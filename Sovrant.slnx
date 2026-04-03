@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Sovrant.Api/Sovrant.Api.csproj" />
+    <Project Path="src/Sovrant.Cli/Sovrant.Cli.csproj" />
+    <Project Path="src/Sovrant.Commands/Sovrant.Commands.csproj" />
+    <Project Path="src/Sovrant.Runtime/Sovrant.Runtime.csproj" />
+    <Project Path="src/Sovrant.Tools/Sovrant.Tools.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sovrant.Api.Tests/Sovrant.Api.Tests.csproj" />
+    <Project Path="tests/Sovrant.Commands.Tests/Sovrant.Commands.Tests.csproj" />
+    <Project Path="tests/Sovrant.Integration.Tests/Sovrant.Integration.Tests.csproj" />
+    <Project Path="tests/Sovrant.Runtime.Tests/Sovrant.Runtime.Tests.csproj" />
+    <Project Path="tests/Sovrant.Tools.Tests/Sovrant.Tools.Tests.csproj" />
+  </Folder>
+</Solution>
