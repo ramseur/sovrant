@@ -2,8 +2,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Sovrant.Tools.Agent;
 using Sovrant.Tools.Core;
 using Sovrant.Tools.Extended;
+using Sovrant.Tools.PlanMode;
 using Sovrant.Tools.Tasks;
 using Sovrant.Tools.Todo;
+using Sovrant.Tools.Worktree;
 
 namespace Sovrant.Tools;
 
@@ -29,6 +31,7 @@ public static class ServiceCollectionExtensions
         // In-session singletons
         services.AddSingleton<TodoState>();
         services.AddSingleton<BackgroundTaskRegistry>();
+        services.AddSingleton<WorktreeState>();
 
         // Core tools
         services.AddSingleton<ITool, ReadFileTool>();
@@ -57,6 +60,15 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITool, TaskListTool>();
         services.AddSingleton<ITool, TaskOutputTool>();
         services.AddSingleton<ITool, TaskStopTool>();
+        services.AddSingleton<ITool, TaskUpdateTool>();
+
+        // Plan mode tools
+        services.AddSingleton<ITool, EnterPlanModeTool>();
+        services.AddSingleton<ITool, ExitPlanModeTool>();
+
+        // Worktree tools
+        services.AddSingleton<ITool, EnterWorktreeTool>();
+        services.AddSingleton<ITool, ExitWorktreeTool>();
 
         // Agent tool
         services.AddSingleton<ITool, AgentTool>();

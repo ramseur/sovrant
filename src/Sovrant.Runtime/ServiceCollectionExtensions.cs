@@ -33,9 +33,12 @@ public static class ServiceCollectionExtensions
         var apiConfig = ConfigLoader.BuildConfiguration();
         services.AddLlmProviders(apiConfig);
 
-        // Permission policy
-        services.AddSingleton<IPermissionPolicy>(
-            new ModeAwarePermissionPolicy(config.PermissionMode));
+        // Permission policy — mutable so EnterPlanMode/ExitPlanMode tools can toggle it at runtime.
+        // The server overrides both IPermissionPolicy and IPermissionModeAccessor with its own
+        // MutableServerConfig-backed implementations.
+        var cliPolicy = new MutableCliPermissionPolicy(config.PermissionMode);
+        services.AddSingleton<IPermissionPolicy>(cliPolicy);
+        services.AddSingleton<IPermissionModeAccessor>(cliPolicy);
 
         // Tool registry and executor
         services.AddSingleton<IToolRegistry, InMemoryToolRegistry>();

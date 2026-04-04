@@ -46,10 +46,11 @@ builder.Services.AddSingleton(mutableConfig);
 // Core runtime (providers + router + session store + conversation runtime).
 builder.Services.AddSovrantRuntime(sovrantConfig);
 
-// Override IAuthProvider and IPermissionPolicy with mutable variants.
+// Override IAuthProvider, IPermissionPolicy, and IPermissionModeAccessor with mutable variants.
 // In Microsoft DI the last registration wins for GetRequiredService<T>().
 builder.Services.AddSingleton<IAuthProvider, MutableApiKeyAuthProvider>();
 builder.Services.AddSingleton<IPermissionPolicy, MutablePermissionPolicy>();
+builder.Services.AddSingleton<IPermissionModeAccessor, MutableServerPermissionModeAdapter>();
 
 // ILogger (non-generic) needed by typed HTTP client providers.
 builder.Services.AddSingleton<ILogger>(sp =>

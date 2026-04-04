@@ -260,6 +260,8 @@ curl -X PUT http://127.0.0.1:5200/v1/config \
 
 Valid values: `Default`, `AcceptEdits`, `BypassPermissions`, `DontAsk`, `Plan`
 
+> The `EnterPlanMode` and `ExitPlanMode` tools can also change the permission mode from within a conversation. In server mode they update `MutableServerConfig.PermissionMode` via the `IPermissionModeAccessor` interface — identical to calling `PUT /v1/config`.
+
 ---
 
 ## Session Persistence

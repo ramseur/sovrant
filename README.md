@@ -4,7 +4,7 @@ A .NET 10 agentic AI engine — multi-provider, tool-using, session-persistent. 
 
 **Branch:** `sovrant-openc-dotnet-port`
 **Runtime:** .NET 10 / C# 13
-**Status:** Engine fully functional. All 8 server endpoints smoke-tested. 99/99 unit tests passing.
+**Status:** Engine fully functional. All 8 server endpoints smoke-tested. 99/99 unit tests passing. Phase 7.5 Tier 1 complete: TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total).
 
 ---
 
@@ -16,7 +16,7 @@ A .NET 10 agentic AI engine — multi-provider, tool-using, session-persistent. 
 | `Sovrant.Server` | ASP.NET Core Minimal API — exposes the engine over HTTP (OpenAI-compatible endpoints + session management). |
 | `Sovrant.Runtime` | Core agentic loop, session persistence (JSONL), permission system, tool executor, MCP client. |
 | `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, native messages API. SmartRouter with health/latency scoring. |
-| `Sovrant.Tools` | All tool implementations (Read, Write, Edit, Glob, Grep, LS, Bash, PowerShell, REPL, WebFetch, WebSearch, TodoWrite, TaskCreate/Get/List/Output/Stop, Agent, AskUserQuestion, Sleep, NotebookEdit). |
+| `Sovrant.Tools` | All 27 tool implementations (Read, Write, Edit, Glob, Grep, LS, Bash, PowerShell, REPL, WebFetch, WebSearch, TodoWrite, TaskCreate/Get/List/Output/Stop/Update, Agent, AskUserQuestion, Sleep, NotebookEdit, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree). |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/exit`, `/clear`, `/session`, etc.). |
 
 ---
@@ -95,7 +95,7 @@ curl -X POST http://localhost:5200/v1/chat/completions \
 
 ## Tools
 
-All tools confirmed working on Windows with `gpt-4o-mini`.
+All tools confirmed working on Windows with `gpt-4o-mini` *(new Tier 1 tools not yet smoke-tested)*.
 
 ### File tools
 `Read` · `Write` · `Edit` · `Glob` · `Grep` · `LS`
@@ -107,7 +107,10 @@ All tools confirmed working on Windows with `gpt-4o-mini`.
 `WebFetch` · `WebSearch` *(requires `BRAVE_API_KEY` or `FIRECRAWL_API_KEY`)*
 
 ### Task tools
-`TodoWrite` · `TaskCreate` · `TaskGet` · `TaskList` · `TaskOutput` · `TaskStop`
+`TodoWrite` · `TaskCreate` · `TaskGet` · `TaskList` · `TaskOutput` · `TaskStop` · `TaskUpdate`
+
+### Plan mode & worktree
+`EnterPlanMode` *(switches to read-only mode)* · `ExitPlanMode` · `EnterWorktree` *(git worktree add)* · `ExitWorktree`
 
 ### Agent & interaction
 `Agent` *(spawns an isolated sub-agent)* · `AskUserQuestion` · `Sleep`
@@ -215,7 +218,9 @@ The server maintains a live in-memory session pool (`IRuntimeSessionPool`) — o
           │  health ping    │  │  Task: TaskCreate/Get/... │
           │  latency score  │  │  Agent  AskUser  Sleep    │
           │  cost weight    │  │  NotebookEdit  TodoWrite  │
-          └────────┬────────┘  └───────────────────────────┘
+          │                 │  │  EnterPlanMode ExitPlanMode│
+          └────────┬────────┘  │  EnterWorktree ExitWorktree│
+                               └───────────────────────────┘
                    │
           ┌────────▼──────────────────┐
           │  LLM Providers            │

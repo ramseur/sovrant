@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (updated with competitor feature gap analysis)
+**Last updated:** 2026-04-04 (Phase 7.5 Tier 1 implemented — 27 tools)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -13,7 +13,8 @@ The engine is fully functional as a single-user tool:
 
 - CLI REPL and one-shot prompt mode
 - Agentic loop with up to 20 tool rounds per turn
-- 22 tools working on Windows and Linux (see Phase 7.5 for gap analysis vs OpenClaude)
+- 27 tools working on Windows and Linux (22 original + 5 Phase 7.5 Tier 1) (Phase 7.5 Tier 1 complete; Tier 2 in progress)
+- Per-runtime mutable permission mode (`IPermissionModeAccessor`) for model-driven plan mode transitions
 - JSONL session persistence
 - SmartRouter with health/latency scoring across multiple providers
 - HTTP server (`Sovrant.Server`) with OpenAI-compatible endpoints
@@ -31,12 +32,14 @@ The engine is fully functional as a single-user tool:
 
 | Category | Count | Tools |
 |---|---|---|
-| Implemented ✅ | 22 | Read, Write, Edit, Glob, Grep, LS, Bash, PowerShell, REPL, WebFetch, WebSearch, TaskCreate/Get/List/Output/Stop, TodoWrite, Agent, AskUserQuestion, Sleep, NotebookEdit |
-| Missing — port ⬜ | 9 | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree, ListMcpResources, ReadMcpResource, ToolSearch, SkillTool, ScheduleCron, ConfigTool, LSP |
+| Implemented ✅ | 27 | Read, Write, Edit, Glob, Grep, LS, Bash, PowerShell, REPL, WebFetch, WebSearch, TaskCreate/Get/List/Output/Stop/Update, TodoWrite, Agent, AskUserQuestion, Sleep, NotebookEdit, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree |
+| Missing — port ⬜ | 7 | ListMcpResources, ReadMcpResource, ToolSearch, SkillTool, ScheduleCron, ConfigTool, LSP |
 | Cloud — future phases ☁️ | 3 | MCPTool (Phase 12), McpAuthTool (Phase 13), TeamCreate/Delete (Phase 14) |
 | Not portable ❌ | 10 | RemoteTrigger, SendMessage, WorkflowTool, BriefTool, SuggestBackgroundPR, VerifyPlanExecution, SyntheticOutput, Tungsten |
 
 #### Tier 1 — High priority (complete the core developer experience)
+
+> **Status: ✅ Implemented** — TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree all implemented and building clean (99/99 tests passing).
 
 **`TaskUpdate`**
 The task management suite has 5 of 6 tools. `TaskUpdate` lets the model update the status or description of a running background task while it is in flight. Trivial to add alongside the existing `BackgroundTaskRegistry`.
@@ -77,9 +80,9 @@ Language Server Protocol integration: hover type info, go-to-definition, find-re
 
 #### Implementation plan
 
-1. `TaskUpdate` — add to `Sovrant.Tools/Tasks/`, register in `ToolRegistrar`, add unit test
-2. `EnterPlanMode` / `ExitPlanMode` — add to `Sovrant.Tools/PlanMode/`; runtime handles the tool result by updating a session-scoped permission override
-3. `EnterWorktree` / `ExitWorktree` — add to `Sovrant.Tools/Worktree/`; session-scoped worktree path stored in `ConversationRuntime` or a scoped service
+1. ~~`TaskUpdate` — add to `Sovrant.Tools/Tasks/`, register in `ToolRegistrar`, add unit test~~ ✅ Done
+2. ~~`EnterPlanMode` / `ExitPlanMode` — add to `Sovrant.Tools/PlanMode/`; runtime handles the tool result by updating a session-scoped permission override~~ ✅ Done — `IPermissionModeAccessor` added to Runtime; `MutableCliPermissionPolicy` and `MutableServerPermissionModeAdapter` registered in both contexts
+3. ~~`EnterWorktree` / `ExitWorktree` — add to `Sovrant.Tools/Worktree/`; session-scoped worktree path stored in `ConversationRuntime` or a scoped service~~ ✅ Done — `WorktreeState` singleton; tools invoke `git worktree add/remove` directly
 4. `/undo`/`/redo` — wrap `Write`/`Edit` execution with git snapshot; add `/undo` and `/redo` slash commands in `Sovrant.Commands`
 5. Custom project commands — extend `SkillTool` to resolve `.sovrant/commands/{name}.md` before global skills directory
 6. `ListMcpResources` / `ReadMcpResource` — extend existing MCP client (`IMcpClient`) with a `ReadResourceAsync` method

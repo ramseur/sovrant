@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04
+**Last updated:** 2026-04-04 (Phase 7.5 Tier 1 complete)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -21,6 +21,7 @@
 | HTTP server (`Sovrant.Server`) | ✅ Working | All 8 endpoints confirmed: health, non-streaming, streaming SSE, session continuity, status, models, config update, session list/delete |
 | Server session pool (`IRuntimeSessionPool`) | ✅ Implemented | One `ConversationRuntime` per session ID, kept alive in `ConcurrentDictionary`. Concurrent turns on the same session not yet serialized — Phase 9 adds per-session lock |
 | Unit test suite | ✅ 99/99 passing | Api(22) + Runtime(28) + Tools(26) + Commands(22) + Integration(1) |
+| Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 
 ### Known issues fixed during testing
 
@@ -72,7 +73,7 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 | Tool | Status | Result |
 |---|---|---|
 | `WebFetch` | ✅ Tested | Fetched `https://httpbin.org/get`; model correctly extracted response data |
-| `WebSearch` | ⬜ Not tested | Implemented; requires `WEB_SEARCH_API_KEY` env var (Brave/Bing API key) |
+| `WebSearch` | ⬜ Not tested | Implemented; requires `BRAVE_API_KEY` (or `FIRECRAWL_API_KEY` as fallback) |
 
 ### Task management tools
 
@@ -84,6 +85,7 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 | `TaskList` | ⬜ Not tested | Implemented; lists all tracked background tasks |
 | `TaskOutput` | ⬜ Not tested | Implemented; streams stdout from running background task |
 | `TaskStop` | ⬜ Not tested | Implemented; cancels and removes background task |
+| `TaskUpdate` | ⬜ Not tested | Implemented (Phase 7.5); updates task description |
 
 ### Agent & interaction tools
 
@@ -92,6 +94,20 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 | `Agent` | ⬜ Not tested | Implemented; spawns isolated `ConversationRuntime` with its own session |
 | `AskUserQuestion` | ✅ Tested | Prompted console correctly in CLI mode. Server mode returns fixed message (by design) |
 | `Sleep` | ✅ Tested | Slept 1000ms and returned correctly |
+
+### Plan mode tools *(Phase 7.5 Tier 1)*
+
+| Tool | Status | Result |
+|---|---|---|
+| `EnterPlanMode` | ⬜ Not tested | Implemented; sets `IPermissionModeAccessor.Mode = Plan`. CLI: updates `MutableCliPermissionPolicy`. Server: updates `MutableServerConfig` via adapter |
+| `ExitPlanMode` | ⬜ Not tested | Implemented; restores permission mode; optional `permission_mode` param (default: `DontAsk`) |
+
+### Worktree tools *(Phase 7.5 Tier 1)*
+
+| Tool | Status | Result |
+|---|---|---|
+| `EnterWorktree` | ⬜ Not tested | Implemented; runs `git worktree add`, records path in `WorktreeState` singleton; `create_branch` param for `-b` flag |
+| `ExitWorktree` | ⬜ Not tested | Implemented; runs `git worktree remove`, clears `WorktreeState`; `force` param for `--force` |
 
 ### Notebook tools
 
@@ -110,7 +126,7 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 | `gemma-4-31b-it` (Google AI Studio) | ❌ No tool calls | Text generation works; function calling not supported via OpenAI-compat endpoint |
 | `gemma-3-27b-it` (Google AI Studio) | ⬜ Not tested | Likely same limitation as Gemma 4 |
 | Ollama (local) | ⬜ Not tested | Implemented; set `OLLAMA_BASE_URL`. Bash tool requires WSL/Linux |
-| Anthropic native API | ⬜ Not tested | Set `PROVIDER_BASE_URL=https://api.anthropic.com` + `PROVIDER_API_KEY` |
+| Native messages API (`ProviderApiProvider`) | ⬜ Not tested | Set `PROVIDER_BASE_URL=https://api.anthropic.com` + `PROVIDER_API_KEY` |
 
 ---
 
@@ -122,10 +138,11 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 | `LLM_BASE_URL` | No | Base URL (default: `https://api.openai.com/v1`) |
 | `SOVRANT_TOKEN` | Yes (server only) | Bearer token for `Sovrant.Server` |
 | `SOVRANT_PORT` | No | Server port (default: `5200`) |
-| `PROVIDER_BASE_URL` | No | Enables `ProviderApiProvider` for Anthropic-native endpoints |
-| `PROVIDER_API_KEY` | No | API key for the Anthropic-native provider |
+| `PROVIDER_BASE_URL` | No | Enables `ProviderApiProvider` (native messages API — `/v1/messages` format) |
+| `PROVIDER_API_KEY` | No | API key for the native messages API provider |
 | `OLLAMA_BASE_URL` | No | Ollama base URL (default: `http://localhost:11434/v1`) |
-| `WEB_SEARCH_API_KEY` | No | Enables `WebSearch` tool (Brave/Bing API key) |
+| `BRAVE_API_KEY` | No | Enables `WebSearch` via Brave Search API |
+| `FIRECRAWL_API_KEY` | No | Enables `WebSearch` via FireCrawl (fallback if `BRAVE_API_KEY` not set) |
 
 ---
 

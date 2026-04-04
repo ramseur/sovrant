@@ -24,7 +24,7 @@ public sealed class BackgroundTaskInfo
 {
     public string Id { get; init; } = Guid.NewGuid().ToString("N")[..8];
     public string Command { get; init; } = string.Empty;
-    public string Description { get; init; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
     public BackgroundTaskStatus Status { get; set; } = BackgroundTaskStatus.Running;
     public System.Text.StringBuilder OutputBuffer { get; } = new();
     public CancellationTokenSource Cts { get; } = new();
