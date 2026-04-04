@@ -172,6 +172,7 @@ The server maintains a live in-memory session pool (`IRuntimeSessionPool`) — o
 | [`docs/frontend-integration.md`](docs/frontend-integration.md) | Node.js proxy setup, browser SSE client, Replit integration |
 | [`docs/engine-status.md`](docs/engine-status.md) | Tool test results, provider compatibility, known issues |
 | [`docs/roadmap.md`](docs/roadmap.md) | Planned features and architectural direction |
+| [`docs/competitor-analysis.md`](docs/competitor-analysis.md) | Comparison vs Claude Code, OpenClaude, and opencode (SST) |
 
 ---
 
