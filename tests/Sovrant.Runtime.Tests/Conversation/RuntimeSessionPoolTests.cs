@@ -160,6 +160,76 @@ public sealed class RuntimeSessionPoolTests
         Assert.Equal(1, pool.ActiveCount);
     }
 
+    [Fact]
+    public async Task GetOrCreateAsync_ReturnsSessionConfig()
+    {
+        var sp = BuildServices();
+        var pool = sp.GetRequiredService<IRuntimeSessionPool>();
+
+        var pooled = await pool.GetOrCreateAsync("config-session");
+
+        Assert.NotNull(pooled.Config);
+        Assert.Null(pooled.Config.Model);
+        Assert.Null(pooled.Config.PermissionMode);
+        Assert.Equal(0, pooled.Config.TotalInputTokens);
+        Assert.Equal(0, pooled.Config.TotalOutputTokens);
+    }
+
+    [Fact]
+    public async Task GetOrCreateAsync_SameSession_ReturnsSameConfig()
+    {
+        var sp = BuildServices();
+        var pool = sp.GetRequiredService<IRuntimeSessionPool>();
+
+        var r1 = await pool.GetOrCreateAsync("shared-config");
+        r1.Config.Model = "custom-model";
+        r1.Config.PermissionMode = Sovrant.Runtime.Permissions.PermissionMode.Plan;
+
+        var r2 = await pool.GetOrCreateAsync("shared-config");
+
+        Assert.Same(r1.Config, r2.Config);
+        Assert.Equal("custom-model", r2.Config.Model);
+        Assert.Equal(Sovrant.Runtime.Permissions.PermissionMode.Plan, r2.Config.PermissionMode);
+    }
+
+    [Fact]
+    public async Task TryGetConfig_ExistingSession_ReturnsConfig()
+    {
+        var sp = BuildServices();
+        var pool = sp.GetRequiredService<IRuntimeSessionPool>();
+
+        await pool.GetOrCreateAsync("existing");
+        var config = pool.TryGetConfig("existing");
+
+        Assert.NotNull(config);
+    }
+
+    [Fact]
+    public void TryGetConfig_NonexistentSession_ReturnsNull()
+    {
+        var sp = BuildServices();
+        var pool = sp.GetRequiredService<IRuntimeSessionPool>();
+
+        var config = pool.TryGetConfig("nonexistent");
+
+        Assert.Null(config);
+    }
+
+    [Fact]
+    public async Task SessionConfig_TokenAccumulation_ThreadSafe()
+    {
+        var sp = BuildServices();
+        var pool = sp.GetRequiredService<IRuntimeSessionPool>();
+
+        var pooled = await pool.GetOrCreateAsync("token-session");
+
+        pooled.Config.AddTokens(100, 50);
+        pooled.Config.AddTokens(200, 75);
+
+        Assert.Equal(300, pooled.Config.TotalInputTokens);
+        Assert.Equal(125, pooled.Config.TotalOutputTokens);
+    }
+
     // ── Test doubles ─────────────────────────────────────────────────────────
 
     private sealed class FakeRouter : ISmartRouter

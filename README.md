@@ -3,7 +3,7 @@
 A .NET 10 agentic AI engine — multi-provider, tool-using, session-persistent. Runs as a CLI agent or an OpenAI-compatible HTTP server. The agent reads and writes files, executes shell commands, searches the web, calls tools autonomously, and maintains full conversation history across sessions.
 
 **Runtime:** .NET 10 / C# 13
-**Status:** Engine fully functional. 31 tools. 9 server endpoints. 115/115 tests passing.
+**Status:** Engine fully functional. 31 tools. 12 server endpoints. 120/120 tests passing.
 
 ---
 
@@ -99,8 +99,11 @@ curl -X POST http://localhost:5200/v1/chat/completions \
 | `GET` | `/v1/status` | Provider health, latency, and routing scores |
 | `GET` | `/v1/models` | OpenAI-compatible model list |
 | `GET` | `/v1/sessions` | List all saved session IDs |
-| `GET` | `/v1/sessions/{id}` | Get message history for a session |
+| `GET` | `/v1/sessions/{id}` | Get message history and token totals for a session |
 | `DELETE` | `/v1/sessions/{id}` | Delete a session |
+| `GET` | `/v1/sessions/{id}/config` | Get per-session config overlay (model, permission mode) |
+| `PUT` | `/v1/sessions/{id}/config` | Update per-session config without affecting other sessions |
+| `GET` | `/v1/usage` | Per-session token usage summary |
 
 ---
 
@@ -215,6 +218,7 @@ The server keeps one `ConversationRuntime` alive per `session_id` in an in-memor
 | `SOVRANT_LOG_FILE` | No | Rolling file path pattern (default: `~/.sovrant/logs/sovrant-{Date}.log`). Empty string disables file logging. |
 | `SOVRANT_LOG_CONSOLE` | No | Write logs to stdout (default: `true`). Set to `false` to silence console output. |
 | `SOVRANT_LOG_FORMAT` | No | `text` (default, human-readable) or `json` (structured — better for log aggregators) |
+| `SOVRANT_RATE_LIMIT_RPM` | No | Per-session rate limit: requests per minute (default: `60`). Returns `429` when exceeded. |
 
 ---
 
@@ -282,13 +286,13 @@ The server keeps one `ConversationRuntime` alive per `session_id` in an in-memor
 ## Tests
 
 ```bash
-dotnet test   # 115 tests across 5 projects
+dotnet test   # 120 tests across 5 projects
 ```
 
 | Project | Tests |
 |---|---|
 | `Sovrant.Api.Tests` | 28 |
-| `Sovrant.Runtime.Tests` | 38 |
+| `Sovrant.Runtime.Tests` | 43 |
 | `Sovrant.Tools.Tests` | 26 |
 | `Sovrant.Commands.Tests` | 22 |
 | `Sovrant.Integration.Tests` | 1 |

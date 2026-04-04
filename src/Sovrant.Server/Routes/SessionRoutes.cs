@@ -1,6 +1,8 @@
 using System.Text.Json.Serialization;
 using Sovrant.Runtime.Conversation;
+using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Session;
+using Sovrant.Server.ServerConfig;
 
 namespace Sovrant.Server.Routes;
 
@@ -12,6 +14,8 @@ internal static class SessionRoutes
         app.MapGet("/v1/sessions", ListSessions);
         app.MapGet("/v1/sessions/{id}", GetSession);
         app.MapDelete("/v1/sessions/{id}", DeleteSession);
+        app.MapPut("/v1/sessions/{id}/config", PutSessionConfig);
+        app.MapGet("/v1/sessions/{id}/config", GetSessionConfig);
     }
 
     private static async Task<IResult> ListSessions(ISessionStore store, CancellationToken ct)
@@ -21,7 +25,11 @@ internal static class SessionRoutes
         return Results.Ok(new { sessions = items });
     }
 
-    private static async Task<IResult> GetSession(string id, ISessionStore store, CancellationToken ct)
+    private static async Task<IResult> GetSession(
+        string id,
+        ISessionStore store,
+        IRuntimeSessionPool pool,
+        CancellationToken ct)
     {
         var entries = await store.LoadAsync(id, ct).ConfigureAwait(false);
         if (entries.Count == 0)
@@ -39,7 +47,18 @@ internal static class SessionRoutes
             })
             .ToList();
 
-        return Results.Ok(new { session_id = id, messages });
+        // Enrich with live session config if the session is active in memory.
+        var sessionConfig = pool.TryGetConfig(id);
+        var totalInput = sessionConfig?.TotalInputTokens ?? entries.Sum(e => (long)e.InputTokens);
+        var totalOutput = sessionConfig?.TotalOutputTokens ?? entries.Sum(e => (long)e.OutputTokens);
+
+        return Results.Ok(new SessionDetailDto
+        {
+            SessionId = id,
+            Messages = messages,
+            TotalInputTokens = totalInput,
+            TotalOutputTokens = totalOutput,
+        });
     }
 
     private static IResult DeleteSession(string id, IRuntimeSessionPool pool)
@@ -59,6 +78,81 @@ internal static class SessionRoutes
 
         return Results.Ok(new { deleted = id });
     }
+
+    private static IResult GetSessionConfig(
+        string id,
+        IRuntimeSessionPool pool,
+        MutableServerConfig serverConfig)
+    {
+        var sessionConfig = pool.TryGetConfig(id);
+        if (sessionConfig is null)
+            return Results.NotFound(new { error = $"Session '{id}' is not active in the pool." });
+
+        return Results.Ok(new SessionConfigDto
+        {
+            Model = sessionConfig.Model ?? serverConfig.Model,
+            PermissionMode = (sessionConfig.PermissionMode ?? serverConfig.PermissionMode)
+                .ToString().ToLowerInvariant(),
+            IsOverridden = sessionConfig.Model is not null || sessionConfig.PermissionMode is not null,
+        });
+    }
+
+    private static IResult PutSessionConfig(
+        string id,
+        SessionConfigUpdateRequest req,
+        IRuntimeSessionPool pool)
+    {
+        ArgumentNullException.ThrowIfNull(req);
+
+        var sessionConfig = pool.TryGetConfig(id);
+        if (sessionConfig is null)
+            return Results.NotFound(new { error = $"Session '{id}' is not active in the pool." });
+
+        if (req.Model is not null)
+            sessionConfig.Model = req.Model;
+
+        if (req.PermissionMode is not null &&
+            Enum.TryParse<PermissionMode>(req.PermissionMode, ignoreCase: true, out var pm))
+            sessionConfig.PermissionMode = pm;
+
+        return Results.Ok(new { updated = true });
+    }
+}
+
+internal sealed class SessionConfigDto
+{
+    [JsonPropertyName("model")]
+    public string Model { get; init; } = string.Empty;
+
+    [JsonPropertyName("permission_mode")]
+    public string PermissionMode { get; init; } = string.Empty;
+
+    [JsonPropertyName("is_overridden")]
+    public bool IsOverridden { get; init; }
+}
+
+internal sealed class SessionConfigUpdateRequest
+{
+    [JsonPropertyName("model")]
+    public string? Model { get; init; }
+
+    [JsonPropertyName("permission_mode")]
+    public string? PermissionMode { get; init; }
+}
+
+internal sealed class SessionDetailDto
+{
+    [JsonPropertyName("session_id")]
+    public string SessionId { get; init; } = string.Empty;
+
+    [JsonPropertyName("messages")]
+    public IReadOnlyList<SessionMessageDto> Messages { get; init; } = [];
+
+    [JsonPropertyName("total_input_tokens")]
+    public long TotalInputTokens { get; init; }
+
+    [JsonPropertyName("total_output_tokens")]
+    public long TotalOutputTokens { get; init; }
 }
 
 internal sealed class SessionSummaryDto

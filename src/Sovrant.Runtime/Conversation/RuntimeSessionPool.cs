@@ -37,7 +37,7 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
         if (_pool.TryGetValue(sessionId, out var existing))
         {
             existing.Touch();
-            return new PooledSession(existing.Runtime, existing.Lock);
+            return new PooledSession(existing.Runtime, existing.Lock, existing.Config);
         }
 
         // Slow path — create, initialise, and race to insert.
@@ -72,7 +72,7 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
             entry.Lock.Dispose();
 
         winner.Touch();
-        return new PooledSession(winner.Runtime, winner.Lock);
+        return new PooledSession(winner.Runtime, winner.Lock, winner.Config);
     }
 
     /// <inheritdoc/>
@@ -122,10 +122,17 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
         return evicted;
     }
 
+    /// <inheritdoc/>
+    public SessionConfig? TryGetConfig(string sessionId)
+    {
+        return _pool.TryGetValue(sessionId, out var entry) ? entry.Config : null;
+    }
+
     private sealed class SessionEntry
     {
         public IConversationRuntime Runtime { get; }
         public SemaphoreSlim Lock { get; } = new(1, 1);
+        public SessionConfig Config { get; } = new();
         public DateTimeOffset LastAccess { get; private set; } = DateTimeOffset.UtcNow;
 
         public SessionEntry(IConversationRuntime runtime)

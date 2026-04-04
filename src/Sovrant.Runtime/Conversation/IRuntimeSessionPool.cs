@@ -39,13 +39,20 @@ public interface IRuntimeSessionPool
     /// Returns the number of sessions evicted.
     /// </summary>
     int EvictExpired(TimeSpan ttl, int maxSessions);
+
+    /// <summary>
+    /// Returns the <see cref="SessionConfig"/> for the given session, or <see langword="null"/>
+    /// if the session is not currently in the pool.
+    /// </summary>
+    SessionConfig? TryGetConfig(string sessionId);
 }
 
 /// <summary>
-/// A pooled session entry containing the runtime and a per-session lock for turn serialization.
+/// A pooled session entry containing the runtime, a per-session lock, and session-scoped config.
 /// Callers must acquire <see cref="Lock"/> before calling <see cref="Runtime"/>'s <c>RunTurnAsync</c>
 /// and release it after, to prevent concurrent turns from corrupting the shared history.
 /// </summary>
 /// <param name="Runtime">The conversation runtime for this session.</param>
 /// <param name="Lock">A semaphore (max 1) for serializing turns within this session.</param>
-public sealed record PooledSession(IConversationRuntime Runtime, SemaphoreSlim Lock);
+/// <param name="Config">Per-session config overlay (model, permission mode, token accumulators).</param>
+public sealed record PooledSession(IConversationRuntime Runtime, SemaphoreSlim Lock, SessionConfig Config);

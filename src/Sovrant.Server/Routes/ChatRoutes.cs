@@ -9,6 +9,7 @@ using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Tools;
 using Sovrant.Server.OpenAi;
+using Sovrant.Server.Permissions;
 using Sovrant.Server.ServerConfig;
 using Sovrant.Server.Streaming;
 using Sovrant.Tools;
@@ -20,7 +21,8 @@ internal static class ChatRoutes
 {
     public static void Map(WebApplication app)
     {
-        app.MapPost("/v1/chat/completions", HandleAsync);
+        app.MapPost("/v1/chat/completions", HandleAsync)
+            .RequireRateLimiting("per-session");
     }
 
     private static async Task HandleAsync(
@@ -80,6 +82,7 @@ internal static class ChatRoutes
         // Resolve the runtime and optional per-session lock for this request.
         IConversationRuntime runtime;
         SemaphoreSlim? sessionLock = null;
+        SessionConfig? sessionConfig = null;
 
         if (!string.IsNullOrWhiteSpace(req.SessionId))
         {
@@ -97,6 +100,7 @@ internal static class ChatRoutes
 
             runtime = pooled.Runtime;
             sessionLock = pooled.Lock;
+            sessionConfig = pooled.Config;
         }
         else if (hasScopedCredentials)
         {
@@ -124,10 +128,10 @@ internal static class ChatRoutes
         }
 
         var completionId = $"chatcmpl-{Guid.NewGuid():N}";
-        var model = req.Model ?? serverConfig.Model;
+        var model = req.Model ?? sessionConfig?.Model ?? serverConfig.Model;
 
         // Apply per-request model override to the live config so ConversationRuntime picks it up.
-        // Only mutate the global config when NOT using scoped credentials.
+        // Only mutate the global config when NOT using scoped credentials and no session config.
         if (req.Model is not null && !hasScopedCredentials)
             serverConfig.Model = req.Model;
 
@@ -136,19 +140,24 @@ internal static class ChatRoutes
         if (sessionLock is not null)
             await sessionLock.WaitAsync(ct).ConfigureAwait(false);
 
+        // Set the session config on the AsyncLocal so EnterPlanMode/ExitPlanMode
+        // write to this session's config instead of the global singleton.
+        SessionAwarePermissionModeAdapter.SetCurrent(sessionConfig);
+
         try
         {
             if (req.Stream)
             {
-                await StreamResponseAsync(ctx, runtime, completionId, model, userMessage, ct).ConfigureAwait(false);
+                await StreamResponseAsync(ctx, runtime, completionId, model, userMessage, sessionConfig, ct).ConfigureAwait(false);
             }
             else
             {
-                await BufferedResponseAsync(ctx, runtime, completionId, model, userMessage, ct).ConfigureAwait(false);
+                await BufferedResponseAsync(ctx, runtime, completionId, model, userMessage, sessionConfig, ct).ConfigureAwait(false);
             }
         }
         finally
         {
+            SessionAwarePermissionModeAdapter.SetCurrent(null);
             sessionLock?.Release();
         }
     }
@@ -159,6 +168,7 @@ internal static class ChatRoutes
         string completionId,
         string model,
         string userMessage,
+        SessionConfig? sessionConfig,
         CancellationToken ct)
     {
         SseWriter.SetSseHeaders(ctx.Response);
@@ -191,6 +201,7 @@ internal static class ChatRoutes
                     break;
 
                 case RuntimeEvent.TurnComplete { InputTokens: var inp, OutputTokens: var outp }:
+                    sessionConfig?.AddTokens(inp, outp);
                     await SseWriter.WriteChunkAsync(ctx.Response,
                         SseWriter.StopChunk(completionId, model, inp, outp), ct).ConfigureAwait(false);
                     break;
@@ -219,6 +230,7 @@ internal static class ChatRoutes
         string completionId,
         string model,
         string userMessage,
+        SessionConfig? sessionConfig,
         CancellationToken ct)
     {
         var sb = new StringBuilder();
@@ -235,6 +247,7 @@ internal static class ChatRoutes
                 case RuntimeEvent.TurnComplete { InputTokens: var inp, OutputTokens: var outp }:
                     inputTokens = inp;
                     outputTokens = outp;
+                    sessionConfig?.AddTokens(inp, outp);
                     break;
             }
         }

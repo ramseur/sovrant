@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 9.1 complete — session lifecycle TTL + turn serialization; Phase 9 multi-tenant credentials; Phase 8 logging — 31 tools, 115 tests)
+**Last updated:** 2026-04-04 (Phase 9.5 complete — small team hardening: session-scoped config, per-session rate limiting, token tracking, usage endpoint — 31 tools, 120 tests)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -19,9 +19,12 @@
 | Permission system | ✅ Working | `bypassPermissions` / `dontAsk` / `default` / `plan` all functional |
 | SSE streaming | ✅ Working | Text chunks stream to console in real time |
 | Token counts | ✅ Fixed | OpenAI trailing usage chunk now captured. Input + output tokens reported correctly after each turn. |
-| HTTP server (`Sovrant.Server`) | ✅ Working | 9 endpoints: `GET /health`, `POST /v1/chat/completions`, `GET+PUT /v1/config`, `GET /v1/status`, `GET /v1/models`, `GET /v1/sessions`, `GET+DELETE /v1/sessions/{id}` |
-| Server session pool (`IRuntimeSessionPool`) | ✅ Implemented | One `ConversationRuntime` per session ID with per-session `SemaphoreSlim` lock for turn serialization. TTL eviction + LRU cap via `SessionEvictionService`. |
-| Unit test suite | ✅ 115/115 passing | Api(28) + Runtime(38) + Tools(26) + Commands(22) + Integration(1) |
+| HTTP server (`Sovrant.Server`) | ✅ Working | 12 endpoints: health, chat, config (GET+PUT), status, models, sessions (list+get+delete), session config (GET+PUT), usage |
+| Server session pool (`IRuntimeSessionPool`) | ✅ Implemented | One `ConversationRuntime` per session ID with per-session `SemaphoreSlim` lock, `SessionConfig` overlay, token accumulators. TTL eviction + LRU cap via `SessionEvictionService`. |
+| Session-scoped config | ✅ Implemented | Per-session model + permission mode overlays via `SessionConfig`. `EnterPlanMode`/`ExitPlanMode` scoped to current session via `AsyncLocal`. `PUT /v1/sessions/{id}/config` for explicit overrides. |
+| Per-session rate limiting | ✅ Implemented | ASP.NET Core `RateLimiter` keyed on `X-Session-Id` header or client IP. `SOVRANT_RATE_LIMIT_RPM` env var (default 60). Returns 429 when exceeded. |
+| Token usage tracking | ✅ Implemented | Per-session `TotalInputTokens`/`TotalOutputTokens` accumulated in `SessionConfig`. `GET /v1/usage` summary. `GET /v1/sessions/{id}` includes totals. |
+| Unit test suite | ✅ 120/120 passing | Api(28) + Runtime(43) + Tools(26) + Commands(22) + Integration(1) |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |

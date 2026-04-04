@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using Sovrant.Api.Auth;
 using Sovrant.Runtime;
 using Sovrant.Runtime.Config;
@@ -50,8 +51,8 @@ builder.Services.AddSovrantRuntime(sovrantConfig);
 // Override IAuthProvider, IPermissionPolicy, and IPermissionModeAccessor with mutable variants.
 // In Microsoft DI the last registration wins for GetRequiredService<T>().
 builder.Services.AddSingleton<IAuthProvider, MutableApiKeyAuthProvider>();
+builder.Services.AddSingleton<IPermissionModeAccessor, SessionAwarePermissionModeAdapter>();
 builder.Services.AddSingleton<IPermissionPolicy, MutablePermissionPolicy>();
-builder.Services.AddSingleton<IPermissionModeAccessor, MutableServerPermissionModeAdapter>();
 
 // ILogger (non-generic) needed by typed HTTP client providers.
 builder.Services.AddSingleton<ILogger>(sp =>
@@ -89,10 +90,37 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(policy =>
         .AllowAnyHeader()
         .AllowCredentials()));
 
+// Per-session rate limiting — keyed on session_id from the request body or "anonymous".
+var rateLimitRpm = int.TryParse(
+    Environment.GetEnvironmentVariable("SOVRANT_RATE_LIMIT_RPM"), out var rpm) ? rpm : 60;
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("per-session", httpContext =>
+    {
+        // Extract session_id from query string or fall back to "anonymous".
+        // The actual session_id is in the JSON body, but we can't read the body twice.
+        // Instead, use a header or query param hint. For chat completions, the
+        // middleware reads X-Session-Id header (set by proxies) or defaults to IP.
+        var key = httpContext.Request.Headers["X-Session-Id"].FirstOrDefault()
+                  ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                  ?? "anonymous";
+
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = rateLimitRpm,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        });
+    });
+});
+
 // ── App pipeline ──────────────────────────────────────────────────────────────
 var app = builder.Build();
 
 app.UseCors();
+app.UseRateLimiter();
 app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseMiddleware<BearerTokenMiddleware>();
 
@@ -111,6 +139,7 @@ ConfigRoutes.Map(app);
 StatusRoutes.Map(app);
 ModelsRoutes.Map(app);
 SessionRoutes.Map(app);
+UsageRoutes.Map(app);
 
 Sovrant.Server.ServerLog.LogServerReady(app.Logger, serverPort);
 

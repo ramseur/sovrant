@@ -46,6 +46,7 @@ The server binds to `http://127.0.0.1:5200` by default.
 | `SOVRANT_LOG_FILE` | No | `~/.sovrant/logs/sovrant-{Date}.log` | Rolling file path pattern. Empty string disables file logging. |
 | `SOVRANT_LOG_CONSOLE` | No | `true` | Write logs to stdout. Set to `false` to silence console output. |
 | `SOVRANT_LOG_FORMAT` | No | `text` | `text` (human-readable) or `json` (structured) |
+| `SOVRANT_RATE_LIMIT_RPM` | No | `60` | Per-session request rate limit (requests per minute). Keyed on `X-Session-Id` header or client IP. Returns `429` when exceeded. |
 
 ---
 
@@ -244,6 +245,63 @@ Returns `404` if the session does not exist.
 
 ---
 
+### Session Config — `GET /v1/sessions/{id}/config`
+
+Returns the effective configuration for an active session (model, permission mode).
+
+```json
+{
+  "model": "gpt-4o",
+  "permission_mode": "dontask",
+  "is_overridden": false
+}
+```
+
+`is_overridden` is `true` if the session has a per-session model or permission mode override. Returns `404` if the session is not currently active in the pool.
+
+---
+
+### Session Config — `PUT /v1/sessions/{id}/config`
+
+Updates per-session config overlay. All fields are optional.
+
+```json
+{
+  "model": "gpt-4o-mini",
+  "permission_mode": "Plan"
+}
+```
+
+Returns `200 {"updated": true}` on success. Returns `404` if the session is not active.
+
+Per-session config shadows the global defaults set via `PUT /v1/config`. Only the specified session is affected — other sessions continue using global defaults or their own overrides.
+
+---
+
+### Usage — `GET /v1/usage`
+
+Returns per-session token usage summary across all sessions.
+
+```json
+{
+  "sessions": [
+    {
+      "session_id": "user-123",
+      "input_tokens": 1200,
+      "output_tokens": 800,
+      "total_tokens": 2000
+    }
+  ],
+  "total_input_tokens": 1200,
+  "total_output_tokens": 800,
+  "total_tokens": 2000
+}
+```
+
+Active sessions report live in-memory counters. Inactive sessions sum from persisted JSONL entries.
+
+---
+
 ## CORS
 
 Allowed origins (no credentials required from the proxy — the proxy injects the bearer token):
@@ -278,7 +336,7 @@ curl -X PUT http://127.0.0.1:5200/v1/config \
 
 Valid values: `Default`, `AcceptEdits`, `BypassPermissions`, `DontAsk`, `Plan`
 
-> The `EnterPlanMode` and `ExitPlanMode` tools can also change the permission mode from within a conversation. In server mode they update `MutableServerConfig.PermissionMode` via the `IPermissionModeAccessor` interface — identical to calling `PUT /v1/config`.
+> The `EnterPlanMode` and `ExitPlanMode` tools change the permission mode for the **current session only** via `SessionConfig`, not the global config. This prevents one user entering Plan mode from affecting other sessions. Use `PUT /v1/sessions/{id}/config` for explicit per-session overrides, or `PUT /v1/config` for server-wide defaults.
 
 ---
 
