@@ -359,7 +359,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             sb.Append("\n\nYou are operating in PLAN MODE. ")
               .Append("You may only read files and gather information. ")
               .Append("You must not execute write, edit, delete, or shell operations. ")
-              .Append("Describe what you would do instead.");
+              .Append("Describe what you would do instead. ")
+              .Append("You MAY call ExitPlanMode to leave plan mode when instructed by the user.");
         }
 
         return sb.ToString();
