@@ -19,6 +19,8 @@ dotnet run --project src/Sovrant.Server
 
 The server binds to `http://127.0.0.1:5200` by default.
 
+> **Port conflict:** `launchSettings.json` declares port `5091` which Kestrel immediately overrides with `5200`. If you start a second instance before the first has released the socket you will see `SocketException (10048): address already in use`. Always stop the running instance first (`pkill -f Sovrant.Server` on Linux/macOS, `Stop-Process -Name dotnet` on Windows) or set `SOVRANT_PORT` to a different port for the second instance.
+
 ---
 
 ## Environment Variables

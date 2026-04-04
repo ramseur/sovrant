@@ -41,6 +41,8 @@
 |---|---|
 | Token counts always show `0↑ 0↓` | OpenAI streaming sends usage only in the final SSE chunk; the native messages API `MessageDelta` parser doesn't capture it |
 | `AskUserQuestion` blocked in server mode | Returns a fixed "question blocked" message — by design; interactive prompts are not possible in HTTP server context |
+| `launchSettings.json` / port conflict on rapid server restart | `src/Sovrant.Server/Properties/launchSettings.json` declares a default port (`5091`) that Kestrel immediately overrides with `127.0.0.1:5200`. If a second `dotnet run` fires before the first process has released the socket (e.g. in test scripts that `&` and don't `pkill` cleanly), Kestrel throws `SocketException (10048): address already in use` and the second process exits with code 1. **Mitigation:** always `pkill -f Sovrant.Server` before restarting. **Fix (Phase 9):** align `launchSettings.json` port with `SOVRANT_PORT` default so there is a single source of truth, and add `--urls` override support to the startup so CI scripts can pin a free port. |
+| `EnterPlanMode` / `ExitPlanMode` are global in server mode | `IPermissionModeAccessor` in server context wraps the shared `MutableServerConfig` singleton — calling `EnterPlanMode` in one session sets plan mode for **all** sessions. Equivalent to `PUT /v1/config {"permission_mode":"Plan"}`. Per-session config isolation is Phase 9.5. |
 
 ---
 

@@ -564,3 +564,5 @@ Supervisor Agent (ConversationRuntime)
 | SmartRouter evicts a provider as unhealthy on first ping failure | Medium | Should retry a few times before marking unhealthy; add exponential backoff |
 | No request-level timeout on agentic loop | Medium | A runaway tool loop can occupy a session indefinitely; add per-turn wall-clock timeout |
 | CORS origins hardcoded | Low | Should be configurable via `SOVRANT_CORS_ORIGINS` env var |
+| `launchSettings.json` port conflicts with `SOVRANT_PORT` default | Low | `launchSettings.json` declares `5091`; Kestrel overrides to `5200`. Rapid restart or parallel test runs cause `SocketException (10048)`. Fix: align `launchSettings.json` with `SOVRANT_PORT`; add `--urls` CLI override for CI. |
+| `EnterPlanMode`/`ExitPlanMode` are global in server mode | Medium | Server uses shared `MutableServerConfig` singleton — calling `EnterPlanMode` in one session sets plan mode for all sessions simultaneously. Requires session-scoped config overlay (Phase 9.5). |
