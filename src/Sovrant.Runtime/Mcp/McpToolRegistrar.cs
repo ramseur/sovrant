@@ -13,6 +13,7 @@ public sealed partial class McpToolRegistrar : IAsyncDisposable
 {
     private readonly IMcpClientFactory _clientFactory;
     private readonly IToolRegistry _registry;
+    private readonly McpClientRegistry _clientRegistry;
     private readonly ILogger<McpToolRegistrar> _logger;
     private readonly List<McpClient> _clients = [];
 
@@ -25,10 +26,12 @@ public sealed partial class McpToolRegistrar : IAsyncDisposable
     public McpToolRegistrar(
         IMcpClientFactory clientFactory,
         IToolRegistry registry,
+        McpClientRegistry clientRegistry,
         ILogger<McpToolRegistrar> logger)
     {
         _clientFactory = clientFactory;
         _registry = registry;
+        _clientRegistry = clientRegistry;
         _logger = logger;
     }
 
@@ -48,6 +51,7 @@ public sealed partial class McpToolRegistrar : IAsyncDisposable
             {
                 var client = await _clientFactory.CreateAsync(name, config, ct).ConfigureAwait(false);
                 _clients.Add(client);
+                _clientRegistry.Register(name, client);
                 await RegisterFromClientAsync(name, client, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)

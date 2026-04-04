@@ -162,6 +162,8 @@ async Task RunReplAsync(IConversationRuntime runtime, SlashCommandDispatcher dis
                 break;
             if (cmdResult.ShouldClearHistory)
                 runtime.Reset();
+            if (cmdResult.InjectAsUserMessage is not null)
+                await RunTurnAsync(runtime, cmdResult.InjectAsUserMessage, ct).ConfigureAwait(false);
             continue;
         }
 

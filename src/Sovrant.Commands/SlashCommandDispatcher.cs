@@ -38,7 +38,22 @@ public sealed class SlashCommandDispatcher
             return new SlashCommandResult("Type /help to see available commands.");
 
         if (!_byName.TryGetValue(name, out var cmd))
+        {
+            // Check for project-local command file: .sovrant/commands/{name}.md
+            var projectCommandPath = Path.Combine(
+                Directory.GetCurrentDirectory(), ".sovrant", "commands", $"{name}.md");
+            if (File.Exists(projectCommandPath))
+            {
+                var template = await File.ReadAllTextAsync(projectCommandPath, ct).ConfigureAwait(false);
+                // Substitute $ARGUMENTS placeholder if present
+                var injected = template.Contains("$ARGUMENTS", StringComparison.Ordinal)
+                    ? template.Replace("$ARGUMENTS", args, StringComparison.Ordinal)
+                    : string.IsNullOrEmpty(args) ? template : $"{template}\n\n{args}";
+                return new SlashCommandResult(InjectAsUserMessage: injected);
+            }
+
             return new SlashCommandResult($"Unknown command: /{name}. Type /help for a list of commands.");
+        }
 
         return await cmd.ExecuteAsync(args, ct).ConfigureAwait(false);
     }

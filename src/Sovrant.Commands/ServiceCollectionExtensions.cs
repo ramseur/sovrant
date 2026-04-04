@@ -30,6 +30,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISlashCommand, CostCommand>();
         services.AddSingleton<ISlashCommand, ResumeCommand>();
         services.AddSingleton<ISlashCommand, ProviderCommand>();
+        services.AddSingleton<ISlashCommand, MemoryCommand>();
 
         // Dispatcher (resolved before HelpCommand so HelpCommand can inject it)
         services.AddSingleton<SlashCommandDispatcher>();

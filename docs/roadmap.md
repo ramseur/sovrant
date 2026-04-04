@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 7.5 Tier 1 implemented — 27 tools)
+**Last updated:** 2026-04-04 (Phase 7.5 Tier 1+2 + Phase 7.6 memory files implemented — 31 tools)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -13,7 +13,8 @@ The engine is fully functional as a single-user tool:
 
 - CLI REPL and one-shot prompt mode
 - Agentic loop with up to 20 tool rounds per turn
-- 27 tools working on Windows and Linux (22 original + 5 Phase 7.5 Tier 1) (Phase 7.5 Tier 1 complete; Tier 2 in progress)
+- 31 tools working on Windows and Linux (22 original + 5 Phase 7.5 Tier 1 + 4 Phase 7.5 Tier 2)
+- Agent memory files (`~/.sovrant/memory.md` + `.sovrant/memory.md`) injected into every system prompt (Phase 7.6 item 1 complete)
 - Per-runtime mutable permission mode (`IPermissionModeAccessor`) for model-driven plan mode transitions
 - JSONL session persistence
 - SmartRouter with health/latency scoring across multiple providers
@@ -32,8 +33,8 @@ The engine is fully functional as a single-user tool:
 
 | Category | Count | Tools |
 |---|---|---|
-| Implemented ✅ | 27 | Read, Write, Edit, Glob, Grep, LS, Bash, PowerShell, REPL, WebFetch, WebSearch, TaskCreate/Get/List/Output/Stop/Update, TodoWrite, Agent, AskUserQuestion, Sleep, NotebookEdit, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree |
-| Missing — port ⬜ | 7 | ListMcpResources, ReadMcpResource, ToolSearch, SkillTool, ScheduleCron, ConfigTool, LSP |
+| Implemented ✅ | 31 | Read, Write, Edit, Glob, Grep, LS, Bash, PowerShell, REPL, WebFetch, WebSearch, TaskCreate/Get/List/Output/Stop/Update, TodoWrite, Agent, AskUserQuestion, Sleep, NotebookEdit, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree, Skill, ToolSearch, ListMcpResources, ReadMcpResource |
+| Missing — port ⬜ | 3 | ScheduleCron, ConfigTool, LSP |
 | Cloud — future phases ☁️ | 3 | MCPTool (Phase 12), McpAuthTool (Phase 13), TeamCreate/Delete (Phase 14) |
 | Not portable ❌ | 10 | RemoteTrigger, SendMessage, WorkflowTool, BriefTool, SuggestBackgroundPR, VerifyPlanExecution, SyntheticOutput, Tungsten |
 
@@ -52,20 +53,22 @@ Creates a temporary git worktree so the agent performs all file edits on an isol
 
 #### Tier 2 — Medium priority (MCP resource access + tool discovery + safety)
 
+> **Status: ✅ Implemented** — `Skill`, `ToolSearch`, `ListMcpResources`, `ReadMcpResource`, custom project slash commands, `/memory` command all implemented and building clean.
+
 **`/undo` / `/redo` (git-backed)**
 Before every `Write` or `Edit` tool call, stash the current file state to a temporary git commit or diff buffer. `/undo` reverts the last agent file change; `/redo` reapplies it. Builds user trust significantly — the user can always roll back an agent mistake without losing their own work. Related to `EnterWorktree`/`ExitWorktree` (Tier 1) but applies even outside a worktree. Implementation: wrap `Write`/`Edit` tool execution in `ConversationRuntime` with pre/post git snapshot calls.
 
-**Custom project slash commands (`.sovrant/commands/`)**
-Project-specific slash commands defined as markdown files in `.sovrant/commands/{name}.md`. When invoked, the file's content is injected as a user message — equivalent to a project-local skill. Extends the global `SkillTool` (below) to support per-repo, version-controlled command libraries. Example: `/deploy`, `/review`, `/test`. Implementation: extend `SkillTool` to check `.sovrant/commands/` before the global skills directory.
+**Custom project slash commands (`.sovrant/commands/`)** ✅ Done
+Project-specific slash commands defined as markdown files in `.sovrant/commands/{name}.md`. When invoked, the file's content is injected as a user message. `SlashCommandDispatcher.TryDispatchAsync` checks this directory when a built-in command is not found.
 
-**`ListMcpResources` / `ReadMcpResource`**
-OpenClaude distinguishes between MCP *tools* (callable functions) and MCP *resources* (readable data — files, database rows, API responses). Sovrant's MCP client invokes tools but cannot read resources. These two tools add resource access: `ListMcpResources` enumerates what each connected MCP server exposes; `ReadMcpResource` fetches a resource by server name and URI.
+**`ListMcpResources` / `ReadMcpResource`** ✅ Done
+`ListMcpResources` enumerates what each connected MCP server exposes; `ReadMcpResource` fetches a resource by URI. Backed by `McpClientRegistry` (populated at `InitializeRuntimeAsync` time).
 
-**`ToolSearch`**
-When the tool list grows large (many MCP servers, many registered tools), including all tool definitions in every LLM context window is expensive and noisy. `ToolSearch` lets the model search available tools by keyword and load them on demand — "deferred tool discovery". Relevant once the tool count exceeds ~30 or MCP servers register many tools.
+**`ToolSearch`** ✅ Done
+Searches registered tool names/descriptions by keyword. Useful once tool count exceeds ~30 or MCP servers register many tools.
 
-**`SkillTool`**
-Invokes a named skill — a pre-defined prompt template stored in `.sovrant/skills/{name}.md`. The model calls `Skill("commit")` and the skill's prompt is injected as a user message, triggering a specialised behaviour. Enables reusable, project-specific agent workflows without changing code.
+**`SkillTool`** ✅ Done
+Reads `.sovrant/skills/{name}.md` (project-local first, then `~/.sovrant/skills/{name}.md`). Substitutes `$ARGUMENTS` placeholder. The model calls `Skill("commit")` to trigger a specialised behaviour from a prompt template.
 
 #### Tier 3 — Lower priority
 
@@ -84,10 +87,10 @@ Language Server Protocol integration: hover type info, go-to-definition, find-re
 2. ~~`EnterPlanMode` / `ExitPlanMode` — add to `Sovrant.Tools/PlanMode/`; runtime handles the tool result by updating a session-scoped permission override~~ ✅ Done — `IPermissionModeAccessor` added to Runtime; `MutableCliPermissionPolicy` and `MutableServerPermissionModeAdapter` registered in both contexts
 3. ~~`EnterWorktree` / `ExitWorktree` — add to `Sovrant.Tools/Worktree/`; session-scoped worktree path stored in `ConversationRuntime` or a scoped service~~ ✅ Done — `WorktreeState` singleton; tools invoke `git worktree add/remove` directly
 4. `/undo`/`/redo` — wrap `Write`/`Edit` execution with git snapshot; add `/undo` and `/redo` slash commands in `Sovrant.Commands`
-5. Custom project commands — extend `SkillTool` to resolve `.sovrant/commands/{name}.md` before global skills directory
-6. `ListMcpResources` / `ReadMcpResource` — extend existing MCP client (`IMcpClient`) with a `ReadResourceAsync` method
-7. `ToolSearch` — add deferred tool registry support to `IToolRegistry`; `ToolSearch` queries it by keyword
-8. `SkillTool` — reads `.sovrant/skills/{name}.md` from disk and returns the content as a user message injection
+5. ~~Custom project commands — `SlashCommandDispatcher.TryDispatchAsync` checks `.sovrant/commands/{name}.md`~~ ✅ Done
+6. ~~`ListMcpResources` / `ReadMcpResource` — `McpClientRegistry` + two tools in `Sovrant.Tools/Mcp/`~~ ✅ Done
+7. ~~`ToolSearch` — injects `IToolRegistry`, filters `GetDefinitions()` by keyword~~ ✅ Done
+8. ~~`SkillTool` — reads `.sovrant/skills/{name}.md` from disk~~ ✅ Done
 9. `ScheduleCron` / `ConfigTool` / `LSPTool` — deferred; document as future work
 
 ---
@@ -132,7 +135,7 @@ Fix: detect the `usage` field on the final OpenAI SSE chunk and capture `prompt_
 
 #### Implementation Plan
 
-1. Agent memory files — extend `BuildSystemPrompt()` in `ConversationRuntime`; add `/memory` slash command
+1. ~~Agent memory files — extend `BuildSystemPrompt()` in `ConversationRuntime`; add `/memory` slash command~~ ✅ Done — `AppendMemoryFile()` helper reads both files; `/memory` and `/mem` commands registered; `InjectAsUserMessage` on `SlashCommandResult` wired into REPL
 2. Token count fix — update `CollectStreamEventsAsync` to capture OpenAI `usage` field from final SSE chunk
 3. Context auto-compaction — add compaction logic to `RunTurnAsync`; add `SOVRANT_COMPACT_THRESHOLD` config; persist compaction events to JSONL
 4. Expose token counts in REPL status line and `GET /v1/sessions/{id}` response

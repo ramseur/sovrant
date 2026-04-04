@@ -2,7 +2,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Sovrant.Tools.Agent;
 using Sovrant.Tools.Core;
 using Sovrant.Tools.Extended;
+using Sovrant.Tools.Mcp;
 using Sovrant.Tools.PlanMode;
+using Sovrant.Tools.Skills;
 using Sovrant.Tools.Tasks;
 using Sovrant.Tools.Todo;
 using Sovrant.Tools.Worktree;
@@ -69,6 +71,14 @@ public static class ServiceCollectionExtensions
         // Worktree tools
         services.AddSingleton<ITool, EnterWorktreeTool>();
         services.AddSingleton<ITool, ExitWorktreeTool>();
+
+        // Skill / discovery tools
+        services.AddSingleton<ITool, SkillTool>();
+        services.AddSingleton<ITool, ToolSearchTool>();
+
+        // MCP resource tools
+        services.AddSingleton<ITool, ListMcpResourcesTool>();
+        services.AddSingleton<ITool, ReadMcpResourceTool>();
 
         // Agent tool
         services.AddSingleton<ITool, AgentTool>();

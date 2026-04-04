@@ -23,7 +23,13 @@ public interface ISlashCommand
 /// <param name="Output">Text to display to the user. Null means nothing to display.</param>
 /// <param name="ShouldExit">When true the REPL should terminate.</param>
 /// <param name="ShouldClearHistory">When true the REPL should clear conversation history.</param>
+/// <param name="InjectAsUserMessage">
+/// When non-null the REPL forwards this string to the LLM as a user message instead of
+/// displaying it directly. Used by project slash commands loaded from
+/// <c>.sovrant/commands/{name}.md</c>.
+/// </param>
 public sealed record SlashCommandResult(
     string? Output = null,
     bool ShouldExit = false,
-    bool ShouldClearHistory = false);
+    bool ShouldClearHistory = false,
+    string? InjectAsUserMessage = null);

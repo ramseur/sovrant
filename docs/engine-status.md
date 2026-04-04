@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 7.5 Tier 1 complete)
+**Last updated:** 2026-04-04 (Phase 7.5 Tier 1+2 + Phase 7.6 memory files complete — 31 tools)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -22,6 +22,8 @@
 | Server session pool (`IRuntimeSessionPool`) | ✅ Implemented | One `ConversationRuntime` per session ID, kept alive in `ConcurrentDictionary`. Concurrent turns on the same session not yet serialized — Phase 9 adds per-session lock |
 | Unit test suite | ✅ 99/99 passing | Api(22) + Runtime(28) + Tools(26) + Commands(22) + Integration(1) |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
+| Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + /memory command (31 tools total) |
+| Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |
 
 ### Known issues fixed during testing
 
@@ -110,6 +112,20 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 |---|---|---|
 | `EnterWorktree` | ⬜ Not tested | Implemented; runs `git worktree add`, records path in `WorktreeState` singleton; `create_branch` param for `-b` flag |
 | `ExitWorktree` | ⬜ Not tested | Implemented; runs `git worktree remove`, clears `WorktreeState`; `force` param for `--force` |
+
+### Skill & discovery tools *(Phase 7.5 Tier 2)*
+
+| Tool | Status | Result |
+|---|---|---|
+| `Skill` | ⬜ Not tested | Implemented; reads `.sovrant/skills/{name}.md` (project-first, then global); substitutes `$ARGUMENTS` |
+| `ToolSearch` | ⬜ Not tested | Implemented; searches registered tool names/descriptions by keyword via `IToolRegistry.GetDefinitions()` |
+
+### MCP resource tools *(Phase 7.5 Tier 2)*
+
+| Tool | Status | Result |
+|---|---|---|
+| `ListMcpResources` | ⬜ Not tested | Implemented; lists resources from connected MCP servers via `McpClientRegistry` |
+| `ReadMcpResource` | ⬜ Not tested | Implemented; reads a resource by URI from a connected MCP server |
 
 ### Notebook tools
 

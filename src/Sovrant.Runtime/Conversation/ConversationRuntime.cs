@@ -363,7 +363,32 @@ public sealed partial class ConversationRuntime : IConversationRuntime
               .Append("You MAY call ExitPlanMode to leave plan mode when instructed by the user.");
         }
 
+        // Global memory: ~/.sovrant/memory.md
+        var globalMemory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".sovrant", "memory.md");
+        AppendMemoryFile(sb, globalMemory, "Global memory");
+
+        // Project memory: .sovrant/memory.md in the working directory
+        var projectMemory = Path.Combine(
+            Directory.GetCurrentDirectory(), ".sovrant", "memory.md");
+        AppendMemoryFile(sb, projectMemory, "Project memory");
+
         return sb.ToString();
+    }
+
+    private static void AppendMemoryFile(StringBuilder sb, string path, string label)
+    {
+        if (!File.Exists(path)) return;
+        try
+        {
+            var content = File.ReadAllText(path).Trim();
+            if (string.IsNullOrEmpty(content)) return;
+            sb.Append("\n\n---\n")
+              .Append("## ").Append(label).Append(" (").Append(path).Append(")\n\n")
+              .Append(content);
+        }
+        catch (IOException) { /* silently skip unreadable files */ }
     }
 
     private sealed record StreamAccumulation(
