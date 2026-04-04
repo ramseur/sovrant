@@ -63,6 +63,9 @@ public static class ServiceCollectionExtensions
 
         if (!ollamaUrl.EndsWith('/')) ollamaUrl += "/";
 
+        var webSearchEnabled = string.Equals(
+            Environment.GetEnvironmentVariable("LLM_WEB_SEARCH"), "true", StringComparison.OrdinalIgnoreCase);
+
         var routerMode = Enum.TryParse<RouterMode>(
             Environment.GetEnvironmentVariable("ROUTER_MODE") ?? configuration["Router:Mode"], true,
             out var rm) ? rm : RouterMode.Smart;
@@ -78,7 +81,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ILogger>(sp =>
             sp.GetRequiredService<ILoggerFactory>().CreateLogger("Sovrant.Api"));
 
-        services.AddHttpClient<OpenAiCompatProvider>(c => c.BaseAddress = new Uri(baseUrl));
+        // When LLM_WEB_SEARCH=true, use the Responses API provider (POST /v1/responses) which
+        // supports web_search_preview. Otherwise use the standard chat completions provider.
+        if (webSearchEnabled)
+            services.AddHttpClient<OpenAiResponsesProvider>(c => c.BaseAddress = new Uri(baseUrl));
+        else
+            services.AddHttpClient<OpenAiCompatProvider>(c => c.BaseAddress = new Uri(baseUrl));
+
         services.AddHttpClient<OllamaProvider>(c => c.BaseAddress = new Uri(ollamaUrl));
         if (hasProviderApi)
         {
@@ -95,14 +104,16 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<ISmartRouter>(sp =>
         {
-            var openAiProv = sp.GetRequiredService<OpenAiCompatProvider>();
+            ILlmProvider primaryProvider = webSearchEnabled
+                ? sp.GetRequiredService<OpenAiResponsesProvider>()
+                : sp.GetRequiredService<OpenAiCompatProvider>();
             var ollamaProv = sp.GetRequiredService<OllamaProvider>();
             var logger = sp.GetRequiredService<ILogger<SmartRouter>>();
             var pingClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("SmartRouterPing");
 
             var providers = new List<ProviderInfo>
             {
-                new(openAiProv, "models", 0.002),
+                new(primaryProvider, "models", 0.002),
                 new(ollamaProv, "models", 0.0),
             };
 

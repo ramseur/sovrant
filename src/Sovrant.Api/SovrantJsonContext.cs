@@ -43,6 +43,12 @@ namespace Sovrant.Api;
 [JsonSerializable(typeof(OpenAiChatRequest))]
 [JsonSerializable(typeof(OpenAiChatResponse))]
 [JsonSerializable(typeof(OpenAiSseChunk))]
+[JsonSerializable(typeof(OpenAiResponsesRequest))]
+[JsonSerializable(typeof(OpenAiResponsesResponse))]
+[JsonSerializable(typeof(OpenAiResponsesTextDeltaChunk))]
+[JsonSerializable(typeof(OpenAiResponsesOutputItemChunk))]
+[JsonSerializable(typeof(OpenAiResponsesFunctionCallDeltaChunk))]
+[JsonSerializable(typeof(OpenAiResponsesCompletedChunk))]
 [JsonSerializable(typeof(JsonElement))]
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,

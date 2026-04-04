@@ -205,7 +205,7 @@ The server keeps one `ConversationRuntime` alive per `session_id` in an in-memor
 | `ROUTER_MODE` | No | `Smart` (default) or `Fixed` |
 | `ROUTER_STRATEGY` | No | `Balanced` (default), `Latency`, or `Cost` |
 | `AGENT_MODE` | No | `modern` (default, in-process) or `legacy` (process-per-agent) |
-| `LLM_WEB_SEARCH` | No | Set to `true` to inject the model's native web search tool (e.g. OpenAI `web_search_preview`). No external API key required. |
+| `LLM_WEB_SEARCH` | No | Set to `true` to use OpenAI's Responses API with `web_search_preview`. No Brave/FireCrawl key required. |
 | `BRAVE_API_KEY` | No | Enables WebSearch via Brave Search API |
 | `FIRECRAWL_API_KEY` | No | Enables WebSearch via FireCrawl (fallback if Brave not set) |
 

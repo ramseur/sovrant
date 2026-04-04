@@ -84,7 +84,7 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 |---|---|---|
 | `WebFetch` | ✅ Tested | Fetched `https://httpbin.org/get`; model correctly extracted response data |
 | `WebSearch` | ⬜ Not tested | Implemented; requires `BRAVE_API_KEY` (or `FIRECRAWL_API_KEY` as fallback) |
-| Native web search (`LLM_WEB_SEARCH=true`) | ⬜ Not tested | Injects `web_search_preview` built-in tool; OpenAI handles search server-side — no external API key required |
+| Native web search (`LLM_WEB_SEARCH=true`) | ✅ Tested | Routes through OpenAI Responses API (`/v1/responses`); `web_search_preview` built-in tool injected; `WebSearch` function tool suppressed; no Brave/FireCrawl key required |
 
 ### Task management tools
 

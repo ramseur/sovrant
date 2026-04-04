@@ -26,9 +26,6 @@ public class OpenAiCompatProvider : ILlmProvider
     private static readonly Action<ILogger, string, Exception?> _logSseSkip =
         LoggerMessage.Define<string>(LogLevel.Warning, new EventId(4, "SseSkip"), "Skipping unparseable SSE data: '{Data}'.");
 
-    private static readonly bool _webSearchEnabled =
-        string.Equals(Environment.GetEnvironmentVariable("LLM_WEB_SEARCH"), "true", StringComparison.OrdinalIgnoreCase);
-
     /// <summary>Initializes a new instance of <see cref="OpenAiCompatProvider"/>.</summary>
     /// <param name="http">The HTTP client configured for this provider.</param>
     /// <param name="auth">The authentication provider.</param>
@@ -196,19 +193,6 @@ public class OpenAiCompatProvider : ILlmProvider
     private protected virtual async Task<HttpRequestMessage> BuildRequestAsync(OpenAiChatRequest openAiReq, CancellationToken ct)
     {
         var apiKey = await _auth.GetAuthHeaderAsync(ct).ConfigureAwait(false);
-
-        if (_webSearchEnabled)
-        {
-            var tools = (openAiReq.Tools ?? [])
-                .Append(new OpenAiTool("web_search_preview", null))
-                .ToList();
-            openAiReq = openAiReq with
-            {
-                Tools = tools,
-                ToolChoice = openAiReq.ToolChoice ?? "auto"
-            };
-        }
-
         var json = JsonSerializer.Serialize(openAiReq, SovrantJsonContext.Default.OpenAiChatRequest);
         var httpReq = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
         {
