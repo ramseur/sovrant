@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 8 complete — structured async logging; Phase 7 hardening done; Phase 17.5 agent scaffolding done; OpenAI Responses API + native web search done — 31 tools, 100+ tests)
+**Last updated:** 2026-04-04 (Phase 9 complete — multi-tenant per-request credentials; Phase 8 structured async logging; Phase 7 hardening done — 31 tools, 111 tests)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -21,7 +21,7 @@
 | Token counts | ✅ Fixed | OpenAI trailing usage chunk now captured. Input + output tokens reported correctly after each turn. |
 | HTTP server (`Sovrant.Server`) | ✅ Working | 9 endpoints: `GET /health`, `POST /v1/chat/completions`, `GET+PUT /v1/config`, `GET /v1/status`, `GET /v1/models`, `GET /v1/sessions`, `GET+DELETE /v1/sessions/{id}` |
 | Server session pool (`IRuntimeSessionPool`) | ✅ Implemented | One `ConversationRuntime` per session ID, `ConcurrentDictionary`. Concurrent turns on the same session not yet serialised — Phase 9 adds per-session lock. |
-| Unit test suite | �� 101/101 passing | Api(23) + Runtime(29) + Tools(26) + Commands(22) + Integration(1) |
+| Unit test suite | ✅ 111/111 passing | Api(28) + Runtime(34) + Tools(26) + Commands(22) + Integration(1) |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |
@@ -68,6 +68,19 @@
 | Structured JSON output (`SOVRANT_LOG_FORMAT=json`) | ✅ Includes scope properties (`session_id`, `model`, `turn`) in JSON log lines |
 | Integration test for structured log output | ✅ `StructuredLoggingTests` — verifies `session_id` on turn-start and scope propagation |
 | No inline `_logger.LogXxx(...)` calls remaining | ✅ All converted to `[LoggerMessage]` delegates |
+
+### Phase 9 — Multi-Tenant Per-Request Credentials ✅
+
+| Item | Status |
+|---|---|
+| `x_api_key` / `x_base_url` fields on `ChatCompletionRequest` | ✅ Deserialized from request body |
+| `ScopedSingleProviderRouter` | ✅ Lightweight `ISmartRouter` wrapping one provider — no ping, no health scoring |
+| Request-scoped `OpenAiCompatProvider` | ✅ Built from `x_api_key` + `x_base_url` per request; `IHttpClientFactory` named client |
+| Composite session pool key (`{session_id}::{provider}`) | ✅ Isolates sessions by provider when per-request credentials present |
+| `RuntimeSessionPool.GetOrCreateAsync` scoped router override | ✅ Optional `ISmartRouter` param for creating scoped runtimes |
+| `x_api_key` never logged or persisted | ✅ Only passed to `ApiKeyAuthProvider` for auth headers; not in any log path |
+| Global config not mutated by scoped requests | ✅ `serverConfig.Model` only updated when NOT using scoped credentials |
+| Tests: `ScopedSingleProviderRouterTests` (5) + `RuntimeSessionPoolTests` (5) | ✅ 10 new tests |
 
 ---
 

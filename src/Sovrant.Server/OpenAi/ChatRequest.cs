@@ -27,6 +27,20 @@ public sealed class ChatCompletionRequest
     /// </summary>
     [JsonPropertyName("session_id")]
     public string? SessionId { get; init; }
+
+    /// <summary>
+    /// Extension field: per-request LLM API key. Overrides the server's global key for this call only.
+    /// The server never logs, persists, or includes this value in error responses.
+    /// </summary>
+    [JsonPropertyName("x_api_key")]
+    public string? XApiKey { get; init; }
+
+    /// <summary>
+    /// Extension field: per-request LLM base URL. Overrides the server's global base URL for this call only.
+    /// Must include protocol (e.g. <c>https://api.openai.com/v1</c>).
+    /// </summary>
+    [JsonPropertyName("x_base_url")]
+    public string? XBaseUrl { get; init; }
 }
 
 /// <summary>A single message in a chat completion request.</summary>

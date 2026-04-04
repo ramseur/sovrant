@@ -1,7 +1,13 @@
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Sovrant.Api.Auth;
+using Sovrant.Api.Providers;
 using Sovrant.Api.Routing;
+using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Conversation;
+using Sovrant.Runtime.Session;
+using Sovrant.Runtime.Tools;
 using Sovrant.Server.OpenAi;
 using Sovrant.Server.ServerConfig;
 using Sovrant.Server.Streaming;
@@ -25,6 +31,12 @@ internal static class ChatRoutes
         MutableServerConfig serverConfig,
         ISmartRouter router,
         ToolRegistrar toolRegistrar,
+        IHttpClientFactory httpClientFactory,
+        IToolExecutor toolExecutor,
+        IToolRegistry toolRegistry,
+        ISessionStore sessionStore,
+        SovrantConfig sovrantConfig,
+        ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
@@ -32,20 +44,68 @@ internal static class ChatRoutes
         // Seed tools (no-op if already registered).
         toolRegistrar.RegisterAll();
 
-        // Initialize router (no-op if already done).
-        await router.InitializeAsync(ct).ConfigureAwait(false);
+        // Determine whether per-request credentials override the global provider.
+        var hasScopedCredentials = !string.IsNullOrWhiteSpace(req.XApiKey);
+        var scopedBaseUrl = req.XBaseUrl;
 
-        // Apply provider pin from config.
-        var pinned = serverConfig.PinnedProvider;
-        if (pinned is not null)
-            await router.PinProviderAsync(pinned, ct).ConfigureAwait(false);
+        ISmartRouter activeRouter;
+        if (hasScopedCredentials)
+        {
+            // Build a request-scoped provider + router using the client-supplied credentials.
+            // The server never logs or persists x_api_key.
+            var baseUrl = !string.IsNullOrWhiteSpace(scopedBaseUrl)
+                ? scopedBaseUrl
+                : serverConfig.LlmBaseUrl;
+            if (!baseUrl.EndsWith('/')) baseUrl += "/";
 
-        // With a session ID → use the pool (in-memory history persists across requests).
-        // Without a session ID → use the transient runtime injected by DI (stateless one-shot).
+            var scopedHttp = httpClientFactory.CreateClient("ScopedProvider");
+            scopedHttp.BaseAddress = new Uri(baseUrl);
+
+            var scopedAuth = new ApiKeyAuthProvider(req.XApiKey!);
+            var scopedLogger = loggerFactory.CreateLogger("Sovrant.Api.ScopedProvider");
+            var scopedProvider = new OpenAiCompatProvider(scopedHttp, scopedAuth, scopedLogger);
+            activeRouter = new ScopedSingleProviderRouter(scopedProvider);
+        }
+        else
+        {
+            // Use the global router with normal smart routing.
+            activeRouter = router;
+            await activeRouter.InitializeAsync(ct).ConfigureAwait(false);
+
+            var pinned = serverConfig.PinnedProvider;
+            if (pinned is not null)
+                await activeRouter.PinProviderAsync(pinned, ct).ConfigureAwait(false);
+        }
+
+        // Resolve the runtime for this request.
         IConversationRuntime runtime;
         if (!string.IsNullOrWhiteSpace(req.SessionId))
         {
-            runtime = await sessionPool.GetOrCreateAsync(req.SessionId, ct).ConfigureAwait(false);
+            // Session pool key includes the base URL when per-request credentials are used
+            // so two users with the same session_id but different providers stay isolated.
+            var status = activeRouter.GetStatus();
+            var providerTag = status.Count > 0 ? status[0].Name : "scoped";
+            var poolKey = hasScopedCredentials
+                ? $"{req.SessionId}::{providerTag}"
+                : req.SessionId;
+
+            if (hasScopedCredentials)
+            {
+                // Scoped sessions need a runtime wired to the scoped router.
+                runtime = await sessionPool.GetOrCreateAsync(poolKey, activeRouter, ct)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                runtime = await sessionPool.GetOrCreateAsync(poolKey, ct: ct).ConfigureAwait(false);
+            }
+        }
+        else if (hasScopedCredentials)
+        {
+            // Stateless one-shot with scoped credentials — build a transient runtime manually.
+            var runtimeLogger = loggerFactory.CreateLogger<ConversationRuntime>();
+            runtime = new ConversationRuntime(
+                activeRouter, toolExecutor, toolRegistry, sessionStore, sovrantConfig, runtimeLogger);
         }
         else
         {
@@ -69,7 +129,8 @@ internal static class ChatRoutes
         var model = req.Model ?? serverConfig.Model;
 
         // Apply per-request model override to the live config so ConversationRuntime picks it up.
-        if (req.Model is not null)
+        // Only mutate the global config when NOT using scoped credentials.
+        if (req.Model is not null && !hasScopedCredentials)
             serverConfig.Model = req.Model;
 
         if (req.Stream)

@@ -11,7 +11,17 @@ public interface IRuntimeSessionPool
     /// Returns the existing runtime for <paramref name="sessionId"/>, or creates and initialises
     /// a new one (replaying any persisted JSONL history) if none exists yet.
     /// </summary>
-    Task<IConversationRuntime> GetOrCreateAsync(string sessionId, CancellationToken ct = default);
+    /// <param name="sessionId">The session identifier (may be a composite key like <c>session::provider</c>).</param>
+    /// <param name="scopedRouterOverride">
+    /// When not <see langword="null"/>, the new runtime is wired to this router instead of the
+    /// DI-registered <see cref="Sovrant.Api.Routing.ISmartRouter"/>. Used for per-request credential overrides.
+    /// Ignored if the session already exists in the pool.
+    /// </param>
+    /// <param name="ct">A cancellation token.</param>
+    Task<IConversationRuntime> GetOrCreateAsync(
+        string sessionId,
+        Sovrant.Api.Routing.ISmartRouter? scopedRouterOverride = null,
+        CancellationToken ct = default);
 
     /// <summary>
     /// Removes the runtime for <paramref name="sessionId"/> from the pool.

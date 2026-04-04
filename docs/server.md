@@ -40,6 +40,10 @@ The server binds to `http://127.0.0.1:5200` by default.
 | `LLM_WEB_SEARCH` | No | `false` | Set to `true` to route through OpenAI Responses API with `web_search_preview`. No Brave/FireCrawl key required. |
 | `BRAVE_API_KEY` | No | — | Enables `WebSearch` via Brave Search API |
 | `FIRECRAWL_API_KEY` | No | — | Enables `WebSearch` via FireCrawl (fallback if `BRAVE_API_KEY` not set) |
+| `SOVRANT_LOG_LEVEL` | No | `Information` | Minimum log level: `Verbose`, `Debug`, `Information`, `Warning`, `Error`, `Fatal` |
+| `SOVRANT_LOG_FILE` | No | `~/.sovrant/logs/sovrant-{Date}.log` | Rolling file path pattern. Empty string disables file logging. |
+| `SOVRANT_LOG_CONSOLE` | No | `true` | Write logs to stdout. Set to `false` to silence console output. |
+| `SOVRANT_LOG_FORMAT` | No | `text` | `text` (human-readable) or `json` (structured) |
 
 ---
 
@@ -81,13 +85,19 @@ OpenAI-compatible. Streams by default.
   ],
   "stream": true,
   "max_tokens": 4096,
-  "session_id": "optional-session-id"
+  "session_id": "optional-session-id",
+  "x_api_key": "sk-...",
+  "x_base_url": "https://api.openai.com/v1"
 }
 ```
 
 - `model` — overrides server default for this request
 - `session_id` — if supplied the server resumes that JSONL session from `~/.sovrant/sessions/{id}.jsonl`
 - `stream` — defaults to `true`; set `false` for a single JSON response
+- `x_api_key` — *(Phase 9)* per-request LLM API key; overrides the server's global `LLM_API_KEY` for this call only. The server never logs, persists, or includes this value in error responses.
+- `x_base_url` — *(Phase 9)* per-request LLM base URL; overrides the server's global `LLM_BASE_URL` for this call only. When combined with `x_api_key`, creates a request-scoped provider.
+
+When `x_api_key` is supplied, the server creates a request-scoped `OpenAiCompatProvider` using the provided credentials. Sessions are isolated by a composite key (`{session_id}::{provider_name}`) so two clients with different keys sharing the same `session_id` will not collide.
 
 **Streaming response (SSE)**
 

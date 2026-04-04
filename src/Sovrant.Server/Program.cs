@@ -63,6 +63,9 @@ builder.Services.AddSovrantTools();
 // AskUserQuestion cannot pause an HTTP stream — return a fixed message instead.
 builder.Services.AddSingleton<IUserInputProvider, HttpUserInputProvider>();
 
+// Named HttpClient for per-request scoped providers (Phase 9).
+builder.Services.AddHttpClient("ScopedProvider");
+
 // Middleware.
 builder.Services.AddSingleton<BearerTokenMiddleware>();
 builder.Services.AddSingleton<RequestLoggingMiddleware>();
