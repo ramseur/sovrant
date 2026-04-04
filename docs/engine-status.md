@@ -18,7 +18,7 @@
 | Session resumption (`--session <id>`) | ✅ Working | History replayed correctly across separate process invocations |
 | Permission system | ✅ Working | `bypassPermissions` / `dontAsk` / `default` / `plan` all functional |
 | SSE streaming | ✅ Working | Text chunks stream to console in real time |
-| HTTP server (`Sovrant.Server`) | ✅ Built | Not smoke-tested live end-to-end; unit-tested |
+| HTTP server (`Sovrant.Server`) | ⚠ Partially tested | Health endpoint confirmed. Chat completions blocked by API key revocation during smoke test — see Server Smoke Test section |
 | Server session pool (`IRuntimeSessionPool`) | ✅ Implemented | Option B: one `ConversationRuntime` per session ID, kept alive in `ConcurrentDictionary`; safe for multi-user |
 | Unit test suite | ✅ 99/99 passing | Api(22) + Runtime(28) + Tools(26) + Commands(22) + Integration(1) |
 
@@ -31,6 +31,8 @@
 | `--permission-mode bypass-permissions` (hyphen) silently fell back to `Default` | Use `bypassPermissions` (camelCase) — matches the `PermissionMode` enum |
 | `--session` option was parsed but never wired to `InitializeSessionAsync` | Fixed: session ID now applied to the same `IConversationRuntime` instance used for the turn |
 | `DisableFastUpToDateCheck` missing — MSB3492 cache file race on parallel Windows builds | Added to `Directory.Build.props` |
+| `ConversationRuntime` set `Stream=false` on internal `MessagesRequest` | Fixed: runtime always sets `Stream=true`; server buffers or forwards SSE independently |
+| Server ran stale binary (pre-URL-fix) during smoke test — ping URL was `v1/v1/models` → 404, all providers unhealthy | Always rebuild server before smoke testing: `dotnet build src/Sovrant.Server` |
 
 ### Known open issues
 
@@ -127,50 +129,73 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 
 ---
 
-## Remaining Smoke Tests
+## Server Smoke Test
 
-Run with a paid-tier key or after quota resets:
+> **Note:** The API key used during testing was revoked mid-session (exposed in conversation).
+> Two bugs were found and fixed before the key was revoked:
+> - `ConversationRuntime` always sets `Stream=true` internally (was `false`, caused empty response bodies)
+> - Stale server binary had double `/v1/v1/` in ping URL — always rebuild before testing
+>
+> Re-run these tests with a fresh key. Always build fresh first:
+> ```bash
+> dotnet build src/Sovrant.Server -c Debug
+> ```
 
 ```bash
-export LLM_API_KEY="..."
-export LLM_BASE_URL="https://api.openai.com/v1"   # or Google AI Studio URL
-MODEL="gpt-4o-mini"
-PM="bypassPermissions"
+export LLM_API_KEY="..."    # fresh key — never paste keys into chat
+export SOVRANT_TOKEN=test123
 
-# PowerShell (Windows)
-sovrant --model $MODEL --permission-mode $PM prompt "Use PowerShell to run: Get-Date"
+# Start server
+dotnet run --project src/Sovrant.Server --no-build &
+sleep 5
 
-# REPL
-sovrant --model $MODEL --permission-mode $PM prompt "Use the REPL tool with python to compute 2+2"
-
-# WebSearch (requires WEB_SEARCH_API_KEY)
-export WEB_SEARCH_API_KEY="..."
-sovrant --model $MODEL --permission-mode $PM prompt "Use WebSearch to find the latest .NET 10 release notes"
-
-# Background tasks
-sovrant --model $MODEL --permission-mode $PM prompt "Use TaskCreate to run: dotnet --version. Then use TaskOutput to get the result."
-
-# Sub-agent
-sovrant --model $MODEL --permission-mode $PM prompt "Use the Agent tool to ask a sub-agent: what is 2+2?"
-
-# NotebookEdit
-sovrant --model $MODEL --permission-mode $PM prompt "Use NotebookEdit to create a new cell in /tmp/test.ipynb with content: print('hello')"
-
-# Server smoke test
-SOVRANT_TOKEN=test123 LLM_API_KEY=... dotnet run --project src/Sovrant.Server
+# 1. Health (unauthenticated)
 curl -s http://localhost:5200/health
-curl -X POST http://localhost:5200/v1/chat/completions \
+# expected: {"status":"ok"}
+
+# 2. Non-streaming chat
+curl -s -X POST http://localhost:5200/v1/chat/completions \
   -H "Authorization: Bearer test123" \
   -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"hello"}],"model":"gpt-4o-mini"}'
+  -d '{"messages":[{"role":"user","content":"Reply with one word: pong"}],"model":"gpt-4o-mini","stream":false}'
+# expected: {"choices":[{"message":{"content":"pong",...},...}],...}
 
-# Server session continuity (uses IRuntimeSessionPool)
-curl -X POST http://localhost:5200/v1/chat/completions \
+# 3. Streaming chat (SSE)
+curl -s -X POST http://localhost:5200/v1/chat/completions \
+  -H "Authorization: Bearer test123" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Reply with one word: pong"}],"model":"gpt-4o-mini","stream":true}'
+# expected: data: {...,"delta":{"content":"pong"},...}  then  data: [DONE]
+
+# 4. Session continuity via server pool
+curl -s -X POST http://localhost:5200/v1/chat/completions \
   -H "Authorization: Bearer test123" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"My name is Eric"}],"model":"gpt-4o-mini","session_id":"test-session-1"}'
-curl -X POST http://localhost:5200/v1/chat/completions \
+
+curl -s -X POST http://localhost:5200/v1/chat/completions \
   -H "Authorization: Bearer test123" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"What is my name?"}],"model":"gpt-4o-mini","session_id":"test-session-1"}'
+# expected: second response references "Eric"
+
+# 5. Status endpoint
+curl -s -H "Authorization: Bearer test123" http://localhost:5200/v1/status
+
+# 6. Models endpoint
+curl -s -H "Authorization: Bearer test123" http://localhost:5200/v1/models
+
+# 7. Config update
+curl -s -X PUT http://localhost:5200/v1/config \
+  -H "Authorization: Bearer test123" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o"}'
+
+# 8. Session list and delete
+curl -s -H "Authorization: Bearer test123" http://localhost:5200/v1/sessions
+curl -s -X DELETE -H "Authorization: Bearer test123" http://localhost:5200/v1/sessions/test-session-1
 ```
+
+## Remaining CLI Smoke Tests
+
+All CLI tools confirmed working. No remaining CLI tests needed.
