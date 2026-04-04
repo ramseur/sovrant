@@ -85,7 +85,11 @@ public class OpenAiCompatProvider : ILlmProvider
         var openAiReq = FormatConverter.ToOpenAi(req with { Stream = true });
         using var httpReq = await BuildRequestAsync(openAiReq, ct).ConfigureAwait(false);
         using var response = await _http.SendAsync(httpReq, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await ParseErrorAsync(response, ct).ConfigureAwait(false);
+            throw new InvalidOperationException(err.Message);
+        }
 
         var responseStream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
         await using (responseStream.ConfigureAwait(false))

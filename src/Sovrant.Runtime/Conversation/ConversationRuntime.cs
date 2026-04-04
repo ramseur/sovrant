@@ -187,7 +187,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             }
 
             // Execute all tool calls and collect results
-            var toolResultBlocks = new List<ToolResultContentBlock>();
+            // Each tool call needs its own separate tool-result entry (required by OpenAI and Anthropic).
+            var toolResultPairs = new List<(ToolResultContentBlock Content, bool IsError)>(toolUseBlocks.Count);
             foreach (var tu in toolUseBlocks)
             {
                 yield return new RuntimeEvent.ToolUseRequested(tu.Id, tu.Name, tu.Input);
@@ -198,17 +199,24 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 if (!execResult.Success && execResult.Output.Contains("denied", StringComparison.OrdinalIgnoreCase))
                     yield return new RuntimeEvent.PermissionDenied(tu.Name, execResult.Output);
 
-                toolResultBlocks.Add(new ToolResultContentBlock.TextBlock(execResult.Output));
+                toolResultPairs.Add((new ToolResultContentBlock.TextBlock(execResult.Output), execResult.IsError));
 
                 await AppendSessionEntryAsync("tool_result", execResult.Output, ct,
                     toolName: tu.Name, toolUseId: tu.Id, isError: execResult.IsError)
                     .ConfigureAwait(false);
             }
 
-            // Append tool results message and loop back
-            _history.Add(InputMessage.UserToolResult(
-                toolUseBlocks[0].Id,
-                toolResultBlocks));
+            // Append ONE tool-result InputContentBlock per tool call so the LLM receives correctly
+            // paired tool_call_id → tool_result associations (OpenAI requires 1:1 pairing).
+            var toolResultInputBlocks = new List<InputContentBlock>(toolUseBlocks.Count);
+            for (var i = 0; i < toolUseBlocks.Count; i++)
+            {
+                toolResultInputBlocks.Add(new InputContentBlock.ToolResultBlock(
+                    toolUseBlocks[i].Id,
+                    [toolResultPairs[i].Content],
+                    toolResultPairs[i].IsError));
+            }
+            _history.Add(new InputMessage("user", toolResultInputBlocks));
 
             round++;
         }
@@ -357,16 +365,18 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
     private static JsonElement ParseToolInput(string json)
     {
+        // Use Clone() so the returned JsonElement owns its memory independently of the
+        // JsonDocument (which is otherwise eligible for GC and ArrayPool reclamation).
         if (string.IsNullOrWhiteSpace(json))
-            return JsonDocument.Parse("{}").RootElement;
+            return JsonDocument.Parse("{}").RootElement.Clone();
 
         try
         {
-            return JsonDocument.Parse(json).RootElement;
+            return JsonDocument.Parse(json).RootElement.Clone();
         }
         catch (JsonException)
         {
-            return JsonDocument.Parse("{}").RootElement;
+            return JsonDocument.Parse("{}").RootElement.Clone();
         }
     }
 
