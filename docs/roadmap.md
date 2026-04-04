@@ -13,7 +13,7 @@ The engine is fully functional as a single-user tool:
 
 - CLI REPL and one-shot prompt mode
 - Agentic loop with up to 20 tool rounds per turn
-- All 20+ tools working on Windows and Linux
+- 22 tools working on Windows and Linux (see Phase 7.5 for gap analysis vs OpenClaude)
 - JSONL session persistence
 - SmartRouter with health/latency scoring across multiple providers
 - HTTP server (`Sovrant.Server`) with OpenAI-compatible endpoints
@@ -22,6 +22,63 @@ The engine is fully functional as a single-user tool:
 ---
 
 ## Roadmap
+
+### Phase 7.5 — Tool Parity with OpenClaude
+
+**Goal:** Close the gap between Sovrant's 22 tools and the full OpenClaude tool set. A comparison of the OpenClaude source against Sovrant's `Sovrant.Tools` project identified 9 missing tools worth porting and 13 cloud/platform-only stubs that are not portable.
+
+#### Tool comparison summary
+
+| Category | Count | Tools |
+|---|---|---|
+| Implemented ✅ | 22 | Read, Write, Edit, Glob, Grep, LS, Bash, PowerShell, REPL, WebFetch, WebSearch, TaskCreate/Get/List/Output/Stop, TodoWrite, Agent, AskUserQuestion, Sleep, NotebookEdit |
+| Missing — port ⬜ | 9 | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree, ListMcpResources, ReadMcpResource, ToolSearch, SkillTool, ScheduleCron, ConfigTool, LSP |
+| Not portable ❌ | 13 | MCPTool, McpAuthTool, TeamCreate/Delete, RemoteTrigger, SendMessage, WorkflowTool, BriefTool, SuggestBackgroundPR, VerifyPlanExecution, SyntheticOutput, Tungsten |
+
+#### Tier 1 — High priority (complete the core developer experience)
+
+**`TaskUpdate`**
+The task management suite has 5 of 6 tools. `TaskUpdate` lets the model update the status or description of a running background task while it is in flight. Trivial to add alongside the existing `BackgroundTaskRegistry`.
+
+**`EnterPlanMode` / `ExitPlanMode`**
+Sovrant already has a `plan` permission mode, but it is set by the user at startup (`--permission-mode plan`). These tools let the *model* signal a plan-mode transition mid-conversation — entering a read-only planning phase and exiting back to execution when ready. The runtime needs to honour the signal by toggling `_config.PermissionMode` (or a session-scoped override) when it sees these tool calls returned.
+
+**`EnterWorktree` / `ExitWorktree`**
+Creates a temporary git worktree so the agent performs all file edits on an isolated branch, then optionally commits and returns the branch name. Essential for safe autonomous multi-file coding work — the user's working tree is never touched until explicitly merged. Requires `git worktree add` / `git worktree remove` via `Bash` internally; the tool wraps this with session-scoped state tracking.
+
+#### Tier 2 — Medium priority (MCP resource access + tool discovery)
+
+**`ListMcpResources` / `ReadMcpResource`**
+OpenClaude distinguishes between MCP *tools* (callable functions) and MCP *resources* (readable data — files, database rows, API responses). Sovrant's MCP client invokes tools but cannot read resources. These two tools add resource access: `ListMcpResources` enumerates what each connected MCP server exposes; `ReadMcpResource` fetches a resource by server name and URI.
+
+**`ToolSearch`**
+When the tool list grows large (many MCP servers, many registered tools), including all tool definitions in every LLM context window is expensive and noisy. `ToolSearch` lets the model search available tools by keyword and load them on demand — "deferred tool discovery". Relevant once the tool count exceeds ~30 or MCP servers register many tools.
+
+**`SkillTool`**
+Invokes a named skill — a pre-defined prompt template stored in `.sovrant/skills/{name}.md`. The model calls `Skill("commit")` and the skill's prompt is injected as a user message, triggering a specialised behaviour. Enables reusable, project-specific agent workflows without changing code.
+
+#### Tier 3 — Lower priority
+
+**`ScheduleCron`**
+Schedules a recurring or one-shot prompt via a 5-field cron expression. The scheduled task fires at the next cron match and enqueues a new conversation turn. Requires a persistent cron scheduler (`IHostedService` + cron file). Complex but powerful for automation use cases.
+
+**`ConfigTool`**
+Lets the model read and write Sovrant's runtime config from within a conversation (change model, permission mode, base URL). The `PUT /v1/config` endpoint already does this from the outside; the tool exposes the same capability to the model itself.
+
+**`LSPTool`**
+Language Server Protocol integration: hover type info, go-to-definition, find-references, document symbols. Powerful for code-heavy agentic work but requires a language server process to be running alongside Sovrant. Out of scope until there is a clear IDE integration story.
+
+#### Implementation plan
+
+1. `TaskUpdate` — add to `Sovrant.Tools/Tasks/`, register in `ToolRegistrar`, add unit test
+2. `EnterPlanMode` / `ExitPlanMode` — add to `Sovrant.Tools/PlanMode/`; runtime handles the tool result by updating a session-scoped permission override
+3. `EnterWorktree` / `ExitWorktree` — add to `Sovrant.Tools/Worktree/`; session-scoped worktree path stored in `ConversationRuntime` or a scoped service
+4. `ListMcpResources` / `ReadMcpResource` — extend existing MCP client (`IMcpClient`) with a `ReadResourceAsync` method
+5. `ToolSearch` — add deferred tool registry support to `IToolRegistry`; `ToolSearch` queries it by keyword
+6. `SkillTool` — reads `.sovrant/skills/{name}.md` from disk and returns the content as a user message injection
+7. `ScheduleCron` / `ConfigTool` / `LSPTool` — deferred; document as future work
+
+---
 
 ### Phase 8 — Multi-Tenant Per-Request Credentials
 
