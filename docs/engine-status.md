@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 7 complete — all hardening done; Phase 17.5 agent scaffolding done; OpenAI Responses API + native web search done — 31 tools, 100 tests)
+**Last updated:** 2026-04-04 (Phase 8 complete — structured async logging; Phase 7 hardening done; Phase 17.5 agent scaffolding done; OpenAI Responses API + native web search done — 31 tools, 100+ tests)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -21,7 +21,7 @@
 | Token counts | ✅ Fixed | OpenAI trailing usage chunk now captured. Input + output tokens reported correctly after each turn. |
 | HTTP server (`Sovrant.Server`) | ✅ Working | 9 endpoints: `GET /health`, `POST /v1/chat/completions`, `GET+PUT /v1/config`, `GET /v1/status`, `GET /v1/models`, `GET /v1/sessions`, `GET+DELETE /v1/sessions/{id}` |
 | Server session pool (`IRuntimeSessionPool`) | ✅ Implemented | One `ConversationRuntime` per session ID, `ConcurrentDictionary`. Concurrent turns on the same session not yet serialised — Phase 9 adds per-session lock. |
-| Unit test suite | ✅ 100/100 passing | Api(23) + Runtime(28) + Tools(26) + Commands(22) + Integration(1) |
+| Unit test suite | �� 101/101 passing | Api(23) + Runtime(29) + Tools(26) + Commands(22) + Integration(1) |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |
@@ -53,6 +53,21 @@
 | ~~No provider retry on 429 / 5xx~~ | ✅ Fixed — 3 attempts with 1s/2s/4s backoff on retryable errors in `ConversationRuntime`. |
 | ~~`AgentTool` has no recursion depth limit~~ | ✅ Fixed — `AsyncLocal<int>` counter; rejects at depth ≥ 5. |
 | `Sovrant.Agents` not wired into CLI or Server | `AddMultiAgentSystem()` exists but is not called in either host. `AgentTool` still uses direct `ConversationRuntime`. Phase 18 wires it up. |
+
+### Phase 8 — Structured Async Logging ✅
+
+| Item | Status |
+|---|---|
+| Async rolling file logger (`AsyncRollingFileLoggerProvider`) | ✅ Custom non-blocking implementation using `System.Threading.Channels` — daily rolling, bounded 4096-entry channel, `DropOldest` backpressure |
+| `SOVRANT_LOG_LEVEL` / `SOVRANT_LOG_FILE` / `SOVRANT_LOG_CONSOLE` / `SOVRANT_LOG_FORMAT` env vars | ✅ `SovrantLogConfig.FromEnvironment()` |
+| Wired in CLI and Server | ✅ `AddSovrantLogging()` in both `Program.cs` files |
+| `[LoggerMessage]` source-generated delegates | ✅ 22+ delegates across `ConversationRuntime`, `SmartRouter`, `OpenAiCompatProvider`, `DefaultToolExecutor`, `RequestLoggingMiddleware`, `JsonlSessionStore`, `McpToolRegistrar`, `ServerLog` |
+| Ambient context (`session_id`, `model`, `turn`) via `BeginScope()` | ✅ In `ConversationRuntime.RunTurnAsync` |
+| Stopwatch timing on tool dispatch | ✅ `duration_ms` logged on every tool completion |
+| All critical log points from roadmap | ✅ Turn start/complete, tool dispatch/result, retry, compaction, provider selection, provider health, SSE errors, permission denied, request pipeline |
+| Structured JSON output (`SOVRANT_LOG_FORMAT=json`) | ✅ Includes scope properties (`session_id`, `model`, `turn`) in JSON log lines |
+| Integration test for structured log output | ✅ `StructuredLoggingTests` — verifies `session_id` on turn-start and scope propagation |
+| No inline `_logger.LogXxx(...)` calls remaining | ✅ All converted to `[LoggerMessage]` delegates |
 
 ---
 

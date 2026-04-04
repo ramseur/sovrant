@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Sovrant.Runtime.Permissions;
@@ -25,6 +26,9 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Tool '{ToolName}' threw an exception")]
     private static partial void LogToolException(ILogger logger, string toolName, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Tool '{ToolName}' completed in {DurationMs}ms (is_error={IsError})")]
+    private static partial void LogExecutionComplete(ILogger logger, string toolName, long durationMs, bool isError);
 
     public DefaultToolExecutor(
         IToolRegistry registry,
@@ -68,6 +72,7 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
         }
 
         LogExecuting(_logger, toolName);
+        var sw = Stopwatch.StartNew();
         try
         {
             var output = await handler(input, ct).ConfigureAwait(false);
@@ -76,6 +81,8 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
             if (output.Length > 50 * 1024)
                 output = await OffloadToTempFileAsync(toolName, output, ct).ConfigureAwait(false);
 
+            sw.Stop();
+            LogExecutionComplete(_logger, toolName, sw.ElapsedMilliseconds, false);
             return new ToolExecutionResult(true, output);
         }
         catch (OperationCanceledException)
@@ -84,17 +91,23 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
         }
         catch (InvalidOperationException ex)
         {
+            sw.Stop();
             LogToolException(_logger, toolName, ex);
+            LogExecutionComplete(_logger, toolName, sw.ElapsedMilliseconds, true);
             return new ToolExecutionResult(false, ex.Message, IsError: true);
         }
         catch (IOException ex)
         {
+            sw.Stop();
             LogToolException(_logger, toolName, ex);
+            LogExecutionComplete(_logger, toolName, sw.ElapsedMilliseconds, true);
             return new ToolExecutionResult(false, ex.Message, IsError: true);
         }
         catch (InvalidDataException ex)
         {
+            sw.Stop();
             LogToolException(_logger, toolName, ex);
+            LogExecutionComplete(_logger, toolName, sw.ElapsedMilliseconds, true);
             return new ToolExecutionResult(false, ex.Message, IsError: true);
         }
     }

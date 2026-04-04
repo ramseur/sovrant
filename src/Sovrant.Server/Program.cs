@@ -6,6 +6,7 @@ using Sovrant.Server.Auth;
 using Sovrant.Server.Permissions;
 using Sovrant.Server.Routes;
 using Sovrant.Server.ServerConfig;
+using Sovrant.Runtime.Logging;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
 
@@ -32,7 +33,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.WebHost.ConfigureKestrel(o => o.ListenLocalhost(serverPort));
 
-builder.Services.AddLogging(b => b.AddConsole().SetMinimumLevel(LogLevel.Warning));
+builder.Services.AddLogging(b => b.AddSovrantLogging());
 
 // Mutable runtime config — single source of truth for live config changes.
 var mutableConfig = new MutableServerConfig(
@@ -62,8 +63,9 @@ builder.Services.AddSovrantTools();
 // AskUserQuestion cannot pause an HTTP stream — return a fixed message instead.
 builder.Services.AddSingleton<IUserInputProvider, HttpUserInputProvider>();
 
-// Auth middleware.
+// Middleware.
 builder.Services.AddSingleton<BearerTokenMiddleware>();
+builder.Services.AddSingleton<RequestLoggingMiddleware>();
 
 // CORS — localhost only.
 builder.Services.AddCors(o => o.AddDefaultPolicy(policy =>
@@ -85,6 +87,7 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(policy =>
 var app = builder.Build();
 
 app.UseCors();
+app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseMiddleware<BearerTokenMiddleware>();
 
 // Health check — unauthenticated so load balancers / monitors can ping it.
@@ -103,8 +106,7 @@ StatusRoutes.Map(app);
 ModelsRoutes.Map(app);
 SessionRoutes.Map(app);
 
-app.Logger.LogInformation(
-    "Sovrant Server ready — http://127.0.0.1:{Port}", serverPort);
+Sovrant.Server.ServerLog.LogServerReady(app.Logger, serverPort);
 
 await app.RunAsync().ConfigureAwait(false);
 

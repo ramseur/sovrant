@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 7 complete — all 7.6–7.9 items done; Phase 17.5 agent scaffolding done; OpenAI Responses API provider + native web search done)
+**Last updated:** 2026-04-04 (Phase 8 complete — structured async logging; Phase 7 hardening done; Phase 17.5 agent scaffolding done; OpenAI Responses API provider + native web search done)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sovrant.Api.Routing;
+using Sovrant.Runtime.Logging;
 using Sovrant.Cli;
 using Sovrant.Commands;
 using Sovrant.Runtime;
@@ -107,7 +108,12 @@ ServiceProvider BuildServices(ParseResult pr)
     }
 
     var services = new ServiceCollection();
-    services.AddLogging(b => b.AddConsole().SetMinimumLevel(LogLevel.Warning));
+    // Default console to Warning in CLI so logs don't pollute the REPL.
+    // File logging always uses the configured SOVRANT_LOG_LEVEL (default: Information).
+    // Users can override with SOVRANT_LOG_LEVEL=Debug to see console debug output too.
+    var explicitLevel = Environment.GetEnvironmentVariable("SOVRANT_LOG_LEVEL");
+    services.AddLogging(b => b.AddSovrantLogging(
+        consoleMinOverride: string.IsNullOrEmpty(explicitLevel) ? LogLevel.Warning : null));
     services.AddSovrantRuntime(config);
     services.AddSovrantTools();
     services.AddSovrantCommands();

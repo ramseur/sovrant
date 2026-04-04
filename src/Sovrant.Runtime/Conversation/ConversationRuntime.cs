@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -27,14 +28,23 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly List<InputMessage> _history = [];
     private readonly string _systemPrompt;
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Starting turn for session '{SessionId}'")]
-    private static partial void LogTurnStart(ILogger logger, string sessionId);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Turn started: session={SessionId}, model={Model}")]
+    private static partial void LogTurnStart(ILogger logger, string sessionId, string model);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Turn complete: duration_ms={DurationMs}, tokens_in={TokensIn}, tokens_out={TokensOut}")]
+    private static partial void LogTurnComplete(ILogger logger, long durationMs, int tokensIn, int tokensOut);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Tool round {Round}/{Max} for session '{SessionId}'")]
     private static partial void LogToolRound(ILogger logger, int round, int max, string sessionId);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Maximum tool rounds ({Max}) reached for session '{SessionId}'")]
     private static partial void LogMaxRoundsReached(ILogger logger, int max, string sessionId);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Tool dispatched: tool={ToolName}")]
+    private static partial void LogToolDispatched(ILogger logger, string toolName);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Tool complete: tool={ToolName}, duration_ms={DurationMs}, is_error={IsError}")]
+    private static partial void LogToolResult(ILogger logger, string toolName, long durationMs, bool isError);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "LLM request failed: {Error}")]
     private static partial void LogRequestFailed(ILogger logger, string error);
@@ -44,6 +54,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Context compacted for session '{SessionId}': {Kept} messages summarized at {Tokens} input tokens")]
     private static partial void LogCompacted(ILogger logger, string sessionId, int kept, int tokens);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Provider selected: provider={Provider}")]
+    private static partial void LogProviderSelected(ILogger logger, string provider);
 
     private string _sessionId = Guid.NewGuid().ToString("N");
 
@@ -95,7 +108,12 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         string userMessage,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        LogTurnStart(_logger, SessionId);
+        var turnSw = Stopwatch.StartNew();
+        LogTurnStart(_logger, SessionId, _config.Model);
+
+        // Ambient logging scope — session_id and model appear on every log line within this turn.
+        using var sessionScope = _logger.BeginScope(
+            new Dictionary<string, object?> { ["session_id"] = SessionId, ["model"] = _config.Model });
 
         _history.Add(InputMessage.UserText(userMessage));
         await AppendSessionEntryAsync("user", userMessage, ct).ConfigureAwait(false);
@@ -103,6 +121,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         var round = 0;
         while (round < MaxToolRounds)
         {
+            using var turnScope = _logger.BeginScope(
+                new Dictionary<string, object?> { ["turn"] = round });
+
             if (round > 0)
                 LogToolRound(_logger, round, MaxToolRounds, SessionId);
 
@@ -134,20 +155,23 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 yield break;
             }
 
-            var started = DateTimeOffset.UtcNow;
+            var resolvedProvider = provider!;  // non-null — routingError guard above yields break first
+            LogProviderSelected(_logger, resolvedProvider.Name);
+
+            var llmSw = Stopwatch.StartNew();
 
             // Collect all streamed events (buffered to avoid yield-in-try/catch restriction)
-            var resolvedProvider = provider!;  // non-null — routingError guard above yields break first
             var (streamEvents, accumulated) = await CollectStreamEventsAsync(resolvedProvider, request, ct)
                 .ConfigureAwait(false);
+
+            llmSw.Stop();
 
             // Yield the collected text/error events to the caller
             foreach (var ev in streamEvents)
                 yield return ev;
 
-            var durationMs = (DateTimeOffset.UtcNow - started).TotalMilliseconds;
             await _router.RecordResultAsync(
-                resolvedProvider.Name, accumulated.Success, durationMs, ct).ConfigureAwait(false);
+                resolvedProvider.Name, accumulated.Success, llmSw.Elapsed.TotalMilliseconds, ct).ConfigureAwait(false);
 
             if (!accumulated.Success)
                 yield break;
@@ -179,6 +203,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             var toolUseBlocks = accumulated.Blocks.OfType<OutputContentBlock.ToolUseBlock>().ToList();
             if (toolUseBlocks.Count == 0 || accumulated.StopReason != "tool_use")
             {
+                turnSw.Stop();
+                LogTurnComplete(_logger, turnSw.ElapsedMilliseconds, accumulated.InputTokens, accumulated.OutputTokens);
                 yield return new RuntimeEvent.TurnComplete(
                     accumulated.StopReason,
                     accumulated.InputTokens,
@@ -193,7 +219,14 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             {
                 yield return new RuntimeEvent.ToolUseRequested(tu.Id, tu.Name, tu.Input);
 
+                LogToolDispatched(_logger, tu.Name);
+                var toolSw = Stopwatch.StartNew();
+
                 var execResult = await _toolExecutor.ExecuteAsync(tu.Name, tu.Input, ct).ConfigureAwait(false);
+
+                toolSw.Stop();
+                LogToolResult(_logger, tu.Name, toolSw.ElapsedMilliseconds, execResult.IsError);
+
                 yield return new RuntimeEvent.ToolResult(tu.Id, tu.Name, execResult.Output, execResult.IsError);
 
                 if (!execResult.Success && execResult.Output.Contains("denied", StringComparison.OrdinalIgnoreCase))
@@ -221,6 +254,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             round++;
         }
 
+        turnSw.Stop();
         LogMaxRoundsReached(_logger, MaxToolRounds, SessionId);
         yield return new RuntimeEvent.RuntimeError($"Maximum tool rounds ({MaxToolRounds}) reached.");
     }
