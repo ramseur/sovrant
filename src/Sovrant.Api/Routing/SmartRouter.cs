@@ -17,6 +17,7 @@ public sealed class SmartRouter : ISmartRouter
     private readonly HttpClient _httpClient;
     private readonly ILogger<SmartRouter> _logger;
     private bool _initialized;
+    private volatile string? _pinnedProviderName;
 
     private static readonly Action<ILogger, string, double, int, Exception?> _logProviderOk =
         LoggerMessage.Define<string, double, int>(LogLevel.Information, new EventId(1, "ProviderOk"),
@@ -69,6 +70,21 @@ public sealed class SmartRouter : ISmartRouter
     public Task<ILlmProvider> RouteAsync(MessagesRequest req, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(req);
+
+        // If a provider is pinned, prefer it when healthy.
+        var pinned = _pinnedProviderName;
+        if (pinned is not null)
+        {
+            var pinnedInfo = _providers.FirstOrDefault(p =>
+                string.Equals(p.Provider.Name, pinned, StringComparison.OrdinalIgnoreCase) && p.Healthy);
+            if (pinnedInfo is not null)
+            {
+                _logRouting(_logger, pinnedInfo.Provider.Name, "pinned", null);
+                return Task.FromResult(pinnedInfo.Provider);
+            }
+            // Pinned provider is unhealthy — fall through to normal routing.
+        }
+
         var available = _providers.Where(p => p.Healthy).ToList();
         if (available.Count == 0)
         {
@@ -81,6 +97,22 @@ public sealed class SmartRouter : ISmartRouter
 
         _logRouting(_logger, selected.Provider.Name, _strategy.ToString(), null);
         return Task.FromResult(selected.Provider);
+    }
+
+    /// <inheritdoc/>
+    public Task PinProviderAsync(string? providerName, CancellationToken ct = default)
+    {
+        if (providerName is not null)
+        {
+            var match = _providers.FirstOrDefault(p =>
+                string.Equals(p.Provider.Name, providerName, StringComparison.OrdinalIgnoreCase));
+            if (match is null)
+                throw new InvalidOperationException(
+                    $"Provider '{providerName}' is not configured. " +
+                    $"Known providers: {string.Join(", ", _providers.Select(p => p.Provider.Name))}");
+        }
+        _pinnedProviderName = providerName;
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc/>

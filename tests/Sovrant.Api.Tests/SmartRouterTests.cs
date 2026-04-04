@@ -117,6 +117,48 @@ public sealed class SmartRouterTests
         Assert.Contains(status, s => s.Name == "b");
     }
 
+    [Fact]
+    public async Task PinProviderAsync_RoutesToPinnedProvider_IgnoringScore()
+    {
+        var fast = CreateProvider("fast", "https://fast.example.com");
+        var slow = CreateProvider("slow", "https://slow.example.com");
+        var fastInfo = new ProviderInfo(fast, "/v1/models", 0.001) { AvgLatencyMs = 1 };
+        var slowInfo = new ProviderInfo(slow, "/v1/models", 0.001) { AvgLatencyMs = 999 };
+        var router = BuildRouter([fastInfo, slowInfo], RouterMode.Smart, RouterStrategy.Latency);
+        var req = new MessagesRequest("gpt-4o", 100, [InputMessage.UserText("Hi")]);
+
+        await router.PinProviderAsync("slow");
+        var selected = await router.RouteAsync(req);
+
+        Assert.Equal("slow", selected.Name);
+    }
+
+    [Fact]
+    public async Task PinProviderAsync_NullUnpins_ResumesNormalRouting()
+    {
+        var fast = CreateProvider("fast", "https://fast.example.com");
+        var slow = CreateProvider("slow", "https://slow.example.com");
+        var fastInfo = new ProviderInfo(fast, "/v1/models", 0.001) { AvgLatencyMs = 1 };
+        var slowInfo = new ProviderInfo(slow, "/v1/models", 0.001) { AvgLatencyMs = 999 };
+        var router = BuildRouter([fastInfo, slowInfo], RouterMode.Smart, RouterStrategy.Latency);
+        var req = new MessagesRequest("gpt-4o", 100, [InputMessage.UserText("Hi")]);
+
+        await router.PinProviderAsync("slow");
+        await router.PinProviderAsync(null); // unpin
+        var selected = await router.RouteAsync(req);
+
+        Assert.Equal("fast", selected.Name);
+    }
+
+    [Fact]
+    public async Task PinProviderAsync_ThrowsForUnrecognisedName()
+    {
+        var info = new ProviderInfo(CreateProvider("p1", "https://p1.example.com"), "/v1/models", 0.001);
+        var router = BuildRouter([info]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => router.PinProviderAsync("unknown"));
+    }
+
     /// <summary>Helper subclass that overrides Name for testing.</summary>
     private sealed class NamedOpenAiCompatProvider : OpenAiCompatProvider
     {

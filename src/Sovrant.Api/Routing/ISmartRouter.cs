@@ -24,6 +24,15 @@ public interface ISmartRouter
 
     /// <summary>Returns a snapshot of current health and scoring for all providers.</summary>
     IReadOnlyList<ProviderStatus> GetStatus();
+
+    /// <summary>
+    /// Pins all subsequent requests to the named provider, bypassing smart routing.
+    /// Pass <see langword="null"/> to unpin and resume normal routing.
+    /// Throws <see cref="InvalidOperationException"/> if the provider name is not recognised.
+    /// </summary>
+    /// <param name="providerName">The provider name to pin, or <see langword="null"/> to unpin.</param>
+    /// <param name="ct">A cancellation token.</param>
+    Task PinProviderAsync(string? providerName, CancellationToken ct = default);
 }
 
 /// <summary>A point-in-time snapshot of a provider's health and scoring metrics.</summary>
