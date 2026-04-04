@@ -40,6 +40,8 @@ The server binds to `http://127.0.0.1:5200` by default.
 | `LLM_WEB_SEARCH` | No | `false` | Set to `true` to route through OpenAI Responses API with `web_search_preview`. No Brave/FireCrawl key required. |
 | `BRAVE_API_KEY` | No | — | Enables `WebSearch` via Brave Search API |
 | `FIRECRAWL_API_KEY` | No | — | Enables `WebSearch` via FireCrawl (fallback if `BRAVE_API_KEY` not set) |
+| `SOVRANT_SESSION_TTL_SECONDS` | No | `3600` | Idle session TTL in seconds before automatic eviction from the in-memory pool |
+| `SOVRANT_MAX_SESSIONS` | No | `500` | Maximum active sessions in the pool. LRU eviction when exceeded. |
 | `SOVRANT_LOG_LEVEL` | No | `Information` | Minimum log level: `Verbose`, `Debug`, `Information`, `Warning`, `Error`, `Fatal` |
 | `SOVRANT_LOG_FILE` | No | `~/.sovrant/logs/sovrant-{Date}.log` | Rolling file path pattern. Empty string disables file logging. |
 | `SOVRANT_LOG_CONSOLE` | No | `true` | Write logs to stdout. Set to `false` to silence console output. |

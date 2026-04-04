@@ -66,6 +66,9 @@ builder.Services.AddSingleton<IUserInputProvider, HttpUserInputProvider>();
 // Named HttpClient for per-request scoped providers (Phase 9).
 builder.Services.AddHttpClient("ScopedProvider");
 
+// Session eviction background service — TTL sweep + LRU cap (Phase 9.1).
+builder.Services.AddHostedService<Sovrant.Server.SessionEvictionService>();
+
 // Middleware.
 builder.Services.AddSingleton<BearerTokenMiddleware>();
 builder.Services.AddSingleton<RequestLoggingMiddleware>();

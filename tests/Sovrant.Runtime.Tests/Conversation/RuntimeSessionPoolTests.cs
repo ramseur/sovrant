@@ -13,7 +13,7 @@ using Sovrant.Runtime.Tools;
 
 namespace Sovrant.Runtime.Tests.Conversation;
 
-/// <summary>Tests for <see cref="RuntimeSessionPool"/> with composite keys and scoped router overrides.</summary>
+/// <summary>Tests for <see cref="RuntimeSessionPool"/> with composite keys, scoped routers, TTL, and locking.</summary>
 public sealed class RuntimeSessionPoolTests
 {
     private static IServiceProvider BuildServices()
@@ -39,7 +39,7 @@ public sealed class RuntimeSessionPoolTests
         var r1 = await pool.GetOrCreateAsync("session-1");
         var r2 = await pool.GetOrCreateAsync("session-1");
 
-        Assert.Same(r1, r2);
+        Assert.Same(r1.Runtime, r2.Runtime);
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public sealed class RuntimeSessionPoolTests
         var r1 = await pool.GetOrCreateAsync("session-1");
         var r2 = await pool.GetOrCreateAsync("session-2");
 
-        Assert.NotSame(r1, r2);
+        Assert.NotSame(r1.Runtime, r2.Runtime);
     }
 
     [Fact]
@@ -60,13 +60,12 @@ public sealed class RuntimeSessionPoolTests
         var sp = BuildServices();
         var pool = sp.GetRequiredService<IRuntimeSessionPool>();
 
-        // Same logical session ID but different provider tags → different pool entries.
         var r1 = await pool.GetOrCreateAsync("session-1::openai");
         var r2 = await pool.GetOrCreateAsync("session-1::gemini");
         var r3 = await pool.GetOrCreateAsync("session-1::openai");
 
-        Assert.NotSame(r1, r2);
-        Assert.Same(r1, r3);
+        Assert.NotSame(r1.Runtime, r2.Runtime);
+        Assert.Same(r1.Runtime, r3.Runtime);
     }
 
     [Fact]
@@ -76,10 +75,28 @@ public sealed class RuntimeSessionPoolTests
         var pool = sp.GetRequiredService<IRuntimeSessionPool>();
 
         var scopedRouter = new FakeRouter();
-        var runtime = await pool.GetOrCreateAsync("scoped-session", scopedRouter);
+        var pooled = await pool.GetOrCreateAsync("scoped-session", scopedRouter);
 
-        Assert.NotNull(runtime);
-        Assert.Equal("scoped-session", runtime.SessionId);
+        Assert.NotNull(pooled.Runtime);
+        Assert.Equal("scoped-session", pooled.Runtime.SessionId);
+    }
+
+    [Fact]
+    public async Task GetOrCreateAsync_ReturnsLock_ForTurnSerialization()
+    {
+        var sp = BuildServices();
+        var pool = sp.GetRequiredService<IRuntimeSessionPool>();
+
+        var pooled = await pool.GetOrCreateAsync("locked-session");
+
+        Assert.NotNull(pooled.Lock);
+        Assert.Equal(1, pooled.Lock.CurrentCount);
+
+        // Acquire and release the lock to verify it works.
+        await pooled.Lock.WaitAsync();
+        Assert.Equal(0, pooled.Lock.CurrentCount);
+        pooled.Lock.Release();
+        Assert.Equal(1, pooled.Lock.CurrentCount);
     }
 
     [Fact]
@@ -92,7 +109,55 @@ public sealed class RuntimeSessionPoolTests
         pool.Evict("session-evict");
         var r2 = await pool.GetOrCreateAsync("session-evict");
 
-        Assert.NotSame(r1, r2);
+        Assert.NotSame(r1.Runtime, r2.Runtime);
+    }
+
+    [Fact]
+    public async Task ActiveCount_TracksPoolSize()
+    {
+        var sp = BuildServices();
+        var pool = sp.GetRequiredService<IRuntimeSessionPool>();
+
+        Assert.Equal(0, pool.ActiveCount);
+
+        await pool.GetOrCreateAsync("a");
+        await pool.GetOrCreateAsync("b");
+        Assert.Equal(2, pool.ActiveCount);
+
+        pool.Evict("a");
+        Assert.Equal(1, pool.ActiveCount);
+    }
+
+    [Fact]
+    public async Task EvictExpired_RemovesOldSessions()
+    {
+        var sp = BuildServices();
+        var pool = sp.GetRequiredService<IRuntimeSessionPool>();
+
+        await pool.GetOrCreateAsync("old-session");
+        await pool.GetOrCreateAsync("new-session");
+
+        // With TTL=0 (immediate expiry), all sessions should be evicted.
+        var evicted = pool.EvictExpired(TimeSpan.Zero, maxSessions: 1000);
+        Assert.Equal(2, evicted);
+        Assert.Equal(0, pool.ActiveCount);
+    }
+
+    [Fact]
+    public async Task EvictExpired_EnforcesMaxSessionsCap()
+    {
+        var sp = BuildServices();
+        var pool = sp.GetRequiredService<IRuntimeSessionPool>();
+
+        await pool.GetOrCreateAsync("s1");
+        await pool.GetOrCreateAsync("s2");
+        await pool.GetOrCreateAsync("s3");
+        Assert.Equal(3, pool.ActiveCount);
+
+        // TTL is very long so nothing expires, but cap is 1 → evict 2.
+        var evicted = pool.EvictExpired(TimeSpan.FromHours(24), maxSessions: 1);
+        Assert.Equal(2, evicted);
+        Assert.Equal(1, pool.ActiveCount);
     }
 
     // ── Test doubles ─────────────────────────────────────────────────────────

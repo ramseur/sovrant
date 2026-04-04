@@ -3,7 +3,7 @@
 A .NET 10 agentic AI engine — multi-provider, tool-using, session-persistent. Runs as a CLI agent or an OpenAI-compatible HTTP server. The agent reads and writes files, executes shell commands, searches the web, calls tools autonomously, and maintains full conversation history across sessions.
 
 **Runtime:** .NET 10 / C# 13
-**Status:** Engine fully functional. 31 tools. 9 server endpoints. 111/111 tests passing.
+**Status:** Engine fully functional. 31 tools. 9 server endpoints. 115/115 tests passing.
 
 ---
 
@@ -209,6 +209,8 @@ The server keeps one `ConversationRuntime` alive per `session_id` in an in-memor
 | `LLM_WEB_SEARCH` | No | Set to `true` to use OpenAI's Responses API with `web_search_preview`. No Brave/FireCrawl key required. |
 | `BRAVE_API_KEY` | No | Enables WebSearch via Brave Search API |
 | `FIRECRAWL_API_KEY` | No | Enables WebSearch via FireCrawl (fallback if Brave not set) |
+| `SOVRANT_SESSION_TTL_SECONDS` | No | Idle session TTL in seconds before automatic eviction (default: `3600`) |
+| `SOVRANT_MAX_SESSIONS` | No | Maximum active sessions in the server pool (default: `500`). LRU eviction when exceeded. |
 | `SOVRANT_LOG_LEVEL` | No | Minimum log level: `Verbose`, `Debug`, `Information` (default), `Warning`, `Error`, `Fatal` |
 | `SOVRANT_LOG_FILE` | No | Rolling file path pattern (default: `~/.sovrant/logs/sovrant-{Date}.log`). Empty string disables file logging. |
 | `SOVRANT_LOG_CONSOLE` | No | Write logs to stdout (default: `true`). Set to `false` to silence console output. |
@@ -280,13 +282,13 @@ The server keeps one `ConversationRuntime` alive per `session_id` in an in-memor
 ## Tests
 
 ```bash
-dotnet test   # 111 tests across 5 projects
+dotnet test   # 115 tests across 5 projects
 ```
 
 | Project | Tests |
 |---|---|
 | `Sovrant.Api.Tests` | 28 |
-| `Sovrant.Runtime.Tests` | 34 |
+| `Sovrant.Runtime.Tests` | 38 |
 | `Sovrant.Tools.Tests` | 26 |
 | `Sovrant.Commands.Tests` | 22 |
 | `Sovrant.Integration.Tests` | 1 |

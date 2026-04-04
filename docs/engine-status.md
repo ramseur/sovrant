@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 9 complete — multi-tenant per-request credentials; Phase 8 structured async logging; Phase 7 hardening done — 31 tools, 111 tests)
+**Last updated:** 2026-04-04 (Phase 9.1 complete — session lifecycle TTL + turn serialization; Phase 9 multi-tenant credentials; Phase 8 logging — 31 tools, 115 tests)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -20,8 +20,8 @@
 | SSE streaming | ✅ Working | Text chunks stream to console in real time |
 | Token counts | ✅ Fixed | OpenAI trailing usage chunk now captured. Input + output tokens reported correctly after each turn. |
 | HTTP server (`Sovrant.Server`) | ✅ Working | 9 endpoints: `GET /health`, `POST /v1/chat/completions`, `GET+PUT /v1/config`, `GET /v1/status`, `GET /v1/models`, `GET /v1/sessions`, `GET+DELETE /v1/sessions/{id}` |
-| Server session pool (`IRuntimeSessionPool`) | ✅ Implemented | One `ConversationRuntime` per session ID, `ConcurrentDictionary`. Concurrent turns on the same session not yet serialised — Phase 9 adds per-session lock. |
-| Unit test suite | ✅ 111/111 passing | Api(28) + Runtime(34) + Tools(26) + Commands(22) + Integration(1) |
+| Server session pool (`IRuntimeSessionPool`) | ✅ Implemented | One `ConversationRuntime` per session ID with per-session `SemaphoreSlim` lock for turn serialization. TTL eviction + LRU cap via `SessionEvictionService`. |
+| Unit test suite | ✅ 115/115 passing | Api(28) + Runtime(38) + Tools(26) + Commands(22) + Integration(1) |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |
@@ -81,6 +81,22 @@
 | `x_api_key` never logged or persisted | ✅ Only passed to `ApiKeyAuthProvider` for auth headers; not in any log path |
 | Global config not mutated by scoped requests | ✅ `serverConfig.Model` only updated when NOT using scoped credentials |
 | Tests: `ScopedSingleProviderRouterTests` (5) + `RuntimeSessionPoolTests` (5) | ✅ 10 new tests |
+
+### Phase 9.1 — Session Lifecycle Management ✅
+
+| Item | Status |
+|---|---|
+| `PooledSession` record (runtime + `SemaphoreSlim` lock) | ✅ Returned by `GetOrCreateAsync`; callers acquire lock before `RunTurnAsync` |
+| Per-session `SemaphoreSlim(1,1)` turn serialization | ✅ `ChatRoutes` acquires/releases lock around turn execution |
+| `SessionEntry` with `LastAccess` timestamp | ✅ Updated on every `GetOrCreateAsync` call |
+| `SessionEvictionService` (`IHostedService`) | ✅ Timer sweep every 5 min: TTL eviction + LRU cap enforcement |
+| `SOVRANT_SESSION_TTL_SECONDS` env var (default: `3600`) | ✅ |
+| `SOVRANT_MAX_SESSIONS` env var (default: `500`) | ✅ |
+| `EvictExpired(ttl, maxSessions)` on `IRuntimeSessionPool` | ✅ Two-phase: TTL sweep then LRU cap |
+| `ActiveCount` property on pool | ✅ |
+| `GET /v1/status` includes `active_sessions`, `max_sessions`, `session_ttl_seconds` | ✅ |
+| Lock disposed on `Evict()` and lost-race cleanup | ✅ |
+| Tests: locking, TTL eviction, LRU cap, active count | ✅ 4 new tests (9 total RuntimeSessionPoolTests) |
 
 ---
 

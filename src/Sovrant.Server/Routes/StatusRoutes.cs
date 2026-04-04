@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Sovrant.Api.Routing;
+using Sovrant.Runtime.Conversation;
 using Sovrant.Server.ServerConfig;
 
 namespace Sovrant.Server.Routes;
@@ -9,7 +10,11 @@ internal static class StatusRoutes
 {
     public static void Map(WebApplication app)
     {
-        app.MapGet("/v1/status", async (ISmartRouter router, MutableServerConfig config, CancellationToken ct) =>
+        app.MapGet("/v1/status", async (
+            ISmartRouter router,
+            MutableServerConfig config,
+            IRuntimeSessionPool sessionPool,
+            CancellationToken ct) =>
         {
             await router.InitializeAsync(ct).ConfigureAwait(false);
             var providers = router.GetStatus()
@@ -25,12 +30,21 @@ internal static class StatusRoutes
                 })
                 .ToList();
 
+            // Read eviction service config from env vars (same defaults as SessionEvictionService).
+            var ttlSeconds = int.TryParse(
+                Environment.GetEnvironmentVariable("SOVRANT_SESSION_TTL_SECONDS"), out var t) ? t : 3600;
+            var maxSessions = int.TryParse(
+                Environment.GetEnvironmentVariable("SOVRANT_MAX_SESSIONS"), out var m) ? m : 500;
+
             return Results.Ok(new StatusResponse
             {
                 Providers = providers,
                 ActiveModel = config.Model,
                 PermissionMode = config.PermissionMode.ToString().ToLowerInvariant(),
                 PinnedProvider = config.PinnedProvider,
+                ActiveSessions = sessionPool.ActiveCount,
+                MaxSessions = maxSessions,
+                SessionTtlSeconds = ttlSeconds,
             });
         });
     }
@@ -50,6 +64,15 @@ internal sealed class StatusResponse
     [JsonPropertyName("pinned_provider")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? PinnedProvider { get; init; }
+
+    [JsonPropertyName("active_sessions")]
+    public int ActiveSessions { get; init; }
+
+    [JsonPropertyName("max_sessions")]
+    public int MaxSessions { get; init; }
+
+    [JsonPropertyName("session_ttl_seconds")]
+    public int SessionTtlSeconds { get; init; }
 }
 
 internal sealed class ProviderStatusDto

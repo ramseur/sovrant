@@ -77,11 +77,13 @@ internal static class ChatRoutes
                 await activeRouter.PinProviderAsync(pinned, ct).ConfigureAwait(false);
         }
 
-        // Resolve the runtime for this request.
+        // Resolve the runtime and optional per-session lock for this request.
         IConversationRuntime runtime;
+        SemaphoreSlim? sessionLock = null;
+
         if (!string.IsNullOrWhiteSpace(req.SessionId))
         {
-            // Session pool key includes the base URL when per-request credentials are used
+            // Session pool key includes the provider tag when per-request credentials are used
             // so two users with the same session_id but different providers stay isolated.
             var status = activeRouter.GetStatus();
             var providerTag = status.Count > 0 ? status[0].Name : "scoped";
@@ -89,16 +91,12 @@ internal static class ChatRoutes
                 ? $"{req.SessionId}::{providerTag}"
                 : req.SessionId;
 
-            if (hasScopedCredentials)
-            {
-                // Scoped sessions need a runtime wired to the scoped router.
-                runtime = await sessionPool.GetOrCreateAsync(poolKey, activeRouter, ct)
-                    .ConfigureAwait(false);
-            }
-            else
-            {
-                runtime = await sessionPool.GetOrCreateAsync(poolKey, ct: ct).ConfigureAwait(false);
-            }
+            var pooled = hasScopedCredentials
+                ? await sessionPool.GetOrCreateAsync(poolKey, activeRouter, ct).ConfigureAwait(false)
+                : await sessionPool.GetOrCreateAsync(poolKey, ct: ct).ConfigureAwait(false);
+
+            runtime = pooled.Runtime;
+            sessionLock = pooled.Lock;
         }
         else if (hasScopedCredentials)
         {
@@ -133,13 +131,25 @@ internal static class ChatRoutes
         if (req.Model is not null && !hasScopedCredentials)
             serverConfig.Model = req.Model;
 
-        if (req.Stream)
+        // Acquire the per-session lock to serialize concurrent turns (prevents history corruption).
+        // Transient/one-shot runtimes have no lock (no shared state).
+        if (sessionLock is not null)
+            await sessionLock.WaitAsync(ct).ConfigureAwait(false);
+
+        try
         {
-            await StreamResponseAsync(ctx, runtime, completionId, model, userMessage, ct).ConfigureAwait(false);
+            if (req.Stream)
+            {
+                await StreamResponseAsync(ctx, runtime, completionId, model, userMessage, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                await BufferedResponseAsync(ctx, runtime, completionId, model, userMessage, ct).ConfigureAwait(false);
+            }
         }
-        else
+        finally
         {
-            await BufferedResponseAsync(ctx, runtime, completionId, model, userMessage, ct).ConfigureAwait(false);
+            sessionLock?.Release();
         }
     }
 
