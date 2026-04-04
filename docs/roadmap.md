@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 7.5 Tier 1+2 + Phase 7.6 items 1+2 complete; Phases 7.7–7.9 added from security review; Phase 17.5 agent scaffolding added; OpenAI Responses API provider + native web search added)
+**Last updated:** 2026-04-04 (Phase 7 complete — all 7.6–7.9 items done; Phase 17.5 agent scaffolding done; OpenAI Responses API provider + native web search done)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -23,19 +23,20 @@ The engine is fully functional as a single-user tool:
 - In-memory session pool (one `ConversationRuntime` per `session_id`, safe for multiple users)
 - **OpenAI Responses API provider** (`LLM_WEB_SEARCH=true`) — routes through `POST /v1/responses`, injects `web_search_preview` built-in tool, suppresses the `WebSearch` function tool; full multi-turn + function tool support tested ✅
 - `Sovrant.Agents` scaffolding — `IAgent`, `IMultiAgentSystem`, both backends, `AGENT_MODE` config switch (Phase 17.5 ✅)
+- **Phase 7 hardening complete** ✅:
+  - Context auto-compaction — LLM-based history summarisation when input tokens ≥ `SOVRANT_COMPACT_THRESHOLD` (default 80k); summary replaces old messages; compaction event persisted to JSONL
+  - BashTool — 256 KB output cap per stream (stdout/stderr), strips `LD_PRELOAD`/`DYLD_INSERT_LIBRARIES`/`LD_LIBRARY_PATH` and related dangerous env vars from subprocess
+  - WebFetchTool SSRF protection — blocks RFC-1918 private IPs, loopback, link-local, IPv6 ULA/link-local, `localhost` by name, and all non-HTTP(S) schemes
+  - Provider retry — 3 attempts with 1 s/2 s/4 s backoff on 429/5xx and network errors
+  - AgentTool recursion depth guard — `AsyncLocal<int>` counter; rejects at depth ≥ 5
+  - ReadFileTool 10 MB cap — file size checked before reading
+  - GlobTool 1000-result cap — truncation notice when exceeded
+  - Atomic writes — `WriteFileTool` and `EditFileTool` write to `.tmp` then `File.Move` with overwrite
 
 ### Still pending (known gaps)
 
 | Gap | Phase |
 |---|---|
-| Context auto-compaction | Phase 7.6 item 3 |
-| BashTool output limits, env stripping, workspace guard | Phase 7.7 |
-| WebFetchTool SSRF protection | Phase 7.7 |
-| Provider retry with exponential backoff | Phase 7.8 |
-| AgentTool recursion depth limit | Phase 7.8 |
-| ReadFileTool 10 MB size cap | Phase 7.8 |
-| Atomic file writes (Write/Edit tools) | Phase 7.9 |
-| GlobTool 1000-file cap | Phase 7.9 |
 | Session TTL eviction + per-session lock | Phase 9 |
 | Per-session config overlay (fixes global `EnterPlanMode`) | Phase 9.5 |
 | Multi-agent `DispatchAsync` + CLI/Server DI wiring | Phase 18–19 |
@@ -45,7 +46,7 @@ The engine is fully functional as a single-user tool:
 | Layer | Status | Notes |
 |---|---|---|
 | Single sub-agent (`AgentTool`) | ✅ Working | Spawns a fresh `ConversationRuntime` via DI, runs one isolated turn, returns text. Used by the LLM today. |
-| Recursion depth guard | ❌ Missing | No limit — infinite nesting possible. Tracked in Phase 7.8. |
+| Recursion depth guard | ✅ Done | `AsyncLocal<int>` counter; rejects at depth ≥ 5 with a clear error message. |
 | Multi-agent interfaces (`IAgent`, `IMultiAgentSystem`) | ✅ Defined | `Sovrant.Agents` project. Both backends implement the same interface. |
 | Modern backend (`InProcessMultiAgentSystem`) | ⚠️ Partial | `BaseAgent` channel/loop, `WorkspaceContext`, `AgentSystemFactory` all working. `MultiAgentCoordinator.DispatchAsync` is a stub — throws `NotImplementedException`. |
 | Legacy backend (`ProcessBasedMultiAgentSystem`) | ⚠️ Partial | Scaffold only. `ProcessAgent.HandleAsync` and `RunTaskAsync` throw `NotImplementedException`. |
@@ -55,10 +56,9 @@ The engine is fully functional as a single-user tool:
 | V2 placeholders (`ITeamWorkspace`, `IArtifact`, `IMultiAgentCollaboration`) | ⚠️ Interfaces only | No implementations. Phase 19+. |
 
 **What needs to happen before multi-agent is usable:**
-1. Phase 7.8 — recursion depth guard on `AgentTool` (safety, low effort)
-2. Phase 19 — implement `MultiAgentCoordinator.DispatchAsync` (modern backend)
-3. Phase 18 — `TeamCreateTool` / `TeamDeleteTool` + wire `IMultiAgentSystem` into DI
-4. Phase 19 — implement `ProcessAgent` / process backend (only needed if legacy mode is required)
+1. Phase 19 — implement `MultiAgentCoordinator.DispatchAsync` (modern backend)
+2. Phase 18 — `TeamCreateTool` / `TeamDeleteTool` + wire `IMultiAgentSystem` into DI
+3. Phase 19 — implement `ProcessAgent` / process backend (only needed if legacy mode is required)
 
 ---
 

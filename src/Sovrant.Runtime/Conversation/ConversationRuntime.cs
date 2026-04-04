@@ -39,6 +39,12 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     [LoggerMessage(Level = LogLevel.Error, Message = "LLM request failed: {Error}")]
     private static partial void LogRequestFailed(ILogger logger, string error);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "LLM request failed (attempt {Attempt}/{Max}): {Error} — retrying in {DelayMs} ms")]
+    private static partial void LogRetry(ILogger logger, int attempt, int max, string error, int delayMs);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Context compacted for session '{SessionId}': {Kept} messages summarized at {Tokens} input tokens")]
+    private static partial void LogCompacted(ILogger logger, string sessionId, int kept, int tokens);
+
     private string _sessionId = Guid.NewGuid().ToString("N");
 
     /// <inheritdoc/>
@@ -165,6 +171,10 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 ? inputBlocks
                 : [new InputContentBlock.TextBlock(string.Empty)]));
 
+            // Compact history if approaching token limit
+            if (accumulated.InputTokens > 0)
+                await MaybeCompactHistoryAsync(accumulated.InputTokens, ct).ConfigureAwait(false);
+
             // Process tool use blocks
             var toolUseBlocks = accumulated.Blocks.OfType<OutputContentBlock.ToolUseBlock>().ToList();
             if (toolUseBlocks.Count == 0 || accumulated.StopReason != "tool_use")
@@ -210,11 +220,51 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     /// <inheritdoc/>
     public void Reset() => _history.Clear();
 
+    private static readonly int[] s_retryDelaysMs = [1000, 2000, 4000];
+
     /// <summary>
-    /// Reads all SSE stream events from the provider and accumulates them into structured result data.
-    /// Returns collected events for the caller to yield, plus an accumulated result struct.
+    /// Reads all SSE stream events from the provider, retrying on transient errors (up to 3 attempts).
     /// </summary>
     private async Task<(List<RuntimeEvent> Events, StreamAccumulation Accumulated)> CollectStreamEventsAsync(
+        Sovrant.Api.Providers.ILlmProvider provider,
+        MessagesRequest request,
+        CancellationToken ct)
+    {
+        const int MaxAttempts = 3;
+
+        (List<RuntimeEvent> Events, StreamAccumulation Accumulated) last = default;
+
+        for (var attempt = 1; attempt <= MaxAttempts; attempt++)
+        {
+            last = await AttemptCollectAsync(provider, request, ct).ConfigureAwait(false);
+
+            if (last.Accumulated.Success) return last;
+
+            var errEvent = last.Events.OfType<RuntimeEvent.RuntimeError>().FirstOrDefault();
+            if (errEvent is null || !IsRetryableError(errEvent.Message) || attempt == MaxAttempts)
+                return last;
+
+            var delayMs = s_retryDelaysMs[attempt - 1];
+            LogRetry(_logger, attempt, MaxAttempts, errEvent.Message, delayMs);
+            await Task.Delay(delayMs, ct).ConfigureAwait(false);
+        }
+
+        return last;
+    }
+
+    private static bool IsRetryableError(string message) =>
+        message.Contains("429", StringComparison.Ordinal) ||
+        message.Contains("500", StringComparison.Ordinal) ||
+        message.Contains("502", StringComparison.Ordinal) ||
+        message.Contains("503", StringComparison.Ordinal) ||
+        message.Contains("504", StringComparison.Ordinal) ||
+        message.Contains("rate limit", StringComparison.OrdinalIgnoreCase) ||
+        message.Contains("too many requests", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Single attempt: reads all SSE stream events from the provider and accumulates them into structured result data.
+    /// </summary>
+    private async Task<(List<RuntimeEvent> Events, StreamAccumulation Accumulated)> AttemptCollectAsync(
         Sovrant.Api.Providers.ILlmProvider provider,
         MessagesRequest request,
         CancellationToken ct)
@@ -339,6 +389,69 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
         return result;
     }
+
+    /// <summary>
+    /// Summarises the oldest portion of <see cref="_history"/> using the LLM when the input
+    /// token count approaches <see cref="SovrantConfig.CompactThreshold"/>.
+    /// </summary>
+    private async Task MaybeCompactHistoryAsync(int inputTokens, CancellationToken ct)
+    {
+        var threshold = _config.CompactThreshold;
+        if (threshold <= 0 || inputTokens < threshold) return;
+        if (_history.Count < 6) return;
+
+        // Keep the last 4 messages intact; summarise everything before that
+        const int KeepTail = 4;
+        var cutPoint = _history.Count - KeepTail;
+        if (cutPoint <= 0) return;
+
+        var toSummarize = _history.Take(cutPoint).ToList();
+        var toKeep = _history.Skip(cutPoint).ToList();
+
+        var historyText = string.Join("\n\n", toSummarize
+            .Select(m => $"{m.Role.ToUpperInvariant()}: {ExtractText(m)}"));
+
+        var summaryRequest = new MessagesRequest(
+            _config.Model,
+            2048,
+            [InputMessage.UserText(
+                "Summarise the following conversation history in 3-5 concise paragraphs. " +
+                "Preserve all key facts, file paths, decisions, and technical context:\n\n" +
+                historyText)])
+        {
+            System = "You are a concise technical summariser. Preserve important details.",
+            Stream = true,
+        };
+
+        try
+        {
+            var provider = await _router.RouteAsync(summaryRequest, ct).ConfigureAwait(false);
+            var (_, accumulated) = await AttemptCollectAsync(provider, summaryRequest, ct).ConfigureAwait(false);
+
+            var summaryText = string.Join(string.Empty,
+                accumulated.Blocks.OfType<OutputContentBlock.TextBlock>().Select(b => b.Text)).Trim();
+
+            if (string.IsNullOrEmpty(summaryText)) return;
+
+            _history.Clear();
+            _history.Add(InputMessage.UserText($"[Conversation history summary — auto-compacted at {inputTokens} tokens]\n\n{summaryText}"));
+            _history.Add(InputMessage.AssistantText("Understood. I have the context from the conversation summary."));
+            _history.AddRange(toKeep);
+
+            LogCompacted(_logger, SessionId, toSummarize.Count, inputTokens);
+
+            await AppendSessionEntryAsync("compaction",
+                $"History compacted: {toSummarize.Count} messages summarised at {inputTokens} input tokens.",
+                ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            LogRequestFailed(_logger, $"Compaction failed (non-fatal): {ex.Message}");
+        }
+    }
+
+    private static string ExtractText(InputMessage m) =>
+        string.Join(" ", m.Content.OfType<InputContentBlock.TextBlock>().Select(b => b.Text));
 
     private async Task AppendSessionEntryAsync(
         string role,

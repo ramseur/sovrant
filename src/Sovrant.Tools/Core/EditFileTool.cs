@@ -45,7 +45,9 @@ public sealed class EditFileTool : ITool
                 ? content.Replace(oldString, newString, StringComparison.Ordinal)
                 : ReplaceFirst(content, oldString, newString);
 
-            await File.WriteAllTextAsync(filePath, updated, ct).ConfigureAwait(false);
+            var tmpPath = filePath + ".tmp";
+            await File.WriteAllTextAsync(tmpPath, updated, ct).ConfigureAwait(false);
+            File.Move(tmpPath, filePath, overwrite: true);
 
             var count = replaceAll
                 ? CountOccurrences(content, oldString)

@@ -205,6 +205,7 @@ The server keeps one `ConversationRuntime` alive per `session_id` in an in-memor
 | `ROUTER_MODE` | No | `Smart` (default) or `Fixed` |
 | `ROUTER_STRATEGY` | No | `Balanced` (default), `Latency`, or `Cost` |
 | `AGENT_MODE` | No | `modern` (default, in-process) or `legacy` (process-per-agent) |
+| `SOVRANT_COMPACT_THRESHOLD` | No | Input token count that triggers context auto-compaction (history summarisation). Default: `80000`. Set to `0` to disable. |
 | `LLM_WEB_SEARCH` | No | Set to `true` to use OpenAI's Responses API with `web_search_preview`. No Brave/FireCrawl key required. |
 | `BRAVE_API_KEY` | No | Enables WebSearch via Brave Search API |
 | `FIRECRAWL_API_KEY` | No | Enables WebSearch via FireCrawl (fallback if Brave not set) |

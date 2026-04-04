@@ -27,6 +27,12 @@ public sealed class SovrantConfig
     /// <summary>Optional API key override. Defaults to the <c>LLM_API_KEY</c> environment variable.</summary>
     public string? ApiKey { get; init; }
 
+    /// <summary>
+    /// Input token count that triggers context auto-compaction (history summarisation).
+    /// Set to 0 to disable. Default: 80000. Override via <c>SOVRANT_COMPACT_THRESHOLD</c>.
+    /// </summary>
+    public int CompactThreshold { get; init; } = 80_000;
+
     /// <summary>MCP server configurations keyed by server name.</summary>
     public IReadOnlyDictionary<string, McpServerConfig> McpServers { get; init; } =
         new Dictionary<string, McpServerConfig>(StringComparer.Ordinal);

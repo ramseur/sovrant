@@ -39,12 +39,21 @@ public sealed class GlobTool : ITool
         if (!result.HasMatches)
             return Task.FromResult("No files found.");
 
+        const int MaxResults = 1000;
         var files = result.Files
             .Select(f => Path.Combine(searchPath, f.Path))
             .OrderByDescending(File.GetLastWriteTimeUtc)
             .ToList();
 
-        return Task.FromResult(string.Join(Environment.NewLine, files));
+        var totalCount = files.Count;
+        if (totalCount > MaxResults)
+            files = files.Take(MaxResults).ToList();
+
+        var output = string.Join(Environment.NewLine, files);
+        if (totalCount > MaxResults)
+            output += $"\n\n[Truncated — showing {MaxResults} of {totalCount} matches. Narrow your pattern to see more.]";
+
+        return Task.FromResult(output);
     }
 
     private static string GetString(JsonElement el, string prop, string def = "") =>

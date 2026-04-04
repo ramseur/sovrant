@@ -10,6 +10,17 @@ namespace Sovrant.Tools.Core;
 public sealed class BashTool : ITool
 {
     private const int DefaultTimeoutMs = 120_000;
+    private const int OutputCapChars = 256 * 1024;
+
+    private static readonly string[] s_dangerousEnvVars =
+    [
+        "LD_PRELOAD",
+        "DYLD_INSERT_LIBRARIES",
+        "DYLD_LIBRARY_PATH",
+        "LD_LIBRARY_PATH",
+        "LD_AUDIT",
+        "LD_DEBUG",
+    ];
 
     private static readonly ToolDefinition s_definition = new("Bash", CreateSchema())
     {
@@ -34,25 +45,39 @@ public sealed class BashTool : ITool
 
         var stdoutSb = new StringBuilder();
         var stderrSb = new StringBuilder();
+        var stdoutTruncated = false;
+        var stderrTruncated = false;
 
         try
         {
             var shell = OperatingSystem.IsWindows() ? "bash.exe" : "/bin/bash";
-            using var process = new Process
+            var psi = new ProcessStartInfo
             {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = shell,
-                    Arguments = $"-c \"{EscapeArg(command)}\"",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                },
+                FileName = shell,
+                Arguments = $"-c \"{EscapeArg(command)}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
             };
 
-            process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdoutSb.AppendLine(e.Data); };
-            process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderrSb.AppendLine(e.Data); };
+            foreach (var envVar in s_dangerousEnvVars)
+                psi.EnvironmentVariables.Remove(envVar);
+
+            using var process = new Process { StartInfo = psi };
+
+            process.OutputDataReceived += (_, e) =>
+            {
+                if (e.Data is null) return;
+                if (stdoutSb.Length < OutputCapChars) stdoutSb.AppendLine(e.Data);
+                else stdoutTruncated = true;
+            };
+            process.ErrorDataReceived += (_, e) =>
+            {
+                if (e.Data is null) return;
+                if (stderrSb.Length < OutputCapChars) stderrSb.AppendLine(e.Data);
+                else stderrTruncated = true;
+            };
 
             process.Start();
             process.BeginOutputReadLine();
@@ -61,7 +86,9 @@ public sealed class BashTool : ITool
             await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
 
             var stdout = stdoutSb.ToString();
+            if (stdoutTruncated) stdout += "\n[stdout truncated at 256 KB]";
             var stderr = stderrSb.ToString();
+            if (stderrTruncated) stderr += "\n[stderr truncated at 256 KB]";
             var exitCode = process.ExitCode;
 
             var result = new StringBuilder();

@@ -17,6 +17,9 @@ public sealed class AgentTool : ITool
             "Use for parallelising independent sub-tasks.",
     };
 
+    private const int MaxDepth = 5;
+    private static readonly AsyncLocal<int> s_depth = new();
+
     private readonly IServiceProvider _services;
 
     public AgentTool(IServiceProvider services) => _services = services;
@@ -29,20 +32,32 @@ public sealed class AgentTool : ITool
         if (string.IsNullOrWhiteSpace(prompt))
             return "Error: prompt is required.";
 
+        if (s_depth.Value >= MaxDepth)
+            return $"Error: maximum agent recursion depth ({MaxDepth}) reached. Cannot spawn a nested sub-agent.";
+
         // Create a fresh isolated runtime (transient)
         var runtime = _services.GetRequiredService<IConversationRuntime>();
         var sb = new StringBuilder();
 
-        await foreach (var ev in runtime.RunTurnAsync(prompt, ct).ConfigureAwait(false))
+        var previousDepth = s_depth.Value;
+        s_depth.Value = previousDepth + 1;
+        try
         {
-            switch (ev)
+            await foreach (var ev in runtime.RunTurnAsync(prompt, ct).ConfigureAwait(false))
             {
-                case RuntimeEvent.TextChunk tc:
-                    sb.Append(tc.Text);
-                    break;
-                case RuntimeEvent.RuntimeError err:
-                    return $"Sub-agent error: {err.Message}";
+                switch (ev)
+                {
+                    case RuntimeEvent.TextChunk tc:
+                        sb.Append(tc.Text);
+                        break;
+                    case RuntimeEvent.RuntimeError err:
+                        return $"Sub-agent error: {err.Message}";
+                }
             }
+        }
+        finally
+        {
+            s_depth.Value = previousDepth;
         }
 
         return sb.Length > 0 ? sb.ToString() : "(sub-agent returned no output)";

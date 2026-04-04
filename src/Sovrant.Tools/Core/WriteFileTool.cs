@@ -33,7 +33,9 @@ public sealed class WriteFileTool : ITool
             if (!string.IsNullOrEmpty(dir))
                 Directory.CreateDirectory(dir);
 
-            await File.WriteAllTextAsync(filePath, content, ct).ConfigureAwait(false);
+            var tmpPath = filePath + ".tmp";
+            await File.WriteAllTextAsync(tmpPath, content, ct).ConfigureAwait(false);
+            File.Move(tmpPath, filePath, overwrite: true);
             var lineCount = content.Split('\n').Length;
             return $"File written: {filePath} ({lineCount} lines)";
         }

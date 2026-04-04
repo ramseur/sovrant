@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 7.5 Tier 1+2 + Phase 7.6 items 1+2 complete; Phase 17.5 agent scaffolding added; OpenAI Responses API provider + native web search added — 31 tools, 100 tests)
+**Last updated:** 2026-04-04 (Phase 7 complete — all hardening done; Phase 17.5 agent scaffolding done; OpenAI Responses API + native web search done — 31 tools, 100 tests)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -27,6 +27,7 @@
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |
 | Phase 17.5 agent scaffolding | ✅ Implemented | `Sovrant.Agents` project: `IAgent`, `IMultiAgentSystem`, both backends as stubs, `AGENT_MODE` config switch, V2 placeholder interfaces. **Not yet wired into CLI or Server DI.** |
 | OpenAI Responses API provider | ✅ Implemented + tested | `OpenAiResponsesProvider` routes through `POST /v1/responses` when `LLM_WEB_SEARCH=true`. Injects `web_search_preview`, suppresses `WebSearch` function tool, full multi-turn agentic loop support. |
+| Phase 7 hardening | ✅ Complete | Context auto-compaction (`SOVRANT_COMPACT_THRESHOLD`, default 80k tokens); BashTool 256 KB cap + dangerous env stripping; WebFetchTool SSRF guard (RFC-1918, loopback, link-local, non-HTTP(S)); provider retry 3×(1s/2s/4s) on 429/5xx; AgentTool recursion depth ≤ 5; ReadFileTool 10 MB cap; GlobTool 1000-file cap; atomic writes in Write/Edit tools. |
 
 ### Known issues fixed during testing
 
@@ -49,8 +50,8 @@
 | `AskUserQuestion` blocked in server mode | Returns a fixed "question blocked" message — by design; interactive prompts not possible in HTTP server context. |
 | `launchSettings.json` / port conflict on rapid server restart | `src/Sovrant.Server/Properties/launchSettings.json` declares port `5091` that Kestrel overrides with `5200`. Rapid restart causes `SocketException (10048)`. **Mitigation:** always `pkill -f Sovrant.Server` first. **Fix (Phase 9):** align `launchSettings.json` port with `SOVRANT_PORT` and add `--urls` override for CI. |
 | `EnterPlanMode` / `ExitPlanMode` are global in server mode | `IPermissionModeAccessor` wraps the shared `MutableServerConfig` singleton — `EnterPlanMode` in one session sets plan mode for all sessions. Fixed in Phase 9.5 (session-scoped `SessionConfig` overlay). |
-| No provider retry on 429 / 5xx | `ApiError.Retryable` flag is set but never acted on. Fix in Phase 7.8. |
-| `AgentTool` has no recursion depth limit | Nested `Agent` calls can recurse indefinitely. Fix in Phase 7.8. |
+| ~~No provider retry on 429 / 5xx~~ | ✅ Fixed — 3 attempts with 1s/2s/4s backoff on retryable errors in `ConversationRuntime`. |
+| ~~`AgentTool` has no recursion depth limit~~ | ✅ Fixed — `AsyncLocal<int>` counter; rejects at depth ≥ 5. |
 | `Sovrant.Agents` not wired into CLI or Server | `AddMultiAgentSystem()` exists but is not called in either host. `AgentTool` still uses direct `ConversationRuntime`. Phase 18 wires it up. |
 
 ---

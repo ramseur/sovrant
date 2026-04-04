@@ -30,6 +30,11 @@ public sealed class ReadFileTool : ITool
         if (!File.Exists(filePath))
             return $"Error: file not found: {filePath}";
 
+        const long MaxBytes = 10 * 1024 * 1024; // 10 MB
+        var fileInfo = new FileInfo(filePath);
+        if (fileInfo.Length > MaxBytes)
+            return $"Error: file is too large to read ({fileInfo.Length / 1024 / 1024} MB). Use offset and limit to read specific ranges, or use Grep to search within the file.";
+
         try
         {
             var lines = await File.ReadAllLinesAsync(filePath, ct).ConfigureAwait(false);
