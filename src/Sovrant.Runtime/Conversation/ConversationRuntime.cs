@@ -39,7 +39,10 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     [LoggerMessage(Level = LogLevel.Error, Message = "LLM request failed: {Error}")]
     private static partial void LogRequestFailed(ILogger logger, string error);
 
-    public string SessionId { get; } = Guid.NewGuid().ToString("N");
+    private string _sessionId = Guid.NewGuid().ToString("N");
+
+    /// <inheritdoc/>
+    public string SessionId => _sessionId;
 
     public ConversationRuntime(
         ISmartRouter router,
@@ -56,6 +59,29 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         _config = config;
         _logger = logger;
         _systemPrompt = BuildSystemPrompt();
+    }
+
+    /// <inheritdoc/>
+    public async Task InitializeSessionAsync(string? sessionId, CancellationToken ct = default)
+    {
+        if (sessionId is null) return;
+
+        _sessionId = sessionId;
+        _history.Clear();
+
+        var entries = await _sessionStore.LoadAsync(sessionId, ct).ConfigureAwait(false);
+        foreach (var entry in entries)
+        {
+            switch (entry.Role)
+            {
+                case "user" when !string.IsNullOrEmpty(entry.Content):
+                    _history.Add(InputMessage.UserText(entry.Content));
+                    break;
+                case "assistant" when !string.IsNullOrEmpty(entry.Content):
+                    _history.Add(InputMessage.AssistantText(entry.Content));
+                    break;
+            }
+        }
     }
 
     /// <inheritdoc/>

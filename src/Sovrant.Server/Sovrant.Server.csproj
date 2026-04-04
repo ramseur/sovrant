@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>sovrant-server</AssemblyName>
+    <!--
+      CA2007  ConfigureAwait not required in ASP.NET Core
+      CA1034  Nested types OK for route helpers
+      CA1812  Instantiated via DI
+      CA1515  Public types intentional for minimal-API model binding
+      CA1720  "Object" property name required by OpenAI wire format
+      CA1056  String URL intentional (OpenAI compat wire format)
+      CA1054  String URL intentional (OpenAI compat wire format)
+      CA1308  ToLowerInvariant intentional for JSON enum strings
+      CA1848  High-perf logging not required in startup path
+      CA1873  Logging arg evaluation fine at startup
+    -->
+    <NoWarn>CA2007;CA1034;CA1812;CA1515;CA1720;CA1056;CA1054;CA1308;CA1848;CA1873</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sovrant.Api\Sovrant.Api.csproj" />
+    <ProjectReference Include="..\Sovrant.Commands\Sovrant.Commands.csproj" />
+    <ProjectReference Include="..\Sovrant.Runtime\Sovrant.Runtime.csproj" />
+    <ProjectReference Include="..\Sovrant.Tools\Sovrant.Tools.csproj" />
+  </ItemGroup>
+
+</Project>
