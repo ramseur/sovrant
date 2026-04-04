@@ -59,12 +59,25 @@ public sealed class SmartRouterTests
     }
 
     [Fact]
-    public async Task RouteAsync_ThrowsWhenNoHealthyProviders()
+    public async Task RouteAsync_FallsBackToUnhealthyProviderWhenAllFail()
     {
+        // When all providers fail the startup ping, the router falls back to the configured
+        // (but unhealthy) providers so a transient DNS hiccup doesn't hard-block routing.
         var info = new ProviderInfo(
             CreateProvider("p1", "https://dead.example.com"), "/v1/models", 0.001) { Healthy = false };
 
         var router = BuildRouter([info]);
+        var req = new MessagesRequest("gpt-4o", 100, [InputMessage.UserText("Hi")]);
+
+        // Should fall back to the unhealthy provider rather than throwing
+        var provider = await router.RouteAsync(req);
+        Assert.Equal("p1", provider.Name);
+    }
+
+    [Fact]
+    public async Task RouteAsync_ThrowsWhenNoProvidersConfigured()
+    {
+        var router = BuildRouter([]);
         var req = new MessagesRequest("gpt-4o", 100, [InputMessage.UserText("Hi")]);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => router.RouteAsync(req));

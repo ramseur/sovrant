@@ -34,6 +34,9 @@ public sealed class SmartRouter : ISmartRouter
     private static readonly Action<ILogger, string, Exception?> _logProviderRecovered =
         LoggerMessage.Define<string>(LogLevel.Information, new EventId(5, "ProviderRecovered"),
             "SmartRouter: {Provider} recovered, re-adding to pool.");
+    private static readonly Action<ILogger, Exception?> _logAllUnhealthyFallback =
+        LoggerMessage.Define(LogLevel.Warning, new EventId(6, "AllUnhealthyFallback"),
+            "SmartRouter: all providers failed health check — routing to configured providers anyway. Check DNS/network if this persists.");
 
     /// <summary>Initializes a new instance of <see cref="SmartRouter"/>.</summary>
     /// <param name="providers">The list of providers to manage.</param>
@@ -88,8 +91,12 @@ public sealed class SmartRouter : ISmartRouter
         var available = _providers.Where(p => p.Healthy).ToList();
         if (available.Count == 0)
         {
-            throw new InvalidOperationException(
-                "SmartRouter: no healthy providers available. Check your API keys and provider health.");
+            // All providers failed the startup health check (e.g. transient DNS failure in WSL/CI).
+            // Fall back to all configured providers and let the actual request surface the real error.
+            if (_providers.Count == 0)
+                throw new InvalidOperationException("SmartRouter: no providers configured.");
+            _logAllUnhealthyFallback(_logger, null);
+            available = _providers.ToList();
         }
         var selected = _mode == RouterMode.Fixed
             ? available[0]

@@ -111,11 +111,28 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 Stream = true,   // runtime always uses streaming internally
             };
 
-            var provider = await _router.RouteAsync(request, ct).ConfigureAwait(false);
+            // RouteAsync can throw if all providers are unhealthy.
+            // Catch outside yield (yield-in-try/catch is not permitted in iterators).
+            Sovrant.Api.Providers.ILlmProvider? provider = null;
+            string? routingError = null;
+            try
+            {
+                provider = await _router.RouteAsync(request, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (InvalidOperationException ex) { routingError = ex.Message; }
+
+            if (routingError is not null)
+            {
+                yield return new RuntimeEvent.RuntimeError(routingError);
+                yield break;
+            }
+
             var started = DateTimeOffset.UtcNow;
 
             // Collect all streamed events (buffered to avoid yield-in-try/catch restriction)
-            var (streamEvents, accumulated) = await CollectStreamEventsAsync(provider, request, ct)
+            var resolvedProvider = provider!;  // non-null — routingError guard above yields break first
+            var (streamEvents, accumulated) = await CollectStreamEventsAsync(resolvedProvider, request, ct)
                 .ConfigureAwait(false);
 
             // Yield the collected text/error events to the caller
@@ -124,7 +141,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
             var durationMs = (DateTimeOffset.UtcNow - started).TotalMilliseconds;
             await _router.RecordResultAsync(
-                provider.Name, accumulated.Success, durationMs, ct).ConfigureAwait(false);
+                resolvedProvider.Name, accumulated.Success, durationMs, ct).ConfigureAwait(false);
 
             if (!accumulated.Success)
                 yield break;
