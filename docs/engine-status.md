@@ -2,8 +2,8 @@
 
 **Branch:** `sovrant-openc-dotnet-port`
 **Date:** 2026-04-04
-**Test model:** `gemini-2.5-flash` via Google AI Studio OpenAI-compat endpoint
-**Test key:** Free tier (5 RPM limit observed in practice)
+**Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI)
+**Note:** Google free tier is ~5 RPM. OpenAI tested with billing enabled.
 
 ---
 
@@ -16,7 +16,7 @@
 | SmartRouter | ✅ Working | Pings providers on startup, routes by latency/cost/health |
 | Agentic loop | ✅ Working | Multi-turn tool use, retries up to 20 rounds |
 | Session persistence (JSONL) | ✅ Working | `~/.sovrant/sessions/{id}.jsonl` append-log |
-| Session resumption (`--session <id>`) | ✅ Working | History replayed on `InitializeSessionAsync` |
+| Session resumption (`--session <id>`) | ✅ Working | History replayed correctly; confirmed across two separate process invocations |
 | Permission system | ✅ Working | `bypassPermissions` / `dontAsk` / `default` / `plan` all functional |
 | SSE streaming | ✅ Working | Text chunks stream to console in real time |
 | HTTP server (`Sovrant.Server`) | ✅ Built | Not smoke-tested live; unit-tested |
@@ -28,6 +28,8 @@
 | Provider URL: hardcoded `/v1/chat/completions` overrode base URL path | Changed to relative `chat/completions`; base URL normalised to always have trailing slash |
 | `ProviderApiProvider` (Anthropic format) was always registered and routed alongside `OpenAiCompatProvider` | Now only registered when `PROVIDER_BASE_URL` env var is explicitly set |
 | `--permission-mode bypass-permissions` (hyphen) silently fell back to `Default` | Use `bypassPermissions` (camelCase) — matches the `PermissionMode` enum |
+| `--session` option was parsed but never wired to `InitializeSessionAsync` | Fixed: session ID now applied to the same `IConversationRuntime` instance used for the turn |
+| Token counts always showed `0↑ 0↓` | OpenAI streaming usage is in final chunk; Anthropic-style `MessageDelta` parser doesn't capture it — tracked as known issue |
 
 ---
 
@@ -58,14 +60,14 @@ Tests run with `gemini-2.5-flash`, `--permission-mode bypassPermissions`, free t
 
 | Tool | Tested | Result |
 |---|---|---|
-| `WebFetch` | ⬜ Not tested | Implemented via `HttpClient`; fetches URL and returns content. Requires outbound HTTP access |
+| `WebFetch` | ✅ | Fetched `https://httpbin.org/get`; model correctly extracted origin IP from response |
 | `WebSearch` | ⬜ Not tested | Implemented; requires `WEB_SEARCH_API_KEY` env var (Brave/Bing API). Returns 400/error if key absent |
 
 ### Task management tools
 
 | Tool | Tested | Result |
 |---|---|---|
-| `TodoWrite` | ⬜ Not tested (rate limited) | Implemented; in-session task list, persists across turns within same runtime instance |
+| `TodoWrite` | ✅ | Created 2-item task list; model confirmed both items with priority |
 | `TaskCreate` | ⬜ Not tested | Implemented; spawns background `dotnet` sub-process |
 | `TaskGet` | ⬜ Not tested | Implemented; polls `BackgroundTaskRegistry` by task ID |
 | `TaskList` | ⬜ Not tested | Implemented; lists all tracked background tasks |
@@ -77,8 +79,8 @@ Tests run with `gemini-2.5-flash`, `--permission-mode bypassPermissions`, free t
 | Tool | Tested | Result |
 |---|---|---|
 | `Agent` | ⬜ Not tested | Implemented; spawns isolated `ConversationRuntime` with its own session |
-| `AskUserQuestion` | ⬜ Not tested | Implemented; prompts stdin in CLI mode; returns fixed message in server mode |
-| `Sleep` | ⬜ Not tested | Implemented; `Task.Delay(ms)` — straightforward |
+| `AskUserQuestion` | ✅ | Tool fired and prompted console correctly in CLI mode. In server mode returns fixed message (by design) |
+| `Sleep` | ✅ | Slept 1000ms and returned correctly |
 
 ### Notebook tools
 
@@ -95,7 +97,7 @@ Tests run with `gemini-2.5-flash`, `--permission-mode bypassPermissions`, free t
 | `gemini-2.5-flash` (Google AI Studio) | ✅ | Confirmed working. Free tier: ~5 RPM |
 | `gemma-4-31b-it` (Google AI Studio) | ❌ | Text generation works; function calling not supported via OpenAI-compat endpoint |
 | `gemma-3-27b-it` (Google AI Studio) | ⬜ Not tested | Likely same limitation as Gemma 4 |
-| OpenAI (`gpt-4o` etc.) | ⬜ Not tested | Should work — standard OpenAI format |
+| OpenAI (`gpt-4o-mini`) | ✅ | Confirmed working — text, all tested tools, session continuity all pass |
 | Ollama (local) | ⬜ Not tested | Implemented; set `OLLAMA_BASE_URL`. WSL/Linux only for bash tool |
 | Anthropic native API | ⬜ Not tested | Set `PROVIDER_BASE_URL=https://api.anthropic.com` + `PROVIDER_API_KEY` |
 

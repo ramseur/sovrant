@@ -53,6 +53,9 @@ promptCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
     await using var sp = BuildServices(pr);
     await InitAsync(sp, pr, ct).ConfigureAwait(false);
     var runtime = sp.GetRequiredService<IConversationRuntime>();
+    var sessionId = pr.GetValue(sessionOpt);
+    if (sessionId is not null)
+        await runtime.InitializeSessionAsync(sessionId, ct).ConfigureAwait(false);
     await RunTurnAsync(runtime, message!, ct).ConfigureAwait(false);
 });
 root.Add(promptCmd);
@@ -63,6 +66,9 @@ root.SetAction(async (ParseResult pr, CancellationToken ct) =>
     await using var sp = BuildServices(pr);
     await InitAsync(sp, pr, ct).ConfigureAwait(false);
     var runtime = sp.GetRequiredService<IConversationRuntime>();
+    var sessionId = pr.GetValue(sessionOpt);
+    if (sessionId is not null)
+        await runtime.InitializeSessionAsync(sessionId, ct).ConfigureAwait(false);
     var dispatcher = sp.GetRequiredService<SlashCommandDispatcher>();
     await RunReplAsync(runtime, dispatcher, ct).ConfigureAwait(false);
 });
@@ -130,6 +136,7 @@ async Task InitAsync(ServiceProvider sp, ParseResult pr, CancellationToken ct)
 
     // Connect to MCP servers and register their tools.
     await sp.InitializeRuntimeAsync(ct).ConfigureAwait(false);
+
 }
 
 async Task RunReplAsync(IConversationRuntime runtime, SlashCommandDispatcher dispatcher, CancellationToken ct)
