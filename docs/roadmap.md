@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 7.5 Tier 1+2 + Phase 7.6 memory files implemented — 31 tools)
+**Last updated:** 2026-04-04 (Phase 7.5 Tier 1+2 + Phase 7.6 items 1+2 complete; Phases 7.7–7.9 added from security review; Phase 17.5 agent scaffolding added)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -20,6 +20,26 @@ The engine is fully functional as a single-user tool:
 - SmartRouter with health/latency scoring across multiple providers
 - HTTP server (`Sovrant.Server`) with OpenAI-compatible endpoints
 - In-memory session pool (one `ConversationRuntime` per `session_id`, safe for multiple users)
+
+### Agent System: Current State
+
+| Layer | Status | Notes |
+|---|---|---|
+| Single sub-agent (`AgentTool`) | ✅ Working | Spawns a fresh `ConversationRuntime` via DI, runs one isolated turn, returns text. Used by the LLM today. |
+| Recursion depth guard | ❌ Missing | No limit — infinite nesting possible. Tracked in Phase 7.8. |
+| Multi-agent interfaces (`IAgent`, `IMultiAgentSystem`) | ✅ Defined | `Sovrant.Agents` project. Both backends implement the same interface. |
+| Modern backend (`InProcessMultiAgentSystem`) | ⚠️ Partial | `BaseAgent` channel/loop, `WorkspaceContext`, `AgentSystemFactory` all working. `MultiAgentCoordinator.DispatchAsync` is a stub — throws `NotImplementedException`. |
+| Legacy backend (`ProcessBasedMultiAgentSystem`) | ⚠️ Partial | Scaffold only. `ProcessAgent.HandleAsync` and `RunTaskAsync` throw `NotImplementedException`. |
+| Config switch (`AGENT_MODE`) | ✅ Working | `AgentSystemConfig.FromEnvironment()` + `AgentSystemFactory.Create()`. `AddMultiAgentSystem()` DI extension ready. |
+| DI wiring in CLI / Server | ❌ Not wired | `services.AddMultiAgentSystem()` is not yet called in `Sovrant.Cli` or `Sovrant.Server`. `AgentTool` still uses the old direct `ConversationRuntime` path. |
+| Team tools (`TeamCreateTool` / `TeamDeleteTool`) | ❌ Not started | Phase 18. Will replace `AgentTool`'s direct runtime spawning with `IMultiAgentSystem.RunTaskAsync`. |
+| V2 placeholders (`ITeamWorkspace`, `IArtifact`, `IMultiAgentCollaboration`) | ⚠️ Interfaces only | No implementations. Phase 19+. |
+
+**What needs to happen before multi-agent is usable:**
+1. Phase 7.8 — recursion depth guard on `AgentTool` (safety, low effort)
+2. Phase 19 — implement `MultiAgentCoordinator.DispatchAsync` (modern backend)
+3. Phase 18 — `TeamCreateTool` / `TeamDeleteTool` + wire `IMultiAgentSystem` into DI
+4. Phase 19 — implement `ProcessAgent` / process backend (only needed if legacy mode is required)
 
 ---
 
@@ -136,9 +156,110 @@ Fix: detect the `usage` field on the final OpenAI SSE chunk and capture `prompt_
 #### Implementation Plan
 
 1. ~~Agent memory files — extend `BuildSystemPrompt()` in `ConversationRuntime`; add `/memory` slash command~~ ✅ Done — `AppendMemoryFile()` helper reads both files; `/memory` and `/mem` commands registered; `InjectAsUserMessage` on `SlashCommandResult` wired into REPL
-2. Token count fix — update `CollectStreamEventsAsync` to capture OpenAI `usage` field from final SSE chunk
+2. ~~Token count fix — update `CollectStreamEventsAsync` to capture OpenAI `usage` field from final SSE chunk~~ ✅ Done — `OpenAiCompatProvider` removed `yield break` on `finish_reason`; continues loop to capture trailing usage chunk; `ConversationRuntime` captures `InputTokens` from `MessageDelta`
 3. Context auto-compaction — add compaction logic to `RunTurnAsync`; add `SOVRANT_COMPACT_THRESHOLD` config; persist compaction events to JSONL
 4. Expose token counts in REPL status line and `GET /v1/sessions/{id}` response
+
+---
+
+### Phase 7.7 — Security Hardening
+
+**Source:** OpenClaude improvement document review (2026-04-04) — items applicable to Sovrant's tool surface.
+
+**Goal:** Address the most critical security and safety gaps in `BashTool` and `WebFetchTool` before the server is used in any shared or internet-facing deployment.
+
+#### BashTool hardening
+
+**Current gaps:**
+- No stdout/stderr size limit — a runaway command can exhaust memory or produce an enormous tool result
+- No dangerous env var stripping — inherits `LD_PRELOAD`, `DYLD_INSERT_LIBRARIES`, and other vars that can be abused to hijack process behaviour
+- No workspace guard — the tool will happily run with `$HOME` or `/` as its working directory
+
+**Fixes:**
+1. Hard `MAX_OUTPUT_BYTES` limit (256 KB) — truncate combined stdout+stderr and append `[truncated: N bytes omitted]` marker
+2. Strip `LD_PRELOAD`, `DYLD_INSERT_LIBRARIES`, `LD_LIBRARY_PATH` from the child process environment before exec
+3. Workspace guard — if the resolved working directory is `$HOME`, `/`, or outside the configured workspace root, log a warning and surface it in the tool output
+
+#### WebFetchTool SSRF protection
+
+**Current gaps:**
+- No SSRF (Server-Side Request Forgery) protection — the agent can be instructed to fetch internal IPs (AWS metadata at `169.254.169.254`, internal services at `192.168.x.x`, `10.x.x.x`, etc.)
+- No `file://` scheme blocking — `file:///etc/passwd` would succeed on some HTTP client configurations
+- Response is buffered entirely in memory via `ReadAsStringAsync`
+
+**Fixes:**
+1. DNS resolution + IP blocklist: after resolving the target hostname, reject requests to RFC-1918 private ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), loopback (`127.0.0.0/8`, `::1`), link-local (`169.254.0.0/16`), and metadata endpoints
+2. Block `file://`, `ftp://`, and other non-HTTP schemes at the URL parse stage
+3. Block redirect chains that resolve to private IPs (check each redirect destination)
+4. Stream response with `HttpCompletionOption.ResponseHeadersRead` + capped `StreamReader` — avoid buffering large responses in memory
+
+#### Implementation Plan
+
+1. `BashTool` — add `MAX_OUTPUT_BYTES = 262144`; pipe stdout+stderr through a capped `MemoryStream`; strip dangerous env vars; add workspace guard warning
+2. `WebFetchTool` — add `IsPrivateIp(IPAddress)` helper; resolve DNS before sending; block private IPs and `file://`; follow redirects manually to check each hop; switch to streaming read
+3. Add tests for each guard in `Sovrant.Tools.Tests`
+
+---
+
+### Phase 7.8 — Reliability & Safety
+
+**Source:** OpenClaude improvement document review (2026-04-04).
+
+**Goal:** Prevent runaway agent behaviour and improve resilience against transient LLM provider errors.
+
+#### Provider retry with exponential backoff
+
+**Current state:** `SmartRouter` makes a single attempt. On a `429` or `5xx`, the request fails immediately and the error propagates to the user. The `ApiError.Retryable` flag is already set correctly but never used.
+
+**Fix:** Wrap `RouteAsync` + `StreamAsync` in a retry loop (max 3 attempts, delays 1s / 2s / 4s) for errors where `ApiError.Retryable == true`. Respect `Retry-After` header if present. Non-retryable errors (`400`, `401`, `403`) skip retries immediately.
+
+#### AgentTool recursion depth limit
+
+**Current state:** `AgentTool` spawns a new `ConversationRuntime` and runs a full agentic loop. That sub-agent can itself call `AgentTool`, with no limit on nesting depth — a model instruction can cause infinite recursion, exhausting threads/memory.
+
+**Fix:** Use `AsyncLocal<int>` to track the current nesting depth. Reject calls at depth ≥ 5 with an error result. Pass the depth counter through the `IServiceProvider` or as an ambient context.
+
+#### ReadFileTool file size limit
+
+**Current state:** `ReadAllLinesAsync` loads the entire file into memory regardless of size. A 2 GB log file would be loaded completely.
+
+**Fix:** Check `FileInfo.Length` before reading. If size exceeds 10 MB, return an error: `"Error: file too large to read (N MB). Use Grep to search within it."`. For files between 1–10 MB, include a warning in the output.
+
+#### Implementation Plan
+
+1. Add retry logic to `ConversationRuntime.CollectStreamEventsAsync` — detect retryable errors from `HttpRequestException`, inspect status code, apply exponential backoff
+2. Add `AsyncLocal<int> s_agentDepth` to `AgentTool`; increment on enter, check ≥ 5, decrement on exit
+3. `ReadFileTool` — add `FileInfo.Length` check; return error if > 10 MB
+
+---
+
+### Phase 7.9 — Robustness
+
+**Source:** OpenClaude improvement document review (2026-04-04).
+
+**Goal:** Eliminate edge-case data corruption and unbounded output in the remaining core tools.
+
+#### Atomic file writes (`WriteFileTool` / `EditFileTool`)
+
+**Current state:** Both tools call `File.WriteAllTextAsync(path, content)` directly. A crash or cancellation mid-write leaves a partial file at the destination path, corrupting the original.
+
+**Fix:** Write to a temporary file in the same directory, then `File.Move(tmp, destination, overwrite: true)`. `File.Move` is atomic on POSIX (same filesystem). On Windows it is not formally atomic but is best-effort via a rename. This eliminates partial writes in the common case.
+
+#### GlobTool result cap
+
+**Current state:** No explicit cap on result count. On a very large repository (monorepos with 100K+ files) a `**/*` glob can produce an enormous result string.
+
+**Fix:** Cap results at 1000 files. If truncated, append `[truncated: showing 1000 of N files]`.
+
+#### Deferred — `ToolResult` structured record
+
+The OpenClaude document suggests replacing the `string` return from `ITool.ExecuteAsync` with a structured `ToolResult` record carrying `Output`, `IsError`, and optional `Metadata`. This is a **breaking change** to the `ITool` interface and all 31 implementations. Defer to a dedicated Phase 10+ refactor when the tool surface has stabilised.
+
+#### Implementation Plan
+
+1. `WriteFileTool` — write to `{path}.tmp`, then `File.Move` with overwrite
+2. `EditFileTool` — same: write full updated content to temp, then rename
+3. `GlobTool` — cap `files` list at 1000; append truncation notice if exceeded
 
 ---
 
@@ -514,7 +635,78 @@ At cloud scale, users will want to connect MCP servers that front OAuth-protecte
 
 ---
 
+### Phase 17.5 — Dual Agent Architecture (Scaffolding)
+
+**Source:** Dual Agent Architecture design document (2026-04-04).
+**Status:** ✅ Scaffolding complete — `Sovrant.Agents` project builds clean; full execution deferred to Phase 19.
+
+**Goal:** Introduce two interchangeable multi-agent backends behind a shared `IMultiAgentSystem` interface so the rest of the system never depends on a specific implementation. Whichever architecture proves superior in practice can be promoted as the default without touching consumers.
+
+#### Why two backends
+
+Multi-agent coordination is an unsettled space. Process-per-agent (spawning a child process for each agent) matches the original OpenClaude approach and is easy to reason about in isolation. In-process async channels are lighter, faster, and compose naturally with the existing `ConversationRuntime` model. Both are viable; the winner is not yet clear. The interface abstraction preserves both options with zero coupling.
+
+#### Project: `Sovrant.Agents`
+
+A standalone project with no dependency on `Sovrant.Runtime` or the tool system. Consumers reference it for the `IMultiAgentSystem` interface and register via `services.AddMultiAgentSystem()`.
+
+```
+src/Sovrant.Agents/
+  Abstractions/
+    IAgent.cs                          ← interface: Name + HandleAsync
+    IMultiAgentSystem.cs               ← interface: RegisterAgent, RunTaskAsync, CancelTask, ShutdownAsync
+  Models/
+    AgentTask.cs                       ← record: Id, Prompt, AssignedAgentName, Metadata, CreatedAt
+    AgentResult.cs                     ← record: TaskId, Success, Output, Error; Ok/Fail factories
+    AgentRole.cs                       ← enum: General, Planner, Coder, Reviewer, Executor, Supervisor
+  Legacy/
+    ProcessAgent.cs                    ← IAgent backed by ProcessStartInfo; stdin/stdout stdio
+    ProcessBasedMultiAgentSystem.cs    ← spawns ProcessAgent per task; AGENT_MODE=legacy
+  Modern/
+    BaseAgent.cs                       ← abstract IAgent with Channel<AgentTask> inbox + RunLoopAsync
+    MultiAgentCoordinator.cs           ← routes tasks; per-task CTS; shutdown drain
+    InProcessMultiAgentSystem.cs       ← wraps coordinator + WorkspaceContext; AGENT_MODE=modern (default)
+    WorkspaceContext.cs                ← thread-safe ConcurrentDictionary scratch space for a run
+  Config/
+    AgentSystemConfig.cs               ← UseLegacyAgents bool; MaxConcurrentAgents; TaskTimeoutSeconds
+    AgentSystemFactory.cs              ← static Create(config, services) → IMultiAgentSystem
+  V2/
+    IArtifact.cs                       ← placeholder: versioned content blob with ReadAsync
+    ITeamWorkspace.cs                  ← placeholder: per-team artifact store
+    IMultiAgentCollaboration.cs        ← placeholder: structured plan-code-review collaboration
+  ServiceCollectionExtensions.cs       ← AddMultiAgentSystem(config?) reads AGENT_MODE env var
+```
+
+#### Configuration switch
+
+| Mechanism | Effect |
+|---|---|
+| `AGENT_MODE=legacy` | `ProcessBasedMultiAgentSystem` (process-per-agent) |
+| `AGENT_MODE=modern` or unset | `InProcessMultiAgentSystem` (default, recommended) |
+| `AgentSystemConfig.UseLegacyAgents = true` | Legacy, programmatic override |
+
+#### What is stubbed (Phase 19 work)
+
+- `ProcessAgent.HandleAsync` — process spawn, stdin write, stdout parse, tool-use message parsing
+- `ProcessBasedMultiAgentSystem.RunTaskAsync` — agent resolution, process lifecycle, streaming output
+- `MultiAgentCoordinator.DispatchAsync` — agent selection by role/name, linked CTS, result channel
+- `MultiAgentCoordinator.ShutdownAsync` — awaiting all `BaseAgent.RunLoopAsync` tasks
+- V2 interfaces — `ITeamWorkspace`, `IArtifact`, `IMultiAgentCollaboration` have no implementations
+
+#### What is fully working now
+
+- `WorkspaceContext` — thread-safe `ConcurrentDictionary` variable store
+- `BaseAgent` — channel construction, `EnqueueAsync`, `RunLoopAsync`, `Complete`
+- `AgentSystemConfig.FromEnvironment()` — reads `AGENT_MODE`
+- `AgentSystemFactory.Create` — correct backend selection
+- `ServiceCollectionExtensions.AddMultiAgentSystem` — DI wiring
+- All interfaces and model records
+
+---
+
 ### Phase 18 — Multi-Agent Teams (`TeamCreateTool` / `TeamDeleteTool`)
+
+**Depends on:** Phase 17.5 (`Sovrant.Agents` scaffolding — already done)
 
 **Goal:** Allow a single Sovrant session to orchestrate a team of independent sub-agents running in parallel, each with its own session, tool access, and LLM provider — coordinated by a supervisor agent.
 
@@ -554,7 +746,43 @@ Supervisor Agent (ConversationRuntime)
 
 ---
 
-### Phase 19 — Enterprise Auth & Multi-Tenancy
+### Phase 19 — Dual Agent Architecture: Full Implementation
+
+**Depends on:** Phase 17.5 (scaffolding), Phase 18 (team tools that will consume `IMultiAgentSystem`)
+
+**Goal:** Complete the two multi-agent backends stubbed in Phase 17.5. At this point the `TeamCreateTool` / `TeamDeleteTool` from Phase 18 will be wired to `IMultiAgentSystem` and the choice of legacy vs. modern backend becomes a runtime configuration decision.
+
+#### Option A completion: `ProcessBasedMultiAgentSystem`
+
+1. `ProcessAgent.HandleAsync` — spawn child process from `ProcessStartInfo`; write task JSON to stdin; stream stdout line by line; parse structured tool-use blocks (same format as original OpenClaude); propagate `CancellationToken` via `Process.Kill()`
+2. `ProcessBasedMultiAgentSystem.RunTaskAsync` — resolve target agent; create linked CTS; stream result incrementally; record CTS for `CancelTask`
+
+#### Option B completion: `MultiAgentCoordinator.DispatchAsync`
+
+1. Resolve target agent by `AgentTask.AssignedAgentName` or by `AgentRole` (planner → coder → reviewer pipeline)
+2. For `BaseAgent` subtypes: enqueue via `EnqueueAsync`, pair with a `TaskCompletionSource<AgentResult>` registered by `RunLoopAsync`
+3. For plain `IAgent` implementations: call `HandleAsync` directly on a `Task.Run` thread
+4. Per-task linked CTS stored in `_taskCts`; `CancelTask` triggers it
+5. `ShutdownAsync` — await all `BaseAgent.RunLoopAsync` background tasks
+
+#### V2 implementations (deferred beyond Phase 19)
+
+- `ITeamWorkspace` → `InMemoryTeamWorkspace` — `ConcurrentDictionary<string, IArtifact>`
+- `IArtifact` → `StringArtifact` and `FileArtifact` concrete types
+- `IMultiAgentCollaboration` → `PlanCodeReviewCollaboration` — planner + coder + reviewer pipeline sharing one `ITeamWorkspace`
+
+#### Implementation Plan
+
+1. Implement `ProcessAgent.HandleAsync` with stdin/stdout pipes and tool-use message parser
+2. Implement `ProcessBasedMultiAgentSystem.RunTaskAsync` with full lifecycle management
+3. Implement `MultiAgentCoordinator.DispatchAsync` and update `ShutdownAsync`
+4. Wire `TeamCreateTool` to use `IMultiAgentSystem.RunTaskAsync` (replaces ad-hoc `ConversationRuntime` spawning in Phase 18)
+5. Add integration tests: legacy backend with a mock echo process; modern backend with a test `BaseAgent` subclass
+6. Implement V2 in-memory types when `IMultiAgentCollaboration` use cases materialise
+
+---
+
+### Phase 20 — Enterprise Auth & Multi-Tenancy
 
 **Depends on:** Phase 9.5 (session-scoped config) + Phase 8 (per-request credentials)
 
@@ -599,9 +827,10 @@ This phase is deliberately deferred. A small trusted team sharing a single deplo
 
 | Issue | Priority | Notes |
 |---|---|---|
-| Token counts always `0↑ 0↓` | Medium | OpenAI streaming sends usage in the final chunk; the SSE parser needs to capture the `usage` field from the `[DONE]` predecessor chunk |
+| ~~Token counts always `0↑ 0↓`~~ | ~~Medium~~ | ✅ Fixed — `OpenAiCompatProvider` now captures trailing OpenAI usage chunk; `ConversationRuntime` reads `InputTokens` from `MessageDelta` |
+| ~~SmartRouter crashes on WSL DNS failure~~ | ~~High~~ | ✅ Fixed — `SmartRouter` falls back to configured providers when all fail startup ping; `ConversationRuntime` catches `RouteAsync` exception and emits `RuntimeError` instead of crashing |
 | `AskUserQuestion` blocked in server mode | Low | By design — no interactive console available over HTTP. Could be solved via a webhook/callback URL pattern |
-| SmartRouter evicts a provider as unhealthy on first ping failure | Medium | Should retry a few times before marking unhealthy; add exponential backoff |
+| Provider has no retry on 429/5xx | Medium | `ApiError.Retryable` flag is set but never used. Addressed in Phase 7.8. |
 | No request-level timeout on agentic loop | Medium | A runaway tool loop can occupy a session indefinitely; add per-turn wall-clock timeout |
 | CORS origins hardcoded | Low | Should be configurable via `SOVRANT_CORS_ORIGINS` env var |
 | `launchSettings.json` port conflicts with `SOVRANT_PORT` default | Low | `launchSettings.json` declares `5091`; Kestrel overrides to `5200`. Rapid restart or parallel test runs cause `SocketException (10048)`. Fix: align `launchSettings.json` with `SOVRANT_PORT`; add `--urls` CLI override for CI. |

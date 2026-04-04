@@ -27,15 +27,18 @@ The server binds to `http://127.0.0.1:5200` by default.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `LLM_API_KEY` | Yes | — | API key forwarded to the LLM provider. Alias: `OPENAI_API_KEY` |
+| `LLM_API_KEY` | Yes | — | API key forwarded to the LLM provider. Aliases: `OPENAI_API_KEY`, `PROVIDER_API_KEY` (checked in order) |
 | `LLM_BASE_URL` | No | `https://api.openai.com/v1` | LLM provider base URL. Alias: `OPENAI_BASE_URL` |
-| `SOVRANT_TOKEN` | Yes | — | Bearer token that every client must supply. If unset the server returns 401 for all requests. |
+| `SOVRANT_TOKEN` | Yes | — | Bearer token all clients must supply. Returns 401 for all requests if unset. |
 | `SOVRANT_PORT` | No | `5200` | TCP port Kestrel listens on |
-| `PROVIDER_BASE_URL` | No | — | Enables the native messages API provider (`/v1/messages` format). |
+| `PROVIDER_BASE_URL` | No | — | Enables the native messages API provider (`/v1/messages` format, e.g. Anthropic direct) |
 | `PROVIDER_API_KEY` | No | — | API key for the native messages API provider |
-| `OLLAMA_BASE_URL` | No | `http://localhost:11434/v1` | Enables the local Ollama provider |
+| `OLLAMA_BASE_URL` | No | — | Enables the local Ollama provider when set (e.g. `http://localhost:11434/v1`) |
+| `ROUTER_MODE` | No | `Smart` | `Smart` (latency/cost scoring) or `Fixed` (always first provider) |
+| `ROUTER_STRATEGY` | No | `Balanced` | `Balanced`, `Latency`, or `Cost` |
+| `AGENT_MODE` | No | `modern` | `modern` (in-process async, recommended) or `legacy` (process-per-agent stdio). Takes effect once Phase 18 wires `Sovrant.Agents` into the server DI. |
 | `BRAVE_API_KEY` | No | — | Enables `WebSearch` via Brave Search API |
-| `FIRECRAWL_API_KEY` | No | — | Enables `WebSearch` via FireCrawl (used if `BRAVE_API_KEY` is not set) |
+| `FIRECRAWL_API_KEY` | No | — | Enables `WebSearch` via FireCrawl (fallback if `BRAVE_API_KEY` not set) |
 
 ---
 
@@ -115,7 +118,7 @@ The `sovrant` extension field appears on tool-related chunks and carries:
 }
 ```
 
-> **Known issue:** Token counts are currently always `0` for OpenAI providers. OpenAI sends usage only in the final SSE chunk in a field our parser does not yet capture. Tracked in `docs/roadmap.md` under Known Issues.
+> Token counts are now captured correctly. OpenAI sends usage in a trailing SSE chunk after `finish_reason`; the provider continues reading after `finish_reason` and emits a final `MessageDelta` with the correct `prompt_tokens` / `completion_tokens`.
 
 ---
 
