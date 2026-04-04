@@ -253,49 +253,45 @@ private sealed record SessionEntry(
 
 ---
 
-### Phase 9.5 — Production Multi-User Hardening
+### Phase 9.5 — Small Team Hardening
 
-**Depends on:** Phase 8 (per-request credentials) + Phase 9 (session TTL + per-session lock)
+**Depends on:** Phase 9 (session TTL + per-session lock)
 
-**Goal:** Make Sovrant safe and correct for a real product deployment where multiple users log in independently — isolated identity, isolated config, per-user cost tracking, and no shared global state leaking between users.
+**Goal:** Make Sovrant solid for a small trusted team sharing a single deployment — a single bearer token is fine, but config changes must be session-scoped, each user should bring their own LLM key, and the server must be observable (token usage, context window) and resilient (rate limiting, usage tracking). No user login system required at this stage.
 
 #### What works today for a team
 
-Session history is already isolated per `session_id` — ten users with different session IDs have fully independent conversation histories and tool state. For a **trusted internal team sharing a single deployment** (shared `SOVRANT_TOKEN`, shared `LLM_API_KEY`, no per-user billing) this is sufficient today.
+Session history is already isolated per `session_id` — ten users with different session IDs have fully independent conversation histories and tool state. A shared `SOVRANT_TOKEN` is fine for a trusted team where everyone is known and has the token. This is sufficient for a team of up to ~50 engineers sharing an internal deployment.
 
-#### What is missing for a product with user logins
+#### What this phase adds
 
 | Gap | Problem | Fix |
 |---|---|---|
-| Single `SOVRANT_TOKEN` | All users share one bearer token — no per-user identity, anyone can delete anyone else's session or change global config | Per-user auth tokens (JWT or opaque tokens issued at login) |
-| Single `LLM_API_KEY` | All users bill to one key — no per-user cost tracking or LLM-level rate limiting | Phase 8 per-request `x_api_key` — each user supplies their own key from the frontend |
-| `PUT /v1/config` is global | One user changing the model or permission mode changes it for all users simultaneously | Session-scoped config overlay — per-session `MutableServerConfig` that shadows the global one |
-| No per-user rate limiting | A single user can saturate the server with concurrent requests, starving others | Per-token request rate limiter (ASP.NET Core rate limiting middleware) |
-| No cost visibility | No way to see which user or session is responsible for LLM spend | Per-session token usage log aggregated in `GET /v1/sessions/{id}` and a new `GET /v1/usage` summary endpoint |
+| `PUT /v1/config` is global | One user changing the model or permission mode (or calling `EnterPlanMode`) changes it for all sessions simultaneously | Session-scoped config overlay — each `SessionEntry` carries a `SessionConfig` that shadows the global defaults |
+| Single `LLM_API_KEY` | All sessions bill to the same key — no per-session cost visibility | Phase 8 per-request `x_api_key` — each user or client supplies their own key in the request body |
+| No per-session rate limiting | A single session can saturate the server with concurrent requests | Per-session request rate limiter (ASP.NET Core `RateLimiter` middleware) |
+| No cost visibility | No way to see which session is responsible for LLM spend | Per-session token accumulation in `SessionEntry`; `GET /v1/usage` summary endpoint |
+| No context window visibility | Users can't see how much context is consumed | `context_used_pct` and `tokens_remaining` in `GET /v1/sessions/{id}`; REPL status line |
 
 #### Design
 
-**Per-user auth tokens**
-Replace the single `SOVRANT_TOKEN` with a small token registry: the server operator issues named tokens (one per user or team member) via a config file or `POST /v1/admin/tokens`. Each request carries its token; the server resolves the caller identity from it. No OAuth required at this stage — simple opaque tokens are sufficient for a team of 10–50.
-
 **Session-scoped config overlay**
-`PUT /v1/config` currently mutates a single `MutableServerConfig` singleton. After Phase 8, each session pool entry already has its own provider credentials. Extend this: each `SessionEntry` carries a `SessionConfig` (model, permission mode) that overlays the global defaults. `PUT /v1/sessions/{id}/config` mutates only that session's overlay. The global `PUT /v1/config` becomes an admin-only operation.
+`PUT /v1/config` currently mutates a single `MutableServerConfig` singleton — this is what makes `EnterPlanMode` global. Fix: each `SessionEntry` carries a `SessionConfig` (model, permission mode) that overlays the global defaults for that session only. Add `PUT /v1/sessions/{id}/config` for per-session overrides. The global `PUT /v1/config` remains available for operators to set server-wide defaults.
 
-**Per-token rate limiting**
-Use ASP.NET Core's built-in `RateLimiter` middleware. Policy: N requests/minute per token (configurable via `SOVRANT_RATE_LIMIT_RPM`, default 60). The 429 response includes a `Retry-After` header.
+**Per-session rate limiting**
+Use ASP.NET Core's built-in `RateLimiter` middleware keyed on `session_id`. Policy: N requests/minute per session (configurable via `SOVRANT_RATE_LIMIT_RPM`, default 60). Returns `429` with a `Retry-After` header.
 
 **Usage tracking**
-Each `SessionEntry` accumulates `TotalInputTokens` and `TotalOutputTokens` across all turns. The existing token-count bug (always 0 for OpenAI streaming) must be fixed first — this is the forcing function to fix it. `GET /v1/usage` returns a summary per session ID and per caller token.
+Each `SessionEntry` accumulates `TotalInputTokens` and `TotalOutputTokens` across all turns. Token count capture (Phase 7.6 prerequisite) must be fixed first. `GET /v1/usage` returns a per-session summary.
 
 #### Implementation Plan
 
-1. Add token registry (`ITokenRegistry`) — maps opaque token → caller name; loaded from `SOVRANT_TOKENS` env var (JSON) or a config file
-2. Replace single `SOVRANT_TOKEN` check in auth middleware with `ITokenRegistry.Resolve(token)`
-3. Add `SessionConfig` overlay to `SessionEntry`; add `PUT /v1/sessions/{id}/config`; restrict global `PUT /v1/config` to admin tokens
-4. Add ASP.NET Core `RateLimiter` middleware keyed on caller token
-5. Fix token count capture — moved to Phase 7.6 (prerequisite); Phase 9.5 consumes the result
-6. Add `TotalInputTokens` / `TotalOutputTokens` to `SessionEntry`; add `GET /v1/usage` endpoint
-7. Add context window visualisation to `GET /v1/sessions/{id}` — `context_used_pct`, `tokens_remaining`; surface in REPL status line
+1. Add `SessionConfig` overlay to `SessionEntry` — model, permission mode; initialised from global `MutableServerConfig` defaults on session creation
+2. Add `PUT /v1/sessions/{id}/config` endpoint; update `EnterPlanMode`/`ExitPlanMode` to write to `SessionConfig` rather than the shared singleton (fixes the global plan mode issue)
+3. Add ASP.NET Core `RateLimiter` middleware keyed on `session_id`; `SOVRANT_RATE_LIMIT_RPM` env var
+4. Fix token count capture (Phase 7.6 prerequisite); add `TotalInputTokens` / `TotalOutputTokens` to `SessionEntry`
+5. Add `GET /v1/usage` endpoint — per-session token summary
+6. Add `context_used_pct` and `tokens_remaining` to `GET /v1/sessions/{id}`; surface in REPL status line
 
 ---
 
@@ -555,6 +551,47 @@ Supervisor Agent (ConversationRuntime)
 
 ---
 
+### Phase 19 — Enterprise Auth & Multi-Tenancy
+
+**Depends on:** Phase 9.5 (session-scoped config) + Phase 8 (per-request credentials)
+
+**Goal:** Replace the single shared `SOVRANT_TOKEN` with per-user identity — named tokens, user-scoped session isolation, and per-user billing visibility. This is the gate to offering Sovrant as a product to external users or as a managed internal platform with login, not just a shared team tool.
+
+#### When to implement
+
+This phase is deliberately deferred. A small trusted team sharing a single deployment does not need per-user auth — everyone knows the token, sessions are already isolated by `session_id`, and Phase 9.5 handles config isolation and rate limiting. Add this phase when:
+- External users (outside the trusted team) need access, **or**
+- Per-user billing or audit trails are required, **or**
+- Session deletion / config access needs to be restricted to the owning user
+
+#### What changes
+
+| Item | Change |
+|---|---|
+| Single `SOVRANT_TOKEN` | Replace with a named token registry: operator issues one opaque token per user. `SOVRANT_TOKENS` env var (JSON map) or a config file. No OAuth required at this stage. |
+| Auth middleware | `BearerTokenMiddleware` resolves the token to a caller identity (`string CallerId`) instead of a boolean pass/fail |
+| Session ownership | Each session is tagged with its `CallerId` on creation; only the owning caller can read, write, or delete it |
+| `PUT /v1/config` | Global config changes restricted to tokens listed in `SOVRANT_ADMIN_TOKENS`; other callers get `403` |
+| `GET /v1/usage` | Returns per-caller summary (requires Phase 9.5 token tracking as prerequisite) |
+| `POST /v1/admin/tokens` | Optional: runtime token issuance without server restart |
+
+#### Security model
+
+- Tokens are opaque random strings (32+ bytes, base64url). No JWT required at this stage — JWTs add complexity without benefit when the server is the issuer and the verifier.
+- The token registry is loaded at startup and can be reloaded via `POST /v1/admin/reload` without restart.
+- Tokens must never appear in logs, session JSONL, or API error responses.
+
+#### Implementation Plan
+
+1. Add `ITokenRegistry` — maps `token → CallerId`; loaded from `SOVRANT_TOKENS` env var or config file
+2. Update `BearerTokenMiddleware` to resolve `CallerId` and attach it to `HttpContext.Items`
+3. Tag `SessionEntry` with `CallerId` on creation; enforce ownership on read/delete endpoints
+4. Restrict `PUT /v1/config` to callers listed in `SOVRANT_ADMIN_TOKENS`
+5. Extend `GET /v1/usage` to group by `CallerId`
+6. Add `POST /v1/admin/reload` to hot-reload the token registry without restart
+
+---
+
 ### Known Issues / Debt
 
 | Issue | Priority | Notes |
@@ -565,4 +602,4 @@ Supervisor Agent (ConversationRuntime)
 | No request-level timeout on agentic loop | Medium | A runaway tool loop can occupy a session indefinitely; add per-turn wall-clock timeout |
 | CORS origins hardcoded | Low | Should be configurable via `SOVRANT_CORS_ORIGINS` env var |
 | `launchSettings.json` port conflicts with `SOVRANT_PORT` default | Low | `launchSettings.json` declares `5091`; Kestrel overrides to `5200`. Rapid restart or parallel test runs cause `SocketException (10048)`. Fix: align `launchSettings.json` with `SOVRANT_PORT`; add `--urls` CLI override for CI. |
-| `EnterPlanMode`/`ExitPlanMode` are global in server mode | Medium | Server uses shared `MutableServerConfig` singleton — calling `EnterPlanMode` in one session sets plan mode for all sessions simultaneously. Requires session-scoped config overlay (Phase 9.5). |
+| `EnterPlanMode`/`ExitPlanMode` are global in server mode | Medium | Server uses shared `MutableServerConfig` singleton — calling `EnterPlanMode` in one session sets plan mode for all sessions simultaneously. Fixed in Phase 9.5 step 2 (session-scoped `SessionConfig` overlay). |

@@ -76,7 +76,7 @@ The SmartRouter routes each LLM call across configured providers (OpenAI-compati
 | **Local / offline models** | ❌ | ✅ Ollama / LM Studio | ✅ Ollama / LM Studio | ✅ Ollama |
 | **Air-gapped deployment** | ❌ | Partial | Partial | ✅ |
 | **Multi-tenant credentials** | ❌ | ❌ | ❌ | Roadmap Phase 8 |
-| **Per-user auth tokens** | Managed account | ❌ | ❌ | Roadmap Phase 9.5 |
+| **Per-user auth tokens** | Managed account | ❌ | ❌ | Roadmap Phase 19 |
 | **Session TTL / eviction** | Managed cloud | ❌ | ❌ | Roadmap Phase 9 |
 | **Rate limiting** | Subscription-based | ❌ | ❌ | Roadmap Phase 9.5 |
 | **Usage tracking** | Subscription dashboard | ❌ | ❌ | Roadmap Phase 9.5 |
@@ -184,7 +184,7 @@ Both exploit Claude Code's trust model around project files and hooks. Sovrant's
 1. **Publish a licence** — the absence of a public licence is the first thing an evaluator notices. Even a source-available licence is better than silence.
 2. **Complete Phase 7.5 Tier 2** — `EnterPlanMode`/`ExitPlanMode` and `EnterWorktree`/`ExitWorktree` are done (Tier 1 ✅). Next: /undo/redo, SkillTool, custom project slash commands, `ListMcpResources`/`ReadMcpResource`, `ToolSearch`.
 3. **Phase 8 + Phase 9** — per-request credentials and session TTL/lock are the prerequisites for anything beyond a single-user deployment. These unlock the multi-user web frontend use case immediately.
-4. **Phase 9.5** — per-user auth tokens and session-scoped config are what separate a demo from a product.
+4. **Phase 9.5** — session-scoped config (fixes `EnterPlanMode` being global), rate limiting, and usage tracking are what make the server solid for a small team. Per-user auth tokens are deferred to Phase 19 — a single shared `SOVRANT_TOKEN` is fine for a trusted team.
 
 ---
 
@@ -297,7 +297,7 @@ The following features exist in one or more competitors but are not yet on Sovra
 #### Slack / Webhook Integration
 **Has it:** Claude Code ✅ (OAuth-based Slack app)
 **What it does:** Invoke the agent from a Slack message, receive streamed responses in a Slack thread. Useful for team-based "ask the codebase" workflows.
-**Why it matters for Sovrant:** `Sovrant.Server`'s HTTP API makes this a thin integration — a Slack bot that forwards messages to `POST /v1/chat/completions` and streams the response back. The prerequisite is Phase 9.5 (per-user auth tokens) so each Slack user maps to an isolated session.
+**Why it matters for Sovrant:** `Sovrant.Server`'s HTTP API makes this a thin integration — a Slack bot that forwards messages to `POST /v1/chat/completions` and streams the response back. Sessions are isolated by `session_id` derived from the Slack user ID — no per-user auth tokens required.
 **Suggested phase:** Phase 12 — Slack Integration. Publish a Sovrant Slack app that connects to a self-hosted `Sovrant.Server`.
 
 ---
