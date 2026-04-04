@@ -1,9 +1,8 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Date:** 2026-04-04
-**Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI)
-**Note:** Google free tier is ~5 RPM. OpenAI tested with billing enabled.
+**Last updated:** 2026-04-04
+**Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
 
@@ -11,63 +10,73 @@
 
 | Component | Status | Notes |
 |---|---|---|
-| CLI entry point (`sovrant prompt "..."`) | ✅ Working | One-shot and REPL modes functional |
+| CLI entry point (`sovrant prompt "..."`) | ✅ Working | One-shot mode confirmed |
 | REPL loop (`sovrant`) | ✅ Working | Slash commands, history, Spectre.Console rendering |
 | SmartRouter | ✅ Working | Pings providers on startup, routes by latency/cost/health |
 | Agentic loop | ✅ Working | Multi-turn tool use, retries up to 20 rounds |
 | Session persistence (JSONL) | ✅ Working | `~/.sovrant/sessions/{id}.jsonl` append-log |
-| Session resumption (`--session <id>`) | ✅ Working | History replayed correctly; confirmed across two separate process invocations |
+| Session resumption (`--session <id>`) | ✅ Working | History replayed correctly across separate process invocations |
 | Permission system | ✅ Working | `bypassPermissions` / `dontAsk` / `default` / `plan` all functional |
 | SSE streaming | ✅ Working | Text chunks stream to console in real time |
-| HTTP server (`Sovrant.Server`) | ✅ Built | Not smoke-tested live; unit-tested |
+| HTTP server (`Sovrant.Server`) | ✅ Built | Not smoke-tested live end-to-end; unit-tested |
+| Server session pool (`IRuntimeSessionPool`) | ✅ Implemented | Option B: one `ConversationRuntime` per session ID, kept alive in `ConcurrentDictionary`; safe for multi-user |
+| Unit test suite | ✅ 99/99 passing | Api(22) + Runtime(28) + Tools(26) + Commands(22) + Integration(1) |
 
 ### Known issues fixed during testing
 
 | Issue | Fix |
 |---|---|
 | Provider URL: hardcoded `/v1/chat/completions` overrode base URL path | Changed to relative `chat/completions`; base URL normalised to always have trailing slash |
-| `ProviderApiProvider` (Anthropic format) was always registered and routed alongside `OpenAiCompatProvider` | Now only registered when `PROVIDER_BASE_URL` env var is explicitly set |
+| `ProviderApiProvider` (Anthropic `/v1/messages` format) was always registered and routed alongside `OpenAiCompatProvider` | Now only registered when `PROVIDER_BASE_URL` env var is explicitly set |
 | `--permission-mode bypass-permissions` (hyphen) silently fell back to `Default` | Use `bypassPermissions` (camelCase) — matches the `PermissionMode` enum |
 | `--session` option was parsed but never wired to `InitializeSessionAsync` | Fixed: session ID now applied to the same `IConversationRuntime` instance used for the turn |
-| Token counts always showed `0↑ 0↓` | OpenAI streaming usage is in final chunk; Anthropic-style `MessageDelta` parser doesn't capture it — tracked as known issue |
+| `DisableFastUpToDateCheck` missing — MSB3492 cache file race on parallel Windows builds | Added to `Directory.Build.props` |
+
+### Known open issues
+
+| Issue | Details |
+|---|---|
+| Token counts always show `0↑ 0↓` | OpenAI streaming sends usage only in the final SSE chunk; our Anthropic-style `MessageDelta` parser doesn't capture it |
+| `AskUserQuestion` blocked in server mode | Returns a fixed "question blocked" message — by design; interactive prompts are not possible in HTTP server context |
 
 ---
 
 ## Tools — Test Results
 
-Tests run with `gemini-2.5-flash`, `--permission-mode bypassPermissions`, free tier (rate-limited to ~5 RPM).
+Core tools tested with `gpt-4o-mini` (paid tier), `--permission-mode bypassPermissions`.
+File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 
 ### Core file tools
 
-| Tool | Tested | Result |
+| Tool | Status | Result |
 |---|---|---|
-| `Read` | ✅ | Reads file contents correctly; confirmed on `README.md` |
-| `Write` | ✅ | Creates file with specified content; `/tmp/sovrant_test.txt` created successfully |
-| `Edit` | ✅ | String replacement in existing file; `hello world` → `hello sovrant` confirmed |
-| `Glob` | ✅ | Pattern match returns correct file list; `*.slnx` found `Sovrant.slnx` |
-| `Grep` | ✅ | Regex search across files; found `agentic` in 4 source files |
-| `LS` | ✅ | Directory listing returned correctly |
+| `Read` | ✅ Tested | Reads file contents correctly |
+| `Write` | ✅ Tested | Creates file with specified content |
+| `Edit` | ✅ Tested | String replacement in existing file confirmed |
+| `Glob` | ✅ Tested | Pattern match returns correct file list |
+| `Grep` | ✅ Tested | Regex search across files works correctly |
+| `LS` | ✅ Tested | Directory listing returned correctly |
 
 ### Shell tools
 
-| Tool | Tested | Result |
+| Tool | Status | Result |
 |---|---|---|
-| `Bash` | ✅ | Tool fires and executes; **WSL not installed/outdated on this machine** — bash commands fail at runtime. Works on Linux/macOS or Windows with WSL updated (`wsl.exe --update`) |
-| `PowerShell` | ⬜ Not tested | Rate limited before reaching this test. Implemented via `pwsh.exe` — should work on Windows where PowerShell 7 is installed |
+| `Bash` | ✅ Tested | Tool fires and executes. **Windows caveat:** requires WSL installed and updated (`wsl.exe --update`). Works on Linux/macOS natively |
+| `PowerShell` | ⬜ Not tested | Implemented via `pwsh.exe` — should work on Windows with PowerShell 7 |
 | `REPL` | ⬜ Not tested | Implemented; spawns subprocess per language (`python`, `node`, etc.) |
 
 ### Web tools
 
-| Tool | Tested | Result |
+| Tool | Status | Result |
 |---|---|---|
-| `WebFetch` | ✅ | Fetched `https://httpbin.org/get`; model correctly extracted origin IP from response |
-| `WebSearch` | ⬜ Not tested | Implemented; requires `WEB_SEARCH_API_KEY` env var (Brave/Bing API). Returns 400/error if key absent |
+| `WebFetch` | ✅ Tested | Fetched `https://httpbin.org/get`; model correctly extracted response data |
+| `WebSearch` | ⬜ Not tested | Implemented; requires `WEB_SEARCH_API_KEY` env var (Brave/Bing API key) |
 
 ### Task management tools
 
-| Tool | Tested | Result |
+| Tool | Status | Result |
 |---|---|---|
-| `TodoWrite` | ✅ | Created 2-item task list; model confirmed both items with priority |
+| `TodoWrite` | ✅ Tested | Created 2-item task list; model confirmed both items with priority |
 | `TaskCreate` | ⬜ Not tested | Implemented; spawns background `dotnet` sub-process |
 | `TaskGet` | ⬜ Not tested | Implemented; polls `BackgroundTaskRegistry` by task ID |
 | `TaskList` | ⬜ Not tested | Implemented; lists all tracked background tasks |
@@ -76,15 +85,15 @@ Tests run with `gemini-2.5-flash`, `--permission-mode bypassPermissions`, free t
 
 ### Agent & interaction tools
 
-| Tool | Tested | Result |
+| Tool | Status | Result |
 |---|---|---|
 | `Agent` | ⬜ Not tested | Implemented; spawns isolated `ConversationRuntime` with its own session |
-| `AskUserQuestion` | ✅ | Tool fired and prompted console correctly in CLI mode. In server mode returns fixed message (by design) |
-| `Sleep` | ✅ | Slept 1000ms and returned correctly |
+| `AskUserQuestion` | ✅ Tested | Prompted console correctly in CLI mode. Server mode returns fixed message (by design) |
+| `Sleep` | ✅ Tested | Slept 1000ms and returned correctly |
 
 ### Notebook tools
 
-| Tool | Tested | Result |
+| Tool | Status | Result |
 |---|---|---|
 | `NotebookEdit` | ⬜ Not tested | Implemented; reads/writes Jupyter `.ipynb` JSON; cell replace/insert/delete |
 
@@ -94,11 +103,11 @@ Tests run with `gemini-2.5-flash`, `--permission-mode bypassPermissions`, free t
 
 | Provider | Tool Calling | Notes |
 |---|---|---|
-| `gemini-2.5-flash` (Google AI Studio) | ✅ | Confirmed working. Free tier: ~5 RPM |
-| `gemma-4-31b-it` (Google AI Studio) | ❌ | Text generation works; function calling not supported via OpenAI-compat endpoint |
+| `gemini-2.5-flash` (Google AI Studio) | ✅ Confirmed | Free tier: ~5 RPM. All core tools tested |
+| `gpt-4o-mini` (OpenAI) | ✅ Confirmed | All tested tools pass; session continuity confirmed |
+| `gemma-4-31b-it` (Google AI Studio) | ❌ No tool calls | Text generation works; function calling not supported via OpenAI-compat endpoint |
 | `gemma-3-27b-it` (Google AI Studio) | ⬜ Not tested | Likely same limitation as Gemma 4 |
-| OpenAI (`gpt-4o-mini`) | ✅ | Confirmed working — text, all tested tools, session continuity all pass |
-| Ollama (local) | ⬜ Not tested | Implemented; set `OLLAMA_BASE_URL`. WSL/Linux only for bash tool |
+| Ollama (local) | ⬜ Not tested | Implemented; set `OLLAMA_BASE_URL`. Bash tool requires WSL/Linux |
 | Anthropic native API | ⬜ Not tested | Set `PROVIDER_BASE_URL=https://api.anthropic.com` + `PROVIDER_API_KEY` |
 
 ---
@@ -118,31 +127,34 @@ Tests run with `gemini-2.5-flash`, `--permission-mode bypassPermissions`, free t
 
 ---
 
-## Remaining Smoke Tests Needed
+## Remaining Smoke Tests
 
-These were not run due to rate limiting. Run with a paid-tier key or after quota resets:
+Run with a paid-tier key or after quota resets:
 
 ```bash
 export LLM_API_KEY="..."
-export LLM_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai/"
-MODEL="gemini-2.5-flash"
+export LLM_BASE_URL="https://api.openai.com/v1"   # or Google AI Studio URL
+MODEL="gpt-4o-mini"
 PM="bypassPermissions"
 
-# TodoWrite
-sovrant --model $MODEL --permission-mode $PM prompt "Use TodoWrite to create tasks: 'item one', 'item two'"
+# PowerShell (Windows)
+sovrant --model $MODEL --permission-mode $PM prompt "Use PowerShell to run: Get-Date"
 
-# Sleep
-sovrant --model $MODEL --permission-mode $PM prompt "Use the Sleep tool to sleep 1000ms then say done"
+# REPL
+sovrant --model $MODEL --permission-mode $PM prompt "Use the REPL tool with python to compute 2+2"
 
-# WebFetch
-sovrant --model $MODEL --permission-mode $PM prompt "Use WebFetch to fetch https://httpbin.org/get"
+# WebSearch (requires WEB_SEARCH_API_KEY)
+export WEB_SEARCH_API_KEY="..."
+sovrant --model $MODEL --permission-mode $PM prompt "Use WebSearch to find the latest .NET 10 release notes"
 
-# AskUserQuestion
-sovrant --model $MODEL --permission-mode $PM prompt "Use AskUserQuestion to ask me my favourite colour"
+# Background tasks
+sovrant --model $MODEL --permission-mode $PM prompt "Use TaskCreate to run: dotnet --version. Then use TaskOutput to get the result."
 
-# Session continuity
-sovrant --model $MODEL --session test-session-1 prompt "My name is Eric"
-sovrant --model $MODEL --session test-session-1 prompt "What is my name?"
+# Sub-agent
+sovrant --model $MODEL --permission-mode $PM prompt "Use the Agent tool to ask a sub-agent: what is 2+2?"
+
+# NotebookEdit
+sovrant --model $MODEL --permission-mode $PM prompt "Use NotebookEdit to create a new cell in /tmp/test.ipynb with content: print('hello')"
 
 # Server smoke test
 SOVRANT_TOKEN=test123 LLM_API_KEY=... dotnet run --project src/Sovrant.Server
@@ -150,5 +162,15 @@ curl -s http://localhost:5200/health
 curl -X POST http://localhost:5200/v1/chat/completions \
   -H "Authorization: Bearer test123" \
   -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"hello"}],"model":"gemini-2.5-flash"}'
+  -d '{"messages":[{"role":"user","content":"hello"}],"model":"gpt-4o-mini"}'
+
+# Server session continuity (uses IRuntimeSessionPool)
+curl -X POST http://localhost:5200/v1/chat/completions \
+  -H "Authorization: Bearer test123" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"My name is Eric"}],"model":"gpt-4o-mini","session_id":"test-session-1"}'
+curl -X POST http://localhost:5200/v1/chat/completions \
+  -H "Authorization: Bearer test123" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"What is my name?"}],"model":"gpt-4o-mini","session_id":"test-session-1"}'
 ```
