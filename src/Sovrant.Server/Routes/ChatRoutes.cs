@@ -20,7 +20,8 @@ internal static class ChatRoutes
     private static async Task HandleAsync(
         HttpContext ctx,
         ChatCompletionRequest req,
-        IConversationRuntime runtime,
+        IRuntimeSessionPool sessionPool,
+        IConversationRuntime transientRuntime,
         MutableServerConfig serverConfig,
         ISmartRouter router,
         ToolRegistrar toolRegistrar,
@@ -28,7 +29,7 @@ internal static class ChatRoutes
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        // Seed tools for this request scope.
+        // Seed tools (no-op if already registered).
         toolRegistrar.RegisterAll();
 
         // Initialize router (no-op if already done).
@@ -39,8 +40,17 @@ internal static class ChatRoutes
         if (pinned is not null)
             await router.PinProviderAsync(pinned, ct).ConfigureAwait(false);
 
-        // Load session history if a session ID was supplied.
-        await runtime.InitializeSessionAsync(req.SessionId, ct).ConfigureAwait(false);
+        // With a session ID → use the pool (in-memory history persists across requests).
+        // Without a session ID → use the transient runtime injected by DI (stateless one-shot).
+        IConversationRuntime runtime;
+        if (!string.IsNullOrWhiteSpace(req.SessionId))
+        {
+            runtime = await sessionPool.GetOrCreateAsync(req.SessionId, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            runtime = transientRuntime;
+        }
 
         // The user message is the last message with role "user".
         var userMessage = req.Messages

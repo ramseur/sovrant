@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Session;
 
 namespace Sovrant.Server.Routes;
@@ -41,7 +42,7 @@ internal static class SessionRoutes
         return Results.Ok(new { session_id = id, messages });
     }
 
-    private static IResult DeleteSession(string id)
+    private static IResult DeleteSession(string id, IRuntimeSessionPool pool)
     {
         var sessionsDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
@@ -52,6 +53,10 @@ internal static class SessionRoutes
             return Results.NotFound(new { error = $"Session '{id}' not found." });
 
         File.Delete(path);
+
+        // Evict the in-memory runtime so stale history is not retained.
+        pool.Evict(id);
+
         return Results.Ok(new { deleted = id });
     }
 }

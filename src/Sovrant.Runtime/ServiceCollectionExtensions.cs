@@ -48,8 +48,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMcpClientFactory, SovrantMcpClientFactory>();
         services.AddSingleton<McpToolRegistrar>();
 
-        // Conversation runtime (transient so each caller gets its own session)
+        // Conversation runtime — transient so the pool creates independent instances per session.
         services.AddTransient<IConversationRuntime, ConversationRuntime>();
+
+        // Session pool — singleton that keeps one runtime alive per session ID.
+        services.AddSingleton<IRuntimeSessionPool, RuntimeSessionPool>();
 
         return services;
     }
