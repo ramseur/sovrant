@@ -195,6 +195,51 @@ private sealed record SessionEntry(
 
 ---
 
+### Phase 9.5 — Production Multi-User Hardening
+
+**Depends on:** Phase 8 (per-request credentials) + Phase 9 (session TTL + per-session lock)
+
+**Goal:** Make Sovrant safe and correct for a real product deployment where multiple users log in independently — isolated identity, isolated config, per-user cost tracking, and no shared global state leaking between users.
+
+#### What works today for a team
+
+Session history is already isolated per `session_id` — ten users with different session IDs have fully independent conversation histories and tool state. For a **trusted internal team sharing a single deployment** (shared `SOVRANT_TOKEN`, shared `LLM_API_KEY`, no per-user billing) this is sufficient today.
+
+#### What is missing for a product with user logins
+
+| Gap | Problem | Fix |
+|---|---|---|
+| Single `SOVRANT_TOKEN` | All users share one bearer token — no per-user identity, anyone can delete anyone else's session or change global config | Per-user auth tokens (JWT or opaque tokens issued at login) |
+| Single `LLM_API_KEY` | All users bill to one key — no per-user cost tracking or LLM-level rate limiting | Phase 8 per-request `x_api_key` — each user supplies their own key from the frontend |
+| `PUT /v1/config` is global | One user changing the model or permission mode changes it for all users simultaneously | Session-scoped config overlay — per-session `MutableServerConfig` that shadows the global one |
+| No per-user rate limiting | A single user can saturate the server with concurrent requests, starving others | Per-token request rate limiter (ASP.NET Core rate limiting middleware) |
+| No cost visibility | No way to see which user or session is responsible for LLM spend | Per-session token usage log aggregated in `GET /v1/sessions/{id}` and a new `GET /v1/usage` summary endpoint |
+
+#### Design
+
+**Per-user auth tokens**
+Replace the single `SOVRANT_TOKEN` with a small token registry: the server operator issues named tokens (one per user or team member) via a config file or `POST /v1/admin/tokens`. Each request carries its token; the server resolves the caller identity from it. No OAuth required at this stage — simple opaque tokens are sufficient for a team of 10–50.
+
+**Session-scoped config overlay**
+`PUT /v1/config` currently mutates a single `MutableServerConfig` singleton. After Phase 8, each session pool entry already has its own provider credentials. Extend this: each `SessionEntry` carries a `SessionConfig` (model, permission mode) that overlays the global defaults. `PUT /v1/sessions/{id}/config` mutates only that session's overlay. The global `PUT /v1/config` becomes an admin-only operation.
+
+**Per-token rate limiting**
+Use ASP.NET Core's built-in `RateLimiter` middleware. Policy: N requests/minute per token (configurable via `SOVRANT_RATE_LIMIT_RPM`, default 60). The 429 response includes a `Retry-After` header.
+
+**Usage tracking**
+Each `SessionEntry` accumulates `TotalInputTokens` and `TotalOutputTokens` across all turns. The existing token-count bug (always 0 for OpenAI streaming) must be fixed first — this is the forcing function to fix it. `GET /v1/usage` returns a summary per session ID and per caller token.
+
+#### Implementation Plan
+
+1. Add token registry (`ITokenRegistry`) — maps opaque token → caller name; loaded from `SOVRANT_TOKENS` env var (JSON) or a config file
+2. Replace single `SOVRANT_TOKEN` check in auth middleware with `ITokenRegistry.Resolve(token)`
+3. Add `SessionConfig` overlay to `SessionEntry`; add `PUT /v1/sessions/{id}/config`; restrict global `PUT /v1/config` to admin tokens
+4. Add ASP.NET Core `RateLimiter` middleware keyed on caller token
+5. Fix token count capture (OpenAI final SSE chunk `usage` field) — required for usage tracking
+6. Add `TotalInputTokens` / `TotalOutputTokens` to `SessionEntry`; add `GET /v1/usage` endpoint
+
+---
+
 ### Phase 10 — Frontend SDK
 
 **Goal:** A typed TypeScript/JavaScript client for `Sovrant.Server` that handles SSE streaming, session management, and tool event rendering.
