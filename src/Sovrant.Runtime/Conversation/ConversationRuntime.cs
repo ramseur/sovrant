@@ -243,8 +243,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                             tbEntry.InputJson.Append(ij.PartialJson);
                         break;
 
-                    case StreamEvent.MessageDelta { Delta.StopReason: var sr, Usage.OutputTokens: var ot }:
+                    case StreamEvent.MessageDelta { Delta.StopReason: var sr, Usage.InputTokens: var it, Usage.OutputTokens: var ot }:
                         if (sr is not null) stopReason = sr;
+                        if (it > 0) inputTokens = it;   // OpenAI sends input tokens here (not in MessageStart)
                         outputTokens = ot;
                         break;
                 }

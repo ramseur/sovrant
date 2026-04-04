@@ -95,6 +95,11 @@ public class OpenAiCompatProvider : ILlmProvider
             bool sentTextBlockStart = false;
             const int textBlockIndex = 0;
 
+            // Captured at finish_reason; usage arrives in a separate trailing chunk when
+            // stream_options.include_usage=true (OpenAI sends usage AFTER finish_reason).
+            string? capturedStopReason = null;
+            OpenAiUsage? capturedUsage = null;
+
             await foreach (var item in SseParser.Create(responseStream).EnumerateAsync(ct).ConfigureAwait(false))
             {
                 if (item.Data is "[DONE]" or "") continue;
@@ -103,6 +108,10 @@ public class OpenAiCompatProvider : ILlmProvider
                 try { chunk = JsonSerializer.Deserialize(item.Data, SovrantJsonContext.Default.OpenAiSseChunk); }
                 catch (JsonException ex) { _logSseSkip(_logger, item.Data, ex); continue; }
                 if (chunk is null) continue;
+
+                // Capture usage from whichever chunk carries it (the trailing usage-only chunk).
+                if (chunk.Usage is not null)
+                    capturedUsage = chunk.Usage;
 
                 var choice = chunk.Choices is { Count: > 0 } ? chunk.Choices[0] : null;
 
@@ -152,26 +161,30 @@ public class OpenAiCompatProvider : ILlmProvider
                 if (choice?.FinishReason is not null)
                 {
                     if (sentTextBlockStart)
-                    {
                         yield return new StreamEvent.ContentBlockStop(textBlockIndex);
-                    }
                     foreach (var kvp in toolBuilders)
-                    {
                         yield return new StreamEvent.ContentBlockStop(textBlockIndex + 1 + kvp.Key);
-                    }
-                    var stopReason = choice.FinishReason switch
+
+                    capturedStopReason = choice.FinishReason switch
                     {
                         "stop" => "end_turn",
                         "tool_calls" => "tool_use",
                         "length" => "max_tokens",
                         var r => r
                     };
-                    var usageData = chunk.Usage;
-                    var usage = new Usage(InputTokens: usageData?.PromptTokens ?? 0, OutputTokens: usageData?.CompletionTokens ?? 0);
-                    yield return new StreamEvent.MessageDelta(new MessageDelta(stopReason, null), usage);
-                    yield return new StreamEvent.MessageStop();
-                    yield break;
+                    // Do NOT yield break — OpenAI sends a trailing usage-only chunk after finish_reason.
+                    // MessageDelta + MessageStop are emitted after the loop once usage has been captured.
                 }
+            }
+
+            // Emit final events after the stream ends (usage arrives in trailing chunk).
+            if (capturedStopReason is not null)
+            {
+                var usage = new Usage(
+                    InputTokens: capturedUsage?.PromptTokens ?? 0,
+                    OutputTokens: capturedUsage?.CompletionTokens ?? 0);
+                yield return new StreamEvent.MessageDelta(new MessageDelta(capturedStopReason, null), usage);
+                yield return new StreamEvent.MessageStop();
             }
         }
     }
