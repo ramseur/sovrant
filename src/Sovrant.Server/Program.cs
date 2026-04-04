@@ -7,6 +7,7 @@ using Sovrant.Server.Auth;
 using Sovrant.Server.Permissions;
 using Sovrant.Server.Routes;
 using Sovrant.Server.ServerConfig;
+using Sovrant.Server.Webhooks;
 using Sovrant.Runtime.Logging;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
@@ -66,6 +67,10 @@ builder.Services.AddSingleton<IUserInputProvider, HttpUserInputProvider>();
 
 // Named HttpClient for per-request scoped providers (Phase 9).
 builder.Services.AddHttpClient("ScopedProvider");
+
+// Named HttpClient for webhook callback delivery (Phase 12).
+builder.Services.AddHttpClient("WebhookCallback");
+builder.Services.AddSingleton<WebhookCallbackService>();
 
 // Session eviction background service — TTL sweep + LRU cap (Phase 9.1).
 builder.Services.AddHostedService<Sovrant.Server.SessionEvictionService>();
@@ -140,6 +145,7 @@ StatusRoutes.Map(app);
 ModelsRoutes.Map(app);
 SessionRoutes.Map(app);
 UsageRoutes.Map(app);
+WebhookRoutes.Map(app);
 
 Sovrant.Server.ServerLog.LogServerReady(app.Logger, serverPort);
 

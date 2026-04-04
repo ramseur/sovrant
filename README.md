@@ -1,9 +1,11 @@
 # Sovrant
 
-A .NET 10 agentic AI engine — multi-provider, tool-using, session-persistent. Runs as a CLI agent or an OpenAI-compatible HTTP server. The agent reads and writes files, executes shell commands, searches the web, calls tools autonomously, and maintains full conversation history across sessions.
+A .NET 10 agentic AI platform — multi-provider, tool-using, session-persistent. Designed for teams that need an autonomous AI agent for software development, business process automation, research, architecture planning, and any workflow that benefits from persistent, tool-augmented conversations.
+
+Sovrant runs as a **CLI agent** for individual use, an **OpenAI-compatible HTTP server** for team and application integration, or via **webhooks** from Slack, Teams, Discord, and custom systems. The agent reads and writes files, executes shell commands, searches the web, calls tools autonomously, and maintains full conversation history across sessions.
 
 **Runtime:** .NET 10 / C# 13
-**Status:** Engine fully functional. 36 tools. 12 server endpoints. CI/CD integration. 189/189 tests passing.
+**Status:** Engine fully functional. 36 tools. 13 server endpoints. Webhook integrations. CI/CD pipeline support. 201/201 tests passing.
 
 ---
 
@@ -108,6 +110,7 @@ curl -X POST http://localhost:5200/v1/chat/completions \
 | `GET` | `/v1/sessions/{id}/config` | Get per-session config overlay (model, permission mode) |
 | `PUT` | `/v1/sessions/{id}/config` | Update per-session config without affecting other sessions |
 | `GET` | `/v1/usage` | Per-session token usage summary |
+| `POST` | `/v1/webhook` | Generic webhook — accepts messages from Slack, Teams, Discord, or custom sources |
 
 ---
 
@@ -364,13 +367,14 @@ Each tool takes a file path and a line/column position (1-based). The agent uses
 ## Tests
 
 ```bash
-dotnet test   # 189 tests across 6 projects
+dotnet test   # 201 tests across 7 projects
 ```
 
 | Project | Tests |
 |---|---|
 | `Sovrant.Api.Tests` | 28 |
 | `Sovrant.Runtime.Tests` | 86 |
+| `Sovrant.Server.Tests` | 12 |
 | `Sovrant.Lsp.Tests` | 26 |
 | `Sovrant.Tools.Tests` | 26 |
 | `Sovrant.Commands.Tests` | 22 |
@@ -386,6 +390,7 @@ dotnet test   # 189 tests across 6 projects
 | [`docs/frontend-integration.md`](docs/frontend-integration.md) | Node.js proxy setup, browser SSE client, Replit integration |
 | [`docs/engine-status.md`](docs/engine-status.md) | Tool test results, provider compatibility, known issues |
 | [`docs/ci-cd.md`](docs/ci-cd.md) | CI/CD integration — `--ci` flag, GitHub Actions action, GitLab CI template |
+| [`docs/webhooks.md`](docs/webhooks.md) | Webhook endpoint, Slack bot setup, Teams/Discord integration guides |
 
 ---
 

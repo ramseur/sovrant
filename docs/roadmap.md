@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 11 complete — CI/CD pipeline integration: --ci flag, CiPermissionPolicy, GitHub Actions action, GitLab CI template)
+**Last updated:** 2026-04-04 (Phase 12 complete — Slack/webhook integration: POST /v1/webhook, WebhookCallbackService, Slack bot, docs)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -620,29 +620,31 @@ An `ILspClient` service manages the lifecycle of one or more language server pro
 
 ---
 
-### Phase 12 — Slack / Webhook Integration
+### Phase 12 — Slack / Webhook Integration ✅
 
-**Competitor precedent:** Claude Code ✅ (OAuth Slack app)
-**Depends on:** Phase 9.5 (per-user auth tokens — each Slack user maps to an isolated session)
+**Goal:** Invoke Sovrant from any messaging platform (Slack, Teams, Discord) or custom system via a generic webhook endpoint.
 
-**Goal:** Invoke Sovrant from a Slack message and receive streamed responses in a Slack thread — enabling "ask the codebase" workflows for teams without leaving Slack.
+**Status: ✅ Complete**
 
-#### Design
+#### What was implemented
 
-A Sovrant Slack app (self-hosted) that:
-- Listens for messages in designated channels or direct messages
-- Forwards the message to `POST /v1/chat/completions` with a session ID derived from the Slack user ID
-- Streams the response back as a series of Slack message updates (progressive edit)
-- Surfaces tool events as Slack attachments (e.g., "Running Bash: `npm test`")
+1. **`POST /v1/webhook`** — generic webhook endpoint in `Sovrant.Server` that accepts `{ source, user_id, message, callback_url, model, thread_id }`, derives a stable session ID (`webhook:{source}:{user_id}`), runs an agentic turn, and returns the result synchronously or POSTs it to a callback URL
+2. **`WebhookCallbackService`** — posts results to callback URLs in the background using a named `HttpClient`; errors are logged but do not propagate
+3. **Webhook DTOs** — `WebhookRequest`, `WebhookResponse`, `WebhookToolCall` with full JSON serialization
+4. **Slack bot** — `integrations/slack/manifest.json` (app manifest) + `integrations/slack/handler.js` (Node.js Bolt SDK event handler using Socket Mode)
+5. **Documentation** at `docs/webhooks.md` — webhook endpoint reference, Slack setup guide, Teams/Discord examples, security notes
+6. **New test project** `Sovrant.Server.Tests` with 12 tests for webhook DTOs and callback service
 
-Alternatively, a generic webhook integration — `POST /v1/webhook` accepts a message from any source (Slack, Teams, Discord, custom) and routes it into the session pool, returning the response to a configured callback URL.
+#### Key files
 
-#### Implementation Plan
-
-1. Add `POST /v1/webhook` to `Sovrant.Server` — accepts `{ source, user_id, message, callback_url }`, runs a turn, POSTs result to `callback_url`
-2. Build Sovrant Slack app manifest and event handler (Node.js thin wrapper or Bolt SDK)
-3. Map Slack user IDs to Sovrant session IDs using Phase 9.5 token registry
-4. Document Teams and Discord equivalents using the webhook endpoint
+- `src/Sovrant.Server/Webhooks/WebhookRequest.cs`
+- `src/Sovrant.Server/Webhooks/WebhookResponse.cs`
+- `src/Sovrant.Server/Webhooks/WebhookCallbackService.cs`
+- `src/Sovrant.Server/Routes/WebhookRoutes.cs`
+- `integrations/slack/manifest.json`
+- `integrations/slack/handler.js`
+- `docs/webhooks.md`
+- `tests/Sovrant.Server.Tests/` (12 tests)
 
 ---
 

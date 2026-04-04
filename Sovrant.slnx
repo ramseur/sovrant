@@ -14,6 +14,7 @@
     <Project Path="tests/Sovrant.Integration.Tests/Sovrant.Integration.Tests.csproj" />
     <Project Path="tests/Sovrant.Runtime.Tests/Sovrant.Runtime.Tests.csproj" />
     <Project Path="tests/Sovrant.Lsp.Tests/Sovrant.Lsp.Tests.csproj" />
+    <Project Path="tests/Sovrant.Server.Tests/Sovrant.Server.Tests.csproj" />
     <Project Path="tests/Sovrant.Tools.Tests/Sovrant.Tools.Tests.csproj" />
   </Folder>
 </Solution>

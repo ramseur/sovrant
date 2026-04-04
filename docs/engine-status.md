@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 11 complete — CI/CD pipeline integration: --ci flag, CiPermissionPolicy, GitHub Actions action — 36 tools, 189 tests)
+**Last updated:** 2026-04-04 (Phase 12 complete — Slack/webhook integration: POST /v1/webhook, callback service, Slack bot — 36 tools, 201 tests)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -26,7 +26,8 @@
 | Token usage tracking | ✅ Implemented | Per-session `TotalInputTokens`/`TotalOutputTokens` accumulated in `SessionConfig`. `GET /v1/usage` summary. `GET /v1/sessions/{id}` includes totals. |
 | LSP integration (`Sovrant.Lsp`) | ✅ Implemented | `ILspClient` / `LspClient` — JSON-RPC 2.0 over stdio, Content-Length framing. `LspClientManager` maps file extensions to language servers. 5 tools: LspHover, LspDefinition, LspReferences, LspDiagnostics, LspRename. Config via `lsp_servers` in `SovrantConfig`. |
 | CI/CD integration | ✅ Implemented | `--ci` flag on CLI: JSON output, non-zero exit on error, `CiPermissionPolicy`, `CiUserInputProvider`. GitHub Actions composite action. GitLab CI template in docs. |
-| Unit test suite | ✅ 189/189 passing | Api(28) + Runtime(86) + Lsp(26) + Tools(26) + Commands(22) + Integration(1) |
+| Webhook integration | ✅ Implemented | `POST /v1/webhook` — generic endpoint for Slack, Teams, Discord, custom. Sync or async (callback URL). `WebhookCallbackService` for background delivery. Slack bot at `integrations/slack/`. |
+| Unit test suite | ✅ 201/201 passing | Api(28) + Runtime(86) + Server(12) + Lsp(26) + Tools(26) + Commands(22) + Integration(1) |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |
