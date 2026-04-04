@@ -1,14 +1,15 @@
 using System.Globalization;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Sovrant.Commands.Commands;
 
 /// <summary>Lists all available slash commands.</summary>
 public sealed class HelpCommand : ISlashCommand
 {
-    private readonly SlashCommandDispatcher _dispatcher;
+    private readonly IServiceProvider _serviceProvider;
 
-    public HelpCommand(SlashCommandDispatcher dispatcher) => _dispatcher = dispatcher;
+    public HelpCommand(IServiceProvider serviceProvider) => _serviceProvider = serviceProvider;
 
     public string Name => "help";
     public IReadOnlyList<string> Aliases => [];
@@ -16,11 +17,17 @@ public sealed class HelpCommand : ISlashCommand
 
     public Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {
+        // Resolve lazily to avoid the circular dependency that would occur at construction time
+        // (HelpCommand is itself an ISlashCommand).
+        var commands = _serviceProvider.GetServices<ISlashCommand>()
+            .DistinctBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(c => c.Name);
+
         var sb = new StringBuilder();
         sb.AppendLine("Available commands:");
         sb.AppendLine();
 
-        foreach (var cmd in _dispatcher.Commands)
+        foreach (var cmd in commands)
         {
             var aliases = cmd.Aliases.Count > 0
                 ? $" (/{string.Join(", /", cmd.Aliases)})"

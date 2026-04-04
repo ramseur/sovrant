@@ -32,11 +32,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISlashCommand, ProviderCommand>();
         services.AddSingleton<ISlashCommand, MemoryCommand>();
 
-        // Dispatcher (resolved before HelpCommand so HelpCommand can inject it)
-        services.AddSingleton<SlashCommandDispatcher>();
-
-        // HelpCommand injects the dispatcher — must come after dispatcher registration
+        // HelpCommand injects IEnumerable<ISlashCommand> directly — must come after all other commands
         services.AddSingleton<ISlashCommand, HelpCommand>();
+
+        // Dispatcher enumerates all registered ISlashCommand implementations
+        services.AddSingleton<SlashCommandDispatcher>();
 
         return services;
     }
