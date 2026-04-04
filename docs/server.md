@@ -29,6 +29,11 @@ The server binds to `http://127.0.0.1:5200` by default.
 | `LLM_BASE_URL` | No | `https://api.openai.com/v1` | LLM provider base URL. Alias: `OPENAI_BASE_URL` |
 | `SOVRANT_TOKEN` | Yes | — | Bearer token that every client must supply. If unset the server returns 401 for all requests. |
 | `SOVRANT_PORT` | No | `5200` | TCP port Kestrel listens on |
+| `PROVIDER_BASE_URL` | No | — | Enables the Anthropic-native provider (`/v1/messages` format). Set to `https://api.anthropic.com` |
+| `PROVIDER_API_KEY` | No | — | API key for the Anthropic-native provider |
+| `OLLAMA_BASE_URL` | No | `http://localhost:11434/v1` | Enables the local Ollama provider |
+| `BRAVE_API_KEY` | No | — | Enables `WebSearch` via Brave Search API |
+| `FIRECRAWL_API_KEY` | No | — | Enables `WebSearch` via FireCrawl (used if `BRAVE_API_KEY` is not set) |
 
 ---
 
@@ -107,6 +112,8 @@ The `sovrant` extension field appears on tool-related chunks and carries:
   "usage": { "prompt_tokens": 12, "completion_tokens": 4, "total_tokens": 16 }
 }
 ```
+
+> **Known issue:** Token counts are currently always `0` for OpenAI providers. OpenAI sends usage only in the final SSE chunk in a field our parser does not yet capture. Tracked in `docs/roadmap.md` under Known Issues.
 
 ---
 

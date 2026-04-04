@@ -4,7 +4,7 @@ A .NET 10 port of an agentic AI engine — multi-provider, tool-using, session-p
 
 **Branch:** `sovrant-openc-dotnet-port`
 **Runtime:** .NET 10 / C# 13
-**Status:** Engine fully functional. Server built and unit-tested. Live server smoke tests in progress.
+**Status:** Engine fully functional. All 8 server endpoints smoke-tested. 99/99 unit tests passing.
 
 ---
 
@@ -225,7 +225,7 @@ The server maintains a live in-memory session pool (`IRuntimeSessionPool`) — o
 
 **Always streaming internally.** The `ConversationRuntime` always sets `Stream: true` on the `MessagesRequest` regardless of what the client requested. The server decides independently whether to forward chunks as SSE (`stream: true`) or buffer them into a single response (`stream: false`). This avoids a dual code path in the agentic loop.
 
-**Session pool (Option B).** The server keeps one `ConversationRuntime` alive per `session_id` in a `ConcurrentDictionary`. Each runtime holds its own message history in memory and loads from JSONL on first creation. This means history is available immediately without a database read on every turn — safe for concurrent multi-user traffic.
+**Session pool (Option B).** The server keeps one `ConversationRuntime` alive per `session_id` in a `ConcurrentDictionary`. Each runtime holds its own message history in memory and loads from JSONL on first creation. This means history is available immediately without a database read on every turn. Note: concurrent turns on the same session are not yet serialized — Phase 9 adds a per-session lock to prevent history corruption under concurrent load.
 
 **SmartRouter.** All LLM calls go through `ISmartRouter`. On startup it pings every configured provider and scores them by latency, cost weight, and error rate. Routing strategies: `Balanced` (default), `LowestCost`, `LowestLatency`. A provider can also be pinned by name (`--provider ollama`).
 
