@@ -139,7 +139,7 @@ curl -X POST http://localhost:5200/v1/chat/completions \
 ### LSP (Language Server Protocol)
 `LspHover` · `LspDefinition` · `LspReferences` · `LspDiagnostics` · `LspRename`
 
-*Requires a language server configured in `~/.sovrant/settings.json` under `lsp_servers`.*
+*Requires a language server configured in `~/.sovrant/settings.json` under `lsp_servers`. See [LSP Integration](#lsp-integration) below.*
 
 ### Notebook
 `NotebookEdit` *(read/write Jupyter `.ipynb` cells)*
@@ -286,6 +286,75 @@ The server keeps one `ConversationRuntime` alive per `session_id` in an in-memor
 **Tool execution is permission-gated.** Every tool call goes through `IPermissionPolicy` before execution. The CLI uses `ModeAwarePermissionPolicy` (interactive prompts based on `PermissionMode`). The server defaults to `DontAsk` (all tools run without prompts) and can be changed live via `PUT /v1/config`.
 
 **Dual agent backends.** `Sovrant.Agents` defines `IMultiAgentSystem` with two interchangeable backends: a modern in-process backend (async message channels, recommended) and a legacy process-based backend (one process per agent, stdin/stdout). Switch via `AGENT_MODE=modern|legacy`. The active backend is selected at startup; no other part of the system depends on the concrete implementation.
+
+---
+
+## LSP Integration
+
+Sovrant includes a built-in Language Server Protocol client that gives the agent IDE-level code intelligence — hover docs, go-to-definition, find references, diagnostics, and rename refactoring — without leaving the agentic loop.
+
+### How it works
+
+1. On startup, `LspClientManager` reads the `lsp_servers` section of `~/.sovrant/settings.json` and spawns each configured language server as a child process.
+2. Communication uses **JSON-RPC 2.0 over stdio** with standard `Content-Length` header framing — the same protocol used by VS Code, Neovim, and other editors.
+3. The agent calls LSP tools like any other tool. The tool resolves the correct language server from the file extension, sends the request, and returns structured results.
+4. Diagnostics are collected passively via `textDocument/publishDiagnostics` notifications — no explicit request needed.
+
+### Supported languages
+
+The client manager maps **18 file extensions** to language identifiers:
+
+| Extension | Language | Extension | Language |
+|---|---|---|---|
+| `.cs` | csharp | `.go` | go |
+| `.py` | python | `.rs` | rust |
+| `.ts` | typescript | `.java` | java |
+| `.tsx` | typescriptreact | `.c` | c |
+| `.js` | javascript | `.cpp` | cpp |
+| `.jsx` | javascriptreact | `.h` / `.hpp` | c / cpp |
+| `.rb` | ruby | `.lua` | lua |
+| `.swift` | swift | `.kt` | kotlin |
+| `.zig` | zig | | |
+
+Any language server that speaks LSP over stdio can be plugged in.
+
+### Configuration
+
+Add a `lsp_servers` object to `~/.sovrant/settings.json`. Each key is the language identifier and the value specifies the command to launch:
+
+```json
+{
+  "lsp_servers": {
+    "csharp": {
+      "command": "OmniSharp",
+      "args": ["-lsp"],
+      "env": {}
+    },
+    "python": {
+      "command": "pylsp",
+      "args": [],
+      "env": {}
+    },
+    "typescript": {
+      "command": "typescript-language-server",
+      "args": ["--stdio"],
+      "env": {}
+    }
+  }
+}
+```
+
+### LSP tools
+
+| Tool | LSP Method | Description |
+|---|---|---|
+| `LspHover` | `textDocument/hover` | Type info, docs, and signatures for a symbol at a given position |
+| `LspDefinition` | `textDocument/definition` | Jump to where a symbol is defined |
+| `LspReferences` | `textDocument/references` | Find all usages of a symbol across the workspace |
+| `LspDiagnostics` | *(passive)* | Returns compiler errors, warnings, and hints collected from `publishDiagnostics` notifications |
+| `LspRename` | `textDocument/rename` | Rename a symbol across all files — returns a workspace edit |
+
+Each tool takes a file path and a line/column position (1-based). The agent uses these tools to understand code structure before making changes — for example, finding all references to a method before renaming it, or checking diagnostics after an edit.
 
 ---
 
