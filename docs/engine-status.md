@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 10 complete — LSP integration: 5 LSP tools, JSON-RPC over stdio — 36 tools, 146 tests)
+**Last updated:** 2026-04-04 (Phase 11 complete — CI/CD pipeline integration: --ci flag, CiPermissionPolicy, GitHub Actions action — 36 tools, 189 tests)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -25,7 +25,8 @@
 | Per-session rate limiting | ✅ Implemented | ASP.NET Core `RateLimiter` keyed on `X-Session-Id` header or client IP. `SOVRANT_RATE_LIMIT_RPM` env var (default 60). Returns 429 when exceeded. |
 | Token usage tracking | ✅ Implemented | Per-session `TotalInputTokens`/`TotalOutputTokens` accumulated in `SessionConfig`. `GET /v1/usage` summary. `GET /v1/sessions/{id}` includes totals. |
 | LSP integration (`Sovrant.Lsp`) | ✅ Implemented | `ILspClient` / `LspClient` — JSON-RPC 2.0 over stdio, Content-Length framing. `LspClientManager` maps file extensions to language servers. 5 tools: LspHover, LspDefinition, LspReferences, LspDiagnostics, LspRename. Config via `lsp_servers` in `SovrantConfig`. |
-| Unit test suite | ✅ 146/146 passing | Api(28) + Runtime(43) + Lsp(26) + Tools(26) + Commands(22) + Integration(1) |
+| CI/CD integration | ✅ Implemented | `--ci` flag on CLI: JSON output, non-zero exit on error, `CiPermissionPolicy`, `CiUserInputProvider`. GitHub Actions composite action. GitLab CI template in docs. |
+| Unit test suite | ✅ 189/189 passing | Api(28) + Runtime(86) + Lsp(26) + Tools(26) + Commands(22) + Integration(1) |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |

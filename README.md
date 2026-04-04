@@ -3,7 +3,7 @@
 A .NET 10 agentic AI engine — multi-provider, tool-using, session-persistent. Runs as a CLI agent or an OpenAI-compatible HTTP server. The agent reads and writes files, executes shell commands, searches the web, calls tools autonomously, and maintains full conversation history across sessions.
 
 **Runtime:** .NET 10 / C# 13
-**Status:** Engine fully functional. 36 tools. 12 server endpoints. 146/146 tests passing.
+**Status:** Engine fully functional. 36 tools. 12 server endpoints. CI/CD integration. 189/189 tests passing.
 
 ---
 
@@ -37,6 +37,9 @@ dotnet run --project src/Sovrant.Cli -- --model gpt-4o-mini
 
 # Resume a named session
 dotnet run --project src/Sovrant.Cli -- --model gpt-4o-mini --session my-project
+
+# CI mode — machine-readable JSON output, non-zero exit on error
+dotnet run --project src/Sovrant.Cli -- --ci --model gpt-4o-mini prompt "Fix the failing tests"
 ```
 
 ### Permission modes
@@ -361,13 +364,13 @@ Each tool takes a file path and a line/column position (1-based). The agent uses
 ## Tests
 
 ```bash
-dotnet test   # 146 tests across 6 projects
+dotnet test   # 189 tests across 6 projects
 ```
 
 | Project | Tests |
 |---|---|
 | `Sovrant.Api.Tests` | 28 |
-| `Sovrant.Runtime.Tests` | 43 |
+| `Sovrant.Runtime.Tests` | 86 |
 | `Sovrant.Lsp.Tests` | 26 |
 | `Sovrant.Tools.Tests` | 26 |
 | `Sovrant.Commands.Tests` | 22 |
@@ -382,3 +385,4 @@ dotnet test   # 146 tests across 6 projects
 | [`docs/server.md`](docs/server.md) | Full server API reference — all 9 endpoints, auth, CORS, streaming format |
 | [`docs/frontend-integration.md`](docs/frontend-integration.md) | Node.js proxy setup, browser SSE client, Replit integration |
 | [`docs/engine-status.md`](docs/engine-status.md) | Tool test results, provider compatibility, known issues |
+| [`docs/ci-cd.md`](docs/ci-cd.md) | CI/CD integration — `--ci` flag, GitHub Actions action, GitLab CI template |

@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 10 complete — LSP integration: Sovrant.Lsp project, 5 LSP tools, JSON-RPC over stdio, LspClientManager)
+**Last updated:** 2026-04-04 (Phase 11 complete — CI/CD pipeline integration: --ci flag, CiPermissionPolicy, GitHub Actions action, GitLab CI template)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -593,41 +593,30 @@ An `ILspClient` service manages the lifecycle of one or more language server pro
 
 ---
 
-### Phase 11 — CI/CD Pipeline Integration
+### Phase 11 — CI/CD Pipeline Integration ✅
 
 **Competitor precedent:** Claude Code ✅ (GitHub Actions + GitLab CI)
 
 **Goal:** Enable Sovrant to run autonomously inside CI pipelines — fix failing tests, resolve build errors, update generated code — without human intervention.
 
-#### Design
+**Status: ✅ Complete**
 
-`Sovrant.Server` already provides the HTTP API. CI integration is a thin wrapper:
+#### What was implemented
 
-1. A GitHub Actions action (`sovrant-agent-action`) that:
-   - Starts `Sovrant.Server` (or calls a hosted instance)
-   - POSTs the failing CI context (test output, build log, diff) as a user message to `/v1/chat/completions`
-   - Streams the response; captures any file edits the agent makes
-   - Commits the changes if the agent signals success
-   - Fails the action if the agent cannot fix the issue within N tool rounds
+1. **`--ci` flag** on the CLI `prompt` command — machine-readable JSON output (`CiOutput` record), non-zero exit code on error, suppressed console logging
+2. **`CiPermissionPolicy`** — auto-approves file edits and shell commands, denies unknown destructive operations (43 tests)
+3. **`CiUserInputProvider`** — no-op input provider for non-interactive CI environments
+4. **GitHub Actions composite action** at `.github/actions/sovrant-agent/action.yml` — builds, runs the agent in CI mode, exposes `success`, `output`, and `json` outputs
+5. **Documentation** at `docs/ci-cd.md` — full reference for `--ci` flag, JSON output format, GitHub Actions usage, GitLab CI template, security notes
 
-2. A GitLab CI template equivalent
+#### Key files
 
-#### Use cases
-
-- "Fix the failing tests" — post test output, agent reads code, makes fixes, reruns
-- "Update generated code" — post schema changes, agent regenerates affected files
-- "Resolve merge conflicts" — post conflicted diff, agent resolves and commits
-
-#### Security Note
-
-The CI environment must never pass production secrets into the agent session. Use read-only API keys scoped to the CI provider. The `plan` permission mode is recommended for CI runs that should not make destructive changes.
-
-#### Implementation Plan
-
-1. Add `--ci` flag to the CLI one-shot mode — machine-readable JSON output, non-zero exit on error
-2. Create `sovrant-agent-action` GitHub Actions action (YAML + shell wrapper around the CLI)
-3. Document GitLab CI equivalent
-4. Add CI-specific permission policy: `CiPermissionPolicy` — auto-approves file edits, denies shell commands that touch outside the working directory
+- `src/Sovrant.Runtime/Permissions/CiPermissionPolicy.cs`
+- `src/Sovrant.Cli/Program.cs` (RunCiTurnAsync, --ci option, CiOutput DTOs)
+- `src/Sovrant.Cli/CiUserInputProvider.cs`
+- `.github/actions/sovrant-agent/action.yml`
+- `docs/ci-cd.md`
+- `tests/Sovrant.Runtime.Tests/Permissions/CiPermissionPolicyTests.cs`
 
 ---
 

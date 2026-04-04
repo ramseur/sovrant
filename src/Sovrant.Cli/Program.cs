@@ -12,6 +12,7 @@ using Sovrant.Tools;
 using Sovrant.Tools.Extended;
 using Spectre.Console;
 using System.CommandLine;
+using System.Text.Json;
 
 // ── Global options ────────────────────────────────────────────────────────────
 var modelOpt = new Option<string?>("--model")
@@ -24,6 +25,8 @@ var sessionOpt = new Option<string?>("--session")
     { Description = "Session ID to resume or create." };
 var noStreamOpt = new Option<bool>("--no-stream")
     { Description = "Buffer the full response before printing." };
+var ciOpt = new Option<bool>("--ci")
+    { Description = "CI mode: machine-readable JSON output, CI permission policy, non-zero exit on error." };
 
 // ── Root command ──────────────────────────────────────────────────────────────
 var root = new RootCommand("Sovrant — multi-provider agentic AI assistant.");
@@ -32,6 +35,7 @@ root.Add(providerOpt);
 root.Add(permModeOpt);
 root.Add(sessionOpt);
 root.Add(noStreamOpt);
+root.Add(ciOpt);
 
 // ── 'status' subcommand ───────────────────────────────────────────────────────
 var statusCmd = new Command("status", "Show provider health and routing statistics.");
@@ -51,13 +55,23 @@ promptCmd.Add(messageArg);
 promptCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
 {
     var message = pr.GetValue(messageArg);
+    var ciMode = pr.GetValue(ciOpt);
     await using var sp = BuildServices(pr);
     await InitAsync(sp, pr, ct).ConfigureAwait(false);
     var runtime = sp.GetRequiredService<IConversationRuntime>();
     var sessionId = pr.GetValue(sessionOpt);
     if (sessionId is not null)
         await runtime.InitializeSessionAsync(sessionId, ct).ConfigureAwait(false);
-    await RunTurnAsync(runtime, message!, ct).ConfigureAwait(false);
+
+    if (ciMode)
+    {
+        var exitCode = await RunCiTurnAsync(runtime, message!, ct).ConfigureAwait(false);
+        Environment.ExitCode = exitCode;
+    }
+    else
+    {
+        await RunTurnAsync(runtime, message!, ct).ConfigureAwait(false);
+    }
 });
 root.Add(promptCmd);
 
@@ -83,6 +97,7 @@ return await parseResult.InvokeAsync(parseResult.InvocationConfiguration, Cancel
 ServiceProvider BuildServices(ParseResult pr)
 {
     var config = ConfigLoader.Load();
+    var ciMode = pr.GetValue(ciOpt);
 
     // Apply CLI overrides on top of file/env config.
     var model = pr.GetValue(modelOpt);
@@ -108,18 +123,38 @@ ServiceProvider BuildServices(ParseResult pr)
     }
 
     var services = new ServiceCollection();
-    // Default console to Warning in CLI so logs don't pollute the REPL.
-    // File logging always uses the configured SOVRANT_LOG_LEVEL (default: Information).
-    // Users can override with SOVRANT_LOG_LEVEL=Debug to see console debug output too.
-    var explicitLevel = Environment.GetEnvironmentVariable("SOVRANT_LOG_LEVEL");
-    services.AddLogging(b => b.AddSovrantLogging(
-        consoleMinOverride: string.IsNullOrEmpty(explicitLevel) ? LogLevel.Warning : null));
+
+    if (ciMode)
+    {
+        // CI mode: suppress all console logging — output is JSON only.
+        services.AddLogging(b => b.AddSovrantLogging(consoleMinOverride: LogLevel.None));
+    }
+    else
+    {
+        // Default console to Warning in CLI so logs don't pollute the REPL.
+        // File logging always uses the configured SOVRANT_LOG_LEVEL (default: Information).
+        // Users can override with SOVRANT_LOG_LEVEL=Debug to see console debug output too.
+        var explicitLevel = Environment.GetEnvironmentVariable("SOVRANT_LOG_LEVEL");
+        services.AddLogging(b => b.AddSovrantLogging(
+            consoleMinOverride: string.IsNullOrEmpty(explicitLevel) ? LogLevel.Warning : null));
+    }
+
     services.AddSovrantRuntime(config);
     services.AddSovrantTools();
     services.AddSovrantCommands();
 
-    // Replace the null input provider with the real console one.
-    services.AddSingleton<IUserInputProvider, ConsoleUserInputProvider>();
+    if (ciMode)
+    {
+        // CI mode uses CiPermissionPolicy — auto-approves edits and shell, denies unknown destructive ops.
+        services.AddSingleton<IPermissionPolicy>(new CiPermissionPolicy());
+        // No interactive input in CI — use a no-op provider that returns empty strings.
+        services.AddSingleton<IUserInputProvider, CiUserInputProvider>();
+    }
+    else
+    {
+        // Replace the null input provider with the real console one.
+        services.AddSingleton<IUserInputProvider, ConsoleUserInputProvider>();
+    }
 
     var sp = services.BuildServiceProvider();
 
@@ -211,6 +246,61 @@ async Task RunTurnAsync(IConversationRuntime runtime, string message, Cancellati
     AnsiConsole.WriteLine();
 }
 
+async Task<int> RunCiTurnAsync(IConversationRuntime runtime, string message, CancellationToken ct)
+{
+    var textChunks = new System.Text.StringBuilder();
+    var toolCalls = new List<CiToolCallResult>();
+    var errors = new List<string>();
+    int inputTokens = 0;
+    int outputTokens = 0;
+
+    await foreach (var ev in runtime.RunTurnAsync(message, ct).ConfigureAwait(false))
+    {
+        switch (ev)
+        {
+            case RuntimeEvent.TextChunk { Text: var text }:
+                textChunks.Append(text);
+                break;
+
+            case RuntimeEvent.ToolUseRequested { ToolName: var toolName, ToolUseId: var id }:
+                toolCalls.Add(new CiToolCallResult(id, toolName, null, false));
+                break;
+
+            case RuntimeEvent.ToolResult { ToolUseId: var id, ToolName: var toolName, Content: var content, IsError: var isErr }:
+                toolCalls.Add(new CiToolCallResult(id, toolName, content, isErr));
+                if (isErr)
+                    errors.Add($"{toolName}: {content}");
+                break;
+
+            case RuntimeEvent.PermissionDenied { ToolName: var toolName, Reason: var reason }:
+                errors.Add($"permission_denied: {toolName}: {reason}");
+                break;
+
+            case RuntimeEvent.TurnComplete { InputTokens: var inTok, OutputTokens: var outTok }:
+                inputTokens = inTok;
+                outputTokens = outTok;
+                break;
+
+            case RuntimeEvent.RuntimeError { Message: var msg }:
+                errors.Add(msg);
+                break;
+        }
+    }
+
+    var result = new CiOutput(
+        success: errors.Count == 0,
+        text: textChunks.ToString(),
+        tool_calls: toolCalls,
+        errors: errors,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens);
+
+    var json = JsonSerializer.Serialize(result, CiJsonOptions.Instance);
+    Console.WriteLine(json);
+
+    return errors.Count == 0 ? 0 : 1;
+}
+
 void PrintStatus(IReadOnlyList<ProviderStatus> statuses)
 {
     if (statuses.Count == 0)
@@ -243,4 +333,29 @@ void PrintStatus(IReadOnlyList<ProviderStatus> statuses)
     }
 
     AnsiConsole.Write(table);
+}
+
+// ── CI output types ──────────────────────────────────────────────────────────
+
+sealed record CiOutput(
+    bool success,
+    string text,
+    List<CiToolCallResult> tool_calls,
+    List<string> errors,
+    int input_tokens,
+    int output_tokens);
+
+sealed record CiToolCallResult(
+    string id,
+    string tool_name,
+    string? content,
+    bool is_error);
+
+static class CiJsonOptions
+{
+    internal static readonly JsonSerializerOptions Instance = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+    };
 }
