@@ -37,7 +37,7 @@ The engine is fully functional as a single-user tool:
 
 | Gap | Phase |
 |---|---|
-| Session TTL eviction + per-session lock | Phase 9 |
+| Session TTL eviction + per-session lock | Phase 9.1 |
 | Per-session config overlay (fixes global `EnterPlanMode`) | Phase 9.5 |
 | Multi-agent `DispatchAsync` + CLI/Server DI wiring | Phase 18–19 |
 
@@ -318,7 +318,94 @@ The OpenClaude document suggests replacing the `string` return from `ITool.Execu
 
 ---
 
-### Phase 8 — Multi-Tenant Per-Request Credentials
+### Phase 8 — Structured Async Logging
+
+**Goal:** Add non-blocking, structured logging throughout the engine and server so that runtime behaviour, errors, and performance are easy to observe without adding latency to the hot path.
+
+#### Motivation
+
+The engine currently logs sparingly — mostly ad-hoc `ILogger` calls with string interpolation. There is no consistent structure, no correlation IDs, and no sink that can write to a file without blocking the calling thread. When something goes wrong (provider error, tool failure, compaction event) there is no reliable way to reconstruct what happened from logs alone.
+
+#### Provider choice — ZLogger or Serilog + Async sink
+
+| Option | Pros | Cons |
+|---|---|---|
+| **ZLogger** (`Cysharp/ZLogger`) | Zero-allocation log formatting; designed for .NET high-throughput; outputs structured JSON; no extra abstraction | Less ecosystem documentation; smaller community |
+| **Serilog + `Serilog.Sinks.Async`** | Widely known; rich ecosystem; `Serilog.Sinks.File` (rolling) + `Serilog.Sinks.Console`; async sink wraps any sink with a bounded `BlockingCollection` | Small allocation per log event (mitigated by buffering) |
+
+**Recommendation:** Use **Serilog** with `Serilog.Sinks.Async` wrapping both a rolling file sink and the console sink. The async wrapper ensures all disk I/O happens on a dedicated background thread and never blocks the agentic loop. Keep `Microsoft.Extensions.Logging` as the surface API — Serilog plugs in as the backing provider via `UseSerilog()`.
+
+#### Source-generated log delegates
+
+All hot-path log calls must use `[LoggerMessage]`-source-generated delegates (already the pattern in `OpenAiCompatProvider`). Do not use `LogInformation("text {Arg}", value)` directly — it allocates a `string[]` on every call even when the log level is disabled.
+
+Convert all existing inline `_logger.LogXxx(...)` calls to static `[LoggerMessage]`-attributed methods.
+
+#### Structured fields
+
+Every log event in the critical path should carry a consistent set of structured properties:
+
+| Field | Type | Source |
+|---|---|---|
+| `session_id` | `string` | `ConversationRuntime` |
+| `model` | `string` | `MessagesRequest.Model` |
+| `provider` | `string` | `ILlmProvider.Name` |
+| `tool_name` | `string` | `ITool.Name` (tool events) |
+| `turn` | `int` | Loop counter in `RunTurnAsync` |
+| `duration_ms` | `long` | `Stopwatch.ElapsedMilliseconds` |
+| `tokens_in` | `int` | `Usage.InputTokens` |
+| `tokens_out` | `int` | `Usage.OutputTokens` |
+| `is_error` | `bool` | Exception / error result |
+| `retry_attempt` | `int` | Retry loop (provider retry) |
+
+Use Serilog's `LogContext.PushProperty` to attach `session_id` and `turn` as ambient properties at the start of each `RunTurnAsync` call so they appear on every log line without threading them through every method signature.
+
+#### Critical log points
+
+| Component | Event | Level |
+|---|---|---|
+| `ConversationRuntime` | Turn start (session, model, turn number) | `Information` |
+| `ConversationRuntime` | Turn complete (duration_ms, tokens_in, tokens_out) | `Information` |
+| `ConversationRuntime` | Tool call dispatched (tool_name, turn) | `Debug` |
+| `ConversationRuntime` | Tool call complete (tool_name, duration_ms, is_error) | `Debug` |
+| `ConversationRuntime` | Retry attempt (attempt, delay_ms, reason) | `Warning` |
+| `ConversationRuntime` | Context compaction triggered (messages_before, messages_after, tokens_before) | `Information` |
+| `ConversationRuntime` | Max tool rounds reached | `Warning` |
+| `SmartRouter` | Provider selected (provider_name, reason) | `Debug` |
+| `SmartRouter` | Provider health ping result (provider_name, latency_ms, is_healthy) | `Debug` |
+| `SmartRouter` | All providers unhealthy — fallback to configured list | `Warning` |
+| `OpenAiCompatProvider` | SSE parse skip (unparseable data) | `Warning` |
+| `OpenAiCompatProvider` | HTTP / JSON / IO error | `Error` |
+| `ToolExecutor` | Permission denied (tool_name, mode) | `Warning` |
+| Server request pipeline | Request received (method, path, session_id) | `Debug` |
+| Server request pipeline | Request complete (status, duration_ms) | `Information` |
+| Server request pipeline | Streaming begun / ended | `Debug` |
+
+#### Configuration
+
+| Variable | Default | Description |
+|---|---|---|
+| `SOVRANT_LOG_LEVEL` | `Information` | Minimum log level: `Verbose`, `Debug`, `Information`, `Warning`, `Error`, `Fatal` |
+| `SOVRANT_LOG_FILE` | `~/.sovrant/logs/sovrant-.log` (rolling daily) | Path pattern for the rolling file sink. Set to empty string to disable file logging. |
+| `SOVRANT_LOG_CONSOLE` | `true` | Whether to write logs to stdout. Set to `false` to silence console output. |
+| `SOVRANT_LOG_FORMAT` | `text` | `text` (human-readable) or `json` (structured JSON — better for log aggregators). |
+
+#### Implementation Plan
+
+1. Add NuGet packages: `Serilog`, `Serilog.Extensions.Hosting`, `Serilog.Sinks.Async`, `Serilog.Sinks.File`, `Serilog.Sinks.Console`, `Serilog.Enrichers.Thread`
+2. Wire `UseSerilog()` in `Sovrant.Server` and `Sovrant.Cli` host builders; read `SOVRANT_LOG_LEVEL` / `SOVRANT_LOG_FILE` / `SOVRANT_LOG_CONSOLE` / `SOVRANT_LOG_FORMAT` from environment
+3. Convert all existing inline `_logger.LogXxx(...)` calls across `Sovrant.Api`, `Sovrant.Runtime`, `Sovrant.Tools`, `Sovrant.Server` to `[LoggerMessage]`-source-generated delegates
+4. Add `LogContext.PushProperty("session_id", ...)` and `LogContext.PushProperty("turn", ...)` scope at the top of `RunTurnAsync`
+5. Add `Stopwatch` timing around each tool dispatch in the agentic loop; log `duration_ms` on completion
+6. Add provider name to every LLM call log line via `LogContext`
+7. Add structured server request middleware (or minimal API filter) that logs request start/end with correlation
+8. Add `Sovrant.Server.Tests` integration test: capture log output, verify `session_id` appears on turn-complete log events
+9. Update `README.md` environment variable table with the four new `SOVRANT_LOG_*` vars
+10. Update `docs/engine-status.md` to mark logging as implemented
+
+---
+
+### Phase 9 — Multi-Tenant Per-Request Credentials
 
 **Goal:** Allow each client to supply its own LLM provider, model, and API key per HTTP request, without the server storing or managing those credentials.
 
@@ -379,7 +466,7 @@ This ensures session history is isolated per user even if two users share the sa
 
 ---
 
-### Phase 9 — Session Lifecycle Management (TTL Eviction + Turn Serialization)
+### Phase 9.1 — Session Lifecycle Management (TTL Eviction + Turn Serialization)
 
 **Goal:** Allow the server to manage many concurrent sessions safely — one `ConversationRuntime` per active session — with automatic eviction of idle sessions and correct serialization of concurrent turns within the same session.
 
@@ -434,7 +521,7 @@ private sealed record SessionEntry(
 
 ### Phase 9.5 — Small Team Hardening
 
-**Depends on:** Phase 9 (session TTL + per-session lock)
+**Depends on:** Phase 9.1 (session TTL + per-session lock)
 
 **Goal:** Make Sovrant solid for a small trusted team sharing a single deployment — a single bearer token is fine, but config changes must be session-scoped, each user should bring their own LLM key, and the server must be observable (token usage, context window) and resilient (rate limiting, usage tracking). No user login system required at this stage.
 
@@ -447,7 +534,7 @@ Session history is already isolated per `session_id` — ten users with differen
 | Gap | Problem | Fix |
 |---|---|---|
 | `PUT /v1/config` is global | One user changing the model or permission mode (or calling `EnterPlanMode`) changes it for all sessions simultaneously | Session-scoped config overlay — each `SessionEntry` carries a `SessionConfig` that shadows the global defaults |
-| Single `LLM_API_KEY` | All sessions bill to the same key — no per-session cost visibility | Phase 8 per-request `x_api_key` — each user or client supplies their own key in the request body |
+| Single `LLM_API_KEY` | All sessions bill to the same key — no per-session cost visibility | Phase 9 per-request `x_api_key` — each user or client supplies their own key in the request body |
 | No per-session rate limiting | A single session can saturate the server with concurrent requests | Per-session request rate limiter (ASP.NET Core `RateLimiter` middleware) |
 | No cost visibility | No way to see which session is responsible for LLM spend | Per-session token accumulation in `SessionEntry`; `GET /v1/usage` summary endpoint |
 | No context window visibility | Users can't see how much context is consumed | `context_used_pct` and `tokens_remaining` in `GET /v1/sessions/{id}`; REPL status line |
@@ -678,7 +765,7 @@ At cloud scale, users will want to connect MCP servers that front OAuth-protecte
 - OAuth tokens must never appear in session JSONL, server logs, or API responses
 - Token storage must be encrypted at rest (use OS keychain on CLI, server-side encrypted store for the HTTP server)
 - Refresh token rotation must be handled automatically on expiry
-- Per-user token isolation is required in multi-tenant deployments (Phase 8 session pool key applies here too)
+- Per-user token isolation is required in multi-tenant deployments (Phase 9 session pool key applies here too)
 
 #### Implementation Plan
 
@@ -779,10 +866,10 @@ Supervisor Agent (ConversationRuntime)
   └── Collects results via TaskOutput / team message bus
 ```
 
-- Each team member is a full `ConversationRuntime` with its own session pool slot, tool set, and optionally its own LLM provider/key (Phase 8)
+- Each team member is a full `ConversationRuntime` with its own session pool slot, tool set, and optionally its own LLM provider/key (Phase 9)
 - The supervisor coordinates via `TaskOutput` polling or a lightweight message bus
 - Team lifecycle: `TeamCreate` spawns and starts, `TeamDelete` cancels and evicts
-- Teams are scoped to the supervisor's session — they are cleaned up when the supervisor session is evicted (Phase 9 TTL)
+- Teams are scoped to the supervisor's session — they are cleaned up when the supervisor session is evicted (Phase 9.1 TTL)
 
 #### Design Decisions to Resolve
 
@@ -839,7 +926,7 @@ Supervisor Agent (ConversationRuntime)
 
 ### Phase 20 — Enterprise Auth & Multi-Tenancy
 
-**Depends on:** Phase 9.5 (session-scoped config) + Phase 8 (per-request credentials)
+**Depends on:** Phase 9.5 (session-scoped config) + Phase 9 (per-request credentials)
 
 **Goal:** Replace the single shared `SOVRANT_TOKEN` with per-user identity — named tokens, user-scoped session isolation, and per-user billing visibility. This is the gate to offering Sovrant as a product to external users or as a managed internal platform with login, not just a shared team tool.
 
