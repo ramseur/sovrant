@@ -1,6 +1,6 @@
 # Sovrant
 
-A .NET 10 port of an agentic AI engine — multi-provider, tool-using, session-persistent. Mirrors the behaviour of Claude Code: a CLI agent loop that reads/writes files, runs terminal commands, searches the web, and maintains conversation history across sessions.
+A .NET 10 agentic AI engine — multi-provider, tool-using, session-persistent. A CLI agent loop that reads/writes files, runs terminal commands, searches the web, and maintains conversation history across sessions.
 
 **Branch:** `sovrant-openc-dotnet-port`
 **Runtime:** .NET 10 / C# 13
