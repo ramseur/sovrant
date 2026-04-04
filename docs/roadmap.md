@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 9.5 complete — small team hardening: session-scoped config, per-session rate limiting, token tracking, usage endpoint)
+**Last updated:** 2026-04-04 (Phase 10 complete — LSP integration: Sovrant.Lsp project, 5 LSP tools, JSON-RPC over stdio, LspClientManager)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 

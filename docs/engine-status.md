@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 9.5 complete — small team hardening: session-scoped config, per-session rate limiting, token tracking, usage endpoint — 31 tools, 120 tests)
+**Last updated:** 2026-04-04 (Phase 10 complete — LSP integration: 5 LSP tools, JSON-RPC over stdio — 36 tools, 146 tests)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -24,7 +24,8 @@
 | Session-scoped config | ✅ Implemented | Per-session model + permission mode overlays via `SessionConfig`. `EnterPlanMode`/`ExitPlanMode` scoped to current session via `AsyncLocal`. `PUT /v1/sessions/{id}/config` for explicit overrides. |
 | Per-session rate limiting | ✅ Implemented | ASP.NET Core `RateLimiter` keyed on `X-Session-Id` header or client IP. `SOVRANT_RATE_LIMIT_RPM` env var (default 60). Returns 429 when exceeded. |
 | Token usage tracking | ✅ Implemented | Per-session `TotalInputTokens`/`TotalOutputTokens` accumulated in `SessionConfig`. `GET /v1/usage` summary. `GET /v1/sessions/{id}` includes totals. |
-| Unit test suite | ✅ 120/120 passing | Api(28) + Runtime(43) + Tools(26) + Commands(22) + Integration(1) |
+| LSP integration (`Sovrant.Lsp`) | ✅ Implemented | `ILspClient` / `LspClient` — JSON-RPC 2.0 over stdio, Content-Length framing. `LspClientManager` maps file extensions to language servers. 5 tools: LspHover, LspDefinition, LspReferences, LspDiagnostics, LspRename. Config via `lsp_servers` in `SovrantConfig`. |
+| Unit test suite | ✅ 146/146 passing | Api(28) + Runtime(43) + Lsp(26) + Tools(26) + Commands(22) + Integration(1) |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |

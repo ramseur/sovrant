@@ -3,7 +3,7 @@
 A .NET 10 agentic AI engine — multi-provider, tool-using, session-persistent. Runs as a CLI agent or an OpenAI-compatible HTTP server. The agent reads and writes files, executes shell commands, searches the web, calls tools autonomously, and maintains full conversation history across sessions.
 
 **Runtime:** .NET 10 / C# 13
-**Status:** Engine fully functional. 31 tools. 12 server endpoints. 120/120 tests passing.
+**Status:** Engine fully functional. 36 tools. 12 server endpoints. 146/146 tests passing.
 
 ---
 
@@ -18,6 +18,7 @@ A .NET 10 agentic AI engine — multi-provider, tool-using, session-persistent. 
 | `Sovrant.Tools` | All 31 tool implementations. |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/clear`, `/session`, `/memory`, etc.). |
 | `Sovrant.Agents` | Multi-agent infrastructure: `IAgent` / `IMultiAgentSystem` interfaces, modern in-process backend, legacy process-based backend, `AGENT_MODE` config switch. |
+| `Sovrant.Lsp` | Language Server Protocol client: JSON-RPC over stdio, manages language server lifecycle, 5 LSP tools. |
 
 ---
 
@@ -109,7 +110,7 @@ curl -X POST http://localhost:5200/v1/chat/completions \
 
 ## Tools
 
-31 tools available. All run inside the agentic loop with automatic retries up to 20 tool rounds per turn.
+36 tools available (31 core + 5 LSP). All run inside the agentic loop with automatic retries up to 20 tool rounds per turn.
 
 ### File
 `Read` · `Write` · `Edit` · `Glob` · `Grep` · `LS`
@@ -134,6 +135,11 @@ curl -X POST http://localhost:5200/v1/chat/completions \
 
 ### MCP resources
 `ListMcpResources` · `ReadMcpResource`
+
+### LSP (Language Server Protocol)
+`LspHover` · `LspDefinition` · `LspReferences` · `LspDiagnostics` · `LspRename`
+
+*Requires a language server configured in `~/.sovrant/settings.json` under `lsp_servers`.*
 
 ### Notebook
 `NotebookEdit` *(read/write Jupyter `.ipynb` cells)*
@@ -286,13 +292,14 @@ The server keeps one `ConversationRuntime` alive per `session_id` in an in-memor
 ## Tests
 
 ```bash
-dotnet test   # 120 tests across 5 projects
+dotnet test   # 146 tests across 6 projects
 ```
 
 | Project | Tests |
 |---|---|
 | `Sovrant.Api.Tests` | 28 |
 | `Sovrant.Runtime.Tests` | 43 |
+| `Sovrant.Lsp.Tests` | 26 |
 | `Sovrant.Tools.Tests` | 26 |
 | `Sovrant.Commands.Tests` | 22 |
 | `Sovrant.Integration.Tests` | 1 |

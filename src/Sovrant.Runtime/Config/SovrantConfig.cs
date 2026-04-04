@@ -36,6 +36,27 @@ public sealed class SovrantConfig
     /// <summary>MCP server configurations keyed by server name.</summary>
     public IReadOnlyDictionary<string, McpServerConfig> McpServers { get; init; } =
         new Dictionary<string, McpServerConfig>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// LSP (Language Server Protocol) server configurations keyed by language identifier.
+    /// Example: <c>{ "csharp": { "command": "omnisharp", "args": ["--languageserver"] } }</c>
+    /// </summary>
+    public IReadOnlyDictionary<string, LspServerConfigEntry> LspServers { get; init; } =
+        new Dictionary<string, LspServerConfigEntry>(StringComparer.OrdinalIgnoreCase);
+}
+
+/// <summary>Configuration for a single LSP server in settings.json.</summary>
+public sealed class LspServerConfigEntry
+{
+    /// <summary>The command to launch the language server.</summary>
+    public string Command { get; init; } = string.Empty;
+
+    /// <summary>Command-line arguments.</summary>
+    public IReadOnlyList<string> Args { get; init; } = [];
+
+    /// <summary>Additional environment variables for the process.</summary>
+    public IReadOnlyDictionary<string, string> Env { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
 }
 
 /// <summary>Configuration for a single MCP server.</summary>

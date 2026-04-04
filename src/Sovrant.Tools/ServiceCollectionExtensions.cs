@@ -1,7 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
+using Sovrant.Lsp;
+using Sovrant.Runtime.Config;
 using Sovrant.Tools.Agent;
 using Sovrant.Tools.Core;
 using Sovrant.Tools.Extended;
+using Sovrant.Tools.Lsp;
 using Sovrant.Tools.Mcp;
 using Sovrant.Tools.PlanMode;
 using Sovrant.Tools.Skills;
@@ -82,6 +85,26 @@ public static class ServiceCollectionExtensions
 
         // Agent tool
         services.AddSingleton<ITool, AgentTool>();
+
+        // LSP tools — only registered if ILspClientManager is available
+        services.AddSingleton<ILspClientManager>(sp =>
+        {
+            var config = sp.GetRequiredService<SovrantConfig>();
+            var loggerFactory = sp.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>();
+            var configs = config.LspServers.Select(kvp => new LspServerConfig
+            {
+                Language = kvp.Key,
+                Command = kvp.Value.Command,
+                Args = kvp.Value.Args,
+                Env = kvp.Value.Env,
+            });
+            return new LspClientManager(configs, loggerFactory);
+        });
+        services.AddSingleton<ITool, LspHoverTool>();
+        services.AddSingleton<ITool, LspDefinitionTool>();
+        services.AddSingleton<ITool, LspReferencesTool>();
+        services.AddSingleton<ITool, LspDiagnosticsTool>();
+        services.AddSingleton<ITool, LspRenameTool>();
 
         // Tool registrar
         services.AddSingleton<ToolRegistrar>();
