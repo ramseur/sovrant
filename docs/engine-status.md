@@ -84,6 +84,7 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 |---|---|---|
 | `WebFetch` | ✅ Tested | Fetched `https://httpbin.org/get`; model correctly extracted response data |
 | `WebSearch` | ⬜ Not tested | Implemented; requires `BRAVE_API_KEY` (or `FIRECRAWL_API_KEY` as fallback) |
+| Native web search (`LLM_WEB_SEARCH=true`) | ⬜ Not tested | Injects `web_search_preview` built-in tool; OpenAI handles search server-side — no external API key required |
 
 ### Task management tools
 
@@ -168,6 +169,7 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 | `ROUTER_MODE` | No | `Smart` (default) or `Fixed`. Overrides `Router:Mode` in config. |
 | `ROUTER_STRATEGY` | No | `Balanced` (default), `Latency`, or `Cost`. Overrides `Router:Strategy` in config. |
 | `AGENT_MODE` | No | `modern` (default, in-process async channels) or `legacy` (process-per-agent stdio). Used by `Sovrant.Agents` when wired in Phase 18. |
+| `LLM_WEB_SEARCH` | No | Set to `true` to use the model's native web search capability (e.g. OpenAI `web_search_preview`). No external API key needed. |
 | `BRAVE_API_KEY` | No | Enables `WebSearch` via Brave Search API |
 | `FIRECRAWL_API_KEY` | No | Enables `WebSearch` via FireCrawl (fallback if `BRAVE_API_KEY` not set) |
 

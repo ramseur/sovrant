@@ -53,7 +53,9 @@ internal sealed record OpenAiFunction(
 
 internal sealed record OpenAiTool(
     [property: JsonPropertyName("type")] string Type,
-    [property: JsonPropertyName("function")] OpenAiToolFunction Function);
+    [property: JsonPropertyName("function")]
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    OpenAiToolFunction? Function);
 
 internal sealed record OpenAiToolFunction(
     [property: JsonPropertyName("name")] string Name,

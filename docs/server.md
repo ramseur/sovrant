@@ -37,6 +37,7 @@ The server binds to `http://127.0.0.1:5200` by default.
 | `ROUTER_MODE` | No | `Smart` | `Smart` (latency/cost scoring) or `Fixed` (always first provider) |
 | `ROUTER_STRATEGY` | No | `Balanced` | `Balanced`, `Latency`, or `Cost` |
 | `AGENT_MODE` | No | `modern` | `modern` (in-process async, recommended) or `legacy` (process-per-agent stdio). Takes effect once Phase 18 wires `Sovrant.Agents` into the server DI. |
+| `LLM_WEB_SEARCH` | No | `false` | Set to `true` to inject the model's native web search tool (e.g. OpenAI `web_search_preview`). No external API key required. |
 | `BRAVE_API_KEY` | No | — | Enables `WebSearch` via Brave Search API |
 | `FIRECRAWL_API_KEY` | No | — | Enables `WebSearch` via FireCrawl (fallback if `BRAVE_API_KEY` not set) |
 
