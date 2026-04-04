@@ -188,6 +188,155 @@ Both exploit Claude Code's trust model around project files and hooks. Sovrant's
 
 ---
 
+## Features to Consider Adding to the Sovrant Roadmap
+
+The following features exist in one or more competitors but are not yet on Sovrant's roadmap. Each entry notes which competitor has it, what value it delivers, and a suggested roadmap phase.
+
+---
+
+### Tier 1 — High Value, Relatively Straightforward
+
+#### Context Auto-Compaction
+**Has it:** Claude Code ✅ · OpenClaude ✅ (inherited) · opencode ✅
+**What it does:** When the conversation history approaches the model's context window limit, the agent automatically summarises older turns into a compact representation and replaces the raw history with it. This allows arbitrarily long sessions without hitting context limits or paying for redundant tokens.
+**Why it matters for Sovrant:** Long agentic sessions (large refactors, multi-file tasks) will hit the 128K–1M token limit. Without compaction the session either fails or the user must manually `/compact`. The `ISessionStore` and `_history` list in `ConversationRuntime` are the right insertion points.
+**Suggested phase:** Phase 9 or a new Phase 7.6 — depends only on the runtime and session store, no external dependencies.
+
+---
+
+#### Session Sharing / Export
+**Has it:** opencode ✅ (`/share` command)
+**What it does:** Generates a shareable read-only link (or exported file) of a session — useful for sharing debugging sessions with teammates, creating reproducible bug reports, or archiving completed tasks.
+**Why it matters for Sovrant:** The JSONL session format already stores everything needed. A `GET /v1/sessions/{id}/export` endpoint returning rendered markdown or HTML would be a low-effort feature with high perceived value for teams.
+**Suggested phase:** Phase 9.5 or alongside the frontend SDK (Phase 10).
+
+---
+
+#### `/undo` / `/redo` (Git-backed)
+**Has it:** opencode ✅
+**What it does:** Every file write/edit the agent makes is committed to a git stash or a temporary branch. `/undo` reverts the last agent action; `/redo` reapplies it. This is fundamentally safer than the current model where tool writes are permanent.
+**Why it matters for Sovrant:** Trust is the biggest barrier to giving an agent write permissions. Git-backed undo dramatically lowers the risk of an agent making a mistake — the user can always roll back. `EnterWorktree`/`ExitWorktree` (Phase 7.5) is related but separate — undo/redo applies even outside a worktree.
+**Suggested phase:** Phase 7.5 Tier 2 or a standalone Phase 7.6.
+
+---
+
+#### Non-Interactive / Headless Prompt Mode
+**Has it:** opencode ✅ · Claude Code ✅ (`--print` flag)
+**What it does:** Run a single prompt non-interactively from a shell script or CI pipeline and exit. No REPL, no interactive prompts. Output goes to stdout.
+**Why it matters for Sovrant:** The CLI already supports `sovrant prompt "..."` (one-shot mode) which covers this. Confirm it works fully non-interactively including tool execution and verify it exits with a non-zero code on errors — then it is CI-ready.
+**Suggested phase:** Already partially implemented — verify and document.
+
+---
+
+#### Custom Slash Commands per Project
+**Has it:** opencode ✅ (`.opencode/command/` directory with named arguments)
+**What it does:** Project-specific slash commands defined in a directory. Each command is a markdown/text file whose content is injected as a prompt when invoked. Supports named arguments (e.g., `/deploy staging`).
+**Why it matters for Sovrant:** This is the lightweight version of `SkillTool` (already on the Phase 7.5 roadmap). The difference is that custom commands are per-project (checked into the repo) rather than global skills. Both should exist.
+**Suggested phase:** Part of Phase 7.5 `SkillTool` work — extend to support project-local `.sovrant/commands/` directory.
+
+---
+
+### Tier 2 — Significant Value, More Complex
+
+#### LSP Integration (Language Server Protocol)
+**Has it:** opencode ✅ (20+ language servers, diagnostics, go-to-definition, symbol search)
+**What it does:** Instead of relying solely on text-based grep/glob for code understanding, the agent launches a real language server (e.g., `clangd`, `pyright`, `typescript-language-server`, `omnisharp`) and queries it for semantically accurate information: hover types, call hierarchies, find-all-references, rename symbol, diagnostics. This makes refactoring and bug-fixing significantly more accurate.
+**Why it matters for Sovrant:** Text manipulation tools (Grep, Glob, Read) are sufficient for simple tasks but miss semantic relationships — type errors, unused imports, interface mismatches. LSP gives the agent code intelligence rather than just file I/O.
+**Suggested phase:** New Phase 15 — LSP Client. Implement `ILspClient` that spawns a language server process, communicates over stdio/JSON-RPC, and exposes tool wrappers (`LspHover`, `LspDefinition`, `LspReferences`, `LspDiagnostics`, `LspRename`).
+
+---
+
+#### IDE Extension (VS Code / JetBrains)
+**Has it:** Claude Code ✅ (VS Code + JetBrains) · opencode ✅ (VS Code beta)
+**What it does:** Embeds the agent directly into the IDE — sidebar panel, inline diff view, permission dialogs with file highlighting, tool output rendered in context.
+**Why it matters for Sovrant:** The HTTP server (`Sovrant.Server`) is the foundation — an IDE extension is essentially a frontend that connects to it. Once Phase 11 (MCP server mode) ships, Sovrant can be consumed by any MCP-aware IDE (VS Code with GitHub Copilot, Cursor, Windsurf) without a bespoke extension. The extension is the layer on top for richer UX.
+**Suggested phase:** Phase 15.5 — VS Code extension backed by `Sovrant.Server`. Phase 11 (MCP server mode) is the prerequisite.
+
+---
+
+#### Context Window Visualisation
+**Has it:** opencode ✅ (configurable via `ctx_viz` command)
+**What it does:** Shows the user how much of the context window is currently used — token count, percentage remaining, which messages are taking the most space. Helps users understand when compaction will trigger and why responses may degrade.
+**Why it matters for Sovrant:** Already tracked as a known issue (token counts always `0`). Fixing the token count capture (OpenAI final SSE chunk `usage` field) is the prerequisite. Once token counts are accurate, exposing them in the REPL and via `GET /v1/sessions/{id}` is low effort.
+**Suggested phase:** Part of Phase 9.5 (usage tracking fix is a dependency of that phase anyway).
+
+---
+
+#### CI / CD Pipeline Integration
+**Has it:** Claude Code ✅ (GitHub Actions + GitLab CI — monitors PR status, fixes CI failures autonomously)
+**What it does:** The agent runs inside a GitHub Actions or GitLab CI workflow. It monitors pipeline status, reads test failure logs, makes code fixes, commits, and re-runs CI until green — without human intervention.
+**Why it matters for Sovrant:** This is a high-value enterprise use case — "fix the broken build" automation. `Sovrant.Server` already provides the HTTP API needed to trigger an agent run from a CI step. A GitHub Actions runner that calls `POST /v1/chat/completions` with the failing test log as the prompt is a thin integration.
+**Suggested phase:** New Phase 16 — CI Integration. Publish a GitHub Actions action (`sovrant-agent-action`) that invokes `Sovrant.Server` with pipeline context. Lightweight — mostly documentation and a thin YAML action wrapper.
+
+---
+
+#### Multi-File Diff View / Structured Edit Preview
+**Has it:** Claude Code ✅ · opencode ✅ (StructuredDiff component, colour diff)
+**What it does:** Before applying file edits, the agent shows a structured diff (unified diff or side-by-side) of the proposed changes. The user can approve, reject, or edit individual hunks.
+**Why it matters for Sovrant:** The CLI currently shows raw edit output. A proper diff view in the REPL (using Spectre.Console's markup or a colour diff) would make the permission dialog for `Edit`/`Write` far more informative and trustworthy.
+**Suggested phase:** Phase 10 / UI polish pass — implement in the CLI REPL using Spectre.Console colour rendering.
+
+---
+
+#### Agent Memory / CLAUDE.md Equivalent
+**Has it:** Claude Code ✅ (`CLAUDE.md` project memory files, `~/.claude/CLAUDE.md` global memory)
+**What it does:** The agent reads markdown memory files from the project root and from the user's home directory at the start of each session. These files contain persistent instructions, project conventions, preferred patterns, and context that persists without the user having to re-explain on every session start.
+**Why it matters for Sovrant:** This is the most direct path to making Sovrant feel "smart" about a codebase — the agent automatically knows the project's coding style, which files to avoid, which commands to run, etc. Implementation: read `.sovrant/memory.md` and `~/.sovrant/memory.md` at session initialisation and prepend their contents to the system prompt.
+**Suggested phase:** Phase 7.6 — trivial to implement (file read + system prompt injection), very high perceived value.
+
+---
+
+#### Voice Mode
+**Has it:** Claude Code ✅ (added 2026)
+**What it does:** Speech-to-text input and text-to-speech output for the agent loop. Primarily useful for hands-free operation during coding sessions.
+**Why it matters for Sovrant:** Low priority for a coding tool — keyboard-first workflows dominate. Worth tracking as a future differentiator but not a near-term priority.
+**Suggested phase:** Future / Phase 20+.
+
+---
+
+#### Slack / Webhook Integration
+**Has it:** Claude Code ✅ (OAuth-based Slack app)
+**What it does:** Invoke the agent from a Slack message, receive streamed responses in a Slack thread. Useful for team-based "ask the codebase" workflows.
+**Why it matters for Sovrant:** `Sovrant.Server`'s HTTP API makes this a thin integration — a Slack bot that forwards messages to `POST /v1/chat/completions` and streams the response back. The prerequisite is Phase 9.5 (per-user auth tokens) so each Slack user maps to an isolated session.
+**Suggested phase:** Phase 16.5 — Slack integration. Publish a Sovrant Slack app that connects to a self-hosted `Sovrant.Server`.
+
+---
+
+### Tier 3 — Speculative / Long-Term
+
+| Feature | Has it | Notes |
+|---|---|---|
+| Background daemon (file watching, idle memory consolidation) | Claude Code (KAIROS, unreleased) | Long-term; `IHostedService` is the right .NET pattern |
+| Swarm / parallel worker agents at scale | Claude Code (behind feature flag) | Phase 14 covers the foundation |
+| GitHub PR monitoring + autonomous fix loop | Claude Code | Phase 16 CI work is the prerequisite |
+| Tauri desktop app | opencode | After Phase 10 frontend SDK — wrap in Tauri |
+| Mobile client | Claude Code (partial) | Very long-term |
+| Fine-tuning pipeline for model specialisation | None yet | Research phase |
+
+---
+
+## Updated Sovrant Feature Gap Summary
+
+| Feature | Priority | Suggested Phase |
+|---|---|---|
+| Context auto-compaction | High | 7.6 |
+| Agent memory files (`.sovrant/memory.md`) | High | 7.6 |
+| `/undo` / `/redo` git-backed | High | 7.5 Tier 2 |
+| Custom project slash commands | Medium | 7.5 (extend SkillTool) |
+| Context window / token visualisation | Medium | 9.5 (token fix prerequisite) |
+| Session export / share | Medium | 9.5 / 10 |
+| Non-interactive headless mode | Low | Verify existing |
+| Structured diff view in REPL | Medium | 10 (UI polish) |
+| LSP integration | High (long-term) | 15 |
+| IDE extension (VS Code) | High (long-term) | 15.5 (after Phase 11 MCP) |
+| CI/CD pipeline integration | Medium | 16 |
+| Slack / webhook integration | Medium | 16.5 |
+| Background daemon / file watching | Low | 20+ |
+| Desktop app (Tauri) | Low | After Phase 10 |
+| Voice mode | Low | 20+ |
+
+---
+
 ## Summary Verdict
 
 | | Claude Code | OpenClaude | opencode | Sovrant |
