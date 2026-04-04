@@ -84,21 +84,56 @@ This ensures session history is isolated per user even if two users share the sa
 
 ---
 
-### Phase 9 — Multiple Engine Instances Per Server
+### Phase 9 — Session Lifecycle Management (TTL Eviction + Turn Serialization)
 
-**Goal:** Allow the server to manage multiple independent `ConversationRuntime` instances concurrently — one per active session — with automatic eviction of idle sessions.
+**Goal:** Allow the server to manage many concurrent sessions safely — one `ConversationRuntime` per active session — with automatic eviction of idle sessions and correct serialization of concurrent turns within the same session.
 
-#### Motivation
+#### Architectural Decision: One Runtime Per Session (Not a Shared Pool)
 
-The current session pool keeps runtimes alive indefinitely. For a production deployment serving many users, idle sessions consume memory and potentially hold references to expensive resources.
+The alternative considered was a fixed pool of runtimes shared across users (like a database connection pool). This was rejected because:
 
-#### Design
+- `ConversationRuntime` is not stateless — it owns `_history` (`List<InputMessage>`), which IS the session state. Sharing a runtime across users would require loading history from disk before every turn and clearing it after — trading RAM for disk I/O on every single request.
+- The "heavy" DI services (`SmartRouter`, `IToolExecutor`, `IToolRegistry`, `ISessionStore`, `SovrantConfig`) are already **shared singletons**. Each runtime holds only references to them. The per-session memory cost is essentially just the conversation history (~40–80 KB for a typical 20-turn session).
+- The JSONL store is already the source of truth on disk. Evicting an idle runtime is safe and reversible — the next request for that session reloads history from JSONL and creates a fresh runtime.
 
-- Add a `session_ttl_seconds` config (default: 3600)
-- `RuntimeSessionPool` tracks last-access time per session
-- A background `IHostedService` evicts sessions older than the TTL
+One runtime per session is the correct model. The gaps to close are eviction and turn ordering.
+
+#### Gap 1 — Unbounded Growth (TTL + LRU Eviction)
+
+`RuntimeSessionPool` currently keeps runtimes alive indefinitely. Fix:
+
+- `RuntimeSessionPool` records `DateTimeOffset LastAccess` per entry (update on every `GetOrCreateAsync`)
+- A background `IHostedService` (e.g., `SessionEvictionService`) runs on a timer (every 5 min) and removes entries where `LastAccess < UtcNow - TTL`
+- `SOVRANT_SESSION_TTL_SECONDS` env var (default: `3600`)
+- LRU cap: if the active session count exceeds `SOVRANT_MAX_SESSIONS` (default: `500`), evict the least-recently-used sessions above the cap immediately, before the timer fires
 - `DELETE /v1/sessions/{id}` continues to work for explicit eviction
-- Optionally: LRU eviction with a max session count cap
+
+Evicted sessions are not lost — their JSONL history persists on disk. The next request with that session ID recreates the runtime and replays history.
+
+#### Gap 2 — Concurrent Turn Corruption (Per-Session Lock)
+
+`ConcurrentDictionary` in the current pool prevents creating two runtimes for the same session, but it does **not** prevent two simultaneous HTTP requests from calling `RunTurnAsync` on the same session concurrently. Since `_history` is a plain `List<InputMessage>`, concurrent turns would corrupt it (both turns append to the same list, producing an interleaved, invalid history).
+
+Fix: add a `SemaphoreSlim(1,1)` per session in the pool. Callers acquire it before starting a turn and release it after.
+
+```csharp
+// RuntimeSessionPool internal entry
+private sealed record SessionEntry(
+    IConversationRuntime Runtime,
+    SemaphoreSlim Lock,         // serializes turns within this session
+    DateTimeOffset LastAccess);
+```
+
+`GetOrCreateAsync` returns both the runtime and the lock. The HTTP handler acquires the lock, runs the turn, and releases it — ensuring turns are strictly ordered per session regardless of how many concurrent HTTP requests arrive.
+
+#### Implementation Plan
+
+1. Add `SessionEntry` record to `RuntimeSessionPool` (runtime + lock + last-access timestamp)
+2. Update `GetOrCreateAsync` to return `SessionEntry` (or expose a `RunExclusiveAsync` helper)
+3. Update `ChatRoutes.HandleAsync` to acquire/release the per-session lock around `RunTurnAsync`
+4. Add `SessionEvictionService : IHostedService` — timer-based TTL sweep + LRU cap enforcement
+5. Add `SOVRANT_SESSION_TTL_SECONDS` and `SOVRANT_MAX_SESSIONS` to env var config and `MutableServerConfig`
+6. Expose TTL and max-sessions in `GET /v1/status` response
 
 ---
 
