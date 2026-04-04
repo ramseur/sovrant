@@ -182,7 +182,10 @@ public sealed class SmartRouter : ISmartRouter
         catch (HttpRequestException ex)
         {
             info.Healthy = false;
-            _logProviderUnhealthy(_logger, info.Provider.Name, ex);
+            // Suppress full stack trace for connection-refused — it's just a provider not running.
+            var inner = ex.InnerException;
+            bool isConnRefused = inner is System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.ConnectionRefused };
+            _logProviderUnhealthy(_logger, info.Provider.Name, isConnRefused ? null : ex);
         }
         catch (TaskCanceledException ex)
         {

@@ -68,6 +68,10 @@ internal static class ChatRoutes
         var completionId = $"chatcmpl-{Guid.NewGuid():N}";
         var model = req.Model ?? serverConfig.Model;
 
+        // Apply per-request model override to the live config so ConversationRuntime picks it up.
+        if (req.Model is not null)
+            serverConfig.Model = req.Model;
+
         if (req.Stream)
         {
             await StreamResponseAsync(ctx, runtime, completionId, model, userMessage, ct).ConfigureAwait(false);

@@ -18,7 +18,7 @@
 | Session resumption (`--session <id>`) | ✅ Working | History replayed correctly across separate process invocations |
 | Permission system | ✅ Working | `bypassPermissions` / `dontAsk` / `default` / `plan` all functional |
 | SSE streaming | ✅ Working | Text chunks stream to console in real time |
-| HTTP server (`Sovrant.Server`) | ⚠ Partially tested | Health endpoint confirmed. Chat completions blocked by API key revocation during smoke test — see Server Smoke Test section |
+| HTTP server (`Sovrant.Server`) | ✅ Working | All 8 endpoints confirmed: health, non-streaming, streaming SSE, session continuity, status, models, config update, session list/delete |
 | Server session pool (`IRuntimeSessionPool`) | ✅ Implemented | Option B: one `ConversationRuntime` per session ID, kept alive in `ConcurrentDictionary`; safe for multi-user |
 | Unit test suite | ✅ 99/99 passing | Api(22) + Runtime(28) + Tools(26) + Commands(22) + Integration(1) |
 

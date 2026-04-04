@@ -12,7 +12,7 @@ public sealed class SovrantConfigTests
     {
         var config = new SovrantConfig();
 
-        Assert.Equal("claude-sonnet-4-6", config.Model);
+        Assert.Equal("gpt-4o-mini", config.Model);
         Assert.Equal(8192, config.MaxTokens);
         Assert.Equal(PermissionMode.Default, config.PermissionMode);
         Assert.Equal(RouterMode.Smart, config.RouterMode);

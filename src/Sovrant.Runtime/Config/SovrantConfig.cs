@@ -7,7 +7,7 @@ namespace Sovrant.Runtime.Config;
 public sealed class SovrantConfig
 {
     /// <summary>The model identifier to use for LLM requests.</summary>
-    public string Model { get; init; } = "claude-sonnet-4-6";
+    public string Model { get; init; } = "gpt-4o-mini";
 
     /// <summary>The maximum number of output tokens per request.</summary>
     public int MaxTokens { get; init; } = 8192;
