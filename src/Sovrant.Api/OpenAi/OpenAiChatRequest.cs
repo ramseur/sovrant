@@ -13,6 +13,14 @@ internal sealed record OpenAiChatRequest(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<OpenAiTool>? Tools { get; init; }
 
+    /// <summary>
+    /// When tools are present, set to "auto" so the model can decide whether to call a tool.
+    /// Omitted when no tools are defined.
+    /// </summary>
+    [JsonPropertyName("tool_choice")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ToolChoice { get; init; }
+
     [JsonPropertyName("stream")]
     public bool Stream { get; init; }
 

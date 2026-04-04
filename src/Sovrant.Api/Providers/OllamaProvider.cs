@@ -22,7 +22,7 @@ public sealed class OllamaProvider : OpenAiCompatProvider
     {
         // Ollama requires no Authorization header
         var json = JsonSerializer.Serialize(openAiReq, SovrantJsonContext.Default.OpenAiChatRequest);
-        var httpReq = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions")
+        var httpReq = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };

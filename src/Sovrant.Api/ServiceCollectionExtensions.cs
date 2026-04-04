@@ -40,13 +40,28 @@ public static class ServiceCollectionExtensions
 
         var baseUrl = Environment.GetEnvironmentVariable("LLM_BASE_URL")
             ?? Environment.GetEnvironmentVariable("OPENAI_BASE_URL")
-            ?? Environment.GetEnvironmentVariable("PROVIDER_BASE_URL")
             ?? configuration["Llm:BaseUrl"]
             ?? "https://api.openai.com/v1";
 
+        // Ensure trailing slash so relative paths (e.g. "chat/completions") resolve correctly
+        // against any base URL, including non-standard paths like Google AI Studio's /v1beta/openai/.
+        if (!baseUrl.EndsWith('/')) baseUrl += "/";
+
+        // ProviderApiProvider uses Anthropic's native messages format (/v1/messages).
+        // Only register it when a dedicated PROVIDER_BASE_URL is explicitly set — otherwise it
+        // would share the same base URL as OpenAiCompatProvider and cause 404s on non-Anthropic hosts.
+        var providerApiUrl = Environment.GetEnvironmentVariable("PROVIDER_BASE_URL")
+            ?? configuration["Llm:ProviderBaseUrl"];
+        var providerApiKey = Environment.GetEnvironmentVariable("PROVIDER_API_KEY")
+            ?? configuration["Llm:ProviderApiKey"];
+        var hasProviderApi = !string.IsNullOrWhiteSpace(providerApiUrl);
+        if (hasProviderApi && !providerApiUrl!.EndsWith('/')) providerApiUrl += "/";
+
         var ollamaUrl = Environment.GetEnvironmentVariable("OLLAMA_BASE_URL")
             ?? configuration["Llm:OllamaBaseUrl"]
-            ?? "http://localhost:11434";
+            ?? "http://localhost:11434/v1";
+
+        if (!ollamaUrl.EndsWith('/')) ollamaUrl += "/";
 
         var routerMode = Enum.TryParse<RouterMode>(
             Environment.GetEnvironmentVariable("ROUTER_MODE") ?? configuration["Router:Mode"], true,
@@ -65,27 +80,38 @@ public static class ServiceCollectionExtensions
 
         services.AddHttpClient<OpenAiCompatProvider>(c => c.BaseAddress = new Uri(baseUrl));
         services.AddHttpClient<OllamaProvider>(c => c.BaseAddress = new Uri(ollamaUrl));
-        services.AddHttpClient<ProviderApiProvider>(c =>
+        if (hasProviderApi)
         {
-            c.BaseAddress = new Uri(baseUrl);
-            c.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
-        });
+            services.AddHttpClient<ProviderApiProvider>(c =>
+            {
+                c.BaseAddress = new Uri(providerApiUrl!);
+                c.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+                if (!string.IsNullOrWhiteSpace(providerApiKey))
+                    c.DefaultRequestHeaders.Authorization =
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("x-api-key", providerApiKey);
+            });
+        }
         services.AddHttpClient("SmartRouterPing");
 
         services.AddSingleton<ISmartRouter>(sp =>
         {
             var openAiProv = sp.GetRequiredService<OpenAiCompatProvider>();
             var ollamaProv = sp.GetRequiredService<OllamaProvider>();
-            var provApiProv = sp.GetRequiredService<ProviderApiProvider>();
             var logger = sp.GetRequiredService<ILogger<SmartRouter>>();
             var pingClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("SmartRouterPing");
 
             var providers = new List<ProviderInfo>
             {
-                new(openAiProv, "/v1/models", 0.002),
-                new(ollamaProv, "/api/tags", 0.0),
-                new(provApiProv, "/v1/models", 0.003),
+                new(openAiProv, "models", 0.002),
+                new(ollamaProv, "models", 0.0),
             };
+
+            // Only add ProviderApiProvider when explicitly configured.
+            if (hasProviderApi)
+            {
+                var provApiProv = sp.GetRequiredService<ProviderApiProvider>();
+                providers.Add(new(provApiProv, "models", 0.003));
+            }
 
             return new SmartRouter(providers, routerMode, routerStrategy, pingClient, logger);
         });

@@ -32,6 +32,7 @@ internal static class FormatConverter
         return new OpenAiChatRequest(req.Model, req.MaxTokens, messages)
         {
             Tools = tools,
+            ToolChoice = tools is { Count: > 0 } ? "auto" : null,
             Stream = req.Stream,
             StreamOptions = req.Stream ? new OpenAiStreamOptions(true) : null
         };
