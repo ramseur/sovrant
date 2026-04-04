@@ -3,7 +3,7 @@
 A .NET 10 agentic AI engine — multi-provider, tool-using, session-persistent. Runs as a CLI agent or an OpenAI-compatible HTTP server. The agent reads and writes files, executes shell commands, searches the web, calls tools autonomously, and maintains full conversation history across sessions.
 
 **Runtime:** .NET 10 / C# 13
-**Status:** Engine fully functional. 31 tools. 9 server endpoints. 99/99 tests passing.
+**Status:** Engine fully functional. 31 tools. 9 server endpoints. 100/100 tests passing.
 
 ---
 
@@ -275,12 +275,12 @@ The server keeps one `ConversationRuntime` alive per `session_id` in an in-memor
 ## Tests
 
 ```bash
-dotnet test   # 99 tests across 5 projects
+dotnet test   # 100 tests across 5 projects
 ```
 
 | Project | Tests |
 |---|---|
-| `Sovrant.Api.Tests` | 22 |
+| `Sovrant.Api.Tests` | 23 |
 | `Sovrant.Runtime.Tests` | 28 |
 | `Sovrant.Tools.Tests` | 26 |
 | `Sovrant.Commands.Tests` | 22 |

@@ -1,25 +1,44 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 7.5 Tier 1+2 + Phase 7.6 items 1+2 complete; Phases 7.7–7.9 added from security review; Phase 17.5 agent scaffolding added)
+**Last updated:** 2026-04-04 (Phase 7.5 Tier 1+2 + Phase 7.6 items 1+2 complete; Phases 7.7–7.9 added from security review; Phase 17.5 agent scaffolding added; OpenAI Responses API provider + native web search added)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
 ---
 
-## Current State (Phase 7 complete)
+## Current State
 
 The engine is fully functional as a single-user tool:
 
 - CLI REPL and one-shot prompt mode
 - Agentic loop with up to 20 tool rounds per turn
 - 31 tools working on Windows and Linux (22 original + 5 Phase 7.5 Tier 1 + 4 Phase 7.5 Tier 2)
-- Agent memory files (`~/.sovrant/memory.md` + `.sovrant/memory.md`) injected into every system prompt (Phase 7.6 item 1 complete)
+- Agent memory files (`~/.sovrant/memory.md` + `.sovrant/memory.md`) injected into every system prompt (Phase 7.6 item 1 ✅)
+- Token counts reported correctly after each turn (Phase 7.6 item 2 ✅)
 - Per-runtime mutable permission mode (`IPermissionModeAccessor`) for model-driven plan mode transitions
 - JSONL session persistence
 - SmartRouter with health/latency scoring across multiple providers
 - HTTP server (`Sovrant.Server`) with OpenAI-compatible endpoints
 - In-memory session pool (one `ConversationRuntime` per `session_id`, safe for multiple users)
+- **OpenAI Responses API provider** (`LLM_WEB_SEARCH=true`) — routes through `POST /v1/responses`, injects `web_search_preview` built-in tool, suppresses the `WebSearch` function tool; full multi-turn + function tool support tested ✅
+- `Sovrant.Agents` scaffolding — `IAgent`, `IMultiAgentSystem`, both backends, `AGENT_MODE` config switch (Phase 17.5 ✅)
+
+### Still pending (known gaps)
+
+| Gap | Phase |
+|---|---|
+| Context auto-compaction | Phase 7.6 item 3 |
+| BashTool output limits, env stripping, workspace guard | Phase 7.7 |
+| WebFetchTool SSRF protection | Phase 7.7 |
+| Provider retry with exponential backoff | Phase 7.8 |
+| AgentTool recursion depth limit | Phase 7.8 |
+| ReadFileTool 10 MB size cap | Phase 7.8 |
+| Atomic file writes (Write/Edit tools) | Phase 7.9 |
+| GlobTool 1000-file cap | Phase 7.9 |
+| Session TTL eviction + per-session lock | Phase 9 |
+| Per-session config overlay (fixes global `EnterPlanMode`) | Phase 9.5 |
+| Multi-agent `DispatchAsync` + CLI/Server DI wiring | Phase 18–19 |
 
 ### Agent System: Current State
 
@@ -157,8 +176,44 @@ Fix: detect the `usage` field on the final OpenAI SSE chunk and capture `prompt_
 
 1. ~~Agent memory files — extend `BuildSystemPrompt()` in `ConversationRuntime`; add `/memory` slash command~~ ✅ Done — `AppendMemoryFile()` helper reads both files; `/memory` and `/mem` commands registered; `InjectAsUserMessage` on `SlashCommandResult` wired into REPL
 2. ~~Token count fix — update `CollectStreamEventsAsync` to capture OpenAI `usage` field from final SSE chunk~~ ✅ Done — `OpenAiCompatProvider` removed `yield break` on `finish_reason`; continues loop to capture trailing usage chunk; `ConversationRuntime` captures `InputTokens` from `MessageDelta`
-3. Context auto-compaction — add compaction logic to `RunTurnAsync`; add `SOVRANT_COMPACT_THRESHOLD` config; persist compaction events to JSONL
-4. Expose token counts in REPL status line and `GET /v1/sessions/{id}` response
+3. Context auto-compaction ⬜ — add compaction logic to `RunTurnAsync`; add `SOVRANT_COMPACT_THRESHOLD` config; persist compaction events to JSONL
+4. Expose token counts in REPL status line and `GET /v1/sessions/{id}` response ⬜
+
+---
+
+### Phase 7.6.5 — Native Model Web Search (OpenAI Responses API)
+
+> **Status: ✅ Complete** — `LLM_WEB_SEARCH=true` activates `OpenAiResponsesProvider`; tested end-to-end with `gpt-4o-mini`.
+
+**Goal:** Allow teams using OpenAI to skip the Brave/FireCrawl API key requirement by using OpenAI's native `web_search_preview` tool instead.
+
+#### What was built
+
+| Component | File | Notes |
+|---|---|---|
+| `OpenAiResponsesTypes.cs` | `Sovrant.Api/OpenAi/` | Request/response/SSE types for `POST /v1/responses` |
+| `ResponsesFormatConverter.cs` | `Sovrant.Api/OpenAi/` | Converts `MessagesRequest` ↔ Responses API format; handles multi-turn history including function call/result replay |
+| `OpenAiResponsesProvider.cs` | `Sovrant.Api/Providers/` | Full `ILlmProvider` implementation; streaming + non-streaming; injects `web_search_preview`; suppresses `WebSearch` function tool |
+| `ServiceCollectionExtensions.cs` | `Sovrant.Api/` | Registers `OpenAiResponsesProvider` instead of `OpenAiCompatProvider` when `LLM_WEB_SEARCH=true` |
+
+#### Key design notes
+
+- **Why a separate provider (not inject into chat/completions):** OpenAI's `/v1/chat/completions` only accepts `function` and `custom` tool types. `web_search_preview` is exclusively available on `POST /v1/responses`.
+- **`WebSearch` suppressed:** The Responses API provider filters `WebSearch` from the function tools list before sending. This prevents the model from calling our function tool (which requires Brave/FireCrawl) when the native built-in is available.
+- **`function_call.id` vs `call_id`:** The Responses API requires `function_call.id` to start with `fc_` (item ID) while `call_id` (starts with `call_`) is used to match tool results. Our `ToolUseBlock.Id` stores `call_id`; the converter prefixes a synthetic `fc_` item ID when rebuilding history for multi-turn requests.
+- **`web_search_preview` is transparent:** The model's search calls are handled server-side by OpenAI. No tool call events are emitted to the agentic loop; search results appear directly in the model's text output.
+
+#### Usage
+
+```bash
+LLM_WEB_SEARCH=true dotnet run --project src/Sovrant.Cli -- --model gpt-4o-mini prompt "What are today's top tech headlines?"
+```
+
+#### What it does NOT cover (future)
+
+- Anthropic does not yet expose a native web search tool via their API — no action needed until they do.
+- Gemini via the OpenAI-compat endpoint (`LLM_BASE_URL=.../openai/`) does not support `web_search_preview` — `LLM_WEB_SEARCH=true` should only be set with OpenAI.
+- Other providers (Ollama, etc.) are unaffected; `OpenAiCompatProvider` is still used when `LLM_WEB_SEARCH` is not set.
 
 ---
 

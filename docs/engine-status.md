@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 7.5 Tier 1+2 + Phase 7.6 items 1+2 complete; Phase 17.5 agent scaffolding added — 31 tools, 99 tests)
+**Last updated:** 2026-04-04 (Phase 7.5 Tier 1+2 + Phase 7.6 items 1+2 complete; Phase 17.5 agent scaffolding added; OpenAI Responses API provider + native web search added — 31 tools, 100 tests)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -21,11 +21,12 @@
 | Token counts | ✅ Fixed | OpenAI trailing usage chunk now captured. Input + output tokens reported correctly after each turn. |
 | HTTP server (`Sovrant.Server`) | ✅ Working | 9 endpoints: `GET /health`, `POST /v1/chat/completions`, `GET+PUT /v1/config`, `GET /v1/status`, `GET /v1/models`, `GET /v1/sessions`, `GET+DELETE /v1/sessions/{id}` |
 | Server session pool (`IRuntimeSessionPool`) | ✅ Implemented | One `ConversationRuntime` per session ID, `ConcurrentDictionary`. Concurrent turns on the same session not yet serialised — Phase 9 adds per-session lock. |
-| Unit test suite | ✅ 99/99 passing | Api(22) + Runtime(28) + Tools(26) + Commands(22) + Integration(1) |
+| Unit test suite | ✅ 100/100 passing | Api(23) + Runtime(28) + Tools(26) + Commands(22) + Integration(1) |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |
 | Phase 17.5 agent scaffolding | ✅ Implemented | `Sovrant.Agents` project: `IAgent`, `IMultiAgentSystem`, both backends as stubs, `AGENT_MODE` config switch, V2 placeholder interfaces. **Not yet wired into CLI or Server DI.** |
+| OpenAI Responses API provider | ✅ Implemented + tested | `OpenAiResponsesProvider` routes through `POST /v1/responses` when `LLM_WEB_SEARCH=true`. Injects `web_search_preview`, suppresses `WebSearch` function tool, full multi-turn agentic loop support. |
 
 ### Known issues fixed during testing
 
