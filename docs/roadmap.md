@@ -296,143 +296,7 @@ Each `SessionEntry` accumulates `TotalInputTokens` and `TotalOutputTokens` acros
 
 ---
 
-### Phase 10 — Frontend SDK
-
-**Goal:** A typed TypeScript/JavaScript client for `Sovrant.Server` that handles SSE streaming, session management, and tool event rendering.
-
-#### Planned Features
-
-- `SovrantClient` class: wraps `fetch` + SSE parsing
-- `useChat()` React hook (standard streaming chat hook pattern)
-- Per-request credential injection (for Replit/browser use where the client holds the key)
-- Built-in retry on transient errors
-- Tool event callbacks: `onToolUse`, `onPermissionDenied`, `onError`
-
-#### Additional: Structured Diff View in REPL
-
-**Competitor precedent:** Claude Code ✅ · opencode ✅
-
-Before applying `Edit` or `Write` tool calls, render a colour unified diff of the proposed change using Spectre.Console markup. The permission dialog shows exactly what will change — filename, line numbers, added/removed lines in green/red — rather than raw tool arguments. Significantly increases trust in the agent's edits.
-
-Implementation: intercept `Edit`/`Write` permission prompts in `ModeAwarePermissionPolicy`; compute and render the diff before asking for approval.
-
-#### Additional: Session Export
-
-**Competitor precedent:** opencode (`/share`)
-
-Add `GET /v1/sessions/{id}/export?format=markdown` — returns the full session rendered as human-readable markdown (user/assistant turns, tool calls summarised, timestamps). Useful for sharing debugging sessions, creating audit trails, and archiving completed tasks. The JSONL format already contains everything needed; the endpoint is a thin renderer.
-
----
-
-### Phase 11 — MCP Server Mode
-
-**Goal:** Expose Sovrant as an MCP server so it can be consumed by MCP clients or composed into larger agent pipelines.
-
----
-
-### Phase 12 — Dynamic MCP Tool Proxy (`MCPTool`)
-
-**Goal:** Allow the model to discover and invoke any tool exposed by a connected MCP server dynamically, without those tools being statically registered in `ToolRegistrar` at startup.
-
-#### Motivation
-
-Today Sovrant's MCP integration pre-registers a fixed set of tools from configured MCP servers on startup. As Sovrant becomes a cloud platform, users will connect arbitrary MCP servers (databases, APIs, SaaS integrations) that expose dozens or hundreds of tools. Pre-registering everything is impractical — it bloats the context window and requires a server restart to pick up new servers.
-
-`MCPTool` (as implemented in OpenClaude) acts as a **dynamic proxy**: the model calls `MCPTool({ server: "myserver", tool: "query_table", input: {...} })` and the runtime forwards the call to the named MCP server at execution time. This decouples tool discovery from startup.
-
-#### Design
-
-- `MCPTool` takes `server`, `tool`, and `input` as parameters
-- At execution time it resolves the named MCP server from the active `IMcpClient` registry
-- Validates that the named tool exists on that server
-- Forwards `input` as-is and returns the MCP tool result
-- Works alongside the existing static tool registration — statically registered tools remain preferred; `MCPTool` is the fallback for everything else
-- Pairs with `ToolSearch` (Phase 7.5 Tier 2) which lets the model discover what tools are available before calling them
-
-#### Implementation Plan
-
-1. Extend `IMcpClient` with `CallToolAsync(serverName, toolName, input)`
-2. Implement `McpProxyTool` (name: `MCPTool`) in `Sovrant.Tools/Mcp/`
-3. Register `McpProxyTool` only when at least one MCP server is configured
-4. Coordinate with `ToolSearch` so the model can list-then-call in a single pattern
-
----
-
-### Phase 13 — MCP OAuth Authentication (`McpAuthTool`)
-
-**Goal:** Support MCP servers that require OAuth 2.0 authentication, enabling Sovrant to connect to SaaS APIs (GitHub, Google, Salesforce, etc.) through MCP without the server holding static API keys.
-
-#### Motivation
-
-At cloud scale, users will want to connect MCP servers that front OAuth-protected APIs. Static API keys are a liability — they don't expire, can't be scoped per user, and are a breach risk if the server is compromised. OAuth tokens are user-scoped, short-lived, and revocable.
-
-#### Design
-
-- `McpAuthTool` initiates an OAuth flow for a named MCP server
-- The server generates an authorization URL and returns it to the model
-- The model surfaces the URL to the user (CLI: prints it; Server: returns it in the SSE stream for the frontend to open)
-- After the user completes the OAuth flow, the callback exchanges the code for tokens
-- Tokens are stored in a scoped, encrypted credential store (never in session history or logs)
-- The `IMcpClient` for that server is updated with the new token and reconnected
-
-#### Security Considerations
-
-- OAuth tokens must never appear in session JSONL, server logs, or API responses
-- Token storage must be encrypted at rest (use OS keychain on CLI, server-side encrypted store for the HTTP server)
-- Refresh token rotation must be handled automatically on expiry
-- Per-user token isolation is required in multi-tenant deployments (Phase 8 session pool key applies here too)
-
-#### Implementation Plan
-
-1. Add OAuth state machine to `IMcpClient` — `InitiateOAuthAsync`, `CompleteOAuthAsync`, `RefreshTokenAsync`
-2. Implement `McpAuthTool` in `Sovrant.Tools/Mcp/`
-3. Add encrypted credential store (`ICredentialStore`) with OS keychain backend for CLI and AES-GCM backend for server
-4. Add callback endpoint to `Sovrant.Server` (`GET /v1/mcp/auth/callback`)
-5. Surface the auth URL in SSE stream as a new `RuntimeEvent.AuthRequired` event type
-
----
-
-### Phase 14 — Multi-Agent Teams (`TeamCreateTool` / `TeamDeleteTool`)
-
-**Goal:** Allow a single Sovrant session to orchestrate a team of independent sub-agents running in parallel, each with its own session, tool access, and LLM provider — coordinated by a supervisor agent.
-
-#### Motivation
-
-Complex long-horizon tasks (large refactors, multi-service deployments, research pipelines) exceed what a single agentic loop can handle reliably. Teams decompose the problem: a supervisor breaks the work into subtasks, spawns specialist agents for each, monitors progress, and synthesises results. This is the foundation for Sovrant as a cloud-scale autonomous engineering platform.
-
-#### Architecture
-
-```
-Supervisor Agent (ConversationRuntime)
-  ├── TeamCreateTool → spawns Agent A (isolated runtime, own session, own tools)
-  ├── TeamCreateTool → spawns Agent B
-  ├── TeamCreateTool → spawns Agent C
-  └── Collects results via TaskOutput / team message bus
-```
-
-- Each team member is a full `ConversationRuntime` with its own session pool slot, tool set, and optionally its own LLM provider/key (Phase 8)
-- The supervisor coordinates via `TaskOutput` polling or a lightweight message bus
-- Team lifecycle: `TeamCreate` spawns and starts, `TeamDelete` cancels and evicts
-- Teams are scoped to the supervisor's session — they are cleaned up when the supervisor session is evicted (Phase 9 TTL)
-
-#### Design Decisions to Resolve
-
-- **Message bus vs polling:** OpenClaude uses a message bus (`SendMessageTool`). Polling via `TaskOutput` is simpler and avoids a new infrastructure dependency. Start with polling; add a message bus if latency becomes a problem.
-- **Resource limits:** Each team member occupies a session pool slot and may trigger many LLM calls in parallel. Rate limiting per team and per supervisor session is required before production use.
-- **Nesting depth:** Should teams be allowed to spawn their own sub-teams? Start with depth-1 (supervisor + workers only); recursive teams add significant complexity.
-
-#### Implementation Plan
-
-1. Design `ITeamRegistry` — tracks team members per supervisor session ID
-2. Implement `TeamCreateTool` — accepts agent prompt, tool subset, optional provider override; spawns a `ConversationRuntime` and registers it
-3. Implement `TeamDeleteTool` — cancels and evicts the named team member
-4. Extend `TaskOutput` to support reading from team member sessions (not just background shell processes)
-5. Add team-scoped resource limits to `MutableServerConfig`
-6. Add team lifecycle events to the SSE stream (`RuntimeEvent.TeamMemberStarted`, `RuntimeEvent.TeamMemberComplete`)
-
----
-
-### Phase 15 — LSP Integration (Language Server Protocol)
+### Phase 10 — LSP Integration (Language Server Protocol)
 
 **Competitor precedent:** opencode ✅ (20+ language servers, diagnostics, go-to-definition, symbol search)
 
@@ -464,31 +328,7 @@ An `ILspClient` service manages the lifecycle of one or more language server pro
 
 ---
 
-### Phase 15.5 — IDE Extension (VS Code)
-
-**Competitor precedent:** Claude Code ✅ · opencode ✅ (beta)
-**Depends on:** Phase 11 (MCP server mode) — once Sovrant exposes an MCP server, MCP-aware IDEs (VS Code with GitHub Copilot, Cursor, Windsurf) can connect without a bespoke extension.
-
-**Goal:** Embed Sovrant into VS Code as a sidebar panel — chat interface, inline diff approval, tool event rendering, permission dialogs with file highlighting.
-
-#### Architecture
-
-Two-layer approach:
-1. **Phase 11 (MCP):** Zero-code IDE integration for MCP-aware clients. Sovrant appears as an MCP tool server. No extension required.
-2. **Phase 15.5 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
-
-#### Implementation Plan
-
-1. Publish `Sovrant.Server` as a local background service (`sovrant serve` command) with auto-start on VS Code activation
-2. Implement the VS Code extension (`vscode-sovrant`) — TypeScript, connects to `Sovrant.Server` via the Phase 10 frontend SDK
-3. Sidebar: chat panel backed by `useChat()` hook
-4. Inline diffs: intercept `Edit`/`Write` tool events, show diff decoration in the editor
-5. Permission dialogs: VS Code `window.showInformationMessage` with approve/deny buttons
-6. Publish to VS Code Marketplace
-
----
-
-### Phase 16 — CI/CD Pipeline Integration
+### Phase 11 — CI/CD Pipeline Integration
 
 **Competitor precedent:** Claude Code ✅ (GitHub Actions + GitLab CI)
 
@@ -526,7 +366,7 @@ The CI environment must never pass production secrets into the agent session. Us
 
 ---
 
-### Phase 16.5 — Slack / Webhook Integration
+### Phase 12 — Slack / Webhook Integration
 
 **Competitor precedent:** Claude Code ✅ (OAuth Slack app)
 **Depends on:** Phase 9.5 (per-user auth tokens — each Slack user maps to an isolated session)
@@ -549,6 +389,166 @@ Alternatively, a generic webhook integration — `POST /v1/webhook` accepts a me
 2. Build Sovrant Slack app manifest and event handler (Node.js thin wrapper or Bolt SDK)
 3. Map Slack user IDs to Sovrant session IDs using Phase 9.5 token registry
 4. Document Teams and Discord equivalents using the webhook endpoint
+
+---
+
+### Phase 13 — Frontend SDK
+
+**Goal:** A typed TypeScript/JavaScript client for `Sovrant.Server` that handles SSE streaming, session management, and tool event rendering.
+
+#### Planned Features
+
+- `SovrantClient` class: wraps `fetch` + SSE parsing
+- `useChat()` React hook (standard streaming chat hook pattern)
+- Per-request credential injection (for Replit/browser use where the client holds the key)
+- Built-in retry on transient errors
+- Tool event callbacks: `onToolUse`, `onPermissionDenied`, `onError`
+
+#### Additional: Structured Diff View in REPL
+
+**Competitor precedent:** Claude Code ✅ · opencode ✅
+
+Before applying `Edit` or `Write` tool calls, render a colour unified diff of the proposed change using Spectre.Console markup. The permission dialog shows exactly what will change — filename, line numbers, added/removed lines in green/red — rather than raw tool arguments. Significantly increases trust in the agent's edits.
+
+Implementation: intercept `Edit`/`Write` permission prompts in `ModeAwarePermissionPolicy`; compute and render the diff before asking for approval.
+
+#### Additional: Session Export
+
+**Competitor precedent:** opencode (`/share`)
+
+Add `GET /v1/sessions/{id}/export?format=markdown` — returns the full session rendered as human-readable markdown (user/assistant turns, tool calls summarised, timestamps). Useful for sharing debugging sessions, creating audit trails, and archiving completed tasks. The JSONL format already contains everything needed; the endpoint is a thin renderer.
+
+---
+
+### Phase 14 — MCP Server Mode
+
+**Goal:** Expose Sovrant as an MCP server so it can be consumed by MCP clients or composed into larger agent pipelines.
+
+---
+
+### Phase 15 — IDE Extension (VS Code)
+
+**Competitor precedent:** Claude Code ✅ · opencode ✅ (beta)
+**Depends on:** Phase 14 (MCP server mode) — once Sovrant exposes an MCP server, MCP-aware IDEs (VS Code with GitHub Copilot, Cursor, Windsurf) can connect without a bespoke extension.
+
+**Goal:** Embed Sovrant into VS Code as a sidebar panel — chat interface, inline diff approval, tool event rendering, permission dialogs with file highlighting.
+
+#### Architecture
+
+Two-layer approach:
+1. **Phase 14 (MCP):** Zero-code IDE integration for MCP-aware clients. Sovrant appears as an MCP tool server. No extension required.
+2. **Phase 15 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
+
+#### Implementation Plan
+
+1. Publish `Sovrant.Server` as a local background service (`sovrant serve` command) with auto-start on VS Code activation
+2. Implement the VS Code extension (`vscode-sovrant`) — TypeScript, connects to `Sovrant.Server` via the Phase 13 frontend SDK
+3. Sidebar: chat panel backed by `useChat()` hook
+4. Inline diffs: intercept `Edit`/`Write` tool events, show diff decoration in the editor
+5. Permission dialogs: VS Code `window.showInformationMessage` with approve/deny buttons
+6. Publish to VS Code Marketplace
+
+---
+
+### Phase 16 — Dynamic MCP Tool Proxy (`MCPTool`)
+
+**Goal:** Allow the model to discover and invoke any tool exposed by a connected MCP server dynamically, without those tools being statically registered in `ToolRegistrar` at startup.
+
+#### Motivation
+
+Today Sovrant's MCP integration pre-registers a fixed set of tools from configured MCP servers on startup. As Sovrant becomes a cloud platform, users will connect arbitrary MCP servers (databases, APIs, SaaS integrations) that expose dozens or hundreds of tools. Pre-registering everything is impractical — it bloats the context window and requires a server restart to pick up new servers.
+
+`MCPTool` acts as a **dynamic proxy**: the model calls `MCPTool({ server: "myserver", tool: "query_table", input: {...} })` and the runtime forwards the call to the named MCP server at execution time. This decouples tool discovery from startup.
+
+#### Design
+
+- `MCPTool` takes `server`, `tool`, and `input` as parameters
+- At execution time it resolves the named MCP server from the active `IMcpClient` registry
+- Validates that the named tool exists on that server
+- Forwards `input` as-is and returns the MCP tool result
+- Works alongside the existing static tool registration — statically registered tools remain preferred; `MCPTool` is the fallback for everything else
+- Pairs with `ToolSearch` (Phase 7.5 Tier 2) which lets the model discover what tools are available before calling them
+
+#### Implementation Plan
+
+1. Extend `IMcpClient` with `CallToolAsync(serverName, toolName, input)`
+2. Implement `McpProxyTool` (name: `MCPTool`) in `Sovrant.Tools/Mcp/`
+3. Register `McpProxyTool` only when at least one MCP server is configured
+4. Coordinate with `ToolSearch` so the model can list-then-call in a single pattern
+
+---
+
+### Phase 17 — MCP OAuth Authentication (`McpAuthTool`)
+
+**Goal:** Support MCP servers that require OAuth 2.0 authentication, enabling Sovrant to connect to SaaS APIs (GitHub, Google, Salesforce, etc.) through MCP without the server holding static API keys.
+
+#### Motivation
+
+At cloud scale, users will want to connect MCP servers that front OAuth-protected APIs. Static API keys are a liability — they don't expire, can't be scoped per user, and are a breach risk if the server is compromised. OAuth tokens are user-scoped, short-lived, and revocable.
+
+#### Design
+
+- `McpAuthTool` initiates an OAuth flow for a named MCP server
+- The server generates an authorization URL and returns it to the model
+- The model surfaces the URL to the user (CLI: prints it; Server: returns it in the SSE stream for the frontend to open)
+- After the user completes the OAuth flow, the callback exchanges the code for tokens
+- Tokens are stored in a scoped, encrypted credential store (never in session history or logs)
+- The `IMcpClient` for that server is updated with the new token and reconnected
+
+#### Security Considerations
+
+- OAuth tokens must never appear in session JSONL, server logs, or API responses
+- Token storage must be encrypted at rest (use OS keychain on CLI, server-side encrypted store for the HTTP server)
+- Refresh token rotation must be handled automatically on expiry
+- Per-user token isolation is required in multi-tenant deployments (Phase 8 session pool key applies here too)
+
+#### Implementation Plan
+
+1. Add OAuth state machine to `IMcpClient` — `InitiateOAuthAsync`, `CompleteOAuthAsync`, `RefreshTokenAsync`
+2. Implement `McpAuthTool` in `Sovrant.Tools/Mcp/`
+3. Add encrypted credential store (`ICredentialStore`) with OS keychain backend for CLI and AES-GCM backend for server
+4. Add callback endpoint to `Sovrant.Server` (`GET /v1/mcp/auth/callback`)
+5. Surface the auth URL in SSE stream as a new `RuntimeEvent.AuthRequired` event type
+
+---
+
+### Phase 18 — Multi-Agent Teams (`TeamCreateTool` / `TeamDeleteTool`)
+
+**Goal:** Allow a single Sovrant session to orchestrate a team of independent sub-agents running in parallel, each with its own session, tool access, and LLM provider — coordinated by a supervisor agent.
+
+#### Motivation
+
+Complex long-horizon tasks (large refactors, multi-service deployments, research pipelines) exceed what a single agentic loop can handle reliably. Teams decompose the problem: a supervisor breaks the work into subtasks, spawns specialist agents for each, monitors progress, and synthesises results. This is the foundation for Sovrant as a cloud-scale autonomous engineering platform.
+
+#### Architecture
+
+```
+Supervisor Agent (ConversationRuntime)
+  ├── TeamCreateTool → spawns Agent A (isolated runtime, own session, own tools)
+  ├── TeamCreateTool → spawns Agent B
+  ├── TeamCreateTool → spawns Agent C
+  └── Collects results via TaskOutput / team message bus
+```
+
+- Each team member is a full `ConversationRuntime` with its own session pool slot, tool set, and optionally its own LLM provider/key (Phase 8)
+- The supervisor coordinates via `TaskOutput` polling or a lightweight message bus
+- Team lifecycle: `TeamCreate` spawns and starts, `TeamDelete` cancels and evicts
+- Teams are scoped to the supervisor's session — they are cleaned up when the supervisor session is evicted (Phase 9 TTL)
+
+#### Design Decisions to Resolve
+
+- **Message bus vs polling:** Polling via `TaskOutput` is simpler and avoids a new infrastructure dependency. Start with polling; add a message bus if latency becomes a problem.
+- **Resource limits:** Each team member occupies a session pool slot and may trigger many LLM calls in parallel. Rate limiting per team and per supervisor session is required before production use.
+- **Nesting depth:** Start with depth-1 (supervisor + workers only); recursive teams add significant complexity.
+
+#### Implementation Plan
+
+1. Design `ITeamRegistry` — tracks team members per supervisor session ID
+2. Implement `TeamCreateTool` — accepts agent prompt, tool subset, optional provider override; spawns a `ConversationRuntime` and registers it
+3. Implement `TeamDeleteTool` — cancels and evicts the named team member
+4. Extend `TaskOutput` to support reading from team member sessions (not just background shell processes)
+5. Add team-scoped resource limits to `MutableServerConfig`
+6. Add team lifecycle events to the SSE stream (`RuntimeEvent.TeamMemberStarted`, `RuntimeEvent.TeamMemberComplete`)
 
 ---
 
