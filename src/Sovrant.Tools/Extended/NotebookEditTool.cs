@@ -24,8 +24,34 @@ public sealed class NotebookEditTool : ITool
         if (string.IsNullOrWhiteSpace(notebookPath))
             return "Error: notebook_path is required.";
 
+        var editModeEarly = GetString(input, "edit_mode");
         if (!File.Exists(notebookPath))
-            return $"Error: file not found: {notebookPath}";
+        {
+            // Auto-create a blank notebook when inserting into a non-existent file.
+            if (!string.Equals(editModeEarly, "insert", StringComparison.OrdinalIgnoreCase))
+                return $"Error: file not found: {notebookPath}";
+
+            var blank = new JsonObject
+            {
+                ["nbformat"] = 4,
+                ["nbformat_minor"] = 5,
+                ["metadata"] = new JsonObject
+                {
+                    ["kernelspec"] = new JsonObject
+                    {
+                        ["display_name"] = "Python 3",
+                        ["language"] = "python",
+                        ["name"] = "python3",
+                    },
+                    ["language_info"] = new JsonObject { ["name"] = "python" },
+                },
+                ["cells"] = new JsonArray(),
+            };
+            var dir = Path.GetDirectoryName(notebookPath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            await File.WriteAllTextAsync(notebookPath,
+                blank.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), ct).ConfigureAwait(false);
+        }
 
         try
         {

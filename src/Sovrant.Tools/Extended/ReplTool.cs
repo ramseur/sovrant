@@ -11,11 +11,15 @@ public sealed class ReplTool : ITool
 {
     private const int DefaultTimeoutMs = 30_000;
 
+    // Resolve python executable once: prefer python3 on Unix, python on Windows.
+    private static readonly string s_pythonExe =
+        OperatingSystem.IsWindows() ? "python" : "python3";
+
     private static readonly IReadOnlyDictionary<string, (string Exe, string Args)> s_runtimes =
         new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase)
         {
-            ["python"] = ("python3", "-c \"{code}\""),
-            ["python3"] = ("python3", "-c \"{code}\""),
+            ["python"] = (s_pythonExe, "-c \"{code}\""),
+            ["python3"] = (s_pythonExe, "-c \"{code}\""),
             ["javascript"] = ("node", "-e \"{code}\""),
             ["js"] = ("node", "-e \"{code}\""),
             ["typescript"] = ("ts-node", "-e \"{code}\""),
@@ -98,6 +102,7 @@ public sealed class ReplTool : ITool
             return $"Error: execution timed out after {timeoutMs} ms.";
         }
         catch (InvalidOperationException ex) { return $"Error starting {runtime.Exe}: {ex.Message}"; }
+        catch (System.ComponentModel.Win32Exception ex) { return $"Error starting {runtime.Exe}: {ex.Message}"; }
     }
 
     private static string GetString(JsonElement el, string prop, string def = "") =>

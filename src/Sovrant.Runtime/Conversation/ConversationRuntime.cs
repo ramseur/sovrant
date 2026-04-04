@@ -108,6 +108,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             {
                 System = _systemPrompt,
                 Tools = tools.Count > 0 ? tools : null,
+                Stream = true,   // runtime always uses streaming internally
             };
 
             var provider = await _router.RouteAsync(request, ct).ConfigureAwait(false);

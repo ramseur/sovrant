@@ -50,7 +50,30 @@ public sealed class TaskCreateTool : ITool
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(info.Cts.Token);
         cts.CancelAfter(timeoutMs);
 
-        var shell = OperatingSystem.IsWindows() ? "bash.exe" : "/bin/bash";
+        string shell, shellArgs;
+        if (OperatingSystem.IsWindows())
+        {
+            // Prefer PowerShell 7, fall back to cmd.exe. bash.exe requires WSL.
+            var pwsh = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                "PowerShell", "7", "pwsh.exe");
+            if (File.Exists(pwsh))
+            {
+                shell = pwsh;
+                shellArgs = $"-NonInteractive -Command \"{command.Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
+            }
+            else
+            {
+                shell = "cmd.exe";
+                shellArgs = $"/c {command}";
+            }
+        }
+        else
+        {
+            shell = "/bin/bash";
+            shellArgs = $"-c \"{command.Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
+        }
+
         try
         {
             using var process = new Process
@@ -58,7 +81,7 @@ public sealed class TaskCreateTool : ITool
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = shell,
-                    Arguments = $"-c \"{command.Replace("\"", "\\\"", StringComparison.Ordinal)}\"",
+                    Arguments = shellArgs,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -90,7 +113,7 @@ public sealed class TaskCreateTool : ITool
         {
             info.Status = BackgroundTaskStatus.Cancelled;
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             lock (info.OutputBuffer) { info.OutputBuffer.AppendLine(CultureInfo.InvariantCulture, $"[error] {ex.Message}"); }
             info.Status = BackgroundTaskStatus.Failed;
