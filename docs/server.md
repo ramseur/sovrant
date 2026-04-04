@@ -29,8 +29,8 @@ The server binds to `http://127.0.0.1:5200` by default.
 | `LLM_BASE_URL` | No | `https://api.openai.com/v1` | LLM provider base URL. Alias: `OPENAI_BASE_URL` |
 | `SOVRANT_TOKEN` | Yes | — | Bearer token that every client must supply. If unset the server returns 401 for all requests. |
 | `SOVRANT_PORT` | No | `5200` | TCP port Kestrel listens on |
-| `PROVIDER_BASE_URL` | No | — | Enables the Anthropic-native provider (`/v1/messages` format). Set to `https://api.anthropic.com` |
-| `PROVIDER_API_KEY` | No | — | API key for the Anthropic-native provider |
+| `PROVIDER_BASE_URL` | No | — | Enables the native messages API provider (`/v1/messages` format). |
+| `PROVIDER_API_KEY` | No | — | API key for the native messages API provider |
 | `OLLAMA_BASE_URL` | No | `http://localhost:11434/v1` | Enables the local Ollama provider |
 | `BRAVE_API_KEY` | No | — | Enables `WebSearch` via Brave Search API |
 | `FIRECRAWL_API_KEY` | No | — | Enables `WebSearch` via FireCrawl (used if `BRAVE_API_KEY` is not set) |

@@ -47,9 +47,9 @@ public static class ServiceCollectionExtensions
         // against any base URL, including non-standard paths like Google AI Studio's /v1beta/openai/.
         if (!baseUrl.EndsWith('/')) baseUrl += "/";
 
-        // ProviderApiProvider uses Anthropic's native messages format (/v1/messages).
+        // ProviderApiProvider uses the native messages API format (/v1/messages).
         // Only register it when a dedicated PROVIDER_BASE_URL is explicitly set — otherwise it
-        // would share the same base URL as OpenAiCompatProvider and cause 404s on non-Anthropic hosts.
+        // would share the same base URL as OpenAiCompatProvider and cause 404s on incompatible hosts.
         var providerApiUrl = Environment.GetEnvironmentVariable("PROVIDER_BASE_URL")
             ?? configuration["Llm:ProviderBaseUrl"];
         var providerApiKey = Environment.GetEnvironmentVariable("PROVIDER_API_KEY")

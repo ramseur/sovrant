@@ -247,7 +247,7 @@ Each `SessionEntry` accumulates `TotalInputTokens` and `TotalOutputTokens` acros
 #### Planned Features
 
 - `SovrantClient` class: wraps `fetch` + SSE parsing
-- `useChat()` React hook (mirrors Claude's `@anthropic-ai/sdk` pattern)
+- `useChat()` React hook (standard streaming chat hook pattern)
 - Per-request credential injection (for Replit/browser use where the client holds the key)
 - Built-in retry on transient errors
 - Tool event callbacks: `onToolUse`, `onPermissionDenied`, `onError`
@@ -256,7 +256,7 @@ Each `SessionEntry` accumulates `TotalInputTokens` and `TotalOutputTokens` acros
 
 ### Phase 11 — MCP Server Mode
 
-**Goal:** Expose Sovrant as an MCP server so it can be consumed by Claude Code, other MCP clients, or composed into larger agent pipelines.
+**Goal:** Expose Sovrant as an MCP server so it can be consumed by MCP clients or composed into larger agent pipelines.
 
 ---
 

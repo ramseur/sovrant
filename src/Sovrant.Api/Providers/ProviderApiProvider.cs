@@ -9,7 +9,7 @@ using Sovrant.Api.Types;
 
 namespace Sovrant.Api.Providers;
 
-/// <summary>LLM provider for proprietary API endpoints using Anthropic-compatible SSE format.</summary>
+/// <summary>LLM provider for native messages API endpoints using the provider SSE format.</summary>
 public sealed class ProviderApiProvider : ILlmProvider
 {
     private readonly HttpClient _http;

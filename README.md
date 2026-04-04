@@ -15,7 +15,7 @@ A .NET 10 agentic AI engine — multi-provider, tool-using, session-persistent. 
 | `Sovrant.Cli` | Interactive REPL and one-shot `prompt` CLI. Entry point for local use. |
 | `Sovrant.Server` | ASP.NET Core Minimal API — exposes the engine over HTTP (OpenAI-compatible endpoints + session management). |
 | `Sovrant.Runtime` | Core agentic loop, session persistence (JSONL), permission system, tool executor, MCP client. |
-| `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, Anthropic native. SmartRouter with health/latency scoring. |
+| `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, native messages API. SmartRouter with health/latency scoring. |
 | `Sovrant.Tools` | All tool implementations (Read, Write, Edit, Glob, Grep, LS, Bash, PowerShell, REPL, WebFetch, WebSearch, TodoWrite, TaskCreate/Get/List/Output/Stop, Agent, AskUserQuestion, Sleep, NotebookEdit). |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/exit`, `/clear`, `/session`, etc.). |
 
@@ -125,8 +125,8 @@ All tools confirmed working on Windows with `gpt-4o-mini`.
 | `LLM_BASE_URL` | No | Provider base URL (default: `https://api.openai.com/v1`) |
 | `SOVRANT_TOKEN` | Yes (Server only) | Bearer token for server auth |
 | `SOVRANT_PORT` | No | Server port (default: `5200`) |
-| `PROVIDER_BASE_URL` | No | Enables Anthropic-native provider (`/v1/messages` format) |
-| `PROVIDER_API_KEY` | No | API key for the Anthropic-native provider |
+| `PROVIDER_BASE_URL` | No | Enables native messages API provider (`/v1/messages` format) |
+| `PROVIDER_API_KEY` | No | API key for the native messages API provider |
 | `OLLAMA_BASE_URL` | No | Ollama base URL (default: `http://localhost:11434/v1`) |
 | `BRAVE_API_KEY` | No | Enables WebSearch via Brave Search API |
 | `FIRECRAWL_API_KEY` | No | Enables WebSearch via FireCrawl (fallback to Brave) |
@@ -140,9 +140,11 @@ All tools confirmed working on Windows with `gpt-4o-mini`.
 | OpenAI | `LLM_API_KEY=sk-...` (default) |
 | Google AI Studio (Gemini) | `LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/` + `LLM_API_KEY=...` |
 | Ollama (local) | `OLLAMA_BASE_URL=http://localhost:11434/v1` |
-| Anthropic native | `PROVIDER_BASE_URL=https://api.anthropic.com` + `PROVIDER_API_KEY=...` |
+| Native messages API | `PROVIDER_BASE_URL=https://api.anthropic.com` + `PROVIDER_API_KEY=...` |
 
 > Gemma models via Google AI Studio do **not** support function calling over the OpenAI-compat endpoint. Use Gemini 2.5 Flash or better.
+
+> The native messages API provider (`PROVIDER_BASE_URL`) uses the `/v1/messages` SSE format and is not tied to any single vendor.
 
 ---
 
@@ -207,7 +209,7 @@ The server maintains a live in-memory session pool (`IRuntimeSessionPool`) — o
           │  SmartRouter    │  │  File: Read Write Edit    │
           │  ├── OpenAI     │  │       Glob Grep LS        │
           │  ├── Ollama     │  │  Shell: Bash PowerShell   │
-          │  └── Anthropic  │  │        REPL               │
+          │  └── Native API │  │        REPL               │
           │                 │  │  Web: WebFetch WebSearch  │
           │  health ping    │  │  Task: TaskCreate/Get/... │
           │  latency score  │  │  Agent  AskUser  Sleep    │
@@ -217,7 +219,7 @@ The server maintains a live in-memory session pool (`IRuntimeSessionPool`) — o
           ┌────────▼──────────────────┐
           │  LLM Providers            │
           │  OpenAI / Google / Ollama │
-          │  / Anthropic              │
+          │  / Native API             │
           └───────────────────────────┘
 ```
 

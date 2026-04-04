@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Sovrant.Api.Types;
 
-/// <summary>A request to the LLM Messages API (Anthropic-compatible format).</summary>
+/// <summary>A request to the LLM native messages API format.</summary>
 public sealed record MessagesRequest(
     [property: JsonPropertyName("model")] string Model,
     [property: JsonPropertyName("max_tokens")] int MaxTokens,

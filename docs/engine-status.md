@@ -38,7 +38,7 @@
 
 | Issue | Details |
 |---|---|
-| Token counts always show `0↑ 0↓` | OpenAI streaming sends usage only in the final SSE chunk; our Anthropic-style `MessageDelta` parser doesn't capture it |
+| Token counts always show `0↑ 0↓` | OpenAI streaming sends usage only in the final SSE chunk; the native messages API `MessageDelta` parser doesn't capture it |
 | `AskUserQuestion` blocked in server mode | Returns a fixed "question blocked" message — by design; interactive prompts are not possible in HTTP server context |
 
 ---

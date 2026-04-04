@@ -4,7 +4,7 @@ using Sovrant.Api.Types;
 
 namespace Sovrant.Api.OpenAi;
 
-/// <summary>Converts between internal Anthropic-format types and OpenAI chat completions format.</summary>
+/// <summary>Converts between Sovrant's internal message types and OpenAI chat completions format.</summary>
 internal static class FormatConverter
 {
     /// <summary>Converts a <see cref="MessagesRequest"/> to an <see cref="OpenAiChatRequest"/>.</summary>
