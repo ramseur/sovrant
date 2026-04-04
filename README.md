@@ -386,3 +386,105 @@ dotnet test   # 189 tests across 6 projects
 | [`docs/frontend-integration.md`](docs/frontend-integration.md) | Node.js proxy setup, browser SSE client, Replit integration |
 | [`docs/engine-status.md`](docs/engine-status.md) | Tool test results, provider compatibility, known issues |
 | [`docs/ci-cd.md`](docs/ci-cd.md) | CI/CD integration — `--ci` flag, GitHub Actions action, GitLab CI template |
+
+---
+
+## Production Deployment
+
+The CLI and server have different runtime profiles and should be published with different optimization strategies.
+
+### CLI — Native AOT
+
+The CLI is short-lived and invoked repeatedly (one-shot `prompt`, CI mode), so cold start time matters. Native AOT eliminates JIT entirely and produces a single self-contained binary.
+
+```bash
+dotnet publish src/Sovrant.Cli/Sovrant.Cli.csproj \
+  -c Release -r linux-x64 \
+  --self-contained true \
+  -p:PublishAot=true \
+  -p:OptimizeSpeed=true \
+  -p:InvariantGlobalization=true \
+  -p:StripSymbols=true \
+  -o ./publish/cli
+```
+
+| Flag | Why |
+|---|---|
+| `PublishAot=true` | Ahead-of-time compilation — no JIT, instant startup |
+| `OptimizeSpeed=true` | Favour runtime speed over binary size |
+| `InvariantGlobalization=true` | Removes ICU dependency — smaller binary, no locale data needed |
+| `StripSymbols=true` | Strips debug symbols from the output binary |
+
+The output is a single `sovrant` executable (~30-50 MB) with no .NET runtime dependency.
+
+### Server — ReadyToRun + Trimming
+
+The server is long-running — JIT warmup cost is paid once at startup, then tiered JIT optimizes hot paths during normal operation. ReadyToRun gives fast startup without AOT compatibility issues from ASP.NET Core middleware and reflection-based configuration binding.
+
+```bash
+dotnet publish src/Sovrant.Server/Sovrant.Server.csproj \
+  -c Release -r linux-x64 \
+  --self-contained true \
+  -p:PublishReadyToRun=true \
+  -p:PublishTrimmed=true \
+  -p:TrimMode=link \
+  -o ./publish/server
+```
+
+| Flag | Why |
+|---|---|
+| `PublishReadyToRun=true` | Pre-compiled native code alongside IL — fast startup, full JIT available for hot paths |
+| `PublishTrimmed=true` | Removes unused assemblies |
+| `TrimMode=link` | Member-level trimming for smaller output |
+
+### Reverse proxy considerations
+
+If running behind nginx or another reverse proxy, disable response buffering so SSE streaming works correctly:
+
+```nginx
+# nginx
+location /v1/chat/completions {
+    proxy_pass http://localhost:5200;
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_set_header Connection '';
+    proxy_http_version 1.1;
+    chunked_transfer_encoding off;
+}
+```
+
+### Docker
+
+Multi-stage build that publishes both targets into a single image:
+
+```dockerfile
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY . .
+
+# Server — ReadyToRun + trimmed
+RUN dotnet publish src/Sovrant.Server/Sovrant.Server.csproj \
+    -c Release -r linux-x64 --self-contained true \
+    -p:PublishReadyToRun=true -p:PublishTrimmed=true -p:TrimMode=link \
+    -o /publish/server
+
+# CLI — Native AOT
+RUN dotnet publish src/Sovrant.Cli/Sovrant.Cli.csproj \
+    -c Release -r linux-x64 --self-contained true \
+    -p:PublishAot=true -p:InvariantGlobalization=true -p:StripSymbols=true \
+    -o /publish/cli
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+COPY --from=build /publish/server /app/server
+COPY --from=build /publish/cli /app/cli
+ENV PATH="/app/cli:${PATH}"
+WORKDIR /app/server
+EXPOSE 5200
+ENTRYPOINT ["./sovrant-server"]
+```
+
+> Use `aspnet` as the runtime base image — the server needs ASP.NET Core libraries. The CLI binary is self-contained and carries everything it needs.
+
+### Windows
+
+Replace `-r linux-x64` with `-r win-x64` in all commands above. The Docker approach assumes Linux containers.
