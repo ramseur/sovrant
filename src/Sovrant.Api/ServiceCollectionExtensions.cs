@@ -58,6 +58,11 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IAuthProvider>(new ApiKeyAuthProvider(apiKey));
 
+        // Providers inject ILogger (non-generic base interface). Register a factory-backed instance
+        // so the DI container can resolve it for typed HTTP clients.
+        services.AddSingleton<ILogger>(sp =>
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger("Sovrant.Api"));
+
         services.AddHttpClient<OpenAiCompatProvider>(c => c.BaseAddress = new Uri(baseUrl));
         services.AddHttpClient<OllamaProvider>(c => c.BaseAddress = new Uri(ollamaUrl));
         services.AddHttpClient<ProviderApiProvider>(c =>
