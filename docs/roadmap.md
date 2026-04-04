@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04
+**Last updated:** 2026-04-04 (updated with competitor feature gap analysis)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -47,7 +47,13 @@ Sovrant already has a `plan` permission mode, but it is set by the user at start
 **`EnterWorktree` / `ExitWorktree`**
 Creates a temporary git worktree so the agent performs all file edits on an isolated branch, then optionally commits and returns the branch name. Essential for safe autonomous multi-file coding work — the user's working tree is never touched until explicitly merged. Requires `git worktree add` / `git worktree remove` via `Bash` internally; the tool wraps this with session-scoped state tracking.
 
-#### Tier 2 — Medium priority (MCP resource access + tool discovery)
+#### Tier 2 — Medium priority (MCP resource access + tool discovery + safety)
+
+**`/undo` / `/redo` (git-backed)**
+Before every `Write` or `Edit` tool call, stash the current file state to a temporary git commit or diff buffer. `/undo` reverts the last agent file change; `/redo` reapplies it. Builds user trust significantly — the user can always roll back an agent mistake without losing their own work. Related to `EnterWorktree`/`ExitWorktree` (Tier 1) but applies even outside a worktree. Implementation: wrap `Write`/`Edit` tool execution in `ConversationRuntime` with pre/post git snapshot calls.
+
+**Custom project slash commands (`.sovrant/commands/`)**
+Project-specific slash commands defined as markdown files in `.sovrant/commands/{name}.md`. When invoked, the file's content is injected as a user message — equivalent to a project-local skill. Extends the global `SkillTool` (below) to support per-repo, version-controlled command libraries. Example: `/deploy`, `/review`, `/test`. Implementation: extend `SkillTool` to check `.sovrant/commands/` before the global skills directory.
 
 **`ListMcpResources` / `ReadMcpResource`**
 OpenClaude distinguishes between MCP *tools* (callable functions) and MCP *resources* (readable data — files, database rows, API responses). Sovrant's MCP client invokes tools but cannot read resources. These two tools add resource access: `ListMcpResources` enumerates what each connected MCP server exposes; `ReadMcpResource` fetches a resource by server name and URI.
@@ -74,10 +80,59 @@ Language Server Protocol integration: hover type info, go-to-definition, find-re
 1. `TaskUpdate` — add to `Sovrant.Tools/Tasks/`, register in `ToolRegistrar`, add unit test
 2. `EnterPlanMode` / `ExitPlanMode` — add to `Sovrant.Tools/PlanMode/`; runtime handles the tool result by updating a session-scoped permission override
 3. `EnterWorktree` / `ExitWorktree` — add to `Sovrant.Tools/Worktree/`; session-scoped worktree path stored in `ConversationRuntime` or a scoped service
-4. `ListMcpResources` / `ReadMcpResource` — extend existing MCP client (`IMcpClient`) with a `ReadResourceAsync` method
-5. `ToolSearch` — add deferred tool registry support to `IToolRegistry`; `ToolSearch` queries it by keyword
-6. `SkillTool` — reads `.sovrant/skills/{name}.md` from disk and returns the content as a user message injection
-7. `ScheduleCron` / `ConfigTool` / `LSPTool` — deferred; document as future work
+4. `/undo`/`/redo` — wrap `Write`/`Edit` execution with git snapshot; add `/undo` and `/redo` slash commands in `Sovrant.Commands`
+5. Custom project commands — extend `SkillTool` to resolve `.sovrant/commands/{name}.md` before global skills directory
+6. `ListMcpResources` / `ReadMcpResource` — extend existing MCP client (`IMcpClient`) with a `ReadResourceAsync` method
+7. `ToolSearch` — add deferred tool registry support to `IToolRegistry`; `ToolSearch` queries it by keyword
+8. `SkillTool` — reads `.sovrant/skills/{name}.md` from disk and returns the content as a user message injection
+9. `ScheduleCron` / `ConfigTool` / `LSPTool` — deferred; document as future work
+
+---
+
+### Phase 7.6 — Quick Wins from Competitor Analysis
+
+**Goal:** Implement three high-value features identified in the competitor analysis that have no external dependencies, can be done in isolation, and dramatically improve day-to-day usability.
+
+#### Agent Memory Files (`.sovrant/memory.md`)
+
+**Competitor precedent:** Claude Code (`CLAUDE.md` project + global memory files)
+
+The agent reads two markdown memory files at the start of every session and prepends their contents to the system prompt:
+
+- **Global:** `~/.sovrant/memory.md` — user-level preferences, coding style, preferred tools
+- **Project:** `.sovrant/memory.md` (in the working directory) — project-specific conventions, which files to avoid, how to run tests, architecture notes
+
+This makes the agent immediately context-aware of any codebase without the user having to re-explain conventions every session. It is the single highest-perceived-value feature for regular users.
+
+**Implementation:** In `ConversationRuntime.BuildSystemPrompt()` — read both files at construction time (if they exist), append their contents after the base system prompt. No new tools required. Add a `/memory` slash command to open the project memory file for editing.
+
+#### Context Auto-Compaction
+
+**Competitor precedent:** Claude Code ✅ · opencode ✅ · OpenClaude ✅
+
+When the accumulated `_history` token count approaches the model's context window limit (configurable threshold, default 80% of `MaxTokens`), the runtime automatically summarises the oldest portion of the history into a compact representation and replaces it. This allows arbitrarily long sessions without hitting limits or paying for redundant tokens.
+
+**Implementation:**
+1. After each turn, estimate token count of `_history` (rough: `sum(message.Content.Length) / 4`)
+2. If above the threshold, call a summarisation turn: `"Summarise the conversation so far in 500 words, preserving all key decisions, code changes, and open questions."`
+3. Replace the oldest N messages with a single `[Compacted: {summary}]` assistant message
+4. Persist the compaction event to JSONL so it survives session reload
+5. Add `SOVRANT_COMPACT_THRESHOLD` env var (default: `0.8` = 80% of MaxTokens)
+
+#### Token Count Fix (OpenAI Streaming)
+
+**Blocks:** Phase 9.5 usage tracking, context window visualisation
+
+OpenAI sends `usage` data in the second-to-last SSE chunk (before `[DONE]`), not in `MessageDelta`. The current `CollectStreamEventsAsync` in `ConversationRuntime` only reads `MessageDelta.Usage.OutputTokens` — the OpenAI format uses a top-level `usage` field on the final content chunk.
+
+Fix: detect the `usage` field on the final OpenAI SSE chunk and capture `prompt_tokens` / `completion_tokens` into `accumulated.InputTokens` / `accumulated.OutputTokens`. Once fixed, expose live token counts in the REPL status line and in `GET /v1/sessions/{id}`.
+
+#### Implementation Plan
+
+1. Agent memory files — extend `BuildSystemPrompt()` in `ConversationRuntime`; add `/memory` slash command
+2. Token count fix — update `CollectStreamEventsAsync` to capture OpenAI `usage` field from final SSE chunk
+3. Context auto-compaction — add compaction logic to `RunTurnAsync`; add `SOVRANT_COMPACT_THRESHOLD` config; persist compaction events to JSONL
+4. Expose token counts in REPL status line and `GET /v1/sessions/{id}` response
 
 ---
 
@@ -235,8 +290,9 @@ Each `SessionEntry` accumulates `TotalInputTokens` and `TotalOutputTokens` acros
 2. Replace single `SOVRANT_TOKEN` check in auth middleware with `ITokenRegistry.Resolve(token)`
 3. Add `SessionConfig` overlay to `SessionEntry`; add `PUT /v1/sessions/{id}/config`; restrict global `PUT /v1/config` to admin tokens
 4. Add ASP.NET Core `RateLimiter` middleware keyed on caller token
-5. Fix token count capture (OpenAI final SSE chunk `usage` field) — required for usage tracking
+5. Fix token count capture — moved to Phase 7.6 (prerequisite); Phase 9.5 consumes the result
 6. Add `TotalInputTokens` / `TotalOutputTokens` to `SessionEntry`; add `GET /v1/usage` endpoint
+7. Add context window visualisation to `GET /v1/sessions/{id}` — `context_used_pct`, `tokens_remaining`; surface in REPL status line
 
 ---
 
@@ -251,6 +307,20 @@ Each `SessionEntry` accumulates `TotalInputTokens` and `TotalOutputTokens` acros
 - Per-request credential injection (for Replit/browser use where the client holds the key)
 - Built-in retry on transient errors
 - Tool event callbacks: `onToolUse`, `onPermissionDenied`, `onError`
+
+#### Additional: Structured Diff View in REPL
+
+**Competitor precedent:** Claude Code ✅ · opencode ✅
+
+Before applying `Edit` or `Write` tool calls, render a colour unified diff of the proposed change using Spectre.Console markup. The permission dialog shows exactly what will change — filename, line numbers, added/removed lines in green/red — rather than raw tool arguments. Significantly increases trust in the agent's edits.
+
+Implementation: intercept `Edit`/`Write` permission prompts in `ModeAwarePermissionPolicy`; compute and render the diff before asking for approval.
+
+#### Additional: Session Export
+
+**Competitor precedent:** opencode (`/share`)
+
+Add `GET /v1/sessions/{id}/export?format=markdown` — returns the full session rendered as human-readable markdown (user/assistant turns, tool calls summarised, timestamps). Useful for sharing debugging sessions, creating audit trails, and archiving completed tasks. The JSONL format already contains everything needed; the endpoint is a thin renderer.
 
 ---
 
@@ -359,6 +429,126 @@ Supervisor Agent (ConversationRuntime)
 4. Extend `TaskOutput` to support reading from team member sessions (not just background shell processes)
 5. Add team-scoped resource limits to `MutableServerConfig`
 6. Add team lifecycle events to the SSE stream (`RuntimeEvent.TeamMemberStarted`, `RuntimeEvent.TeamMemberComplete`)
+
+---
+
+### Phase 15 — LSP Integration (Language Server Protocol)
+
+**Competitor precedent:** opencode ✅ (20+ language servers, diagnostics, go-to-definition, symbol search)
+
+**Goal:** Give the agent semantic code intelligence — not just text search — by connecting to real language servers running alongside Sovrant.
+
+#### Motivation
+
+Grep and Glob find text. They cannot tell the agent that a variable is unused, that a function signature has changed, or where all callers of a method are. A language server speaks the code's actual type system: it can answer "what type does this return?", "what breaks if I rename this?", "what are all the diagnostics in this file?". This makes refactoring and bug-fixing dramatically more accurate and less likely to introduce regressions.
+
+#### Architecture
+
+An `ILspClient` service manages the lifecycle of one or more language server processes (e.g., `omnisharp`, `pyright`, `typescript-language-server`, `clangd`). The client communicates via JSON-RPC over stdio (the LSP standard transport). Five tool wrappers expose LSP capabilities to the model:
+
+| Tool | LSP request | What it returns |
+|---|---|---|
+| `LspHover` | `textDocument/hover` | Type info, documentation for a symbol at a file position |
+| `LspDefinition` | `textDocument/definition` | File + line where a symbol is defined |
+| `LspReferences` | `textDocument/references` | All locations that reference a symbol |
+| `LspDiagnostics` | `textDocument/publishDiagnostics` | All errors and warnings in a file |
+| `LspRename` | `textDocument/rename` | Workspace-wide rename with preview |
+
+#### Implementation Plan
+
+1. Add `ILspClient` / `LspClient` to a new `Sovrant.Lsp` project — JSON-RPC over stdio, manages server process lifecycle
+2. Add language server configuration to `SovrantConfig` (`LspServers: { "csharp": "omnisharp", "python": "pyright" }`)
+3. Implement the five tool wrappers in `Sovrant.Tools/Lsp/`
+4. Auto-start configured language servers when the CLI starts; shut down on exit
+5. In server mode, start language servers per active session (or shared if single-workspace)
+
+---
+
+### Phase 15.5 — IDE Extension (VS Code)
+
+**Competitor precedent:** Claude Code ✅ · opencode ✅ (beta)
+**Depends on:** Phase 11 (MCP server mode) — once Sovrant exposes an MCP server, MCP-aware IDEs (VS Code with GitHub Copilot, Cursor, Windsurf) can connect without a bespoke extension.
+
+**Goal:** Embed Sovrant into VS Code as a sidebar panel — chat interface, inline diff approval, tool event rendering, permission dialogs with file highlighting.
+
+#### Architecture
+
+Two-layer approach:
+1. **Phase 11 (MCP):** Zero-code IDE integration for MCP-aware clients. Sovrant appears as an MCP tool server. No extension required.
+2. **Phase 15.5 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
+
+#### Implementation Plan
+
+1. Publish `Sovrant.Server` as a local background service (`sovrant serve` command) with auto-start on VS Code activation
+2. Implement the VS Code extension (`vscode-sovrant`) — TypeScript, connects to `Sovrant.Server` via the Phase 10 frontend SDK
+3. Sidebar: chat panel backed by `useChat()` hook
+4. Inline diffs: intercept `Edit`/`Write` tool events, show diff decoration in the editor
+5. Permission dialogs: VS Code `window.showInformationMessage` with approve/deny buttons
+6. Publish to VS Code Marketplace
+
+---
+
+### Phase 16 — CI/CD Pipeline Integration
+
+**Competitor precedent:** Claude Code ✅ (GitHub Actions + GitLab CI)
+
+**Goal:** Enable Sovrant to run autonomously inside CI pipelines — fix failing tests, resolve build errors, update generated code — without human intervention.
+
+#### Design
+
+`Sovrant.Server` already provides the HTTP API. CI integration is a thin wrapper:
+
+1. A GitHub Actions action (`sovrant-agent-action`) that:
+   - Starts `Sovrant.Server` (or calls a hosted instance)
+   - POSTs the failing CI context (test output, build log, diff) as a user message to `/v1/chat/completions`
+   - Streams the response; captures any file edits the agent makes
+   - Commits the changes if the agent signals success
+   - Fails the action if the agent cannot fix the issue within N tool rounds
+
+2. A GitLab CI template equivalent
+
+#### Use cases
+
+- "Fix the failing tests" — post test output, agent reads code, makes fixes, reruns
+- "Update generated code" — post schema changes, agent regenerates affected files
+- "Resolve merge conflicts" — post conflicted diff, agent resolves and commits
+
+#### Security Note
+
+The CI environment must never pass production secrets into the agent session. Use read-only API keys scoped to the CI provider. The `plan` permission mode is recommended for CI runs that should not make destructive changes.
+
+#### Implementation Plan
+
+1. Add `--ci` flag to the CLI one-shot mode — machine-readable JSON output, non-zero exit on error
+2. Create `sovrant-agent-action` GitHub Actions action (YAML + shell wrapper around the CLI)
+3. Document GitLab CI equivalent
+4. Add CI-specific permission policy: `CiPermissionPolicy` — auto-approves file edits, denies shell commands that touch outside the working directory
+
+---
+
+### Phase 16.5 — Slack / Webhook Integration
+
+**Competitor precedent:** Claude Code ✅ (OAuth Slack app)
+**Depends on:** Phase 9.5 (per-user auth tokens — each Slack user maps to an isolated session)
+
+**Goal:** Invoke Sovrant from a Slack message and receive streamed responses in a Slack thread — enabling "ask the codebase" workflows for teams without leaving Slack.
+
+#### Design
+
+A Sovrant Slack app (self-hosted) that:
+- Listens for messages in designated channels or direct messages
+- Forwards the message to `POST /v1/chat/completions` with a session ID derived from the Slack user ID
+- Streams the response back as a series of Slack message updates (progressive edit)
+- Surfaces tool events as Slack attachments (e.g., "Running Bash: `npm test`")
+
+Alternatively, a generic webhook integration — `POST /v1/webhook` accepts a message from any source (Slack, Teams, Discord, custom) and routes it into the session pool, returning the response to a configured callback URL.
+
+#### Implementation Plan
+
+1. Add `POST /v1/webhook` to `Sovrant.Server` — accepts `{ source, user_id, message, callback_url }`, runs a turn, POSTs result to `callback_url`
+2. Build Sovrant Slack app manifest and event handler (Node.js thin wrapper or Bolt SDK)
+3. Map Slack user IDs to Sovrant session IDs using Phase 9.5 token registry
+4. Document Teams and Discord equivalents using the webhook endpoint
 
 ---
 
