@@ -80,9 +80,10 @@ The engine is fully functional for individual and small-team use:
 | Multi-layered memory (3 layers: session summaries, learned patterns, instincts) | Phase 25 | Medium |
 | Cost tracking & token budget management (4 components) | Phase 26 | Medium |
 | Eval-driven development framework (3 grader types, 2 metrics) | Phase 27 | Lower |
-| Enterprise auth & multi-tenancy (per-user tokens, session ownership) | Phase 28 (deferred) | Deferred |
-| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 29 (deferred) | Deferred |
-| VS Code native extension | Phase 30 (deferred — nice-to-have) | Deferred |
+| Swarm orchestrator (auto-decomposition, DAG execution, file locking, quality gate) | Phase 28 | Lower |
+| Enterprise auth & multi-tenancy (per-user tokens, session ownership) | Phase 29 (deferred) | Deferred |
+| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 30 (deferred) | Deferred |
+| VS Code native extension | Phase 31 (deferred — nice-to-have) | Deferred |
 | `/undo` / `/redo` (git-backed file rollback) | Phase 7.5 Tier 2 (deferred) | Deferred |
 | `ScheduleCron` / `ConfigTool` | Phase 7.5 Tier 3 (deferred) | Deferred |
 
@@ -1539,7 +1540,157 @@ Evals stored in `.sovrant/evals/`:
 
 ---
 
-### Phase 28 — Enterprise Auth & Multi-Tenancy ⏸️ Deferred
+### Phase 28 — Swarm Orchestrator (Auto-Decomposition + DAG Execution)
+
+**Inspired by:** [claude-swarm](https://github.com/affaan-m/claude-swarm) (parallel task decomposition with dependency DAGs, file locking, budget enforcement, quality gate)
+**Depends on:** Phase 18+19 (multi-agent team tools), Phase 21 (agent templates), Phase 26 (cost tracking)
+
+**Goal:** Add a **swarm orchestration layer** on top of Sovrant's existing multi-agent infrastructure. A user gives a single complex prompt; an Opus-class model automatically decomposes it into a dependency graph of 2-8 subtasks; subtasks execute in parallel waves respecting dependencies, with file-level conflict prevention, budget enforcement, and a quality gate review phase. Available via CLI (`sovrant swarm "task"`), the `SwarmTool` for programmatic use, and `POST /v1/swarm` for frontend integration.
+
+#### What Sovrant already has vs. what this adds
+
+| Existing (Phase 18+19) | This Phase adds |
+|---|---|
+| Manual agent creation (`TeamCreate`) | **Auto-decomposition**: one prompt → task DAG |
+| Manual delegation (`TeamDelegate`) | **Dependency-aware scheduling**: topological wave execution |
+| Basic status tracking (`TeamStatus`) | **File conflict prevention**: pessimistic locking per agent |
+| Per-agent timeout | **Cross-swarm budget enforcement** with auto-cancellation |
+| — | **Quality gate**: post-execution review of combined output |
+| — | **Session recording/replay**: full JSONL audit trail of swarm runs |
+| — | **Rich progress**: real-time swarm status via SSE to frontend |
+
+#### How it works (3-phase pipeline)
+
+**Phase 1 — Decomposition** (Opus-class model)
+1. User submits a single complex prompt
+2. Decomposer calls `IConversationRuntime` with a structured system prompt instructing it to output a JSON task graph
+3. Each task in the graph has: `id`, `description`, `dependencies` (list of task IDs), `files_to_modify` (predicted), `agent_template` (from Phase 21), `allowed_tools`
+4. Tasks are organized into parallel waves (levels of the DAG) — wave 0 has no dependencies, wave 1 depends on wave 0, etc.
+
+**Phase 2 — Parallel Execution** (Sonnet/Haiku-class workers)
+1. `SwarmOrchestrator` processes waves sequentially, tasks within a wave in parallel
+2. Before launching each task: check file locks (pessimistic), check budget ceiling
+3. Each task spawns an agent via `SovrantAgentFactory` using the appropriate `AgentTemplate`
+4. PostToolUse tracking records which files each agent actually modifies
+5. On completion: release file locks, accumulate cost, pass output to dependent tasks as context
+6. On failure: retry up to `max_retries`, then mark failed and cancel dependents
+
+**Phase 3 — Quality Gate** (Opus-class model)
+1. Collect all task outputs
+2. Send combined output to Opus with a quality review prompt
+3. Score 1-10 with verdict: `pass` / `needs_revision` / `fail`
+4. If `needs_revision`: identify specific tasks to re-run, loop back to Phase 2
+5. Return final combined result to user
+
+#### Architecture
+
+```
+src/Sovrant.Agents/Swarm/
+  SwarmTask.cs                ← task model: id, prompt, dependencies, files_to_modify, template, status
+  SwarmPlan.cs                ← decomposed DAG: tasks, parallel_waves, metadata
+  SwarmResult.cs              ← final result: task outputs, quality score, total cost, duration
+  ISwarmDecomposer.cs         ← interface: DecomposeAsync(prompt, ct) → SwarmPlan
+  LlmSwarmDecomposer.cs       ← Opus-class decomposition via IConversationRuntime
+  SwarmOrchestrator.cs        ← DAG execution engine with file locking, budget, retries
+  SwarmQualityGate.cs         ← post-execution Opus review with score + verdict
+  SwarmSession.cs             ← JSONL event recording and replay
+
+src/Sovrant.Tools/Swarm/
+  SwarmTool.cs                ← tool: accepts prompt, returns swarm result (for agent-initiated swarms)
+  SwarmStatusTool.cs          ← tool: returns live swarm progress (tasks, status, cost)
+
+src/Sovrant.Cli/Commands/
+  SwarmCommand.cs             ← CLI: `sovrant swarm "task" [--budget 5.0] [--max-agents 4] [--dry-run]`
+```
+
+#### Configuration
+
+`.sovrant/swarm.yaml` (optional — overrides defaults):
+```yaml
+swarm:
+  max_concurrent: 4          # max parallel agents
+  budget_usd: 5.0            # hard cost ceiling
+  max_retries: 1             # per-task retry limit
+  quality_gate: true         # enable post-execution review
+  decomposer_model: reasoning  # model tier for decomposition (Phase 21 ModelTier)
+  worker_model: execution      # default model tier for workers
+
+templates:                    # override agent templates per task type
+  code_change: coder
+  review: security-reviewer
+  test: tdd-guide
+  docs: doc-updater
+```
+
+#### CLI Interface
+
+```bash
+# Basic: decompose + execute + quality gate
+sovrant swarm "Refactor the auth module to use JWT tokens with refresh rotation"
+
+# Dry run: show the decomposed plan without executing
+sovrant swarm "Add pagination to all API endpoints" --dry-run
+
+# Budget-constrained
+sovrant swarm "Build a complete CRUD API for the inventory module" --budget 3.0 --max-agents 6
+
+# List past swarm sessions
+sovrant swarm sessions
+
+# Replay a past session
+sovrant swarm replay <session-id>
+```
+
+#### Server API (frontend integration)
+
+```
+POST /v1/swarm
+  Body: { "prompt": "...", "budget_usd": 5.0, "max_concurrent": 4, "quality_gate": true }
+  Response: SSE stream of SwarmEvent objects
+
+GET /v1/swarm/{session_id}
+  Response: { tasks: [...], status, quality_score, total_cost, duration }
+
+GET /v1/swarm/{session_id}/events
+  Response: JSONL event stream (for replay)
+```
+
+The SSE stream emits events matching the session recorder: `plan_created`, `task_started`, `task_completed`, `task_failed`, `file_conflict`, `quality_gate_started`, `quality_gate_result`, `swarm_completed`. The frontend can render a live DAG visualization showing task status, active agents, file locks, and cost accumulation.
+
+#### File Conflict Prevention
+
+```
+SwarmOrchestrator maintains:
+  _fileLocks: ConcurrentDictionary<string, string>  // filePath → agentId
+
+Before launching a task:
+  1. Check if any file in task.FilesToModify is locked by another agent
+  2. If conflict: mark task BLOCKED, re-check after blocking agent completes
+  3. On task start: lock all files in task.FilesToModify
+  4. PostToolUse hook: track additional files the agent edits at runtime
+  5. On task completion: release all locks held by that agent
+```
+
+#### Key difference from claude-swarm
+
+Claude-swarm agents are isolated — downstream tasks wait for predecessors but never receive their output. Sovrant's swarm **passes predecessor output as context** to dependent tasks, enabling true information flow through the DAG. Combined with the existing `TeamDelegate` infrastructure, agents within a swarm can also delegate ad-hoc subtasks beyond the original plan.
+
+#### Implementation Plan (10 steps, ~12 new files)
+
+1. Define `SwarmTask`, `SwarmPlan`, `SwarmResult` models in `Sovrant.Agents/Swarm/`
+2. Implement `LlmSwarmDecomposer` — structured Opus call that outputs JSON task DAG
+3. Implement `SwarmOrchestrator` — DAG scheduler with `SemaphoreSlim`, file locks, budget tracking, retry logic
+4. Implement `SwarmQualityGate` — post-execution Opus review with structured scoring
+5. Implement `SwarmSession` — JSONL event recording and replay
+6. Create `SwarmTool` and `SwarmStatusTool` in `Sovrant.Tools/Swarm/`
+7. Add `SwarmCommand` to CLI (`sovrant swarm "prompt" [flags]`)
+8. Add `POST /v1/swarm` SSE endpoint and `GET /v1/swarm/{id}` to `Sovrant.Server`
+9. Wire into DI: `ISwarmDecomposer`, `SwarmOrchestrator`, session store
+10. Tests: decomposition parsing, DAG scheduling, file lock conflicts, budget enforcement, quality gate scoring, SSE event streaming, session replay
+
+---
+
+### Phase 29 — Enterprise Auth & Multi-Tenancy ⏸️ Deferred
 
 **Depends on:** Phase 9.5 (session-scoped config) + Phase 9 (per-request credentials)
 
@@ -1580,7 +1731,7 @@ This phase is deliberately deferred. A small trusted team sharing a single deplo
 
 ---
 
-### Phase 29 — Artifact System ⏸️ Deferred
+### Phase 30 — Artifact System ⏸️ Deferred
 
 **Depends on:** Phase 18+19 (multi-agent team tools)
 
@@ -1618,7 +1769,7 @@ Today, team agents communicate solely through prompt/response text via `TeamDele
 
 ---
 
-### Phase 30 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
+### Phase 31 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
 
 **Competitor precedent:** Claude Code ✅ · opencode ✅ (beta)
 **Depends on:** Phase 14 (MCP server mode) — once Sovrant exposes an MCP server, MCP-aware IDEs (VS Code with GitHub Copilot, Cursor, Windsurf) can connect without a bespoke extension.
@@ -1630,7 +1781,7 @@ Today, team agents communicate solely through prompt/response text via `TeamDele
 
 Two-layer approach:
 1. **Phase 14 (MCP):** Zero-code IDE integration for MCP-aware clients. Sovrant appears as an MCP tool server. No extension required.
-2. **Phase 30 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
+2. **Phase 31 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
 
 #### Implementation Plan
 
