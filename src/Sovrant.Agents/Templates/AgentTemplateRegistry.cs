@@ -29,11 +29,11 @@ public sealed partial class AgentTemplateRegistry
 
         _templates = new Dictionary<string, AgentTemplate>(StringComparer.OrdinalIgnoreCase);
 
-        // Seed built-ins first
-        foreach (var t in BuiltInTemplates.All)
-            _templates[t.Name] = t;
+        // Tier 1 (lowest priority): built-in templates from the install directory
+        var assemblyDir = Path.GetDirectoryName(typeof(AgentTemplateRegistry).Assembly.Location) ?? ".";
+        LoadUserTemplates(Path.Combine(assemblyDir, "agents"));
 
-        // Layer user templates from .sovrant/agents/ on top
+        // Tier 2: project-local .sovrant/agents/ (overrides install-dir templates)
         LoadUserTemplates(Path.Combine(".sovrant", "agents"));
     }
 
