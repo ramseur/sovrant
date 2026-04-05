@@ -72,19 +72,19 @@ The engine is fully functional for individual and small-team use:
 
 | Gap | Phase | Priority |
 |---|---|---|
-| Hook lifecycle system (pre/post tool use, session events) | Phase 22 | High |
-| Specialized agent definitions (role templates + model routing) | Phase 23 | High |
-| Verification loop & quality gates | Phase 24 | High |
-| Governance, security monitoring & audit | Phase 25 | Medium |
-| Skills system (composable workflow packages) | Phase 26 | Medium |
-| Multi-layered memory (session summaries, learned patterns, instincts) | Phase 27 | Medium |
-| Cost tracking & token budget management | Phase 28 | Medium |
-| Enterprise auth & multi-tenancy (per-user tokens, session ownership) | Phase 20 | Medium |
-| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 21 | Medium |
-| Eval-driven development framework | Phase 29 | Lower |
-| VS Code native extension | Phase 15 (deferred — nice-to-have) | Lowest |
-| `/undo` / `/redo` (git-backed file rollback) | Phase 7.5 Tier 2 (deferred) | Lowest |
-| `ScheduleCron` / `ConfigTool` | Phase 7.5 Tier 3 (deferred) | Lowest |
+| Hook lifecycle system (pre/post tool use, session events) | Phase 20 | High |
+| Specialized agent definitions (role templates + model routing) | Phase 21 | High |
+| Verification loop & quality gates | Phase 22 | High |
+| Governance, security monitoring & audit | Phase 23 | Medium |
+| Skills system (composable workflow packages) | Phase 24 | Medium |
+| Multi-layered memory (session summaries, learned patterns, instincts) | Phase 25 | Medium |
+| Cost tracking & token budget management | Phase 26 | Medium |
+| Eval-driven development framework | Phase 27 | Lower |
+| Enterprise auth & multi-tenancy (per-user tokens, session ownership) | Phase 28 (deferred) | Deferred |
+| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 29 (deferred) | Deferred |
+| VS Code native extension | Phase 30 (deferred — nice-to-have) | Deferred |
+| `/undo` / `/redo` (git-backed file rollback) | Phase 7.5 Tier 2 (deferred) | Deferred |
+| `ScheduleCron` / `ConfigTool` | Phase 7.5 Tier 3 (deferred) | Deferred |
 
 ---
 
@@ -916,86 +916,7 @@ Supervisor Agent (ConversationRuntime)
 
 ---
 
-### Phase 20 — Enterprise Auth & Multi-Tenancy
-
-**Depends on:** Phase 9.5 (session-scoped config) + Phase 9 (per-request credentials)
-
-**Goal:** Replace the single shared `SOVRANT_TOKEN` with per-user identity — named tokens, user-scoped session isolation, and per-user billing visibility. This is the gate to offering Sovrant as a product to external users or as a managed internal platform with login, not just a shared team tool.
-
-#### When to implement
-
-This phase is deliberately deferred. A small trusted team sharing a single deployment does not need per-user auth — everyone knows the token, sessions are already isolated by `session_id`, and Phase 9.5 handles config isolation and rate limiting. Add this phase when:
-- External users (outside the trusted team) need access, **or**
-- Per-user billing or audit trails are required, **or**
-- Session deletion / config access needs to be restricted to the owning user
-
-#### What changes
-
-| Item | Change |
-|---|---|
-| Single `SOVRANT_TOKEN` | Replace with a named token registry: operator issues one opaque token per user. `SOVRANT_TOKENS` env var (JSON map) or a config file. No OAuth required at this stage. |
-| Auth middleware | `BearerTokenMiddleware` resolves the token to a caller identity (`string CallerId`) instead of a boolean pass/fail |
-| Session ownership | Each session is tagged with its `CallerId` on creation; only the owning caller can read, write, or delete it |
-| `PUT /v1/config` | Global config changes restricted to tokens listed in `SOVRANT_ADMIN_TOKENS`; other callers get `403` |
-| `GET /v1/usage` | Returns per-caller summary (requires Phase 9.5 token tracking as prerequisite) |
-| `POST /v1/admin/tokens` | Optional: runtime token issuance without server restart |
-
-#### Security model
-
-- Tokens are opaque random strings (32+ bytes, base64url). No JWT required at this stage — JWTs add complexity without benefit when the server is the issuer and the verifier.
-- The token registry is loaded at startup and can be reloaded via `POST /v1/admin/reload` without restart.
-- Tokens must never appear in logs, session JSONL, or API error responses.
-
-#### Implementation Plan
-
-1. Add `ITokenRegistry` — maps `token → CallerId`; loaded from `SOVRANT_TOKENS` env var or config file
-2. Update `BearerTokenMiddleware` to resolve `CallerId` and attach it to `HttpContext.Items`
-3. Tag `SessionEntry` with `CallerId` on creation; enforce ownership on read/delete endpoints
-4. Restrict `PUT /v1/config` to callers listed in `SOVRANT_ADMIN_TOKENS`
-5. Extend `GET /v1/usage` to group by `CallerId`
-6. Add `POST /v1/admin/reload` to hot-reload the token registry without restart
-
----
-
-### Phase 21 — Artifact System
-
-**Depends on:** Phase 18+19 (multi-agent team tools)
-
-**Goal:** Give team agents a structured way to share work products — code files, plans, review notes, intermediate results — through a versioned artifact store rather than passing everything through prompt text.
-
-#### Motivation
-
-Today, team agents communicate solely through prompt/response text via `TeamDelegate`. This works for simple tasks but breaks down when agents need to iterate on shared outputs — a planner writes a plan, a coder implements it, a reviewer annotates it. Passing multi-kilobyte code blocks back and forth through prompts wastes tokens, loses formatting, and has no versioning. An artifact store gives agents a shared workspace with named, versioned content blobs that persist across delegations.
-
-#### Design
-
-| Component | Description |
-|---|---|
-| `IArtifact` | Versioned content blob — `Name`, `Version`, `ContentType` (text, code, json), `ReadAsync()`, `WriteAsync()` |
-| `ITeamWorkspace` | Per-team artifact store — `GetAsync(name)`, `PutAsync(name, content)`, `ListAsync()`, `DeleteAsync(name)` |
-| `InMemoryTeamWorkspace` | `ConcurrentDictionary<string, IArtifact>` implementation for in-process teams |
-| `FileBackedTeamWorkspace` | Persists artifacts to `~/.sovrant/workspaces/{team_id}/` for durability across sessions |
-
-#### How agents use it
-
-- `TeamCreate` with `workspace: true` creates a shared `ITeamWorkspace` for that team
-- Agents read/write artifacts via two new tools: `ArtifactRead(name)` and `ArtifactWrite(name, content)`
-- The supervisor can inspect workspace contents via `ArtifactList()` or `TeamStatus` (which would include artifact summaries)
-- Artifacts are scoped to the team — cleaned up when the team is deleted
-
-#### Implementation Plan
-
-1. Define `IArtifact` and `ITeamWorkspace` interfaces (replace the deleted V2 placeholders)
-2. Implement `InMemoryTeamWorkspace` — `ConcurrentDictionary` backed, version counter per artifact
-3. Implement `FileBackedTeamWorkspace` — file-per-artifact with `.version` metadata
-4. Add `ArtifactRead`, `ArtifactWrite`, `ArtifactList` tools to `Sovrant.Tools/Team/`
-5. Wire workspace creation into `TeamCreateTool` when `workspace` param is set
-6. Add workspace cleanup to `TeamDeleteTool`
-7. Tests: workspace CRUD, versioning, concurrent access, cleanup on team delete
-
----
-
-### Phase 22 — Hook Lifecycle System
+### Phase 20 — Hook Lifecycle System
 
 **Inspired by:** everything-claude-code (34 hooks across 6 lifecycle events)
 **Depends on:** None — can be implemented independently
@@ -1063,7 +984,7 @@ Three enforcement levels configurable via `SOVRANT_HOOK_PROFILE`:
 
 ---
 
-### Phase 23 — Specialized Agent Definitions (Role Templates + Model Routing)
+### Phase 21 — Specialized Agent Definitions (Role Templates + Model Routing)
 
 **Inspired by:** everything-claude-code (28 specialized agents with tool restrictions and model selection)
 **Depends on:** Phase 18+19 (multi-agent team tools — already complete)
@@ -1138,16 +1059,16 @@ You are a security-focused code reviewer specializing in OWASP Top 10...
 
 ---
 
-### Phase 24 — Verification Loop & Quality Gates
+### Phase 22 — Verification Loop & Quality Gates
 
 **Inspired by:** everything-claude-code (6-phase verification loop, quality gate hooks, TDD workflow)
-**Depends on:** Phase 22 (hooks — gates run as post-stop hooks) or can be standalone tools
+**Depends on:** Phase 20 (hooks — gates run as post-stop hooks) or can be standalone tools
 
 **Goal:** A structured multi-phase quality verification pipeline that runs automatically before PR submission or on demand via a `/verify` skill. Covers: build, type check, lint, test (with coverage threshold), security scan, and diff review.
 
 #### Why this is high priority
 
-The code review (Phases A-F) was manual. A verification loop automates the same checks as repeatable, enforceable gates. Combined with hooks (Phase 22), this runs automatically at the end of every coding session.
+The code review (Phases A-F) was manual. A verification loop automates the same checks as repeatable, enforceable gates. Combined with hooks (Phase 20), this runs automatically at the end of every coding session.
 
 #### Verification Phases
 
@@ -1192,15 +1113,15 @@ Also a `/verify` skill that the model can invoke or that fires as a `Stop` hook.
 2. Implement `VerifyTool` — runs phases sequentially, collects results, returns structured report
 3. Auto-detect project type (`.csproj` → dotnet, `package.json` → npm, `go.mod` → Go) for default commands
 4. Add `/verify` skill registration
-5. Optionally wire as a `Stop` hook (Phase 22) for automatic end-of-session verification
+5. Optionally wire as a `Stop` hook (Phase 20) for automatic end-of-session verification
 6. Tests: each phase runner, threshold enforcement, skip list, auto-detection
 
 ---
 
-### Phase 25 — Governance, Security Monitoring & Audit
+### Phase 23 — Governance, Security Monitoring & Audit
 
 **Inspired by:** everything-claude-code (governance capture, config protection, commit quality, enterprise controls)
-**Depends on:** Phase 22 (hooks — governance runs as PreToolUse/PostToolUse hooks)
+**Depends on:** Phase 20 (hooks — governance runs as PreToolUse/PostToolUse hooks)
 
 **Goal:** Defense-in-depth for agentic operations: detect secrets in tool outputs, block dangerous commands, protect configuration files, audit-log all bash commands, and provide enterprise control policies.
 
@@ -1251,16 +1172,16 @@ Three levels: `minimal` (audit only), `standard` (audit + warn), `strict` (audit
 4. Implement `ConfigProtectionRule` with configurable protected file globs
 5. Implement `AuditLogger` — append-only JSONL to `~/.sovrant/audit/`
 6. Implement `GovernanceMonitor` — aggregates all rules, returns `GovernanceVerdict`
-7. Wire into hook system (Phase 22) or directly into `DefaultToolExecutor` as a pre-execution check
+7. Wire into hook system (Phase 20) or directly into `DefaultToolExecutor` as a pre-execution check
 8. Add `SOVRANT_GOVERNANCE_LEVEL` env var
 9. Tests: secret detection patterns, command blocking, config protection, audit log format
 
 ---
 
-### Phase 26 — Skills System (Composable Workflow Packages)
+### Phase 24 — Skills System (Composable Workflow Packages)
 
 **Inspired by:** everything-claude-code (156+ skills as directory-based workflow definitions)
-**Depends on:** Phase 22 (hooks — skills can trigger hooks), Phase 23 (agent templates — skills can spawn agents)
+**Depends on:** Phase 20 (hooks — skills can trigger hooks), Phase 21 (agent templates — skills can spawn agents)
 
 **Goal:** A modular system for packaging multi-step workflows as reusable, composable "skills" — each a directory containing a definition file (`SKILL.md`), optional agent configurations, and activation triggers. Skills are invoked via `/skill-name` slash commands or programmatically by agents.
 
@@ -1314,7 +1235,7 @@ tools: [Read, Write, Edit, Bash, Grep]
 |---|---|---|
 | `tdd-workflow` | `/tdd` | Red-Green-Refactor with coverage enforcement |
 | `code-review` | `/review` | Multi-severity code review |
-| `verification-loop` | `/verify` | 6-phase quality gate (Phase 24) |
+| `verification-loop` | `/verify` | 6-phase quality gate (Phase 22) |
 | `deep-research` | `/research` | Multi-source research with citation |
 | `plan` | `/plan` | Structured planning with phased implementation |
 | `security-review` | `/security` | OWASP-based security audit |
@@ -1344,10 +1265,10 @@ src/Sovrant.Tools/Skills/
 
 ---
 
-### Phase 27 — Multi-Layered Memory System
+### Phase 25 — Multi-Layered Memory System
 
 **Inspired by:** everything-claude-code (session summaries, learned skills, instincts with confidence scoring)
-**Depends on:** Phase 22 (hooks — memory persisted via session start/end hooks)
+**Depends on:** Phase 20 (hooks — memory persisted via session start/end hooks)
 
 **Goal:** Evolve Sovrant's current flat memory files (`~/.sovrant/memory.md`) into a multi-layered memory system: session summaries (short-term), learned patterns (medium-term), and instincts with confidence scoring (long-term). Each layer has different persistence, scope, and retrieval characteristics.
 
@@ -1412,14 +1333,14 @@ src/Sovrant.Runtime/Memory/
 3. Implement `LearnedPatternStore` — markdown files in `.sovrant/learned/`
 4. Implement `InstinctStore` — YAML with confidence scoring and evidence
 5. Implement `MemoryInjector` — selects relevant memories based on project, recency, and confidence
-6. Wire session summary extraction into `SessionEnd` hook (Phase 22) or `RuntimeSessionPool.Evict`
+6. Wire session summary extraction into `SessionEnd` hook (Phase 20) or `RuntimeSessionPool.Evict`
 7. Update system prompt builder to inject multi-layered memory
 8. Add `/remember` and `/forget` commands for explicit memory management
 9. Tests: summary extraction, pattern storage, instinct confidence updates, memory selection
 
 ---
 
-### Phase 28 — Cost Tracking & Token Budget Management
+### Phase 26 — Cost Tracking & Token Budget Management
 
 **Inspired by:** everything-claude-code (cost-tracker hook with per-model USD estimation)
 **Depends on:** Phase 9.5 (token usage tracking — already complete)
@@ -1464,10 +1385,10 @@ Phase 9.5 already tracks `TotalInputTokens` and `TotalOutputTokens` per session 
 
 ---
 
-### Phase 29 — Eval-Driven Development Framework
+### Phase 27 — Eval-Driven Development Framework
 
 **Inspired by:** everything-claude-code (eval harness with pass@k metrics, capability/regression evals, multiple grader types)
-**Depends on:** Phase 24 (verification loop), Phase 23 (agent templates)
+**Depends on:** Phase 22 (verification loop), Phase 21 (agent templates)
 
 **Goal:** A formal evaluation framework for testing agent behavior itself — not just the code it produces. Define expected behaviors as evals, run them against agent sessions, and track pass@k metrics over time. This is how you measure whether agent improvements actually improve outcomes.
 
@@ -1532,7 +1453,86 @@ Evals stored in `.sovrant/evals/`:
 
 ---
 
-### Phase 15 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
+### Phase 28 — Enterprise Auth & Multi-Tenancy ⏸️ Deferred
+
+**Depends on:** Phase 9.5 (session-scoped config) + Phase 9 (per-request credentials)
+
+**Goal:** Replace the single shared `SOVRANT_TOKEN` with per-user identity — named tokens, user-scoped session isolation, and per-user billing visibility. This is the gate to offering Sovrant as a product to external users or as a managed internal platform with login, not just a shared team tool.
+
+#### When to implement
+
+This phase is deliberately deferred. A small trusted team sharing a single deployment does not need per-user auth — everyone knows the token, sessions are already isolated by `session_id`, and Phase 9.5 handles config isolation and rate limiting. Add this phase when:
+- External users (outside the trusted team) need access, **or**
+- Per-user billing or audit trails are required, **or**
+- Session deletion / config access needs to be restricted to the owning user
+
+#### What changes
+
+| Item | Change |
+|---|---|
+| Single `SOVRANT_TOKEN` | Replace with a named token registry: operator issues one opaque token per user. `SOVRANT_TOKENS` env var (JSON map) or a config file. No OAuth required at this stage. |
+| Auth middleware | `BearerTokenMiddleware` resolves the token to a caller identity (`string CallerId`) instead of a boolean pass/fail |
+| Session ownership | Each session is tagged with its `CallerId` on creation; only the owning caller can read, write, or delete it |
+| `PUT /v1/config` | Global config changes restricted to tokens listed in `SOVRANT_ADMIN_TOKENS`; other callers get `403` |
+| `GET /v1/usage` | Returns per-caller summary (requires Phase 9.5 token tracking as prerequisite) |
+| `POST /v1/admin/tokens` | Optional: runtime token issuance without server restart |
+
+#### Security model
+
+- Tokens are opaque random strings (32+ bytes, base64url). No JWT required at this stage — JWTs add complexity without benefit when the server is the issuer and the verifier.
+- The token registry is loaded at startup and can be reloaded via `POST /v1/admin/reload` without restart.
+- Tokens must never appear in logs, session JSONL, or API error responses.
+
+#### Implementation Plan
+
+1. Add `ITokenRegistry` — maps `token → CallerId`; loaded from `SOVRANT_TOKENS` env var or config file
+2. Update `BearerTokenMiddleware` to resolve `CallerId` and attach it to `HttpContext.Items`
+3. Tag `SessionEntry` with `CallerId` on creation; enforce ownership on read/delete endpoints
+4. Restrict `PUT /v1/config` to callers listed in `SOVRANT_ADMIN_TOKENS`
+5. Extend `GET /v1/usage` to group by `CallerId`
+6. Add `POST /v1/admin/reload` to hot-reload the token registry without restart
+
+---
+
+### Phase 29 — Artifact System ⏸️ Deferred
+
+**Depends on:** Phase 18+19 (multi-agent team tools)
+
+**Goal:** Give team agents a structured way to share work products — code files, plans, review notes, intermediate results — through a versioned artifact store rather than passing everything through prompt text.
+
+#### Motivation
+
+Today, team agents communicate solely through prompt/response text via `TeamDelegate`. This works for simple tasks but breaks down when agents need to iterate on shared outputs — a planner writes a plan, a coder implements it, a reviewer annotates it. Passing multi-kilobyte code blocks back and forth through prompts wastes tokens, loses formatting, and has no versioning. An artifact store gives agents a shared workspace with named, versioned content blobs that persist across delegations.
+
+#### Design
+
+| Component | Description |
+|---|---|
+| `IArtifact` | Versioned content blob — `Name`, `Version`, `ContentType` (text, code, json), `ReadAsync()`, `WriteAsync()` |
+| `ITeamWorkspace` | Per-team artifact store — `GetAsync(name)`, `PutAsync(name, content)`, `ListAsync()`, `DeleteAsync(name)` |
+| `InMemoryTeamWorkspace` | `ConcurrentDictionary<string, IArtifact>` implementation for in-process teams |
+| `FileBackedTeamWorkspace` | Persists artifacts to `~/.sovrant/workspaces/{team_id}/` for durability across sessions |
+
+#### How agents use it
+
+- `TeamCreate` with `workspace: true` creates a shared `ITeamWorkspace` for that team
+- Agents read/write artifacts via two new tools: `ArtifactRead(name)` and `ArtifactWrite(name, content)`
+- The supervisor can inspect workspace contents via `ArtifactList()` or `TeamStatus` (which would include artifact summaries)
+- Artifacts are scoped to the team — cleaned up when the team is deleted
+
+#### Implementation Plan
+
+1. Define `IArtifact` and `ITeamWorkspace` interfaces (replace the deleted V2 placeholders)
+2. Implement `InMemoryTeamWorkspace` — `ConcurrentDictionary` backed, version counter per artifact
+3. Implement `FileBackedTeamWorkspace` — file-per-artifact with `.version` metadata
+4. Add `ArtifactRead`, `ArtifactWrite`, `ArtifactList` tools to `Sovrant.Tools/Team/`
+5. Wire workspace creation into `TeamCreateTool` when `workspace` param is set
+6. Add workspace cleanup to `TeamDeleteTool`
+7. Tests: workspace CRUD, versioning, concurrent access, cleanup on team delete
+
+---
+
+### Phase 30 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
 
 **Competitor precedent:** Claude Code ✅ · opencode ✅ (beta)
 **Depends on:** Phase 14 (MCP server mode) — once Sovrant exposes an MCP server, MCP-aware IDEs (VS Code with GitHub Copilot, Cursor, Windsurf) can connect without a bespoke extension.
@@ -1544,7 +1544,7 @@ Evals stored in `.sovrant/evals/`:
 
 Two-layer approach:
 1. **Phase 14 (MCP):** Zero-code IDE integration for MCP-aware clients. Sovrant appears as an MCP tool server. No extension required.
-2. **Phase 15 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
+2. **Phase 30 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
 
 #### Implementation Plan
 
