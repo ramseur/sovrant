@@ -36,7 +36,9 @@ public sealed class AsyncRollingFileLoggerProvider : ILoggerProvider, IAsyncDisp
     {
         _cts.Cancel();
         _channel.Writer.TryComplete();
-        _writerTask.GetAwaiter().GetResult();
+        // Use a bounded wait to avoid blocking indefinitely on shutdown.
+        // If the writer doesn't finish in 2 seconds, proceed with disposal anyway.
+        _writerTask.Wait(TimeSpan.FromSeconds(2));
         _cts.Dispose();
     }
 

@@ -152,10 +152,12 @@ internal static class ChatRoutes
         var completionId = $"chatcmpl-{Guid.NewGuid():N}";
         var model = req.Model ?? sessionConfig?.Model ?? serverConfig.Model;
 
-        // Apply per-request model override to the live config so ConversationRuntime picks it up.
-        // Only mutate the global config when NOT using scoped credentials and no session config.
-        if (req.Model is not null && !hasScopedCredentials)
-            serverConfig.Model = req.Model;
+        // Apply per-request model override to the session config if present,
+        // so subsequent requests in the same session default to this model.
+        // Never mutate global serverConfig.Model from a per-request context — it races
+        // with concurrent requests.
+        if (req.Model is not null && sessionConfig is not null)
+            sessionConfig.Model = req.Model;
 
         // Acquire the per-session lock to serialize concurrent turns (prevents history corruption).
         // Transient/one-shot runtimes have no lock (no shared state).

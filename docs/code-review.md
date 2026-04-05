@@ -372,7 +372,7 @@ finally {
 
 ## 5. Recommended Fix Order
 
-### Phase A — Critical Security (do first)
+### Phase A — Critical Security (do first) ✅ COMPLETE (cd3a548)
 
 | # | Issue | Effort | Risk if Unfixed |
 |---|-------|--------|-----------------|
@@ -382,17 +382,17 @@ finally {
 | 1.7 | Startup token validation | Low | Confusing failure mode |
 | 1.8 | Unhandled exceptions in chat | Low | Information leakage |
 
-### Phase B — Resource Leaks & Thread Safety (high stability impact)
+### Phase B — Resource Leaks & Thread Safety (high stability impact) ✅ COMPLETE
 
 | # | Issue | Effort | Risk if Unfixed |
 |---|-------|--------|-----------------|
-| 2.1-2.2 | CTS leaks | Low | Memory leak over time |
-| 2.3 | Unsafe dictionary | Low | `InvalidOperationException` crash |
-| 2.5 | Coordinator not disposed | Low | Semaphore leak |
-| 2.7 | TeamDelegateTool race | Low | Duplicate agent registration |
-| 2.9 | Blocking dispose | Low | Shutdown hang |
-| 2.10 | Fire-and-forget recheck | Low | Delayed shutdown |
-| M1 | Global config mutation | Medium | Non-deterministic model selection |
+| 2.1-2.2 | CTS leaks — dispose on TryRemove | Low | Memory leak over time |
+| 2.3 | Unsafe Dictionary → ConcurrentDictionary | Low | `InvalidOperationException` crash |
+| 2.5 | Coordinator disposed in DisposeAsync | Low | Semaphore leak |
+| 2.7 | HashSet → ConcurrentDictionary | Low | Duplicate agent registration |
+| 2.9 | Blocking dispose → bounded Wait(2s) | Low | Shutdown hang |
+| 2.10 | Fire-and-forget → tracked + cancellable | Low | Delayed shutdown |
+| M1 | Global config mutation → session-only | Medium | Non-deterministic model selection |
 
 ### Phase C — Validation & Hardening
 

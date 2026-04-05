@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Models;
@@ -23,7 +24,7 @@ public sealed class TeamDelegateTool : ITool
     private readonly ITeamRegistry _registry;
     private readonly IMultiAgentSystem _agentSystem;
     private readonly Func<TeamMemberInfo, IAgent> _agentFactory;
-    private readonly HashSet<string> _initialized = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, byte> _initialized = new(StringComparer.Ordinal);
 
     public TeamDelegateTool(
         ITeamRegistry registry,
@@ -52,7 +53,7 @@ public sealed class TeamDelegateTool : ITool
             return $"Error: no team member found with ID '{memberId}'.";
 
         // Lazy-create and register the agent on first delegation
-        if (_initialized.Add(member.Id))
+        if (_initialized.TryAdd(member.Id, 0))
         {
             var agent = _agentFactory(member);
             _agentSystem.RegisterAgent(agent);

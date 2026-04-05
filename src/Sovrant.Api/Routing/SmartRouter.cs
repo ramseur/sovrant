@@ -9,13 +9,15 @@ namespace Sovrant.Api.Routing;
 /// by latency/cost/health, routes each request to the optimal provider, and
 /// falls back automatically on failure. Ported from smart_router.py.
 /// </summary>
-public sealed class SmartRouter : ISmartRouter
+public sealed class SmartRouter : ISmartRouter, IDisposable
 {
     private readonly IReadOnlyList<ProviderInfo> _providers;
     private readonly RouterMode _mode;
     private readonly RouterStrategy _strategy;
     private readonly HttpClient _httpClient;
     private readonly ILogger<SmartRouter> _logger;
+    private readonly CancellationTokenSource _shutdownCts = new();
+    private readonly List<Task> _recheckTasks = [];
     private bool _initialized;
     private volatile string? _pinnedProviderName;
 
@@ -142,7 +144,8 @@ public sealed class SmartRouter : ISmartRouter
             {
                 _logHighErrorRate(_logger, providerName, info.ErrorRate, null);
                 info.Healthy = false;
-                _ = RecheckAsync(info, TimeSpan.FromSeconds(60), CancellationToken.None);
+                var recheckTask = RecheckAsync(info, TimeSpan.FromSeconds(60), _shutdownCts.Token);
+                lock (_recheckTasks) { _recheckTasks.Add(recheckTask); }
             }
         }
         return Task.CompletedTask;
@@ -218,5 +221,15 @@ public sealed class SmartRouter : ISmartRouter
             }
         }
         catch (OperationCanceledException) { /* expected on shutdown */ }
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        _shutdownCts.Cancel();
+        Task[] tasks;
+        lock (_recheckTasks) { tasks = [.. _recheckTasks]; }
+        Task.WhenAll(tasks).Wait(TimeSpan.FromSeconds(5));
+        _shutdownCts.Dispose();
     }
 }

@@ -14,7 +14,7 @@ namespace Sovrant.Agents.Modern;
 /// </summary>
 public sealed partial class MultiAgentCoordinator : IDisposable
 {
-    private readonly Dictionary<string, IAgent> _agents =
+    private readonly ConcurrentDictionary<string, IAgent> _agents =
         new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _taskCts =
         new(StringComparer.Ordinal);
@@ -94,7 +94,8 @@ public sealed partial class MultiAgentCoordinator : IDisposable
         }
         finally
         {
-            _taskCts.TryRemove(task.Id, out _);
+            if (_taskCts.TryRemove(task.Id, out var removed))
+                removed.Dispose();
         }
     }
 

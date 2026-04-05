@@ -61,6 +61,9 @@ public sealed class InProcessMultiAgentSystem : IMultiAgentSystem, IAsyncDisposa
         _coordinator.ShutdownAsync(ct);
 
     /// <inheritdoc/>
-    public async ValueTask DisposeAsync() =>
+    public async ValueTask DisposeAsync()
+    {
         await ShutdownAsync().ConfigureAwait(false);
+        _coordinator.Dispose();
+    }
 }

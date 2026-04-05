@@ -24,6 +24,7 @@ public sealed partial class ProcessBasedMultiAgentSystem : IMultiAgentSystem, ID
         new(StringComparer.Ordinal);
     private readonly AgentSystemConfig _config;
     private readonly ILogger<ProcessBasedMultiAgentSystem> _logger;
+    private volatile bool _disposed;
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Dispatching task '{TaskId}' to process agent '{AgentName}'")]
     private static partial void LogDispatch(ILogger logger, string taskId, string agentName);
@@ -54,6 +55,7 @@ public sealed partial class ProcessBasedMultiAgentSystem : IMultiAgentSystem, ID
     public async Task<AgentResult> RunTaskAsync(AgentTask task, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(task);
+        ObjectDisposedException.ThrowIf(_disposed, this);
 
         // Resolve target agent
         ProcessAgent? agent = null;
@@ -89,7 +91,8 @@ public sealed partial class ProcessBasedMultiAgentSystem : IMultiAgentSystem, ID
         }
         finally
         {
-            _taskCts.TryRemove(task.Id, out _);
+            if (_taskCts.TryRemove(task.Id, out var removed))
+                removed.Dispose();
         }
     }
 
@@ -113,6 +116,7 @@ public sealed partial class ProcessBasedMultiAgentSystem : IMultiAgentSystem, ID
     /// <inheritdoc/>
     public void Dispose()
     {
+        _disposed = true;
         foreach (var cts in _taskCts.Values)
             cts.Dispose();
         _taskCts.Clear();
