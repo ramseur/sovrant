@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (MCP bearer token auth added — 37 tools, 243 tests)
+**Last updated:** 2026-04-04 (Multi-agent team orchestration — 39 tools, 329 tests)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -32,11 +32,12 @@
 | Session export | ✅ Implemented | `GET /v1/sessions/{id}/export` — markdown rendering of full session history |
 | MCP server mode | ✅ Implemented | `sovrant mcp-server` — stdio transport (JSON-RPC 2.0). Bridges all `IToolRegistry` tools + synthetic `chat` tool + session/config resources to MCP protocol. Zero overlap with HTTP server. Bearer token auth via `SOVRANT_MCP_TOKEN` + `--token`. |
 | Dynamic MCP Tool Proxy (`MCPTool`) | ✅ Implemented | Calls any tool on any connected MCP server dynamically at execution time — no static registration needed. Optional `server` param; searches all clients when omitted. |
-| Unit test suite | ✅ 243/243 passing | Api(28) + Runtime(86) + Server(16) + Lsp(26) + Tools(34) + Commands(22) + McpServer(30) + Integration(1) |
+| Unit test suite | ✅ 329/329 passing | Api(28) + Runtime(106) + Server(16) + Lsp(26) + Tools(42) + Commands(22) + McpServer(30) + Agents(58) + Integration(1) |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |
-| Phase 17.5 agent scaffolding | ✅ Implemented | `Sovrant.Agents` project: `IAgent`, `IMultiAgentSystem`, both backends as stubs, `AGENT_MODE` config switch, V2 placeholder interfaces. **Not yet wired into CLI or Server DI.** |
+| Phase 17.5 agent scaffolding | ✅ Implemented | `Sovrant.Agents` project: `IAgent`, `IMultiAgentSystem`, dual backends (modern + legacy), `AGENT_MODE` config switch, `SovrantAgentFactory`, `AgentPrompts`, `FilteredToolRegistry`. Wired into CLI and Server DI via `AddMultiAgentSystem()`. |
+| Phase 18+19 multi-agent teams | ✅ Implemented | `ITeamRegistry` + `InMemoryTeamRegistry`, 4 team tools (`TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`), `MultiAgentCoordinator` (semaphore concurrency, linked CTS + timeout), `ProcessAgent` (stdin/stdout, process tree kill), `SovrantAgent` (runtime-backed), 6 role-specific `AgentPrompts`. 58 tests in `Sovrant.Agents.Tests`. |
 | OpenAI Responses API provider | ✅ Implemented + tested | `OpenAiResponsesProvider` routes through `POST /v1/responses` when `LLM_WEB_SEARCH=true`. Injects `web_search_preview`, suppresses `WebSearch` function tool, full multi-turn agentic loop support. |
 | Phase 7 hardening | ✅ Complete | Context auto-compaction (`SOVRANT_COMPACT_THRESHOLD`, default 80k tokens); BashTool 256 KB cap + dangerous env stripping; WebFetchTool SSRF guard (RFC-1918, loopback, link-local, non-HTTP(S)); provider retry 3×(1s/2s/4s) on 429/5xx; AgentTool recursion depth ≤ 5; ReadFileTool 10 MB cap; GlobTool 1000-file cap; atomic writes in Write/Edit tools. |
 
@@ -63,7 +64,7 @@
 | `EnterPlanMode` / `ExitPlanMode` are global in server mode | `IPermissionModeAccessor` wraps the shared `MutableServerConfig` singleton — `EnterPlanMode` in one session sets plan mode for all sessions. Fixed in Phase 9.5 (session-scoped `SessionConfig` overlay). |
 | ~~No provider retry on 429 / 5xx~~ | ✅ Fixed — 3 attempts with 1s/2s/4s backoff on retryable errors in `ConversationRuntime`. |
 | ~~`AgentTool` has no recursion depth limit~~ | ✅ Fixed — `AsyncLocal<int>` counter; rejects at depth ≥ 5. |
-| `Sovrant.Agents` not wired into CLI or Server | `AddMultiAgentSystem()` exists but is not called in either host. `AgentTool` still uses direct `ConversationRuntime`. Phase 18 wires it up. |
+| ~~`Sovrant.Agents` not wired into CLI or Server~~ | ✅ Fixed — `AddMultiAgentSystem()` called in both CLI and Server `Program.cs`. Team tools registered. `AgentTool` uses direct `ConversationRuntime` (by design — lightweight ad-hoc). |
 
 ### Phase 8 — Structured Async Logging ✅
 
@@ -159,9 +160,18 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 
 | Tool | Status | Result |
 |---|---|---|
-| `Agent` | ⬜ Not tested | Implemented; spawns isolated `ConversationRuntime` with its own session |
+| `Agent` | ⬜ Not tested | Implemented; spawns isolated `ConversationRuntime` with its own session. Recursion depth ≤ 5. |
 | `AskUserQuestion` | ✅ Tested | Prompted console correctly in CLI mode. Server mode returns fixed message (by design) |
 | `Sleep` | ✅ Tested | Slept 1000ms and returned correctly |
+
+### Team orchestration tools *(Phase 18+19)*
+
+| Tool | Status | Result |
+|---|---|---|
+| `TeamCreate` | ⬜ Not tested | Implemented; creates named agent with role, custom prompt, optional tool restrictions and model override |
+| `TeamDelete` | ⬜ Not tested | Implemented; cancels agent tasks and removes from registry |
+| `TeamStatus` | ⬜ Not tested | Implemented; returns JSON array of all team members with lifecycle state |
+| `TeamDelegate` | ⬜ Not tested | Implemented; delegates prompt to a team member via `IMultiAgentSystem`, tracks status/output/errors |
 
 ### Plan mode tools *(Phase 7.5 Tier 1)*
 
@@ -225,7 +235,7 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 | `OLLAMA_BASE_URL` | No | Enables the local Ollama provider (default when set: `http://localhost:11434/v1`) |
 | `ROUTER_MODE` | No | `Smart` (default) or `Fixed`. Overrides `Router:Mode` in config. |
 | `ROUTER_STRATEGY` | No | `Balanced` (default), `Latency`, or `Cost`. Overrides `Router:Strategy` in config. |
-| `AGENT_MODE` | No | `modern` (default, in-process async channels) or `legacy` (process-per-agent stdio). Used by `Sovrant.Agents` when wired in Phase 18. |
+| `AGENT_MODE` | No | `modern` (default, in-process async channels) or `legacy` (process-per-agent stdio). Controls the `IMultiAgentSystem` backend used by team tools. |
 | `SOVRANT_MCP_TOKEN` | No | Required bearer token for MCP server mode. If set, callers must pass `--token <value>` matching this. Unset = no auth. |
 | `SOVRANT_MCP_TOOLS` | No | Comma-separated allow-list of tool names to expose via MCP server. Unset = all tools. `chat` always passes. |
 | `LLM_WEB_SEARCH` | No | Set to `true` to use the model's native web search capability (e.g. OpenAI `web_search_preview`). No external API key needed. |
@@ -312,7 +322,8 @@ The following tools are implemented but have not been manually tested end-to-end
 | `REPL` | Spawns subprocess per language (`python`, `node`, etc.) |
 | `WebSearch` | Requires `BRAVE_API_KEY` or `FIRECRAWL_API_KEY` |
 | `TaskCreate` / `TaskGet` / `TaskList` / `TaskOutput` / `TaskStop` / `TaskUpdate` | Background task management suite |
-| `Agent` | Spawns isolated `ConversationRuntime`; no recursion depth guard yet (Phase 7.8) |
+| `Agent` | Spawns isolated `ConversationRuntime`; recursion depth limited to 5 |
+| `TeamCreate` / `TeamDelete` / `TeamStatus` / `TeamDelegate` | Team orchestration tools — require `IMultiAgentSystem` (wired in DI) |
 | `EnterPlanMode` / `ExitPlanMode` | Global in server mode until Phase 9.5 |
 | `EnterWorktree` / `ExitWorktree` | Requires git repo with at least one commit |
 | `Skill` / `ToolSearch` | Requires `.sovrant/skills/` dir or registered tools |

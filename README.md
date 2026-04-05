@@ -5,7 +5,7 @@ A .NET 10 agentic AI platform — multi-provider, tool-using, session-persistent
 Sovrant runs as a **CLI agent** for individual use, an **OpenAI-compatible HTTP server** for team and application integration, or via **webhooks** from Slack, Teams, Discord, and custom systems. The agent reads and writes files, executes shell commands, searches the web, calls tools autonomously, and maintains full conversation history across sessions.
 
 **Runtime:** .NET 10 / C# 13
-**Status:** Engine fully functional. 37 tools. 14 server endpoints. Webhook integrations. CI/CD pipeline support. Frontend SDK. MCP server mode. 243/243 tests passing.
+**Status:** Engine fully functional. 39 tools. 14 server endpoints. Webhook integrations. CI/CD pipeline support. Frontend SDK. MCP server mode. Multi-agent team orchestration. 329/329 tests passing.
 
 ---
 
@@ -17,9 +17,9 @@ Sovrant runs as a **CLI agent** for individual use, an **OpenAI-compatible HTTP 
 | `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus session management and live config. |
 | `Sovrant.Runtime` | Core agentic loop, session persistence (JSONL), permission system, tool executor, MCP client. |
 | `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, native messages API. SmartRouter with health/latency/cost scoring. |
-| `Sovrant.Tools` | All 31 tool implementations. |
+| `Sovrant.Tools` | All 39 tool implementations (core + LSP + team). |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/clear`, `/session`, `/memory`, etc.). |
-| `Sovrant.Agents` | Multi-agent infrastructure: `IAgent` / `IMultiAgentSystem` interfaces, modern in-process backend, legacy process-based backend, `AGENT_MODE` config switch. |
+| `Sovrant.Agents` | Multi-agent orchestration: team registry, agent factory, dual backends (modern in-process + legacy process-per-agent), role-specific prompts, tool filtering per agent. Wired into CLI and Server DI. |
 | `Sovrant.McpServer` | MCP server mode: exposes all tools and resources via stdio transport for IDE integration (VS Code, Cursor, Windsurf). |
 | `Sovrant.Lsp` | Language Server Protocol client: JSON-RPC over stdio, manages language server lifecycle, 5 LSP tools. |
 | `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient`, SSE streaming, React `useChat()` hook. |
@@ -119,7 +119,7 @@ curl -X POST http://localhost:5200/v1/chat/completions \
 
 ## Tools
 
-37 tools available (32 core + 5 LSP). All run inside the agentic loop with automatic retries up to 20 tool rounds per turn.
+39 tools available (32 core + 5 LSP + 4 team — see [Agent System](#agent-system) below). All run inside the agentic loop with automatic retries up to 20 tool rounds per turn. Two additional tools (`MCPTool` and `McpAuth`) provide dynamic MCP server interaction.
 
 ### File
 `Read` · `Write` · `Edit` · `Glob` · `Grep` · `LS`
@@ -138,6 +138,11 @@ curl -X POST http://localhost:5200/v1/chat/completions \
 
 ### Agent & interaction
 `Agent` *(spawns an isolated sub-agent session)* · `AskUserQuestion` · `Sleep`
+
+### Team orchestration
+`TeamCreate` · `TeamDelete` · `TeamStatus` · `TeamDelegate`
+
+*Create persistent named agents with roles, custom system prompts, and tool restrictions. Delegate tasks and track lifecycle. See [Agent System](#agent-system) below.*
 
 ### Discovery & skills
 `ToolSearch` *(keyword search over registered tools)* · `Skill` *(loads `.sovrant/skills/{name}.md` prompt template)*
@@ -278,7 +283,23 @@ The server keeps one `ConversationRuntime` alive per `session_id` in an in-memor
          │  error rate      │  │  Skill  ToolSearch           │
          └──────────┬───────┘  │  MCP: ListResources Read     │
                     │          │  NotebookEdit                │
-                    │          └──────────────────────────────┘
+                    │          │  Team: Create Delete         │
+                    │          │        Status Delegate       │
+                    │          └──────────┬───────────────────┘
+                    │                     │
+         ┌─────────┘          ┌───────────▼──────────────────┐
+         │                    │  Sovrant.Agents              │
+         │                    │                              │
+         │                    │  ITeamRegistry               │
+         │                    │  SovrantAgentFactory          │
+         │                    │  ├── AgentPrompts (6 roles)  │
+         │                    │  └── FilteredToolRegistry    │
+         │                    │                              │
+         │                    │  IMultiAgentSystem            │
+         │                    │  ├── Modern (in-process)     │
+         │                    │  └── Legacy (process-based)  │
+         │                    └──────────────────────────────┘
+         │
          ┌──────────▼───────────────┐
          │  LLM Providers           │
          │  OpenAI · Gemini · Ollama│
@@ -296,7 +317,59 @@ The server keeps one `ConversationRuntime` alive per `session_id` in an in-memor
 
 **Tool execution is permission-gated.** Every tool call goes through `IPermissionPolicy` before execution. The CLI uses `ModeAwarePermissionPolicy` (interactive prompts based on `PermissionMode`). The server defaults to `DontAsk` (all tools run without prompts) and can be changed live via `PUT /v1/config`.
 
-**Dual agent backends.** `Sovrant.Agents` defines `IMultiAgentSystem` with two interchangeable backends: a modern in-process backend (async message channels, recommended) and a legacy process-based backend (one process per agent, stdin/stdout). Switch via `AGENT_MODE=modern|legacy`. The active backend is selected at startup; no other part of the system depends on the concrete implementation.
+**Dual agent backends.** `Sovrant.Agents` defines `IMultiAgentSystem` with two interchangeable backends (see [Agent System](#agent-system) below). The active backend is selected at startup via `AGENT_MODE`; no other part of the system depends on the concrete implementation.
+
+---
+
+## Agent System
+
+Sovrant provides two complementary approaches to agent parallelization, serving different use cases.
+
+### Approach 1: Ad-hoc sub-agents (`Agent` tool)
+
+The `Agent` tool spawns a lightweight, stateless sub-agent for the duration of a single task. The LLM decides when to use it — typically to parallelize independent research, explore multiple solution paths, or isolate risky operations in a separate context.
+
+- Each sub-agent gets its own `ConversationRuntime` with a fresh session
+- No persistent identity — the agent is created, runs, and is discarded
+- Recursion depth limited to 5 to prevent runaway nesting
+- No role restrictions or tool filtering — the sub-agent has access to the same tools as the parent
+
+This is ideal for LLM-driven parallelization where the model itself decides how to decompose work.
+
+### Approach 2: Persistent team agents (Team tools)
+
+The team tools (`TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`) provide structured, user-controlled multi-agent orchestration. You define named agents with specific roles, custom system prompts, and optional tool restrictions. Agents persist across delegations and track their lifecycle.
+
+```
+# Create a specialist agent
+TeamCreate(name: "reviewer", role: "reviewer", prompt: "You review code for bugs and security issues", allowed_tools: ["Read", "Grep", "Glob"])
+
+# Delegate work
+TeamDelegate(member_id: "abc123", prompt: "Review the auth module for SQL injection")
+
+# Check status
+TeamStatus()  →  [{ name: "reviewer", status: "Completed", last_output: "Found 2 issues..." }]
+```
+
+Each team member:
+- Has a **role** (General, Planner, Coder, Reviewer, Executor, Supervisor) with a role-specific system prompt from `AgentPrompts`
+- Can be restricted to a **subset of tools** via `FilteredToolRegistry` — e.g., a reviewer that can only read files, not modify them
+- Tracks **lifecycle state**: Idle → Running → Completed/Failed
+- Is backed by a real `ConversationRuntime` with the custom system prompt, created lazily on first delegation via `SovrantAgentFactory`
+
+### Two backend modes
+
+Both the `Agent` tool and Team tools ultimately dispatch through `IMultiAgentSystem`, which has two interchangeable backends:
+
+| | Modern (default) | Legacy |
+|---|---|---|
+| **Env var** | `AGENT_MODE=modern` | `AGENT_MODE=legacy` |
+| **How it works** | In-process async — each agent runs as a `SovrantAgent` backed by its own `ConversationRuntime` in the same process | Process-per-agent — spawns a separate OS process per agent, communicates via stdin/stdout JSON |
+| **Concurrency** | `SemaphoreSlim` enforcing `MaxConcurrentAgents` | One process per agent, OS-level isolation |
+| **Cancellation** | Linked `CancellationTokenSource` (caller token + timeout) | Process tree kill on cancel |
+| **Best for** | Most workloads — lower overhead, shared memory | Untrusted code execution, hard isolation requirements |
+
+The backend is selected once at startup. The `AgentTool` (ad-hoc) and Team tools both use whichever backend is active.
 
 ---
 
@@ -372,18 +445,19 @@ Each tool takes a file path and a line/column position (1-based). The agent uses
 ## Tests
 
 ```bash
-dotnet test   # 243 tests across 8 projects
+dotnet test   # 329 tests across 9 projects
 ```
 
 | Project | Tests |
 |---|---|
 | `Sovrant.Api.Tests` | 28 |
-| `Sovrant.Runtime.Tests` | 86 |
+| `Sovrant.Runtime.Tests` | 106 |
 | `Sovrant.Server.Tests` | 16 |
 | `Sovrant.McpServer.Tests` | 30 |
 | `Sovrant.Lsp.Tests` | 26 |
-| `Sovrant.Tools.Tests` | 34 |
+| `Sovrant.Tools.Tests` | 42 |
 | `Sovrant.Commands.Tests` | 22 |
+| `Sovrant.Agents.Tests` | 58 |
 | `Sovrant.Integration.Tests` | 1 |
 
 ---
@@ -392,7 +466,7 @@ dotnet test   # 243 tests across 8 projects
 
 | Document | Contents |
 |---|---|
-| [`docs/server.md`](docs/server.md) | Full server API reference — all 9 endpoints, auth, CORS, streaming format |
+| [`docs/server.md`](docs/server.md) | Full server API reference — all 14 endpoints, auth, CORS, streaming format |
 | [`docs/frontend-integration.md`](docs/frontend-integration.md) | Node.js proxy setup, browser SSE client, Replit integration |
 | [`docs/engine-status.md`](docs/engine-status.md) | Tool test results, provider compatibility, known issues |
 | [`docs/ci-cd.md`](docs/ci-cd.md) | CI/CD integration — `--ci` flag, GitHub Actions action, GitLab CI template |

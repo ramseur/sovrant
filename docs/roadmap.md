@@ -9,56 +9,75 @@ This document tracks planned features, architectural decisions, and the reasonin
 
 ## Current State
 
-The engine is fully functional as a single-user tool:
+The engine is fully functional for individual and small-team use:
 
-- CLI REPL and one-shot prompt mode
+- **39 tools** across 8 categories (file, shell, web, task, agent, team, MCP, LSP)
+- **329 tests** across 9 projects, 0 warnings
+- **14 server endpoints** (OpenAI-compatible chat, sessions, config, usage, webhooks, export)
+- CLI REPL, one-shot `prompt`, CI mode (`--ci`), MCP server mode (`mcp-server`)
 - Agentic loop with up to 20 tool rounds per turn
-- 31 tools working on Windows and Linux (22 original + 5 Phase 7.5 Tier 1 + 4 Phase 7.5 Tier 2)
-- Agent memory files (`~/.sovrant/memory.md` + `.sovrant/memory.md`) injected into every system prompt (Phase 7.6 item 1 ✅)
-- Token counts reported correctly after each turn (Phase 7.6 item 2 ✅)
-- Per-runtime mutable permission mode (`IPermissionModeAccessor`) for model-driven plan mode transitions
-- JSONL session persistence
-- SmartRouter with health/latency scoring across multiple providers
-- HTTP server (`Sovrant.Server`) with OpenAI-compatible endpoints
-- In-memory session pool (one `ConversationRuntime` per `session_id`, safe for multiple users)
-- **OpenAI Responses API provider** (`LLM_WEB_SEARCH=true`) — routes through `POST /v1/responses`, injects `web_search_preview` built-in tool, suppresses the `WebSearch` function tool; full multi-turn + function tool support tested ✅
-- `Sovrant.Agents` scaffolding — `IAgent`, `IMultiAgentSystem`, both backends, `AGENT_MODE` config switch (Phase 17.5 ✅)
-- **Phase 7 hardening complete** ✅:
-  - Context auto-compaction — LLM-based history summarisation when input tokens ≥ `SOVRANT_COMPACT_THRESHOLD` (default 80k); summary replaces old messages; compaction event persisted to JSONL
-  - BashTool — 256 KB output cap per stream (stdout/stderr), strips `LD_PRELOAD`/`DYLD_INSERT_LIBRARIES`/`LD_LIBRARY_PATH` and related dangerous env vars from subprocess
-  - WebFetchTool SSRF protection — blocks RFC-1918 private IPs, loopback, link-local, IPv6 ULA/link-local, `localhost` by name, and all non-HTTP(S) schemes
-  - Provider retry — 3 attempts with 1 s/2 s/4 s backoff on 429/5xx and network errors
-  - AgentTool recursion depth guard — `AsyncLocal<int>` counter; rejects at depth ≥ 5
-  - ReadFileTool 10 MB cap — file size checked before reading
-  - GlobTool 1000-result cap — truncation notice when exceeded
-  - Atomic writes — `WriteFileTool` and `EditFileTool` write to `.tmp` then `File.Move` with overwrite
-
-### Still pending (known gaps)
-
-| Gap | Phase |
-|---|---|
-| Session TTL eviction + per-session lock | Phase 9.1 |
-| Per-session config overlay (fixes global `EnterPlanMode`) | Phase 9.5 |
-| ~~Multi-agent `DispatchAsync` + CLI/Server DI wiring~~ | ~~Phase 18–19~~ ✅ |
+- JSONL session persistence with in-memory pool (one `ConversationRuntime` per `session_id`)
+- SmartRouter with health/latency/cost scoring across multiple providers
+- Multi-provider support: OpenAI, Gemini, Ollama, native messages API, OpenAI Responses API (`LLM_WEB_SEARCH=true`)
+- Per-session config overlay, rate limiting, token usage tracking (Phase 9.5 ✅)
+- Session TTL eviction + LRU cap + per-session turn serialization (Phase 9.1 ✅)
+- Multi-tenant per-request credentials (`x_api_key` / `x_base_url`) (Phase 9 ✅)
+- Structured async logging with 4 env vars, source-generated delegates (Phase 8 ✅)
+- Agent memory files (`~/.sovrant/memory.md` + `.sovrant/memory.md`) injected into system prompt
+- Context auto-compaction at configurable token threshold
+- Security hardening: BashTool 256 KB cap + env stripping, WebFetch SSRF protection, provider retry 3×, AgentTool depth ≤ 5, ReadFile 10 MB cap, GlobTool 1000 cap, atomic writes
+- Webhook integration (Slack, Teams, Discord, custom)
+- Frontend SDK (TypeScript/React), structured diff view, session export
+- MCP server mode (stdio JSON-RPC 2.0) + dynamic MCP tool proxy (`MCPTool`) + MCP OAuth (`McpAuthTool`)
+- LSP integration (5 tools, 18 language extensions)
+- CI/CD integration (`--ci` flag, GitHub Actions composite action, GitLab CI template)
+- **Multi-agent team orchestration** (Phase 18+19 ✅) — see below
 
 ### Agent System: Current State
 
 | Layer | Status | Notes |
 |---|---|---|
-| Single sub-agent (`AgentTool`) | ✅ Working | Spawns a fresh `ConversationRuntime` via DI, runs one isolated turn, returns text. Used by the LLM today. |
-| Recursion depth guard | ✅ Done | `AsyncLocal<int>` counter; rejects at depth ≥ 5 with a clear error message. |
-| Multi-agent interfaces (`IAgent`, `IMultiAgentSystem`) | ✅ Defined | `Sovrant.Agents` project. Both backends implement the same interface. |
-| Modern backend (`InProcessMultiAgentSystem`) | ⚠️ Partial | `BaseAgent` channel/loop, `WorkspaceContext`, `AgentSystemFactory` all working. `MultiAgentCoordinator.DispatchAsync` is a stub — throws `NotImplementedException`. |
-| Legacy backend (`ProcessBasedMultiAgentSystem`) | ⚠️ Partial | Scaffold only. `ProcessAgent.HandleAsync` and `RunTaskAsync` throw `NotImplementedException`. |
-| Config switch (`AGENT_MODE`) | ✅ Working | `AgentSystemConfig.FromEnvironment()` + `AgentSystemFactory.Create()`. `AddMultiAgentSystem()` DI extension ready. |
-| DI wiring in CLI / Server | ❌ Not wired | `services.AddMultiAgentSystem()` is not yet called in `Sovrant.Cli` or `Sovrant.Server`. `AgentTool` still uses the old direct `ConversationRuntime` path. |
-| Team tools (`TeamCreate` / `TeamDelete` / `TeamStatus` / `TeamDelegate`) | ✅ Done | Phase 18. Uses `IMultiAgentSystem.RunTaskAsync` via `SovrantAgentFactory`. |
+| Ad-hoc sub-agent (`AgentTool`) | ✅ Working | Spawns a fresh `ConversationRuntime`, runs one isolated turn, returns text. Recursion depth ≤ 5. LLM-driven parallelization. |
+| Multi-agent interfaces (`IAgent`, `IMultiAgentSystem`) | ✅ Complete | `Sovrant.Agents` project. Both backends implement the same interface. |
+| Modern backend (`MultiAgentCoordinator`) | ✅ Complete | Semaphore-based concurrency control (`MaxConcurrentAgents`), linked CTS with timeout, agent resolution by name or first-registered, proper shutdown drain. |
+| Legacy backend (`ProcessBasedMultiAgentSystem`) | ✅ Complete | Process spawn, stdin/stdout JSON, process tree kill on cancel, timeout handling. |
+| `SovrantAgent` + `SovrantAgentFactory` | ✅ Complete | Runtime-backed agents with role-specific system prompts (`AgentPrompts`) and optional tool filtering (`FilteredToolRegistry`). |
+| Config switch (`AGENT_MODE`) | ✅ Working | `modern` (default, in-process) or `legacy` (process-per-agent). |
+| DI wiring in CLI / Server | ✅ Complete | `services.AddMultiAgentSystem()` called in both hosts. `ITeamRegistry`, `SovrantAgentFactory`, team tools all registered. |
+| Team tools | ✅ Complete | `TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`. Named agents with roles, custom prompts, tool restrictions, lifecycle tracking. |
 | V2 placeholders (`ITeamWorkspace`, `IArtifact`, `IMultiAgentCollaboration`) | ⚠️ Interfaces only | No implementations. Post-Phase 19. |
 
-**What needs to happen before multi-agent is usable:**
-1. ~~Phase 19 — implement `MultiAgentCoordinator.DispatchAsync` (modern backend)~~ ✅
-2. ~~Phase 18 — `TeamCreateTool` / `TeamDeleteTool` + wire `IMultiAgentSystem` into DI~~ ✅
-3. ~~Phase 19 — implement `ProcessAgent` / process backend~~ ✅
+### Completed phases
+
+| Phase | Summary |
+|---|---|
+| 7.5 | Tool parity — 9 new tools (EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree, TaskUpdate, Skill, ToolSearch, ListMcpResources, ReadMcpResource) |
+| 7.6 | Agent memory files, token count fix, context auto-compaction |
+| 7.6.5 | OpenAI Responses API (`LLM_WEB_SEARCH=true`) |
+| 7.7–7.9 | Security hardening, reliability, robustness |
+| 8 | Structured async logging |
+| 9 | Multi-tenant per-request credentials |
+| 9.1 | Session lifecycle (TTL eviction, LRU cap, turn serialization) |
+| 9.5 | Small team hardening (session-scoped config, rate limiting, usage tracking) |
+| 10 | LSP integration (5 tools, 18 language extensions) |
+| 11 | CI/CD pipeline integration |
+| 12 | Slack / webhook integration |
+| 13 | Frontend SDK, diff view, session export |
+| 14 | MCP server mode |
+| 16 | Dynamic MCP tool proxy (`MCPTool`) |
+| 17 | MCP OAuth authentication (`McpAuthTool`) |
+| 17.5 | Dual agent architecture scaffolding |
+| 18+19 | Multi-agent backend + team tools (58 tests) |
+
+### Still pending
+
+| Gap | Phase |
+|---|---|
+| VS Code native extension | Phase 15 (deferred — MCP covers the core IDE integration use case) |
+| V2 collaboration primitives (`ITeamWorkspace`, `IArtifact`, `IMultiAgentCollaboration`) | Post-Phase 19 |
+| Enterprise auth & multi-tenancy (per-user tokens, session ownership) | Phase 20 |
+| `/undo` / `/redo` (git-backed file rollback) | Phase 7.5 Tier 2 (deferred) |
+| `ScheduleCron` / `ConfigTool` | Phase 7.5 Tier 3 (deferred) |
 
 ---
 
@@ -971,11 +990,19 @@ This phase is deliberately deferred. A small trusted team sharing a single deplo
 
 | Issue | Priority | Notes |
 |---|---|---|
-| ~~Token counts always `0↑ 0↓`~~ | ~~Medium~~ | ✅ Fixed — `OpenAiCompatProvider` now captures trailing OpenAI usage chunk; `ConversationRuntime` reads `InputTokens` from `MessageDelta` |
-| ~~SmartRouter crashes on WSL DNS failure~~ | ~~High~~ | ✅ Fixed — `SmartRouter` falls back to configured providers when all fail startup ping; `ConversationRuntime` catches `RouteAsync` exception and emits `RuntimeError` instead of crashing |
-| `AskUserQuestion` blocked in server mode | Low | By design — no interactive console available over HTTP. Could be solved via a webhook/callback URL pattern |
-| Provider has no retry on 429/5xx | Medium | `ApiError.Retryable` flag is set but never used. Addressed in Phase 7.8. |
-| No request-level timeout on agentic loop | Medium | A runaway tool loop can occupy a session indefinitely; add per-turn wall-clock timeout |
-| CORS origins hardcoded | Low | Should be configurable via `SOVRANT_CORS_ORIGINS` env var |
+| `AskUserQuestion` blocked in server mode | Low | By design — no interactive console available over HTTP. Could be solved via a webhook/callback URL pattern. |
+| No request-level timeout on agentic loop | Medium | A runaway tool loop can occupy a session indefinitely; add per-turn wall-clock timeout. |
+| CORS origins hardcoded | Low | Should be configurable via `SOVRANT_CORS_ORIGINS` env var. |
 | `launchSettings.json` port conflicts with `SOVRANT_PORT` default | Low | `launchSettings.json` declares `5091`; Kestrel overrides to `5200`. Rapid restart or parallel test runs cause `SocketException (10048)`. Fix: align `launchSettings.json` with `SOVRANT_PORT`; add `--urls` CLI override for CI. |
-| `EnterPlanMode`/`ExitPlanMode` are global in server mode | Medium | Server uses shared `MutableServerConfig` singleton — calling `EnterPlanMode` in one session sets plan mode for all sessions simultaneously. Fixed in Phase 9.5 step 2 (session-scoped `SessionConfig` overlay). |
+| Team tools not yet smoke-tested with live LLM | Medium | `TeamCreate`/`TeamDelete`/`TeamStatus`/`TeamDelegate` have 58 unit tests but no end-to-end smoke test with a real provider. |
+| V2 collaboration interfaces are placeholders | Low | `ITeamWorkspace`, `IArtifact`, `IMultiAgentCollaboration` — no implementations yet. |
+
+### Resolved Issues
+
+| Issue | Resolution |
+|---|---|
+| Token counts always `0↑ 0↓` | ✅ `OpenAiCompatProvider` captures trailing OpenAI usage chunk |
+| SmartRouter crashes on WSL DNS failure | ✅ Falls back to configured providers when all fail startup ping |
+| Provider has no retry on 429/5xx | ✅ Phase 7.8 — 3 attempts with 1s/2s/4s backoff |
+| `EnterPlanMode`/`ExitPlanMode` are global in server mode | ✅ Phase 9.5 — session-scoped `SessionConfig` overlay |
+| `Sovrant.Agents` not wired into CLI or Server | ✅ Phase 18+19 — `AddMultiAgentSystem()` called in both hosts |
