@@ -78,9 +78,24 @@ promptCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
 root.Add(promptCmd);
 
 // ── 'mcp-server' subcommand ───────────────────────────────────────────────────
+var mcpTokenOpt = new Option<string?>("--token")
+    { Description = "Bearer token required by SOVRANT_MCP_TOKEN. Must match the server-side env var." };
+
 var mcpCmd = new Command("mcp-server", "Run as an MCP server on stdio for IDE integration (VS Code, Cursor, etc.).");
+mcpCmd.Add(mcpTokenOpt);
 mcpCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
 {
+    // ── Token validation ──────────────────────────────────────────────────
+    // If SOVRANT_MCP_TOKEN is set, the caller must provide a matching --token.
+    // stderr is used for diagnostics so it doesn't corrupt the stdout JSON-RPC transport.
+    var tokenError = McpTokenValidator.Validate(pr.GetValue(mcpTokenOpt));
+    if (tokenError is not null)
+    {
+        await Console.Error.WriteLineAsync($"sovrant mcp-server: {tokenError}").ConfigureAwait(false);
+        Environment.ExitCode = 1;
+        return;
+    }
+
     var config = ConfigLoader.Load();
     var model = pr.GetValue(modelOpt);
 

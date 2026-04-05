@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 16 complete — Dynamic MCP Tool Proxy (MCPTool) — 37 tools, 233 tests)
+**Last updated:** 2026-04-04 (MCP bearer token auth added — 37 tools, 243 tests)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -30,9 +30,9 @@
 | Frontend SDK | ✅ Implemented | `sdk/js/` — TypeScript `SovrantClient`, SSE parser, React `useChat()` hook, full type coverage |
 | Structured diff view | ✅ Implemented | `DiffRenderer` in CLI — color unified diffs for edit/write tools in REPL |
 | Session export | ✅ Implemented | `GET /v1/sessions/{id}/export` — markdown rendering of full session history |
-| MCP server mode | ✅ Implemented | `sovrant mcp-server` — stdio transport (JSON-RPC 2.0). Bridges all `IToolRegistry` tools + synthetic `chat` tool + session/config resources to MCP protocol. Zero overlap with HTTP server. |
+| MCP server mode | ✅ Implemented | `sovrant mcp-server` — stdio transport (JSON-RPC 2.0). Bridges all `IToolRegistry` tools + synthetic `chat` tool + session/config resources to MCP protocol. Zero overlap with HTTP server. Bearer token auth via `SOVRANT_MCP_TOKEN` + `--token`. |
 | Dynamic MCP Tool Proxy (`MCPTool`) | ✅ Implemented | Calls any tool on any connected MCP server dynamically at execution time — no static registration needed. Optional `server` param; searches all clients when omitted. |
-| Unit test suite | ✅ 233/233 passing | Api(28) + Runtime(86) + Server(16) + Lsp(26) + Tools(34) + Commands(22) + McpServer(20) + Integration(1) |
+| Unit test suite | ✅ 243/243 passing | Api(28) + Runtime(86) + Server(16) + Lsp(26) + Tools(34) + Commands(22) + McpServer(30) + Integration(1) |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |
@@ -226,6 +226,7 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 | `ROUTER_MODE` | No | `Smart` (default) or `Fixed`. Overrides `Router:Mode` in config. |
 | `ROUTER_STRATEGY` | No | `Balanced` (default), `Latency`, or `Cost`. Overrides `Router:Strategy` in config. |
 | `AGENT_MODE` | No | `modern` (default, in-process async channels) or `legacy` (process-per-agent stdio). Used by `Sovrant.Agents` when wired in Phase 18. |
+| `SOVRANT_MCP_TOKEN` | No | Required bearer token for MCP server mode. If set, callers must pass `--token <value>` matching this. Unset = no auth. |
 | `SOVRANT_MCP_TOOLS` | No | Comma-separated allow-list of tool names to expose via MCP server. Unset = all tools. `chat` always passes. |
 | `LLM_WEB_SEARCH` | No | Set to `true` to use the model's native web search capability (e.g. OpenAI `web_search_preview`). No external API key needed. |
 | `BRAVE_API_KEY` | No | Enables `WebSearch` via Brave Search API |

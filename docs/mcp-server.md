@@ -150,12 +150,67 @@ Tool names are **case-sensitive** — use the exact names as shown above.
 
 ---
 
+## Authentication
+
+MCP uses stdio (pipes), not HTTP — so there are no `Authorization` headers. Authentication works as a **startup gate**: the server validates the token before accepting any JSON-RPC messages.
+
+### How to enable
+
+**Step 1 — set the required token on the server side:**
+```bash
+export SOVRANT_MCP_TOKEN="your-secret-token"
+```
+
+This is the token the server expects. Keep it secret (use a secrets manager, `.env` file with restricted permissions, or a system keychain).
+
+**Step 2 — pass the token in your IDE config via `--token`:**
+
+```json
+{
+  "command": "sovrant",
+  "args": ["mcp-server", "--token", "your-secret-token"],
+  "env": {
+    "LLM_API_KEY": "sk-..."
+  }
+}
+```
+
+**Behavior:**
+
+| `SOVRANT_MCP_TOKEN` | `--token` provided | Result |
+|---|---|---|
+| Not set | Any | Allowed (open mode) |
+| Set | Not provided | Process exits, error to stderr |
+| Set | Wrong value | Process exits, error to stderr |
+| Set | Correct value | Allowed |
+
+Errors go to **stderr** so they don't corrupt the stdout JSON-RPC transport. The IDE will see the process exit immediately with a non-zero code.
+
+### VS Code example with token
+
+```json
+{
+  "github.copilot.chat.mcpServers": {
+    "sovrant": {
+      "command": "sovrant",
+      "args": ["mcp-server", "--token", "your-secret-token"],
+      "env": {
+        "LLM_API_KEY": "sk-..."
+      }
+    }
+  }
+}
+```
+
+---
+
 ## Environment Variables
 
 | Variable | Required | Description |
 |---|---|---|
 | `LLM_API_KEY` | Yes | API key for the LLM provider |
 | `LLM_BASE_URL` | No | Provider base URL (default: OpenAI) |
+| `SOVRANT_MCP_TOKEN` | No | Required bearer token. If set, callers must pass `--token <value>` matching this. Unset = no auth required. |
 | `SOVRANT_MCP_TOOLS` | No | Comma-separated allow-list of tool names. Unset = all tools. |
 
 All standard Sovrant environment variables (`ROUTER_MODE`, `ROUTER_STRATEGY`, `LLM_WEB_SEARCH`, etc.) are respected.
@@ -164,6 +219,7 @@ All standard Sovrant environment variables (`ROUTER_MODE`, `ROUTER_STRATEGY`, `L
 
 ## Security
 
+- **Token authentication** — `SOVRANT_MCP_TOKEN` + `--token` provides startup-time auth. Mismatches exit the process before any JSON-RPC exchange.
 - **Permission mode** is forced to `DontAsk` — all tool executions are auto-approved. MCP server mode is non-interactive; there is no console to prompt.
 - **Console logging is suppressed** — stdout is the JSON-RPC transport. Logs go to file only (`~/.sovrant/logs/`).
 - **No HTTP exposure** — MCP runs over stdio pipes. The process is only accessible to the parent process (IDE) that spawned it.

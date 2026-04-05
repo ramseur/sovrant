@@ -5,7 +5,7 @@ A .NET 10 agentic AI platform — multi-provider, tool-using, session-persistent
 Sovrant runs as a **CLI agent** for individual use, an **OpenAI-compatible HTTP server** for team and application integration, or via **webhooks** from Slack, Teams, Discord, and custom systems. The agent reads and writes files, executes shell commands, searches the web, calls tools autonomously, and maintains full conversation history across sessions.
 
 **Runtime:** .NET 10 / C# 13
-**Status:** Engine fully functional. 37 tools. 14 server endpoints. Webhook integrations. CI/CD pipeline support. Frontend SDK. MCP server mode. 233/233 tests passing.
+**Status:** Engine fully functional. 37 tools. 14 server endpoints. Webhook integrations. CI/CD pipeline support. Frontend SDK. MCP server mode. 243/243 tests passing.
 
 ---
 
@@ -234,6 +234,7 @@ The server keeps one `ConversationRuntime` alive per `session_id` in an in-memor
 | `SOVRANT_LOG_CONSOLE` | No | Write logs to stdout (default: `true`). Set to `false` to silence console output. |
 | `SOVRANT_LOG_FORMAT` | No | `text` (default, human-readable) or `json` (structured — better for log aggregators) |
 | `SOVRANT_RATE_LIMIT_RPM` | No | Per-session rate limit: requests per minute (default: `60`). Returns `429` when exceeded. |
+| `SOVRANT_MCP_TOKEN` | No | Required bearer token for MCP server mode. If set, callers must pass `--token <value>`. Unset = no auth. |
 | `SOVRANT_MCP_TOOLS` | No | Comma-separated allow-list of tools to expose in MCP server mode. Unset = all tools. |
 
 ---
@@ -371,7 +372,7 @@ Each tool takes a file path and a line/column position (1-based). The agent uses
 ## Tests
 
 ```bash
-dotnet test   # 233 tests across 8 projects
+dotnet test   # 243 tests across 8 projects
 ```
 
 | Project | Tests |
@@ -379,7 +380,7 @@ dotnet test   # 233 tests across 8 projects
 | `Sovrant.Api.Tests` | 28 |
 | `Sovrant.Runtime.Tests` | 86 |
 | `Sovrant.Server.Tests` | 16 |
-| `Sovrant.McpServer.Tests` | 20 |
+| `Sovrant.McpServer.Tests` | 30 |
 | `Sovrant.Lsp.Tests` | 26 |
 | `Sovrant.Tools.Tests` | 34 |
 | `Sovrant.Commands.Tests` | 22 |
