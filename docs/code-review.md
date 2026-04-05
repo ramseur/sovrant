@@ -425,15 +425,15 @@ finally {
 | M47 | Error hierarchy: SovrantAuthError, SovrantRateLimitError, SovrantTimeoutError | Medium | Poor error handling |
 | M49 | Shared ChatCallOptions interface replacing 4 inline option types | Low | DRY |
 
-### Phase F — Performance & Polish (when time permits)
+### Phase F — Performance & Polish ✅ COMPLETE
 
 | # | Issue | Effort | Risk if Unfixed |
 |---|-------|--------|-----------------|
-| M10 | Provider lookup dictionary | Low | Slightly slower routing |
-| M26 | GlobTool stat calls | Low | Slow on large directories |
-| M27 | ReadFileTool streaming | Medium | Memory spike on large files |
-| M37 | Semaphore contention | Medium | Agent starvation |
-| L-series | Various minor items | Low each | Polish |
+| M10 | Provider lookup via Dictionary for O(1) name resolution | Low | Slightly slower routing |
+| M26 | GlobTool: skip stat calls when matches exceed 1000 (return unsorted) | Low | Slow on large directories |
+| M27 | ReadFileTool: stream lines instead of ReadAllLinesAsync (constant memory) | Medium | Memory spike on large files |
+| M37 | Semaphore contention — **deferred** (configurable MaxConcurrentAgents suffices) | Medium | Agent starvation |
+| L-series | Various minor items — **deferred** | Low each | Polish |
 
 ---
 

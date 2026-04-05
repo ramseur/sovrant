@@ -40,14 +40,23 @@ public sealed class GlobTool : ITool
             return Task.FromResult("No files found.");
 
         const int MaxResults = 1000;
-        var files = result.Files
+        var allPaths = result.Files
             .Select(f => Path.Combine(searchPath, f.Path))
-            .OrderByDescending(File.GetLastWriteTimeUtc)
             .ToList();
 
-        var totalCount = files.Count;
-        if (totalCount > MaxResults)
-            files = files.Take(MaxResults).ToList();
+        var totalCount = allPaths.Count;
+
+        // Only stat+sort when the result set is manageable (avoids O(n) stat calls on huge matches).
+        List<string> files;
+        if (totalCount <= MaxResults)
+        {
+            files = [.. allPaths.OrderByDescending(File.GetLastWriteTimeUtc)];
+        }
+        else
+        {
+            // Too many to stat — return unsorted and truncated.
+            files = allPaths.Take(MaxResults).ToList();
+        }
 
         var output = string.Join(Environment.NewLine, files);
         if (totalCount > MaxResults)

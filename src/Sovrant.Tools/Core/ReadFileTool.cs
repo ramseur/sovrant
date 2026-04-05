@@ -37,16 +37,26 @@ public sealed class ReadFileTool : ITool
 
         try
         {
-            var lines = await File.ReadAllLinesAsync(filePath, ct).ConfigureAwait(false);
             var start = Math.Max(0, offset);
-            var end = Math.Min(lines.Length, start + limit);
-
             var sb = new StringBuilder();
-            for (var i = start; i < end; i++)
-                sb.Append(CultureInfo.InvariantCulture, $"{i + 1,6}\u2192{lines[i]}\n");
+            var lineNumber = 0;
+            var linesRead = 0;
+            var totalLines = 0;
 
-            if (end < lines.Length)
-                sb.Append(CultureInfo.InvariantCulture, $"\n[{lines.Length - end} more lines — use offset={end} to continue]");
+            using var reader = new StreamReader(filePath);
+            while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
+            {
+                totalLines++;
+                if (lineNumber >= start && linesRead < limit)
+                {
+                    sb.Append(CultureInfo.InvariantCulture, $"{lineNumber + 1,6}\u2192{line}\n");
+                    linesRead++;
+                }
+                lineNumber++;
+            }
+
+            if (totalLines > start + linesRead)
+                sb.Append(CultureInfo.InvariantCulture, $"\n[{totalLines - start - linesRead} more lines — use offset={start + linesRead} to continue]");
 
             return sb.ToString();
         }

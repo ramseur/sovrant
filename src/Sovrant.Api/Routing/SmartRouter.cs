@@ -12,6 +12,7 @@ namespace Sovrant.Api.Routing;
 public sealed class SmartRouter : ISmartRouter, IDisposable
 {
     private readonly IReadOnlyList<ProviderInfo> _providers;
+    private readonly Dictionary<string, ProviderInfo> _providersByName;
     private readonly RouterMode _mode;
     private readonly RouterStrategy _strategy;
     private readonly HttpClient _httpClient;
@@ -57,6 +58,7 @@ public sealed class SmartRouter : ISmartRouter, IDisposable
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(logger);
         _providers = providers;
+        _providersByName = providers.ToDictionary(p => p.Provider.Name, StringComparer.OrdinalIgnoreCase);
         _mode = mode;
         _strategy = strategy;
         _httpClient = httpClient;
@@ -113,9 +115,7 @@ public sealed class SmartRouter : ISmartRouter, IDisposable
     {
         if (providerName is not null)
         {
-            var match = _providers.FirstOrDefault(p =>
-                string.Equals(p.Provider.Name, providerName, StringComparison.OrdinalIgnoreCase));
-            if (match is null)
+            if (!_providersByName.ContainsKey(providerName))
                 throw new InvalidOperationException(
                     $"Provider '{providerName}' is not configured. " +
                     $"Known providers: {string.Join(", ", _providers.Select(p => p.Provider.Name))}");
@@ -128,8 +128,8 @@ public sealed class SmartRouter : ISmartRouter, IDisposable
     public Task RecordResultAsync(string providerName, bool success, double durationMs, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(providerName);
-        var info = _providers.FirstOrDefault(p => p.Provider.Name == providerName);
-        if (info is null) return Task.CompletedTask;
+        if (!_providersByName.TryGetValue(providerName, out var info))
+            return Task.CompletedTask;
 
         info.RequestCount++;
         if (success)
