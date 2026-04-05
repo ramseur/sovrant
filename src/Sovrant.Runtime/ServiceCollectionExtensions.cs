@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Api;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Conversation;
+using Sovrant.Runtime.Hooks;
 using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Session;
@@ -39,6 +40,9 @@ public static class ServiceCollectionExtensions
         var cliPolicy = new MutableCliPermissionPolicy(config.PermissionMode);
         services.AddSingleton<IPermissionPolicy>(cliPolicy);
         services.AddSingleton<IPermissionModeAccessor>(cliPolicy);
+
+        // Hook runner — loads hooks.json from disk on first construction.
+        services.AddSingleton<IHookRunner, HookRunner>();
 
         // Tool registry and executor
         services.AddSingleton<IToolRegistry, InMemoryToolRegistry>();

@@ -1,6 +1,9 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Sovrant.Agents.Models;
+using Sovrant.Agents.Modern;
+using Sovrant.Agents.Templates;
 using Sovrant.Api.Types;
 using Sovrant.Runtime.Conversation;
 
@@ -13,6 +16,7 @@ public sealed class AgentTool : ITool
     {
         Description =
             "Launches a sub-agent with a fresh isolated session to handle a specific task. " +
+            "Optionally specify a template (e.g. 'security-reviewer') for a purpose-built agent. " +
             "The agent runs to completion and returns its full text output. " +
             "Use for parallelising independent sub-tasks.",
     };
@@ -35,14 +39,33 @@ public sealed class AgentTool : ITool
         if (s_depth.Value >= MaxDepth)
             return $"Error: maximum agent recursion depth ({MaxDepth}) reached. Cannot spawn a nested sub-agent.";
 
-        // Create a fresh isolated runtime (transient)
-        var runtime = _services.GetRequiredService<IConversationRuntime>();
-        var sb = new StringBuilder();
-
+        var templateName = input.TryGetProperty("template", out var tEl) ? tEl.GetString() : null;
         var previousDepth = s_depth.Value;
         s_depth.Value = previousDepth + 1;
         try
         {
+            // When a template is specified, delegate to a purpose-built agent.
+            if (!string.IsNullOrWhiteSpace(templateName))
+            {
+                var registry = _services.GetService<AgentTemplateRegistry>();
+                var template = registry?.TryGet(templateName);
+                if (template is null)
+                    return $"Error: unknown template '{templateName}'.";
+
+                var factory = _services.GetService<SovrantAgentFactory>();
+                if (factory is null)
+                    return "Error: SovrantAgentFactory is not registered. Ensure AddMultiAgentSystem() was called.";
+
+                var modelOverride = input.TryGetProperty("model", out var mEl) ? mEl.GetString() : null;
+                var agent = factory.Create(template, modelOverride: modelOverride);
+                var taskId = Guid.NewGuid().ToString("N");
+                var result = await agent.HandleAsync(new AgentTask(taskId, prompt), ct).ConfigureAwait(false);
+                return result.Success ? result.Output : $"Sub-agent error: {result.Error}";
+            }
+
+            // Default path: fresh transient runtime with no template.
+            var runtime = _services.GetRequiredService<IConversationRuntime>();
+            var sb = new StringBuilder();
             await foreach (var ev in runtime.RunTurnAsync(prompt, ct).ConfigureAwait(false))
             {
                 switch (ev)
@@ -54,22 +77,22 @@ public sealed class AgentTool : ITool
                         return $"Sub-agent error: {err.Message}";
                 }
             }
+            return sb.Length > 0 ? sb.ToString() : "(sub-agent returned no output)";
         }
         finally
         {
             s_depth.Value = previousDepth;
         }
-
-        return sb.Length > 0 ? sb.ToString() : "(sub-agent returned no output)";
     }
-
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {
             "type": "object",
             "properties": {
-                "description": {"type": "string", "description": "Brief description of the sub-task."},
-                "prompt":      {"type": "string", "description": "The prompt to send to the sub-agent."}
+                "description": {"type": "string",  "description": "Brief description of the sub-task."},
+                "prompt":      {"type": "string",  "description": "The prompt to send to the sub-agent."},
+                "template":    {"type": "string",  "description": "Optional template name (e.g. 'coder', 'security-reviewer') for a purpose-built agent."},
+                "model":       {"type": "string",  "description": "Optional model override (only used when template is specified)."}
             },
             "required": ["prompt"]
         }

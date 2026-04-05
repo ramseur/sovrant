@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Sovrant.Agents.Models;
 using Sovrant.Agents.Teams;
+using Sovrant.Agents.Templates;
 using Sovrant.Api.Types;
 
 namespace Sovrant.Tools.Team;
@@ -16,8 +17,13 @@ public sealed class TeamCreateTool : ITool
     };
 
     private readonly ITeamRegistry _registry;
+    private readonly AgentTemplateRegistry? _templates;
 
-    public TeamCreateTool(ITeamRegistry registry) => _registry = registry;
+    public TeamCreateTool(ITeamRegistry registry, AgentTemplateRegistry? templates = null)
+    {
+        _registry = registry;
+        _templates = templates;
+    }
 
     public ToolDefinition Definition => s_definition;
 
@@ -27,13 +33,22 @@ public sealed class TeamCreateTool : ITool
         if (string.IsNullOrWhiteSpace(name))
             return Task.FromResult("Error: 'name' is required.");
 
-        var prompt = input.GetStringProp("prompt");
-        if (string.IsNullOrWhiteSpace(prompt))
-            return Task.FromResult("Error: 'prompt' is required.");
+        // Optional template — provides defaults for prompt, tools, and model level.
+        var templateName = GetStringOrNull(input, "template");
+        var template = templateName is not null ? _templates?.TryGet(templateName) : null;
+        if (templateName is not null && template is null)
+            return Task.FromResult($"Error: unknown template '{templateName}'. " +
+                "Use the 'templates' field on TeamStatus to list available templates.");
 
-        var roleStr = input.GetStringProp("role", "general");
+        // prompt is required unless a template provides it.
+        var promptRaw = GetStringOrNull(input, "prompt");
+        var prompt = promptRaw ?? template?.SystemPrompt;
+        if (string.IsNullOrWhiteSpace(prompt))
+            return Task.FromResult("Error: 'prompt' is required (or specify a 'template').");
+
+        var roleStr = input.GetStringProp("role", template?.Role.ToString() ?? "general");
         if (!Enum.TryParse<AgentRole>(roleStr, ignoreCase: true, out var role))
-            role = AgentRole.General;
+            role = template?.Role ?? AgentRole.General;
 
         var model = GetStringOrNull(input, "model");
 
@@ -46,6 +61,8 @@ public sealed class TeamCreateTool : ITool
                 .Cast<string>()
                 .ToList();
         }
+        // Fall back to template's tool list if caller didn't specify one.
+        allowedTools ??= template?.AllowedTools is { Count: > 0 } tTools ? tTools : null;
 
         var member = new TeamMemberInfo
         {
@@ -79,12 +96,13 @@ public sealed class TeamCreateTool : ITool
             "type": "object",
             "properties": {
                 "name":          {"type": "string", "description": "Unique name for the team member."},
+                "template":      {"type": "string", "description": "Optional built-in template name (e.g. 'security-reviewer'). Provides default prompt and tools."},
                 "role":          {"type": "string", "description": "Agent role: general, planner, coder, reviewer, executor, supervisor.", "default": "general"},
-                "prompt":        {"type": "string", "description": "System prompt / instructions for this agent."},
-                "allowed_tools": {"type": "array", "items": {"type": "string"}, "description": "Optional list of tool names this agent may use. If omitted, all tools are available."},
+                "prompt":        {"type": "string", "description": "System prompt / instructions. Required unless a template is specified."},
+                "allowed_tools": {"type": "array", "items": {"type": "string"}, "description": "Tools this agent may use. Defaults to the template's tool list if omitted."},
                 "model":         {"type": "string", "description": "Optional model override for this agent."}
             },
-            "required": ["name", "prompt"]
+            "required": ["name"]
         }
         """).RootElement;
 }

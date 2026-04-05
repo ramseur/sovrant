@@ -33,6 +33,15 @@ public sealed class SovrantConfig
     /// </summary>
     public int CompactThreshold { get; init; } = 80_000;
 
+    /// <summary>
+    /// Maps capability level names (<c>high</c>, <c>standard</c>, <c>fast</c>) to specific model
+    /// identifiers for this deployment. When an agent template's <c>RecommendedLevel</c> matches
+    /// a key here, the corresponding model is used instead of the default <see cref="Model"/>.
+    /// Example: <c>{ "high": "claude-opus-4-6", "standard": "gpt-4o", "fast": "gpt-4o-mini" }</c>
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ModelLevels { get; init; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>MCP server configurations keyed by server name.</summary>
     public IReadOnlyDictionary<string, McpServerConfig> McpServers { get; init; } =
         new Dictionary<string, McpServerConfig>(StringComparer.Ordinal);
@@ -43,6 +52,25 @@ public sealed class SovrantConfig
     /// </summary>
     public IReadOnlyDictionary<string, LspServerConfigEntry> LspServers { get; init; } =
         new Dictionary<string, LspServerConfigEntry>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Returns a copy of this config with <see cref="Model"/> replaced by <paramref name="model"/>.
+    /// All other properties are preserved.
+    /// </summary>
+    internal SovrantConfig WithModel(string model) => new()
+    {
+        Model = model,
+        MaxTokens = MaxTokens,
+        PermissionMode = PermissionMode,
+        RouterMode = RouterMode,
+        RouterStrategy = RouterStrategy,
+        BaseUrl = BaseUrl,
+        ApiKey = ApiKey,
+        CompactThreshold = CompactThreshold,
+        ModelLevels = ModelLevels,
+        McpServers = McpServers,
+        LspServers = LspServers,
+    };
 }
 
 /// <summary>Configuration for a single LSP server in settings.json.</summary>

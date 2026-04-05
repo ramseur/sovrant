@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sovrant.Api.Routing;
 using Sovrant.Runtime.Config;
+using Sovrant.Runtime.Hooks;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Tools;
 
@@ -50,7 +51,8 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
                 _services.GetRequiredService<IToolRegistry>(),
                 _services.GetRequiredService<ISessionStore>(),
                 _services.GetRequiredService<SovrantConfig>(),
-                _services.GetRequiredService<ILogger<ConversationRuntime>>());
+                _services.GetRequiredService<ILogger<ConversationRuntime>>(),
+                _services.GetService<IHookRunner>());
         }
         else
         {
@@ -67,6 +69,19 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
         var entry = new SessionEntry(runtime);
         var winner = _pool.GetOrAdd(sessionId, entry);
 
+        // Fire SessionStart only for the thread that actually created the entry.
+        if (ReferenceEquals(winner, entry))
+        {
+            var hookRunner = _services.GetService<IHookRunner>();
+            if (hookRunner is not null)
+            {
+                _ = hookRunner.RunAsync(
+                    HookEvent.SessionStart,
+                    new HookContext(HookEvent.SessionStart, persistenceId),
+                    CancellationToken.None);
+            }
+        }
+
         // If another thread won the race, dispose the lock we just created.
         if (!ReferenceEquals(winner, entry))
             entry.Lock.Dispose();
@@ -79,7 +94,10 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
     public void Evict(string sessionId)
     {
         if (_pool.TryRemove(sessionId, out var entry))
+        {
             entry.Lock.Dispose();
+            FireSessionEnd(sessionId);
+        }
     }
 
     /// <inheritdoc/>
@@ -96,6 +114,7 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
                 if (_pool.TryRemove(kvp.Key, out var removed))
                 {
                     removed.Lock.Dispose();
+                    FireSessionEnd(kvp.Key);
                     evicted++;
                 }
             }
@@ -114,6 +133,7 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
                 if (_pool.TryRemove(sortedByAccess[i].Key, out var removed))
                 {
                     removed.Lock.Dispose();
+                    FireSessionEnd(sortedByAccess[i].Key);
                     evicted++;
                 }
             }
@@ -126,6 +146,22 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
     public SessionConfig? TryGetConfig(string sessionId)
     {
         return _pool.TryGetValue(sessionId, out var entry) ? entry.Config : null;
+    }
+
+    private void FireSessionEnd(string sessionId)
+    {
+        var hookRunner = _services.GetService<IHookRunner>();
+        if (hookRunner is null) return;
+
+        // Strip composite key suffix for consistency with SessionStart.
+        var persistenceId = sessionId.Contains("::", StringComparison.Ordinal)
+            ? sessionId[..sessionId.IndexOf("::", StringComparison.Ordinal)]
+            : sessionId;
+
+        _ = hookRunner.RunAsync(
+            HookEvent.SessionEnd,
+            new HookContext(HookEvent.SessionEnd, persistenceId),
+            CancellationToken.None);
     }
 
     private sealed class SessionEntry

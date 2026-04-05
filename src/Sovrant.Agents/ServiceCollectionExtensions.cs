@@ -3,6 +3,7 @@ using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Config;
 using Sovrant.Agents.Modern;
 using Sovrant.Agents.Teams;
+using Sovrant.Agents.Templates;
 
 namespace Sovrant.Agents;
 
@@ -37,7 +38,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMultiAgentSystem>(sp =>
             AgentSystemFactory.Create(resolvedConfig, sp));
 
-        // Team registry and agent factory
+        // Template registry and agent factory
+        services.AddSingleton<AgentTemplateRegistry>();
         services.AddSingleton<ITeamRegistry, InMemoryTeamRegistry>();
         services.AddSingleton<SovrantAgentFactory>();
 

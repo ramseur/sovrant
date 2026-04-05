@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Api.Routing;
 using Sovrant.Api.Types;
 using Sovrant.Runtime.Config;
+using Sovrant.Runtime.Hooks;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Tools;
 
@@ -25,6 +26,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly ISessionStore _sessionStore;
     private readonly SovrantConfig _config;
     private readonly ILogger<ConversationRuntime> _logger;
+    private readonly IHookRunner _hookRunner;
     private readonly List<InputMessage> _history = [];
     private readonly string _systemPrompt;
 
@@ -70,6 +72,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         ISessionStore sessionStore,
         SovrantConfig config,
         ILogger<ConversationRuntime> logger,
+        IHookRunner? hookRunner = null,
         string? systemPromptOverride = null)
     {
         _router = router;
@@ -78,6 +81,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         _sessionStore = sessionStore;
         _config = config;
         _logger = logger;
+        _hookRunner = hookRunner ?? NullHookRunner.Instance;
         _systemPrompt = systemPromptOverride ?? BuildSystemPrompt();
     }
 
@@ -210,6 +214,11 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     accumulated.StopReason,
                     accumulated.InputTokens,
                     accumulated.OutputTokens);
+                // Stop hook is fire-and-forget — agent does not wait for it.
+                _ = _hookRunner.RunAsync(
+                    HookEvent.Stop,
+                    new HookContext(HookEvent.Stop, SessionId, StopReason: accumulated.StopReason),
+                    CancellationToken.None);
                 yield break;
             }
 
@@ -218,6 +227,20 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             var toolResultPairs = new List<(ToolResultContentBlock Content, bool IsError)>(toolUseBlocks.Count);
             foreach (var tu in toolUseBlocks)
             {
+                // PreToolUse: blocking in strict profile — abort tool if any hook exits non-zero.
+                var preCtx = new HookContext(HookEvent.PreToolUse, SessionId,
+                    ToolName: tu.Name, ToolInput: tu.Input.ToString());
+                var allowed = await _hookRunner.RunAsync(HookEvent.PreToolUse, preCtx, ct).ConfigureAwait(false);
+                if (!allowed)
+                {
+                    const string blockedMsg = "Blocked by PreToolUse hook.";
+                    yield return new RuntimeEvent.PermissionDenied(tu.Name, blockedMsg);
+                    toolResultPairs.Add((new ToolResultContentBlock.TextBlock(blockedMsg), true));
+                    await AppendSessionEntryAsync("tool_result", blockedMsg, ct,
+                        toolName: tu.Name, toolUseId: tu.Id, isError: true).ConfigureAwait(false);
+                    continue;
+                }
+
                 yield return new RuntimeEvent.ToolUseRequested(tu.Id, tu.Name, tu.Input);
 
                 LogToolDispatched(_logger, tu.Name);
@@ -232,6 +255,15 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
                 if (!execResult.Success && execResult.Output.Contains("denied", StringComparison.OrdinalIgnoreCase))
                     yield return new RuntimeEvent.PermissionDenied(tu.Name, execResult.Output);
+
+                // PostToolUse / PostToolUseFailure: fire-and-forget.
+                var postEvent = execResult.IsError ? HookEvent.PostToolUseFailure : HookEvent.PostToolUse;
+                var postCtx = new HookContext(postEvent, SessionId,
+                    ToolName: tu.Name,
+                    ToolOutput: execResult.Output,
+                    FilePath: TryExtractFilePath(tu.Input),
+                    IsError: execResult.IsError);
+                _ = _hookRunner.RunAsync(postEvent, postCtx, CancellationToken.None);
 
                 toolResultPairs.Add((new ToolResultContentBlock.TextBlock(execResult.Output), execResult.IsError));
 
@@ -445,6 +477,12 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         if (threshold <= 0 || inputTokens < threshold) return;
         if (_history.Count < 6) return;
 
+        // Allow hooks to save state before context is lost.
+        await _hookRunner.RunAsync(
+            HookEvent.PreCompact,
+            new HookContext(HookEvent.PreCompact, SessionId, InputTokens: inputTokens),
+            ct).ConfigureAwait(false);
+
         // Keep the last 4 messages intact; summarise everything before that
         const int KeepTail = 4;
         var cutPoint = _history.Count - KeepTail;
@@ -565,6 +603,16 @@ public sealed partial class ConversationRuntime : IConversationRuntime
               .Append(content);
         }
         catch (IOException) { /* silently skip unreadable files */ }
+    }
+
+    private static string? TryExtractFilePath(JsonElement input)
+    {
+        foreach (var prop in new[] { "path", "file_path", "filepath" })
+        {
+            if (input.TryGetProperty(prop, out var val) && val.ValueKind == JsonValueKind.String)
+                return val.GetString();
+        }
+        return null;
     }
 
     private sealed record StreamAccumulation(
