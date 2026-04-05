@@ -990,7 +990,7 @@ Three enforcement levels configurable via `SOVRANT_HOOK_PROFILE`:
 **Inspired by:** everything-claude-code (38 specialized agents with tool restrictions and model selection)
 **Depends on:** Phase 18+19 (multi-agent team tools — already complete)
 
-**Goal:** Define a library of **24 specialized agent role templates** spanning coding, research, communication, operations, and creative work — each with a structured methodology, constrained tool access, and model routing (Opus-class for reasoning, Sonnet-class for execution, Haiku-class for fast triage). These templates are loaded by `TeamCreate` and `AgentTool` to spawn purpose-built sub-agents. Sovrant is a general-purpose agentic platform — coding is one vertical, not the entire product.
+**Goal:** Define a library of **24 specialized agent role templates** spanning coding, research, communication, operations, and creative work — each with a structured methodology, constrained tool access, and a **recommended capability level** (high/standard/fast). Templates specify what capability a task *needs*, not which vendor model to use — admins and users choose the actual model and API key. These templates are loaded by `TeamCreate` and `AgentTool` to spawn purpose-built sub-agents. Sovrant is a general-purpose agentic platform — coding is one vertical, not the entire product.
 
 #### Why this is high priority
 
@@ -998,50 +998,50 @@ The team tools exist (Phase 18+19) but agents are generic — they get a role en
 
 #### Agent Templates — General-Purpose (10 templates)
 
-| Template | Model Tier | Tools | Methodology |
+| Template | Recommended Level | Tools | Methodology |
 |---|---|---|---|
-| **Planner** | Opus | Read, Grep, Glob (read-only) | Requirements analysis → architecture review → step breakdown → implementation ordering |
-| **Architect** | Opus | Read, Grep, Glob (read-only) | System design, trade-off analysis, ADR generation, scalability review |
-| **Researcher** | Opus | Read, Grep, Glob, WebSearch, WebFetch | Multi-source research with citation, 6-step workflow (scope → search → evaluate → synthesize → cite → report) |
-| **Chief of Staff** | Opus | Read, Grep, Glob, Bash, Edit, Write | Multi-channel communication triage (email, Slack, calendar), 4-tier priority classification, response drafting |
-| **Content Writer** | Sonnet | Read, Write, Edit, WebSearch | Long-form content creation with voice matching, anti-slop enforcement, multi-platform adaptation |
-| **Data Analyst** | Sonnet | Read, Grep, Glob, Bash | Data exploration, pattern detection, visualization generation, statistical analysis |
-| **Project Manager** | Sonnet | Read, Grep, Glob, Edit | Issue triage, cross-system coordination (GitHub/Linear/Jira), status tracking, dependency mapping |
-| **Doc Updater** | Sonnet | Read, Write, Edit, Grep, Glob | Documentation sync with code changes, API doc generation, changelog maintenance |
-| **Loop Operator** | Sonnet | Read, Grep, Glob, Bash, Edit | Safe autonomous loop management with monitoring, stall detection, and human escalation triggers |
-| **Executor** | Sonnet | Bash, PowerShell, Read | Run commands, monitor output, report results |
+| **Planner** | High | Read, Grep, Glob (read-only) | Requirements analysis → architecture review → step breakdown → implementation ordering |
+| **Architect** | High | Read, Grep, Glob (read-only) | System design, trade-off analysis, ADR generation, scalability review |
+| **Researcher** | High | Read, Grep, Glob, WebSearch, WebFetch | Multi-source research with citation, 6-step workflow (scope → search → evaluate → synthesize → cite → report) |
+| **Chief of Staff** | High | Read, Grep, Glob, Bash, Edit, Write | Multi-channel communication triage (email, Slack, calendar), 4-tier priority classification, response drafting |
+| **Content Writer** | Standard | Read, Write, Edit, WebSearch | Long-form content creation with voice matching, anti-slop enforcement, multi-platform adaptation |
+| **Data Analyst** | Standard | Read, Grep, Glob, Bash | Data exploration, pattern detection, visualization generation, statistical analysis |
+| **Project Manager** | Standard | Read, Grep, Glob, Edit | Issue triage, cross-system coordination (GitHub/Linear/Jira), status tracking, dependency mapping |
+| **Doc Updater** | Standard | Read, Write, Edit, Grep, Glob | Documentation sync with code changes, API doc generation, changelog maintenance |
+| **Loop Operator** | Standard | Read, Grep, Glob, Bash, Edit | Safe autonomous loop management with monitoring, stall detection, and human escalation triggers |
+| **Executor** | Standard | Bash, PowerShell, Read | Run commands, monitor output, report results |
 
 #### Agent Templates — Code-Specific (8 templates)
 
-| Template | Model Tier | Tools | Methodology |
+| Template | Recommended Level | Tools | Methodology |
 |---|---|---|---|
-| **Code Reviewer** | Opus | Read, Grep, Glob (read-only) | Multi-severity review (CRITICAL/HIGH/MEDIUM/LOW) with confidence thresholds |
-| **Security Reviewer** | Opus | Read, Grep, Glob (read-only) | OWASP Top 10 scan, secret detection, dependency audit, attack surface analysis |
-| **TDD Guide** | Sonnet | All | Red-Green-Refactor cycle enforcement, 80%+ coverage target, edge case generation |
-| **Refactor Cleaner** | Sonnet | Read, Grep, Glob, Edit | Dead code detection, safe incremental removal with SAFE/CAREFUL/RISKY classification |
-| **Coder** | Sonnet | All | Implementation from specs, test writing, error handling |
-| **Build Error Resolver** | Sonnet | Read, Grep, Glob, Bash | Parse build errors, identify root cause, apply fix, verify build passes |
-| **E2E Test Runner** | Sonnet | Read, Bash, Grep | Playwright/Selenium E2E test execution, failure analysis, screenshot capture |
-| **Database Reviewer** | Opus | Read, Grep, Glob (read-only) | Schema review, query optimization, migration safety analysis |
+| **Code Reviewer** | High | Read, Grep, Glob (read-only) | Multi-severity review (CRITICAL/HIGH/MEDIUM/LOW) with confidence thresholds |
+| **Security Reviewer** | High | Read, Grep, Glob (read-only) | OWASP Top 10 scan, secret detection, dependency audit, attack surface analysis |
+| **TDD Guide** | Standard | All | Red-Green-Refactor cycle enforcement, 80%+ coverage target, edge case generation |
+| **Refactor Cleaner** | Standard | Read, Grep, Glob, Edit | Dead code detection, safe incremental removal with SAFE/CAREFUL/RISKY classification |
+| **Coder** | Standard | All | Implementation from specs, test writing, error handling |
+| **Build Error Resolver** | Standard | Read, Grep, Glob, Bash | Parse build errors, identify root cause, apply fix, verify build passes |
+| **E2E Test Runner** | Standard | Read, Bash, Grep | Playwright/Selenium E2E test execution, failure analysis, screenshot capture |
+| **Database Reviewer** | High | Read, Grep, Glob (read-only) | Schema review, query optimization, migration safety analysis |
 
 #### Agent Templates — Creative & Domain (6 templates)
 
-| Template | Model Tier | Tools | Methodology |
+| Template | Recommended Level | Tools | Methodology |
 |---|---|---|---|
-| **GAN Planner** | Opus | Read, Grep, Glob | Expands briefs into comprehensive product specs with success criteria |
-| **GAN Generator** | Sonnet | All | Implements features per spec, manages sprint iterations |
-| **GAN Evaluator** | Opus | Read, Bash, Grep | Tests live apps against rubric, scores 4 dimensions (design, originality, craft, functionality) |
-| **Prompt Optimizer** | Opus | Read, Write, Edit | 6-phase prompt analysis: gap identification, ecosystem mapping, structure optimization |
-| **Sales Intelligence** | Sonnet | Read, WebSearch, WebFetch | Lead scoring, prospecting pipeline, warm-path discovery, outreach draft generation |
-| **Compliance Reviewer** | Opus | Read, Grep, Glob (read-only) | Policy adherence verification, PHI/PII detection, regulatory checklist enforcement |
+| **GAN Planner** | High | Read, Grep, Glob | Expands briefs into comprehensive product specs with success criteria |
+| **GAN Generator** | Standard | All | Implements features per spec, manages sprint iterations |
+| **GAN Evaluator** | High | Read, Bash, Grep | Tests live apps against rubric, scores 4 dimensions (design, originality, craft, functionality) |
+| **Prompt Optimizer** | High | Read, Write, Edit | 6-phase prompt analysis: gap identification, ecosystem mapping, structure optimization |
+| **Sales Intelligence** | Standard | Read, WebSearch, WebFetch | Lead scoring, prospecting pipeline, warm-path discovery, outreach draft generation |
+| **Compliance Reviewer** | High | Read, Grep, Glob (read-only) | Policy adherence verification, PHI/PII detection, regulatory checklist enforcement |
 
 #### Architecture
 
 ```
 src/Sovrant.Agents/Templates/
-  AgentTemplate.cs          ← record: Name, Role, ModelTier, AllowedTools, SystemPrompt, Methodology, OutputFormat
+  AgentTemplate.cs          ← record: Name, Role, RecommendedLevel, AllowedTools, SystemPrompt, Methodology, OutputFormat
   AgentTemplateRegistry.cs  ← loads built-in + user-defined templates from .sovrant/agents/
-  ModelTier.cs              ← enum: Reasoning (Opus-class), Execution (Sonnet-class), Fast (Haiku-class)
+  RecommendedLevel.cs       ← enum: High (complex reasoning), Standard (general tasks), Fast (triage/simple)
 ```
 
 Templates stored as markdown files in `.sovrant/agents/` (user-defined) or embedded resources (built-in):
@@ -1050,7 +1050,7 @@ Templates stored as markdown files in `.sovrant/agents/` (user-defined) or embed
 ---
 name: security-reviewer
 role: reviewer
-model_tier: reasoning
+recommended_level: high
 allowed_tools: [Read, Grep, Glob]
 ---
 # Security Reviewer
@@ -1066,23 +1066,28 @@ You are a security-focused code reviewer specializing in OWASP Top 10...
 ...
 ```
 
-#### Model Routing
+#### Model Resolution (Provider-Agnostic)
 
-`SovrantAgentFactory` maps `ModelTier` to actual model names via config:
+Templates specify a `RecommendedLevel` (high/standard/fast), not a specific model. The actual model used is resolved at runtime based on what the admin or user has configured:
 
-```json
-{ "model_tiers": { "reasoning": "claude-opus-4-6", "execution": "claude-sonnet-4-6", "fast": "claude-haiku-4-5" } }
-```
+1. **User override** — `TeamCreate` or `AgentTool` accepts an optional `model` parameter (e.g., `"gpt-4o"`, `"claude-sonnet-4-6"`, `"deepseek-r1"`)
+2. **Admin defaults** — `.sovrant/config.json` or env vars map levels to models for the deployment:
+   ```json
+   { "model_levels": { "high": "claude-opus-4-6", "standard": "gpt-4o", "fast": "gpt-4o-mini" } }
+   ```
+3. **Template recommendation** — if no override and no admin default, the template's `recommended_level` is logged as a suggestion but the session's current model is used
+
+This keeps Sovrant provider-agnostic. Users who care about cost can route "high" tasks to a cheaper model; users who want the best results can route everything to their top-tier model. The template defines *what capability is needed*, not *which vendor to call*.
 
 #### Implementation Plan
 
-1. Define `AgentTemplate` and `ModelTier` in `Sovrant.Agents/Templates/`
+1. Define `AgentTemplate` and `RecommendedLevel` in `Sovrant.Agents/Templates/`
 2. Implement `AgentTemplateRegistry` — loads built-in templates from embedded resources + user templates from `.sovrant/agents/`
-3. Update `SovrantAgentFactory` to accept `AgentTemplate` and map `ModelTier` → model name
+3. Update `SovrantAgentFactory` to accept `AgentTemplate` and resolve model via user override → admin default → session model
 4. Update `TeamCreateTool` to accept a `template` parameter (e.g., `"security-reviewer"`)
 5. Update `AgentTool` to accept an optional `template` parameter for ad-hoc sub-agents
 6. Ship **24 built-in templates**: 10 general-purpose, 8 code-specific, 6 creative/domain
-7. Tests: template loading, model tier mapping, tool restriction enforcement, user template override
+7. Tests: template loading, model level resolution (override → admin default → session), tool restriction enforcement, user template override
 
 ---
 
@@ -1545,7 +1550,7 @@ Evals stored in `.sovrant/evals/`:
 **Inspired by:** [claude-swarm](https://github.com/affaan-m/claude-swarm) (parallel task decomposition with dependency DAGs, file locking, budget enforcement, quality gate)
 **Depends on:** Phase 18+19 (multi-agent team tools), Phase 21 (agent templates), Phase 26 (cost tracking)
 
-**Goal:** Add a **swarm orchestration layer** on top of Sovrant's existing multi-agent infrastructure. A user gives a single complex prompt; an Opus-class model automatically decomposes it into a dependency graph of 2-8 subtasks; subtasks execute in parallel waves respecting dependencies, with file-level conflict prevention, budget enforcement, and a quality gate review phase. Available via CLI (`sovrant swarm "task"`), the `SwarmTool` for programmatic use, and `POST /v1/swarm` for frontend integration.
+**Goal:** Add a **swarm orchestration layer** on top of Sovrant's existing multi-agent infrastructure. A user gives a single complex prompt; a high-capability model automatically decomposes it into a dependency graph of 2-8 subtasks; subtasks execute in parallel waves respecting dependencies, with file-level conflict prevention, budget enforcement, and a quality gate review phase. The swarm uses whatever models the admin/user has configured — decomposition and quality gates use the "high" level model, workers use the "standard" level (all provider-agnostic via Phase 21's model resolution). Available via CLI (`sovrant swarm "task"`), the `SwarmTool` for programmatic use, and `POST /v1/swarm` for frontend integration.
 
 #### What Sovrant already has vs. what this adds
 
@@ -1561,13 +1566,13 @@ Evals stored in `.sovrant/evals/`:
 
 #### How it works (3-phase pipeline)
 
-**Phase 1 — Decomposition** (Opus-class model)
+**Phase 1 — Decomposition** (high-level model)
 1. User submits a single complex prompt
-2. Decomposer calls `IConversationRuntime` with a structured system prompt instructing it to output a JSON task graph
+2. Decomposer calls `IConversationRuntime` (using the admin's configured "high" model) with a structured system prompt instructing it to output a JSON task graph
 3. Each task in the graph has: `id`, `description`, `dependencies` (list of task IDs), `files_to_modify` (predicted), `agent_template` (from Phase 21), `allowed_tools`
 4. Tasks are organized into parallel waves (levels of the DAG) — wave 0 has no dependencies, wave 1 depends on wave 0, etc.
 
-**Phase 2 — Parallel Execution** (Sonnet/Haiku-class workers)
+**Phase 2 — Parallel Execution** (standard/fast-level workers)
 1. `SwarmOrchestrator` processes waves sequentially, tasks within a wave in parallel
 2. Before launching each task: check file locks (pessimistic), check budget ceiling
 3. Each task spawns an agent via `SovrantAgentFactory` using the appropriate `AgentTemplate`
@@ -1575,9 +1580,9 @@ Evals stored in `.sovrant/evals/`:
 5. On completion: release file locks, accumulate cost, pass output to dependent tasks as context
 6. On failure: retry up to `max_retries`, then mark failed and cancel dependents
 
-**Phase 3 — Quality Gate** (Opus-class model)
+**Phase 3 — Quality Gate** (high-level model)
 1. Collect all task outputs
-2. Send combined output to Opus with a quality review prompt
+2. Send combined output to the "high" model with a quality review prompt
 3. Score 1-10 with verdict: `pass` / `needs_revision` / `fail`
 4. If `needs_revision`: identify specific tasks to re-run, loop back to Phase 2
 5. Return final combined result to user
@@ -1590,9 +1595,9 @@ src/Sovrant.Agents/Swarm/
   SwarmPlan.cs                ← decomposed DAG: tasks, parallel_waves, metadata
   SwarmResult.cs              ← final result: task outputs, quality score, total cost, duration
   ISwarmDecomposer.cs         ← interface: DecomposeAsync(prompt, ct) → SwarmPlan
-  LlmSwarmDecomposer.cs       ← Opus-class decomposition via IConversationRuntime
+  LlmSwarmDecomposer.cs       ← high-level model decomposition via IConversationRuntime
   SwarmOrchestrator.cs        ← DAG execution engine with file locking, budget, retries
-  SwarmQualityGate.cs         ← post-execution Opus review with score + verdict
+  SwarmQualityGate.cs         ← post-execution high-level model review with score + verdict
   SwarmSession.cs             ← JSONL event recording and replay
 
 src/Sovrant.Tools/Swarm/
@@ -1612,8 +1617,8 @@ swarm:
   budget_usd: 5.0            # hard cost ceiling
   max_retries: 1             # per-task retry limit
   quality_gate: true         # enable post-execution review
-  decomposer_model: reasoning  # model tier for decomposition (Phase 21 ModelTier)
-  worker_model: execution      # default model tier for workers
+  decomposer_level: high       # recommended level for decomposition (Phase 21 RecommendedLevel)
+  worker_level: standard       # default recommended level for workers
 
 templates:                    # override agent templates per task type
   code_change: coder
@@ -1678,9 +1683,9 @@ Claude-swarm agents are isolated — downstream tasks wait for predecessors but 
 #### Implementation Plan (10 steps, ~12 new files)
 
 1. Define `SwarmTask`, `SwarmPlan`, `SwarmResult` models in `Sovrant.Agents/Swarm/`
-2. Implement `LlmSwarmDecomposer` — structured Opus call that outputs JSON task DAG
+2. Implement `LlmSwarmDecomposer` — structured high-level model call that outputs JSON task DAG
 3. Implement `SwarmOrchestrator` — DAG scheduler with `SemaphoreSlim`, file locks, budget tracking, retry logic
-4. Implement `SwarmQualityGate` — post-execution Opus review with structured scoring
+4. Implement `SwarmQualityGate` — post-execution high-level model review with structured scoring
 5. Implement `SwarmSession` — JSONL event recording and replay
 6. Create `SwarmTool` and `SwarmStatusTool` in `Sovrant.Tools/Swarm/`
 7. Add `SwarmCommand` to CLI (`sovrant swarm "prompt" [flags]`)
