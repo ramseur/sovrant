@@ -11,9 +11,9 @@ This document tracks planned features, architectural decisions, and the reasonin
 
 The engine is fully functional for individual and small-team use:
 
-- **39 tools** across 8 categories (file, shell, web, task, agent, team, MCP, LSP)
+- **45 tools** across 8 categories (file, shell, web, task, agent, team, MCP, LSP)
 - **879 tests** across 9 projects, 0 warnings
-- **20 server endpoints** (OpenAI-compatible chat, sessions, config, usage, webhooks, export, registry discovery)
+- **28 server endpoints** (OpenAI-compatible chat, sessions, config, usage, webhooks, export, registry discovery, swarm, evals)
 - CLI REPL, one-shot `prompt`, CI mode (`--ci`), MCP server mode (`mcp-server`)
 - Agentic loop with up to 20 tool rounds per turn
 - JSONL session persistence with in-memory pool (one `ConversationRuntime` per `session_id`)

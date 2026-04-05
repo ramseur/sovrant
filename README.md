@@ -8,7 +8,7 @@ The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HT
 
 **Runtime:** .NET 10 / C# 13
 **License:** [see LICENSE]
-**Status:** Engine fully functional. 45 tools. 24 agent templates. 32 built-in skills. 18 server endpoints. Multi-agent team orchestration. Swarm orchestrator. Eval framework. MCP server mode. Frontend SDK. 836 tests passing.
+**Status:** Engine fully functional. 45 tools. 24 agent templates. 32 built-in skills. 28 server endpoints. Multi-agent team orchestration. Swarm orchestrator. Eval framework. MCP server mode. Frontend SDK. 879 tests passing.
 
 ---
 
@@ -95,13 +95,34 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
 - An API key from any supported LLM provider
 
+### Clone & Build
+
+```bash
+git clone https://github.com/ramseur/sovrant-engine.git
+cd sovrant-engine
+git checkout sovrant-openc-dotnet-port
+dotnet restore
+dotnet build
+```
+
 ### CLI
 
+**Linux / macOS / WSL:**
 ```bash
 export LLM_API_KEY="sk-..."
 # Optional: use a different provider
 export LLM_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai/"
+```
 
+**Windows (PowerShell):**
+```powershell
+$env:LLM_API_KEY = "sk-..."
+# Optional: use a different provider
+$env:LLM_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+```
+
+**Then run:**
+```bash
 # One-shot prompt
 dotnet run --project src/Sovrant.Cli -- --model gpt-4o-mini prompt "List all .cs files in src/"
 
@@ -117,11 +138,22 @@ dotnet run --project src/Sovrant.Cli -- --ci --model gpt-4o-mini prompt "Fix the
 
 ### Server
 
+**Linux / macOS / WSL:**
 ```bash
 export LLM_API_KEY="sk-..."
 export SOVRANT_TOKEN="your-secret-token"
 export SOVRANT_PORT=5200    # optional, default 5200
+```
 
+**Windows (PowerShell):**
+```powershell
+$env:LLM_API_KEY = "sk-..."
+$env:SOVRANT_TOKEN = "your-secret-token"
+$env:SOVRANT_PORT = 5200    # optional, default 5200
+```
+
+**Then run:**
+```bash
 dotnet run --project src/Sovrant.Server
 ```
 
@@ -729,7 +761,7 @@ Replace `-r linux-x64` with `-r win-x64` in all commands above.
 ## Tests
 
 ```bash
-dotnet test Sovrant.slnx   # 836 tests across 9 projects
+dotnet test Sovrant.slnx   # 879 tests across 9 projects
 ```
 
 | Project | Tests |
