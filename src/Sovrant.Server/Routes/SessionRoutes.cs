@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using System.Text.Json.Serialization;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Permissions;
@@ -16,6 +18,7 @@ internal static class SessionRoutes
         app.MapDelete("/v1/sessions/{id}", DeleteSession);
         app.MapPut("/v1/sessions/{id}/config", PutSessionConfig);
         app.MapGet("/v1/sessions/{id}/config", GetSessionConfig);
+        app.MapGet("/v1/sessions/{id}/export", ExportSession);
     }
 
     private static async Task<IResult> ListSessions(ISessionStore store, CancellationToken ct)
@@ -116,6 +119,86 @@ internal static class SessionRoutes
             sessionConfig.PermissionMode = pm;
 
         return Results.Ok(new { updated = true });
+    }
+
+    private static async Task<IResult> ExportSession(
+        string id,
+        ISessionStore store,
+        CancellationToken ct)
+    {
+        var entries = await store.LoadAsync(id, ct).ConfigureAwait(false);
+        if (entries.Count == 0)
+            return Results.NotFound(new { error = $"Session '{id}' not found." });
+
+        var sb = new StringBuilder();
+        sb.Append(CultureInfo.InvariantCulture, $"# Session: {id}").AppendLine();
+        sb.AppendLine();
+
+        foreach (var entry in entries)
+        {
+            var ts = entry.Timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+
+            switch (entry.Role)
+            {
+                case "user":
+                    sb.Append(CultureInfo.InvariantCulture, $"## User ({ts})").AppendLine();
+                    sb.AppendLine();
+                    sb.AppendLine(entry.Content);
+                    sb.AppendLine();
+                    break;
+
+                case "assistant":
+                    sb.Append(CultureInfo.InvariantCulture, $"## Assistant ({ts})").AppendLine();
+                    if (entry.Model is not null)
+                        sb.Append(CultureInfo.InvariantCulture, $"*Model: {entry.Model}*").AppendLine();
+                    sb.AppendLine();
+                    sb.AppendLine(entry.Content);
+                    if (entry.InputTokens > 0 || entry.OutputTokens > 0)
+                    {
+                        sb.AppendLine();
+                        sb.Append(CultureInfo.InvariantCulture,
+                            $"> Tokens: {entry.InputTokens} input, {entry.OutputTokens} output").AppendLine();
+                    }
+                    sb.AppendLine();
+                    break;
+
+                case "tool_use":
+                    sb.Append(CultureInfo.InvariantCulture,
+                        $"### Tool: {entry.ToolName ?? "unknown"} ({ts})").AppendLine();
+                    sb.AppendLine();
+                    sb.AppendLine("```");
+                    sb.AppendLine(entry.Content);
+                    sb.AppendLine("```");
+                    sb.AppendLine();
+                    break;
+
+                case "tool_result":
+                    var errorTag = entry.IsError ? " [ERROR]" : "";
+                    sb.Append(CultureInfo.InvariantCulture,
+                        $"### Result: {entry.ToolName ?? "unknown"}{errorTag}").AppendLine();
+                    sb.AppendLine();
+                    sb.AppendLine("```");
+                    // Truncate long tool results to keep export readable.
+                    var content = entry.Content.Length > 2000
+                        ? string.Concat(entry.Content.AsSpan(0, 2000), "... (truncated)")
+                        : entry.Content;
+                    sb.AppendLine(content);
+                    sb.AppendLine("```");
+                    sb.AppendLine();
+                    break;
+
+                default:
+                    // system, compaction, etc. — include as a note
+                    sb.Append(CultureInfo.InvariantCulture,
+                        $"### {entry.Role} ({ts})").AppendLine();
+                    sb.AppendLine();
+                    sb.AppendLine(entry.Content);
+                    sb.AppendLine();
+                    break;
+            }
+        }
+
+        return Results.Text(sb.ToString(), "text/markdown; charset=utf-8");
     }
 }
 

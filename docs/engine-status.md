@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 12 complete — Slack/webhook integration: POST /v1/webhook, callback service, Slack bot — 36 tools, 201 tests)
+**Last updated:** 2026-04-04 (Phase 13 complete — Frontend SDK, structured diff view, session export — 36 tools, 205 tests)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -27,7 +27,10 @@
 | LSP integration (`Sovrant.Lsp`) | ✅ Implemented | `ILspClient` / `LspClient` — JSON-RPC 2.0 over stdio, Content-Length framing. `LspClientManager` maps file extensions to language servers. 5 tools: LspHover, LspDefinition, LspReferences, LspDiagnostics, LspRename. Config via `lsp_servers` in `SovrantConfig`. |
 | CI/CD integration | ✅ Implemented | `--ci` flag on CLI: JSON output, non-zero exit on error, `CiPermissionPolicy`, `CiUserInputProvider`. GitHub Actions composite action. GitLab CI template in docs. |
 | Webhook integration | ✅ Implemented | `POST /v1/webhook` — generic endpoint for Slack, Teams, Discord, custom. Sync or async (callback URL). `WebhookCallbackService` for background delivery. Slack bot at `integrations/slack/`. |
-| Unit test suite | ✅ 201/201 passing | Api(28) + Runtime(86) + Server(12) + Lsp(26) + Tools(26) + Commands(22) + Integration(1) |
+| Frontend SDK | ✅ Implemented | `sdk/js/` — TypeScript `SovrantClient`, SSE parser, React `useChat()` hook, full type coverage |
+| Structured diff view | ✅ Implemented | `DiffRenderer` in CLI — color unified diffs for edit/write tools in REPL |
+| Session export | ✅ Implemented | `GET /v1/sessions/{id}/export` — markdown rendering of full session history |
+| Unit test suite | ✅ 205/205 passing | Api(28) + Runtime(86) + Server(16) + Lsp(26) + Tools(26) + Commands(22) + Integration(1) |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |

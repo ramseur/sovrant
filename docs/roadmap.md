@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 12 complete — Slack/webhook integration: POST /v1/webhook, WebhookCallbackService, Slack bot, docs)
+**Last updated:** 2026-04-04 (Phase 13 complete — Frontend SDK, structured diff view, session export)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -648,31 +648,43 @@ An `ILspClient` service manages the lifecycle of one or more language server pro
 
 ---
 
-### Phase 13 — Frontend SDK
+### Phase 13 — Frontend SDK, Diff View, Session Export ✅
 
-**Goal:** A typed TypeScript/JavaScript client for `Sovrant.Server` that handles SSE streaming, session management, and tool event rendering.
+**Goal:** TypeScript/JavaScript client SDK, structured diff rendering in the CLI, and session export endpoint.
 
-#### Planned Features
+**Status: ✅ Complete**
 
-- `SovrantClient` class: wraps `fetch` + SSE parsing
-- `useChat()` React hook (standard streaming chat hook pattern)
-- Per-request credential injection (for Replit/browser use where the client holds the key)
-- Built-in retry on transient errors
-- Tool event callbacks: `onToolUse`, `onPermissionDenied`, `onError`
+#### What was implemented
 
-#### Additional: Structured Diff View in REPL
+1. **TypeScript SDK** at `sdk/js/` — `@sovrant/sdk` npm package
+   - `SovrantClient` class: chat (sync + streaming), webhook, config, status, sessions, usage, health
+   - SSE stream parser (`parseSSEStream`) for raw chunk iteration
+   - React `useChat()` hook with streaming text, tool events, and error handling
+   - Per-request credential injection via options
+   - Built-in retry on 429/5xx with configurable max retries
+   - `SovrantApiError` class for structured error handling
+   - Full TypeScript types for all request/response shapes
 
-**Competitor precedent:** Claude Code ✅ · opencode ✅
+2. **Structured Diff View** in CLI REPL
+   - `DiffRenderer` class renders edit/write tool inputs as colored diffs
+   - Edit tools: red lines for `old_string`, green lines for `new_string`
+   - Write tools: file path + line count + first 5 lines preview
+   - Integrated into `ToolUseRequested` event handling in the REPL
 
-Before applying `Edit` or `Write` tool calls, render a colour unified diff of the proposed change using Spectre.Console markup. The permission dialog shows exactly what will change — filename, line numbers, added/removed lines in green/red — rather than raw tool arguments. Significantly increases trust in the agent's edits.
+3. **Session Export** — `GET /v1/sessions/{id}/export`
+   - Returns full session as human-readable markdown (`text/markdown`)
+   - User turns, assistant turns (with model + token counts), tool calls (as code blocks), tool results
+   - Long tool results truncated to 2000 chars for readability
 
-Implementation: intercept `Edit`/`Write` permission prompts in `ModeAwarePermissionPolicy`; compute and render the diff before asking for approval.
+#### Key files
 
-#### Additional: Session Export
-
-**Competitor precedent:** opencode (`/share`)
-
-Add `GET /v1/sessions/{id}/export?format=markdown` — returns the full session rendered as human-readable markdown (user/assistant turns, tool calls summarised, timestamps). Useful for sharing debugging sessions, creating audit trails, and archiving completed tasks. The JSONL format already contains everything needed; the endpoint is a thin renderer.
+- `sdk/js/src/client.ts` — `SovrantClient`
+- `sdk/js/src/sse.ts` — SSE parser
+- `sdk/js/src/hooks/use-chat.ts` — React hook
+- `sdk/js/src/types.ts` — TypeScript types
+- `sdk/js/src/index.ts` — barrel export
+- `src/Sovrant.Cli/DiffRenderer.cs` — structured diff display
+- `src/Sovrant.Server/Routes/SessionRoutes.cs` — added `ExportSession`
 
 ---
 

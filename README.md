@@ -5,7 +5,7 @@ A .NET 10 agentic AI platform — multi-provider, tool-using, session-persistent
 Sovrant runs as a **CLI agent** for individual use, an **OpenAI-compatible HTTP server** for team and application integration, or via **webhooks** from Slack, Teams, Discord, and custom systems. The agent reads and writes files, executes shell commands, searches the web, calls tools autonomously, and maintains full conversation history across sessions.
 
 **Runtime:** .NET 10 / C# 13
-**Status:** Engine fully functional. 36 tools. 13 server endpoints. Webhook integrations. CI/CD pipeline support. 201/201 tests passing.
+**Status:** Engine fully functional. 36 tools. 14 server endpoints. Webhook integrations. CI/CD pipeline support. Frontend SDK. 205/205 tests passing.
 
 ---
 
@@ -21,6 +21,7 @@ Sovrant runs as a **CLI agent** for individual use, an **OpenAI-compatible HTTP 
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/clear`, `/session`, `/memory`, etc.). |
 | `Sovrant.Agents` | Multi-agent infrastructure: `IAgent` / `IMultiAgentSystem` interfaces, modern in-process backend, legacy process-based backend, `AGENT_MODE` config switch. |
 | `Sovrant.Lsp` | Language Server Protocol client: JSON-RPC over stdio, manages language server lifecycle, 5 LSP tools. |
+| `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient`, SSE streaming, React `useChat()` hook. |
 
 ---
 
@@ -111,6 +112,7 @@ curl -X POST http://localhost:5200/v1/chat/completions \
 | `PUT` | `/v1/sessions/{id}/config` | Update per-session config without affecting other sessions |
 | `GET` | `/v1/usage` | Per-session token usage summary |
 | `POST` | `/v1/webhook` | Generic webhook — accepts messages from Slack, Teams, Discord, or custom sources |
+| `GET` | `/v1/sessions/{id}/export` | Export session as human-readable markdown |
 
 ---
 
@@ -367,14 +369,14 @@ Each tool takes a file path and a line/column position (1-based). The agent uses
 ## Tests
 
 ```bash
-dotnet test   # 201 tests across 7 projects
+dotnet test   # 205 tests across 7 projects
 ```
 
 | Project | Tests |
 |---|---|
 | `Sovrant.Api.Tests` | 28 |
 | `Sovrant.Runtime.Tests` | 86 |
-| `Sovrant.Server.Tests` | 12 |
+| `Sovrant.Server.Tests` | 16 |
 | `Sovrant.Lsp.Tests` | 26 |
 | `Sovrant.Tools.Tests` | 26 |
 | `Sovrant.Commands.Tests` | 22 |

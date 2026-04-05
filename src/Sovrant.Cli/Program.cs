@@ -223,9 +223,11 @@ async Task RunTurnAsync(IConversationRuntime runtime, string message, Cancellati
                 AnsiConsole.Write(text);
                 break;
 
-            case RuntimeEvent.ToolUseRequested { ToolName: var toolName }:
+            case RuntimeEvent.ToolUseRequested { ToolName: var toolName, Input: var input }:
                 AnsiConsole.WriteLine();
                 AnsiConsole.MarkupLine($"[grey]⚙ {Markup.Escape(toolName)}[/]");
+                if (DiffRenderer.IsFileModifyTool(toolName))
+                    DiffRenderer.RenderToolInput(toolName, input);
                 break;
 
             case RuntimeEvent.PermissionDenied { ToolName: var toolName, Reason: var reason }:
