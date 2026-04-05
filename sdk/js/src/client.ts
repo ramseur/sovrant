@@ -15,6 +15,8 @@ import type {
 
 const DEFAULT_MAX_RETRIES = 3;
 const RETRY_DELAYS = [1000, 2000, 4000];
+const ALLOWED_PROTOCOLS = ["http:", "https:"];
+const ALLOWED_EXPORT_FORMATS = ["markdown"];
 
 /**
  * Typed client for the Sovrant server API.
@@ -49,11 +51,42 @@ export class SovrantClient {
   private readonly maxRetries: number;
 
   constructor(options: SovrantClientOptions) {
-    this.baseUrl = options.baseUrl.replace(/\/+$/, "");
+    const trimmed = options.baseUrl.replace(/\/+$/, "");
+    // Validate URL protocol to prevent javascript:, file:, data: etc.
+    try {
+      const parsed = new URL(trimmed);
+      if (!ALLOWED_PROTOCOLS.includes(parsed.protocol)) {
+        throw new Error(
+          `Invalid baseUrl protocol "${parsed.protocol}". Only http: and https: are allowed.`
+        );
+      }
+    } catch (err) {
+      if (err instanceof TypeError) {
+        throw new Error(`Invalid baseUrl: "${trimmed}" is not a valid URL.`);
+      }
+      throw err;
+    }
+
+    if (!options.token || typeof options.token !== "string") {
+      throw new Error("A non-empty token string is required.");
+    }
+
+    this.baseUrl = trimmed;
     this.token = options.token;
     this.model = options.model;
     this.sessionId = options.sessionId;
     this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
+  }
+
+  /** Prevent token leakage via JSON.stringify / console.log. */
+  toJSON(): Record<string, unknown> {
+    return {
+      baseUrl: this.baseUrl,
+      model: this.model,
+      sessionId: this.sessionId,
+      maxRetries: this.maxRetries,
+      token: "[REDACTED]",
+    };
   }
 
   // ── Chat ──────────────────────────────────────────────────────────────
@@ -216,8 +249,13 @@ export class SovrantClient {
     sessionId: string,
     format: "markdown" = "markdown"
   ): Promise<string> {
+    if (!ALLOWED_EXPORT_FORMATS.includes(format)) {
+      throw new Error(
+        `Invalid export format "${format}". Allowed: ${ALLOWED_EXPORT_FORMATS.join(", ")}`
+      );
+    }
     const res = await this.fetchWithRetry(
-      `/v1/sessions/${encodeURIComponent(sessionId)}/export?format=${format}`
+      `/v1/sessions/${encodeURIComponent(sessionId)}/export?format=${encodeURIComponent(format)}`
     );
     return res.text();
   }
