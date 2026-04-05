@@ -1,7 +1,7 @@
 namespace Sovrant.Runtime.Conversation;
 
 /// <summary>A discriminated union of events emitted by the conversation runtime during a turn.</summary>
-public abstract record RuntimeEvent
+public abstract partial record RuntimeEvent
 {
     private RuntimeEvent() { }
 

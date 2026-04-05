@@ -8,6 +8,7 @@ using Sovrant.Runtime;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Permissions;
+using Sovrant.Agents;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
 using Sovrant.McpServer;
@@ -209,6 +210,7 @@ ServiceProvider BuildServices(ParseResult pr)
 
     services.AddSovrantRuntime(config);
     services.AddSovrantTools();
+    services.AddMultiAgentSystem();
     services.AddSovrantCommands();
 
     if (ciMode)

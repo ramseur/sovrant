@@ -10,6 +10,7 @@ using Sovrant.Tools.PlanMode;
 using Sovrant.Tools.Skills;
 using Sovrant.Tools.Tasks;
 using Sovrant.Tools.Todo;
+using Sovrant.Tools.Team;
 using Sovrant.Tools.Worktree;
 
 namespace Sovrant.Tools;
@@ -87,6 +88,18 @@ public static class ServiceCollectionExtensions
 
         // Agent tool
         services.AddSingleton<ITool, AgentTool>();
+
+        // Team tools
+        services.AddSingleton<ITool, TeamCreateTool>();
+        services.AddSingleton<ITool, TeamDeleteTool>();
+        services.AddSingleton<ITool, TeamStatusTool>();
+        services.AddSingleton<ITool>(sp =>
+        {
+            var registry = sp.GetRequiredService<Sovrant.Agents.Teams.ITeamRegistry>();
+            var agentSystem = sp.GetRequiredService<Sovrant.Agents.Abstractions.IMultiAgentSystem>();
+            var factory = sp.GetRequiredService<Sovrant.Agents.Modern.SovrantAgentFactory>();
+            return new TeamDelegateTool(registry, agentSystem, member => factory.Create(member));
+        });
 
         // LSP tools — only registered if ILspClientManager is available
         services.AddSingleton<ILspClientManager>(sp =>

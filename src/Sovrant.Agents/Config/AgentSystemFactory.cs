@@ -25,6 +25,7 @@ public static class AgentSystemFactory
         if (config.UseLegacyAgents)
         {
             return new ProcessBasedMultiAgentSystem(
+                config,
                 services.GetRequiredService<ILogger<ProcessBasedMultiAgentSystem>>());
         }
 

@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Config;
 using Sovrant.Agents.Modern;
+using Sovrant.Agents.Teams;
 
 namespace Sovrant.Agents;
 
@@ -35,6 +36,10 @@ public static class ServiceCollectionExtensions
         // The factory resolves the correct backend at first resolution.
         services.AddSingleton<IMultiAgentSystem>(sp =>
             AgentSystemFactory.Create(resolvedConfig, sp));
+
+        // Team registry and agent factory
+        services.AddSingleton<ITeamRegistry, InMemoryTeamRegistry>();
+        services.AddSingleton<SovrantAgentFactory>();
 
         return services;
     }

@@ -8,8 +8,10 @@
     <Project Path="src/Sovrant.Lsp/Sovrant.Lsp.csproj" />
     <Project Path="src/Sovrant.Tools/Sovrant.Tools.csproj" />
     <Project Path="src/Sovrant.McpServer/Sovrant.McpServer.csproj" />
+    <Project Path="src/Sovrant.Agents/Sovrant.Agents.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Sovrant.Agents.Tests/Sovrant.Agents.Tests.csproj" />
     <Project Path="tests/Sovrant.Api.Tests/Sovrant.Api.Tests.csproj" />
     <Project Path="tests/Sovrant.Commands.Tests/Sovrant.Commands.Tests.csproj" />
     <Project Path="tests/Sovrant.Integration.Tests/Sovrant.Integration.Tests.csproj" />

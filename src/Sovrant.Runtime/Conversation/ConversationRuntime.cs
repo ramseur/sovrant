@@ -69,7 +69,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         IToolRegistry toolRegistry,
         ISessionStore sessionStore,
         SovrantConfig config,
-        ILogger<ConversationRuntime> logger)
+        ILogger<ConversationRuntime> logger,
+        string? systemPromptOverride = null)
     {
         _router = router;
         _toolExecutor = toolExecutor;
@@ -77,7 +78,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         _sessionStore = sessionStore;
         _config = config;
         _logger = logger;
-        _systemPrompt = BuildSystemPrompt();
+        _systemPrompt = systemPromptOverride ?? BuildSystemPrompt();
     }
 
     /// <inheritdoc/>

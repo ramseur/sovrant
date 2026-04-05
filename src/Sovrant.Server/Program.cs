@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using Sovrant.Api.Auth;
+using Sovrant.Agents;
 using Sovrant.Runtime;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Permissions;
@@ -61,6 +62,9 @@ builder.Services.AddSingleton<ILogger>(sp =>
 
 // Tools.
 builder.Services.AddSovrantTools();
+
+// Multi-agent system.
+builder.Services.AddMultiAgentSystem();
 
 // AskUserQuestion cannot pause an HTTP stream — return a fixed message instead.
 builder.Services.AddSingleton<IUserInputProvider, HttpUserInputProvider>();

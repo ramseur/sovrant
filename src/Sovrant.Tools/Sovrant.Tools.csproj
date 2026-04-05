@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Sovrant.Agents\Sovrant.Agents.csproj" />
     <ProjectReference Include="..\Sovrant.Lsp\Sovrant.Lsp.csproj" />
     <ProjectReference Include="..\Sovrant.Runtime\Sovrant.Runtime.csproj" />
   </ItemGroup>

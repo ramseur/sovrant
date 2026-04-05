@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Sovrant.Agents.Abstractions;
+using Sovrant.Agents.Config;
 using Sovrant.Agents.Models;
 
 namespace Sovrant.Agents.Legacy;
@@ -11,21 +12,27 @@ namespace Sovrant.Agents.Legacy;
 /// same format as the original OpenClaude process-based agent protocol.
 /// <para>
 /// Activate via <c>AGENT_MODE=legacy</c> or
-/// <see cref="Config.AgentSystemConfig.UseLegacyAgents"/> = <see langword="true"/>.
+/// <see cref="AgentSystemConfig.UseLegacyAgents"/> = <see langword="true"/>.
 /// The modern in-process backend is preferred for new deployments.
 /// </para>
 /// </summary>
-public sealed class ProcessBasedMultiAgentSystem : IMultiAgentSystem, IDisposable
+public sealed partial class ProcessBasedMultiAgentSystem : IMultiAgentSystem, IDisposable
 {
     private readonly Dictionary<string, ProcessAgent> _agents =
         new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _taskCts =
         new(StringComparer.Ordinal);
+    private readonly AgentSystemConfig _config;
     private readonly ILogger<ProcessBasedMultiAgentSystem> _logger;
 
-    public ProcessBasedMultiAgentSystem(ILogger<ProcessBasedMultiAgentSystem> logger)
+    [LoggerMessage(Level = LogLevel.Information, Message = "Dispatching task '{TaskId}' to process agent '{AgentName}'")]
+    private static partial void LogDispatch(ILogger logger, string taskId, string agentName);
+
+    public ProcessBasedMultiAgentSystem(AgentSystemConfig config, ILogger<ProcessBasedMultiAgentSystem> logger)
     {
+        ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(logger);
+        _config = config;
         _logger = logger;
     }
 
@@ -44,16 +51,46 @@ public sealed class ProcessBasedMultiAgentSystem : IMultiAgentSystem, IDisposabl
     }
 
     /// <inheritdoc/>
-    /// <remarks>
-    /// TODO (Phase 19): Resolve target agent by <see cref="AgentTask.AssignedAgentName"/> or
-    /// fall back to the first registered agent; create a linked <see cref="CancellationTokenSource"/>
-    /// for the task; spawn the process; stream and parse stdout; record the CTS for cancellation.
-    /// </remarks>
-    public Task<AgentResult> RunTaskAsync(AgentTask task, CancellationToken ct = default)
+    public async Task<AgentResult> RunTaskAsync(AgentTask task, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(task);
-        throw new NotImplementedException(
-            "Process-based multi-agent execution is not yet implemented. See Phase 19 roadmap.");
+
+        // Resolve target agent
+        ProcessAgent? agent = null;
+        if (task.AssignedAgentName is not null)
+        {
+            if (!_agents.TryGetValue(task.AssignedAgentName, out agent))
+                return AgentResult.Fail(task.Id, $"Unknown agent: '{task.AssignedAgentName}'.");
+        }
+        else
+        {
+            agent = _agents.Values.FirstOrDefault();
+            if (agent is null)
+                return AgentResult.Fail(task.Id, "No agents registered.");
+        }
+
+        // Create linked CTS: caller's ct + timeout
+        using var timeoutCts = new CancellationTokenSource(
+            TimeSpan.FromSeconds(_config.TaskTimeoutSeconds));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+
+        _taskCts[task.Id] = linkedCts;
+        try
+        {
+            LogDispatch(_logger, task.Id, agent.Name);
+            return await agent.HandleAsync(task, linkedCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return AgentResult.Fail(task.Id,
+                timeoutCts.IsCancellationRequested
+                    ? "Task timed out."
+                    : "Task was cancelled.");
+        }
+        finally
+        {
+            _taskCts.TryRemove(task.Id, out _);
+        }
     }
 
     /// <inheritdoc/>
@@ -70,7 +107,7 @@ public sealed class ProcessBasedMultiAgentSystem : IMultiAgentSystem, IDisposabl
         foreach (var cts in _taskCts.Values)
             await cts.CancelAsync().ConfigureAwait(false);
 
-        // TODO (Phase 19): wait for in-flight process agents to drain stdout and exit gracefully.
+        // In-flight process agents will be killed by their linked CTS cancellation.
     }
 
     /// <inheritdoc/>

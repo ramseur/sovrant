@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 16 complete — Dynamic MCP Tool Proxy)
+**Last updated:** 2026-04-04 (Phase 18+19 complete — Multi-Agent Backend & Team Tools)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -39,7 +39,7 @@ The engine is fully functional as a single-user tool:
 |---|---|
 | Session TTL eviction + per-session lock | Phase 9.1 |
 | Per-session config overlay (fixes global `EnterPlanMode`) | Phase 9.5 |
-| Multi-agent `DispatchAsync` + CLI/Server DI wiring | Phase 18–19 |
+| ~~Multi-agent `DispatchAsync` + CLI/Server DI wiring~~ | ~~Phase 18–19~~ ✅ |
 
 ### Agent System: Current State
 
@@ -52,13 +52,13 @@ The engine is fully functional as a single-user tool:
 | Legacy backend (`ProcessBasedMultiAgentSystem`) | ⚠️ Partial | Scaffold only. `ProcessAgent.HandleAsync` and `RunTaskAsync` throw `NotImplementedException`. |
 | Config switch (`AGENT_MODE`) | ✅ Working | `AgentSystemConfig.FromEnvironment()` + `AgentSystemFactory.Create()`. `AddMultiAgentSystem()` DI extension ready. |
 | DI wiring in CLI / Server | ❌ Not wired | `services.AddMultiAgentSystem()` is not yet called in `Sovrant.Cli` or `Sovrant.Server`. `AgentTool` still uses the old direct `ConversationRuntime` path. |
-| Team tools (`TeamCreateTool` / `TeamDeleteTool`) | ❌ Not started | Phase 18. Will replace `AgentTool`'s direct runtime spawning with `IMultiAgentSystem.RunTaskAsync`. |
-| V2 placeholders (`ITeamWorkspace`, `IArtifact`, `IMultiAgentCollaboration`) | ⚠️ Interfaces only | No implementations. Phase 19+. |
+| Team tools (`TeamCreate` / `TeamDelete` / `TeamStatus` / `TeamDelegate`) | ✅ Done | Phase 18. Uses `IMultiAgentSystem.RunTaskAsync` via `SovrantAgentFactory`. |
+| V2 placeholders (`ITeamWorkspace`, `IArtifact`, `IMultiAgentCollaboration`) | ⚠️ Interfaces only | No implementations. Post-Phase 19. |
 
 **What needs to happen before multi-agent is usable:**
-1. Phase 19 — implement `MultiAgentCoordinator.DispatchAsync` (modern backend)
-2. Phase 18 — `TeamCreateTool` / `TeamDeleteTool` + wire `IMultiAgentSystem` into DI
-3. Phase 19 — implement `ProcessAgent` / process backend (only needed if legacy mode is required)
+1. ~~Phase 19 — implement `MultiAgentCoordinator.DispatchAsync` (modern backend)~~ ✅
+2. ~~Phase 18 — `TeamCreateTool` / `TeamDeleteTool` + wire `IMultiAgentSystem` into DI~~ ✅
+3. ~~Phase 19 — implement `ProcessAgent` / process backend~~ ✅
 
 ---
 
@@ -701,10 +701,11 @@ An `ILspClient` service manages the lifecycle of one or more language server pro
 
 ---
 
-### Phase 15 — IDE Extension (VS Code)
+### Phase 15 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
 
 **Competitor precedent:** Claude Code ✅ · opencode ✅ (beta)
 **Depends on:** Phase 14 (MCP server mode) — once Sovrant exposes an MCP server, MCP-aware IDEs (VS Code with GitHub Copilot, Cursor, Windsurf) can connect without a bespoke extension.
+**Status:** Deferred. MCP-based IDE integration (Phase 14) covers the core use case. A native extension adds polish but is not required for the core product.
 
 **Goal:** Embed Sovrant into VS Code as a sidebar panel — chat interface, inline diff approval, tool event rendering, permission dialogs with file highlighting.
 
@@ -737,7 +738,7 @@ Two-layer approach:
 
 ---
 
-### Phase 17 — MCP OAuth Authentication (`McpAuthTool`)
+### Phase 17 — MCP OAuth Authentication (`McpAuthTool`) ✅
 
 **Goal:** Support MCP servers that require OAuth 2.0 authentication, enabling Sovrant to connect to SaaS APIs (GitHub, Google, Salesforce, etc.) through MCP without the server holding static API keys.
 
@@ -771,10 +772,10 @@ At cloud scale, users will want to connect MCP servers that front OAuth-protecte
 
 ---
 
-### Phase 17.5 — Dual Agent Architecture (Scaffolding)
+### Phase 17.5 — Dual Agent Architecture (Scaffolding) ✅
 
 **Source:** Dual Agent Architecture design document (2026-04-04).
-**Status:** ✅ Scaffolding complete — `Sovrant.Agents` project builds clean; full execution deferred to Phase 19.
+**Status:** ✅ Complete — scaffolding done, full execution implemented in Phase 19.
 
 **Goal:** Introduce two interchangeable multi-agent backends behind a shared `IMultiAgentSystem` interface so the rest of the system never depends on a specific implementation. Whichever architecture proves superior in practice can be promoted as the default without touching consumers.
 
@@ -784,7 +785,7 @@ Multi-agent coordination is an unsettled space. Process-per-agent (spawning a ch
 
 #### Project: `Sovrant.Agents`
 
-A standalone project with no dependency on `Sovrant.Runtime` or the tool system. Consumers reference it for the `IMultiAgentSystem` interface and register via `services.AddMultiAgentSystem()`.
+Depends on `Sovrant.Runtime` (for `IConversationRuntime`, `IToolRegistry`, `FilteredToolRegistry`). Consumers reference it for the `IMultiAgentSystem` interface and register via `services.AddMultiAgentSystem()`.
 
 ```
 src/Sovrant.Agents/
@@ -821,26 +822,32 @@ src/Sovrant.Agents/
 | `AGENT_MODE=modern` or unset | `InProcessMultiAgentSystem` (default, recommended) |
 | `AgentSystemConfig.UseLegacyAgents = true` | Legacy, programmatic override |
 
-#### What is stubbed (Phase 19 work)
+#### Fully implemented (Phase 19)
 
-- `ProcessAgent.HandleAsync` — process spawn, stdin write, stdout parse, tool-use message parsing
-- `ProcessBasedMultiAgentSystem.RunTaskAsync` — agent resolution, process lifecycle, streaming output
-- `MultiAgentCoordinator.DispatchAsync` — agent selection by role/name, linked CTS, result channel
+- `ProcessAgent.HandleAsync` — process spawn, stdin write, stdout/stderr read, cancellation kills process tree
+- `ProcessBasedMultiAgentSystem.RunTaskAsync` — agent resolution, linked CTS, timeout handling
+- `MultiAgentCoordinator.DispatchAsync` — agent selection by name/first-registered, semaphore-based concurrency control, linked CTS with timeout, proper cleanup
 - `MultiAgentCoordinator.ShutdownAsync` — awaiting all `BaseAgent.RunLoopAsync` tasks
-- V2 interfaces — `ITeamWorkspace`, `IArtifact`, `IMultiAgentCollaboration` have no implementations
+- `SovrantAgent` — `BaseAgent` subclass backed by `IConversationRuntime`, collects `TextChunk` events
+- `SovrantAgentFactory` — creates `SovrantAgent` from `TeamMemberInfo` with role-specific prompts and tool filtering
+- `AgentPrompts` — role-specific system prompts for each `AgentRole`
+- `FilteredToolRegistry` — decorator restricting tool visibility per agent
+- `ITeamRegistry` / `InMemoryTeamRegistry` — team member lifecycle management
+- Team tools: `TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`
+- V2 interfaces — `ITeamWorkspace`, `IArtifact`, `IMultiAgentCollaboration` remain placeholders
 
-#### What is fully working now
+#### Also working
 
 - `WorkspaceContext` — thread-safe `ConcurrentDictionary` variable store
 - `BaseAgent` — channel construction, `EnqueueAsync`, `RunLoopAsync`, `Complete`
 - `AgentSystemConfig.FromEnvironment()` — reads `AGENT_MODE`
 - `AgentSystemFactory.Create` — correct backend selection
-- `ServiceCollectionExtensions.AddMultiAgentSystem` — DI wiring
+- `ServiceCollectionExtensions.AddMultiAgentSystem` — DI wiring (includes `ITeamRegistry` and `SovrantAgentFactory`)
 - All interfaces and model records
 
 ---
 
-### Phase 18 — Multi-Agent Teams (`TeamCreateTool` / `TeamDeleteTool`)
+### Phase 18 — Multi-Agent Teams (`TeamCreateTool` / `TeamDeleteTool`) ✅
 
 **Depends on:** Phase 17.5 (`Sovrant.Agents` scaffolding — already done)
 
@@ -882,9 +889,10 @@ Supervisor Agent (ConversationRuntime)
 
 ---
 
-### Phase 19 — Dual Agent Architecture: Full Implementation
+### Phase 19 — Dual Agent Architecture: Full Implementation ✅
 
 **Depends on:** Phase 17.5 (scaffolding), Phase 18 (team tools that will consume `IMultiAgentSystem`)
+**Status:** ✅ Complete — both backends implemented, team tools wired, 58 tests passing.
 
 **Goal:** Complete the two multi-agent backends stubbed in Phase 17.5. At this point the `TeamCreateTool` / `TeamDeleteTool` from Phase 18 will be wired to `IMultiAgentSystem` and the choice of legacy vs. modern backend becomes a runtime configuration decision.
 
