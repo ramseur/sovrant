@@ -2022,6 +2022,7 @@ Every place the engine currently writes data to disk:
 | **Session index** | Implicit (scan JSONL filenames) | No storage (derived) | Query by creation date, last access, project, message count, files touched, token totals |
 | **Token usage history** (Phase 9.5) | In-memory only (`SessionConfig.AddTokens()`) | Not persisted | Persist across restarts; query by date/model/session; historical cost analysis |
 | **Encrypted credentials** (Phase 17) | `~/.sovrant/credentials/*.enc` + `.keystore` | Binary (AES-GCM) / Hex | Per-user credential isolation; no directory scanning; key rotation without file juggling |
+| **Memory entries** | `~/.sovrant/memory.md` + `.sovrant/memory.md` | Markdown (2 flat files) | Per-user, per-project, typed (user/feedback/project/reference); searchable; concurrent writes without file lock; multiple sessions can add entries simultaneously |
 | **CLI memory — learned patterns** (Phase 25) | `.sovrant/learned/*.md` (planned) | Markdown (planned) | Full-text search, confidence scoring, evidence trails, recency ranking |
 | **CLI memory — instincts** (Phase 25) | `~/.sovrant/instincts/*.yaml` (planned) | YAML (planned) | Query by trigger, confidence threshold, decay pruning |
 
@@ -2031,7 +2032,7 @@ Every place the engine currently writes data to disk:
 |---|---|---|---|
 | **Skills** | `.sovrant/skills/*.md` + built-in `src/.../skills/` | Markdown + YAML frontmatter | Version-controlled, git-diffable, human-authored; loaded into memory at startup |
 | **Agent templates** | `.sovrant/agents/*.md` + built-in `src/.../agents/` | Markdown + YAML frontmatter | Same as skills |
-| **Memory notes** | `~/.sovrant/memory.md` + `.sovrant/memory.md` | Markdown | Human-authored notes injected into system prompt; simple read-once-at-start |
+| **Memory `.md` bootstrap files** | `~/.sovrant/memory.md` + `.sovrant/memory.md` | Markdown | Read-only seed layer — imported into `memory_entries` table on first run; existing files still loaded as fallback if DB is empty; new entries go to SQLite |
 | **Rolling app logs** (Phase 8) | `~/.sovrant/logs/sovrant-{Date}.log` | Text or JSON | Standard log files consumed by log aggregators (Datadog, ELK, etc.); daily rotation; external tooling expects files |
 | **Temp scripts** | `{TempPath}/sovrant_*.{sh,ps1,cmd}` | Text | Ephemeral — created for tool execution, deleted immediately after |
 
@@ -2041,8 +2042,8 @@ Every place the engine currently writes data to disk:
 
 | Entry point | Writes | Reads |
 |---|---|---|
-| **CLI** | Config, audit events, bash commands, session transcripts, session index, token usage, credentials, learned patterns, instincts | Config (scoped resolution), session index (resume), audit queries, memory queries, credential lookup |
-| **Server** | Same as CLI, plus per-request token tracking at higher volume | Same as CLI, plus `GET /v1/audit`, `GET /v1/usage`, `GET /v1/sessions?query=...`, all backed by SQLite |
+| **CLI** | Config, memory entries, audit events, bash commands, session transcripts, session index, token usage, credentials, learned patterns, instincts | Config (scoped), memory (prepend to system prompt), session index (resume), audit queries, credential lookup |
+| **Server** | Same as CLI, plus per-request token tracking at higher volume | Same as CLI, plus `GET /v1/audit`, `GET /v1/usage`, `GET /v1/sessions?query=...`, per-user memory via API |
 
 #### Config scoping model
 
@@ -2073,6 +2074,10 @@ The `users` table is an anchor row — created on first seen, referenced everywh
 SELECT * FROM session_index WHERE user_id = 'eric';
 SELECT * FROM config WHERE scope = 'user:eric';
 SELECT SUM(output_tokens) FROM token_usage WHERE user_id = 'eric' AND timestamp > '2026-04-01';
+
+-- Memory: per-user, per-project, typed, searchable
+SELECT * FROM memory_entries WHERE user_id = 'eric' AND project = 'sovrant' AND type = 'feedback';
+SELECT * FROM memory_entries WHERE user_id = 'eric' AND content LIKE '%testing%' AND is_stale = 0;
 ```
 
 #### Architecture
@@ -2093,6 +2098,8 @@ src/Sovrant.Runtime/Storage/
     bash_commands              ← (id, timestamp, user_id FK, session_id, command, exit_code, duration_ms)
     credentials                ← (id, user_id FK, credential_key, encrypted_blob, created_at, updated_at)
     token_usage                ← (id, user_id FK, session_id, model, input_tokens, output_tokens, timestamp)
+    memory_entries             ← (id, user_id FK, project, type, name, description, content,
+                                  source_session, created_at, updated_at, is_stale)
     learned_patterns           ← (id, user_id FK, project, pattern, source_session, confidence, created_at, last_used)
     instincts                  ← (id, user_id FK, trigger, action, confidence, evidence_json, created_at, updated_at)
 ```
@@ -2122,10 +2129,11 @@ All tables except `users` and `config` have a `user_id` foreign key. Queries nat
 On first run, `StorageMigrator` detects existing flat-file data and imports it:
 
 1. **Config files** → Reads each JSON config file, inserts key-value pairs into `config` table with appropriate scope (`global` for `~/.sovrant/`, `project:{path}` for `.sovrant/`)
-2. **Session transcripts** → Reads each `*.jsonl`, inserts messages into `sessions` table, builds `session_index` row from metadata
-3. **Audit logs** → Reads `governance.jsonl` and `bash-commands.jsonl`, inserts into respective tables
-4. **Credentials** → Reads `*.enc` files, inserts encrypted blobs into `credentials` table (master key migrates too)
-5. **Token usage** → No existing persistence to migrate (currently in-memory only)
+2. **Memory files** → Parses `~/.sovrant/memory.md` (global scope) and `.sovrant/memory.md` (project scope), splits into individual entries, inserts into `memory_entries` with `type` inferred from content structure
+3. **Session transcripts** → Reads each `*.jsonl`, inserts messages into `sessions` table, builds `session_index` row from metadata
+4. **Audit logs** → Reads `governance.jsonl` and `bash-commands.jsonl`, inserts into respective tables
+5. **Credentials** → Reads `*.enc` files, inserts encrypted blobs into `credentials` table (master key migrates too)
+6. **Token usage** → No existing persistence to migrate (currently in-memory only)
 
 Post-migration:
 - Original files are **not deleted** — they become archival copies
@@ -2164,11 +2172,12 @@ Phase 30's `ICacheProvider` is for **hot, ephemeral data** — fast reads with T
 7. **Audit migration:** Replace `AuditLogger` file writes with SQLite inserts; add `SOVRANT_AUDIT_JSONL` dual-write toggle
 8. **Credential migration:** Replace `AesGcmCredentialStore` file I/O with `credentials` table; same AES-GCM encryption, different storage
 9. **Token usage:** Add `token_usage` table; wire `SessionConfig.AddTokens()` to persist
-10. Prepare `learned_patterns` and `instincts` tables (schema only — populated by Phase 25)
-11. Wire `IStorageProvider` into DI as singleton; CLI and Server share same registration
-12. Add server endpoints: `GET /v1/audit` (query events), `GET /v1/sessions?query=...` (full-text search)
-13. Import tool: `StorageMigrator` auto-imports existing flat files on first run
-14. Tests: migration idempotency, config scope resolution, session CRUD, concurrent write safety, JSONL import, credential round-trip, CLI + Server both resolve same provider
+10. **Memory migration:** Add `memory_entries` table; replace `MemoryCommand` file I/O with SQLite reads/writes; import existing `.md` files on first run; `/memory` command writes to DB
+11. Prepare `learned_patterns` and `instincts` tables (schema only — populated by Phase 25)
+12. Wire `IStorageProvider` into DI as singleton; CLI and Server share same registration
+13. Add server endpoints: `GET /v1/audit` (query events), `GET /v1/sessions?query=...` (full-text search)
+14. Import tool: `StorageMigrator` auto-imports existing flat files on first run
+15. Tests: migration idempotency, config scope resolution, session CRUD, memory CRUD + type filtering, concurrent write safety, JSONL import, credential round-trip, CLI + Server both resolve same provider
 
 ---
 
