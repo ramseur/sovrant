@@ -33,6 +33,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISlashCommand, MemoryCommand>();
         services.AddSingleton<ISlashCommand, RememberCommand>();
         services.AddSingleton<ISlashCommand, ForgetCommand>();
+        services.AddSingleton<ISlashCommand, EvalCommand>();
 
         // HelpCommand injects IEnumerable<ISlashCommand> directly — must come after all other commands
         services.AddSingleton<ISlashCommand, HelpCommand>();

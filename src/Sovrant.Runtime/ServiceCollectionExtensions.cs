@@ -6,6 +6,7 @@ using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Governance;
 using Sovrant.Runtime.Hooks;
 using Sovrant.Runtime.Mcp;
+using Sovrant.Runtime.Evals;
 using Sovrant.Runtime.Memory;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Session;
@@ -61,6 +62,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMemoryStore, FileMemoryStore>();
         services.AddSingleton<MemoryInjector>();
         services.AddSingleton<SessionEndMemoryHandler>();
+
+        // Eval framework (Phase 27)
+        services.AddSingleton<EvalResultStore>();
+        services.AddSingleton<IEvalRunner, EvalRunner>();
 
         // MCP
         services.AddSingleton<IMcpClientFactory, SovrantMcpClientFactory>();

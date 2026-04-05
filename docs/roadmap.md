@@ -72,8 +72,7 @@ The engine is fully functional for individual and small-team use:
 
 | Gap | Phase | Priority |
 |---|---|---|
-| Cost tracking & token budget management (3 components, no pricing) | Phase 26 | Medium |
-| Eval-driven development framework (3 grader types, 2 metrics) | Phase 27 | Lower |
+| ~~Eval-driven development framework (3 grader types, 2 metrics)~~ | Phase 27 ✅ | Lower |
 | Swarm orchestrator (auto-decomposition, DAG execution, file locking, quality gate) | Phase 28 | Lower |
 | Registry discovery API (tools, skills, agent templates for frontends) | Phase 29 | Low–Medium |
 | Server response caching & cache infrastructure (in-memory + Redis, ETag, TTL) | Phase 30 | Medium |
@@ -84,7 +83,7 @@ The engine is fully functional for individual and small-team use:
 | VS Code native extension | Phase 35 (deferred — nice-to-have) | Deferred |
 | `/undo` / `/redo` (git-backed file rollback) | Phase 7.5 Tier 2 (deferred) | Deferred |
 | `ScheduleCron` / `ConfigTool` | Phase 7.5 Tier 3 (deferred) | Deferred |
-| Model pricing registry (multi-source, real-time pricing data) | Phase 36 (deferred — nice-to-have) | Deferred |
+| Cost tracking, token budgets & model pricing registry | Phase 36 (deferred — nice-to-have) | Deferred |
 | Workspaces (personal + team areas, isolated memory/config/sessions) | Phase 37 (deferred) | Deferred |
 | Projects (workspace-scoped containers for isolated work) | Phase 38 (deferred) | Deferred |
 
@@ -1554,38 +1553,6 @@ src/Sovrant.Runtime/Memory/
 
 ---
 
-### Phase 26 — Cost Tracking & Token Budget Management
-
-**Inspired by:** everything-claude-code (cost-tracker hook with per-model USD estimation)
-**Depends on:** Phase 9.5 (token usage tracking — already complete)
-
-**Goal:** Per-session and per-project cost tracking with JSONL metrics log, budget enforcement, and a `/cost` dashboard. USD estimation is delegated to Phase 32.5 (model pricing registry); this phase tracks tokens and defers to `ICostModel` for pricing.
-
-#### What exists today
-
-Phase 9.5 already tracks `TotalInputTokens` and `TotalOutputTokens` per session in `SessionConfig`, and `GET /v1/usage` returns per-session token summaries. This phase adds budget limits, persistent metrics logging, and a cost dashboard. Actual USD estimation depends on Phase 32.5's `ICostModel` — until that lands, the dashboard shows token counts only.
-
-#### Components
-
-| Component | What it does |
-|---|---|
-| **Metrics Logger** | Appends per-turn token/cost events to `~/.sovrant/metrics/cost.jsonl` |
-| **Budget Enforcer** | Optional per-session or per-project budget cap; warns at 80%, blocks at 100% |
-| **Cost Dashboard** | `GET /v1/cost` endpoint and `/cost` CLI command — daily/weekly/monthly breakdown |
-
-#### Implementation Plan
-
-1. Define `ICostModel` interface in `Sovrant.Runtime/Metrics/` — `decimal? EstimateCost(string model, long inputTokens, long outputTokens)` (returns null when no pricing available)
-2. Add `NullCostModel` (always returns null) as default — Phase 32.5 provides the real implementation
-3. Add `CostMetricsLogger` — appends to `~/.sovrant/metrics/cost.jsonl` per turn (tokens always, USD when `ICostModel` returns non-null)
-4. Add optional `BudgetEnforcer` — reads `SOVRANT_SESSION_BUDGET_USD` and `SOVRANT_PROJECT_BUDGET_USD` (only enforced when `ICostModel` can price the model)
-5. Add `GET /v1/cost` endpoint with daily/weekly/monthly aggregation
-6. Update `/cost` CLI command to show token counts + estimated spend (when available)
-7. Wire cost logging into `TurnComplete` event handling
-8. Tests: metrics logging, budget enforcement, JSONL format, graceful null-pricing fallback
-
----
-
 ### Phase 27 — Eval-Driven Development Framework
 
 **Inspired by:** everything-claude-code (eval harness with pass@k metrics, capability/regression evals, multiple grader types)
@@ -1657,7 +1624,7 @@ Evals stored in `.sovrant/evals/`:
 ### Phase 28 — Swarm Orchestrator (Auto-Decomposition + DAG Execution)
 
 **Inspired by:** [claude-swarm](https://github.com/affaan-m/claude-swarm) (parallel task decomposition with dependency DAGs, file locking, budget enforcement, quality gate)
-**Depends on:** Phase 18+19 (multi-agent team tools), Phase 21 (agent templates), Phase 26 (cost tracking)
+**Depends on:** Phase 18+19 (multi-agent team tools), Phase 21 (agent templates), Phase 36 (cost tracking — optional)
 
 **Goal:** Add a **swarm orchestration layer** on top of Sovrant's existing multi-agent infrastructure. A user gives a single complex prompt; a high-capability model automatically decomposes it into a dependency graph of 2-8 subtasks; subtasks execute in parallel waves respecting dependencies, with file-level conflict prevention, budget enforcement, and a quality gate review phase. The swarm uses whatever models the admin/user has configured — decomposition and quality gates use the "high" level model, workers use the "standard" level (all provider-agnostic via Phase 21's model resolution). Available via CLI (`sovrant swarm "task"`), the `SwarmTool` for programmatic use, and `POST /v1/swarm` for frontend integration.
 
@@ -2323,15 +2290,28 @@ CREATE INDEX idx_api_tokens_hash ON api_tokens(token_hash);
 
 ---
 
-### Phase 36 — Model Pricing Registry ⏸️ Deferred (nice-to-have)
+### Phase 36 — Cost Tracking, Token Budgets & Model Pricing Registry ⏸️ Deferred (nice-to-have)
 
-**Depends on:** Phase 26 (cost tracking — defines `ICostModel` interface)
+**Depends on:** Phase 9.5 (token usage tracking — already complete)
 
-**Goal:** A multi-source, user-overridable pricing registry that maps model names to USD-per-token rates. Vendors change prices frequently; a hardcoded table goes stale immediately. This phase designs a layered system that stays current without requiring a Sovrant release for every price change. Requires real-time external data — not worth building until there's a reliable upstream source or enough demand to maintain one.
+**Goal:** End-to-end cost management — per-session/per-project token tracking with JSONL metrics log, budget enforcement, a `/cost` dashboard, and a multi-source pricing registry that maps model names to USD-per-token rates. Merges the former Phase 26 (cost tracking) with model pricing so the full cost pipeline ships as one coherent feature.
 
-#### Why this needs its own phase
+#### What exists today
 
-Pricing looks simple (a JSON lookup table) but has real complexity:
+Phase 9.5 already tracks `TotalInputTokens` and `TotalOutputTokens` per session in `SessionConfig`, and `GET /v1/usage` returns per-session token summaries. This phase adds budget limits, persistent metrics logging, a cost dashboard, and USD estimation via a layered pricing registry.
+
+#### Components
+
+| Component | What it does |
+|---|---|
+| **`ICostModel`** | Interface: `decimal? EstimateCost(string model, long inputTokens, long outputTokens)` — layered pricing lookup |
+| **Metrics Logger** | Appends per-turn token/cost events to `~/.sovrant/metrics/cost.jsonl` |
+| **Budget Enforcer** | Optional per-session or per-project budget cap; warns at 80%, blocks at 100% |
+| **Cost Dashboard** | `GET /v1/cost` endpoint and `/cost` CLI command — daily/weekly/monthly breakdown |
+| **Pricing Registry** | Multi-source, user-overridable model-to-price mapping |
+
+#### Why pricing is non-trivial
+
 - Vendors change prices without notice — any static table is immediately a liability
 - Provider-agnostic design means Sovrant must price models from OpenAI, Anthropic, Google, Mistral, Ollama (free), Azure (different pricing than direct), and arbitrary OpenAI-compatible endpoints
 - Model name aliasing: `gpt-4o-2024-08-06` vs `gpt-4o`, `claude-sonnet-4-6` vs `claude-sonnet-4-6-20250514`
@@ -2363,16 +2343,22 @@ Pricing looks simple (a JSON lookup table) but has real complexity:
 - How to handle model name normalization (fuzzy match? alias table?)
 - Is there value in a `sovrant update-pricing` CLI command that fetches latest?
 
-#### Skeleton implementation plan (pending design decisions)
+#### Implementation Plan
 
-1. Define `CostModelEntry` record: `InputPer1KTokens`, `OutputPer1KTokens`, optional `CacheReadPer1KTokens`, `CacheWritePer1KTokens`
-2. Implement `LayeredCostModel : ICostModel` — walks the 4-tier chain
-3. `CostModelFileLoader` — reads/merges JSON from user → project → bundled paths
-4. Optional `RemoteCostModelFetcher` — periodic background refresh with local disk cache
-5. Model name normalization — alias map or prefix matching
-6. Ship bundled `cost-models.json` with current pricing for top ~20 models
-7. `sovrant update-pricing` CLI command (if remote registry enabled)
-8. Tests: layering precedence, alias resolution, offline fallback, stale cache behavior
+1. Define `ICostModel` interface in `Sovrant.Runtime/Metrics/`
+2. Define `CostModelEntry` record: `InputPer1KTokens`, `OutputPer1KTokens`, optional `CacheReadPer1KTokens`, `CacheWritePer1KTokens`
+3. Implement `LayeredCostModel : ICostModel` — walks the 4-tier pricing chain
+4. `CostModelFileLoader` — reads/merges JSON from user → project → bundled paths
+5. Optional `RemoteCostModelFetcher` — periodic background refresh with local disk cache
+6. Model name normalization — alias map or prefix matching
+7. Ship bundled `cost-models.json` with current pricing for top ~20 models
+8. Add `CostMetricsLogger` — appends to `~/.sovrant/metrics/cost.jsonl` per turn
+9. Add `BudgetEnforcer` — reads `SOVRANT_SESSION_BUDGET_USD` and `SOVRANT_PROJECT_BUDGET_USD`
+10. Add `GET /v1/cost` endpoint with daily/weekly/monthly aggregation
+11. Update `/cost` CLI command to show token counts + estimated spend
+12. Wire cost logging into `TurnComplete` event handling
+13. `sovrant update-pricing` CLI command (if remote registry enabled)
+14. Tests: layering precedence, alias resolution, metrics logging, budget enforcement, JSONL format, offline fallback
 
 ---
 
@@ -2612,7 +2598,7 @@ project memory  +  workspace memory  (both visible within project context)
 6. Memory scoping: project memory writes go to `workspace_memory` with `project_id` set; reads merge project + workspace layers
 7. Session creation auto-associates with active project context
 8. Project-scoped agent templates and skills (load from project config in addition to workspace/global)
-9. Budget enforcement at project level (Phase 26's `ICostModel` + project config budget cap)
+9. Budget enforcement at project level (Phase 36's `ICostModel` + project config budget cap)
 10. Tests: project isolation within workspace, config inheritance chain, memory scoping (project sees own + workspace memory), membership subset validation, archive behavior
 
 #### Relationship to Phase 34 (Artifact System)

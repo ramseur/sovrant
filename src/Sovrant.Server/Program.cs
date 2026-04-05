@@ -159,6 +159,7 @@ SessionRoutes.Map(app);
 UsageRoutes.Map(app);
 WebhookRoutes.Map(app);
 McpAuthRoutes.Map(app);
+EvalRoutes.Map(app);
 
 Sovrant.Server.ServerLog.LogServerReady(app.Logger, serverPort);
 
