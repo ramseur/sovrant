@@ -49,6 +49,8 @@ export class SovrantClient {
   private readonly model?: string;
   private readonly sessionId?: string;
   private readonly maxRetries: number;
+  private readonly llmApiKey?: string;
+  private readonly llmBaseUrl?: string;
 
   constructor(options: SovrantClientOptions) {
     const trimmed = options.baseUrl.replace(/\/+$/, "");
@@ -76,9 +78,11 @@ export class SovrantClient {
     this.model = options.model;
     this.sessionId = options.sessionId;
     this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
+    this.llmApiKey = options.llmApiKey;
+    this.llmBaseUrl = options.llmBaseUrl;
   }
 
-  /** Prevent token leakage via JSON.stringify / console.log. */
+  /** Prevent credential leakage via JSON.stringify / console.log. */
   toJSON(): Record<string, unknown> {
     return {
       baseUrl: this.baseUrl,
@@ -86,6 +90,8 @@ export class SovrantClient {
       sessionId: this.sessionId,
       maxRetries: this.maxRetries,
       token: "[REDACTED]",
+      llmApiKey: this.llmApiKey !== undefined ? "[REDACTED]" : undefined,
+      llmBaseUrl: this.llmBaseUrl,
     };
   }
 
@@ -97,7 +103,7 @@ export class SovrantClient {
    */
   async chat(
     message: string,
-    options?: { model?: string; sessionId?: string }
+    options?: { model?: string; sessionId?: string; llmApiKey?: string; llmBaseUrl?: string }
   ): Promise<{ text: string; usage?: UsageInfo }> {
     const req = this.buildRequest(message, false, options);
     const res = await this.fetchWithRetry("/v1/chat/completions", {
@@ -118,7 +124,7 @@ export class SovrantClient {
   async stream(
     message: string,
     callbacks: StreamCallbacks,
-    options?: { model?: string; sessionId?: string }
+    options?: { model?: string; sessionId?: string; llmApiKey?: string; llmBaseUrl?: string }
   ): Promise<void> {
     const req = this.buildRequest(message, true, options);
     const res = await this.fetchWithRetry("/v1/chat/completions", {
@@ -166,7 +172,7 @@ export class SovrantClient {
    */
   async *streamRaw(
     message: string,
-    options?: { model?: string; sessionId?: string }
+    options?: { model?: string; sessionId?: string; llmApiKey?: string; llmBaseUrl?: string }
   ): AsyncGenerator<ChatCompletionChunk> {
     const req = this.buildRequest(message, true, options);
     const res = await this.fetchWithRetry("/v1/chat/completions", {
@@ -281,14 +287,19 @@ export class SovrantClient {
   private buildRequest(
     message: string,
     stream: boolean,
-    options?: { model?: string; sessionId?: string }
+    options?: { model?: string; sessionId?: string; llmApiKey?: string; llmBaseUrl?: string }
   ): ChatCompletionRequest {
     const messages: ChatMessage[] = [{ role: "user", content: message }];
+    // Per-call options take precedence over constructor defaults.
+    const llmApiKey = options?.llmApiKey ?? this.llmApiKey;
+    const llmBaseUrl = options?.llmBaseUrl ?? this.llmBaseUrl;
     return {
       model: options?.model ?? this.model,
       messages,
       stream,
       session_id: options?.sessionId ?? this.sessionId,
+      ...(llmApiKey !== undefined && { x_api_key: llmApiKey }),
+      ...(llmBaseUrl !== undefined && { x_base_url: llmBaseUrl }),
     };
   }
 

@@ -116,6 +116,66 @@ export async function POST(req: NextRequest) {
 
 ---
 
+## Multi-Tenant: Per-Team LLM Keys
+
+For cloud platforms where each team or user brings their own LLM API key, the SDK supports sending team credentials with every request via `llmApiKey` and `llmBaseUrl`.
+
+### How it works
+
+```
+Team's browser/server
+  ──[SOVRANT_TOKEN + x_api_key in body]──►  Sovrant.Server
+                                              ──[x_api_key]──►  OpenAI / Gemini / etc.
+```
+
+- `SOVRANT_TOKEN` still authenticates the client to your Sovrant server
+- `x_api_key` and `x_base_url` travel in the **JSON request body**, encrypted by HTTPS
+- The server uses them for that LLM call only — they are never logged, stored, or included in error responses
+- Each team's session history is isolated by a composite key (`session_id + provider`)
+
+### Set at client construction (same key for all calls)
+
+```ts
+// One client per team — constructed with their credentials
+const teamClient = new SovrantClient({
+  baseUrl: "https://sovrant.yourcompany.com",
+  token: process.env.SOVRANT_TOKEN!,     // Your server's bearer token
+  llmApiKey: team.llmApiKey,             // Team's own LLM key
+  llmBaseUrl: team.llmBaseUrl,           // Team's provider (optional)
+  sessionId: `team:${team.id}`,
+});
+
+const { text } = await teamClient.chat("Summarise our sprint");
+```
+
+### Override per individual call
+
+```ts
+// Single shared client, different credentials per request
+await client.chat("hello", {
+  llmApiKey: currentUser.llmApiKey,
+  llmBaseUrl: currentUser.llmBaseUrl,
+  sessionId: `user:${currentUser.id}`,
+});
+```
+
+### Security properties
+
+| Property | Detail |
+|---|---|
+| **In transit** | Sent in the HTTPS-encrypted request body, not in URLs or headers |
+| **On the server** | Used only for that LLM call. Never logged, never persisted, not in error bodies. |
+| **In the SDK** | `toJSON()` / `JSON.stringify()` redacts `llmApiKey` as `"[REDACTED]"` |
+| **Session isolation** | Server keys sessions by `{session_id}::{provider}` so team A never sees team B's history |
+
+### What to watch for
+
+- **HTTPS is required.** The LLM key travels in the request body. HTTP exposes it in plaintext — always use `https://` in production (the SDK rejects non-HTTP(S) base URLs at construction).
+- **Don't hardcode keys.** Even with redaction, LLM keys should come from your auth/secrets layer, not from JavaScript source files.
+- **The key leaves the browser.** If you use this in a public browser app, the user's key goes to your Sovrant server over HTTPS. That is expected and appropriate for a bring-your-own-key model, but make it clear to users in your terms of service.
+
+---
+
 ## SDK Reference
 
 ### Constructor Options
@@ -123,10 +183,16 @@ export async function POST(req: NextRequest) {
 ```ts
 const client = new SovrantClient({
   baseUrl: "http://localhost:5200",  // Required — only http: and https: allowed
-  token: "your-token",               // Required — non-empty string
+  token: "your-token",               // Required — SOVRANT_TOKEN bearer token
   model: "gpt-4o",                   // Optional — default model for requests
   sessionId: "session-abc",          // Optional — default session for persistent conversations
   maxRetries: 3,                     // Optional — retry count on 429/5xx (default: 3)
+
+  // Multi-tenant: supply each team's own LLM credentials.
+  // Sent in the request body (never a URL or header), HTTPS-encrypted in transit.
+  // The server uses them for the LLM call and never logs or persists them.
+  llmApiKey: "sk-team-a-key",        // Optional — overrides server's LLM_API_KEY
+  llmBaseUrl: "https://...",         // Optional — overrides server's LLM_BASE_URL
 });
 ```
 
@@ -138,12 +204,14 @@ const { text, usage } = await client.chat("What is our burn rate?");
 // usage?: { prompt_tokens, completion_tokens, total_tokens }
 ```
 
-Override model or session per-call:
+Override model, session, or LLM credentials per-call:
 
 ```ts
 const { text } = await client.chat("Quick question", {
   model: "gpt-4o-mini",
   sessionId: "one-off",
+  llmApiKey: "sk-this-call-only",   // per-call override
+  llmBaseUrl: "https://...",
 });
 ```
 
@@ -373,7 +441,7 @@ The SDK enforces several security measures automatically. Here's what it does an
 |------------|---------|
 | **URL protocol validation** | Only `http:` and `https:` base URLs accepted. `javascript:`, `file:`, `data:`, `ftp:` are rejected at construction time. |
 | **Token validation** | Empty or non-string tokens are rejected at construction time. |
-| **Token redaction** | `JSON.stringify(client)` outputs `"[REDACTED]"` for the token field. Safe to log the client object. |
+| **Token redaction** | `JSON.stringify(client)` outputs `"[REDACTED]"` for both `token` and `llmApiKey`. Safe to log the client object. |
 | **Bearer token in headers only** | Token is sent via `Authorization: Bearer` header, never in URLs or request bodies. |
 | **Path traversal prevention** | Session IDs are `encodeURIComponent()`-encoded in all URL paths. |
 | **Query injection prevention** | Export format parameter is validated against an allow-list and URI-encoded. |

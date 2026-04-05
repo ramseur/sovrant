@@ -300,6 +300,133 @@ describe("SovrantClient — retry does not leak info", () => {
   });
 });
 
+// ─── LLM API Key (multi-tenant) ──────────────────────────────────────────────
+
+describe("SovrantClient — llmApiKey handling", () => {
+  let fetchSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("sends x_api_key in request body when set at constructor level", async () => {
+    const client = new SovrantClient({
+      baseUrl: "http://localhost:5200",
+      token: "sovrant-token",
+      llmApiKey: "sk-team-key",
+      maxRetries: 0,
+    });
+    await client.chat("hello");
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.x_api_key).toBe("sk-team-key");
+  });
+
+  it("sends x_api_key from per-call override", async () => {
+    const client = new SovrantClient({
+      baseUrl: "http://localhost:5200",
+      token: "sovrant-token",
+      maxRetries: 0,
+    });
+    await client.chat("hello", { llmApiKey: "sk-per-call" });
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.x_api_key).toBe("sk-per-call");
+  });
+
+  it("per-call llmApiKey overrides constructor llmApiKey", async () => {
+    const client = new SovrantClient({
+      baseUrl: "http://localhost:5200",
+      token: "sovrant-token",
+      llmApiKey: "sk-constructor",
+      maxRetries: 0,
+    });
+    await client.chat("hello", { llmApiKey: "sk-override" });
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.x_api_key).toBe("sk-override");
+  });
+
+  it("omits x_api_key from body when not set", async () => {
+    const client = new SovrantClient({
+      baseUrl: "http://localhost:5200",
+      token: "sovrant-token",
+      maxRetries: 0,
+    });
+    await client.chat("hello");
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.x_api_key).toBeUndefined();
+  });
+
+  it("sends x_base_url in request body when set", async () => {
+    const client = new SovrantClient({
+      baseUrl: "http://localhost:5200",
+      token: "sovrant-token",
+      llmBaseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
+      maxRetries: 0,
+    });
+    await client.chat("hello");
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.x_base_url).toBe("https://generativelanguage.googleapis.com/v1beta/openai/");
+  });
+
+  it("x_api_key is sent in body, never in Authorization header or URL", async () => {
+    const client = new SovrantClient({
+      baseUrl: "http://localhost:5200",
+      token: "sovrant-token",
+      llmApiKey: "sk-team-key",
+      maxRetries: 0,
+    });
+    await client.chat("hello");
+    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const authHeader = (init.headers as Record<string, string>).Authorization;
+    expect(url).not.toContain("sk-team-key");
+    expect(authHeader).not.toContain("sk-team-key");
+    expect(authHeader).toBe("Bearer sovrant-token");
+  });
+
+  it("toJSON redacts llmApiKey", () => {
+    const client = new SovrantClient({
+      baseUrl: "http://localhost:5200",
+      token: "t",
+      llmApiKey: "sk-secret-team-key",
+    });
+    const serialized = JSON.stringify(client);
+    expect(serialized).not.toContain("sk-secret-team-key");
+    expect(serialized).toContain("[REDACTED]");
+  });
+
+  it("toJSON does not include llmApiKey key when not set", () => {
+    const client = new SovrantClient({
+      baseUrl: "http://localhost:5200",
+      token: "t",
+    });
+    const json = client.toJSON();
+    expect(json.llmApiKey).toBeUndefined();
+  });
+
+  it("toJSON exposes llmBaseUrl (not sensitive, aids debugging)", () => {
+    const client = new SovrantClient({
+      baseUrl: "http://localhost:5200",
+      token: "t",
+      llmBaseUrl: "https://api.openai.com/v1",
+    });
+    expect(client.toJSON().llmBaseUrl).toBe("https://api.openai.com/v1");
+  });
+});
+
 // ─── Health endpoint ─────────────────────────────────────────────────────────
 
 describe("SovrantClient — health endpoint", () => {

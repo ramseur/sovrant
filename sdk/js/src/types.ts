@@ -2,7 +2,7 @@
 export interface SovrantClientOptions {
   /** Base URL of the Sovrant server (e.g. "http://localhost:5200"). */
   baseUrl: string;
-  /** Bearer token for authentication. */
+  /** Bearer token for authentication against Sovrant.Server. */
   token: string;
   /** Default model to use for requests. */
   model?: string;
@@ -10,6 +10,19 @@ export interface SovrantClientOptions {
   sessionId?: string;
   /** Number of retry attempts on transient errors (default: 3). */
   maxRetries?: number;
+  /**
+   * LLM provider API key for this client (multi-tenant use).
+   * Sent as `x_api_key` in the request body — never in a URL or header.
+   * The server uses it for the LLM call and never logs or persists it.
+   * Overrides the server's global `LLM_API_KEY` for every request this client makes.
+   */
+  llmApiKey?: string;
+  /**
+   * LLM provider base URL for this client (multi-tenant use).
+   * Sent as `x_base_url` in the request body.
+   * Allows each team to use a different LLM provider or endpoint.
+   */
+  llmBaseUrl?: string;
 }
 
 /** A message in the chat conversation. */
