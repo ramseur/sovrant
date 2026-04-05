@@ -50,44 +50,57 @@ public sealed class TaskCreateTool : ITool
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(info.Cts.Token);
         cts.CancelAfter(timeoutMs);
 
-        string shell, shellArgs;
+        // Write command to a temp file to avoid shell injection via argument escaping.
+        string shell;
+        string scriptFile;
         if (OperatingSystem.IsWindows())
         {
-            // Prefer PowerShell 7, fall back to cmd.exe. bash.exe requires WSL.
             var pwsh = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                 "PowerShell", "7", "pwsh.exe");
             if (File.Exists(pwsh))
             {
                 shell = pwsh;
-                shellArgs = $"-NonInteractive -Command \"{command.Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
+                scriptFile = Path.Combine(Path.GetTempPath(), $"sovrant_task_{Guid.NewGuid():N}.ps1");
             }
             else
             {
                 shell = "cmd.exe";
-                shellArgs = $"/c {command}";
+                scriptFile = Path.Combine(Path.GetTempPath(), $"sovrant_task_{Guid.NewGuid():N}.cmd");
             }
         }
         else
         {
             shell = "/bin/bash";
-            shellArgs = $"-c \"{command.Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
+            scriptFile = Path.Combine(Path.GetTempPath(), $"sovrant_task_{Guid.NewGuid():N}.sh");
         }
 
         try
         {
+            await File.WriteAllTextAsync(scriptFile, command, cts.Token).ConfigureAwait(false);
+
             using var process = new Process
             {
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = shell,
-                    Arguments = shellArgs,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true,
                 },
             };
+
+            if (shell == "cmd.exe")
+            {
+                process.StartInfo.ArgumentList.Add("/c");
+            }
+            else if (shell.EndsWith("pwsh.exe", StringComparison.OrdinalIgnoreCase))
+            {
+                process.StartInfo.ArgumentList.Add("-NonInteractive");
+                process.StartInfo.ArgumentList.Add("-File");
+            }
+            process.StartInfo.ArgumentList.Add(scriptFile);
 
             process.OutputDataReceived += (_, e) =>
             {
@@ -121,6 +134,7 @@ public sealed class TaskCreateTool : ITool
         finally
         {
             info.CompletedAt = DateTimeOffset.UtcNow;
+            try { File.Delete(scriptFile); } catch (IOException) { /* best-effort cleanup */ }
         }
     }
 

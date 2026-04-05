@@ -37,18 +37,23 @@ public sealed class PowerShellTool : ITool
 
         try
         {
+            // Use -EncodedCommand with Base64 to avoid all shell escaping issues.
+            var encodedCommand = Convert.ToBase64String(Encoding.Unicode.GetBytes(command));
+
             using var process = new Process
             {
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = shell,
-                    Arguments = $"-NonInteractive -Command \"{command.Replace("\"", "\\\"", StringComparison.Ordinal)}\"",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true,
                 },
             };
+            process.StartInfo.ArgumentList.Add("-NonInteractive");
+            process.StartInfo.ArgumentList.Add("-EncodedCommand");
+            process.StartInfo.ArgumentList.Add(encodedCommand);
 
             process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdoutSb.AppendLine(e.Data); };
             process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderrSb.AppendLine(e.Data); };

@@ -56,14 +56,34 @@ internal static class ChatRoutes
         if (hasScopedCredentials)
         {
             // Build a request-scoped provider + router using the client-supplied credentials.
-            // The server never logs or persists x_api_key.
+            // The server never logs or persists the API key.
             var baseUrl = !string.IsNullOrWhiteSpace(scopedBaseUrl)
                 ? scopedBaseUrl
                 : serverConfig.LlmBaseUrl;
             if (!baseUrl.EndsWith('/')) baseUrl += "/";
 
+            // Validate the base URL to prevent SSRF attacks against internal networks.
+            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var parsedUrl)
+                || (parsedUrl.Scheme != "https" && parsedUrl.Scheme != "http"))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await ctx.Response.WriteAsJsonAsync(
+                    new { error = "Invalid X-LLM-Base-Url: must be an absolute http or https URL." }, ct)
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            if (IsReservedAddress(parsedUrl.Host))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await ctx.Response.WriteAsJsonAsync(
+                    new { error = "Invalid X-LLM-Base-Url: reserved or private network addresses are not allowed." }, ct)
+                    .ConfigureAwait(false);
+                return;
+            }
+
             var scopedHttp = httpClientFactory.CreateClient("ScopedProvider");
-            scopedHttp.BaseAddress = new Uri(baseUrl);
+            scopedHttp.BaseAddress = parsedUrl;
 
             var scopedAuth = new ApiKeyAuthProvider(scopedApiKey!);
             var scopedLogger = loggerFactory.CreateLogger("Sovrant.Api.ScopedProvider");
@@ -155,6 +175,26 @@ internal static class ChatRoutes
             else
             {
                 await BufferedResponseAsync(ctx, runtime, completionId, model, userMessage, sessionConfig, ct).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Client disconnected — nothing to write.
+        }
+#pragma warning disable CA1031 // Top-level HTTP handler must catch all to return a clean error response
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            var logger = ctx.RequestServices.GetRequiredService<ILoggerFactory>()
+                .CreateLogger("Sovrant.Server.ChatRoutes");
+            logger.LogError(ex, "Unhandled error in chat completion");
+
+            if (!ctx.Response.HasStarted)
+            {
+                ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                await ctx.Response.WriteAsJsonAsync(
+                    new { error = "An internal error occurred processing the request." }, CancellationToken.None)
+                    .ConfigureAwait(false);
             }
         }
         finally
@@ -271,5 +311,37 @@ internal static class ChatRoutes
         };
 
         await ctx.Response.WriteAsJsonAsync(response, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Returns true if the host resolves to a reserved/private IP range, preventing SSRF
+    /// attacks that target internal infrastructure via user-supplied base URLs.
+    /// </summary>
+    private static bool IsReservedAddress(string host)
+    {
+        if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!System.Net.IPAddress.TryParse(host, out var ip))
+            return false; // DNS name — allow (can't resolve synchronously without blocking)
+
+        var bytes = ip.GetAddressBytes();
+        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+        {
+            // 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16
+            return bytes[0] == 127
+                || bytes[0] == 10
+                || (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31)
+                || (bytes[0] == 192 && bytes[1] == 168)
+                || (bytes[0] == 169 && bytes[1] == 254)
+                || (bytes[0] == 0); // 0.0.0.0/8
+        }
+
+        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+        {
+            return System.Net.IPAddress.IsLoopback(ip) || ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal;
+        }
+
+        return false;
     }
 }

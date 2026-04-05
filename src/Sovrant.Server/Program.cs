@@ -108,13 +108,11 @@ builder.Services.AddRateLimiter(options =>
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.AddPolicy("per-session", httpContext =>
     {
-        // Extract session_id from query string or fall back to "anonymous".
-        // The actual session_id is in the JSON body, but we can't read the body twice.
-        // Instead, use a header or query param hint. For chat completions, the
-        // middleware reads X-Session-Id header (set by proxies) or defaults to IP.
+        // Key on X-Session-Id header (set by proxies) or the connection IP.
+        // Never fall back to a shared bucket — each client gets its own limit.
         var key = httpContext.Request.Headers["X-Session-Id"].FirstOrDefault()
                   ?? httpContext.Connection.RemoteIpAddress?.ToString()
-                  ?? "anonymous";
+                  ?? httpContext.Connection.Id;
 
         return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
         {
@@ -124,6 +122,16 @@ builder.Services.AddRateLimiter(options =>
         });
     });
 });
+
+// ── Startup validation ────────────────────────────────────────────────────────
+var sovrantToken = Environment.GetEnvironmentVariable("SOVRANT_TOKEN")
+    ?? builder.Configuration["Server:Token"];
+if (string.IsNullOrEmpty(sovrantToken))
+{
+    throw new InvalidOperationException(
+        "SOVRANT_TOKEN environment variable is required. " +
+        "Set it to a non-empty bearer token that clients must supply to authenticate requests.");
+}
 
 // ── App pipeline ──────────────────────────────────────────────────────────────
 var app = builder.Build();

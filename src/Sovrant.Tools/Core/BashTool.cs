@@ -48,18 +48,22 @@ public sealed class BashTool : ITool
         var stdoutTruncated = false;
         var stderrTruncated = false;
 
+        // Write command to a temp file to avoid shell injection via argument escaping.
+        var scriptFile = Path.Combine(Path.GetTempPath(), $"sovrant_cmd_{Guid.NewGuid():N}.sh");
         try
         {
+            await File.WriteAllTextAsync(scriptFile, command, ct).ConfigureAwait(false);
+
             var shell = OperatingSystem.IsWindows() ? "bash.exe" : "/bin/bash";
             var psi = new ProcessStartInfo
             {
                 FileName = shell,
-                Arguments = $"-c \"{EscapeArg(command)}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
+            psi.ArgumentList.Add(scriptFile);
 
             foreach (var envVar in s_dangerousEnvVars)
                 psi.EnvironmentVariables.Remove(envVar);
@@ -103,9 +107,11 @@ public sealed class BashTool : ITool
             return $"Error: command timed out after {timeoutMs} ms.";
         }
         catch (InvalidOperationException ex) { return $"Error starting process: {ex.Message}"; }
+        finally
+        {
+            try { File.Delete(scriptFile); } catch (IOException) { /* best-effort cleanup */ }
+        }
     }
-
-    private static string EscapeArg(string arg) => arg.Replace("\"", "\\\"", StringComparison.Ordinal);
 
     private static string GetString(JsonElement el, string prop, string def = "") =>
         el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;

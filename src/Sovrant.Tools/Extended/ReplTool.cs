@@ -15,19 +15,19 @@ public sealed class ReplTool : ITool
     private static readonly string s_pythonExe =
         OperatingSystem.IsWindows() ? "python" : "python3";
 
-    private static readonly IReadOnlyDictionary<string, (string Exe, string Args)> s_runtimes =
+    private static readonly IReadOnlyDictionary<string, (string Exe, string Extension)> s_runtimes =
         new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase)
         {
-            ["python"] = (s_pythonExe, "-c \"{code}\""),
-            ["python3"] = (s_pythonExe, "-c \"{code}\""),
-            ["javascript"] = ("node", "-e \"{code}\""),
-            ["js"] = ("node", "-e \"{code}\""),
-            ["typescript"] = ("ts-node", "-e \"{code}\""),
-            ["ts"] = ("ts-node", "-e \"{code}\""),
-            ["bash"] = ("bash", "-c \"{code}\""),
-            ["sh"] = ("sh", "-c \"{code}\""),
-            ["ruby"] = ("ruby", "-e \"{code}\""),
-            ["perl"] = ("perl", "-e \"{code}\""),
+            ["python"] = (s_pythonExe, ".py"),
+            ["python3"] = (s_pythonExe, ".py"),
+            ["javascript"] = ("node", ".js"),
+            ["js"] = ("node", ".js"),
+            ["typescript"] = ("ts-node", ".ts"),
+            ["ts"] = ("ts-node", ".ts"),
+            ["bash"] = ("bash", ".sh"),
+            ["sh"] = ("sh", ".sh"),
+            ["ruby"] = ("ruby", ".rb"),
+            ["perl"] = ("perl", ".pl"),
         };
 
     private static readonly ToolDefinition s_definition = new("REPL", CreateSchema())
@@ -61,26 +61,27 @@ public sealed class ReplTool : ITool
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(timeoutMs);
 
+        // Write code to a temp file to avoid shell injection via argument escaping.
+        var scriptFile = Path.Combine(Path.GetTempPath(), $"sovrant_repl_{Guid.NewGuid():N}{runtime.Extension}");
         var stdoutSb = new StringBuilder();
         var stderrSb = new StringBuilder();
 
         try
         {
-            var args = runtime.Args.Replace("{code}", code.Replace("\"", "\\\"", StringComparison.Ordinal),
-                StringComparison.Ordinal);
+            await File.WriteAllTextAsync(scriptFile, code, cts.Token).ConfigureAwait(false);
 
             using var process = new Process
             {
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = runtime.Exe,
-                    Arguments = args,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true,
                 },
             };
+            process.StartInfo.ArgumentList.Add(scriptFile);
 
             process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdoutSb.AppendLine(e.Data); };
             process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderrSb.AppendLine(e.Data); };
@@ -103,6 +104,10 @@ public sealed class ReplTool : ITool
         }
         catch (InvalidOperationException ex) { return $"Error starting {runtime.Exe}: {ex.Message}"; }
         catch (System.ComponentModel.Win32Exception ex) { return $"Error starting {runtime.Exe}: {ex.Message}"; }
+        finally
+        {
+            try { File.Delete(scriptFile); } catch (IOException) { /* best-effort cleanup */ }
+        }
     }
 
     private static string GetString(JsonElement el, string prop, string def = "") =>
