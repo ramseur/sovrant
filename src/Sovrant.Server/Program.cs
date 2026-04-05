@@ -164,6 +164,10 @@ Sovrant.Server.ServerLog.LogServerReady(app.Logger, serverPort);
 
 await app.RunAsync().ConfigureAwait(false);
 
+// ── Expose the implicit Program class for WebApplicationFactory<Program> ─────
+/// <summary>Enables integration tests via <c>WebApplicationFactory&lt;Program&gt;</c>.</summary>
+public partial class Program { }
+
 // ── Inline types (top-level-statement scope) ──────────────────────────────────
 
 /// <summary>
