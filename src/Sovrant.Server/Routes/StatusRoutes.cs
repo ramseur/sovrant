@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Sovrant.Api.Routing;
+using Sovrant.Runtime.Caching;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Server.ServerConfig;
 
@@ -14,8 +15,17 @@ internal static class StatusRoutes
             ISmartRouter router,
             MutableServerConfig config,
             IRuntimeSessionPool sessionPool,
+            ICacheProvider cache,
+            HttpContext ctx,
             CancellationToken ct) =>
         {
+            var cached = await cache.GetAsync<StatusResponse>("status:current", ct).ConfigureAwait(false);
+            if (cached is not null)
+            {
+                ctx.Response.Headers.CacheControl = $"private, max-age={(int)CacheTtl.Status.TotalSeconds}";
+                return Results.Ok(cached);
+            }
+
             await router.InitializeAsync(ct).ConfigureAwait(false);
             var providers = router.GetStatus()
                 .Select(s => new ProviderStatusDto
@@ -36,7 +46,7 @@ internal static class StatusRoutes
             var maxSessions = int.TryParse(
                 Environment.GetEnvironmentVariable("SOVRANT_MAX_SESSIONS"), out var m) ? m : 500;
 
-            return Results.Ok(new StatusResponse
+            var response = new StatusResponse
             {
                 Providers = providers,
                 ActiveModel = config.Model,
@@ -45,7 +55,11 @@ internal static class StatusRoutes
                 ActiveSessions = sessionPool.ActiveCount,
                 MaxSessions = maxSessions,
                 SessionTtlSeconds = ttlSeconds,
-            });
+            };
+
+            await cache.SetAsync("status:current", response, CacheTtl.Status, ct).ConfigureAwait(false);
+            ctx.Response.Headers.CacheControl = $"private, max-age={(int)CacheTtl.Status.TotalSeconds}";
+            return Results.Ok(response);
         });
     }
 }

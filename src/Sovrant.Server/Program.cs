@@ -140,6 +140,7 @@ app.UseCors();
 app.UseRateLimiter();
 app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseMiddleware<BearerTokenMiddleware>();
+app.UseMiddleware<Sovrant.Server.Middleware.ETagMiddleware>();
 
 // Health check — unauthenticated so load balancers / monitors can ping it.
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));

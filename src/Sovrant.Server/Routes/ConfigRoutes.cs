@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Sovrant.Api.Routing;
+using Sovrant.Runtime.Caching;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Server.ServerConfig;
 
@@ -14,19 +15,36 @@ internal static class ConfigRoutes
         app.MapPut("/v1/config", PutConfig);
     }
 
-    private static IResult GetConfig(MutableServerConfig config) =>
-        Results.Ok(new ConfigResponse
+    private static async Task<IResult> GetConfig(
+        MutableServerConfig config,
+        ICacheProvider cache,
+        HttpContext ctx)
+    {
+        var cached = await cache.GetAsync<ConfigResponse>("config:current").ConfigureAwait(false);
+        if (cached is not null)
+        {
+            ctx.Response.Headers.CacheControl = $"private, max-age={(int)CacheTtl.Config.TotalSeconds}";
+            return Results.Ok(cached);
+        }
+
+        var response = new ConfigResponse
         {
             Model = config.Model,
             BaseUrl = config.LlmBaseUrl,
             PermissionMode = config.PermissionMode.ToString().ToLowerInvariant(),
             Provider = config.PinnedProvider,
-        });
+        };
+
+        await cache.SetAsync("config:current", response, CacheTtl.Config).ConfigureAwait(false);
+        ctx.Response.Headers.CacheControl = $"private, max-age={(int)CacheTtl.Config.TotalSeconds}";
+        return Results.Ok(response);
+    }
 
     private static async Task<IResult> PutConfig(
         ConfigUpdateRequest req,
         MutableServerConfig config,
         ISmartRouter router,
+        CacheInvalidator cacheInvalidator,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
@@ -65,6 +83,9 @@ internal static class ConfigRoutes
                 return Results.BadRequest(new { error = ex.Message });
             }
         }
+
+        // Invalidate cached config so the next GET returns fresh data.
+        await cacheInvalidator.InvalidateConfigAsync(ct).ConfigureAwait(false);
 
         return Results.Ok(new ConfigResponse
         {

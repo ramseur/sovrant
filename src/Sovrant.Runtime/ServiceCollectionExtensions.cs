@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sovrant.Api;
+using Sovrant.Runtime.Caching;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Governance;
@@ -32,6 +33,10 @@ public static class ServiceCollectionExtensions
 
         // Register config as singleton
         services.AddSingleton(config);
+
+        // Caching infrastructure (Phase 31) — in-memory by default.
+        services.AddSingleton<ICacheProvider, InMemoryCacheProvider>();
+        services.AddSingleton<CacheInvalidator>();
 
         // Register API layer (providers + router) using the built configuration
         var apiConfig = ConfigLoader.BuildConfiguration();

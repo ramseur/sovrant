@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Sovrant.Runtime.Caching;
 using Sovrant.Tools.Skills;
 
 namespace Sovrant.Server.Routes;
@@ -8,8 +9,15 @@ internal static class SkillRegistryRoutes
 {
     public static void Map(WebApplication app)
     {
-        app.MapGet("/v1/skills", (SkillRegistry registry) =>
+        app.MapGet("/v1/skills", async (SkillRegistry registry, ICacheProvider cache, HttpContext ctx) =>
         {
+            var cached = await cache.GetAsync<SkillListResponse>("skills:list").ConfigureAwait(false);
+            if (cached is not null)
+            {
+                SetCacheHeaders(ctx, CacheTtl.Skills);
+                return Results.Ok(cached);
+            }
+
             var skills = registry.All
                 .Select(s => new SkillSummaryDto
                 {
@@ -22,16 +30,27 @@ internal static class SkillRegistryRoutes
                 .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            return Results.Ok(new SkillListResponse { Skills = skills, Count = skills.Count });
+            var response = new SkillListResponse { Skills = skills, Count = skills.Count };
+            await cache.SetAsync("skills:list", response, CacheTtl.Skills).ConfigureAwait(false);
+            SetCacheHeaders(ctx, CacheTtl.Skills);
+            return Results.Ok(response);
         });
 
-        app.MapGet("/v1/skills/{name}", (string name, SkillRegistry registry) =>
+        app.MapGet("/v1/skills/{name}", async (string name, SkillRegistry registry, ICacheProvider cache, HttpContext ctx) =>
         {
+            var cacheKey = $"skills:{name}";
+            var cached = await cache.GetAsync<SkillDetailDto>(cacheKey).ConfigureAwait(false);
+            if (cached is not null)
+            {
+                SetCacheHeaders(ctx, CacheTtl.Skills);
+                return Results.Ok(cached);
+            }
+
             var skill = registry.TryGetByName(name);
             if (skill is null)
                 return Results.NotFound(new { error = $"Skill '{name}' not found." });
 
-            return Results.Ok(new SkillDetailDto
+            var dto = new SkillDetailDto
             {
                 Name = skill.Name,
                 Description = skill.Description,
@@ -39,9 +58,15 @@ internal static class SkillRegistryRoutes
                 Agents = skill.Agents.Count > 0 ? skill.Agents : null,
                 Tools = skill.Tools.Count > 0 ? skill.Tools : null,
                 Body = skill.Body,
-            });
+            };
+            await cache.SetAsync(cacheKey, dto, CacheTtl.Skills).ConfigureAwait(false);
+            SetCacheHeaders(ctx, CacheTtl.Skills);
+            return Results.Ok(dto);
         });
     }
+
+    private static void SetCacheHeaders(HttpContext ctx, TimeSpan ttl) =>
+        ctx.Response.Headers.CacheControl = $"private, max-age={(int)ttl.TotalSeconds}";
 }
 
 internal sealed class SkillListResponse

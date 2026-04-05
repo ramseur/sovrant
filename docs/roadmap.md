@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-05 (Phase 30 Registry Discovery API complete)
+**Last updated:** 2026-04-05 (Phase 31 Server Response Caching complete)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -12,7 +12,7 @@ This document tracks planned features, architectural decisions, and the reasonin
 The engine is fully functional for individual and small-team use:
 
 - **39 tools** across 8 categories (file, shell, web, task, agent, team, MCP, LSP)
-- **836 tests** across 9 projects, 0 warnings
+- **879 tests** across 9 projects, 0 warnings
 - **20 server endpoints** (OpenAI-compatible chat, sessions, config, usage, webhooks, export, registry discovery)
 - CLI REPL, one-shot `prompt`, CI mode (`--ci`), MCP server mode (`mcp-server`)
 - Agentic loop with up to 20 tool rounds per turn
@@ -78,12 +78,12 @@ The engine is fully functional for individual and small-team use:
 | 28 | Eval-driven development framework (3 graders, pass@k metrics, 62 tests) |
 | 29 | Swarm orchestrator (auto-decomposition, DAG execution, file locking, quality gate, 62 tests) |
 | 30 | Registry discovery API (tools, skills, agent templates — 11 tests) |
+| 31 | Server response caching & cache infrastructure (in-memory, ETag, TTL — 32 tests) |
 
 ### Still pending
 
 | Gap | Phase | Priority |
 |---|---|---|
-| Server response caching & cache infrastructure (in-memory + Redis, ETag, TTL) | Phase 31 (deferred) | Deferred |
 | Persistence layer — SQLite (config, sessions, audit, credentials, usage, user identity) | Phase 32 | **Next** |
 | Workspaces (personal + team areas, isolated memory/config/sessions) | Phase 33 | Medium–High |
 | Projects (workspace-scoped containers for isolated work) | Phase 34 | Medium |
@@ -1864,7 +1864,7 @@ All endpoints are authenticated (same `SOVRANT_TOKEN` bearer auth as existing en
 
 ---
 
-### Phase 31 — Server Response Caching & Cache Infrastructure ⏸️ Deferred
+### Phase 31 — Server Response Caching & Cache Infrastructure ✅
 
 **Depends on:** Phase 30 (registry discovery API — primary consumer), Phase 7 (server)
 **Difficulty:** Medium

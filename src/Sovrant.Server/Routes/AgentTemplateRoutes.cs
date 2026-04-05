@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Sovrant.Agents.Templates;
+using Sovrant.Runtime.Caching;
 
 namespace Sovrant.Server.Routes;
 
@@ -8,8 +9,15 @@ internal static class AgentTemplateRoutes
 {
     public static void Map(WebApplication app)
     {
-        app.MapGet("/v1/agents/templates", (AgentTemplateRegistry registry) =>
+        app.MapGet("/v1/agents/templates", async (AgentTemplateRegistry registry, ICacheProvider cache, HttpContext ctx) =>
         {
+            var cached = await cache.GetAsync<AgentTemplateListResponse>("templates:list").ConfigureAwait(false);
+            if (cached is not null)
+            {
+                SetCacheHeaders(ctx, CacheTtl.Templates);
+                return Results.Ok(cached);
+            }
+
             var templates = registry.All
                 .Select(t => new AgentTemplateSummaryDto
                 {
@@ -23,25 +31,42 @@ internal static class AgentTemplateRoutes
                 .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            return Results.Ok(new AgentTemplateListResponse { Templates = templates, Count = templates.Count });
+            var response = new AgentTemplateListResponse { Templates = templates, Count = templates.Count };
+            await cache.SetAsync("templates:list", response, CacheTtl.Templates).ConfigureAwait(false);
+            SetCacheHeaders(ctx, CacheTtl.Templates);
+            return Results.Ok(response);
         });
 
-        app.MapGet("/v1/agents/templates/{name}", (string name, AgentTemplateRegistry registry) =>
+        app.MapGet("/v1/agents/templates/{name}", async (string name, AgentTemplateRegistry registry, ICacheProvider cache, HttpContext ctx) =>
         {
+            var cacheKey = $"templates:{name}";
+            var cached = await cache.GetAsync<AgentTemplateDetailDto>(cacheKey).ConfigureAwait(false);
+            if (cached is not null)
+            {
+                SetCacheHeaders(ctx, CacheTtl.Templates);
+                return Results.Ok(cached);
+            }
+
             var template = registry.TryGet(name);
             if (template is null)
                 return Results.NotFound(new { error = $"Agent template '{name}' not found." });
 
-            return Results.Ok(new AgentTemplateDetailDto
+            var dto = new AgentTemplateDetailDto
             {
                 Name = template.Name,
                 Role = template.Role.ToString(),
                 RecommendedLevel = template.RecommendedLevel.ToString(),
                 AllowedTools = template.AllowedTools.Count > 0 ? template.AllowedTools : null,
                 SystemPrompt = template.SystemPrompt,
-            });
+            };
+            await cache.SetAsync(cacheKey, dto, CacheTtl.Templates).ConfigureAwait(false);
+            SetCacheHeaders(ctx, CacheTtl.Templates);
+            return Results.Ok(dto);
         });
     }
+
+    private static void SetCacheHeaders(HttpContext ctx, TimeSpan ttl) =>
+        ctx.Response.Headers.CacheControl = $"private, max-age={(int)ttl.TotalSeconds}";
 }
 
 internal sealed class AgentTemplateListResponse
