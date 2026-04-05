@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Multi-agent team orchestration — 39 tools, 329 tests)
+**Last updated:** 2026-04-05 (Phase 28 Swarm Orchestrator + Phase 27 Eval Framework — 45 tools, 836 tests)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -19,7 +19,7 @@
 | Permission system | ✅ Working | `bypassPermissions` / `dontAsk` / `default` / `plan` all functional |
 | SSE streaming | ✅ Working | Text chunks stream to console in real time |
 | Token counts | ✅ Fixed | OpenAI trailing usage chunk now captured. Input + output tokens reported correctly after each turn. |
-| HTTP server (`Sovrant.Server`) | ✅ Working | 12 endpoints: health, chat, config (GET+PUT), status, models, sessions (list+get+delete), session config (GET+PUT), usage |
+| HTTP server (`Sovrant.Server`) | ✅ Working | 22 endpoints: health, chat, config (GET+PUT), status, models, sessions (CRUD + config + export), usage, webhook, MCP auth, evals (list+history+run), swarm (start+status+events+sessions) |
 | Server session pool (`IRuntimeSessionPool`) | ✅ Implemented | One `ConversationRuntime` per session ID with per-session `SemaphoreSlim` lock, `SessionConfig` overlay, token accumulators. TTL eviction + LRU cap via `SessionEvictionService`. |
 | Session-scoped config | ✅ Implemented | Per-session model + permission mode overlays via `SessionConfig`. `EnterPlanMode`/`ExitPlanMode` scoped to current session via `AsyncLocal`. `PUT /v1/sessions/{id}/config` for explicit overrides. |
 | Per-session rate limiting | ✅ Implemented | ASP.NET Core `RateLimiter` keyed on `X-Session-Id` header or client IP. `SOVRANT_RATE_LIMIT_RPM` env var (default 60). Returns 429 when exceeded. |
@@ -32,12 +32,14 @@
 | Session export | ✅ Implemented | `GET /v1/sessions/{id}/export` — markdown rendering of full session history |
 | MCP server mode | ✅ Implemented | `sovrant mcp-server` — stdio transport (JSON-RPC 2.0). Bridges all `IToolRegistry` tools + synthetic `chat` tool + session/config resources to MCP protocol. Zero overlap with HTTP server. Bearer token auth via `SOVRANT_MCP_TOKEN` + `--token`. |
 | Dynamic MCP Tool Proxy (`MCPTool`) | ✅ Implemented | Calls any tool on any connected MCP server dynamically at execution time — no static registration needed. Optional `server` param; searches all clients when omitted. |
-| Unit test suite | ✅ 329/329 passing | Api(28) + Runtime(106) + Server(16) + Lsp(26) + Tools(42) + Commands(22) + McpServer(30) + Agents(58) + Integration(1) |
+| Unit test suite | ✅ 836/836 passing | Api(28) + Runtime(302) + Server(73) + Lsp(26) + Tools(174) + Commands(42) + McpServer(30) + Agents(160) + Integration(1) |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |
 | Phase 17.5 agent scaffolding | ✅ Implemented | `Sovrant.Agents` project: `IAgent`, `IMultiAgentSystem`, dual backends (isolated + shared), `AGENT_MODE` config switch, `SovrantAgentFactory`, `AgentPrompts`, `FilteredToolRegistry`. Wired into CLI and Server DI via `AddMultiAgentSystem()`. |
 | Phase 18+19 multi-agent teams | ✅ Implemented | `ITeamRegistry` + `InMemoryTeamRegistry`, 4 team tools (`TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`), `MultiAgentCoordinator` (semaphore concurrency, linked CTS + timeout), `ProcessAgent` (stdin/stdout, process tree kill), `SovrantAgent` (runtime-backed), 6 role-specific `AgentPrompts`. 58 tests in `Sovrant.Agents.Tests`. |
+| Eval framework (Phase 27) | ✅ Implemented | 3 grader types (code, model, human), pass@1 + pass@k metrics, JSON eval definitions in `.sovrant/evals/`, trend tracking via `EvalResultStore`, `/eval` command, 3 server endpoints. 62 tests. |
+| Swarm orchestrator (Phase 28) | ✅ Implemented | Auto-decomposition via LLM, Kahn's topological sort for wave assignment, wave-by-wave parallel execution (`SemaphoreSlim`), pessimistic file locking, token budget enforcement, per-task retry + timeout, optional quality gate, JSONL session recording, team bridge (different orchestrations use different teams). OFF by default. `SwarmTool` + `SwarmStatusTool`, `/swarm` command, 4 server endpoints (SSE streaming). 62 tests. |
 | OpenAI Responses API provider | ✅ Implemented + tested | `OpenAiResponsesProvider` routes through `POST /v1/responses` when `LLM_WEB_SEARCH=true`. Injects `web_search_preview`, suppresses `WebSearch` function tool, full multi-turn agentic loop support. |
 | Phase 7 hardening | ✅ Complete | Context auto-compaction (`SOVRANT_COMPACT_THRESHOLD`, default 80k tokens); BashTool 256 KB cap + dangerous env stripping; WebFetchTool SSRF guard (RFC-1918, loopback, link-local, non-HTTP(S)); provider retry 3×(1s/2s/4s) on 429/5xx; AgentTool recursion depth ≤ 5; ReadFileTool 10 MB cap; GlobTool 1000-file cap; atomic writes in Write/Edit tools. |
 

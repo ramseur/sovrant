@@ -364,3 +364,55 @@ The `AskUserQuestion` tool cannot pause an SSE stream to wait for a response. Wh
 ```
 [User input is not available in server mode. Please proceed without it.]
 ```
+
+---
+
+## Eval Endpoints
+
+### List Eval Suites — `GET /v1/evals`
+
+Returns all available eval suites found in `.sovrant/evals/` and `~/.sovrant/evals/`.
+
+### Eval History — `GET /v1/evals/{suiteName}/history`
+
+Returns trend data (pass rates, durations) for a named suite from `~/.sovrant/evals/results/`.
+
+### Run Eval Suite — `POST /v1/evals/run`
+
+```json
+{ "suite_name": "my-suite", "tag": "regression" }
+```
+
+Runs the named suite (optionally filtered by tag) and returns the full report with per-eval results.
+
+---
+
+## Swarm Endpoints
+
+### Start Swarm — `POST /v1/swarm`
+
+Starts a swarm orchestration. Returns an SSE stream of swarm events (plan creation, task start/complete/fail, quality gate, final result).
+
+```json
+{
+  "prompt": "Refactor auth to use JWT",
+  "team": "backend-team",
+  "dry_run": false
+}
+```
+
+- `prompt` (required) — the task to decompose and execute
+- `team` (optional) — multi-agent team whose members should be used as swarm workers
+- `dry_run` (optional) — if `true`, only decompose and return the plan without executing
+
+### Swarm Status — `GET /v1/swarm/{id}`
+
+Returns the current status and task states for a swarm.
+
+### Swarm Events — `GET /v1/swarm/{id}/events`
+
+Replays the full JSONL event log for a swarm session.
+
+### List Swarm Sessions — `GET /v1/swarm/sessions`
+
+Returns all recorded swarm session IDs.

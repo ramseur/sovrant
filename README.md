@@ -8,7 +8,7 @@ The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HT
 
 **Runtime:** .NET 10 / C# 13
 **License:** [see LICENSE]
-**Status:** Engine fully functional. 43 tools. 24 agent templates. 32 built-in skills. 14 server endpoints. Multi-agent team orchestration. MCP server mode. Frontend SDK. 661 tests passing.
+**Status:** Engine fully functional. 45 tools. 24 agent templates. 32 built-in skills. 18 server endpoints. Multi-agent team orchestration. Swarm orchestrator. Eval framework. MCP server mode. Frontend SDK. 836 tests passing.
 
 ---
 
@@ -19,6 +19,8 @@ The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HT
 - [Architecture](#architecture)
 - [Tools](#tools)
 - [Agent System](#agent-system)
+- [Swarm Orchestrator](#swarm-orchestrator)
+- [Eval Framework](#eval-framework)
 - [Providers](#providers)
 - [Server API](#server-api)
 - [Frontend SDK](#frontend-sdk)
@@ -39,8 +41,14 @@ The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HT
 ### Provider-Agnostic LLM Routing
 Connect to **any OpenAI-compatible API** — OpenAI, Anthropic (via proxy), Google Gemini, Ollama (local), or any provider that speaks the OpenAI chat completions format. The `SmartRouter` pings all configured providers on startup, scores them by latency, cost, and error rate, and routes each request to the optimal one. Switch providers by changing an environment variable — no code changes.
 
-### 43 Built-in Tools
-Agents autonomously use tools for file operations (read, write, edit, glob, grep), shell execution (Bash, PowerShell, REPL), web access (fetch, search), task management, plan/worktree mode, notebook editing, MCP resource access, LSP code intelligence, code verification, skill execution, and multi-agent delegation. Up to 20 tool rounds per turn with automatic retries.
+### Swarm Orchestrator (Auto-Decomposition + Parallel DAG Execution)
+Submit a single complex prompt and the swarm auto-decomposes it into a task DAG, executes tasks in parallel waves via specialized agents, enforces file-level locking and token budgets, and runs an optional quality gate review. OFF by default — enable in `.sovrant/swarm.json`. Different orchestrations can reference different multi-agent teams, so the same swarm engine can leverage purpose-built agent rosters per use case. Available via CLI (`sovrant swarm "task"`), the `Swarm` tool, `/swarm` slash command, and `POST /v1/swarm` (SSE streaming).
+
+### Eval-Driven Development Framework
+Define evaluation suites as JSON files in `.sovrant/evals/`. Three grader types: code (exit code + regex), model (LLM-judged with rubric), and human (manual review). Pass@1 and pass@k metrics with configurable attempt counts. Trend tracking via `EvalResultStore`. Run from CLI (`/eval`), programmatically (`IEvalRunner`), or via API (`POST /v1/evals/run`).
+
+### 45 Built-in Tools
+Agents autonomously use tools for file operations (read, write, edit, glob, grep), shell execution (Bash, PowerShell, REPL), web access (fetch, search), task management, plan/worktree mode, notebook editing, MCP resource access, LSP code intelligence, code verification, skill execution, multi-agent delegation, and swarm orchestration. Up to 20 tool rounds per turn with automatic retries.
 
 ### 24 Specialized Agent Templates
 Define reusable agent roles as `.md` files with YAML frontmatter — each specifying a name, recommended model tier, system prompt, and allowed tools. 24 built-in templates ship with the engine (10 general-purpose, 8 code-specific, 6 creative/domain). Drop custom templates into `.sovrant/agents/` to override built-ins or add your own. Agents spawned via the `Agent` tool or `TeamCreate` can reference a template by name for purpose-built behavior without manual prompt engineering.
@@ -209,6 +217,11 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
          │                    │  IMultiAgentSystem            │
          │                    │  ├── Isolated (process-based) │
          │                    │  └── Shared (in-process)     │
+         │                    │                              │
+         │                    │  Swarm Orchestrator           │
+         │                    │  ├── LlmSwarmDecomposer      │
+         │                    │  ├── SwarmOrchestrator (DAG)  │
+         │                    │  └── SwarmQualityGate         │
          │                    └──────────────────────────────┘
          │
          ┌──────────▼───────────────┐
@@ -226,9 +239,9 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
 | `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus session management and live config. |
 | `Sovrant.Runtime` | Core agentic loop, session persistence (JSONL), permission system, tool executor, MCP client. |
 | `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, native messages API. SmartRouter with health/latency/cost scoring. |
-| `Sovrant.Tools` | All 43 tool implementations (core + LSP + team + MCP + quality + skills). 32 built-in skill `.md` files. |
+| `Sovrant.Tools` | All 45 tool implementations (core + LSP + team + swarm + MCP + quality + skills). 32 built-in skill `.md` files. |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/clear`, `/session`, `/memory`, etc.). |
-| `Sovrant.Agents` | Multi-agent orchestration: team registry, agent factory, dual backends (isolated process-per-agent + shared in-process), 24 agent templates as `.md` files, tool filtering per agent. |
+| `Sovrant.Agents` | Multi-agent orchestration: team registry, agent factory, dual backends (isolated process-per-agent + shared in-process), 24 agent templates, tool filtering per agent, swarm orchestrator (auto-decomposition, DAG execution, file locking, quality gate). |
 | `Sovrant.McpServer` | MCP server mode: exposes all tools and resources via stdio transport for IDE integration. |
 | `Sovrant.Lsp` | Language Server Protocol client: JSON-RPC over stdio, manages language server lifecycle, 5 LSP tools. |
 | `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient`, SSE streaming, React `useChat()` hook. |
@@ -249,7 +262,7 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
 
 ## Tools
 
-43 tools available. All run inside the agentic loop with automatic retries up to 20 tool rounds per turn. Two additional tools (`MCPTool` and `McpAuth`) provide dynamic MCP server interaction.
+45 tools available. All run inside the agentic loop with automatic retries up to 20 tool rounds per turn. Two additional tools (`MCPTool` and `McpAuth`) provide dynamic MCP server interaction.
 
 ### File
 `Read` · `Write` · `Edit` · `Glob` · `Grep` · `LS`
@@ -273,6 +286,11 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
 `TeamCreate` · `TeamDelete` · `TeamStatus` · `TeamDelegate`
 
 *Create persistent named agents with roles, custom system prompts, and tool restrictions. Delegate tasks and track lifecycle. See [Agent System](#agent-system).*
+
+### Swarm Orchestration
+`Swarm` *(auto-decompose + parallel DAG execution with optional team)* · `SwarmStatus` *(live progress tracking)*
+
+*Submit complex tasks for automatic decomposition into parallel waves. Optionally reference a multi-agent team. See [Swarm Orchestrator](#swarm-orchestrator).*
 
 ### Discovery & Skills
 `ToolSearch` *(keyword search over registered tools)* · `Skill` *(loads and executes a skill by name or /trigger)* · `SkillCreate` *(creates new `.md` skill files at runtime)*
@@ -367,6 +385,105 @@ Each team member:
 
 ---
 
+## Swarm Orchestrator
+
+The swarm orchestrator auto-decomposes complex tasks into parallel DAGs and executes them across multiple agents. It is a separate feature from multi-agent teams — teams define **who** (reusable agent rosters), swarms define **how** (execution patterns). Both are independently controllable from the frontend.
+
+### How It Works
+
+```
+User prompt → [1. Decompose] → SwarmPlan (task DAG with waves)
+                                    ↓
+              [2. Execute]   → wave-by-wave parallel execution
+                                    ↓
+              [3. Quality Gate] → score + verdict → SwarmResult
+```
+
+**Phase 1 — Decomposition:** A high-level LLM agent analyzes the prompt and produces a JSON task array with dependencies, file predictions, and agent template assignments. Kahn's topological sort assigns parallel wave indices.
+
+**Phase 2 — Execution:** The orchestrator processes waves sequentially, tasks within a wave in parallel (bounded by `SemaphoreSlim`). File-level pessimistic locking prevents conflicts. Token budget enforcement with auto-cancellation of remaining waves on breach. Per-task retry with configurable timeout.
+
+**Phase 3 — Quality Gate (optional):** A reviewer agent scores the combined output on a 1-10 scale with pass/needs_revision/fail verdict.
+
+### Using Teams with Swarms
+
+Different orchestrations can reference different multi-agent teams. When a swarm plan has a `TeamId`, the orchestrator resolves workers from that team before falling back to templates.
+
+```bash
+# CLI
+sovrant swarm "Refactor auth to JWT" --dry-run
+
+# Tool (from within an agent conversation)
+Swarm(prompt: "Add pagination to all API endpoints", team: "backend-team")
+
+# API
+curl -X POST http://localhost:5200/v1/swarm \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"prompt": "Add pagination", "team": "backend-team"}'
+```
+
+### Configuration
+
+Config lives in `.sovrant/swarm.json` (OFF by default, designed for SQLite migration later):
+
+```json
+{
+  "enabled": true,
+  "max_concurrent": 4,
+  "max_token_budget": 500000,
+  "max_retries": 1,
+  "quality_gate": true,
+  "decomposer_level": "High",
+  "worker_level": "Standard",
+  "task_timeout_seconds": 300,
+  "templates": {}
+}
+```
+
+### Server Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/v1/swarm` | Start a swarm (SSE streaming of events) |
+| `GET` | `/v1/swarm/{id}` | Get swarm status and task states |
+| `GET` | `/v1/swarm/{id}/events` | Replay JSONL event log |
+| `GET` | `/v1/swarm/sessions` | List all swarm session IDs |
+
+---
+
+## Eval Framework
+
+Define evaluation suites as JSON files in `.sovrant/evals/`. Run them from the CLI, programmatically, or via the server API.
+
+### Grader Types
+
+| Type | How It Works |
+|---|---|
+| **Code** | Runs a command with the output as a temp file. Checks exit code + optional regex pattern. |
+| **Model** | Sends output to an LLM with a rubric prompt. Parses `VERDICT: PASS/FAIL` + `SCORE: N`. |
+| **Human** | Returns "pending human review" — designed for manual assessment workflows. |
+
+### Metrics
+
+- **pass@1** — did the first attempt pass?
+- **pass@k** — did any of k attempts pass? (configurable via `attempts` per eval)
+- Trend tracking: results persisted to `~/.sovrant/evals/results/` for historical comparison
+
+### Usage
+
+```bash
+# REPL
+/eval my-suite
+/eval --history my-suite
+
+# API
+POST /v1/evals/run  {"suite_name": "my-suite", "tag": "regression"}
+GET  /v1/evals
+GET  /v1/evals/{name}/history
+```
+
+---
+
 ## Providers
 
 | Provider | How to enable |
@@ -384,7 +501,7 @@ The `SmartRouter` pings all configured providers on startup, scores them by late
 
 ## Server API
 
-The server exposes an OpenAI-compatible chat completions endpoint plus session management, live config, status, and models. See [`docs/server.md`](docs/server.md) for the full API reference.
+The server exposes an OpenAI-compatible chat completions endpoint plus session management, live config, status, models, evals, and swarm orchestration. See [`docs/server.md`](docs/server.md) for the full API reference.
 
 | Method | Path | Description |
 |---|---|---|
@@ -402,6 +519,13 @@ The server exposes an OpenAI-compatible chat completions endpoint plus session m
 | `GET` | `/v1/usage` | Per-session token usage summary |
 | `POST` | `/v1/webhook` | Generic webhook — Slack, Teams, Discord, or custom sources |
 | `GET` | `/v1/sessions/{id}/export` | Export session as human-readable markdown |
+| `GET` | `/v1/evals` | List available eval suites |
+| `GET` | `/v1/evals/{name}/history` | Get eval trend data for a suite |
+| `POST` | `/v1/evals/run` | Run a named eval suite |
+| `POST` | `/v1/swarm` | Start a swarm orchestration (SSE streaming) |
+| `GET` | `/v1/swarm/{id}` | Get swarm status |
+| `GET` | `/v1/swarm/{id}/events` | Replay swarm JSONL events |
+| `GET` | `/v1/swarm/sessions` | List all swarm sessions |
 
 ---
 
@@ -605,19 +729,19 @@ Replace `-r linux-x64` with `-r win-x64` in all commands above.
 ## Tests
 
 ```bash
-dotnet test Sovrant.slnx   # 661 tests across 9 projects
+dotnet test Sovrant.slnx   # 836 tests across 9 projects
 ```
 
 | Project | Tests |
 |---|---|
 | `Sovrant.Api.Tests` | 28 |
-| `Sovrant.Runtime.Tests` | 209 |
+| `Sovrant.Runtime.Tests` | 302 |
 | `Sovrant.Server.Tests` | 73 |
 | `Sovrant.McpServer.Tests` | 30 |
 | `Sovrant.Lsp.Tests` | 26 |
 | `Sovrant.Tools.Tests` | 174 |
-| `Sovrant.Commands.Tests` | 22 |
-| `Sovrant.Agents.Tests` | 98 |
+| `Sovrant.Commands.Tests` | 42 |
+| `Sovrant.Agents.Tests` | 160 |
 | `Sovrant.Integration.Tests` | 1 |
 
 ---
