@@ -11,6 +11,7 @@ using Sovrant.Tools.Skills;
 using Sovrant.Tools.Tasks;
 using Sovrant.Tools.Todo;
 using Sovrant.Tools.Quality;
+using Sovrant.Tools.Swarm;
 using Sovrant.Tools.Team;
 using Sovrant.Tools.Worktree;
 
@@ -107,6 +108,10 @@ public static class ServiceCollectionExtensions
 
         // Quality / verification tools
         services.AddSingleton<ITool, VerifyTool>();
+
+        // Swarm tools
+        services.AddSingleton<ITool, SwarmTool>();
+        services.AddSingleton<ITool, SwarmStatusTool>();
 
         // LSP tools — only registered if ILspClientManager is available
         services.AddSingleton<ILspClientManager>(sp =>

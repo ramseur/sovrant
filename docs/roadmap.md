@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-05 (Phases 22-29 added from everything-claude-code research)
+**Last updated:** 2026-04-05 (Phase 28 Swarm Orchestrator complete)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -12,7 +12,7 @@ This document tracks planned features, architectural decisions, and the reasonin
 The engine is fully functional for individual and small-team use:
 
 - **39 tools** across 8 categories (file, shell, web, task, agent, team, MCP, LSP)
-- **416 tests** across 9 projects, 0 warnings
+- **836 tests** across 9 projects, 0 warnings
 - **14 server endpoints** (OpenAI-compatible chat, sessions, config, usage, webhooks, export)
 - CLI REPL, one-shot `prompt`, CI mode (`--ci`), MCP server mode (`mcp-server`)
 - Agentic loop with up to 20 tool rounds per turn
@@ -67,15 +67,15 @@ The engine is fully functional for individual and small-team use:
 | 17 | MCP OAuth authentication (`McpAuthTool`) |
 | 17.5 | Dual agent architecture scaffolding |
 | 18+19 | Multi-agent backend + team tools (58 tests) |
+| 27 | Eval-driven development framework (3 graders, pass@k metrics, 62 tests) |
+| 28 | Swarm orchestrator foundation (auto-decomposition, DAG execution, file locking, quality gate, 62 tests) |
 
 ### Still pending
 
 | Gap | Phase | Priority |
 |---|---|---|
-| ~~Eval-driven development framework (3 grader types, 2 metrics)~~ | Phase 27 ✅ | Lower |
-| Swarm orchestrator (auto-decomposition, DAG execution, file locking, quality gate) | Phase 28 | Lower |
 | Registry discovery API (tools, skills, agent templates for frontends) | Phase 29 | Low–Medium |
-| Server response caching & cache infrastructure (in-memory + Redis, ETag, TTL) | Phase 30 | Medium |
+| Server response caching & cache infrastructure (in-memory + Redis, ETag, TTL) | Phase 30 (deferred) | Deferred |
 | Persistence layer — SQLite (config, sessions, audit, credentials, usage, user identity) | Phase 31 | Medium–High |
 | User management API (CRUD users, issue/revoke tokens, per-user data views) | Phase 32 | Medium |
 | Enterprise auth & multi-tenancy (OAuth/OIDC, RBAC, org isolation) | Phase 33 (deferred) | Deferred |
@@ -1621,7 +1621,9 @@ Evals stored in `.sovrant/evals/`:
 
 ---
 
-### Phase 28 — Swarm Orchestrator (Auto-Decomposition + DAG Execution)
+### Phase 28 — Swarm Orchestrator (Auto-Decomposition + DAG Execution) ✅
+
+> **Status: ✅ Complete** — 17 new files, 62 new tests, 0 warnings. OFF by default; foundation for frontend-driven orchestration.
 
 **Inspired by:** [claude-swarm](https://github.com/affaan-m/claude-swarm) (parallel task decomposition with dependency DAGs, file locking, budget enforcement, quality gate)
 **Depends on:** Phase 18+19 (multi-agent team tools), Phase 21 (agent templates), Phase 36 (cost tracking — optional)

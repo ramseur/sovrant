@@ -144,6 +144,87 @@ mcpCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
 });
 root.Add(mcpCmd);
 
+// ── 'swarm' subcommand ───────────────────────────────────────────────────────
+var swarmTaskArg = new Argument<string>("task") { Description = "The task to decompose and execute via swarm." };
+var swarmBudgetOpt = new Option<int?>("--budget") { Description = "Override the token budget." };
+var swarmMaxAgentsOpt = new Option<int?>("--max-agents") { Description = "Override max concurrent agents." };
+var swarmDryRunOpt = new Option<bool>("--dry-run") { Description = "Show decomposed plan without executing." };
+
+var swarmCmd = new Command("swarm", "Decompose and execute a task via parallel agent swarm.");
+swarmCmd.Add(swarmTaskArg);
+swarmCmd.Add(swarmBudgetOpt);
+swarmCmd.Add(swarmMaxAgentsOpt);
+swarmCmd.Add(swarmDryRunOpt);
+swarmCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    await using var sp = BuildServices(pr);
+    await InitAsync(sp, pr, ct).ConfigureAwait(false);
+
+    var swarmConfig = sp.GetRequiredService<Sovrant.Agents.Swarm.SwarmConfig>();
+    if (!swarmConfig.Enabled)
+    {
+        AnsiConsole.MarkupLine("[red]Swarm orchestration is disabled.[/] Enable in .sovrant/swarm.json.");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    var task = pr.GetValue(swarmTaskArg)!;
+    var dryRun = pr.GetValue(swarmDryRunOpt);
+
+    var decomposer = sp.GetRequiredService<Sovrant.Agents.Swarm.ISwarmDecomposer>();
+    var orchestrator = sp.GetRequiredService<Sovrant.Agents.Swarm.SwarmOrchestrator>();
+    var qualityGate = sp.GetRequiredService<Sovrant.Agents.Swarm.SwarmQualityGate>();
+    var stateTracker = sp.GetRequiredService<Sovrant.Agents.Swarm.SwarmStateTracker>();
+
+    AnsiConsole.MarkupLine("[bold]Decomposing task...[/]");
+    var plan = await decomposer.DecomposeAsync(task, swarmConfig, ct).ConfigureAwait(false);
+    AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
+        $"[green]Plan:[/] {plan.Tasks.Count} tasks across {plan.WaveCount} waves");
+
+    if (dryRun)
+    {
+        for (var w = 0; w < plan.WaveCount; w++)
+        {
+            AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture, $"\n[bold]Wave {w}[/]");
+            foreach (var t in plan.GetWave(w))
+                AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
+                    $"  [cyan]{t.Id}[/]: {Markup.Escape(t.Description)}");
+        }
+        return;
+    }
+
+    AnsiConsole.MarkupLine("[bold]Executing swarm...[/]");
+    var result = await orchestrator.ExecuteAsync(plan, swarmConfig, onEvent: evt =>
+    {
+        switch (evt)
+        {
+            case Sovrant.Agents.Swarm.SwarmEvent.TaskStarted ts:
+                AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
+                    $"  [blue]▶[/] {ts.TaskId} → {Markup.Escape(ts.AgentName)}");
+                break;
+            case Sovrant.Agents.Swarm.SwarmEvent.TaskCompleted tc:
+                AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
+                    $"  [green]✓[/] {tc.TaskId} ({tc.TokensUsed} tokens)");
+                break;
+            case Sovrant.Agents.Swarm.SwarmEvent.TaskFailed tf:
+                AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
+                    $"  [red]✗[/] {tf.TaskId}: {Markup.Escape(tf.Error)}");
+                break;
+        }
+    }, ct).ConfigureAwait(false);
+
+    AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
+        $"\n[bold]Status:[/] {result.Status} | Tokens: {result.TotalTokensUsed} | Duration: {result.Duration.TotalSeconds:F1}s");
+
+    if (swarmConfig.QualityGateEnabled && result.Status == Sovrant.Agents.Swarm.SwarmStatus.Completed)
+    {
+        var verdict = await qualityGate.ReviewAsync(result.SwarmId, task, result.CombinedOutput, ct).ConfigureAwait(false);
+        AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
+            $"[bold]Quality Gate:[/] {verdict.Verdict} (score {verdict.Score})");
+    }
+});
+root.Add(swarmCmd);
+
 // ── REPL (default handler) ────────────────────────────────────────────────────
 root.SetAction(async (ParseResult pr, CancellationToken ct) =>
 {

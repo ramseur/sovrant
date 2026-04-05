@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Config;
 using Sovrant.Agents.Shared;
+using Sovrant.Agents.Swarm;
 using Sovrant.Agents.Teams;
 using Sovrant.Agents.Templates;
 
@@ -42,6 +43,15 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<AgentTemplateRegistry>();
         services.AddSingleton<ITeamRegistry, InMemoryTeamRegistry>();
         services.AddSingleton<SovrantAgentFactory>();
+
+        // Swarm orchestrator infrastructure
+        services.AddSingleton(_ => SwarmConfigLoader.Load());
+        services.AddSingleton<SwarmFileLockManager>();
+        services.AddSingleton<SwarmStateTracker>();
+        services.AddSingleton<SwarmSession>();
+        services.AddSingleton<ISwarmDecomposer, LlmSwarmDecomposer>();
+        services.AddSingleton<SwarmOrchestrator>();
+        services.AddSingleton<SwarmQualityGate>();
 
         return services;
     }
