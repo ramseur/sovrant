@@ -1975,31 +1975,53 @@ src/Sovrant.Server/Middleware/
 **Depends on:** Phase 8 (structured logging — audit logs are a migration candidate), Phase 25 (memory system — primary consumer)
 **Difficulty:** Medium
 
-**Goal:** Introduce SQLite as a structured, queryable persistence layer for data that is currently stored in flat files (JSONL audit logs, session index, CLI memory). SQLite is zero-config, works offline, ships as a single file, and gives indexed queries that JSONL scanning cannot. This phase does **not** replace JSONL session transcripts (those remain append-logs) — it targets the metadata and queryable data around them.
+**Goal:** Introduce SQLite as a structured, queryable persistence layer for operational data that is currently stored in flat JSONL files or held only in memory. SQLite is zero-config, works offline, ships as a single file, and gives indexed queries that JSONL scanning cannot. Both the CLI and the server share the same `IStorageProvider` singleton from `Sovrant.Runtime` — one database, two entry points.
+
+This phase does **not** touch human-editable files (`.md` skills, `.md` agent templates, `.json` config, `.md` memory). Those stay as files. The principle: **queryable operational data → SQLite; human-editable content → files.**
 
 #### Why this matters
 
-Today, finding "all governance violations in the last 7 days" means scanning every line of `~/.sovrant/audit/governance.jsonl`. Finding "which sessions touched file X" means opening every session JSONL. The CLI memory system (Phase 25) will need to search learned patterns and instincts by trigger, confidence, or recency — flat markdown files don't support that. SQLite gives us indexed queries with zero infrastructure.
+Today, finding "all governance violations in the last 7 days" means scanning every line of `~/.sovrant/audit/governance.jsonl`. Finding "which sessions touched file X" means opening every session JSONL. The CLI memory system (Phase 25) will need to search learned patterns and instincts by trigger, confidence, or recency — flat markdown files don't support that. Token usage is lost entirely on restart. SQLite gives us indexed queries with zero infrastructure.
 
-#### What moves to SQLite
+#### Complete persistence inventory — what moves vs. what stays
 
-| Data | Current storage | Why SQLite is better |
+Every place the engine currently writes structured data to disk, and whether it moves to SQLite:
+
+**Moves to SQLite (queryable operational data)**
+
+| Data | Current storage | Current format | Why SQLite is better |
+|---|---|---|---|
+| **Governance audit log** (Phase 23) | `~/.sovrant/audit/governance.jsonl` | JSONL (AppendAllTextAsync) | Query by tool, session, severity, date range; currently requires full file scan |
+| **Bash command audit log** (Phase 23) | `~/.sovrant/audit/bash-commands.jsonl` | JSONL (AppendAllTextAsync) | Query by command, exit code, session; filter dangerous commands |
+| **Session index** | Implicit — scan `~/.sovrant/sessions/*.jsonl` filenames | No storage (derived) | Query by creation date, last access, project, message count, files touched, token totals |
+| **Token usage history** (Phase 9.5) | In-memory only (`SessionConfig.AddTokens()`) | Not persisted | Persist across restarts; query by date/model/session; historical cost analysis |
+| **CLI memory — learned patterns** (Phase 25) | `.sovrant/learned/*.md` (planned) | Markdown (planned) | Full-text search, confidence scoring, evidence trails, recency ranking |
+| **CLI memory — instincts** (Phase 25) | `~/.sovrant/instincts/*.yaml` (planned) | YAML (planned) | Query by trigger, confidence threshold, decay pruning |
+
+**Stays as files (human-editable or specialized format)**
+
+| Data | Current path | Format | Why it stays |
+|---|---|---|---|
+| **Session transcripts** | `~/.sovrant/sessions/*.jsonl` | JSONL | Append-only write pattern; large; full conversation history; rarely queried by field — SQLite indexes the *metadata* about sessions, not the transcripts themselves |
+| **Skills** | `.sovrant/skills/*.md` + built-in | Markdown + YAML frontmatter | Human-editable, git-friendly, loaded at startup, no query need beyond name/trigger lookup (already in-memory) |
+| **Agent templates** | `.sovrant/agents/*.md` + built-in | Markdown + YAML frontmatter | Same as skills |
+| **Config — settings** | `~/.sovrant/settings.json`, `.sovrant/settings.json`, `.sovrant/settings.local.json` | JSON | Human-editable, small, loaded once at startup, merged in order |
+| **Config — hooks** | `~/.sovrant/hooks.json`, `.sovrant/hooks.json` | JSON | Human-editable hook definitions |
+| **Config — governance** | `~/.sovrant/governance.json`, `.sovrant/governance.json` | JSON | Human-editable governance rules, merged (global + project) |
+| **Config — verification** | `.sovrant/verify.json` | JSON | Human-editable quality gate config |
+| **Memory files** | `~/.sovrant/memory.md`, `.sovrant/memory.md` | Markdown | Human-editable notes injected into system prompt; simple read-once |
+| **Encrypted credentials** (Phase 17) | `~/.sovrant/credentials/*.enc` + `.keystore` | Binary (AES-256-GCM) / Hex | Security-sensitive, no query need, one file per credential |
+| **Rolling app logs** (Phase 8) | `~/.sovrant/logs/sovrant-{Date}.log` | Text or JSON | Standard log files consumed by log aggregators; daily rotation; not application-queried |
+| **Temp scripts** | `{TempPath}/sovrant_*.{sh,ps1,cmd}` | Text | Ephemeral — created for tool execution, deleted after |
+
+#### Shared by CLI and Server
+
+`IStorageProvider` lives in `Sovrant.Runtime` — the same project that both `Sovrant.Cli` and `Sovrant.Server` reference. Both register it as a singleton in DI. Both read and write the same `~/.sovrant/sovrant.db` file (or `$SOVRANT_DB_PATH` for containers).
+
+| Entry point | What it writes | What it reads |
 |---|---|---|
-| **Audit log** (Phase 23) | `~/.sovrant/audit/governance.jsonl` | Query by tool, session, severity, date range |
-| **Bash command log** (Phase 23) | `~/.sovrant/audit/bash-commands.jsonl` | Query by command, session, exit code |
-| **Session index** | Implicit (scan `~/.sovrant/sessions/*.jsonl` filenames) | Query by creation date, last access, project, token totals |
-| **CLI memory — learned patterns** (Phase 25) | `.sovrant/learned/*.md` (planned) | Full-text search, confidence scoring, evidence trails |
-| **CLI memory — instincts** (Phase 25) | `~/.sovrant/instincts/*.yaml` (planned) | Query by trigger, confidence threshold, decay pruning |
-| **Token usage history** | In-memory only (Phase 9.5) | Persist across restarts, query by date/model/session |
-
-#### What stays as files
-
-| Data | Why |
-|---|---|
-| **Session transcripts** (`.jsonl`) | Append-only write pattern; rarely queried by field; large |
-| **Skills** (`.md`) | Human-editable, git-friendly, loaded at startup |
-| **Agent templates** (`.md`) | Same as skills |
-| **Config** (`settings.json`) | Human-editable, small, loaded once |
+| **CLI** | Audit events, bash commands, session index updates, token usage, learned patterns, instincts | Session index (resume), audit queries (governance review), memory queries (pattern/instinct lookup) |
+| **Server** | Same as CLI, plus per-request token tracking at higher volume | Same as CLI, plus `GET /v1/audit`, `GET /v1/usage` backed by SQLite queries |
 
 #### Architecture
 
@@ -2012,7 +2034,8 @@ src/Sovrant.Runtime/Storage/
   Tables:
     audit_events               ← (id, timestamp, session_id, tool, action, severity, detail)
     bash_commands              ← (id, timestamp, session_id, command, exit_code, duration_ms)
-    session_index              ← (session_id, project, created_at, last_accessed, total_input_tokens, total_output_tokens)
+    session_index              ← (session_id, project, created_at, last_accessed, message_count,
+                                  files_modified, total_input_tokens, total_output_tokens)
     learned_patterns           ← (id, project, pattern, source_session, confidence, created_at, last_used)
     instincts                  ← (id, trigger, action, confidence, evidence_json, created_at, updated_at)
     token_usage                ← (id, session_id, model, input_tokens, output_tokens, timestamp)
@@ -2022,8 +2045,8 @@ src/Sovrant.Runtime/Storage/
 
 | Context | Path | Rationale |
 |---|---|---|
-| CLI (per-user) | `~/.sovrant/sovrant.db` | Single file, backed up with user data |
-| Server | `$SOVRANT_DATA_DIR/sovrant.db` or `~/.sovrant/sovrant.db` | Configurable for containers |
+| CLI (per-user) | `~/.sovrant/sovrant.db` | Single file alongside existing `.sovrant/` data, backed up with user data |
+| Server | `$SOVRANT_DB_PATH` or `~/.sovrant/sovrant.db` | Configurable for containers and non-default data directories |
 
 #### Environment Variables
 
@@ -2031,19 +2054,24 @@ src/Sovrant.Runtime/Storage/
 |---|---|---|
 | `SOVRANT_STORAGE_PROVIDER` | `sqlite` | `sqlite` (future: `postgres` for enterprise) |
 | `SOVRANT_DB_PATH` | `~/.sovrant/sovrant.db` | SQLite database file path |
+| `SOVRANT_AUDIT_JSONL` | `false` | Keep writing JSONL audit files alongside SQLite (dual-write for migration period) |
 
 #### Migration from flat files
 
-- On first run with SQLite enabled, `StorageMigrator` scans existing JSONL audit logs and indexes them into the `audit_events` table
+- On first run with SQLite enabled, `StorageMigrator` checks for existing data and imports it:
+  - Scans `~/.sovrant/audit/governance.jsonl` → inserts into `audit_events` table
+  - Scans `~/.sovrant/audit/bash-commands.jsonl` → inserts into `bash_commands` table
+  - Scans `~/.sovrant/sessions/*.jsonl` → extracts metadata (file size, first/last timestamp, message count) into `session_index` table
 - Existing JSONL files are not deleted — they become the archival copy
-- Session index is built by scanning `~/.sovrant/sessions/*.jsonl` file headers
-- Future writes go to SQLite; JSONL audit logging becomes optional (`SOVRANT_AUDIT_JSONL=true` to keep both)
+- Future writes go to SQLite by default; set `SOVRANT_AUDIT_JSONL=true` to keep dual-writing JSONL during the transition
+- Migration is idempotent — re-running skips already-imported records (keyed by timestamp + session_id)
 
 #### Relationship to Phase 30 (Caching)
 
 Phase 30's `ICacheProvider` is for **hot, ephemeral data** — fast reads with TTL expiry, no durability guarantee. Phase 31's `IStorageProvider` is for **cold, durable data** — structured records that survive restarts and support queries. They are complementary:
 - Cache a query result from SQLite in the in-memory/Redis cache for repeated fast access
 - Invalidate the cache entry when the underlying SQLite data changes
+- Example: `GET /v1/audit?last=7d` → first request queries SQLite, caches result for 30s; subsequent requests served from cache until TTL or new audit event invalidates
 
 #### Implementation Plan
 
@@ -2051,12 +2079,13 @@ Phase 30's `ICacheProvider` is for **hot, ephemeral data** — fast reads with T
 2. Define `IStorageProvider` interface (generic query/insert/update/delete with typed results)
 3. Implement `SqliteStorageProvider` — connection pooling via `SqliteConnection`, WAL mode for concurrent reads
 4. Implement `StorageMigrator` — version table + ordered migration scripts, `CREATE TABLE IF NOT EXISTS`
-5. Migrate `AuditLogger` to write to SQLite (keep JSONL as optional dual-write)
-6. Add session index table; populate from existing JSONL files on first run
-7. Add token usage persistence (currently in-memory only in `SessionConfig`)
-8. Wire into DI as singleton; CLI and Server both use same `IStorageProvider`
-9. Add `GET /v1/audit` endpoint (query audit events by date, tool, session — depends on SQLite backing)
-10. Tests: migration idempotency, query correctness, concurrent write safety, JSONL import
+5. Migrate `AuditLogger` to write to SQLite; add `SOVRANT_AUDIT_JSONL` dual-write toggle
+6. Add `session_index` table; populate from existing JSONL file metadata on first run
+7. Add `token_usage` table; wire `SessionConfig.AddTokens()` to persist each accumulation
+8. Prepare `learned_patterns` and `instincts` tables (schema only — populated by Phase 25)
+9. Wire `IStorageProvider` into DI as singleton; both CLI and Server use the same registration
+10. Add `GET /v1/audit` endpoint (query audit events by date, tool, session — backed by SQLite)
+11. Tests: migration idempotency, query correctness, concurrent write safety, JSONL import, CLI + Server both resolve same provider
 
 ---
 
