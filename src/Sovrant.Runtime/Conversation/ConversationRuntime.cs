@@ -7,6 +7,7 @@ using Sovrant.Api.Routing;
 using Sovrant.Api.Types;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Hooks;
+using Sovrant.Runtime.Memory;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Tools;
 
@@ -27,8 +28,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly SovrantConfig _config;
     private readonly ILogger<ConversationRuntime> _logger;
     private readonly IHookRunner _hookRunner;
+    private readonly MemoryInjector? _memoryInjector;
     private readonly List<InputMessage> _history = [];
-    private readonly string _systemPrompt;
+    private string _systemPrompt;
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Turn started: session={SessionId}, model={Model}")]
     private static partial void LogTurnStart(ILogger logger, string sessionId, string model);
@@ -57,6 +59,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     [LoggerMessage(Level = LogLevel.Information, Message = "Context compacted for session '{SessionId}': {Kept} messages summarized at {Tokens} input tokens")]
     private static partial void LogCompacted(ILogger logger, string sessionId, int kept, int tokens);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to inject multi-layered memory into system prompt")]
+    private static partial void LogMemoryInjectionFailed(ILogger logger, Exception ex);
+
     [LoggerMessage(Level = LogLevel.Debug, Message = "Provider selected: provider={Provider}")]
     private static partial void LogProviderSelected(ILogger logger, string provider);
 
@@ -73,6 +78,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         SovrantConfig config,
         ILogger<ConversationRuntime> logger,
         IHookRunner? hookRunner = null,
+        MemoryInjector? memoryInjector = null,
         string? systemPromptOverride = null)
     {
         _router = router;
@@ -82,6 +88,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         _config = config;
         _logger = logger;
         _hookRunner = hookRunner ?? NullHookRunner.Instance;
+        _memoryInjector = memoryInjector;
         _systemPrompt = systemPromptOverride ?? BuildSystemPrompt();
     }
 
@@ -104,6 +111,23 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 case "assistant" when !string.IsNullOrEmpty(entry.Content):
                     _history.Add(InputMessage.AssistantText(entry.Content));
                     break;
+            }
+        }
+
+        // Inject multi-layered memory (session summaries, learned patterns, instincts)
+        if (_memoryInjector is not null)
+        {
+            try
+            {
+                var project = Directory.GetCurrentDirectory();
+                var memorySection = await _memoryInjector.BuildMemorySectionAsync(project, ct).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(memorySection))
+                    _systemPrompt += memorySection;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Memory injection is best-effort — never block session initialization.
+                LogMemoryInjectionFailed(_logger, ex);
             }
         }
     }

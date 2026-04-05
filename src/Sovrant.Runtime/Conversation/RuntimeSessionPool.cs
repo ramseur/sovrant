@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Api.Routing;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Hooks;
+using Sovrant.Runtime.Memory;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Tools;
 
@@ -52,7 +53,8 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
                 _services.GetRequiredService<ISessionStore>(),
                 _services.GetRequiredService<SovrantConfig>(),
                 _services.GetRequiredService<ILogger<ConversationRuntime>>(),
-                _services.GetService<IHookRunner>());
+                _services.GetService<IHookRunner>(),
+                _services.GetService<MemoryInjector>());
         }
         else
         {
@@ -162,6 +164,11 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
             HookEvent.SessionEnd,
             new HookContext(HookEvent.SessionEnd, persistenceId),
             CancellationToken.None);
+
+        // Fire-and-forget session summary extraction (Phase 25 memory system).
+        var memoryHandler = _services.GetService<SessionEndMemoryHandler>();
+        if (memoryHandler is not null)
+            _ = memoryHandler.HandleSessionEndAsync(persistenceId);
     }
 
     private sealed class SessionEntry

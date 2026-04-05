@@ -72,13 +72,6 @@ The engine is fully functional for individual and small-team use:
 
 | Gap | Phase | Priority |
 |---|---|---|
-| Hook lifecycle system (7 events, 3 profiles, ~16 built-in hooks) | Phase 20 | High |
-| Specialized agent definitions (24 templates: 10 general, 8 code, 6 creative/domain) | Phase 21 | High |
-| Template externalisation — move built-in templates from code to `.md` files | Phase 21.5 | Medium |
-| Verification loop & quality gates (6 phases) | Phase 22 | High |
-| Governance, security monitoring & audit (6 components) | Phase 23 | Medium |
-| Skills system (32 built-in skills across 7 domains) | Phase 24 | Medium |
-| Multi-layered memory (3 layers: session summaries, learned patterns, instincts) | Phase 25 | Medium |
 | Cost tracking & token budget management (4 components) | Phase 26 | Medium |
 | Eval-driven development framework (3 grader types, 2 metrics) | Phase 27 | Lower |
 | Swarm orchestrator (auto-decomposition, DAG execution, file locking, quality gate) | Phase 28 | Lower |
@@ -1483,7 +1476,7 @@ src/Sovrant.Tools/Skills/
 
 ---
 
-### Phase 25 — Multi-Layered Memory System
+### Phase 25 — Multi-Layered Memory System ✅
 
 **Inspired by:** everything-claude-code (session summaries, learned skills, instincts with confidence scoring)
 **Depends on:** Phase 20 (hooks — memory persisted via session start/end hooks)
@@ -2108,17 +2101,21 @@ All tables except `users` and `config` have a `user_id` foreign key. Queries nat
 
 #### Database Location
 
+All persistent data lives under `{project-root}/data/`. This keeps the database alongside the codebase (easy to find, back up, and `.gitignore`), separate from config/template files in `.sovrant/`, and avoids polluting the user's home directory.
+
 | Context | Path | Rationale |
 |---|---|---|
-| CLI (per-user) | `~/.sovrant/sovrant.db` | Single file alongside `.sovrant/` data |
-| Server | `$SOVRANT_DB_PATH` or `~/.sovrant/sovrant.db` | Configurable for containers |
+| CLI (per-user) | `{project-root}/data/sovrant.db` | Alongside the project; `data/` is gitignored |
+| Server | `$SOVRANT_DB_PATH` or `{project-root}/data/sovrant.db` | Configurable for containers; defaults to project root |
+
+The `data/` directory also holds WAL and SHM files that SQLite creates automatically (`sovrant.db-wal`, `sovrant.db-shm`). Add `data/` to `.gitignore`.
 
 #### Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
 | `SOVRANT_STORAGE_PROVIDER` | `sqlite` | `sqlite` now; `postgres` in a future phase |
-| `SOVRANT_DB_PATH` | `~/.sovrant/sovrant.db` | SQLite database file path |
+| `SOVRANT_DB_PATH` | `{project-root}/data/sovrant.db` | SQLite database file path |
 | `SOVRANT_USER_ID` | OS username | User identity for CLI (server resolves from token) |
 | `SOVRANT_TOKENS` | — | JSON map of `{"bearer-token": "user_id"}` for server multi-user identity resolution |
 | `SOVRANT_AUDIT_JSONL` | `false` | Dual-write audit to JSONL alongside SQLite (migration period) |
@@ -2153,6 +2150,22 @@ SQLite is the starting persistence layer, not the final one. The `IStorageProvid
 | Distributed edge | Turso (libSQL) | SQLite-compatible with replication |
 
 Swapping backends is a DI registration change + migration script, not a rewrite. All consumers use `IStorageProvider` — they never touch `SqliteConnection` directly.
+
+#### Relationship to Phase 25 (Memory System → SQLite)
+
+Phase 25 introduces three memory layers that initially use flat files. Phase 31 migrates all three into SQLite:
+
+| Memory layer | Phase 25 storage | Phase 31 table | What changes |
+|---|---|---|---|
+| **Session summaries** | `~/.sovrant/sessions/{project}/{ts}-summary.md` | `session_summaries` `(id, user_id, project, session_id, summary_md, tasks, tools_used, files_modified, outcome, tokens_in, tokens_out, created_at)` | Full-text search across summaries; per-user scoping; no filesystem scanning |
+| **Learned patterns** | `.sovrant/learned/*.md` | `learned_patterns` `(id, user_id, project, pattern, source_session, confidence, created_at, last_used)` | Query by project + confidence; automatic decay; concurrent multi-session writes |
+| **Instincts** | `~/.sovrant/instincts/*.yaml` | `instincts` `(id, user_id, trigger, action, confidence, evidence_json, created_at, updated_at)` | Query by trigger keyword; confidence-threshold pruning via SQL; evidence append without YAML rewrite |
+
+Migration strategy:
+- `StorageMigrator` reads existing Phase 25 flat files and inserts into respective tables
+- `IMemoryStore` implementations get a second constructor path accepting `IStorageProvider`
+- When `IStorageProvider` is available (Phase 31+), stores write to SQLite; otherwise fall back to flat files
+- `.md` and `.yaml` files are kept as archival copies post-migration
 
 #### Relationship to Phase 30 (Caching)
 

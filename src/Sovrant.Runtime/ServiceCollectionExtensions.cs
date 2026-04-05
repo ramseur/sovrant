@@ -6,6 +6,7 @@ using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Governance;
 using Sovrant.Runtime.Hooks;
 using Sovrant.Runtime.Mcp;
+using Sovrant.Runtime.Memory;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Tools;
@@ -55,6 +56,11 @@ public static class ServiceCollectionExtensions
 
         // Session store
         services.AddSingleton<ISessionStore, JsonlSessionStore>();
+
+        // Memory system (Phase 25)
+        services.AddSingleton<IMemoryStore, FileMemoryStore>();
+        services.AddSingleton<MemoryInjector>();
+        services.AddSingleton<SessionEndMemoryHandler>();
 
         // MCP
         services.AddSingleton<IMcpClientFactory, SovrantMcpClientFactory>();

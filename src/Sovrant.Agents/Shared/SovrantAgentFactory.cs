@@ -111,6 +111,6 @@ public sealed class SovrantAgentFactory
             registry = new FilteredToolRegistry(registry, new HashSet<string>(allowedTools, StringComparer.Ordinal));
 
         var hookRunner = _services.GetService<IHookRunner>();
-        return new ConversationRuntime(router, executor, registry, sessionStore, config, logger, hookRunner, systemPrompt);
+        return new ConversationRuntime(router, executor, registry, sessionStore, config, logger, hookRunner, memoryInjector: null, systemPromptOverride: systemPrompt);
     }
 }
