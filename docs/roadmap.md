@@ -74,6 +74,7 @@ The engine is fully functional for individual and small-team use:
 |---|---|---|
 | Hook lifecycle system (7 events, 3 profiles, ~16 built-in hooks) | Phase 20 | High |
 | Specialized agent definitions (24 templates: 10 general, 8 code, 6 creative/domain) | Phase 21 | High |
+| Template externalisation — move built-in templates from code to `.md` files | Phase 21.5 | Medium |
 | Verification loop & quality gates (6 phases) | Phase 22 | High |
 | Governance, security monitoring & audit (6 components) | Phase 23 | Medium |
 | Skills system (32 built-in skills across 7 domains) | Phase 24 | Medium |
@@ -1088,6 +1089,108 @@ This keeps Sovrant provider-agnostic. Users who care about cost can route "high"
 5. Update `AgentTool` to accept an optional `template` parameter for ad-hoc sub-agents
 6. Ship **24 built-in templates**: 10 general-purpose, 8 code-specific, 6 creative/domain
 7. Tests: template loading, model level resolution (override → admin default → session), tool restriction enforcement, user template override
+
+---
+
+### Phase 21.5 — Template Externalisation (Built-ins as Markdown Files)
+
+**Depends on:** Phase 21 (AgentTemplateRegistry already loads user templates from `.sovrant/agents/`)
+
+**Goal:** Move the 24 built-in agent templates out of `BuiltInTemplates.cs` and into
+plain markdown files on disk. This lets operators tune system prompts, adjust tool
+lists, and add new templates without recompiling — changes take effect immediately on
+the next agent spawn.
+
+#### Why this matters
+
+Right now the built-in templates are embedded in source code. That means:
+- Changing a prompt requires a build + deploy cycle.
+- Operators running Sovrant as a shared service can't customise templates without forking.
+- A/B testing or iterating on prompt methodology requires code changes.
+
+With file-resident templates, a single `.md` edit is all it takes.
+
+#### Design
+
+Built-in templates ship as markdown files in a well-known location, loaded at startup
+by `AgentTemplateRegistry`. The search order mirrors the existing layering:
+
+```
+1. ~/.sovrant/agents/          — user-global overrides (highest priority)
+2. .sovrant/agents/            — project-level overrides
+3. <install>/agents/           — shipped built-ins (lowest priority, always present)
+```
+
+The install directory is resolved from the executing assembly's location:
+`Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)/agents/`
+
+This means the 24 `.md` files are deployed alongside the binary (copied to output
+via `<Content CopyToOutputDirectory="Always" />`), but any of them can be shadowed by
+a file with the same name in `.sovrant/agents/` or `~/.sovrant/agents/`.
+
+`BuiltInTemplates.cs` is deleted once the files are in place. The fallback
+`NullObject` pattern (one hardcoded emergency template) is optional and not required.
+
+#### File layout
+
+```
+src/Sovrant.Agents/agents/
+  planner.md
+  architect.md
+  researcher.md
+  chief-of-staff.md
+  content-writer.md
+  data-analyst.md
+  project-manager.md
+  doc-updater.cs
+  loop-operator.md
+  executor.md
+  code-reviewer.md
+  security-reviewer.md
+  tdd-guide.md
+  refactor-cleaner.md
+  coder.md
+  build-error-resolver.md
+  e2e-test-runner.md
+  database-reviewer.md
+  gan-planner.md
+  gan-generator.md
+  gan-evaluator.md
+  prompt-optimizer.md
+  sales-intelligence.md
+  compliance-reviewer.md
+```
+
+Each file uses the same front matter format already supported by `AgentTemplateRegistry.ParseTemplateFile`:
+
+```markdown
+---
+name: security-reviewer
+role: Reviewer
+recommended_level: High
+allowed_tools: [Read, Grep, Glob]
+---
+You are a security review agent...
+```
+
+#### Implementation Plan
+
+1. Create `src/Sovrant.Agents/agents/` and write one `.md` file per built-in template
+   (content ported verbatim from `BuiltInTemplates.cs`).
+2. Mark each file `<Content CopyToOutputDirectory="PreserveNewest" />` in the `.csproj`.
+3. Update `AgentTemplateRegistry` constructor to resolve the install-directory path
+   and call `LoadUserTemplates` on it as the lowest-priority source.
+4. Delete `BuiltInTemplates.cs`.
+5. Update tests: `All_Returns24BuiltInTemplates` and per-template metadata tests should
+   still pass — behaviour is unchanged, only the loading mechanism differs.
+6. Verify that placing a custom `.md` in `.sovrant/agents/coder.md` correctly shadows
+   the shipped `coder.md`.
+
+#### Hot-reload (optional stretch goal)
+
+Use `FileSystemWatcher` on the three template directories to reload changed files
+without restarting the process. Gate behind `SOVRANT_TEMPLATE_WATCH=true` to avoid
+unnecessary overhead in production.
 
 ---
 
