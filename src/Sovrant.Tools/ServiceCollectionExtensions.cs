@@ -10,6 +10,7 @@ using Sovrant.Tools.PlanMode;
 using Sovrant.Tools.Skills;
 using Sovrant.Tools.Tasks;
 using Sovrant.Tools.Todo;
+using Sovrant.Tools.Quality;
 using Sovrant.Tools.Team;
 using Sovrant.Tools.Worktree;
 
@@ -100,6 +101,9 @@ public static class ServiceCollectionExtensions
             var factory = sp.GetRequiredService<Sovrant.Agents.Shared.SovrantAgentFactory>();
             return new TeamDelegateTool(registry, agentSystem, member => factory.Create(member));
         });
+
+        // Quality / verification tools
+        services.AddSingleton<ITool, VerifyTool>();
 
         // LSP tools — only registered if ILspClientManager is available
         services.AddSingleton<ILspClientManager>(sp =>
