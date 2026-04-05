@@ -45,7 +45,6 @@ The engine is fully functional for individual and small-team use:
 | Config switch (`AGENT_MODE`) | ✅ Working | `modern` (default, in-process) or `legacy` (process-per-agent). |
 | DI wiring in CLI / Server | ✅ Complete | `services.AddMultiAgentSystem()` called in both hosts. `ITeamRegistry`, `SovrantAgentFactory`, team tools all registered. |
 | Team tools | ✅ Complete | `TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`. Named agents with roles, custom prompts, tool restrictions, lifecycle tracking. |
-| V2 placeholders (`ITeamWorkspace`, `IArtifact`, `IMultiAgentCollaboration`) | ⚠️ Interfaces only | No implementations. Post-Phase 19. |
 
 ### Completed phases
 
@@ -74,7 +73,7 @@ The engine is fully functional for individual and small-team use:
 | Gap | Phase |
 |---|---|
 | VS Code native extension | Phase 15 (deferred — MCP covers the core IDE integration use case) |
-| V2 collaboration primitives (`ITeamWorkspace`, `IArtifact`, `IMultiAgentCollaboration`) | Post-Phase 19 |
+| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 21 (see below) |
 | Enterprise auth & multi-tenancy (per-user tokens, session ownership) | Phase 20 |
 | `/undo` / `/redo` (git-backed file rollback) | Phase 7.5 Tier 2 (deferred) |
 | `ScheduleCron` / `ConfigTool` | Phase 7.5 Tier 3 (deferred) |
@@ -826,10 +825,6 @@ src/Sovrant.Agents/
   Config/
     AgentSystemConfig.cs               ← UseLegacyAgents bool; MaxConcurrentAgents; TaskTimeoutSeconds
     AgentSystemFactory.cs              ← static Create(config, services) → IMultiAgentSystem
-  V2/
-    IArtifact.cs                       ← placeholder: versioned content blob with ReadAsync
-    ITeamWorkspace.cs                  ← placeholder: per-team artifact store
-    IMultiAgentCollaboration.cs        ← placeholder: structured plan-code-review collaboration
   ServiceCollectionExtensions.cs       ← AddMultiAgentSystem(config?) reads AGENT_MODE env var
 ```
 
@@ -853,7 +848,6 @@ src/Sovrant.Agents/
 - `FilteredToolRegistry` — decorator restricting tool visibility per agent
 - `ITeamRegistry` / `InMemoryTeamRegistry` — team member lifecycle management
 - Team tools: `TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`
-- V2 interfaces — `ITeamWorkspace`, `IArtifact`, `IMultiAgentCollaboration` remain placeholders
 
 #### Also working
 
@@ -928,12 +922,6 @@ Supervisor Agent (ConversationRuntime)
 4. Per-task linked CTS stored in `_taskCts`; `CancelTask` triggers it
 5. `ShutdownAsync` — await all `BaseAgent.RunLoopAsync` background tasks
 
-#### V2 implementations (deferred beyond Phase 19)
-
-- `ITeamWorkspace` → `InMemoryTeamWorkspace` — `ConcurrentDictionary<string, IArtifact>`
-- `IArtifact` → `StringArtifact` and `FileArtifact` concrete types
-- `IMultiAgentCollaboration` → `PlanCodeReviewCollaboration` — planner + coder + reviewer pipeline sharing one `ITeamWorkspace`
-
 #### Implementation Plan
 
 1. Implement `ProcessAgent.HandleAsync` with stdin/stdout pipes and tool-use message parser
@@ -941,7 +929,6 @@ Supervisor Agent (ConversationRuntime)
 3. Implement `MultiAgentCoordinator.DispatchAsync` and update `ShutdownAsync`
 4. Wire `TeamCreateTool` to use `IMultiAgentSystem.RunTaskAsync` (replaces ad-hoc `ConversationRuntime` spawning in Phase 18)
 5. Add integration tests: legacy backend with a mock echo process; modern backend with a test `BaseAgent` subclass
-6. Implement V2 in-memory types when `IMultiAgentCollaboration` use cases materialise
 
 ---
 
@@ -986,6 +973,44 @@ This phase is deliberately deferred. A small trusted team sharing a single deplo
 
 ---
 
+### Phase 21 — Artifact System
+
+**Depends on:** Phase 18+19 (multi-agent team tools)
+
+**Goal:** Give team agents a structured way to share work products — code files, plans, review notes, intermediate results — through a versioned artifact store rather than passing everything through prompt text.
+
+#### Motivation
+
+Today, team agents communicate solely through prompt/response text via `TeamDelegate`. This works for simple tasks but breaks down when agents need to iterate on shared outputs — a planner writes a plan, a coder implements it, a reviewer annotates it. Passing multi-kilobyte code blocks back and forth through prompts wastes tokens, loses formatting, and has no versioning. An artifact store gives agents a shared workspace with named, versioned content blobs that persist across delegations.
+
+#### Design
+
+| Component | Description |
+|---|---|
+| `IArtifact` | Versioned content blob — `Name`, `Version`, `ContentType` (text, code, json), `ReadAsync()`, `WriteAsync()` |
+| `ITeamWorkspace` | Per-team artifact store — `GetAsync(name)`, `PutAsync(name, content)`, `ListAsync()`, `DeleteAsync(name)` |
+| `InMemoryTeamWorkspace` | `ConcurrentDictionary<string, IArtifact>` implementation for in-process teams |
+| `FileBackedTeamWorkspace` | Persists artifacts to `~/.sovrant/workspaces/{team_id}/` for durability across sessions |
+
+#### How agents use it
+
+- `TeamCreate` with `workspace: true` creates a shared `ITeamWorkspace` for that team
+- Agents read/write artifacts via two new tools: `ArtifactRead(name)` and `ArtifactWrite(name, content)`
+- The supervisor can inspect workspace contents via `ArtifactList()` or `TeamStatus` (which would include artifact summaries)
+- Artifacts are scoped to the team — cleaned up when the team is deleted
+
+#### Implementation Plan
+
+1. Define `IArtifact` and `ITeamWorkspace` interfaces (replace the deleted V2 placeholders)
+2. Implement `InMemoryTeamWorkspace` — `ConcurrentDictionary` backed, version counter per artifact
+3. Implement `FileBackedTeamWorkspace` — file-per-artifact with `.version` metadata
+4. Add `ArtifactRead`, `ArtifactWrite`, `ArtifactList` tools to `Sovrant.Tools/Team/`
+5. Wire workspace creation into `TeamCreateTool` when `workspace` param is set
+6. Add workspace cleanup to `TeamDeleteTool`
+7. Tests: workspace CRUD, versioning, concurrent access, cleanup on team delete
+
+---
+
 ### Known Issues / Debt
 
 | Issue | Priority | Notes |
@@ -995,7 +1020,6 @@ This phase is deliberately deferred. A small trusted team sharing a single deplo
 | CORS origins hardcoded | Low | Should be configurable via `SOVRANT_CORS_ORIGINS` env var. |
 | `launchSettings.json` port conflicts with `SOVRANT_PORT` default | Low | `launchSettings.json` declares `5091`; Kestrel overrides to `5200`. Rapid restart or parallel test runs cause `SocketException (10048)`. Fix: align `launchSettings.json` with `SOVRANT_PORT`; add `--urls` CLI override for CI. |
 | Team tools not yet smoke-tested with live LLM | Medium | `TeamCreate`/`TeamDelete`/`TeamStatus`/`TeamDelegate` have 58 unit tests but no end-to-end smoke test with a real provider. |
-| V2 collaboration interfaces are placeholders | Low | `ITeamWorkspace`, `IArtifact`, `IMultiAgentCollaboration` — no implementations yet. |
 
 ### Resolved Issues
 
