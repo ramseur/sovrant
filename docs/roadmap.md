@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 18+19 complete — Multi-Agent Backend & Team Tools)
+**Last updated:** 2026-04-05 (Phases 22-29 added from everything-claude-code research)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -12,7 +12,7 @@ This document tracks planned features, architectural decisions, and the reasonin
 The engine is fully functional for individual and small-team use:
 
 - **39 tools** across 8 categories (file, shell, web, task, agent, team, MCP, LSP)
-- **329 tests** across 9 projects, 0 warnings
+- **416 tests** across 9 projects, 0 warnings
 - **14 server endpoints** (OpenAI-compatible chat, sessions, config, usage, webhooks, export)
 - CLI REPL, one-shot `prompt`, CI mode (`--ci`), MCP server mode (`mcp-server`)
 - Agentic loop with up to 20 tool rounds per turn
@@ -70,13 +70,21 @@ The engine is fully functional for individual and small-team use:
 
 ### Still pending
 
-| Gap | Phase |
-|---|---|
-| VS Code native extension | Phase 15 (deferred — MCP covers the core IDE integration use case) |
-| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 21 (see below) |
-| Enterprise auth & multi-tenancy (per-user tokens, session ownership) | Phase 20 |
-| `/undo` / `/redo` (git-backed file rollback) | Phase 7.5 Tier 2 (deferred) |
-| `ScheduleCron` / `ConfigTool` | Phase 7.5 Tier 3 (deferred) |
+| Gap | Phase | Priority |
+|---|---|---|
+| Hook lifecycle system (pre/post tool use, session events) | Phase 22 | High |
+| Specialized agent definitions (role templates + model routing) | Phase 23 | High |
+| Verification loop & quality gates | Phase 24 | High |
+| Governance, security monitoring & audit | Phase 25 | Medium |
+| Skills system (composable workflow packages) | Phase 26 | Medium |
+| Multi-layered memory (session summaries, learned patterns, instincts) | Phase 27 | Medium |
+| Cost tracking & token budget management | Phase 28 | Medium |
+| Enterprise auth & multi-tenancy (per-user tokens, session ownership) | Phase 20 | Medium |
+| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 21 | Medium |
+| Eval-driven development framework | Phase 29 | Lower |
+| VS Code native extension | Phase 15 (deferred — nice-to-have) | Lowest |
+| `/undo` / `/redo` (git-backed file rollback) | Phase 7.5 Tier 2 (deferred) | Lowest |
+| `ScheduleCron` / `ConfigTool` | Phase 7.5 Tier 3 (deferred) | Lowest |
 
 ---
 
@@ -720,31 +728,6 @@ An `ILspClient` service manages the lifecycle of one or more language server pro
 
 ---
 
-### Phase 15 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
-
-**Competitor precedent:** Claude Code ✅ · opencode ✅ (beta)
-**Depends on:** Phase 14 (MCP server mode) — once Sovrant exposes an MCP server, MCP-aware IDEs (VS Code with GitHub Copilot, Cursor, Windsurf) can connect without a bespoke extension.
-**Status:** Deferred. MCP-based IDE integration (Phase 14) covers the core use case. A native extension adds polish but is not required for the core product.
-
-**Goal:** Embed Sovrant into VS Code as a sidebar panel — chat interface, inline diff approval, tool event rendering, permission dialogs with file highlighting.
-
-#### Architecture
-
-Two-layer approach:
-1. **Phase 14 (MCP):** Zero-code IDE integration for MCP-aware clients. Sovrant appears as an MCP tool server. No extension required.
-2. **Phase 15 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
-
-#### Implementation Plan
-
-1. Publish `Sovrant.Server` as a local background service (`sovrant serve` command) with auto-start on VS Code activation
-2. Implement the VS Code extension (`vscode-sovrant`) — TypeScript, connects to `Sovrant.Server` via the Phase 13 frontend SDK
-3. Sidebar: chat panel backed by `useChat()` hook
-4. Inline diffs: intercept `Edit`/`Write` tool events, show diff decoration in the editor
-5. Permission dialogs: VS Code `window.showInformationMessage` with approve/deny buttons
-6. Publish to VS Code Marketplace
-
----
-
 ### Phase 16 — Dynamic MCP Tool Proxy (`MCPTool`) ✅
 
 **Goal:** Allow the model to discover and invoke any tool exposed by a connected MCP server dynamically, without those tools being statically registered in `ToolRegistrar` at startup.
@@ -1009,6 +992,568 @@ Today, team agents communicate solely through prompt/response text via `TeamDele
 5. Wire workspace creation into `TeamCreateTool` when `workspace` param is set
 6. Add workspace cleanup to `TeamDeleteTool`
 7. Tests: workspace CRUD, versioning, concurrent access, cleanup on team delete
+
+---
+
+### Phase 22 — Hook Lifecycle System
+
+**Inspired by:** everything-claude-code (34 hooks across 6 lifecycle events)
+**Depends on:** None — can be implemented independently
+
+**Goal:** Add an event-driven hook system that fires user-defined scripts at key points in the agent lifecycle: before/after tool use, session start/end, pre-compaction, and response stop. This enables quality enforcement, security monitoring, cost tracking, and memory persistence without modifying the core agent loop.
+
+#### Why this is high priority
+
+Hooks are the single most extensible feature in everything-claude-code. They enable the entire ecosystem of quality gates, governance, learning, and observability — all without touching the engine itself. Every subsequent phase (verification loops, governance, cost tracking, memory) becomes dramatically easier to implement when hooks exist.
+
+#### Hook Events
+
+| Event | When | Use Cases |
+|---|---|---|
+| `SessionStart` | New session begins | Load previous session summary, detect project type, seed context |
+| `PreToolUse` | Before any tool executes | Block dangerous operations, validate inputs, config protection |
+| `PostToolUse` | After a tool completes | Lint/format edited files, audit log bash commands, accumulate edits |
+| `PostToolUseFailure` | After a tool fails | Error analysis, retry suggestions |
+| `PreCompact` | Before context compaction | Save state to memory before context is lost |
+| `Stop` | Agent response ends | Batch format/typecheck, desktop notifications |
+| `SessionEnd` | Session terminates | Persist session summary, extract patterns |
+
+#### Architecture
+
+```
+src/Sovrant.Runtime/Hooks/
+  IHookRunner.cs           ← interface: RunAsync(HookEvent, HookContext)
+  HookEvent.cs             ← enum of lifecycle events
+  HookContext.cs            ← event-specific context (tool name, file path, session ID, etc.)
+  HookRunner.cs            ← loads hooks from config, executes matching scripts
+  HookConfig.cs            ← hook definition: event, matcher (tool/glob), command, timeout
+```
+
+#### Configuration
+
+Hooks defined in `.sovrant/hooks.json` or `~/.sovrant/hooks.json`:
+
+```json
+{
+  "hooks": [
+    { "event": "PostToolUse", "matcher": { "tool": "Edit" }, "command": "dotnet format {file}", "timeout": 30000 },
+    { "event": "PreToolUse", "matcher": { "tool": "Bash" }, "command": "scripts/validate-command.sh {command}" },
+    { "event": "Stop", "command": "scripts/batch-format.sh" }
+  ]
+}
+```
+
+#### Hook Profiles
+
+Three enforcement levels configurable via `SOVRANT_HOOK_PROFILE`:
+- `minimal` — session start/end only
+- `standard` — all non-blocking hooks (default)
+- `strict` — all hooks, including blocking pre-tool-use validators
+
+#### Implementation Plan
+
+1. Define `IHookRunner`, `HookEvent`, `HookContext`, `HookConfig` in `Sovrant.Runtime/Hooks/`
+2. Implement `HookRunner` — loads from config, matches event + tool name, executes via `ProcessExecutor`
+3. Add hook firing points to `ConversationRuntime.RunTurnAsync` (pre/post tool use) and `RuntimeSessionPool` (session start/end)
+4. Add `PreCompact` hook to context compaction logic
+5. Add `Stop` hook after the final `TurnComplete` event
+6. Support both blocking (pre-tool-use: can abort the tool) and fire-and-forget (post-tool-use) execution modes
+7. Add `SOVRANT_HOOK_PROFILE` and `SOVRANT_DISABLED_HOOKS` env vars
+8. Tests: hook matching, execution, timeout, blocking vs fire-and-forget, profile filtering
+
+---
+
+### Phase 23 — Specialized Agent Definitions (Role Templates + Model Routing)
+
+**Inspired by:** everything-claude-code (28 specialized agents with tool restrictions and model selection)
+**Depends on:** Phase 18+19 (multi-agent team tools — already complete)
+
+**Goal:** Define a library of specialized agent role templates — planner, architect, code reviewer, security reviewer, TDD guide, refactor cleaner — each with a structured methodology, constrained tool access, and model routing (Opus-class for reasoning, Sonnet-class for execution). These templates are loaded by `TeamCreate` and `AgentTool` to spawn purpose-built sub-agents.
+
+#### Why this is high priority
+
+The team tools exist (Phase 18+19) but agents are generic — they get a role enum and a freeform prompt. Structured role templates with defined methodologies, tool restrictions, and output formats make agents dramatically more effective. This is the difference between "ask an LLM to review code" and "run a structured 4-phase security review with OWASP Top 10 checklist and severity tiers."
+
+#### Agent Templates
+
+| Template | Model Tier | Tools | Methodology |
+|---|---|---|---|
+| **Planner** | Opus | Read, Grep, Glob (read-only) | Requirements analysis → architecture review → step breakdown → implementation ordering |
+| **Architect** | Opus | Read, Grep, Glob (read-only) | System design, trade-off analysis, ADR generation, scalability review |
+| **Code Reviewer** | Opus | Read, Grep, Glob (read-only) | Multi-severity review (CRITICAL/HIGH/MEDIUM/LOW) with confidence thresholds |
+| **Security Reviewer** | Opus | Read, Grep, Glob (read-only) | OWASP Top 10 scan, secret detection, dependency audit, attack surface analysis |
+| **TDD Guide** | Sonnet | All | Red-Green-Refactor cycle enforcement, 80%+ coverage target, edge case generation |
+| **Refactor Cleaner** | Sonnet | Read, Grep, Glob, Edit | Dead code detection, safe incremental removal with SAFE/CAREFUL/RISKY classification |
+| **Coder** | Sonnet | All | Implementation from specs, test writing, error handling |
+| **Executor** | Sonnet | Bash, PowerShell, Read | Run commands, monitor output, report results |
+
+#### Architecture
+
+```
+src/Sovrant.Agents/Templates/
+  AgentTemplate.cs          ← record: Name, Role, ModelTier, AllowedTools, SystemPrompt, Methodology, OutputFormat
+  AgentTemplateRegistry.cs  ← loads built-in + user-defined templates from .sovrant/agents/
+  ModelTier.cs              ← enum: Reasoning (Opus-class), Execution (Sonnet-class), Fast (Haiku-class)
+```
+
+Templates stored as markdown files in `.sovrant/agents/` (user-defined) or embedded resources (built-in):
+
+```markdown
+---
+name: security-reviewer
+role: reviewer
+model_tier: reasoning
+allowed_tools: [Read, Grep, Glob]
+---
+# Security Reviewer
+
+## Identity
+You are a security-focused code reviewer specializing in OWASP Top 10...
+
+## Methodology
+1. Attack surface mapping
+2. Input validation audit
+3. Authentication/authorization review
+4. Secret detection scan
+...
+```
+
+#### Model Routing
+
+`SovrantAgentFactory` maps `ModelTier` to actual model names via config:
+
+```json
+{ "model_tiers": { "reasoning": "claude-opus-4-6", "execution": "claude-sonnet-4-6", "fast": "claude-haiku-4-5" } }
+```
+
+#### Implementation Plan
+
+1. Define `AgentTemplate` and `ModelTier` in `Sovrant.Agents/Templates/`
+2. Implement `AgentTemplateRegistry` — loads built-in templates from embedded resources + user templates from `.sovrant/agents/`
+3. Update `SovrantAgentFactory` to accept `AgentTemplate` and map `ModelTier` → model name
+4. Update `TeamCreateTool` to accept a `template` parameter (e.g., `"security-reviewer"`)
+5. Update `AgentTool` to accept an optional `template` parameter for ad-hoc sub-agents
+6. Ship 8 built-in templates (planner, architect, code-reviewer, security-reviewer, tdd-guide, refactor-cleaner, coder, executor)
+7. Tests: template loading, model tier mapping, tool restriction enforcement, user template override
+
+---
+
+### Phase 24 — Verification Loop & Quality Gates
+
+**Inspired by:** everything-claude-code (6-phase verification loop, quality gate hooks, TDD workflow)
+**Depends on:** Phase 22 (hooks — gates run as post-stop hooks) or can be standalone tools
+
+**Goal:** A structured multi-phase quality verification pipeline that runs automatically before PR submission or on demand via a `/verify` skill. Covers: build, type check, lint, test (with coverage threshold), security scan, and diff review.
+
+#### Why this is high priority
+
+The code review (Phases A-F) was manual. A verification loop automates the same checks as repeatable, enforceable gates. Combined with hooks (Phase 22), this runs automatically at the end of every coding session.
+
+#### Verification Phases
+
+| Phase | What it does | Pass criteria |
+|---|---|---|
+| **Build** | `dotnet build` / `npm run build` / `go build` | Zero errors |
+| **Type Check** | Language-specific type checking (e.g., `tsc --noEmit`) | Zero errors |
+| **Lint** | `dotnet format --verify-no-changes` / `eslint` / `golangci-lint` | Zero warnings at configured severity |
+| **Test** | `dotnet test` with coverage collection | All tests pass, coverage ≥ configurable threshold (default 60%) |
+| **Security Scan** | `dotnet list package --vulnerable` / `npm audit` / secret detection | Zero critical/high vulnerabilities |
+| **Diff Review** | Git diff analysis: no debug code, no secrets, no unintended files | Clean diff |
+
+#### Architecture
+
+```
+src/Sovrant.Tools/Quality/
+  VerifyTool.cs              ← runs all 6 phases, returns structured report
+  VerificationPhase.cs       ← enum + per-phase runner
+  VerificationConfig.cs      ← thresholds, skip list, per-project overrides
+  VerificationResult.cs      ← phase results with pass/fail + detail
+```
+
+Also a `/verify` skill that the model can invoke or that fires as a `Stop` hook.
+
+#### Configuration
+
+`.sovrant/verify.json`:
+```json
+{
+  "coverage_threshold": 60,
+  "lint_severity": "warning",
+  "skip_phases": [],
+  "build_command": "dotnet build Sovrant.slnx",
+  "test_command": "dotnet test Sovrant.slnx --collect:\"XPlat Code Coverage\"",
+  "security_command": "dotnet list package --vulnerable"
+}
+```
+
+#### Implementation Plan
+
+1. Define `VerificationPhase`, `VerificationConfig`, `VerificationResult` in `Sovrant.Tools/Quality/`
+2. Implement `VerifyTool` — runs phases sequentially, collects results, returns structured report
+3. Auto-detect project type (`.csproj` → dotnet, `package.json` → npm, `go.mod` → Go) for default commands
+4. Add `/verify` skill registration
+5. Optionally wire as a `Stop` hook (Phase 22) for automatic end-of-session verification
+6. Tests: each phase runner, threshold enforcement, skip list, auto-detection
+
+---
+
+### Phase 25 — Governance, Security Monitoring & Audit
+
+**Inspired by:** everything-claude-code (governance capture, config protection, commit quality, enterprise controls)
+**Depends on:** Phase 22 (hooks — governance runs as PreToolUse/PostToolUse hooks)
+
+**Goal:** Defense-in-depth for agentic operations: detect secrets in tool outputs, block dangerous commands, protect configuration files, audit-log all bash commands, and provide enterprise control policies.
+
+#### Components
+
+| Component | What it does | Hook Event |
+|---|---|---|
+| **Secret Detection** | Scans tool inputs/outputs for AWS keys, tokens, JWTs, API keys | PostToolUse |
+| **Dangerous Command Blocker** | Blocks `rm -rf /`, `git push --force`, `DROP TABLE`, `chmod 777` | PreToolUse (Bash) |
+| **Config Protection** | Prevents modification of `.editorconfig`, `.eslintrc`, `Directory.Build.props` | PreToolUse (Edit/Write) |
+| **Bash Audit Log** | Logs every bash command to `~/.sovrant/audit/bash-commands.jsonl` | PostToolUse (Bash) |
+| **Commit Quality Gate** | Validates staged files for debug code, secrets, formatting before commit | PreToolUse (Bash, matcher: `git commit`) |
+| **Governance Event Stream** | Structured JSON events for security-relevant actions: severity, session, timestamp | All |
+
+#### Architecture
+
+```
+src/Sovrant.Runtime/Governance/
+  IGovernanceMonitor.cs       ← interface: EvaluateAsync(GovernanceContext) → GovernanceVerdict
+  GovernanceMonitor.cs        ← aggregates all detection rules
+  GovernanceVerdict.cs        ← Allow / Warn / Block + reason
+  SecretDetector.cs           ← regex patterns for common secret formats
+  DangerousCommandDetector.cs ← blocked command patterns
+  ConfigProtectionRule.cs     ← protected file path patterns
+  AuditLogger.cs              ← append-only JSONL audit log
+```
+
+#### Enterprise Controls
+
+`.sovrant/governance.json`:
+```json
+{
+  "blocked_commands": ["rm -rf /", "git push --force main"],
+  "protected_files": [".editorconfig", "Directory.Build.props", "*.sln"],
+  "secret_patterns": ["AKIA[0-9A-Z]{16}", "sk-[a-zA-Z0-9]{48}"],
+  "audit_log": true,
+  "governance_level": "standard"
+}
+```
+
+Three levels: `minimal` (audit only), `standard` (audit + warn), `strict` (audit + block).
+
+#### Implementation Plan
+
+1. Define governance interfaces and models in `Sovrant.Runtime/Governance/`
+2. Implement `SecretDetector` with configurable regex patterns
+3. Implement `DangerousCommandDetector` with configurable blocked patterns
+4. Implement `ConfigProtectionRule` with configurable protected file globs
+5. Implement `AuditLogger` — append-only JSONL to `~/.sovrant/audit/`
+6. Implement `GovernanceMonitor` — aggregates all rules, returns `GovernanceVerdict`
+7. Wire into hook system (Phase 22) or directly into `DefaultToolExecutor` as a pre-execution check
+8. Add `SOVRANT_GOVERNANCE_LEVEL` env var
+9. Tests: secret detection patterns, command blocking, config protection, audit log format
+
+---
+
+### Phase 26 — Skills System (Composable Workflow Packages)
+
+**Inspired by:** everything-claude-code (156+ skills as directory-based workflow definitions)
+**Depends on:** Phase 22 (hooks — skills can trigger hooks), Phase 23 (agent templates — skills can spawn agents)
+
+**Goal:** A modular system for packaging multi-step workflows as reusable, composable "skills" — each a directory containing a definition file (`SKILL.md`), optional agent configurations, and activation triggers. Skills are invoked via `/skill-name` slash commands or programmatically by agents.
+
+#### Why this matters
+
+Today Sovrant has a basic `SkillTool` that loads markdown files as system prompt overlays. The everything-claude-code approach is richer: skills are full workflow definitions with steps, agent delegation, tool restrictions, and cross-harness compatibility. This turns Sovrant from a tool-using agent into a workflow engine.
+
+#### Skill Structure
+
+```
+.sovrant/skills/
+  tdd-workflow/
+    SKILL.md              ← workflow definition (identity, steps, output format)
+    agents.json           ← optional: agent templates to spawn for this skill
+  code-review/
+    SKILL.md
+  verification-loop/
+    SKILL.md
+  deep-research/
+    SKILL.md
+```
+
+`SKILL.md` format:
+```markdown
+---
+name: tdd-workflow
+description: Red-Green-Refactor cycle with coverage enforcement
+trigger: /tdd
+agents: [tdd-guide]
+tools: [Read, Write, Edit, Bash, Grep]
+---
+
+# TDD Workflow
+
+## Steps
+1. Identify the feature or bug to test
+2. Write a failing test (Red)
+3. Write minimal code to pass (Green)
+4. Refactor while tests stay green
+5. Verify coverage ≥ 80%
+
+## Output Format
+- Test file path
+- Coverage report
+- Refactoring notes
+```
+
+#### Built-in Skills (ship with engine)
+
+| Skill | Trigger | What it does |
+|---|---|---|
+| `tdd-workflow` | `/tdd` | Red-Green-Refactor with coverage enforcement |
+| `code-review` | `/review` | Multi-severity code review |
+| `verification-loop` | `/verify` | 6-phase quality gate (Phase 24) |
+| `deep-research` | `/research` | Multi-source research with citation |
+| `plan` | `/plan` | Structured planning with phased implementation |
+| `security-review` | `/security` | OWASP-based security audit |
+| `refactor` | `/refactor` | Dead code detection + safe removal |
+| `doc-update` | `/docs` | Documentation maintenance |
+
+#### Architecture
+
+```
+src/Sovrant.Tools/Skills/
+  SkillDefinition.cs          ← parsed SKILL.md: name, description, trigger, agents, tools, steps
+  SkillRegistry.cs            ← discovers and indexes skills from .sovrant/skills/ and built-in
+  SkillRunner.cs              ← executes a skill: sets system prompt overlay, spawns agents if needed
+  SkillTool.cs                ← (existing) updated to use SkillRegistry
+```
+
+#### Implementation Plan
+
+1. Define `SkillDefinition` with YAML frontmatter parser
+2. Implement `SkillRegistry` — scans `.sovrant/skills/`, `~/.sovrant/skills/`, and embedded built-in skills
+3. Update `SkillTool` to use `SkillRegistry` for discovery and execution
+4. Implement `SkillRunner` — applies system prompt overlay, optionally spawns agent templates
+5. Add `SkillCreate` tool for agents to define new skills at runtime
+6. Ship 8 built-in skills
+7. Register skill triggers as slash commands in `SlashCommandDispatcher`
+8. Tests: skill discovery, frontmatter parsing, execution, trigger registration
+
+---
+
+### Phase 27 — Multi-Layered Memory System
+
+**Inspired by:** everything-claude-code (session summaries, learned skills, instincts with confidence scoring)
+**Depends on:** Phase 22 (hooks — memory persisted via session start/end hooks)
+
+**Goal:** Evolve Sovrant's current flat memory files (`~/.sovrant/memory.md`) into a multi-layered memory system: session summaries (short-term), learned patterns (medium-term), and instincts with confidence scoring (long-term). Each layer has different persistence, scope, and retrieval characteristics.
+
+#### Memory Layers
+
+| Layer | Scope | Lifetime | What it stores |
+|---|---|---|---|
+| **Session Summary** | Per-session | Until next session on same project | Tasks attempted, tools used, files modified, outcome |
+| **Learned Patterns** | Per-project | Persistent | Extracted code patterns, common fixes, project conventions |
+| **Instincts** | Global | Persistent, evolving | Behavioral rules with confidence scores (0.0–1.0), evidence trails |
+
+#### Session Summaries
+
+At session end (via hook or explicit), extract from the JSONL transcript:
+- User messages (tasks requested)
+- Tools used and files modified
+- Outcome (success/failure)
+- Tokens consumed
+
+Stored at `~/.sovrant/sessions/{project}/{timestamp}-summary.md`. Loaded at next session start for continuity.
+
+#### Learned Patterns
+
+Extracted from high-quality sessions (configurable threshold: minimum N turns, user-confirmed success). Examples:
+- "This project uses NUnit, not xUnit"
+- "API routes follow RESTful naming: `/v1/{resource}/{id}`"
+- "Tests go in `tests/{Project}.Tests/` mirroring `src/{Project}/`"
+
+Stored at `.sovrant/learned/` per project.
+
+#### Instincts (Confidence-Scored Behavioral Rules)
+
+Long-term behavioral learning with evidence tracking:
+
+```yaml
+- id: instinct-001
+  trigger: "user corrects test framework choice"
+  action: "Check project test dependencies before generating tests"
+  confidence: 0.85
+  evidence:
+    - "2026-04-03: user corrected xUnit → NUnit in Project X"
+    - "2026-04-05: correctly used NUnit based on dependency scan"
+```
+
+Confidence increases on positive reinforcement, decreases on correction. Low-confidence instincts (< 0.3) are pruned.
+
+#### Architecture
+
+```
+src/Sovrant.Runtime/Memory/
+  IMemoryStore.cs             ← interface: sessions, patterns, instincts
+  SessionSummaryStore.cs      ← JSONL-based session summaries
+  LearnedPatternStore.cs      ← markdown files per project
+  InstinctStore.cs            ← YAML instinct definitions with confidence tracking
+  MemoryInjector.cs           ← selects relevant memories for system prompt injection
+```
+
+#### Implementation Plan
+
+1. Define `IMemoryStore` and memory layer models
+2. Implement `SessionSummaryStore` — extract from JSONL, persist as markdown
+3. Implement `LearnedPatternStore` — markdown files in `.sovrant/learned/`
+4. Implement `InstinctStore` — YAML with confidence scoring and evidence
+5. Implement `MemoryInjector` — selects relevant memories based on project, recency, and confidence
+6. Wire session summary extraction into `SessionEnd` hook (Phase 22) or `RuntimeSessionPool.Evict`
+7. Update system prompt builder to inject multi-layered memory
+8. Add `/remember` and `/forget` commands for explicit memory management
+9. Tests: summary extraction, pattern storage, instinct confidence updates, memory selection
+
+---
+
+### Phase 28 — Cost Tracking & Token Budget Management
+
+**Inspired by:** everything-claude-code (cost-tracker hook with per-model USD estimation)
+**Depends on:** Phase 9.5 (token usage tracking — already complete)
+
+**Goal:** Per-session and per-project cost tracking with USD estimation by model tier, JSONL metrics log, budget enforcement, and a `/cost` dashboard.
+
+#### What exists today
+
+Phase 9.5 already tracks `TotalInputTokens` and `TotalOutputTokens` per session in `SessionConfig`, and `GET /v1/usage` returns per-session token summaries. This phase adds USD estimation, budget limits, and persistent metrics.
+
+#### Components
+
+| Component | What it does |
+|---|---|
+| **Cost Estimator** | Maps model name → cost per 1K tokens (input/output), estimates USD per session |
+| **Metrics Logger** | Appends per-turn cost events to `~/.sovrant/metrics/cost.jsonl` |
+| **Budget Enforcer** | Optional per-session or per-project budget cap; warns at 80%, blocks at 100% |
+| **Cost Dashboard** | `GET /v1/cost` endpoint and `/cost` CLI command — daily/weekly/monthly breakdown |
+
+#### Cost Model
+
+```json
+{
+  "models": {
+    "claude-opus-4-6":   { "input_per_1k": 0.015, "output_per_1k": 0.075 },
+    "claude-sonnet-4-6": { "input_per_1k": 0.003, "output_per_1k": 0.015 },
+    "gpt-4o":            { "input_per_1k": 0.005, "output_per_1k": 0.015 },
+    "gpt-4o-mini":       { "input_per_1k": 0.00015, "output_per_1k": 0.0006 }
+  }
+}
+```
+
+#### Implementation Plan
+
+1. Add `CostEstimator` to `Sovrant.Runtime/Metrics/` — model → cost mapping from config
+2. Add `CostMetricsLogger` — appends to `~/.sovrant/metrics/cost.jsonl` per turn
+3. Add optional `BudgetEnforcer` — reads `SOVRANT_SESSION_BUDGET_USD` and `SOVRANT_PROJECT_BUDGET_USD`
+4. Add `GET /v1/cost` endpoint with daily/weekly/monthly aggregation
+5. Update `/cost` CLI command to show estimated spend
+6. Wire cost logging into `TurnComplete` event handling
+7. Tests: cost estimation, budget enforcement, JSONL format
+
+---
+
+### Phase 29 — Eval-Driven Development Framework
+
+**Inspired by:** everything-claude-code (eval harness with pass@k metrics, capability/regression evals, multiple grader types)
+**Depends on:** Phase 24 (verification loop), Phase 23 (agent templates)
+
+**Goal:** A formal evaluation framework for testing agent behavior itself — not just the code it produces. Define expected behaviors as evals, run them against agent sessions, and track pass@k metrics over time. This is how you measure whether agent improvements actually improve outcomes.
+
+#### Why this matters
+
+Unit tests verify code. Evals verify the agent. "Does the agent correctly identify security vulnerabilities?" "Does it write tests before code when asked?" "Does it use the right framework conventions?" These questions can't be answered by running `dotnet test` — they require evaluating the agent's behavior against structured expectations.
+
+#### Eval Types
+
+| Type | What it tests | Example |
+|---|---|---|
+| **Capability Eval** | Can the agent do X? | "Given a failing test, does the agent identify and fix the root cause?" |
+| **Regression Eval** | Does Y still work after changes? | "After refactoring the tool executor, does BashTool still handle timeouts?" |
+| **Quality Eval** | How well does the agent do X? | "Rate the code review output on completeness (1-5)" |
+
+#### Grader Types
+
+| Grader | How it works |
+|---|---|
+| **Code-based** | Deterministic: run a command, check exit code / output pattern (e.g., `dotnet test`, `grep "CRITICAL"`) |
+| **Model-based** | LLM judges the output against a rubric (e.g., "Does this review identify all 3 planted bugs?") |
+| **Human-based** | Flags for manual review, stores rating |
+
+#### Metrics
+
+- `pass@1` — passes on first attempt
+- `pass@3` — passes within 3 attempts
+- Trend tracking over time (did agent quality improve after template changes?)
+
+#### Architecture
+
+```
+src/Sovrant.Runtime/Evals/
+  IEvalRunner.cs            ← interface: RunAsync(EvalSuite) → EvalReport
+  EvalDefinition.cs         ← eval: name, prompt, expected behavior, grader config
+  EvalSuite.cs              ← collection of evals with metadata
+  EvalReport.cs             ← results: per-eval pass/fail, pass@k, duration
+  Graders/
+    CodeGrader.cs           ← runs command, checks output
+    ModelGrader.cs          ← sends output to LLM with rubric
+```
+
+Evals stored in `.sovrant/evals/`:
+```yaml
+- name: security-review-detects-sqli
+  prompt: "Review src/Controllers/UserController.cs for security issues"
+  grader: code
+  check: "grep -q 'SQL injection' {output}"
+  pass_threshold: 1
+```
+
+#### Implementation Plan
+
+1. Define eval interfaces and models in `Sovrant.Runtime/Evals/`
+2. Implement `CodeGrader` — command execution + output matching
+3. Implement `ModelGrader` — sends eval output to LLM with rubric prompt
+4. Implement `EvalRunner` — loads suite, runs evals, computes pass@k
+5. Add `/eval` CLI command and skill
+6. Add `GET /v1/evals` endpoint for results
+7. Store results in `~/.sovrant/evals/results/` for trend tracking
+8. Tests: grader execution, pass@k computation, eval loading
+
+---
+
+### Phase 15 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
+
+**Competitor precedent:** Claude Code ✅ · opencode ✅ (beta)
+**Depends on:** Phase 14 (MCP server mode) — once Sovrant exposes an MCP server, MCP-aware IDEs (VS Code with GitHub Copilot, Cursor, Windsurf) can connect without a bespoke extension.
+**Status:** Deferred. MCP-based IDE integration (Phase 14) covers the core use case. A native extension adds polish but is not required for the core product.
+
+**Goal:** Embed Sovrant into VS Code as a sidebar panel — chat interface, inline diff approval, tool event rendering, permission dialogs with file highlighting.
+
+#### Architecture
+
+Two-layer approach:
+1. **Phase 14 (MCP):** Zero-code IDE integration for MCP-aware clients. Sovrant appears as an MCP tool server. No extension required.
+2. **Phase 15 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
+
+#### Implementation Plan
+
+1. Publish `Sovrant.Server` as a local background service (`sovrant serve` command) with auto-start on VS Code activation
+2. Implement the VS Code extension (`vscode-sovrant`) — TypeScript, connects to `Sovrant.Server` via the Phase 13 frontend SDK
+3. Sidebar: chat panel backed by `useChat()` hook
+4. Inline diffs: intercept `Edit`/`Write` tool events, show diff decoration in the editor
+5. Permission dialogs: VS Code `window.showInformationMessage` with approve/deny buttons
+6. Publish to VS Code Marketplace
 
 ---
 
