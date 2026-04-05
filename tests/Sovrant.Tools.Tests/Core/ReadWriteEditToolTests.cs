@@ -97,6 +97,69 @@ public sealed class ReadWriteEditToolTests : IDisposable
         Assert.StartsWith("Error", result, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Read_MissingFilePath_ReturnsError()
+    {
+        var tool = new ReadFileTool();
+        var result = await tool.ExecuteAsync(MakeInput(new { offset = 0 }));
+        Assert.StartsWith("Error", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Read_EmptyFile_ReturnsEmpty()
+    {
+        var tool = new ReadFileTool();
+        var path = TempFile("empty.txt");
+        await File.WriteAllTextAsync(path, "");
+        var result = await tool.ExecuteAsync(MakeInput(new { file_path = path }));
+
+        // Empty file should return an empty or minimal result (no content lines)
+        Assert.DoesNotContain("→", result);
+    }
+
+    [Fact]
+    public async Task Read_MoreLinesThanExist_ShowsAllLines()
+    {
+        var tool = new ReadFileTool();
+        var path = TempFile("short.txt");
+        await File.WriteAllTextAsync(path, "one\ntwo");
+        var result = await tool.ExecuteAsync(MakeInput(new { file_path = path, limit = 100 }));
+
+        Assert.Contains("one", result);
+        Assert.Contains("two", result);
+        Assert.DoesNotContain("more lines", result);
+    }
+
+    [Fact]
+    public async Task Read_LimitReached_ShowsContinuationHint()
+    {
+        var tool = new ReadFileTool();
+        var path = TempFile("long.txt");
+        var lines = Enumerable.Range(1, 20).Select(i => $"line {i}");
+        await File.WriteAllTextAsync(path, string.Join("\n", lines));
+        var result = await tool.ExecuteAsync(MakeInput(new { file_path = path, limit = 5 }));
+
+        Assert.Contains("more lines", result);
+        Assert.Contains("offset=5", result);
+    }
+
+    [Fact]
+    public async Task Read_LargeFile_ReturnsError()
+    {
+        var tool = new ReadFileTool();
+        var path = TempFile("large.bin");
+        // Create a file > 10MB
+        using (var fs = File.Create(path))
+        {
+            var buf = new byte[1024 * 1024]; // 1MB buffer
+            for (var i = 0; i < 11; i++)
+                fs.Write(buf);
+        }
+        var result = await tool.ExecuteAsync(MakeInput(new { file_path = path }));
+
+        Assert.Contains("too large", result, StringComparison.OrdinalIgnoreCase);
+    }
+
     // ── EditTool ───────────────────────────────────────────────────────────────
 
     [Fact]
