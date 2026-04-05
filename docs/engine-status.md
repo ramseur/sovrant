@@ -85,12 +85,12 @@
 
 | Item | Status |
 |---|---|
-| `x_api_key` / `x_base_url` fields on `ChatCompletionRequest` | ✅ Deserialized from request body |
+| `X-LLM-Api-Key` / `X-LLM-Base-Url` headers on chat request | ✅ Read from request headers |
 | `ScopedSingleProviderRouter` | ✅ Lightweight `ISmartRouter` wrapping one provider — no ping, no health scoring |
 | Request-scoped `OpenAiCompatProvider` | ✅ Built from `x_api_key` + `x_base_url` per request; `IHttpClientFactory` named client |
 | Composite session pool key (`{session_id}::{provider}`) | ✅ Isolates sessions by provider when per-request credentials present |
 | `RuntimeSessionPool.GetOrCreateAsync` scoped router override | ✅ Optional `ISmartRouter` param for creating scoped runtimes |
-| `x_api_key` never logged or persisted | ✅ Only passed to `ApiKeyAuthProvider` for auth headers; not in any log path |
+| `X-LLM-Api-Key` never logged or persisted | ✅ Only passed to `ApiKeyAuthProvider` for auth headers; not in any log path |
 | Global config not mutated by scoped requests | ✅ `serverConfig.Model` only updated when NOT using scoped credentials |
 | Tests: `ScopedSingleProviderRouterTests` (5) + `RuntimeSessionPoolTests` (5) | ✅ 10 new tests |
 

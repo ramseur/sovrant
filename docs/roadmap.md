@@ -21,7 +21,7 @@ The engine is fully functional for individual and small-team use:
 - Multi-provider support: OpenAI, Gemini, Ollama, native messages API, OpenAI Responses API (`LLM_WEB_SEARCH=true`)
 - Per-session config overlay, rate limiting, token usage tracking (Phase 9.5 ✅)
 - Session TTL eviction + LRU cap + per-session turn serialization (Phase 9.1 ✅)
-- Multi-tenant per-request credentials (`x_api_key` / `x_base_url`) (Phase 9 ✅)
+- Multi-tenant per-request credentials (`X-LLM-Api-Key` / `X-LLM-Base-Url` headers) (Phase 9 ✅)
 - Structured async logging with 4 env vars, source-generated delegates (Phase 8 ✅)
 - Agent memory files (`~/.sovrant/memory.md` + `.sovrant/memory.md`) injected into system prompt
 - Context auto-compaction at configurable token threshold
@@ -445,13 +445,14 @@ Extend the `POST /v1/chat/completions` request body with optional override field
   "model": "gpt-4o-mini",
   "messages": [...],
   "session_id": "user-123",
-  "x_api_key": "sk-...",
-  "x_base_url": "https://api.openai.com/v1"
+  // Per-request credentials are now sent as headers:
+  // X-LLM-Api-Key: sk-...
+  // X-LLM-Base-Url: https://api.openai.com/v1
 }
 ```
 
 The server:
-1. Checks for `x_api_key` / `x_base_url` in the request body
+1. Checks for `X-LLM-Api-Key` / `X-LLM-Base-Url` headers on the request
 2. If present, creates a **request-scoped** `IConversationRuntime` with a temporary `ApiKeyAuthProvider` and provider pointing at the override URL
 3. If absent, falls back to the global `MutableServerConfig` key/URL as today
 4. The session pool keyed on `session_id` must also account for the provider — otherwise two users with the same session ID but different keys would collide
@@ -468,19 +469,19 @@ This ensures session history is isolated per user even if two users share the sa
 
 #### Security Considerations
 
-- `x_api_key` is a client-supplied secret. The server must never log it, persist it, or include it in error responses.
+- `X-LLM-Api-Key` is a client-supplied secret. The server must never log it, persist it, or include it in error responses.
 - The server's own `SOVRANT_TOKEN` continues to gate all requests — the per-request key is only for the downstream LLM call.
-- Rate limiting per `x_api_key` or per `SOVRANT_TOKEN` client should be added to prevent abuse.
+- Rate limiting per `X-LLM-Api-Key` or per `SOVRANT_TOKEN` client should be added to prevent abuse.
 
 #### Implementation Plan
 
-1. Add `XApiKey` and `XBaseUrl` to `ChatCompletionRequest`
+1. Read `X-LLM-Api-Key` and `X-LLM-Base-Url` from request headers
 2. In `ChatRoutes.HandleAsync`:
-   - If `XApiKey` / `XBaseUrl` are present, build a scoped `OpenAiCompatProvider` with those credentials
+   - If headers are present, build a scoped `OpenAiCompatProvider` with those credentials
    - Wrap it in a scoped `SmartRouter` (single-provider, skip ping)
    - Create a scoped `ConversationRuntime` using the scoped router
 3. Session pool key: `{sessionId}::{baseUrl}` or a hash of both
-4. Add `x_api_key` to the server's sensitive-field redaction list
+4. Add `X-LLM-Api-Key` to the server's sensitive-field redaction list
 
 ---
 
@@ -552,7 +553,7 @@ Session history is already isolated per `session_id` — ten users with differen
 | Gap | Problem | Fix |
 |---|---|---|
 | `PUT /v1/config` is global | One user changing the model or permission mode (or calling `EnterPlanMode`) changes it for all sessions simultaneously | Session-scoped config overlay — each `SessionEntry` carries a `SessionConfig` that shadows the global defaults |
-| Single `LLM_API_KEY` | All sessions bill to the same key — no per-session cost visibility | Phase 9 per-request `x_api_key` — each user or client supplies their own key in the request body |
+| Single `LLM_API_KEY` | All sessions bill to the same key — no per-session cost visibility | Phase 9 per-request `X-LLM-Api-Key` header — each user or client supplies their own key |
 | No per-session rate limiting | A single session can saturate the server with concurrent requests | Per-session request rate limiter (ASP.NET Core `RateLimiter` middleware) |
 | No cost visibility | No way to see which session is responsible for LLM spend | Per-session token accumulation in `SessionEntry`; `GET /v1/usage` summary endpoint |
 | No context window visibility | Users can't see how much context is consumed | `context_used_pct` and `tokens_remaining` in `GET /v1/sessions/{id}`; REPL status line |

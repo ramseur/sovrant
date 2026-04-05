@@ -47,8 +47,10 @@ internal static class ChatRoutes
         toolRegistrar.RegisterAll();
 
         // Determine whether per-request credentials override the global provider.
-        var hasScopedCredentials = !string.IsNullOrWhiteSpace(req.XApiKey);
-        var scopedBaseUrl = req.XBaseUrl;
+        // Credentials are passed via headers, never in the request body.
+        var scopedApiKey = ctx.Request.Headers["X-LLM-Api-Key"].FirstOrDefault();
+        var scopedBaseUrl = ctx.Request.Headers["X-LLM-Base-Url"].FirstOrDefault();
+        var hasScopedCredentials = !string.IsNullOrWhiteSpace(scopedApiKey);
 
         ISmartRouter activeRouter;
         if (hasScopedCredentials)
@@ -63,7 +65,7 @@ internal static class ChatRoutes
             var scopedHttp = httpClientFactory.CreateClient("ScopedProvider");
             scopedHttp.BaseAddress = new Uri(baseUrl);
 
-            var scopedAuth = new ApiKeyAuthProvider(req.XApiKey!);
+            var scopedAuth = new ApiKeyAuthProvider(scopedApiKey!);
             var scopedLogger = loggerFactory.CreateLogger("Sovrant.Api.ScopedProvider");
             var scopedProvider = new OpenAiCompatProvider(scopedHttp, scopedAuth, scopedLogger);
             activeRouter = new ScopedSingleProviderRouter(scopedProvider);

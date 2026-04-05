@@ -124,12 +124,12 @@ For cloud platforms where each team or user brings their own LLM API key, the SD
 
 ```
 Team's browser/server
-  ──[SOVRANT_TOKEN + x_api_key in body]──►  Sovrant.Server
-                                              ──[x_api_key]──►  OpenAI / Gemini / etc.
+  ──[Authorization: Bearer SOVRANT_TOKEN]──►  Sovrant.Server
+  ──[X-LLM-Api-Key: sk-team-...]──────────►    ──[sk-team-...]──►  OpenAI / Gemini / etc.
 ```
 
-- `SOVRANT_TOKEN` still authenticates the client to your Sovrant server
-- `x_api_key` and `x_base_url` travel in the **JSON request body**, encrypted by HTTPS
+- `SOVRANT_TOKEN` still authenticates the client to your Sovrant server (via `Authorization` header)
+- `X-LLM-Api-Key` and `X-LLM-Base-Url` travel as **HTTP headers**, encrypted by HTTPS
 - The server uses them for that LLM call only — they are never logged, stored, or included in error responses
 - Each team's session history is isolated by a composite key (`session_id + provider`)
 

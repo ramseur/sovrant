@@ -88,19 +88,24 @@ OpenAI-compatible. Streams by default.
   ],
   "stream": true,
   "max_tokens": 4096,
-  "session_id": "optional-session-id",
-  "x_api_key": "sk-...",
-  "x_base_url": "https://api.openai.com/v1"
+  "session_id": "optional-session-id"
 }
+```
+
+**Per-request credential headers** (optional):
+
+```
+X-LLM-Api-Key: sk-...
+X-LLM-Base-Url: https://api.openai.com/v1
 ```
 
 - `model` — overrides server default for this request
 - `session_id` — if supplied the server resumes that JSONL session from `~/.sovrant/sessions/{id}.jsonl`
 - `stream` — defaults to `true`; set `false` for a single JSON response
-- `x_api_key` — *(Phase 9)* per-request LLM API key; overrides the server's global `LLM_API_KEY` for this call only. The server never logs, persists, or includes this value in error responses.
-- `x_base_url` — *(Phase 9)* per-request LLM base URL; overrides the server's global `LLM_BASE_URL` for this call only. When combined with `x_api_key`, creates a request-scoped provider.
+- `X-LLM-Api-Key` header — per-request LLM API key; overrides the server's global `LLM_API_KEY` for this call only. The server never logs, persists, or includes this value in error responses.
+- `X-LLM-Base-Url` header — per-request LLM base URL; overrides the server's global `LLM_BASE_URL` for this call only. When combined with `X-LLM-Api-Key`, creates a request-scoped provider.
 
-When `x_api_key` is supplied, the server creates a request-scoped `OpenAiCompatProvider` using the provided credentials. Sessions are isolated by a composite key (`{session_id}::{provider_name}`) so two clients with different keys sharing the same `session_id` will not collide.
+When `X-LLM-Api-Key` is supplied, the server creates a request-scoped `OpenAiCompatProvider` using the provided credentials. Sessions are isolated by a composite key (`{session_id}::{provider_name}`) so two clients with different keys sharing the same `session_id` will not collide.
 
 **Streaming response (SSE)**
 

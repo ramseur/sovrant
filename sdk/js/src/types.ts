@@ -12,14 +12,14 @@ export interface SovrantClientOptions {
   maxRetries?: number;
   /**
    * LLM provider API key for this client (multi-tenant use).
-   * Sent as `x_api_key` in the request body — never in a URL or header.
+   * Sent as the `X-LLM-Api-Key` header — never in a URL or request body.
    * The server uses it for the LLM call and never logs or persists it.
    * Overrides the server's global `LLM_API_KEY` for every request this client makes.
    */
   llmApiKey?: string;
   /**
    * LLM provider base URL for this client (multi-tenant use).
-   * Sent as `x_base_url` in the request body.
+   * Sent as the `X-LLM-Base-Url` header.
    * Allows each team to use a different LLM provider or endpoint.
    */
   llmBaseUrl?: string;
@@ -38,8 +38,6 @@ export interface ChatCompletionRequest {
   stream?: boolean;
   max_tokens?: number;
   session_id?: string;
-  x_api_key?: string;
-  x_base_url?: string;
 }
 
 /** Non-streaming response from POST /v1/chat/completions. */

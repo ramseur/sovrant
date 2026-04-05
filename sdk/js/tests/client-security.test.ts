@@ -319,7 +319,7 @@ describe("SovrantClient — llmApiKey handling", () => {
     vi.unstubAllGlobals();
   });
 
-  it("sends x_api_key in request body when set at constructor level", async () => {
+  it("sends X-LLM-Api-Key header when set at constructor level", async () => {
     const client = new SovrantClient({
       baseUrl: "http://localhost:5200",
       token: "sovrant-token",
@@ -328,11 +328,13 @@ describe("SovrantClient — llmApiKey handling", () => {
     });
     await client.chat("hello");
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-LLM-Api-Key"]).toBe("sk-team-key");
     const body = JSON.parse(init.body as string);
-    expect(body.x_api_key).toBe("sk-team-key");
+    expect(body.x_api_key).toBeUndefined();
   });
 
-  it("sends x_api_key from per-call override", async () => {
+  it("sends X-LLM-Api-Key header from per-call override", async () => {
     const client = new SovrantClient({
       baseUrl: "http://localhost:5200",
       token: "sovrant-token",
@@ -340,8 +342,8 @@ describe("SovrantClient — llmApiKey handling", () => {
     });
     await client.chat("hello", { llmApiKey: "sk-per-call" });
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(init.body as string);
-    expect(body.x_api_key).toBe("sk-per-call");
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-LLM-Api-Key"]).toBe("sk-per-call");
   });
 
   it("per-call llmApiKey overrides constructor llmApiKey", async () => {
@@ -353,11 +355,11 @@ describe("SovrantClient — llmApiKey handling", () => {
     });
     await client.chat("hello", { llmApiKey: "sk-override" });
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(init.body as string);
-    expect(body.x_api_key).toBe("sk-override");
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-LLM-Api-Key"]).toBe("sk-override");
   });
 
-  it("omits x_api_key from body when not set", async () => {
+  it("omits X-LLM-Api-Key header when not set", async () => {
     const client = new SovrantClient({
       baseUrl: "http://localhost:5200",
       token: "sovrant-token",
@@ -365,11 +367,11 @@ describe("SovrantClient — llmApiKey handling", () => {
     });
     await client.chat("hello");
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(init.body as string);
-    expect(body.x_api_key).toBeUndefined();
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-LLM-Api-Key"]).toBeUndefined();
   });
 
-  it("sends x_base_url in request body when set", async () => {
+  it("sends X-LLM-Base-Url header when set", async () => {
     const client = new SovrantClient({
       baseUrl: "http://localhost:5200",
       token: "sovrant-token",
@@ -378,11 +380,13 @@ describe("SovrantClient — llmApiKey handling", () => {
     });
     await client.chat("hello");
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-LLM-Base-Url"]).toBe("https://generativelanguage.googleapis.com/v1beta/openai/");
     const body = JSON.parse(init.body as string);
-    expect(body.x_base_url).toBe("https://generativelanguage.googleapis.com/v1beta/openai/");
+    expect(body.x_base_url).toBeUndefined();
   });
 
-  it("x_api_key is sent in body, never in Authorization header or URL", async () => {
+  it("X-LLM-Api-Key is in header, never in body or URL", async () => {
     const client = new SovrantClient({
       baseUrl: "http://localhost:5200",
       token: "sovrant-token",
@@ -391,10 +395,12 @@ describe("SovrantClient — llmApiKey handling", () => {
     });
     await client.chat("hello");
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-    const authHeader = (init.headers as Record<string, string>).Authorization;
+    const headers = init.headers as Record<string, string>;
+    const body = JSON.parse(init.body as string);
     expect(url).not.toContain("sk-team-key");
-    expect(authHeader).not.toContain("sk-team-key");
-    expect(authHeader).toBe("Bearer sovrant-token");
+    expect(headers.Authorization).toBe("Bearer sovrant-token");
+    expect(headers["X-LLM-Api-Key"]).toBe("sk-team-key");
+    expect(body.x_api_key).toBeUndefined();
   });
 
   it("toJSON redacts llmApiKey", () => {

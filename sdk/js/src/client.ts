@@ -109,6 +109,7 @@ export class SovrantClient {
     const res = await this.fetchWithRetry("/v1/chat/completions", {
       method: "POST",
       body: JSON.stringify(req),
+      headers: this.buildLlmHeaders(options),
     });
     const data = (await res.json()) as ChatCompletionResponse;
     return {
@@ -130,6 +131,7 @@ export class SovrantClient {
     const res = await this.fetchWithRetry("/v1/chat/completions", {
       method: "POST",
       body: JSON.stringify(req),
+      headers: this.buildLlmHeaders(options),
     });
 
     let fullText = "";
@@ -178,6 +180,7 @@ export class SovrantClient {
     const res = await this.fetchWithRetry("/v1/chat/completions", {
       method: "POST",
       body: JSON.stringify(req),
+      headers: this.buildLlmHeaders(options),
     });
     yield* parseSSEStream(res);
   }
@@ -290,17 +293,24 @@ export class SovrantClient {
     options?: { model?: string; sessionId?: string; llmApiKey?: string; llmBaseUrl?: string }
   ): ChatCompletionRequest {
     const messages: ChatMessage[] = [{ role: "user", content: message }];
-    // Per-call options take precedence over constructor defaults.
-    const llmApiKey = options?.llmApiKey ?? this.llmApiKey;
-    const llmBaseUrl = options?.llmBaseUrl ?? this.llmBaseUrl;
     return {
       model: options?.model ?? this.model,
       messages,
       stream,
       session_id: options?.sessionId ?? this.sessionId,
-      ...(llmApiKey !== undefined && { x_api_key: llmApiKey }),
-      ...(llmBaseUrl !== undefined && { x_base_url: llmBaseUrl }),
     };
+  }
+
+  /** Resolve per-request LLM credential headers (per-call options override constructor defaults). */
+  private buildLlmHeaders(
+    options?: { llmApiKey?: string; llmBaseUrl?: string }
+  ): Record<string, string> {
+    const headers: Record<string, string> = {};
+    const llmApiKey = options?.llmApiKey ?? this.llmApiKey;
+    const llmBaseUrl = options?.llmBaseUrl ?? this.llmBaseUrl;
+    if (llmApiKey !== undefined) headers["X-LLM-Api-Key"] = llmApiKey;
+    if (llmBaseUrl !== undefined) headers["X-LLM-Base-Url"] = llmBaseUrl;
+    return headers;
   }
 
   private async fetchWithRetry(
@@ -308,10 +318,11 @@ export class SovrantClient {
     init?: RequestInit
   ): Promise<Response> {
     const url = `${this.baseUrl}${path}`;
+    const extraHeaders = init?.headers as Record<string, string> | undefined;
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.token}`,
       "Content-Type": "application/json",
-      ...(init?.headers as Record<string, string> | undefined),
+      ...extraHeaders,
     };
 
     let lastError: Error | undefined;
