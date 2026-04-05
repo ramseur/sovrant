@@ -77,8 +77,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITool, EnterWorktreeTool>();
         services.AddSingleton<ITool, ExitWorktreeTool>();
 
-        // Skill / discovery tools
+        // Skill system — registry, runner, tools
+        services.AddSingleton<SkillRegistry>();
+        services.AddSingleton<SkillRunner>();
         services.AddSingleton<ITool, SkillTool>();
+        services.AddSingleton<ITool, SkillCreateTool>();
         services.AddSingleton<ITool, ToolSearchTool>();
 
         // MCP resource tools, dynamic proxy, and OAuth
