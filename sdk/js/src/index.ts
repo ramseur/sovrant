@@ -1,18 +1,31 @@
-export { SovrantClient, SovrantApiError } from "./client.js";
+export {
+  SovrantClient,
+  SovrantApiError,
+  SovrantAuthError,
+  SovrantRateLimitError,
+  SovrantTimeoutError,
+} from "./client.js";
 export { parseSSEStream } from "./sse.js";
 export type {
+  ChatCallOptions,
   ChatCompletionChunk,
   ChatCompletionRequest,
   ChatCompletionResponse,
   ChatMessage,
   ChunkChoice,
+  ModelInfo,
+  ModelsResponse,
   ProviderStatus,
   ResponseChoice,
   ServerConfig,
+  SessionDetail,
+  SessionListResponse,
+  SessionMessage,
   SovrantClientOptions,
   SovrantEvent,
   StreamCallbacks,
   UsageInfo,
+  UsageSummary,
   WebhookRequest,
   WebhookResponse,
   WebhookToolCall,

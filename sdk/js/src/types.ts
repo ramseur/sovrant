@@ -10,6 +10,8 @@ export interface SovrantClientOptions {
   sessionId?: string;
   /** Number of retry attempts on transient errors (default: 3). */
   maxRetries?: number;
+  /** Request timeout in milliseconds (default: 120000). */
+  timeoutMs?: number;
   /**
    * LLM provider API key for this client (multi-tenant use).
    * Sent as the `X-LLM-Api-Key` header — never in a URL or request body.
@@ -131,6 +133,54 @@ export interface WebhookToolCall {
   id: string;
   tool_name: string;
   is_error: boolean;
+}
+
+/** Per-call options for chat/stream/streamRaw methods. */
+export interface ChatCallOptions {
+  model?: string;
+  sessionId?: string;
+  llmApiKey?: string;
+  llmBaseUrl?: string;
+}
+
+/** Response from GET /v1/models. */
+export interface ModelsResponse {
+  object: string;
+  data: ModelInfo[];
+}
+
+export interface ModelInfo {
+  id: string;
+  object: string;
+  owned_by?: string;
+}
+
+/** Response from GET /v1/sessions/:id. */
+export interface SessionDetail {
+  session_id: string;
+  messages: SessionMessage[];
+  total_input_tokens: number;
+  total_output_tokens: number;
+}
+
+export interface SessionMessage {
+  role: string;
+  content: string;
+  timestamp: string;
+  input_tokens?: number;
+  output_tokens?: number;
+}
+
+/** Response from GET /v1/sessions. */
+export interface SessionListResponse {
+  sessions: { id: string }[];
+}
+
+/** Response from GET /v1/usage. */
+export interface UsageSummary {
+  sessions: Record<string, { input_tokens: number; output_tokens: number }>;
+  total_input_tokens: number;
+  total_output_tokens: number;
 }
 
 /** Callbacks for streaming events. */

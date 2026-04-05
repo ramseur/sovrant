@@ -1,20 +1,26 @@
 import { parseSSEStream } from "./sse.js";
 import type {
+  ChatCallOptions,
   ChatCompletionChunk,
   ChatCompletionRequest,
   ChatCompletionResponse,
   ChatMessage,
+  ModelsResponse,
   ProviderStatus,
   ServerConfig,
+  SessionDetail,
+  SessionListResponse,
   SovrantClientOptions,
   StreamCallbacks,
   UsageInfo,
+  UsageSummary,
   WebhookRequest,
   WebhookResponse,
 } from "./types.js";
 
 const DEFAULT_MAX_RETRIES = 3;
-const RETRY_DELAYS = [1000, 2000, 4000];
+const DEFAULT_TIMEOUT_MS = 120_000;
+const BASE_RETRY_DELAYS = [1000, 2000, 4000];
 const ALLOWED_PROTOCOLS = ["http:", "https:"];
 const ALLOWED_EXPORT_FORMATS = ["markdown"];
 
@@ -49,6 +55,7 @@ export class SovrantClient {
   private readonly model?: string;
   private readonly sessionId?: string;
   private readonly maxRetries: number;
+  private readonly timeoutMs: number;
   private readonly llmApiKey?: string;
   private readonly llmBaseUrl?: string;
 
@@ -78,6 +85,7 @@ export class SovrantClient {
     this.model = options.model;
     this.sessionId = options.sessionId;
     this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.llmApiKey = options.llmApiKey;
     this.llmBaseUrl = options.llmBaseUrl;
   }
@@ -89,6 +97,7 @@ export class SovrantClient {
       model: this.model,
       sessionId: this.sessionId,
       maxRetries: this.maxRetries,
+      timeoutMs: this.timeoutMs,
       token: "[REDACTED]",
       llmApiKey: this.llmApiKey !== undefined ? "[REDACTED]" : undefined,
       llmBaseUrl: this.llmBaseUrl,
@@ -103,7 +112,7 @@ export class SovrantClient {
    */
   async chat(
     message: string,
-    options?: { model?: string; sessionId?: string; llmApiKey?: string; llmBaseUrl?: string }
+    options?: ChatCallOptions
   ): Promise<{ text: string; usage?: UsageInfo }> {
     const req = this.buildRequest(message, false, options);
     const res = await this.fetchWithRetry("/v1/chat/completions", {
@@ -125,7 +134,7 @@ export class SovrantClient {
   async stream(
     message: string,
     callbacks: StreamCallbacks,
-    options?: { model?: string; sessionId?: string; llmApiKey?: string; llmBaseUrl?: string }
+    options?: ChatCallOptions
   ): Promise<void> {
     const req = this.buildRequest(message, true, options);
     const res = await this.fetchWithRetry("/v1/chat/completions", {
@@ -174,7 +183,7 @@ export class SovrantClient {
    */
   async *streamRaw(
     message: string,
-    options?: { model?: string; sessionId?: string; llmApiKey?: string; llmBaseUrl?: string }
+    options?: ChatCallOptions
   ): AsyncGenerator<ChatCompletionChunk> {
     const req = this.buildRequest(message, true, options);
     const res = await this.fetchWithRetry("/v1/chat/completions", {
@@ -224,25 +233,23 @@ export class SovrantClient {
   }
 
   /** Get available models. */
-  async getModels(): Promise<unknown> {
+  async getModels(): Promise<ModelsResponse> {
     const res = await this.fetchWithRetry("/v1/models");
-    return res.json();
+    return (await res.json()) as ModelsResponse;
   }
 
   // ── Sessions ──────────────────────────────────────────────────────────
 
   /** List all session IDs. */
-  async listSessions(): Promise<string[]> {
+  async listSessions(): Promise<SessionListResponse> {
     const res = await this.fetchWithRetry("/v1/sessions");
-    return (await res.json()) as string[];
+    return (await res.json()) as SessionListResponse;
   }
 
   /** Get session details including message history and token totals. */
-  async getSession(
-    sessionId: string
-  ): Promise<Record<string, unknown>> {
+  async getSession(sessionId: string): Promise<SessionDetail> {
     const res = await this.fetchWithRetry(`/v1/sessions/${encodeURIComponent(sessionId)}`);
-    return (await res.json()) as Record<string, unknown>;
+    return (await res.json()) as SessionDetail;
   }
 
   /** Delete a session. */
@@ -272,9 +279,9 @@ export class SovrantClient {
   // ── Usage ─────────────────────────────────────────────────────────────
 
   /** Get per-session token usage summary. */
-  async getUsage(): Promise<Record<string, unknown>> {
+  async getUsage(): Promise<UsageSummary> {
     const res = await this.fetchWithRetry("/v1/usage");
-    return (await res.json()) as Record<string, unknown>;
+    return (await res.json()) as UsageSummary;
   }
 
   // ── Health ────────────────────────────────────────────────────────────
@@ -290,7 +297,7 @@ export class SovrantClient {
   private buildRequest(
     message: string,
     stream: boolean,
-    options?: { model?: string; sessionId?: string; llmApiKey?: string; llmBaseUrl?: string }
+    options?: ChatCallOptions
   ): ChatCompletionRequest {
     const messages: ChatMessage[] = [{ role: "user", content: message }];
     return {
@@ -303,7 +310,7 @@ export class SovrantClient {
 
   /** Resolve per-request LLM credential headers (per-call options override constructor defaults). */
   private buildLlmHeaders(
-    options?: { llmApiKey?: string; llmBaseUrl?: string }
+    options?: ChatCallOptions
   ): Record<string, string> {
     const headers: Record<string, string> = {};
     const llmApiKey = options?.llmApiKey ?? this.llmApiKey;
@@ -328,29 +335,53 @@ export class SovrantClient {
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+
       try {
-        const res = await fetch(url, { ...init, headers });
+        const res = await fetch(url, {
+          ...init,
+          headers,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
 
         // Retry on 429 and 5xx.
         if (
           (res.status === 429 || res.status >= 500) &&
           attempt < this.maxRetries
         ) {
-          await sleep(RETRY_DELAYS[attempt] ?? 4000);
+          await sleep(retryDelay(attempt));
           continue;
         }
 
         if (!res.ok) {
           const body = await res.text().catch(() => "");
+          if (res.status === 429) throw new SovrantRateLimitError(body, url);
+          if (res.status === 401 || res.status === 403) throw new SovrantAuthError(res.status, body, url);
           throw new SovrantApiError(res.status, body, url);
         }
 
         return res;
       } catch (err) {
+        clearTimeout(timeoutId);
+
         if (err instanceof SovrantApiError) throw err;
+
+        // AbortController fires on timeout
+        if (err instanceof DOMException && err.name === "AbortError") {
+          lastError = new SovrantTimeoutError(url, this.timeoutMs);
+          if (attempt < this.maxRetries) {
+            await sleep(retryDelay(attempt));
+            continue;
+          }
+          break;
+        }
+
         lastError = err instanceof Error ? err : new Error(String(err));
         if (attempt < this.maxRetries) {
-          await sleep(RETRY_DELAYS[attempt] ?? 4000);
+          await sleep(retryDelay(attempt));
         }
       }
     }
@@ -358,6 +389,8 @@ export class SovrantClient {
     throw lastError ?? new Error(`Request to ${url} failed after retries.`);
   }
 }
+
+// ── Errors ──────────────────────────────────────────────────────────────
 
 /** Error thrown when the Sovrant API returns a non-OK response. */
 export class SovrantApiError extends Error {
@@ -369,6 +402,43 @@ export class SovrantApiError extends Error {
     super(`Sovrant API error ${status} from ${url}: ${body}`);
     this.name = "SovrantApiError";
   }
+}
+
+/** Error thrown on 401/403 authentication failures. */
+export class SovrantAuthError extends SovrantApiError {
+  constructor(status: number, body: string, url: string) {
+    super(status, body, url);
+    this.name = "SovrantAuthError";
+  }
+}
+
+/** Error thrown on 429 rate limit responses. */
+export class SovrantRateLimitError extends SovrantApiError {
+  constructor(body: string, url: string) {
+    super(429, body, url);
+    this.name = "SovrantRateLimitError";
+  }
+}
+
+/** Error thrown when a request times out. */
+export class SovrantTimeoutError extends Error {
+  constructor(
+    public readonly url: string,
+    public readonly timeoutMs: number
+  ) {
+    super(`Request to ${url} timed out after ${timeoutMs}ms`);
+    this.name = "SovrantTimeoutError";
+  }
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────
+
+/** Exponential backoff with jitter to prevent thundering herd. */
+function retryDelay(attempt: number): number {
+  const base = BASE_RETRY_DELAYS[attempt] ?? 4000;
+  // Add ±25% jitter
+  const jitter = base * 0.25 * (Math.random() * 2 - 1);
+  return Math.max(0, Math.round(base + jitter));
 }
 
 function sleep(ms: number): Promise<void> {

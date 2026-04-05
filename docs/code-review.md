@@ -414,15 +414,16 @@ finally {
 | 2.23 | Schema builder — **deferred** (High effort, current approach functional) | High | Error-prone schema definitions |
 | 2.4 | Removed dead BaseAgent inbox/channel/RunLoopAsync/EnqueueAsync code | Low | Confusing architecture |
 
-### Phase E — SDK Improvements
+### Phase E — SDK Improvements ✅ COMPLETE
 
 | # | Issue | Effort | Risk if Unfixed |
 |---|-------|--------|-----------------|
-| 2.19 | Request timeout | Low | Hanging requests |
-| 2.18 | Response type definitions | Medium | Type-unsafe consumption |
-| 2.20 | Functional test suite | High | Regression risk |
-| M46 | Retry with jitter | Low | Thundering herd |
-| M47 | Error class hierarchy | Medium | Poor error handling |
+| 2.19 | AbortController-based request timeout (default 120s, configurable) | Low | Hanging requests |
+| 2.18 | Typed responses: ModelsResponse, SessionDetail, SessionListResponse, UsageSummary | Medium | Type-unsafe consumption |
+| 2.20 | Functional test suite — **deferred** (requires Node.js) | High | Regression risk |
+| M46 | Exponential backoff with ±25% jitter on retries | Low | Thundering herd |
+| M47 | Error hierarchy: SovrantAuthError, SovrantRateLimitError, SovrantTimeoutError | Medium | Poor error handling |
+| M49 | Shared ChatCallOptions interface replacing 4 inline option types | Low | DRY |
 
 ### Phase F — Performance & Polish (when time permits)
 
