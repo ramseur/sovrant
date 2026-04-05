@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Api.Types;
+using Sovrant.Runtime.Governance;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Tools;
 
@@ -20,7 +21,7 @@ public sealed class DefaultToolExecutorTests
     {
         var policy = new ModeAwarePermissionPolicy(mode);
         registry ??= new InMemoryToolRegistry();
-        return new DefaultToolExecutor(registry, policy, NullLogger<DefaultToolExecutor>.Instance);
+        return new DefaultToolExecutor(registry, policy, new NullGovernanceMonitor(), NullLogger<DefaultToolExecutor>.Instance);
     }
 
     [Fact]

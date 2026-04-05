@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Api;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Conversation;
+using Sovrant.Runtime.Governance;
 using Sovrant.Runtime.Hooks;
 using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Permissions;
@@ -43,6 +44,10 @@ public static class ServiceCollectionExtensions
 
         // Hook runner — loads hooks.json from disk on first construction.
         services.AddSingleton<IHookRunner, HookRunner>();
+
+        // Governance monitor — loads governance.json from disk.
+        services.AddSingleton<GovernanceConfig>(_ => GovernanceConfig.Load());
+        services.AddSingleton<IGovernanceMonitor, GovernanceMonitor>();
 
         // Tool registry and executor
         services.AddSingleton<IToolRegistry, InMemoryToolRegistry>();

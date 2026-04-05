@@ -1,15 +1,17 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Sovrant.Runtime.Governance;
 using Sovrant.Runtime.Permissions;
 
 namespace Sovrant.Runtime.Tools;
 
-/// <summary>Executes tools after evaluating them against the active permission policy.</summary>
+/// <summary>Executes tools after evaluating them against the active permission policy and governance rules.</summary>
 public sealed partial class DefaultToolExecutor : IToolExecutor
 {
     private readonly IToolRegistry _registry;
     private readonly IPermissionPolicy _policy;
+    private readonly IGovernanceMonitor _governance;
     private readonly ILogger<DefaultToolExecutor> _logger;
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Executing tool '{ToolName}'")]
@@ -30,13 +32,18 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
     [LoggerMessage(Level = LogLevel.Debug, Message = "Tool '{ToolName}' completed in {DurationMs}ms (is_error={IsError})")]
     private static partial void LogExecutionComplete(ILogger logger, string toolName, long durationMs, bool isError);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Tool '{ToolName}' blocked by governance: {Reason}")]
+    private static partial void LogGovernanceBlocked(ILogger logger, string toolName, string reason);
+
     public DefaultToolExecutor(
         IToolRegistry registry,
         IPermissionPolicy policy,
+        IGovernanceMonitor governance,
         ILogger<DefaultToolExecutor> logger)
     {
         _registry = registry;
         _policy = policy;
+        _governance = governance;
         _logger = logger;
     }
 
@@ -71,15 +78,43 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
                 $"Unknown tool: '{toolName}'.", IsError: true);
         }
 
+        // Pre-execution governance check
+        var inputText = input.ValueKind == System.Text.Json.JsonValueKind.Undefined
+            ? null
+            : input.ToString();
+        var filePath = input.ValueKind != System.Text.Json.JsonValueKind.Undefined &&
+                       input.TryGetProperty("file_path", out var fp) ? fp.GetString() :
+                       input.ValueKind != System.Text.Json.JsonValueKind.Undefined &&
+                       input.TryGetProperty("path", out var p) ? p.GetString() : null;
+
+        var preContext = new GovernanceContext(GovernancePhase.Pre, toolName, inputText, FilePath: filePath);
+        var preVerdict = await _governance.EvaluateAsync(preContext, ct).ConfigureAwait(false);
+        if (preVerdict.Action == GovernanceAction.Block)
+        {
+            LogGovernanceBlocked(_logger, toolName, preVerdict.Reason);
+            return new ToolExecutionResult(false,
+                $"Blocked by governance ({preVerdict.Rule}): {preVerdict.Reason}", IsError: true);
+        }
+
         LogExecuting(_logger, toolName);
         var sw = Stopwatch.StartNew();
         try
         {
             var output = await handler(input, ct).ConfigureAwait(false);
 
+            // Post-execution governance check
+            var postContext = new GovernanceContext(GovernancePhase.Post, toolName, inputText, output);
+            var postVerdict = await _governance.EvaluateAsync(postContext, ct).ConfigureAwait(false);
+            if (postVerdict.Action == GovernanceAction.Warn)
+                output = $"[Governance warning — {postVerdict.Rule}: {postVerdict.Reason}]\n{output}";
+
             // Large results (> 50 KB) are offloaded to a temp file.
             if (output.Length > 50 * 1024)
                 output = await OffloadToTempFileAsync(toolName, output, ct).ConfigureAwait(false);
+
+            // Pre-execution warning appended after output
+            if (preVerdict.Action == GovernanceAction.Warn)
+                output = $"[Governance warning — {preVerdict.Rule}: {preVerdict.Reason}]\n{output}";
 
             sw.Stop();
             LogExecutionComplete(_logger, toolName, sw.ElapsedMilliseconds, false);
