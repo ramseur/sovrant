@@ -5,7 +5,7 @@ A .NET 10 agentic AI platform — multi-provider, tool-using, session-persistent
 Sovrant runs as a **CLI agent** for individual use, an **OpenAI-compatible HTTP server** for team and application integration, or via **webhooks** from Slack, Teams, Discord, and custom systems. The agent reads and writes files, executes shell commands, searches the web, calls tools autonomously, and maintains full conversation history across sessions.
 
 **Runtime:** .NET 10 / C# 13
-**Status:** Engine fully functional. 36 tools. 14 server endpoints. Webhook integrations. CI/CD pipeline support. Frontend SDK. 205/205 tests passing.
+**Status:** Engine fully functional. 36 tools. 14 server endpoints. Webhook integrations. CI/CD pipeline support. Frontend SDK. MCP server mode. 225/225 tests passing.
 
 ---
 
@@ -20,6 +20,7 @@ Sovrant runs as a **CLI agent** for individual use, an **OpenAI-compatible HTTP 
 | `Sovrant.Tools` | All 31 tool implementations. |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/clear`, `/session`, `/memory`, etc.). |
 | `Sovrant.Agents` | Multi-agent infrastructure: `IAgent` / `IMultiAgentSystem` interfaces, modern in-process backend, legacy process-based backend, `AGENT_MODE` config switch. |
+| `Sovrant.McpServer` | MCP server mode: exposes all tools and resources via stdio transport for IDE integration (VS Code, Cursor, Windsurf). |
 | `Sovrant.Lsp` | Language Server Protocol client: JSON-RPC over stdio, manages language server lifecycle, 5 LSP tools. |
 | `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient`, SSE streaming, React `useChat()` hook. |
 
@@ -233,6 +234,7 @@ The server keeps one `ConversationRuntime` alive per `session_id` in an in-memor
 | `SOVRANT_LOG_CONSOLE` | No | Write logs to stdout (default: `true`). Set to `false` to silence console output. |
 | `SOVRANT_LOG_FORMAT` | No | `text` (default, human-readable) or `json` (structured — better for log aggregators) |
 | `SOVRANT_RATE_LIMIT_RPM` | No | Per-session rate limit: requests per minute (default: `60`). Returns `429` when exceeded. |
+| `SOVRANT_MCP_TOOLS` | No | Comma-separated allow-list of tools to expose in MCP server mode. Unset = all tools. |
 
 ---
 
@@ -369,7 +371,7 @@ Each tool takes a file path and a line/column position (1-based). The agent uses
 ## Tests
 
 ```bash
-dotnet test   # 205 tests across 7 projects
+dotnet test   # 225 tests across 8 projects
 ```
 
 | Project | Tests |
@@ -377,6 +379,7 @@ dotnet test   # 205 tests across 7 projects
 | `Sovrant.Api.Tests` | 28 |
 | `Sovrant.Runtime.Tests` | 86 |
 | `Sovrant.Server.Tests` | 16 |
+| `Sovrant.McpServer.Tests` | 20 |
 | `Sovrant.Lsp.Tests` | 26 |
 | `Sovrant.Tools.Tests` | 26 |
 | `Sovrant.Commands.Tests` | 22 |
@@ -393,6 +396,7 @@ dotnet test   # 205 tests across 7 projects
 | [`docs/engine-status.md`](docs/engine-status.md) | Tool test results, provider compatibility, known issues |
 | [`docs/ci-cd.md`](docs/ci-cd.md) | CI/CD integration — `--ci` flag, GitHub Actions action, GitLab CI template |
 | [`docs/webhooks.md`](docs/webhooks.md) | Webhook endpoint, Slack bot setup, Teams/Discord integration guides |
+| [`docs/mcp-server.md`](docs/mcp-server.md) | MCP server mode — IDE config (VS Code, Cursor, Windsurf), available tools/resources, env vars |
 
 ---
 

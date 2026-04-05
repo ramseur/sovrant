@@ -7,6 +7,7 @@
     <Project Path="src/Sovrant.Server/Sovrant.Server.csproj" />
     <Project Path="src/Sovrant.Lsp/Sovrant.Lsp.csproj" />
     <Project Path="src/Sovrant.Tools/Sovrant.Tools.csproj" />
+    <Project Path="src/Sovrant.McpServer/Sovrant.McpServer.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Sovrant.Api.Tests/Sovrant.Api.Tests.csproj" />
@@ -16,5 +17,6 @@
     <Project Path="tests/Sovrant.Lsp.Tests/Sovrant.Lsp.Tests.csproj" />
     <Project Path="tests/Sovrant.Server.Tests/Sovrant.Server.Tests.csproj" />
     <Project Path="tests/Sovrant.Tools.Tests/Sovrant.Tools.Tests.csproj" />
+    <Project Path="tests/Sovrant.McpServer.Tests/Sovrant.McpServer.Tests.csproj" />
   </Folder>
 </Solution>

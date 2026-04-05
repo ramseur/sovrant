@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 13 complete — Frontend SDK, structured diff view, session export)
+**Last updated:** 2026-04-04 (Phase 14 complete — MCP Server Mode)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -688,9 +688,16 @@ An `ILspClient` service manages the lifecycle of one or more language server pro
 
 ---
 
-### Phase 14 — MCP Server Mode
+### Phase 14 — MCP Server Mode ✅
 
 **Goal:** Expose Sovrant as an MCP server so it can be consumed by MCP clients or composed into larger agent pipelines.
+
+**Status:** Complete. `sovrant mcp-server` subcommand activates stdio-based MCP server. Bridges all `IToolRegistry` tools + synthetic `chat` tool + session/config resources. `SOVRANT_MCP_TOOLS` env var for optional filtering. 20 tests. See [`docs/mcp-server.md`](mcp-server.md).
+
+**Files added:**
+- `src/Sovrant.McpServer/` — `McpServerSetup.cs`, `ChatToolHandler.cs`, `ToolFilter.cs`
+- `tests/Sovrant.McpServer.Tests/` — `ToolBridgeTests.cs`, `ToolFilterTests.cs`, `ChatToolHandlerTests.cs`
+- `docs/mcp-server.md` — full documentation with IDE config examples
 
 ---
 

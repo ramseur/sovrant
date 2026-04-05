@@ -10,6 +10,8 @@ using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
+using Sovrant.McpServer;
+using Microsoft.Extensions.Hosting;
 using Spectre.Console;
 using System.CommandLine;
 using System.Text.Json;
@@ -74,6 +76,57 @@ promptCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
     }
 });
 root.Add(promptCmd);
+
+// ── 'mcp-server' subcommand ───────────────────────────────────────────────────
+var mcpCmd = new Command("mcp-server", "Run as an MCP server on stdio for IDE integration (VS Code, Cursor, etc.).");
+mcpCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    var config = ConfigLoader.Load();
+    var model = pr.GetValue(modelOpt);
+
+    // Force dontAsk permission mode — MCP server is non-interactive.
+    config = new SovrantConfig
+    {
+        Model = model ?? config.Model,
+        MaxTokens = config.MaxTokens,
+        PermissionMode = PermissionMode.DontAsk,
+        RouterMode = config.RouterMode,
+        RouterStrategy = config.RouterStrategy,
+        BaseUrl = config.BaseUrl,
+        ApiKey = config.ApiKey,
+        McpServers = config.McpServers,
+        CompactThreshold = config.CompactThreshold,
+    };
+
+    var host = Host.CreateDefaultBuilder()
+        .ConfigureServices(services =>
+        {
+            // Suppress console logging — stdout is the JSON-RPC transport.
+            services.AddLogging(b => b.AddSovrantLogging(consoleMinOverride: LogLevel.None));
+            services.AddSovrantRuntime(config);
+            services.AddSovrantTools();
+            services.AddSingleton<IPermissionPolicy>(new CiPermissionPolicy());
+            services.AddSingleton<IUserInputProvider, CiUserInputProvider>();
+            services.AddSovrantMcpServer();
+        })
+        .Build();
+
+    // Seed tools and initialize runtime (MCP clients, router) before accepting connections.
+    host.Services.GetRequiredService<ToolRegistrar>().RegisterAll();
+    await host.Services.InitializeRuntimeAsync(ct).ConfigureAwait(false);
+
+    // Pin to a specific provider if requested.
+    var providerName = pr.GetValue(providerOpt);
+    if (providerName is not null)
+    {
+        var router = host.Services.GetRequiredService<ISmartRouter>();
+        await router.PinProviderAsync(providerName, ct).ConfigureAwait(false);
+    }
+
+    // Block on stdio until the IDE closes the pipe.
+    await host.RunAsync(ct).ConfigureAwait(false);
+});
+root.Add(mcpCmd);
 
 // ── REPL (default handler) ────────────────────────────────────────────────────
 root.SetAction(async (ParseResult pr, CancellationToken ct) =>
