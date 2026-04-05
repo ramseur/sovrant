@@ -117,8 +117,24 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
         string content,
         CancellationToken ct)
     {
-        var tempPath = Path.Combine(Path.GetTempPath(), $"sovrant_{toolName}_{Guid.NewGuid():N}.txt");
+        // Sanitize tool name to prevent path traversal in temp file names.
+        var safeName = SanitizeToolName(toolName);
+        var tempPath = Path.Combine(Path.GetTempPath(), $"sovrant_{safeName}_{Guid.NewGuid():N}.txt");
         await File.WriteAllTextAsync(tempPath, content, ct).ConfigureAwait(false);
         return $"[Large output ({content.Length:N0} bytes) written to: {tempPath}]";
+    }
+
+    private static string SanitizeToolName(string name)
+    {
+        // Replace any character that isn't alphanumeric, hyphen, or underscore.
+        var span = name.AsSpan();
+        Span<char> buffer = stackalloc char[Math.Min(span.Length, 64)];
+        var len = 0;
+        for (var i = 0; i < span.Length && len < buffer.Length; i++)
+        {
+            var c = span[i];
+            buffer[len++] = char.IsLetterOrDigit(c) || c == '-' || c == '_' ? c : '_';
+        }
+        return new string(buffer[..len]);
     }
 }

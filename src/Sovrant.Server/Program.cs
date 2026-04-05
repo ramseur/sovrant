@@ -95,8 +95,8 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(policy =>
             "http://127.0.0.1:3000",
             "http://127.0.0.1:5173",
             "http://127.0.0.1:8080")
-        .AllowAnyMethod()
-        .AllowAnyHeader()
+        .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+        .WithHeaders("Content-Type", "Accept", "Authorization", "X-Session-Id", "X-LLM-Api-Key", "X-LLM-Base-Url")
         .AllowCredentials()));
 
 // Per-session rate limiting — keyed on session_id from the request body or "anonymous".

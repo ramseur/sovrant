@@ -103,8 +103,15 @@ public sealed partial class JsonlSessionStore : ISessionStore, IDisposable
         return Task.FromResult<IReadOnlyList<string>>(ids);
     }
 
-    private string GetSessionPath(string sessionId) =>
-        Path.Combine(_sessionsDir, $"{sessionId}.jsonl");
+    private string GetSessionPath(string sessionId)
+    {
+        var path = Path.Combine(_sessionsDir, $"{sessionId}.jsonl");
+        var fullPath = Path.GetFullPath(path);
+        var fullDir = Path.GetFullPath(_sessionsDir);
+        if (!fullPath.StartsWith(fullDir, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException($"Session ID '{sessionId}' resolves outside the sessions directory.", nameof(sessionId));
+        return path;
+    }
 
     /// <inheritdoc/>
     public void Dispose() => _lock.Dispose();

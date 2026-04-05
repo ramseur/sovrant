@@ -36,13 +36,19 @@ public sealed class SkillTool : ITool
         // Sanitise: no path traversal
         if (name.Contains('/', StringComparison.Ordinal) ||
             name.Contains('\\', StringComparison.Ordinal) ||
-            name.Contains("..", StringComparison.Ordinal))
-            return "Error: name must be a plain filename without path separators.";
+            name.Contains("..", StringComparison.Ordinal) ||
+            name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            return "Error: name must be a plain filename without path separators or special characters.";
 
         var args = GetString(input, "args");
 
         var projectPath = Path.Combine(ProjectSkillsDir, string.Create(CultureInfo.InvariantCulture, $"{name}.md"));
         var globalPath  = Path.Combine(GlobalSkillsDir,  string.Create(CultureInfo.InvariantCulture, $"{name}.md"));
+
+        // Defense-in-depth: verify resolved paths stay within the skills directories.
+        if (!Path.GetFullPath(projectPath).StartsWith(Path.GetFullPath(ProjectSkillsDir), StringComparison.OrdinalIgnoreCase) ||
+            !Path.GetFullPath(globalPath).StartsWith(Path.GetFullPath(GlobalSkillsDir), StringComparison.OrdinalIgnoreCase))
+            return "Error: name resolves outside the skills directory.";
 
         var path = File.Exists(projectPath) ? projectPath
                  : File.Exists(globalPath)  ? globalPath

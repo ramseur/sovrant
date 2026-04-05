@@ -108,6 +108,15 @@ internal static class ChatRoutes
 
         if (!string.IsNullOrWhiteSpace(req.SessionId))
         {
+            if (!InputValidation.IsValidSessionId(req.SessionId))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await ctx.Response.WriteAsJsonAsync(
+                    new { error = "Invalid session_id: must be 1-128 alphanumeric characters, hyphens, underscores, dots, or colons." }, ct)
+                    .ConfigureAwait(false);
+                return;
+            }
+
             // Session pool key includes the provider tag when per-request credentials are used
             // so two users with the same session_id but different providers stay isolated.
             var status = activeRouter.GetStatus();
@@ -145,6 +154,15 @@ internal static class ChatRoutes
         {
             ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
             await ctx.Response.WriteAsJsonAsync(new { error = "No user message found in messages array." }, ct)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        if (req.Model is not null && !InputValidation.IsValidModelName(req.Model))
+        {
+            ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await ctx.Response.WriteAsJsonAsync(
+                new { error = "Invalid model name: must be 1-128 alphanumeric characters, hyphens, underscores, dots, slashes, or colons." }, ct)
                 .ConfigureAwait(false);
             return;
         }

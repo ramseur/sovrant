@@ -34,6 +34,9 @@ internal static class SessionRoutes
         IRuntimeSessionPool pool,
         CancellationToken ct)
     {
+        if (!InputValidation.IsValidSessionId(id))
+            return Results.BadRequest(new { error = "Invalid session ID format." });
+
         var entries = await store.LoadAsync(id, ct).ConfigureAwait(false);
         if (entries.Count == 0)
             return Results.NotFound(new { error = $"Session '{id}' not found." });
@@ -66,6 +69,9 @@ internal static class SessionRoutes
 
     private static IResult DeleteSession(string id, IRuntimeSessionPool pool)
     {
+        if (!InputValidation.IsValidSessionId(id))
+            return Results.BadRequest(new { error = "Invalid session ID format." });
+
         var sessionsDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".sovrant", "sessions");
@@ -87,6 +93,9 @@ internal static class SessionRoutes
         IRuntimeSessionPool pool,
         MutableServerConfig serverConfig)
     {
+        if (!InputValidation.IsValidSessionId(id))
+            return Results.BadRequest(new { error = "Invalid session ID format." });
+
         var sessionConfig = pool.TryGetConfig(id);
         if (sessionConfig is null)
             return Results.NotFound(new { error = $"Session '{id}' is not active in the pool." });
@@ -107,6 +116,9 @@ internal static class SessionRoutes
     {
         ArgumentNullException.ThrowIfNull(req);
 
+        if (!InputValidation.IsValidSessionId(id))
+            return Results.BadRequest(new { error = "Invalid session ID format." });
+
         var sessionConfig = pool.TryGetConfig(id);
         if (sessionConfig is null)
             return Results.NotFound(new { error = $"Session '{id}' is not active in the pool." });
@@ -126,6 +138,9 @@ internal static class SessionRoutes
         ISessionStore store,
         CancellationToken ct)
     {
+        if (!InputValidation.IsValidSessionId(id))
+            return Results.BadRequest(new { error = "Invalid session ID format." });
+
         var entries = await store.LoadAsync(id, ct).ConfigureAwait(false);
         if (entries.Count == 0)
             return Results.NotFound(new { error = $"Session '{id}' not found." });

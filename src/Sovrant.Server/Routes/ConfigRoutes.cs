@@ -32,13 +32,22 @@ internal static class ConfigRoutes
         ArgumentNullException.ThrowIfNull(req);
 
         if (req.Model is not null)
+        {
+            if (!InputValidation.IsValidModelName(req.Model))
+                return Results.BadRequest(new { error = "Invalid model name." });
             config.Model = req.Model;
+        }
 
         if (req.ApiKey is not null)
             config.LlmApiKey = req.ApiKey;
 
         if (req.BaseUrl is not null)
+        {
+            if (!Uri.TryCreate(req.BaseUrl, UriKind.Absolute, out var parsed)
+                || (parsed.Scheme != "https" && parsed.Scheme != "http"))
+                return Results.BadRequest(new { error = "Invalid base_url: must be an absolute http or https URL." });
             config.LlmBaseUrl = req.BaseUrl;
+        }
 
         if (req.PermissionMode is not null &&
             Enum.TryParse<PermissionMode>(req.PermissionMode, ignoreCase: true, out var pm))

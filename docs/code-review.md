@@ -394,16 +394,16 @@ finally {
 | 2.10 | Fire-and-forget → tracked + cancellable | Low | Delayed shutdown |
 | M1 | Global config mutation → session-only | Medium | Non-deterministic model selection |
 
-### Phase C — Validation & Hardening
+### Phase C — Validation & Hardening ✅ COMPLETE
 
 | # | Issue | Effort | Risk if Unfixed |
 |---|-------|--------|-----------------|
-| 2.14 | Model/provider validation | Low | Runtime crashes |
-| 2.17 | CORS restriction | Low | Reduced defense-in-depth |
-| M2 | Session ID validation | Low | Filesystem issues |
-| M20 | Session persistence path safety | Low | Path traversal |
-| M21 | Tool name validation | Low | Path traversal in temp files |
-| M22 | SkillTool path traversal | Low | File access bypass |
+| 2.14 | Model/provider/URL validation in ConfigRoutes | Low | Runtime crashes |
+| 2.17 | CORS restricted to explicit methods+headers | Low | Reduced defense-in-depth |
+| M2 | Session ID validated (regex, 1-128 chars) across all routes | Low | Filesystem issues |
+| M20 | Session persistence GetFullPath containment check | Low | Path traversal |
+| M21 | Tool name sanitized before temp file path construction | Low | Path traversal in temp files |
+| M22 | SkillTool: invalid filename chars check + GetFullPath containment | Low | File access bypass |
 
 ### Phase D — Code Quality & DRY (maintainability)
 
