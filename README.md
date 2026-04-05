@@ -5,7 +5,7 @@ A .NET 10 agentic AI platform — multi-provider, tool-using, session-persistent
 Sovrant runs as a **CLI agent** for individual use, an **OpenAI-compatible HTTP server** for team and application integration, or via **webhooks** from Slack, Teams, Discord, and custom systems. The agent reads and writes files, executes shell commands, searches the web, calls tools autonomously, and maintains full conversation history across sessions.
 
 **Runtime:** .NET 10 / C# 13
-**Status:** Engine fully functional. 36 tools. 14 server endpoints. Webhook integrations. CI/CD pipeline support. Frontend SDK. MCP server mode. 225/225 tests passing.
+**Status:** Engine fully functional. 37 tools. 14 server endpoints. Webhook integrations. CI/CD pipeline support. Frontend SDK. MCP server mode. 233/233 tests passing.
 
 ---
 
@@ -119,7 +119,7 @@ curl -X POST http://localhost:5200/v1/chat/completions \
 
 ## Tools
 
-36 tools available (31 core + 5 LSP). All run inside the agentic loop with automatic retries up to 20 tool rounds per turn.
+37 tools available (32 core + 5 LSP). All run inside the agentic loop with automatic retries up to 20 tool rounds per turn.
 
 ### File
 `Read` · `Write` · `Edit` · `Glob` · `Grep` · `LS`
@@ -143,7 +143,7 @@ curl -X POST http://localhost:5200/v1/chat/completions \
 `ToolSearch` *(keyword search over registered tools)* · `Skill` *(loads `.sovrant/skills/{name}.md` prompt template)*
 
 ### MCP resources
-`ListMcpResources` · `ReadMcpResource`
+`ListMcpResources` · `ReadMcpResource` · `MCPTool` *(dynamic proxy — calls any tool on any connected MCP server)*
 
 ### LSP (Language Server Protocol)
 `LspHover` · `LspDefinition` · `LspReferences` · `LspDiagnostics` · `LspRename`
@@ -371,7 +371,7 @@ Each tool takes a file path and a line/column position (1-based). The agent uses
 ## Tests
 
 ```bash
-dotnet test   # 225 tests across 8 projects
+dotnet test   # 233 tests across 8 projects
 ```
 
 | Project | Tests |
@@ -381,7 +381,7 @@ dotnet test   # 225 tests across 8 projects
 | `Sovrant.Server.Tests` | 16 |
 | `Sovrant.McpServer.Tests` | 20 |
 | `Sovrant.Lsp.Tests` | 26 |
-| `Sovrant.Tools.Tests` | 26 |
+| `Sovrant.Tools.Tests` | 34 |
 | `Sovrant.Commands.Tests` | 22 |
 | `Sovrant.Integration.Tests` | 1 |
 

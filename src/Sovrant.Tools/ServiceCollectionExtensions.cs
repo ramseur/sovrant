@@ -79,9 +79,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITool, SkillTool>();
         services.AddSingleton<ITool, ToolSearchTool>();
 
-        // MCP resource tools
+        // MCP resource tools + dynamic proxy
         services.AddSingleton<ITool, ListMcpResourcesTool>();
         services.AddSingleton<ITool, ReadMcpResourceTool>();
+        services.AddSingleton<ITool, McpProxyTool>();
 
         // Agent tool
         services.AddSingleton<ITool, AgentTool>();

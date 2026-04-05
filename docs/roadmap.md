@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-04 (Phase 14 complete — MCP Server Mode)
+**Last updated:** 2026-04-04 (Phase 16 complete — Dynamic MCP Tool Proxy)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -725,31 +725,15 @@ Two-layer approach:
 
 ---
 
-### Phase 16 — Dynamic MCP Tool Proxy (`MCPTool`)
+### Phase 16 — Dynamic MCP Tool Proxy (`MCPTool`) ✅
 
 **Goal:** Allow the model to discover and invoke any tool exposed by a connected MCP server dynamically, without those tools being statically registered in `ToolRegistrar` at startup.
 
-#### Motivation
+**Status:** Complete. `MCPTool` added to `Sovrant.Tools/Mcp/`. Parameters: `tool` (required), `server` (optional — searches all clients when omitted), `input` (object). Uses existing `McpClientRegistry` — no new infrastructure. 8 tests.
 
-Today Sovrant's MCP integration pre-registers a fixed set of tools from configured MCP servers on startup. As Sovrant becomes a cloud platform, users will connect arbitrary MCP servers (databases, APIs, SaaS integrations) that expose dozens or hundreds of tools. Pre-registering everything is impractical — it bloats the context window and requires a server restart to pick up new servers.
-
-`MCPTool` acts as a **dynamic proxy**: the model calls `MCPTool({ server: "myserver", tool: "query_table", input: {...} })` and the runtime forwards the call to the named MCP server at execution time. This decouples tool discovery from startup.
-
-#### Design
-
-- `MCPTool` takes `server`, `tool`, and `input` as parameters
-- At execution time it resolves the named MCP server from the active `IMcpClient` registry
-- Validates that the named tool exists on that server
-- Forwards `input` as-is and returns the MCP tool result
-- Works alongside the existing static tool registration — statically registered tools remain preferred; `MCPTool` is the fallback for everything else
-- Pairs with `ToolSearch` (Phase 7.5 Tier 2) which lets the model discover what tools are available before calling them
-
-#### Implementation Plan
-
-1. Extend `IMcpClient` with `CallToolAsync(serverName, toolName, input)`
-2. Implement `McpProxyTool` (name: `MCPTool`) in `Sovrant.Tools/Mcp/`
-3. Register `McpProxyTool` only when at least one MCP server is configured
-4. Coordinate with `ToolSearch` so the model can list-then-call in a single pattern
+**Files added:**
+- `src/Sovrant.Tools/Mcp/McpProxyTool.cs` — implementation
+- `tests/Sovrant.Tools.Tests/Mcp/McpProxyToolTests.cs` — 8 tests
 
 ---
 
