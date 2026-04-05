@@ -72,14 +72,14 @@ The engine is fully functional for individual and small-team use:
 
 | Gap | Phase | Priority |
 |---|---|---|
-| Hook lifecycle system (pre/post tool use, session events) | Phase 20 | High |
-| Specialized agent definitions (role templates + model routing) | Phase 21 | High |
-| Verification loop & quality gates | Phase 22 | High |
-| Governance, security monitoring & audit | Phase 23 | Medium |
-| Skills system (composable workflow packages) | Phase 24 | Medium |
-| Multi-layered memory (session summaries, learned patterns, instincts) | Phase 25 | Medium |
-| Cost tracking & token budget management | Phase 26 | Medium |
-| Eval-driven development framework | Phase 27 | Lower |
+| Hook lifecycle system (7 events, 3 profiles, ~16 built-in hooks) | Phase 20 | High |
+| Specialized agent definitions (24 templates: 10 general, 8 code, 6 creative/domain) | Phase 21 | High |
+| Verification loop & quality gates (6 phases) | Phase 22 | High |
+| Governance, security monitoring & audit (6 components) | Phase 23 | Medium |
+| Skills system (32 built-in skills across 7 domains) | Phase 24 | Medium |
+| Multi-layered memory (3 layers: session summaries, learned patterns, instincts) | Phase 25 | Medium |
+| Cost tracking & token budget management (4 components) | Phase 26 | Medium |
+| Eval-driven development framework (3 grader types, 2 metrics) | Phase 27 | Lower |
 | Enterprise auth & multi-tenancy (per-user tokens, session ownership) | Phase 28 (deferred) | Deferred |
 | Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 29 (deferred) | Deferred |
 | VS Code native extension | Phase 30 (deferred — nice-to-have) | Deferred |
@@ -918,7 +918,7 @@ Supervisor Agent (ConversationRuntime)
 
 ### Phase 20 — Hook Lifecycle System
 
-**Inspired by:** everything-claude-code (34 hooks across 6 lifecycle events)
+**Inspired by:** everything-claude-code (34 hooks across 7 lifecycle events, ~16 built-in implementations)
 **Depends on:** None — can be implemented independently
 
 **Goal:** Add an event-driven hook system that fires user-defined scripts at key points in the agent lifecycle: before/after tool use, session start/end, pre-compaction, and response stop. This enables quality enforcement, security monitoring, cost tracking, and memory persistence without modifying the core agent loop.
@@ -986,27 +986,53 @@ Three enforcement levels configurable via `SOVRANT_HOOK_PROFILE`:
 
 ### Phase 21 — Specialized Agent Definitions (Role Templates + Model Routing)
 
-**Inspired by:** everything-claude-code (28 specialized agents with tool restrictions and model selection)
+**Inspired by:** everything-claude-code (38 specialized agents with tool restrictions and model selection)
 **Depends on:** Phase 18+19 (multi-agent team tools — already complete)
 
-**Goal:** Define a library of specialized agent role templates — planner, architect, code reviewer, security reviewer, TDD guide, refactor cleaner — each with a structured methodology, constrained tool access, and model routing (Opus-class for reasoning, Sonnet-class for execution). These templates are loaded by `TeamCreate` and `AgentTool` to spawn purpose-built sub-agents.
+**Goal:** Define a library of **24 specialized agent role templates** spanning coding, research, communication, operations, and creative work — each with a structured methodology, constrained tool access, and model routing (Opus-class for reasoning, Sonnet-class for execution, Haiku-class for fast triage). These templates are loaded by `TeamCreate` and `AgentTool` to spawn purpose-built sub-agents. Sovrant is a general-purpose agentic platform — coding is one vertical, not the entire product.
 
 #### Why this is high priority
 
-The team tools exist (Phase 18+19) but agents are generic — they get a role enum and a freeform prompt. Structured role templates with defined methodologies, tool restrictions, and output formats make agents dramatically more effective. This is the difference between "ask an LLM to review code" and "run a structured 4-phase security review with OWASP Top 10 checklist and severity tiers."
+The team tools exist (Phase 18+19) but agents are generic — they get a role enum and a freeform prompt. Structured role templates with defined methodologies, tool restrictions, and output formats make agents dramatically more effective. This is the difference between "ask an LLM to do research" and "run a structured 6-step deep research workflow with source attribution and confidence scoring."
 
-#### Agent Templates
+#### Agent Templates — General-Purpose (10 templates)
 
 | Template | Model Tier | Tools | Methodology |
 |---|---|---|---|
 | **Planner** | Opus | Read, Grep, Glob (read-only) | Requirements analysis → architecture review → step breakdown → implementation ordering |
 | **Architect** | Opus | Read, Grep, Glob (read-only) | System design, trade-off analysis, ADR generation, scalability review |
+| **Researcher** | Opus | Read, Grep, Glob, WebSearch, WebFetch | Multi-source research with citation, 6-step workflow (scope → search → evaluate → synthesize → cite → report) |
+| **Chief of Staff** | Opus | Read, Grep, Glob, Bash, Edit, Write | Multi-channel communication triage (email, Slack, calendar), 4-tier priority classification, response drafting |
+| **Content Writer** | Sonnet | Read, Write, Edit, WebSearch | Long-form content creation with voice matching, anti-slop enforcement, multi-platform adaptation |
+| **Data Analyst** | Sonnet | Read, Grep, Glob, Bash | Data exploration, pattern detection, visualization generation, statistical analysis |
+| **Project Manager** | Sonnet | Read, Grep, Glob, Edit | Issue triage, cross-system coordination (GitHub/Linear/Jira), status tracking, dependency mapping |
+| **Doc Updater** | Sonnet | Read, Write, Edit, Grep, Glob | Documentation sync with code changes, API doc generation, changelog maintenance |
+| **Loop Operator** | Sonnet | Read, Grep, Glob, Bash, Edit | Safe autonomous loop management with monitoring, stall detection, and human escalation triggers |
+| **Executor** | Sonnet | Bash, PowerShell, Read | Run commands, monitor output, report results |
+
+#### Agent Templates — Code-Specific (8 templates)
+
+| Template | Model Tier | Tools | Methodology |
+|---|---|---|---|
 | **Code Reviewer** | Opus | Read, Grep, Glob (read-only) | Multi-severity review (CRITICAL/HIGH/MEDIUM/LOW) with confidence thresholds |
 | **Security Reviewer** | Opus | Read, Grep, Glob (read-only) | OWASP Top 10 scan, secret detection, dependency audit, attack surface analysis |
 | **TDD Guide** | Sonnet | All | Red-Green-Refactor cycle enforcement, 80%+ coverage target, edge case generation |
 | **Refactor Cleaner** | Sonnet | Read, Grep, Glob, Edit | Dead code detection, safe incremental removal with SAFE/CAREFUL/RISKY classification |
 | **Coder** | Sonnet | All | Implementation from specs, test writing, error handling |
-| **Executor** | Sonnet | Bash, PowerShell, Read | Run commands, monitor output, report results |
+| **Build Error Resolver** | Sonnet | Read, Grep, Glob, Bash | Parse build errors, identify root cause, apply fix, verify build passes |
+| **E2E Test Runner** | Sonnet | Read, Bash, Grep | Playwright/Selenium E2E test execution, failure analysis, screenshot capture |
+| **Database Reviewer** | Opus | Read, Grep, Glob (read-only) | Schema review, query optimization, migration safety analysis |
+
+#### Agent Templates — Creative & Domain (6 templates)
+
+| Template | Model Tier | Tools | Methodology |
+|---|---|---|---|
+| **GAN Planner** | Opus | Read, Grep, Glob | Expands briefs into comprehensive product specs with success criteria |
+| **GAN Generator** | Sonnet | All | Implements features per spec, manages sprint iterations |
+| **GAN Evaluator** | Opus | Read, Bash, Grep | Tests live apps against rubric, scores 4 dimensions (design, originality, craft, functionality) |
+| **Prompt Optimizer** | Opus | Read, Write, Edit | 6-phase prompt analysis: gap identification, ecosystem mapping, structure optimization |
+| **Sales Intelligence** | Sonnet | Read, WebSearch, WebFetch | Lead scoring, prospecting pipeline, warm-path discovery, outreach draft generation |
+| **Compliance Reviewer** | Opus | Read, Grep, Glob (read-only) | Policy adherence verification, PHI/PII detection, regulatory checklist enforcement |
 
 #### Architecture
 
@@ -1054,7 +1080,7 @@ You are a security-focused code reviewer specializing in OWASP Top 10...
 3. Update `SovrantAgentFactory` to accept `AgentTemplate` and map `ModelTier` → model name
 4. Update `TeamCreateTool` to accept a `template` parameter (e.g., `"security-reviewer"`)
 5. Update `AgentTool` to accept an optional `template` parameter for ad-hoc sub-agents
-6. Ship 8 built-in templates (planner, architect, code-reviewer, security-reviewer, tdd-guide, refactor-cleaner, coder, executor)
+6. Ship **24 built-in templates**: 10 general-purpose, 8 code-specific, 6 creative/domain
 7. Tests: template loading, model tier mapping, tool restriction enforcement, user template override
 
 ---
@@ -1183,11 +1209,11 @@ Three levels: `minimal` (audit only), `standard` (audit + warn), `strict` (audit
 **Inspired by:** everything-claude-code (156+ skills as directory-based workflow definitions)
 **Depends on:** Phase 20 (hooks — skills can trigger hooks), Phase 21 (agent templates — skills can spawn agents)
 
-**Goal:** A modular system for packaging multi-step workflows as reusable, composable "skills" — each a directory containing a definition file (`SKILL.md`), optional agent configurations, and activation triggers. Skills are invoked via `/skill-name` slash commands or programmatically by agents.
+**Goal:** A modular system for packaging multi-step workflows as reusable, composable "skills" — each a directory containing a definition file (`SKILL.md`), optional agent configurations, and activation triggers. Skills are invoked via `/skill-name` slash commands or programmatically by agents. Ship with **32 built-in skills** across 7 domains — coding is just one.
 
 #### Why this matters
 
-Today Sovrant has a basic `SkillTool` that loads markdown files as system prompt overlays. The everything-claude-code approach is richer: skills are full workflow definitions with steps, agent delegation, tool restrictions, and cross-harness compatibility. This turns Sovrant from a tool-using agent into a workflow engine.
+Today Sovrant has a basic `SkillTool` that loads markdown files as system prompt overlays. The everything-claude-code approach is richer: skills are full workflow definitions with steps, agent delegation, tool restrictions, and cross-harness compatibility. Sovrant is a general-purpose agentic platform — chat, research, writing, business ops, project management, and coding. The skill system turns Sovrant from a tool-using agent into a workflow engine that serves all these verticals.
 
 #### Skill Structure
 
@@ -1198,49 +1224,109 @@ Today Sovrant has a basic `SkillTool` that loads markdown files as system prompt
     agents.json           ← optional: agent templates to spawn for this skill
   code-review/
     SKILL.md
-  verification-loop/
-    SKILL.md
   deep-research/
+    SKILL.md
+  article-writing/
+    SKILL.md
+  market-research/
     SKILL.md
 ```
 
 `SKILL.md` format:
 ```markdown
 ---
-name: tdd-workflow
-description: Red-Green-Refactor cycle with coverage enforcement
-trigger: /tdd
-agents: [tdd-guide]
-tools: [Read, Write, Edit, Bash, Grep]
+name: deep-research
+description: Multi-source research with citation and confidence scoring
+trigger: /research
+agents: [researcher]
+tools: [Read, Grep, Glob, WebSearch, WebFetch]
 ---
 
-# TDD Workflow
+# Deep Research
 
 ## Steps
-1. Identify the feature or bug to test
-2. Write a failing test (Red)
-3. Write minimal code to pass (Green)
-4. Refactor while tests stay green
-5. Verify coverage ≥ 80%
+1. Define research scope and questions
+2. Search multiple sources (web, docs, codebase)
+3. Evaluate source quality and relevance
+4. Synthesize findings with cross-reference
+5. Generate cited report with confidence levels
+6. Identify gaps and suggest follow-up queries
 
 ## Output Format
-- Test file path
-- Coverage report
-- Refactoring notes
+- Executive summary
+- Detailed findings with citations
+- Confidence assessment per finding
+- Recommended next steps
 ```
 
-#### Built-in Skills (ship with engine)
+#### Built-in Skills — 32 skills across 7 domains
+
+**Research & Intelligence (5 skills)**
+
+| Skill | Trigger | What it does |
+|---|---|---|
+| `deep-research` | `/research` | Multi-source research from 15-30 sources with cited reports |
+| `market-research` | `/market` | Competitive analysis, market sizing, source-attributed business intelligence |
+| `data-scraper` | `/scrape` | Autonomous data collection pipeline: collect → enrich → store with scheduling |
+| `doc-lookup` | `/docs-lookup` | API and documentation research with structured extraction |
+| `search-first` | `/search-first` | Forces web/doc lookup before any implementation begins |
+
+**Writing & Content (5 skills)**
+
+| Skill | Trigger | What it does |
+|---|---|---|
+| `article-writing` | `/article` | Long-form blog posts, essays, newsletters with voice matching and anti-slop rules |
+| `content-engine` | `/content` | Multi-platform content for social, newsletters, blogs — repurposes anchor content |
+| `brand-voice` | `/brand-voice` | Extracts durable voice profiles from 5-20 writing samples |
+| `crosspost` | `/crosspost` | Adapts content across platforms (X, LinkedIn, Threads) with per-platform rules |
+| `slides` | `/slides` | HTML presentations and PPTX conversion |
+
+**Business & Operations (5 skills)**
+
+| Skill | Trigger | What it does |
+|---|---|---|
+| `investor-materials` | `/pitch` | Pitch decks (12-slide structure), one-pagers, financial models |
+| `lead-intelligence` | `/leads` | AI-native prospecting: signal scoring, mutual ranking, warm-path discovery |
+| `billing-ops` | `/billing` | Subscription management, refund triage, churn analysis, plan optimization |
+| `connections-optimizer` | `/network` | Network pruning, expansion, rebalancing with warm-path outreach drafts |
+| `product-lens` | `/product` | Product analysis, feature evaluation, competitive positioning |
+
+**Project Management (4 skills)**
+
+| Skill | Trigger | What it does |
+|---|---|---|
+| `plan` | `/plan` | Structured planning with phased implementation and dependency mapping |
+| `project-flow` | `/flow` | GitHub + Linear/Jira coordination, issue triage, cross-system consistency |
+| `team-builder` | `/team` | Interactive agent selection and parallel dispatch with result synthesis |
+| `architecture-decision` | `/adr` | Structured ADR creation and management |
+
+**Coding & Quality (7 skills)**
 
 | Skill | Trigger | What it does |
 |---|---|---|
 | `tdd-workflow` | `/tdd` | Red-Green-Refactor with coverage enforcement |
-| `code-review` | `/review` | Multi-severity code review |
+| `code-review` | `/review` | Multi-severity code review (CRITICAL/HIGH/MEDIUM/LOW) |
 | `verification-loop` | `/verify` | 6-phase quality gate (Phase 22) |
-| `deep-research` | `/research` | Multi-source research with citation |
-| `plan` | `/plan` | Structured planning with phased implementation |
 | `security-review` | `/security` | OWASP-based security audit |
 | `refactor` | `/refactor` | Dead code detection + safe removal |
-| `doc-update` | `/docs` | Documentation maintenance |
+| `doc-update` | `/docs` | Documentation maintenance synced with code changes |
+| `codebase-onboard` | `/onboard` | New contributor onboarding — architecture walkthrough, key patterns, setup guide |
+
+**Media & Creative (3 skills)**
+
+| Skill | Trigger | What it does |
+|---|---|---|
+| `media-gen` | `/media` | Image, video, audio generation via AI services (fal.ai, etc.) |
+| `video-explainer` | `/explainer` | Animated technical explainers with progressive reveal |
+| `ui-demo` | `/ui-demo` | Interactive UI demonstration creation |
+
+**Agent Infrastructure (3 skills)**
+
+| Skill | Trigger | What it does |
+|---|---|---|
+| `autonomous-loop` | `/loop` | 6 loop patterns from simple pipelines to DAG orchestration with merge queues |
+| `prompt-optimize` | `/optimize-prompt` | 6-phase prompt analysis: gap identification, structure optimization |
+| `skill-create` | `/new-skill` | Define new skills at runtime from successful workflow patterns |
 
 #### Architecture
 
@@ -1259,7 +1345,7 @@ src/Sovrant.Tools/Skills/
 3. Update `SkillTool` to use `SkillRegistry` for discovery and execution
 4. Implement `SkillRunner` — applies system prompt overlay, optionally spawns agent templates
 5. Add `SkillCreate` tool for agents to define new skills at runtime
-6. Ship 8 built-in skills
+6. Ship **32 built-in skills**: 5 research, 5 writing, 5 business, 4 project management, 7 coding, 3 media, 3 agent infrastructure
 7. Register skill triggers as slash commands in `SlashCommandDispatcher`
 8. Tests: skill discovery, frontmatter parsing, execution, trigger registration
 
@@ -1390,11 +1476,11 @@ Phase 9.5 already tracks `TotalInputTokens` and `TotalOutputTokens` per session 
 **Inspired by:** everything-claude-code (eval harness with pass@k metrics, capability/regression evals, multiple grader types)
 **Depends on:** Phase 22 (verification loop), Phase 21 (agent templates)
 
-**Goal:** A formal evaluation framework for testing agent behavior itself — not just the code it produces. Define expected behaviors as evals, run them against agent sessions, and track pass@k metrics over time. This is how you measure whether agent improvements actually improve outcomes.
+**Goal:** A formal evaluation framework for testing agent behavior itself — not just the code it produces. Define expected behaviors as evals, run them against agent sessions, and track pass@k metrics over time. This applies to all agent verticals: "Does the research agent cite sources?" "Does the content writer avoid slop phrases?" "Does the planner create actionable steps?" — not just coding tasks.
 
 #### Why this matters
 
-Unit tests verify code. Evals verify the agent. "Does the agent correctly identify security vulnerabilities?" "Does it write tests before code when asked?" "Does it use the right framework conventions?" These questions can't be answered by running `dotnet test` — they require evaluating the agent's behavior against structured expectations.
+Unit tests verify code. Evals verify the agent. "Does the agent correctly identify security vulnerabilities?" "Does the research agent produce cited, multi-source reports?" "Does the content writer match the brand voice?" "Does the planner break tasks into parallelizable sub-tasks?" These questions can't be answered by running `dotnet test` — they require evaluating the agent's behavior against structured expectations across every domain Sovrant serves.
 
 #### Eval Types
 
