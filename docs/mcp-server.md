@@ -227,6 +227,73 @@ All standard Sovrant environment variables (`ROUTER_MODE`, `ROUTER_STRATEGY`, `L
 
 ---
 
+## MCP OAuth Authentication (McpAuth tool)
+
+Some MCP servers require OAuth authorization before they can be used (e.g., GitHub MCP server requires a GitHub OAuth app token). Sovrant handles this through the `McpAuth` tool and a lightweight OAuth 2.0 Authorization Code + PKCE flow that runs through the Sovrant HTTP server.
+
+### Prerequisites
+
+- `Sovrant.Server` must be running on port 5200 (or `SOVRANT_PORT`)
+- The OAuth app's redirect URI must be registered as `http://localhost:{SOVRANT_PORT}/v1/mcp/auth/callback`
+
+### Configuration
+
+Add `oauth_config` to an MCP server entry in `settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "oauth_config": {
+        "client_id": "your-github-oauth-app-client-id",
+        "authorization_url": "https://github.com/login/oauth/authorize",
+        "token_url": "https://github.com/login/oauth/access_token",
+        "scopes": ["repo", "read:org"],
+        "token_env_var": "GITHUB_TOKEN",
+        "redirect_uri": "http://localhost:5200/v1/mcp/auth/callback"
+      }
+    }
+  }
+}
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `client_id` | Yes | Your OAuth app's client ID |
+| `client_secret` | No | Client secret (omit for public clients — PKCE is always used) |
+| `authorization_url` | Yes | Provider's authorization endpoint |
+| `token_url` | Yes | Provider's token endpoint |
+| `scopes` | No | OAuth scopes to request |
+| `token_env_var` | No | Env var to inject the access token into when reconnecting the MCP process |
+| `redirect_uri` | No | Redirect URI override (default: `http://localhost:{SOVRANT_PORT}/v1/mcp/auth/callback`) |
+
+### Flow
+
+1. The model detects an MCP tool call fails with an auth error (or the user asks to authorize an MCP server).
+2. The model calls the `McpAuth` tool with `{ "server": "github" }`.
+3. Sovrant generates an authorization URL (PKCE challenge included) and returns it as text.
+4. The model surfaces the URL to the user: _"Please visit this URL to authorize GitHub access: https://github.com/..."_
+5. The user visits the URL, approves access in their browser.
+6. GitHub redirects to `http://localhost:5200/v1/mcp/auth/callback?code=...&state=...`
+7. Sovrant exchanges the code for an access token, stores it encrypted in `~/.sovrant/credentials/`.
+8. If `token_env_var` is set, Sovrant reconnects the MCP server process with the token injected as that environment variable.
+9. The user sees a success page and closes the tab — no further action needed.
+
+### Credential storage
+
+Tokens are stored AES-256-GCM encrypted in `~/.sovrant/credentials/`. The master encryption key lives in `~/.sovrant/credentials/.keystore` (user-only permissions on POSIX). Tokens are **never** written to session history, logs, or any other file.
+
+### Security notes
+
+- PKCE (`code_challenge_method=S256`) is always used, even when a `client_secret` is present.
+- OAuth state parameters expire after **10 minutes** — attempts to replay a callback after expiry are rejected.
+- The `/v1/mcp/auth/callback` endpoint is exempt from bearer token authentication (the OAuth provider redirects there without credentials). The CSRF `state` parameter is the security control.
+- The callback endpoint is only accessible if `Sovrant.Server` is running locally — it is not exposed to the internet.
+
+---
+
 ## How It Works
 
 1. The IDE starts `sovrant mcp-server` as a child process.

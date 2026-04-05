@@ -128,6 +128,33 @@ public sealed partial class McpToolRegistrar : IAsyncDisposable
         return dict;
     }
 
+    /// <summary>
+    /// Replaces the MCP client for a named server — used after OAuth token acquisition.
+    /// The old client is disposed, a fresh one is created with the updated config, and
+    /// all tools previously registered from that server are re-registered with the new client.
+    /// </summary>
+    public async Task ReconnectServerAsync(
+        string serverName,
+        McpServerConfig config,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(serverName);
+        ArgumentNullException.ThrowIfNull(config);
+
+        // Dispose the old client for this server if one was tracked.
+        var existing = _clientRegistry.Clients.TryGetValue(serverName, out var old) ? old : null;
+        if (existing is not null)
+        {
+            _clients.Remove(existing);
+            await existing.DisposeAsync().ConfigureAwait(false);
+        }
+
+        var client = await _clientFactory.CreateAsync(serverName, config, ct).ConfigureAwait(false);
+        _clients.Add(client);
+        _clientRegistry.Register(serverName, client);
+        await RegisterFromClientAsync(serverName, client, ct).ConfigureAwait(false);
+    }
+
     /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {

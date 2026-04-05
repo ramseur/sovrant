@@ -34,4 +34,10 @@ public abstract record RuntimeEvent
 
     /// <summary>An error occurred during the turn.</summary>
     public sealed record RuntimeError(string Message) : RuntimeEvent;
+
+    /// <summary>
+    /// An MCP server requires OAuth authorization before it can be used.
+    /// The authorization URL should be surfaced to the user so they can complete the flow.
+    /// </summary>
+    public sealed record AuthRequired(string ServerName, Uri AuthorizationUrl) : RuntimeEvent;
 }

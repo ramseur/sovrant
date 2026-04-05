@@ -71,4 +71,48 @@ public sealed class McpServerConfig
     /// <summary>Additional environment variables to set for the MCP server process.</summary>
     public IReadOnlyDictionary<string, string> Env { get; init; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Optional OAuth 2.0 configuration for MCP servers that require authorization.
+    /// When present, the <c>McpAuth</c> tool can initiate the OAuth flow to obtain
+    /// an access token, which is then injected as an environment variable on reconnect.
+    /// </summary>
+    public McpOAuthConfig? OAuthConfig { get; init; }
+}
+
+/// <summary>
+/// OAuth 2.0 (Authorization Code + PKCE) configuration for an MCP server.
+/// </summary>
+public sealed class McpOAuthConfig
+{
+    /// <summary>The OAuth client ID registered with the authorization server.</summary>
+    public string ClientId { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The OAuth client secret. Leave empty for public clients (PKCE-only flows).
+    /// </summary>
+    public string ClientSecret { get; init; } = string.Empty;
+
+    /// <summary>The authorization endpoint URL — where users are redirected to log in.</summary>
+    public Uri? AuthorizationUrl { get; init; }
+
+    /// <summary>The token endpoint URL — where the authorization code is exchanged for tokens.</summary>
+    public Uri? TokenUrl { get; init; }
+
+    /// <summary>OAuth scopes to request during authorization.</summary>
+    public IReadOnlyList<string> Scopes { get; init; } = [];
+
+    /// <summary>
+    /// The name of the environment variable to set when reconnecting the MCP server process
+    /// after a successful OAuth flow. The access token value is injected under this name.
+    /// Example: <c>"GITHUB_TOKEN"</c>.
+    /// </summary>
+    public string TokenEnvVar { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Optional redirect URI override.
+    /// Defaults to <c>http://localhost:{SOVRANT_PORT}/v1/mcp/auth/callback</c>.
+    /// Must match a URI registered with the OAuth provider.
+    /// </summary>
+    public Uri? RedirectUri { get; init; }
 }

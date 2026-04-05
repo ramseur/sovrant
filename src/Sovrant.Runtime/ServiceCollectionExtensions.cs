@@ -51,6 +51,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMcpClientFactory, SovrantMcpClientFactory>();
         services.AddSingleton<McpClientRegistry>();
         services.AddSingleton<McpToolRegistrar>();
+        services.AddSingleton<ICredentialStore, AesGcmCredentialStore>();
+        services.AddSingleton<McpOAuthService>();
 
         // Conversation runtime — transient so the pool creates independent instances per session.
         services.AddTransient<IConversationRuntime, ConversationRuntime>();
