@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Models;
 
-namespace Sovrant.Agents.Modern;
+namespace Sovrant.Agents.Shared;
 
 /// <summary>
 /// Base class for in-process agents. Subclasses override <see cref="HandleAsync"/> to

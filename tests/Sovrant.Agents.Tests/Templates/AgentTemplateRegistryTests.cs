@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Agents.Models;
-using Sovrant.Agents.Modern;
+using Sovrant.Agents.Shared;
 using Sovrant.Agents.Templates;
 using Sovrant.Runtime.Config;
 

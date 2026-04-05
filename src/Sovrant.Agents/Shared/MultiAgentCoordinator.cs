@@ -4,7 +4,7 @@ using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Config;
 using Sovrant.Agents.Models;
 
-namespace Sovrant.Agents.Modern;
+namespace Sovrant.Agents.Shared;
 
 /// <summary>
 /// Routes tasks to registered agents and manages the task lifecycle for

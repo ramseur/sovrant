@@ -36,7 +36,7 @@
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |
-| Phase 17.5 agent scaffolding | ✅ Implemented | `Sovrant.Agents` project: `IAgent`, `IMultiAgentSystem`, dual backends (modern + legacy), `AGENT_MODE` config switch, `SovrantAgentFactory`, `AgentPrompts`, `FilteredToolRegistry`. Wired into CLI and Server DI via `AddMultiAgentSystem()`. |
+| Phase 17.5 agent scaffolding | ✅ Implemented | `Sovrant.Agents` project: `IAgent`, `IMultiAgentSystem`, dual backends (isolated + shared), `AGENT_MODE` config switch, `SovrantAgentFactory`, `AgentPrompts`, `FilteredToolRegistry`. Wired into CLI and Server DI via `AddMultiAgentSystem()`. |
 | Phase 18+19 multi-agent teams | ✅ Implemented | `ITeamRegistry` + `InMemoryTeamRegistry`, 4 team tools (`TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`), `MultiAgentCoordinator` (semaphore concurrency, linked CTS + timeout), `ProcessAgent` (stdin/stdout, process tree kill), `SovrantAgent` (runtime-backed), 6 role-specific `AgentPrompts`. 58 tests in `Sovrant.Agents.Tests`. |
 | OpenAI Responses API provider | ✅ Implemented + tested | `OpenAiResponsesProvider` routes through `POST /v1/responses` when `LLM_WEB_SEARCH=true`. Injects `web_search_preview`, suppresses `WebSearch` function tool, full multi-turn agentic loop support. |
 | Phase 7 hardening | ✅ Complete | Context auto-compaction (`SOVRANT_COMPACT_THRESHOLD`, default 80k tokens); BashTool 256 KB cap + dangerous env stripping; WebFetchTool SSRF guard (RFC-1918, loopback, link-local, non-HTTP(S)); provider retry 3×(1s/2s/4s) on 429/5xx; AgentTool recursion depth ≤ 5; ReadFileTool 10 MB cap; GlobTool 1000-file cap; atomic writes in Write/Edit tools. |
@@ -235,7 +235,7 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 | `OLLAMA_BASE_URL` | No | Enables the local Ollama provider (default when set: `http://localhost:11434/v1`) |
 | `ROUTER_MODE` | No | `Smart` (default) or `Fixed`. Overrides `Router:Mode` in config. |
 | `ROUTER_STRATEGY` | No | `Balanced` (default), `Latency`, or `Cost`. Overrides `Router:Strategy` in config. |
-| `AGENT_MODE` | No | `modern` (default, in-process async channels) or `legacy` (process-per-agent stdio). Controls the `IMultiAgentSystem` backend used by team tools. |
+| `AGENT_MODE` | No | `isolated` (default, process-per-agent stdio) or `shared` (in-process async channels). Controls the `IMultiAgentSystem` backend used by team tools. |
 | `SOVRANT_MCP_TOKEN` | No | Required bearer token for MCP server mode. If set, callers must pass `--token <value>` matching this. Unset = no auth. |
 | `SOVRANT_MCP_TOOLS` | No | Comma-separated allow-list of tool names to expose via MCP server. Unset = all tools. `chat` always passes. |
 | `LLM_WEB_SEARCH` | No | Set to `true` to use the model's native web search capability (e.g. OpenAI `web_search_preview`). No external API key needed. |

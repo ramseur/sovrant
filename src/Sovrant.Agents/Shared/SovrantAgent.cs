@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Agents.Models;
 using Sovrant.Runtime.Conversation;
 
-namespace Sovrant.Agents.Modern;
+namespace Sovrant.Agents.Shared;
 
 /// <summary>
 /// An in-process agent backed by a <see cref="IConversationRuntime"/>. Runs a full

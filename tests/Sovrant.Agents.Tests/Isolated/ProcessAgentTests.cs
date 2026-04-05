@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging.Abstractions;
-using Sovrant.Agents.Legacy;
+using Sovrant.Agents.Isolated;
 using Sovrant.Agents.Models;
 
-namespace Sovrant.Agents.Tests.Legacy;
+namespace Sovrant.Agents.Tests.Isolated;
 
 public sealed class ProcessAgentTests
 {

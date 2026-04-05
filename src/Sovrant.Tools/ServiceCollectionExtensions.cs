@@ -97,7 +97,7 @@ public static class ServiceCollectionExtensions
         {
             var registry = sp.GetRequiredService<Sovrant.Agents.Teams.ITeamRegistry>();
             var agentSystem = sp.GetRequiredService<Sovrant.Agents.Abstractions.IMultiAgentSystem>();
-            var factory = sp.GetRequiredService<Sovrant.Agents.Modern.SovrantAgentFactory>();
+            var factory = sp.GetRequiredService<Sovrant.Agents.Shared.SovrantAgentFactory>();
             return new TeamDelegateTool(registry, agentSystem, member => factory.Create(member));
         });
 

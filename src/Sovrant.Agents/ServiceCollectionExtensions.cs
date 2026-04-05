@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Config;
-using Sovrant.Agents.Modern;
+using Sovrant.Agents.Shared;
 using Sovrant.Agents.Teams;
 using Sovrant.Agents.Templates;
 
@@ -29,8 +29,8 @@ public static class ServiceCollectionExtensions
         var resolvedConfig = config ?? AgentSystemConfig.FromEnvironment();
         services.AddSingleton(resolvedConfig);
 
-        // Always register modern-backend singletons; the factory only constructs them
-        // when UseLegacyAgents == false.
+        // Always register shared-backend singletons; the factory only constructs them
+        // when UseIsolatedAgents == false.
         services.AddSingleton<MultiAgentCoordinator>();
         services.AddSingleton<WorkspaceContext>();
 

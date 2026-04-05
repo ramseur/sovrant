@@ -7,7 +7,7 @@ using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Hooks;
 using Sovrant.Runtime.Tools;
 
-namespace Sovrant.Agents.Modern;
+namespace Sovrant.Agents.Shared;
 
 /// <summary>
 /// Creates configured <see cref="SovrantAgent"/> instances from <see cref="TeamMemberInfo"/>

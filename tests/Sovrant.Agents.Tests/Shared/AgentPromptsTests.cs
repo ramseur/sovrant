@@ -1,7 +1,7 @@
 using Sovrant.Agents.Models;
-using Sovrant.Agents.Modern;
+using Sovrant.Agents.Shared;
 
-namespace Sovrant.Agents.Tests.Modern;
+namespace Sovrant.Agents.Tests.Shared;
 
 public sealed class AgentPromptsTests
 {

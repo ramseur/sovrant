@@ -5,21 +5,22 @@ namespace Sovrant.Agents.Config;
 /// <para>
 /// The simplest way to switch backends is the <c>AGENT_MODE</c> environment variable:
 /// <list type="bullet">
-///   <item><c>AGENT_MODE=legacy</c> — uses <see cref="Legacy.ProcessBasedMultiAgentSystem"/></item>
-///   <item><c>AGENT_MODE=modern</c> (or unset) — uses <see cref="Modern.InProcessMultiAgentSystem"/> (default)</item>
+///   <item><c>AGENT_MODE=isolated</c> (or unset) — uses <see cref="Isolated.ProcessBasedMultiAgentSystem"/> (default)</item>
+///   <item><c>AGENT_MODE=shared</c> — uses <see cref="Shared.InProcessMultiAgentSystem"/></item>
 /// </list>
-/// Alternatively, set <see cref="UseLegacyAgents"/> programmatically before calling
+/// Alternatively, set <see cref="UseIsolatedAgents"/> programmatically before calling
 /// <c>services.AddMultiAgentSystem(config)</c>.
 /// </para>
 /// </summary>
 public sealed class AgentSystemConfig
 {
     /// <summary>
-    /// When <see langword="true"/>, uses <see cref="Legacy.ProcessBasedMultiAgentSystem"/>
-    /// (process-per-agent, stdin/stdout). When <see langword="false"/> (default), uses
-    /// <see cref="Modern.InProcessMultiAgentSystem"/> (in-process async channels).
+    /// When <see langword="true"/> (default), uses <see cref="Isolated.ProcessBasedMultiAgentSystem"/>
+    /// (process-per-agent, stdin/stdout) for full process-level isolation. When
+    /// <see langword="false"/>, uses <see cref="Shared.InProcessMultiAgentSystem"/>
+    /// (in-process async channels, shared memory).
     /// </summary>
-    public bool UseLegacyAgents { get; init; }
+    public bool UseIsolatedAgents { get; init; } = true;
 
     /// <summary>
     /// Maximum number of agents that can execute tasks simultaneously in a single
@@ -35,15 +36,15 @@ public sealed class AgentSystemConfig
 
     /// <summary>
     /// Builds an <see cref="AgentSystemConfig"/> from the <c>AGENT_MODE</c> environment variable.
-    /// <c>AGENT_MODE=legacy</c> sets <see cref="UseLegacyAgents"/> = <see langword="true"/>;
-    /// any other value (including absent) leaves the modern default.
+    /// <c>AGENT_MODE=shared</c> sets <see cref="UseIsolatedAgents"/> = <see langword="false"/>;
+    /// any other value (including absent) keeps the isolated default.
     /// </summary>
     public static AgentSystemConfig FromEnvironment()
     {
         var mode = Environment.GetEnvironmentVariable("AGENT_MODE");
         return new AgentSystemConfig
         {
-            UseLegacyAgents = string.Equals(mode, "legacy", StringComparison.OrdinalIgnoreCase),
+            UseIsolatedAgents = !string.Equals(mode, "shared", StringComparison.OrdinalIgnoreCase),
         };
     }
 }

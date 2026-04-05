@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Agents.Models;
-using Sovrant.Agents.Modern;
+using Sovrant.Agents.Shared;
 using Sovrant.Runtime.Conversation;
 
-namespace Sovrant.Agents.Tests.Modern;
+namespace Sovrant.Agents.Tests.Shared;
 
 public sealed class SovrantAgentTests
 {

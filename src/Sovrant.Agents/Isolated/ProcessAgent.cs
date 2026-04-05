@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Models;
 
-namespace Sovrant.Agents.Legacy;
+namespace Sovrant.Agents.Isolated;
 
 /// <summary>
 /// An <see cref="IAgent"/> backed by a child process. Tasks are written as JSON to the

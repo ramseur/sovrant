@@ -1,6 +1,6 @@
 using Sovrant.Agents.Models;
 
-namespace Sovrant.Agents.Modern;
+namespace Sovrant.Agents.Shared;
 
 /// <summary>
 /// Generates role-specific system prompts for <see cref="SovrantAgent"/> instances.

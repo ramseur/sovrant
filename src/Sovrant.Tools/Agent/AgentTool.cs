@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Sovrant.Agents.Models;
-using Sovrant.Agents.Modern;
+using Sovrant.Agents.Shared;
 using Sovrant.Agents.Templates;
 using Sovrant.Api.Types;
 using Sovrant.Runtime.Conversation;

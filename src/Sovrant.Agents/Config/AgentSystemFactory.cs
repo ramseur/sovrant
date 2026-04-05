@@ -1,8 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sovrant.Agents.Abstractions;
-using Sovrant.Agents.Legacy;
-using Sovrant.Agents.Modern;
+using Sovrant.Agents.Isolated;
+using Sovrant.Agents.Shared;
 
 namespace Sovrant.Agents.Config;
 
@@ -22,7 +22,7 @@ public static class AgentSystemFactory
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(services);
 
-        if (config.UseLegacyAgents)
+        if (config.UseIsolatedAgents)
         {
             return new ProcessBasedMultiAgentSystem(
                 config,

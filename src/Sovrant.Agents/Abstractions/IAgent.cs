@@ -3,8 +3,8 @@ using Sovrant.Agents.Models;
 namespace Sovrant.Agents.Abstractions;
 
 /// <summary>
-/// An agent that handles tasks in a multi-agent system. Both process-based and
-/// in-process backends implement this interface.
+/// An agent that handles tasks in a multi-agent system. Both isolated (process-based) and
+/// shared (in-process) backends implement this interface.
 /// </summary>
 public interface IAgent
 {

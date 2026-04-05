@@ -2,16 +2,15 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Models;
 
-namespace Sovrant.Agents.Modern;
+namespace Sovrant.Agents.Shared;
 
 /// <summary>
 /// Multi-agent backend that runs agents as in-memory objects connected by async message
 /// channels. Tasks are routed by <see cref="MultiAgentCoordinator"/>. All agents share a
 /// <see cref="WorkspaceContext"/> for inter-agent state.
 /// <para>
-/// This is the recommended default backend. Activate via <c>AGENT_MODE=modern</c> (or by
-/// omitting <c>AGENT_MODE</c> entirely) or
-/// <see cref="Config.AgentSystemConfig.UseLegacyAgents"/> = <see langword="false"/>.
+/// Activate via <c>AGENT_MODE=shared</c> or
+/// <see cref="Config.AgentSystemConfig.UseIsolatedAgents"/> = <see langword="false"/>.
 /// </para>
 /// </summary>
 public sealed class InProcessMultiAgentSystem : IMultiAgentSystem, IAsyncDisposable

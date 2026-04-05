@@ -88,7 +88,7 @@
 
 ### 2.1 CancellationTokenSource Leak — MultiAgentCoordinator
 **Layer:** Agents
-**File:** `src/Sovrant.Agents/Modern/MultiAgentCoordinator.cs:69-98`
+**File:** `src/Sovrant.Agents/Shared/MultiAgentCoordinator.cs:69-98`
 **Problem:** `linkedCts` (from `CreateLinkedTokenSource`) is stored in `_taskCts` but never explicitly disposed. `TryRemove` doesn't call `Dispose()`.
 **Fix:**
 ```csharp
@@ -100,31 +100,31 @@ finally {
 
 ### 2.2 CancellationTokenSource Leak — ProcessBasedMultiAgentSystem
 **Layer:** Agents
-**File:** `src/Sovrant.Agents/Legacy/ProcessBasedMultiAgentSystem.cs:114-119`
+**File:** `src/Sovrant.Agents/Isolated/ProcessBasedMultiAgentSystem.cs:114-119`
 **Problem:** Race condition between `Dispose()` iterating `_taskCts` and `RunTaskAsync()` adding new entries.
 **Fix:** Add locking or use a disposed flag to reject new tasks during shutdown.
 
 ### 2.3 Unsafe Dictionary — MultiAgentCoordinator
 **Layer:** Agents
-**File:** `src/Sovrant.Agents/Modern/MultiAgentCoordinator.cs:17-18,42`
+**File:** `src/Sovrant.Agents/Shared/MultiAgentCoordinator.cs:17-18,42`
 **Problem:** `_agents` is a plain `Dictionary<string, IAgent>` without synchronization. Concurrent `AddAgent()` and `DispatchAsync()` calls cause `InvalidOperationException`.
 **Fix:** Use `ConcurrentDictionary<string, IAgent>`.
 
 ### 2.4 Dead Code — Discarded Agent Results in BaseAgent
 **Layer:** Agents
-**File:** `src/Sovrant.Agents/Modern/BaseAgent.cs:64`
+**File:** `src/Sovrant.Agents/Shared/BaseAgent.cs:64`
 **Problem:** `_ = await HandleAsync(task, ct)` — agent results from `RunLoopAsync` are discarded. The inbox/channel infrastructure is unused since `DispatchAsync` calls `HandleAsync` directly.
 **Fix:** Either implement result-passing mechanism or remove dead `RunLoopAsync`/`EnqueueAsync` code.
 
 ### 2.5 Coordinator Not Disposed
 **Layer:** Agents
-**File:** `src/Sovrant.Agents/Modern/InProcessMultiAgentSystem.cs:17`
+**File:** `src/Sovrant.Agents/Shared/InProcessMultiAgentSystem.cs:17`
 **Problem:** `DisposeAsync()` calls `ShutdownAsync()` but never disposes the `MultiAgentCoordinator` (which owns a `SemaphoreSlim`).
 **Fix:** Call `_coordinator?.Dispose()` in `DisposeAsync()`.
 
 ### 2.6 ProcessAgent — No ProcessStartInfo Validation
 **Layer:** Agents
-**File:** `src/Sovrant.Agents/Legacy/ProcessAgent.cs:35-51`
+**File:** `src/Sovrant.Agents/Isolated/ProcessAgent.cs:35-51`
 **Problem:** `ProcessStartInfo` is accepted without validating `FileName` or `Arguments`. Untrusted config can lead to arbitrary code execution.
 **Fix:** Validate `FileName` against an allowlist. Document that `ProcessAgent` must only be used with trusted inputs.
 
@@ -354,7 +354,7 @@ finally {
 | L23 | Tools | Multiple tools | Vague error messages without remediation guidance |
 | L24 | Tools | `NotebookEditTool.cs:2` | Potentially unused `using` statement |
 | L25 | Agents | `Program.cs:288-316` | No default case in event switch — new events silently ignored |
-| L26 | Agents | `ServiceCollectionExtensions.cs:33-34` | Modern backend singletons registered even in legacy mode |
+| L26 | Agents | `ServiceCollectionExtensions.cs:33-34` | Shared backend singletons registered even in isolated mode |
 | L27 | Agents | `Program.cs:257-283` | CLI REPL has no input length validation |
 | L28 | Agents | `ProcessAgent.cs:64` | New process per task — no pooling |
 | L29 | SDK | `sse.ts:74` | `safeJsonParse` exported but may be internal |

@@ -39,10 +39,10 @@ The engine is fully functional for individual and small-team use:
 |---|---|---|
 | Ad-hoc sub-agent (`AgentTool`) | ✅ Working | Spawns a fresh `ConversationRuntime`, runs one isolated turn, returns text. Recursion depth ≤ 5. LLM-driven parallelization. |
 | Multi-agent interfaces (`IAgent`, `IMultiAgentSystem`) | ✅ Complete | `Sovrant.Agents` project. Both backends implement the same interface. |
-| Modern backend (`MultiAgentCoordinator`) | ✅ Complete | Semaphore-based concurrency control (`MaxConcurrentAgents`), linked CTS with timeout, agent resolution by name or first-registered, proper shutdown drain. |
-| Legacy backend (`ProcessBasedMultiAgentSystem`) | ✅ Complete | Process spawn, stdin/stdout JSON, process tree kill on cancel, timeout handling. |
+| Shared backend (`MultiAgentCoordinator`) | ✅ Complete | Semaphore-based concurrency control (`MaxConcurrentAgents`), linked CTS with timeout, agent resolution by name or first-registered, proper shutdown drain. |
+| Isolated backend (`ProcessBasedMultiAgentSystem`) | ✅ Complete | Process spawn, stdin/stdout JSON, process tree kill on cancel, timeout handling. |
 | `SovrantAgent` + `SovrantAgentFactory` | ✅ Complete | Runtime-backed agents with role-specific system prompts (`AgentPrompts`) and optional tool filtering (`FilteredToolRegistry`). |
-| Config switch (`AGENT_MODE`) | ✅ Working | `modern` (default, in-process) or `legacy` (process-per-agent). |
+| Config switch (`AGENT_MODE`) | ✅ Working | `isolated` (default, process-per-agent) or `shared` (in-process). |
 | DI wiring in CLI / Server | ✅ Complete | `services.AddMultiAgentSystem()` called in both hosts. `ITeamRegistry`, `SovrantAgentFactory`, team tools all registered. |
 | Team tools | ✅ Complete | `TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`. Named agents with roles, custom prompts, tool restrictions, lifecycle tracking. |
 
@@ -800,16 +800,16 @@ src/Sovrant.Agents/
     AgentTask.cs                       ← record: Id, Prompt, AssignedAgentName, Metadata, CreatedAt
     AgentResult.cs                     ← record: TaskId, Success, Output, Error; Ok/Fail factories
     AgentRole.cs                       ← enum: General, Planner, Coder, Reviewer, Executor, Supervisor
-  Legacy/
+  Isolated/
     ProcessAgent.cs                    ← IAgent backed by ProcessStartInfo; stdin/stdout stdio
-    ProcessBasedMultiAgentSystem.cs    ← spawns ProcessAgent per task; AGENT_MODE=legacy
-  Modern/
+    ProcessBasedMultiAgentSystem.cs    ← spawns ProcessAgent per task; AGENT_MODE=isolated
+  Shared/
     BaseAgent.cs                       ← abstract IAgent with Channel<AgentTask> inbox + RunLoopAsync
     MultiAgentCoordinator.cs           ← routes tasks; per-task CTS; shutdown drain
-    InProcessMultiAgentSystem.cs       ← wraps coordinator + WorkspaceContext; AGENT_MODE=modern (default)
+    InProcessMultiAgentSystem.cs       ← wraps coordinator + WorkspaceContext; AGENT_MODE=shared (default)
     WorkspaceContext.cs                ← thread-safe ConcurrentDictionary scratch space for a run
   Config/
-    AgentSystemConfig.cs               ← UseLegacyAgents bool; MaxConcurrentAgents; TaskTimeoutSeconds
+    AgentSystemConfig.cs               ← UseIsolatedAgents bool; MaxConcurrentAgents; TaskTimeoutSeconds
     AgentSystemFactory.cs              ← static Create(config, services) → IMultiAgentSystem
   ServiceCollectionExtensions.cs       ← AddMultiAgentSystem(config?) reads AGENT_MODE env var
 ```
@@ -818,9 +818,9 @@ src/Sovrant.Agents/
 
 | Mechanism | Effect |
 |---|---|
-| `AGENT_MODE=legacy` | `ProcessBasedMultiAgentSystem` (process-per-agent) |
-| `AGENT_MODE=modern` or unset | `InProcessMultiAgentSystem` (default, recommended) |
-| `AgentSystemConfig.UseLegacyAgents = true` | Legacy, programmatic override |
+| `AGENT_MODE=isolated` | `ProcessBasedMultiAgentSystem` (process-per-agent) |
+| `AGENT_MODE=shared` or unset | `InProcessMultiAgentSystem` (shared, in-process) |
+| `AgentSystemConfig.UseIsolatedAgents = true` | Isolated (default), programmatic override |
 
 #### Fully implemented (Phase 19)
 
@@ -893,7 +893,7 @@ Supervisor Agent (ConversationRuntime)
 **Depends on:** Phase 17.5 (scaffolding), Phase 18 (team tools that will consume `IMultiAgentSystem`)
 **Status:** ✅ Complete — both backends implemented, team tools wired, 58 tests passing.
 
-**Goal:** Complete the two multi-agent backends stubbed in Phase 17.5. At this point the `TeamCreateTool` / `TeamDeleteTool` from Phase 18 will be wired to `IMultiAgentSystem` and the choice of legacy vs. modern backend becomes a runtime configuration decision.
+**Goal:** Complete the two multi-agent backends stubbed in Phase 17.5. At this point the `TeamCreateTool` / `TeamDeleteTool` from Phase 18 will be wired to `IMultiAgentSystem` and the choice of isolated vs. shared backend becomes a runtime configuration decision.
 
 #### Option A completion: `ProcessBasedMultiAgentSystem`
 
@@ -914,7 +914,7 @@ Supervisor Agent (ConversationRuntime)
 2. Implement `ProcessBasedMultiAgentSystem.RunTaskAsync` with full lifecycle management
 3. Implement `MultiAgentCoordinator.DispatchAsync` and update `ShutdownAsync`
 4. Wire `TeamCreateTool` to use `IMultiAgentSystem.RunTaskAsync` (replaces ad-hoc `ConversationRuntime` spawning in Phase 18)
-5. Add integration tests: legacy backend with a mock echo process; modern backend with a test `BaseAgent` subclass
+5. Add integration tests: isolated backend with a mock echo process; shared backend with a test `BaseAgent` subclass
 
 ---
 

@@ -3,11 +3,11 @@ using Sovrant.Agents.Models;
 namespace Sovrant.Agents.Abstractions;
 
 /// <summary>
-/// A multi-agent coordination backend. Both <c>ProcessBasedMultiAgentSystem</c> (legacy)
-/// and <c>InProcessMultiAgentSystem</c> (modern) implement this interface, making the
+/// A multi-agent coordination backend. Both <c>ProcessBasedMultiAgentSystem</c> (isolated)
+/// and <c>InProcessMultiAgentSystem</c> (shared) implement this interface, making the
 /// rest of the system backend-agnostic.
 /// The active backend is selected at startup via <c>AGENT_MODE</c> or
-/// <see cref="Config.AgentSystemConfig.UseLegacyAgents"/>.
+/// <see cref="Config.AgentSystemConfig.UseIsolatedAgents"/>.
 /// </summary>
 public interface IMultiAgentSystem
 {

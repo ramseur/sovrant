@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace Sovrant.Agents.Modern;
+namespace Sovrant.Agents.Shared;
 
 /// <summary>
 /// Shared, thread-safe scratch space for agents collaborating on a task. Holds named

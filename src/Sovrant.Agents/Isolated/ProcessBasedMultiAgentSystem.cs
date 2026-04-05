@@ -4,16 +4,16 @@ using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Config;
 using Sovrant.Agents.Models;
 
-namespace Sovrant.Agents.Legacy;
+namespace Sovrant.Agents.Isolated;
 
 /// <summary>
 /// Multi-agent backend that spawns a separate process per agent. Agents communicate via
 /// stdin/stdout and output is streamed incrementally. Tool-use messages are parsed in the
 /// same format as the original OpenClaude process-based agent protocol.
 /// <para>
-/// Activate via <c>AGENT_MODE=legacy</c> or
-/// <see cref="AgentSystemConfig.UseLegacyAgents"/> = <see langword="true"/>.
-/// The modern in-process backend is preferred for new deployments.
+/// This is the default backend. Activate via <c>AGENT_MODE=isolated</c> (or by omitting
+/// <c>AGENT_MODE</c> entirely) or
+/// <see cref="AgentSystemConfig.UseIsolatedAgents"/> = <see langword="true"/>.
 /// </para>
 /// </summary>
 public sealed partial class ProcessBasedMultiAgentSystem : IMultiAgentSystem, IDisposable
