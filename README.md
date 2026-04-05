@@ -31,7 +31,6 @@ The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HT
 - [Production Deployment](#production-deployment)
 - [Tests](#tests)
 - [Documentation](#documentation)
-- [Roadmap](#roadmap)
 
 ---
 
@@ -599,23 +598,5 @@ dotnet test Sovrant.slnx   # 416 tests across 9 projects
 | [`docs/ci-cd.md`](docs/ci-cd.md) | CI/CD integration — `--ci` flag, GitHub Actions action, GitLab CI template |
 | [`docs/webhooks.md`](docs/webhooks.md) | Webhook endpoint, Slack bot setup, Teams/Discord integration guides |
 | [`docs/mcp-server.md`](docs/mcp-server.md) | MCP server mode — IDE config, available tools/resources, env vars |
-| [`docs/roadmap.md`](docs/roadmap.md) | Full development roadmap — 31 phases, current status, upcoming features |
 | [`docs/code-review.md`](docs/code-review.md) | Code review findings and coverage report |
 
----
-
-## Roadmap
-
-See [`docs/roadmap.md`](docs/roadmap.md) for the full development roadmap. Upcoming phases include:
-
-| Phase | What |
-|---|---|
-| 20 | Hook lifecycle system (7 events, 3 profiles) |
-| 21 | 24 specialized agent templates across 3 categories |
-| 22 | Verification loop & quality gates (6 phases) |
-| 23 | Governance, security monitoring & audit |
-| 24 | 32 built-in skills across 7 domains |
-| 25 | Multi-layered memory (session summaries, learned patterns, instincts) |
-| 26 | Cost tracking & token budget management |
-| 27 | Eval-driven development framework |
-| 28 | Swarm orchestrator (auto-decomposition + DAG execution) |
