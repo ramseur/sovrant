@@ -8,7 +8,7 @@ The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HT
 
 **Runtime:** .NET 10 / C# 13
 **License:** [see LICENSE]
-**Status:** Engine fully functional. 41 tools. 14 server endpoints. Multi-agent team orchestration. MCP server mode. Frontend SDK. 416 tests passing.
+**Status:** Engine fully functional. 41 tools. 14 server endpoints. Multi-agent team orchestration. MCP server mode. Frontend SDK. 487 tests passing.
 
 ---
 
@@ -43,7 +43,7 @@ Connect to **any OpenAI-compatible API** — OpenAI, Anthropic (via proxy), Goog
 Agents autonomously use tools for file operations (read, write, edit, glob, grep), shell execution (Bash, PowerShell, REPL), web access (fetch, search), task management, plan/worktree mode, notebook editing, MCP resource access, LSP code intelligence, and multi-agent delegation. Up to 20 tool rounds per turn with automatic retries.
 
 ### Multi-Agent Team Orchestration
-Create persistent named agents with specific roles, custom system prompts, and tool restrictions. Delegate tasks, track lifecycle status, and coordinate teams — all from within the agentic loop or via API. Two interchangeable backends: in-process async (default) or process-per-agent for hard isolation.
+Create persistent named agents with specific roles, custom system prompts, and tool restrictions. Delegate tasks, track lifecycle status, and coordinate teams — all from within the agentic loop or via API. Two interchangeable backends: process-per-agent for hard isolation (default) or in-process async for lower overhead.
 
 ### Session Persistence
 Every conversation is stored as a JSONL append-log. Resume sessions by name across CLI invocations or HTTP requests. The server keeps one runtime per session in memory for instant history access. Automatic context compaction when conversations exceed token limits.
@@ -201,8 +201,8 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
          │                    │  └── FilteredToolRegistry    │
          │                    │                              │
          │                    │  IMultiAgentSystem            │
-         │                    │  ├── Modern (in-process)     │
-         │                    │  └── Legacy (process-based)  │
+         │                    │  ├── Isolated (process-based) │
+         │                    │  └── Shared (in-process)     │
          │                    └──────────────────────────────┘
          │
          ┌──────────▼───────────────┐
@@ -222,7 +222,7 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
 | `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, native messages API. SmartRouter with health/latency/cost scoring. |
 | `Sovrant.Tools` | All 41 tool implementations (core + LSP + team + MCP). |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/clear`, `/session`, `/memory`, etc.). |
-| `Sovrant.Agents` | Multi-agent orchestration: team registry, agent factory, dual backends (modern in-process + legacy process-per-agent), role-specific prompts, tool filtering per agent. |
+| `Sovrant.Agents` | Multi-agent orchestration: team registry, agent factory, dual backends (isolated process-per-agent + shared in-process), 24 role templates, tool filtering per agent. |
 | `Sovrant.McpServer` | MCP server mode: exposes all tools and resources via stdio transport for IDE integration. |
 | `Sovrant.Lsp` | Language Server Protocol client: JSON-RPC over stdio, manages language server lifecycle, 5 LSP tools. |
 | `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient`, SSE streaming, React `useChat()` hook. |
@@ -323,13 +323,13 @@ Each team member:
 
 ### Two Backend Modes
 
-| | Modern (default) | Legacy |
+| | Isolated (default) | Shared |
 |---|---|---|
-| **Env var** | `AGENT_MODE=modern` | `AGENT_MODE=legacy` |
-| **How it works** | In-process async — each agent runs as a `SovrantAgent` in the same process | Process-per-agent — spawns a separate OS process per agent |
-| **Concurrency** | `SemaphoreSlim` enforcing `MaxConcurrentAgents` | One process per agent, OS-level isolation |
-| **Cancellation** | Linked `CancellationTokenSource` (caller token + timeout) | Process tree kill on cancel |
-| **Best for** | Most workloads — lower overhead, shared memory | Untrusted code execution, hard isolation |
+| **Env var** | `AGENT_MODE=isolated` (or unset) | `AGENT_MODE=shared` |
+| **How it works** | Process-per-agent — spawns a separate OS process per agent | In-process async — each agent runs as a `SovrantAgent` in the same process |
+| **Concurrency** | One process per agent, OS-level isolation | `SemaphoreSlim` enforcing `MaxConcurrentAgents` |
+| **Cancellation** | Process tree kill on cancel | Linked `CancellationTokenSource` (caller token + timeout) |
+| **Best for** | Security-sensitive workloads, untrusted code, production defaults | Lower overhead when agents share trusted memory space |
 
 ---
 
@@ -473,7 +473,7 @@ Place a markdown file at `.sovrant/commands/{name}.md`. Invoking `/{name}` in th
 | `OLLAMA_BASE_URL` | No | Enables local Ollama provider |
 | `ROUTER_MODE` | No | `Smart` (default) or `Fixed` |
 | `ROUTER_STRATEGY` | No | `Balanced` (default), `Latency`, or `Cost` |
-| `AGENT_MODE` | No | `modern` (default, in-process) or `legacy` (process-per-agent) |
+| `AGENT_MODE` | No | `isolated` (default, process-per-agent) or `shared` (in-process) |
 | `SOVRANT_COMPACT_THRESHOLD` | No | Input token count that triggers context auto-compaction (default: `80000`). Set to `0` to disable. |
 | `LLM_WEB_SEARCH` | No | Set to `true` to use OpenAI's Responses API with `web_search_preview` |
 | `BRAVE_API_KEY` | No | Enables WebSearch via Brave Search API |
@@ -571,19 +571,19 @@ Replace `-r linux-x64` with `-r win-x64` in all commands above.
 ## Tests
 
 ```bash
-dotnet test Sovrant.slnx   # 416 tests across 9 projects
+dotnet test Sovrant.slnx   # 487 tests across 9 projects
 ```
 
 | Project | Tests |
 |---|---|
 | `Sovrant.Api.Tests` | 28 |
-| `Sovrant.Runtime.Tests` | 106 |
+| `Sovrant.Runtime.Tests` | 137 |
 | `Sovrant.Server.Tests` | 73 |
 | `Sovrant.McpServer.Tests` | 30 |
 | `Sovrant.Lsp.Tests` | 26 |
 | `Sovrant.Tools.Tests` | 72 |
 | `Sovrant.Commands.Tests` | 22 |
-| `Sovrant.Agents.Tests` | 58 |
+| `Sovrant.Agents.Tests` | 98 |
 | `Sovrant.Integration.Tests` | 1 |
 
 ---
