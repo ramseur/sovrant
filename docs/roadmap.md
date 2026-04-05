@@ -84,7 +84,7 @@ The engine is fully functional for individual and small-team use:
 | Swarm orchestrator (auto-decomposition, DAG execution, file locking, quality gate) | Phase 28 | Lower |
 | Registry discovery API (tools, skills, agent templates for frontends) | Phase 29 | Low–Medium |
 | Server response caching & cache infrastructure (in-memory + Redis, ETag, TTL) | Phase 30 | Medium |
-| Persistent storage layer (SQLite for audit, session index, CLI memory, usage) | Phase 31 | Medium |
+| Persistence layer — SQLite (config, sessions, audit, credentials, usage, user identity) | Phase 31 | Medium–High |
 | Enterprise auth & multi-tenancy (per-user tokens, session ownership) | Phase 32 (deferred) | Deferred |
 | Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 33 (deferred) | Deferred |
 | VS Code native extension | Phase 34 (deferred — nice-to-have) | Deferred |
@@ -1970,122 +1970,204 @@ src/Sovrant.Server/Middleware/
 
 ---
 
-### Phase 31 — Persistent Storage Layer (SQLite)
+### Phase 31 — Persistence Layer (SQLite)
 
-**Depends on:** Phase 8 (structured logging — audit logs are a migration candidate), Phase 25 (memory system — primary consumer)
-**Difficulty:** Medium
+**Depends on:** Phase 8 (structured logging), Phase 23 (governance audit), Phase 25 (memory system)
+**Difficulty:** Medium–High
 
-**Goal:** Introduce SQLite as a structured, queryable persistence layer for operational data that is currently stored in flat JSONL files or held only in memory. SQLite is zero-config, works offline, ships as a single file, and gives indexed queries that JSONL scanning cannot. Both the CLI and the server share the same `IStorageProvider` singleton from `Sovrant.Runtime` — one database, two entry points.
+**Goal:** Introduce SQLite as **the** persistence layer for the engine. Everything except `.md` files moves into a single database — config, sessions, audit, credentials, token usage, and CLI memory. SQLite is the starting point: zero-config, zero-infrastructure, works offline, ships as a single file. The abstraction (`IStorageProvider`) is designed so that a future phase can swap in Postgres, CockroachDB, or Turso without touching any consumer code.
 
-This phase does **not** touch human-editable files (`.md` skills, `.md` agent templates, `.json` config, `.md` memory). Those stay as files. The principle: **queryable operational data → SQLite; human-editable content → files.**
+Both the CLI and the server share the same `IStorageProvider` singleton from `Sovrant.Runtime` — one database, two entry points.
+
+#### The principle
+
+**`.md` files stay as files. Everything else moves to the database.**
+
+`.md` files (skills, agent templates, memory notes) are version-controlled, git-diffable, human-authored content. They belong in a repo or a dotfiles directory. Everything else — config, sessions, audit, credentials, usage — is operational data that the engine produces and consumes. Operational data belongs in a database where it can be scoped per-user, per-team, queried, and migrated.
 
 #### Why this matters
 
-Today, finding "all governance violations in the last 7 days" means scanning every line of `~/.sovrant/audit/governance.jsonl`. Finding "which sessions touched file X" means opening every session JSONL. The CLI memory system (Phase 25) will need to search learned patterns and instincts by trigger, confidence, or recency — flat markdown files don't support that. Token usage is lost entirely on restart. SQLite gives us indexed queries with zero infrastructure.
+**Multi-user/multi-team config.** Today config is a 3-file merge (`~/.sovrant/settings.json` → `.sovrant/settings.json` → `.sovrant/settings.local.json`). Adding per-user or per-team overrides means more files, more merge logic, more edge cases. With a `config` table, scoping is a query:
 
-#### Complete persistence inventory — what moves vs. what stays
+```sql
+SELECT key, value FROM config
+WHERE scope IN ('global', 'team:engineering', 'user:eric')
+ORDER BY priority DESC  -- user > team > global
+```
 
-Every place the engine currently writes structured data to disk, and whether it moves to SQLite:
+**Queryable operations.** Finding "all governance violations in the last 7 days" means scanning every line of `governance.jsonl`. Finding "which sessions touched file X" means opening every JSONL. Token usage is lost entirely on restart. SQLite gives indexed queries with zero infrastructure.
 
-**Moves to SQLite (queryable operational data)**
+**Session search.** Cross-session search (`GET /v1/sessions?query=auth+module`) currently requires scanning every JSONL file on disk. With transcripts in SQLite, it's a full-text search index.
 
-| Data | Current storage | Current format | Why SQLite is better |
+**Credential isolation.** Per-user credential scoping becomes natural: `(user_id, credential_key, encrypted_blob)` instead of a flat directory of `.enc` files.
+
+**Growth path.** SQLite today, Postgres tomorrow. The `IStorageProvider` abstraction means swapping the backend is a DI registration change, not a rewrite.
+
+#### Complete persistence inventory
+
+Every place the engine currently writes data to disk:
+
+**Moves to SQLite**
+
+| Data | Current storage | Current format | What SQLite enables |
 |---|---|---|---|
-| **Governance audit log** (Phase 23) | `~/.sovrant/audit/governance.jsonl` | JSONL (AppendAllTextAsync) | Query by tool, session, severity, date range; currently requires full file scan |
-| **Bash command audit log** (Phase 23) | `~/.sovrant/audit/bash-commands.jsonl` | JSONL (AppendAllTextAsync) | Query by command, exit code, session; filter dangerous commands |
-| **Session index** | Implicit — scan `~/.sovrant/sessions/*.jsonl` filenames | No storage (derived) | Query by creation date, last access, project, message count, files touched, token totals |
+| **Config — settings** | `~/.sovrant/settings.json` + `.sovrant/settings.json` + `.sovrant/settings.local.json` | JSON (3-file merge) | Per-user/per-team scoped config; `PUT /v1/config` writes to DB, not files; no more merge logic |
+| **Config — hooks** | `~/.sovrant/hooks.json` + `.sovrant/hooks.json` | JSON | Per-user hook overrides; query "which hooks are active for user X in project Y" |
+| **Config — governance** | `~/.sovrant/governance.json` + `.sovrant/governance.json` | JSON (merged) | Per-team governance rules; audit trail of rule changes |
+| **Config — verification** | `.sovrant/verify.json` | JSON | Per-project with team overrides; consistent with other config |
+| **Session transcripts** | `~/.sovrant/sessions/*.jsonl` | JSONL (AppendAllTextAsync) | Cross-session full-text search; per-user session isolation; no filesystem scanning; `GET /v1/sessions?query=...` |
+| **Governance audit log** (Phase 23) | `~/.sovrant/audit/governance.jsonl` | JSONL (AppendAllTextAsync) | Query by tool, session, severity, date range |
+| **Bash command audit log** (Phase 23) | `~/.sovrant/audit/bash-commands.jsonl` | JSONL (AppendAllTextAsync) | Query by command, exit code, session |
+| **Session index** | Implicit (scan JSONL filenames) | No storage (derived) | Query by creation date, last access, project, message count, files touched, token totals |
 | **Token usage history** (Phase 9.5) | In-memory only (`SessionConfig.AddTokens()`) | Not persisted | Persist across restarts; query by date/model/session; historical cost analysis |
+| **Encrypted credentials** (Phase 17) | `~/.sovrant/credentials/*.enc` + `.keystore` | Binary (AES-GCM) / Hex | Per-user credential isolation; no directory scanning; key rotation without file juggling |
 | **CLI memory — learned patterns** (Phase 25) | `.sovrant/learned/*.md` (planned) | Markdown (planned) | Full-text search, confidence scoring, evidence trails, recency ranking |
 | **CLI memory — instincts** (Phase 25) | `~/.sovrant/instincts/*.yaml` (planned) | YAML (planned) | Query by trigger, confidence threshold, decay pruning |
 
-**Stays as files (human-editable or specialized format)**
+**Stays as files**
 
-| Data | Current path | Format | Why it stays |
+| Data | Path | Format | Why it stays |
 |---|---|---|---|
-| **Session transcripts** | `~/.sovrant/sessions/*.jsonl` | JSONL | Append-only write pattern; large; full conversation history; rarely queried by field — SQLite indexes the *metadata* about sessions, not the transcripts themselves |
-| **Skills** | `.sovrant/skills/*.md` + built-in | Markdown + YAML frontmatter | Human-editable, git-friendly, loaded at startup, no query need beyond name/trigger lookup (already in-memory) |
-| **Agent templates** | `.sovrant/agents/*.md` + built-in | Markdown + YAML frontmatter | Same as skills |
-| **Config — settings** | `~/.sovrant/settings.json`, `.sovrant/settings.json`, `.sovrant/settings.local.json` | JSON | Human-editable, small, loaded once at startup, merged in order |
-| **Config — hooks** | `~/.sovrant/hooks.json`, `.sovrant/hooks.json` | JSON | Human-editable hook definitions |
-| **Config — governance** | `~/.sovrant/governance.json`, `.sovrant/governance.json` | JSON | Human-editable governance rules, merged (global + project) |
-| **Config — verification** | `.sovrant/verify.json` | JSON | Human-editable quality gate config |
-| **Memory files** | `~/.sovrant/memory.md`, `.sovrant/memory.md` | Markdown | Human-editable notes injected into system prompt; simple read-once |
-| **Encrypted credentials** (Phase 17) | `~/.sovrant/credentials/*.enc` + `.keystore` | Binary (AES-256-GCM) / Hex | Security-sensitive, no query need, one file per credential |
-| **Rolling app logs** (Phase 8) | `~/.sovrant/logs/sovrant-{Date}.log` | Text or JSON | Standard log files consumed by log aggregators; daily rotation; not application-queried |
-| **Temp scripts** | `{TempPath}/sovrant_*.{sh,ps1,cmd}` | Text | Ephemeral — created for tool execution, deleted after |
+| **Skills** | `.sovrant/skills/*.md` + built-in `src/.../skills/` | Markdown + YAML frontmatter | Version-controlled, git-diffable, human-authored; loaded into memory at startup |
+| **Agent templates** | `.sovrant/agents/*.md` + built-in `src/.../agents/` | Markdown + YAML frontmatter | Same as skills |
+| **Memory notes** | `~/.sovrant/memory.md` + `.sovrant/memory.md` | Markdown | Human-authored notes injected into system prompt; simple read-once-at-start |
+| **Rolling app logs** (Phase 8) | `~/.sovrant/logs/sovrant-{Date}.log` | Text or JSON | Standard log files consumed by log aggregators (Datadog, ELK, etc.); daily rotation; external tooling expects files |
+| **Temp scripts** | `{TempPath}/sovrant_*.{sh,ps1,cmd}` | Text | Ephemeral — created for tool execution, deleted immediately after |
 
 #### Shared by CLI and Server
 
-`IStorageProvider` lives in `Sovrant.Runtime` — the same project that both `Sovrant.Cli` and `Sovrant.Server` reference. Both register it as a singleton in DI. Both read and write the same `~/.sovrant/sovrant.db` file (or `$SOVRANT_DB_PATH` for containers).
+`IStorageProvider` lives in `Sovrant.Runtime` — both `Sovrant.Cli` and `Sovrant.Server` reference it. Both register it as a singleton in DI. Same database, same schema, same migrations.
 
-| Entry point | What it writes | What it reads |
+| Entry point | Writes | Reads |
 |---|---|---|
-| **CLI** | Audit events, bash commands, session index updates, token usage, learned patterns, instincts | Session index (resume), audit queries (governance review), memory queries (pattern/instinct lookup) |
-| **Server** | Same as CLI, plus per-request token tracking at higher volume | Same as CLI, plus `GET /v1/audit`, `GET /v1/usage` backed by SQLite queries |
+| **CLI** | Config, audit events, bash commands, session transcripts, session index, token usage, credentials, learned patterns, instincts | Config (scoped resolution), session index (resume), audit queries, memory queries, credential lookup |
+| **Server** | Same as CLI, plus per-request token tracking at higher volume | Same as CLI, plus `GET /v1/audit`, `GET /v1/usage`, `GET /v1/sessions?query=...`, all backed by SQLite |
+
+#### Config scoping model
+
+Config moves from file-merge to scope-priority resolution:
+
+| Scope | Priority | Who sets it | Example |
+|---|---|---|---|
+| `global` | 0 (lowest) | Server admin / CLI defaults | Default model, log level |
+| `team:{name}` | 1 | Team lead via API | Team-specific governance level, allowed tools |
+| `project:{path}` | 2 | Project `.sovrant/` directory (migrated) | Project-specific verify config, hooks |
+| `user:{id}` | 3 (highest) | Individual via CLI or API | Personal model preference, permission mode |
+
+Resolution: for a given key, the highest-priority scope wins. `ConfigLoader` becomes `ConfigResolver` backed by `IStorageProvider` instead of file I/O.
+
+#### Lightweight user identity
+
+Phase 31 introduces a `users` table — not full enterprise auth (that's Phase 32), just enough to give every other table an `owner_id` foreign key. This enables per-user config, session isolation, credential scoping, and usage attribution without building a login system.
+
+| Context | How user ID is resolved |
+|---|---|
+| **CLI** | `SOVRANT_USER_ID` env var, or defaults to OS username (`Environment.UserName`) |
+| **Server** | Derived from bearer token → user mapping (simple `SOVRANT_TOKENS` JSON map: `{"token": "user_id"}`). Falls back to `"anonymous"` for single-token setups. |
+
+The `users` table is an anchor row — created on first seen, referenced everywhere by `user_id`. No passwords, no OAuth, no sessions-as-auth. Phase 32 adds real auth on top of this same schema.
+
+```sql
+-- Every table references user_id for scoping
+SELECT * FROM session_index WHERE user_id = 'eric';
+SELECT * FROM config WHERE scope = 'user:eric';
+SELECT SUM(output_tokens) FROM token_usage WHERE user_id = 'eric' AND timestamp > '2026-04-01';
+```
 
 #### Architecture
 
 ```
 src/Sovrant.Runtime/Storage/
-  IStorageProvider.cs           ← abstraction over structured storage (query, insert, update, delete)
-  SqliteStorageProvider.cs      ← Microsoft.Data.Sqlite, auto-creates tables + migrations
-  StorageMigrator.cs            ← versioned schema migrations (CREATE TABLE IF NOT EXISTS + ALTER TABLE)
+  IStorageProvider.cs           ← abstraction: query, insert, update, delete, transaction support
+  SqliteStorageProvider.cs      ← Microsoft.Data.Sqlite, WAL mode, connection pooling
+  StorageMigrator.cs            ← versioned schema migrations (version table + ordered scripts)
 
   Tables:
-    audit_events               ← (id, timestamp, session_id, tool, action, severity, detail)
-    bash_commands              ← (id, timestamp, session_id, command, exit_code, duration_ms)
-    session_index              ← (session_id, project, created_at, last_accessed, message_count,
-                                  files_modified, total_input_tokens, total_output_tokens)
-    learned_patterns           ← (id, project, pattern, source_session, confidence, created_at, last_used)
-    instincts                  ← (id, trigger, action, confidence, evidence_json, created_at, updated_at)
-    token_usage                ← (id, session_id, model, input_tokens, output_tokens, timestamp)
+    users                      ← (user_id PK, display_name, created_at, last_seen_at)
+    config                     ← (id, scope, key, value_json, updated_at)
+    sessions                   ← (id, session_id, user_id FK, role, content, tool_calls_json, timestamp)
+    session_index              ← (session_id PK, user_id FK, project, created_at, last_accessed,
+                                  message_count, files_modified, total_input_tokens, total_output_tokens)
+    audit_events               ← (id, timestamp, user_id FK, session_id, tool, action, severity, detail)
+    bash_commands              ← (id, timestamp, user_id FK, session_id, command, exit_code, duration_ms)
+    credentials                ← (id, user_id FK, credential_key, encrypted_blob, created_at, updated_at)
+    token_usage                ← (id, user_id FK, session_id, model, input_tokens, output_tokens, timestamp)
+    learned_patterns           ← (id, user_id FK, project, pattern, source_session, confidence, created_at, last_used)
+    instincts                  ← (id, user_id FK, trigger, action, confidence, evidence_json, created_at, updated_at)
 ```
+
+All tables except `users` and `config` have a `user_id` foreign key. Queries naturally scope by user without extra logic. Phase 32's enterprise auth adds token management and access control on top of this existing schema — the data model doesn't change, only who is allowed to set `user_id`.
 
 #### Database Location
 
 | Context | Path | Rationale |
 |---|---|---|
-| CLI (per-user) | `~/.sovrant/sovrant.db` | Single file alongside existing `.sovrant/` data, backed up with user data |
-| Server | `$SOVRANT_DB_PATH` or `~/.sovrant/sovrant.db` | Configurable for containers and non-default data directories |
+| CLI (per-user) | `~/.sovrant/sovrant.db` | Single file alongside `.sovrant/` data |
+| Server | `$SOVRANT_DB_PATH` or `~/.sovrant/sovrant.db` | Configurable for containers |
 
 #### Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `SOVRANT_STORAGE_PROVIDER` | `sqlite` | `sqlite` (future: `postgres` for enterprise) |
+| `SOVRANT_STORAGE_PROVIDER` | `sqlite` | `sqlite` now; `postgres` in a future phase |
 | `SOVRANT_DB_PATH` | `~/.sovrant/sovrant.db` | SQLite database file path |
-| `SOVRANT_AUDIT_JSONL` | `false` | Keep writing JSONL audit files alongside SQLite (dual-write for migration period) |
+| `SOVRANT_USER_ID` | OS username | User identity for CLI (server resolves from token) |
+| `SOVRANT_TOKENS` | — | JSON map of `{"bearer-token": "user_id"}` for server multi-user identity resolution |
+| `SOVRANT_AUDIT_JSONL` | `false` | Dual-write audit to JSONL alongside SQLite (migration period) |
+| `SOVRANT_SESSION_JSONL` | `false` | Dual-write session transcripts to JSONL alongside SQLite (migration period) |
 
 #### Migration from flat files
 
-- On first run with SQLite enabled, `StorageMigrator` checks for existing data and imports it:
-  - Scans `~/.sovrant/audit/governance.jsonl` → inserts into `audit_events` table
-  - Scans `~/.sovrant/audit/bash-commands.jsonl` → inserts into `bash_commands` table
-  - Scans `~/.sovrant/sessions/*.jsonl` → extracts metadata (file size, first/last timestamp, message count) into `session_index` table
-- Existing JSONL files are not deleted — they become the archival copy
-- Future writes go to SQLite by default; set `SOVRANT_AUDIT_JSONL=true` to keep dual-writing JSONL during the transition
-- Migration is idempotent — re-running skips already-imported records (keyed by timestamp + session_id)
+On first run, `StorageMigrator` detects existing flat-file data and imports it:
+
+1. **Config files** → Reads each JSON config file, inserts key-value pairs into `config` table with appropriate scope (`global` for `~/.sovrant/`, `project:{path}` for `.sovrant/`)
+2. **Session transcripts** → Reads each `*.jsonl`, inserts messages into `sessions` table, builds `session_index` row from metadata
+3. **Audit logs** → Reads `governance.jsonl` and `bash-commands.jsonl`, inserts into respective tables
+4. **Credentials** → Reads `*.enc` files, inserts encrypted blobs into `credentials` table (master key migrates too)
+5. **Token usage** → No existing persistence to migrate (currently in-memory only)
+
+Post-migration:
+- Original files are **not deleted** — they become archival copies
+- `SOVRANT_AUDIT_JSONL=true` and `SOVRANT_SESSION_JSONL=true` enable dual-write during transition
+- Migration is **idempotent** — keyed by content hash + timestamp, re-running skips already-imported records
+- `ConfigLoader` falls back to file-based resolution if SQLite is unavailable (graceful degradation)
+
+#### Future growth path
+
+SQLite is the starting persistence layer, not the final one. The `IStorageProvider` abstraction is designed for this:
+
+| Scale | Backend | When |
+|---|---|---|
+| Single user / small team | SQLite (this phase) | Now |
+| Multi-instance server | Postgres / CockroachDB | When horizontal scaling is needed |
+| Edge / embedded | SQLite remains ideal | Always |
+| Distributed edge | Turso (libSQL) | SQLite-compatible with replication |
+
+Swapping backends is a DI registration change + migration script, not a rewrite. All consumers use `IStorageProvider` — they never touch `SqliteConnection` directly.
 
 #### Relationship to Phase 30 (Caching)
 
-Phase 30's `ICacheProvider` is for **hot, ephemeral data** — fast reads with TTL expiry, no durability guarantee. Phase 31's `IStorageProvider` is for **cold, durable data** — structured records that survive restarts and support queries. They are complementary:
+Phase 30's `ICacheProvider` is for **hot, ephemeral data** — fast reads with TTL expiry, no durability guarantee. Phase 31's `IStorageProvider` is for **cold, durable data** — structured records that survive restarts and support queries. They compose:
 - Cache a query result from SQLite in the in-memory/Redis cache for repeated fast access
 - Invalidate the cache entry when the underlying SQLite data changes
-- Example: `GET /v1/audit?last=7d` → first request queries SQLite, caches result for 30s; subsequent requests served from cache until TTL or new audit event invalidates
+- Example: `GET /v1/audit?last=7d` → first request queries SQLite, caches for 30s; new audit event invalidates
 
 #### Implementation Plan
 
 1. Add `Microsoft.Data.Sqlite` package to `Sovrant.Runtime`
-2. Define `IStorageProvider` interface (generic query/insert/update/delete with typed results)
-3. Implement `SqliteStorageProvider` — connection pooling via `SqliteConnection`, WAL mode for concurrent reads
-4. Implement `StorageMigrator` — version table + ordered migration scripts, `CREATE TABLE IF NOT EXISTS`
-5. Migrate `AuditLogger` to write to SQLite; add `SOVRANT_AUDIT_JSONL` dual-write toggle
-6. Add `session_index` table; populate from existing JSONL file metadata on first run
-7. Add `token_usage` table; wire `SessionConfig.AddTokens()` to persist each accumulation
-8. Prepare `learned_patterns` and `instincts` tables (schema only — populated by Phase 25)
-9. Wire `IStorageProvider` into DI as singleton; both CLI and Server use the same registration
-10. Add `GET /v1/audit` endpoint (query audit events by date, tool, session — backed by SQLite)
-11. Tests: migration idempotency, query correctness, concurrent write safety, JSONL import, CLI + Server both resolve same provider
+2. Define `IStorageProvider` interface — generic query/insert/update/delete with typed results, transaction support
+3. Implement `SqliteStorageProvider` — connection pooling, WAL mode, `PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL`
+4. Implement `StorageMigrator` — `schema_version` table + ordered migration classes
+5. **Config migration:** Replace `ConfigLoader` file-merge with `ConfigResolver` backed by `config` table; scoped resolution by priority
+6. **Session migration:** Replace `JsonlSessionStore` with SQLite-backed `SqliteSessionStore`; `sessions` table for messages, `session_index` for metadata
+7. **Audit migration:** Replace `AuditLogger` file writes with SQLite inserts; add `SOVRANT_AUDIT_JSONL` dual-write toggle
+8. **Credential migration:** Replace `AesGcmCredentialStore` file I/O with `credentials` table; same AES-GCM encryption, different storage
+9. **Token usage:** Add `token_usage` table; wire `SessionConfig.AddTokens()` to persist
+10. Prepare `learned_patterns` and `instincts` tables (schema only — populated by Phase 25)
+11. Wire `IStorageProvider` into DI as singleton; CLI and Server share same registration
+12. Add server endpoints: `GET /v1/audit` (query events), `GET /v1/sessions?query=...` (full-text search)
+13. Import tool: `StorageMigrator` auto-imports existing flat files on first run
+14. Tests: migration idempotency, config scope resolution, session CRUD, concurrent write safety, JSONL import, credential round-trip, CLI + Server both resolve same provider
 
 ---
 
