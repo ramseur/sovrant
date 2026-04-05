@@ -82,9 +82,10 @@ The engine is fully functional for individual and small-team use:
 | Cost tracking & token budget management (4 components) | Phase 26 | Medium |
 | Eval-driven development framework (3 grader types, 2 metrics) | Phase 27 | Lower |
 | Swarm orchestrator (auto-decomposition, DAG execution, file locking, quality gate) | Phase 28 | Lower |
-| Enterprise auth & multi-tenancy (per-user tokens, session ownership) | Phase 29 (deferred) | Deferred |
-| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 30 (deferred) | Deferred |
-| VS Code native extension | Phase 31 (deferred — nice-to-have) | Deferred |
+| Registry discovery API (tools, skills, agent templates for frontends) | Phase 29 | Low–Medium |
+| Enterprise auth & multi-tenancy (per-user tokens, session ownership) | Phase 30 (deferred) | Deferred |
+| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 31 (deferred) | Deferred |
+| VS Code native extension | Phase 32 (deferred — nice-to-have) | Deferred |
 | `/undo` / `/redo` (git-backed file rollback) | Phase 7.5 Tier 2 (deferred) | Deferred |
 | `ScheduleCron` / `ConfigTool` | Phase 7.5 Tier 3 (deferred) | Deferred |
 
@@ -1817,7 +1818,92 @@ Claude-swarm agents are isolated — downstream tasks wait for predecessors but 
 
 ---
 
-### Phase 29 — Enterprise Auth & Multi-Tenancy ⏸️ Deferred
+### Phase 29 — Registry Discovery API (Tools, Skills, Agent Templates)
+
+**Depends on:** Phase 24 (skills system), Phase 21.5 (agent templates), existing tool registry
+**Difficulty:** Low–Medium
+
+**Goal:** Expose read-only API endpoints that let frontends discover what the engine can do — every registered tool, every built-in and user-defined skill, and every agent template. Today the engine has 43 tools, 32 skills, and 24 agent templates, but a frontend has no way to enumerate them or display their metadata to the user. These endpoints close that gap so UIs can render tool palettes, skill catalogs, and agent template pickers.
+
+#### Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/v1/tools` | List all registered tools with name, description, and parameter schema |
+| `GET` | `/v1/tools/{name}` | Get a single tool's full definition (name, description, parameters JSON Schema) |
+| `GET` | `/v1/skills` | List all skills (built-in + global + project-local) with name, description, trigger |
+| `GET` | `/v1/skills/{name}` | Get a single skill's full definition including body, agents, and tools constraints |
+| `GET` | `/v1/agents/templates` | List all agent templates with name, description, recommended level, allowed tools |
+| `GET` | `/v1/agents/templates/{name}` | Get a single agent template's full definition including system prompt body |
+
+All endpoints are authenticated (same `SOVRANT_TOKEN` bearer auth as existing endpoints). Responses are JSON.
+
+#### Response Shapes
+
+**`GET /v1/tools`**
+```json
+{
+  "tools": [
+    {
+      "name": "Read",
+      "description": "Read a file from the filesystem",
+      "parameters": { "type": "object", "properties": { "file_path": { ... } }, ... }
+    }
+  ],
+  "count": 43
+}
+```
+
+**`GET /v1/skills`**
+```json
+{
+  "skills": [
+    {
+      "name": "deep-research",
+      "description": "Multi-source research with citation and confidence scoring",
+      "trigger": "/research",
+      "agents": ["researcher"],
+      "tools": ["Read", "Grep", "Glob", "WebSearch", "WebFetch"]
+    }
+  ],
+  "count": 32
+}
+```
+
+**`GET /v1/agents/templates`**
+```json
+{
+  "templates": [
+    {
+      "name": "security-auditor",
+      "description": "Security-focused code review agent",
+      "recommended_level": "High",
+      "allowed_tools": ["Read", "Grep", "Glob"]
+    }
+  ],
+  "count": 24
+}
+```
+
+#### Architecture
+
+- `ToolRegistryRoutes` — maps `IToolRegistry.All` to JSON; parameter schema from `ToolDefinition.Parameters`
+- `SkillRegistryRoutes` — maps `SkillRegistry.All` to JSON; detail endpoint includes body
+- `AgentTemplateRoutes` — maps `AgentTemplateRegistry.All` to JSON; detail endpoint includes system prompt
+- All three registries already exist as singletons in DI — no new infrastructure needed
+
+#### Implementation Plan
+
+1. Add `GET /v1/tools` and `GET /v1/tools/{name}` route group in `Sovrant.Server`
+2. Add `GET /v1/skills` and `GET /v1/skills/{name}` route group
+3. Add `GET /v1/agents/templates` and `GET /v1/agents/templates/{name}` route group
+4. Update `docs/server.md` with new endpoints
+5. Update README server API table
+6. Tests: list endpoints return correct counts, detail endpoints return 404 for unknown names, auth required
+
+---
+
+### Phase 30 — Enterprise Auth & Multi-Tenancy ⏸️ Deferred
 
 **Depends on:** Phase 9.5 (session-scoped config) + Phase 9 (per-request credentials)
 
@@ -1858,7 +1944,7 @@ This phase is deliberately deferred. A small trusted team sharing a single deplo
 
 ---
 
-### Phase 30 — Artifact System ⏸️ Deferred
+### Phase 31 — Artifact System ⏸️ Deferred
 
 **Depends on:** Phase 18+19 (multi-agent team tools)
 
@@ -1896,7 +1982,7 @@ Today, team agents communicate solely through prompt/response text via `TeamDele
 
 ---
 
-### Phase 31 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
+### Phase 32 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
 
 **Competitor precedent:** Claude Code ✅ · opencode ✅ (beta)
 **Depends on:** Phase 14 (MCP server mode) — once Sovrant exposes an MCP server, MCP-aware IDEs (VS Code with GitHub Copilot, Cursor, Windsurf) can connect without a bespoke extension.
@@ -1908,7 +1994,7 @@ Today, team agents communicate solely through prompt/response text via `TeamDele
 
 Two-layer approach:
 1. **Phase 14 (MCP):** Zero-code IDE integration for MCP-aware clients. Sovrant appears as an MCP tool server. No extension required.
-2. **Phase 31 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
+2. **Phase 32 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
 
 #### Implementation Plan
 
