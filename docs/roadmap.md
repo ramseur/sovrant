@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-05 (Phase 28 Swarm Orchestrator complete)
+**Last updated:** 2026-04-05 (Phase 30 Registry Discovery API complete)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -13,16 +13,16 @@ The engine is fully functional for individual and small-team use:
 
 - **39 tools** across 8 categories (file, shell, web, task, agent, team, MCP, LSP)
 - **836 tests** across 9 projects, 0 warnings
-- **14 server endpoints** (OpenAI-compatible chat, sessions, config, usage, webhooks, export)
+- **20 server endpoints** (OpenAI-compatible chat, sessions, config, usage, webhooks, export, registry discovery)
 - CLI REPL, one-shot `prompt`, CI mode (`--ci`), MCP server mode (`mcp-server`)
 - Agentic loop with up to 20 tool rounds per turn
 - JSONL session persistence with in-memory pool (one `ConversationRuntime` per `session_id`)
 - SmartRouter with health/latency/cost scoring across multiple providers
 - Multi-provider support: OpenAI, Gemini, Ollama, native messages API, OpenAI Responses API (`LLM_WEB_SEARCH=true`)
-- Per-session config overlay, rate limiting, token usage tracking (Phase 9.5 ✅)
-- Session TTL eviction + LRU cap + per-session turn serialization (Phase 9.1 ✅)
-- Multi-tenant per-request credentials (`X-LLM-Api-Key` / `X-LLM-Base-Url` headers) (Phase 9 ✅)
-- Structured async logging with 4 env vars, source-generated delegates (Phase 8 ✅)
+- Per-session config overlay, rate limiting, token usage tracking (Phase 10 ✅)
+- Session TTL eviction + LRU cap + per-session turn serialization (Phase 9 ✅)
+- Multi-tenant per-request credentials (`X-LLM-Api-Key` / `X-LLM-Base-Url` headers) (Phase 8 ✅)
+- Structured async logging with 4 env vars, source-generated delegates (Phase 7 ✅)
 - Agent memory files (`~/.sovrant/memory.md` + `.sovrant/memory.md`) injected into system prompt
 - Context auto-compaction at configurable token threshold
 - Security hardening: BashTool 256 KB cap + env stripping, WebFetch SSRF protection, provider retry 3×, AgentTool depth ≤ 5, ReadFile 10 MB cap, GlobTool 1000 cap, atomic writes
@@ -31,7 +31,8 @@ The engine is fully functional for individual and small-team use:
 - MCP server mode (stdio JSON-RPC 2.0) + dynamic MCP tool proxy (`MCPTool`) + MCP OAuth (`McpAuthTool`)
 - LSP integration (5 tools, 18 language extensions)
 - CI/CD integration (`--ci` flag, GitHub Actions composite action, GitLab CI template)
-- **Multi-agent team orchestration** (Phase 18+19 ✅) — see below
+- Registry discovery API — tools, skills, agent templates (Phase 30 ✅)
+- **Multi-agent team orchestration** (Phase 19+20 ✅) — see below
 
 ### Agent System: Current State
 
@@ -46,52 +47,57 @@ The engine is fully functional for individual and small-team use:
 | DI wiring in CLI / Server | ✅ Complete | `services.AddMultiAgentSystem()` called in both hosts. `ITeamRegistry`, `SovrantAgentFactory`, team tools all registered. |
 | Team tools | ✅ Complete | `TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`. Named agents with roles, custom prompts, tool restrictions, lifecycle tracking. |
 
-### Completed phases
+### Completed phases (1–30)
 
 | Phase | Summary |
 |---|---|
-| 7.5 | Tool parity — 9 new tools (EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree, TaskUpdate, Skill, ToolSearch, ListMcpResources, ReadMcpResource) |
-| 7.6 | Agent memory files, token count fix, context auto-compaction |
-| 7.6.5 | OpenAI Responses API (`LLM_WEB_SEARCH=true`) |
-| 7.7–7.9 | Security hardening, reliability, robustness |
-| 8 | Structured async logging |
-| 9 | Multi-tenant per-request credentials |
-| 9.1 | Session lifecycle (TTL eviction, LRU cap, turn serialization) |
-| 9.5 | Small team hardening (session-scoped config, rate limiting, usage tracking) |
-| 10 | LSP integration (5 tools, 18 language extensions) |
-| 11 | CI/CD pipeline integration |
-| 12 | Slack / webhook integration |
-| 13 | Frontend SDK, diff view, session export |
-| 14 | MCP server mode |
+| 1 | Tool parity — 9 new tools (EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree, TaskUpdate, Skill, ToolSearch, ListMcpResources, ReadMcpResource) |
+| 2 | Agent memory files, token count fix, context auto-compaction |
+| 3 | OpenAI Responses API (`LLM_WEB_SEARCH=true`) |
+| 4–6 | Security hardening, reliability, robustness |
+| 7 | Structured async logging |
+| 8 | Multi-tenant per-request credentials |
+| 9 | Session lifecycle (TTL eviction, LRU cap, turn serialization) |
+| 10 | Small team hardening (session-scoped config, rate limiting, usage tracking) |
+| 11 | LSP integration (5 tools, 18 language extensions) |
+| 12 | CI/CD pipeline integration |
+| 13 | Slack / webhook integration |
+| 14 | Frontend SDK, diff view, session export |
+| 15 | MCP server mode |
 | 16 | Dynamic MCP tool proxy (`MCPTool`) |
 | 17 | MCP OAuth authentication (`McpAuthTool`) |
-| 17.5 | Dual agent architecture scaffolding |
-| 18+19 | Multi-agent backend + team tools (58 tests) |
-| 27 | Eval-driven development framework (3 graders, pass@k metrics, 62 tests) |
-| 28 | Swarm orchestrator foundation (auto-decomposition, DAG execution, file locking, quality gate, 62 tests) |
+| 18 | Dual agent architecture scaffolding |
+| 19+20 | Multi-agent backend + team tools (58 tests) |
+| 21 | Hook lifecycle system |
+| 22 | Specialized agent definitions (role templates + model routing) |
+| 23 | Template externalisation (built-ins as markdown files) |
+| 24 | Verification loop & quality gates |
+| 25 | Governance, security monitoring & audit |
+| 26 | Skills system (composable workflow packages) |
+| 27 | Multi-layered memory system |
+| 28 | Eval-driven development framework (3 graders, pass@k metrics, 62 tests) |
+| 29 | Swarm orchestrator (auto-decomposition, DAG execution, file locking, quality gate, 62 tests) |
+| 30 | Registry discovery API (tools, skills, agent templates — 11 tests) |
 
 ### Still pending
 
 | Gap | Phase | Priority |
 |---|---|---|
-| Registry discovery API (tools, skills, agent templates for frontends) | Phase 29 | Low–Medium |
-| Server response caching & cache infrastructure (in-memory + Redis, ETag, TTL) | Phase 30 (deferred) | Deferred |
-| Persistence layer — SQLite (config, sessions, audit, credentials, usage, user identity) | Phase 31 | Medium–High |
-| User management API (CRUD users, issue/revoke tokens, per-user data views) | Phase 32 | Medium |
-| Enterprise auth & multi-tenancy (OAuth/OIDC, RBAC, org isolation) | Phase 33 (deferred) | Deferred |
-| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 34 (deferred) | Deferred |
-| VS Code native extension | Phase 35 (deferred — nice-to-have) | Deferred |
-| `/undo` / `/redo` (git-backed file rollback) | Phase 7.5 Tier 2 (deferred) | Deferred |
-| `ScheduleCron` / `ConfigTool` | Phase 7.5 Tier 3 (deferred) | Deferred |
-| Cost tracking, token budgets & model pricing registry | Phase 36 (deferred — nice-to-have) | Deferred |
-| Workspaces (personal + team areas, isolated memory/config/sessions) | Phase 37 (deferred) | Deferred |
-| Projects (workspace-scoped containers for isolated work) | Phase 38 (deferred) | Deferred |
+| Server response caching & cache infrastructure (in-memory + Redis, ETag, TTL) | Phase 31 (deferred) | Deferred |
+| Persistence layer — SQLite (config, sessions, audit, credentials, usage, user identity) | Phase 32 | **Next** |
+| Workspaces (personal + team areas, isolated memory/config/sessions) | Phase 33 | Medium–High |
+| Projects (workspace-scoped containers for isolated work) | Phase 34 | Medium |
+| User management API (CRUD users, issue/revoke tokens, per-user data views) | Phase 35 | Medium |
+| Cost tracking, token budgets & model pricing registry | Phase 36 (deferred) | Deferred |
+| Enterprise auth & multi-tenancy (OAuth/OIDC, RBAC, org isolation) | Phase 37 (deferred) | Deferred |
+| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 38 (deferred) | Deferred |
+| VS Code native extension | Phase 39 (deferred) | Deferred |
 
 ---
 
 ## Roadmap
 
-### Phase 7.5 — Tool Parity with OpenClaude
+### Phase 1 — Tool Parity with OpenClaude ✅
 
 **Goal:** Close the gap between Sovrant's 22 tools and the full OpenClaude tool set. A comparison of the OpenClaude source against Sovrant's `Sovrant.Tools` project identified 9 missing tools worth porting and 13 cloud/platform-only stubs that are not portable.
 
@@ -101,7 +107,7 @@ The engine is fully functional for individual and small-team use:
 |---|---|---|
 | Implemented ✅ | 31 | Read, Write, Edit, Glob, Grep, LS, Bash, PowerShell, REPL, WebFetch, WebSearch, TaskCreate/Get/List/Output/Stop/Update, TodoWrite, Agent, AskUserQuestion, Sleep, NotebookEdit, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree, Skill, ToolSearch, ListMcpResources, ReadMcpResource |
 | Missing — port ⬜ | 3 | ScheduleCron, ConfigTool, LSP |
-| Cloud — future phases ☁️ | 3 | MCPTool (Phase 12), McpAuthTool (Phase 13), TeamCreate/Delete (Phase 14) |
+| Cloud — future phases ☁️ | 3 | MCPTool (Phase 13), McpAuthTool (Phase 14), TeamCreate/Delete (Phase 15) |
 | Not portable ❌ | 10 | RemoteTrigger, SendMessage, WorkflowTool, BriefTool, SuggestBackgroundPR, VerifyPlanExecution, SyntheticOutput, Tungsten |
 
 #### Tier 1 — High priority (complete the core developer experience)
@@ -161,7 +167,7 @@ Language Server Protocol integration: hover type info, go-to-definition, find-re
 
 ---
 
-### Phase 7.6 — Quick Wins from Competitor Analysis
+### Phase 2 — Quick Wins from Competitor Analysis ✅
 
 **Goal:** Implement three high-value features identified in the competitor analysis that have no external dependencies, can be done in isolation, and dramatically improve day-to-day usability.
 
@@ -193,7 +199,7 @@ When the accumulated `_history` token count approaches the model's context windo
 
 #### Token Count Fix (OpenAI Streaming)
 
-**Blocks:** Phase 9.5 usage tracking, context window visualisation
+**Blocks:** Phase 10 usage tracking, context window visualisation
 
 OpenAI sends `usage` data in the second-to-last SSE chunk (before `[DONE]`), not in `MessageDelta`. The current `CollectStreamEventsAsync` in `ConversationRuntime` only reads `MessageDelta.Usage.OutputTokens` — the OpenAI format uses a top-level `usage` field on the final content chunk.
 
@@ -208,7 +214,7 @@ Fix: detect the `usage` field on the final OpenAI SSE chunk and capture `prompt_
 
 ---
 
-### Phase 7.6.5 — Native Model Web Search (OpenAI Responses API)
+### Phase 3 — Native Model Web Search (OpenAI Responses API) ✅
 
 > **Status: ✅ Complete** — `LLM_WEB_SEARCH=true` activates `OpenAiResponsesProvider`; tested end-to-end with `gpt-4o-mini`.
 
@@ -244,7 +250,7 @@ LLM_WEB_SEARCH=true dotnet run --project src/Sovrant.Cli -- --model gpt-4o-mini 
 
 ---
 
-### Phase 7.7 — Security Hardening
+### Phase 4 — Security Hardening ✅
 
 **Source:** OpenClaude improvement document review (2026-04-04) — items applicable to Sovrant's tool surface.
 
@@ -283,7 +289,7 @@ LLM_WEB_SEARCH=true dotnet run --project src/Sovrant.Cli -- --model gpt-4o-mini 
 
 ---
 
-### Phase 7.8 — Reliability & Safety
+### Phase 5 — Reliability & Safety ✅
 
 **Source:** OpenClaude improvement document review (2026-04-04).
 
@@ -315,7 +321,7 @@ LLM_WEB_SEARCH=true dotnet run --project src/Sovrant.Cli -- --model gpt-4o-mini 
 
 ---
 
-### Phase 7.9 — Robustness
+### Phase 6 — Robustness ✅
 
 **Source:** OpenClaude improvement document review (2026-04-04).
 
@@ -335,7 +341,7 @@ LLM_WEB_SEARCH=true dotnet run --project src/Sovrant.Cli -- --model gpt-4o-mini 
 
 #### Deferred — `ToolResult` structured record
 
-The OpenClaude document suggests replacing the `string` return from `ITool.ExecuteAsync` with a structured `ToolResult` record carrying `Output`, `IsError`, and optional `Metadata`. This is a **breaking change** to the `ITool` interface and all 31 implementations. Defer to a dedicated Phase 10+ refactor when the tool surface has stabilised.
+The OpenClaude document suggests replacing the `string` return from `ITool.ExecuteAsync` with a structured `ToolResult` record carrying `Output`, `IsError`, and optional `Metadata`. This is a **breaking change** to the `ITool` interface and all 31 implementations. Defer to a dedicated Phase 11+ refactor when the tool surface has stabilised.
 
 #### Implementation Plan
 
@@ -345,7 +351,7 @@ The OpenClaude document suggests replacing the `string` return from `ITool.Execu
 
 ---
 
-### Phase 8 — Structured Async Logging
+### Phase 7 — Structured Async Logging ✅
 
 **Goal:** Add non-blocking, structured logging throughout the engine and server so that runtime behaviour, errors, and performance are easy to observe without adding latency to the hot path.
 
@@ -432,7 +438,7 @@ Use Serilog's `LogContext.PushProperty` to attach `session_id` and `turn` as amb
 
 ---
 
-### Phase 9 — Multi-Tenant Per-Request Credentials
+### Phase 8 — Multi-Tenant Per-Request Credentials ✅
 
 **Goal:** Allow each client to supply its own LLM provider, model, and API key per HTTP request, without the server storing or managing those credentials.
 
@@ -494,7 +500,7 @@ This ensures session history is isolated per user even if two users share the sa
 
 ---
 
-### Phase 9.1 — Session Lifecycle Management (TTL Eviction + Turn Serialization)
+### Phase 9 — Session Lifecycle Management (TTL Eviction + Turn Serialization) ✅
 
 **Goal:** Allow the server to manage many concurrent sessions safely — one `ConversationRuntime` per active session — with automatic eviction of idle sessions and correct serialization of concurrent turns within the same session.
 
@@ -547,9 +553,9 @@ private sealed record SessionEntry(
 
 ---
 
-### Phase 9.5 — Small Team Hardening
+### Phase 10 — Small Team Hardening ✅
 
-**Depends on:** Phase 9.1 (session TTL + per-session lock)
+**Depends on:** Phase 9 (session TTL + per-session lock)
 
 **Goal:** Make Sovrant solid for a small trusted team sharing a single deployment — a single bearer token is fine, but config changes must be session-scoped, each user should bring their own LLM key, and the server must be observable (token usage, context window) and resilient (rate limiting, usage tracking). No user login system required at this stage.
 
@@ -562,7 +568,7 @@ Session history is already isolated per `session_id` — ten users with differen
 | Gap | Problem | Fix |
 |---|---|---|
 | `PUT /v1/config` is global | One user changing the model or permission mode (or calling `EnterPlanMode`) changes it for all sessions simultaneously | Session-scoped config overlay — each `SessionEntry` carries a `SessionConfig` that shadows the global defaults |
-| Single `LLM_API_KEY` | All sessions bill to the same key — no per-session cost visibility | Phase 9 per-request `X-LLM-Api-Key` header — each user or client supplies their own key |
+| Single `LLM_API_KEY` | All sessions bill to the same key — no per-session cost visibility | Phase 8 per-request `X-LLM-Api-Key` header — each user or client supplies their own key |
 | No per-session rate limiting | A single session can saturate the server with concurrent requests | Per-session request rate limiter (ASP.NET Core `RateLimiter` middleware) |
 | No cost visibility | No way to see which session is responsible for LLM spend | Per-session token accumulation in `SessionEntry`; `GET /v1/usage` summary endpoint |
 | No context window visibility | Users can't see how much context is consumed | `context_used_pct` and `tokens_remaining` in `GET /v1/sessions/{id}`; REPL status line |
@@ -576,20 +582,20 @@ Session history is already isolated per `session_id` — ten users with differen
 Use ASP.NET Core's built-in `RateLimiter` middleware keyed on `session_id`. Policy: N requests/minute per session (configurable via `SOVRANT_RATE_LIMIT_RPM`, default 60). Returns `429` with a `Retry-After` header.
 
 **Usage tracking**
-Each `SessionEntry` accumulates `TotalInputTokens` and `TotalOutputTokens` across all turns. Token count capture (Phase 7.6 prerequisite) must be fixed first. `GET /v1/usage` returns a per-session summary.
+Each `SessionEntry` accumulates `TotalInputTokens` and `TotalOutputTokens` across all turns. Token count capture (Phase 2 prerequisite) must be fixed first. `GET /v1/usage` returns a per-session summary.
 
 #### Implementation Plan
 
 1. Add `SessionConfig` overlay to `SessionEntry` — model, permission mode; initialised from global `MutableServerConfig` defaults on session creation
 2. Add `PUT /v1/sessions/{id}/config` endpoint; update `EnterPlanMode`/`ExitPlanMode` to write to `SessionConfig` rather than the shared singleton (fixes the global plan mode issue)
 3. Add ASP.NET Core `RateLimiter` middleware keyed on `session_id`; `SOVRANT_RATE_LIMIT_RPM` env var
-4. Fix token count capture (Phase 7.6 prerequisite); add `TotalInputTokens` / `TotalOutputTokens` to `SessionEntry`
+4. Fix token count capture (Phase 2 prerequisite); add `TotalInputTokens` / `TotalOutputTokens` to `SessionEntry`
 5. Add `GET /v1/usage` endpoint — per-session token summary
 6. Add `context_used_pct` and `tokens_remaining` to `GET /v1/sessions/{id}`; surface in REPL status line
 
 ---
 
-### Phase 10 — LSP Integration (Language Server Protocol)
+### Phase 11 — LSP Integration (Language Server Protocol) ✅
 
 **Competitor precedent:** opencode ✅ (20+ language servers, diagnostics, go-to-definition, symbol search)
 
@@ -621,7 +627,7 @@ An `ILspClient` service manages the lifecycle of one or more language server pro
 
 ---
 
-### Phase 11 — CI/CD Pipeline Integration ✅
+### Phase 12 — CI/CD Pipeline Integration ✅
 
 **Competitor precedent:** Claude Code ✅ (GitHub Actions + GitLab CI)
 
@@ -648,7 +654,7 @@ An `ILspClient` service manages the lifecycle of one or more language server pro
 
 ---
 
-### Phase 12 — Slack / Webhook Integration ✅
+### Phase 13 — Slack / Webhook Integration ✅
 
 **Goal:** Invoke Sovrant from any messaging platform (Slack, Teams, Discord) or custom system via a generic webhook endpoint.
 
@@ -676,7 +682,7 @@ An `ILspClient` service manages the lifecycle of one or more language server pro
 
 ---
 
-### Phase 13 — Frontend SDK, Diff View, Session Export ✅
+### Phase 14 — Frontend SDK, Diff View, Session Export ✅
 
 **Goal:** TypeScript/JavaScript client SDK, structured diff rendering in the CLI, and session export endpoint.
 
@@ -716,7 +722,7 @@ An `ILspClient` service manages the lifecycle of one or more language server pro
 
 ---
 
-### Phase 14 — MCP Server Mode ✅
+### Phase 15 — MCP Server Mode ✅
 
 **Goal:** Expose Sovrant as an MCP server so it can be consumed by MCP clients or composed into larger agent pipelines.
 
@@ -763,7 +769,7 @@ At cloud scale, users will want to connect MCP servers that front OAuth-protecte
 - OAuth tokens must never appear in session JSONL, server logs, or API responses
 - Token storage must be encrypted at rest (use OS keychain on CLI, server-side encrypted store for the HTTP server)
 - Refresh token rotation must be handled automatically on expiry
-- Per-user token isolation is required in multi-tenant deployments (Phase 9 session pool key applies here too)
+- Per-user token isolation is required in multi-tenant deployments (Phase 8 session pool key applies here too)
 
 #### Implementation Plan
 
@@ -775,10 +781,10 @@ At cloud scale, users will want to connect MCP servers that front OAuth-protecte
 
 ---
 
-### Phase 17.5 — Dual Agent Architecture (Scaffolding) ✅
+### Phase 18 — Dual Agent Architecture (Scaffolding) ✅
 
 **Source:** Dual Agent Architecture design document (2026-04-04).
-**Status:** ✅ Complete — scaffolding done, full execution implemented in Phase 19.
+**Status:** ✅ Complete — scaffolding done, full execution implemented in Phase 20.
 
 **Goal:** Introduce two interchangeable multi-agent backends behind a shared `IMultiAgentSystem` interface so the rest of the system never depends on a specific implementation. Whichever architecture proves superior in practice can be promoted as the default without touching consumers.
 
@@ -821,7 +827,7 @@ src/Sovrant.Agents/
 | `AGENT_MODE=shared` or unset | `InProcessMultiAgentSystem` (shared, in-process) |
 | `AgentSystemConfig.UseIsolatedAgents = true` | Isolated (default), programmatic override |
 
-#### Fully implemented (Phase 19)
+#### Fully implemented (Phase 20)
 
 - `ProcessAgent.HandleAsync` — process spawn, stdin write, stdout/stderr read, cancellation kills process tree
 - `ProcessBasedMultiAgentSystem.RunTaskAsync` — agent resolution, linked CTS, timeout handling
@@ -845,9 +851,9 @@ src/Sovrant.Agents/
 
 ---
 
-### Phase 18 — Multi-Agent Teams (`TeamCreateTool` / `TeamDeleteTool`) ✅
+### Phase 19 — Multi-Agent Teams (`TeamCreateTool` / `TeamDeleteTool`) ✅
 
-**Depends on:** Phase 17.5 (`Sovrant.Agents` scaffolding — already done)
+**Depends on:** Phase 18 (`Sovrant.Agents` scaffolding — already done)
 
 **Goal:** Allow a single Sovrant session to orchestrate a team of independent sub-agents running in parallel, each with its own session, tool access, and LLM provider — coordinated by a supervisor agent.
 
@@ -865,10 +871,10 @@ Supervisor Agent (ConversationRuntime)
   └── Collects results via TaskOutput / team message bus
 ```
 
-- Each team member is a full `ConversationRuntime` with its own session pool slot, tool set, and optionally its own LLM provider/key (Phase 9)
+- Each team member is a full `ConversationRuntime` with its own session pool slot, tool set, and optionally its own LLM provider/key (Phase 8)
 - The supervisor coordinates via `TaskOutput` polling or a lightweight message bus
 - Team lifecycle: `TeamCreate` spawns and starts, `TeamDelete` cancels and evicts
-- Teams are scoped to the supervisor's session — they are cleaned up when the supervisor session is evicted (Phase 9.1 TTL)
+- Teams are scoped to the supervisor's session — they are cleaned up when the supervisor session is evicted (Phase 9 TTL)
 
 #### Design Decisions to Resolve
 
@@ -887,12 +893,12 @@ Supervisor Agent (ConversationRuntime)
 
 ---
 
-### Phase 19 — Dual Agent Architecture: Full Implementation ✅
+### Phase 20 — Dual Agent Architecture: Full Implementation ✅
 
-**Depends on:** Phase 17.5 (scaffolding), Phase 18 (team tools that will consume `IMultiAgentSystem`)
+**Depends on:** Phase 18 (scaffolding), Phase 19 (team tools that will consume `IMultiAgentSystem`)
 **Status:** ✅ Complete — both backends implemented, team tools wired, 58 tests passing.
 
-**Goal:** Complete the two multi-agent backends stubbed in Phase 17.5. At this point the `TeamCreateTool` / `TeamDeleteTool` from Phase 18 will be wired to `IMultiAgentSystem` and the choice of isolated vs. shared backend becomes a runtime configuration decision.
+**Goal:** Complete the two multi-agent backends stubbed in Phase 18. At this point the `TeamCreateTool` / `TeamDeleteTool` from Phase 19 will be wired to `IMultiAgentSystem` and the choice of isolated vs. shared backend becomes a runtime configuration decision.
 
 #### Option A completion: `ProcessBasedMultiAgentSystem`
 
@@ -912,12 +918,12 @@ Supervisor Agent (ConversationRuntime)
 1. Implement `ProcessAgent.HandleAsync` with stdin/stdout pipes and tool-use message parser
 2. Implement `ProcessBasedMultiAgentSystem.RunTaskAsync` with full lifecycle management
 3. Implement `MultiAgentCoordinator.DispatchAsync` and update `ShutdownAsync`
-4. Wire `TeamCreateTool` to use `IMultiAgentSystem.RunTaskAsync` (replaces ad-hoc `ConversationRuntime` spawning in Phase 18)
+4. Wire `TeamCreateTool` to use `IMultiAgentSystem.RunTaskAsync` (replaces ad-hoc `ConversationRuntime` spawning in Phase 19)
 5. Add integration tests: isolated backend with a mock echo process; shared backend with a test `BaseAgent` subclass
 
 ---
 
-### Phase 20 — Hook Lifecycle System
+### Phase 21 — Hook Lifecycle System ✅
 
 **Inspired by:** everything-claude-code (34 hooks across 7 lifecycle events, ~16 built-in implementations)
 **Depends on:** None — can be implemented independently
@@ -985,16 +991,16 @@ Three enforcement levels configurable via `SOVRANT_HOOK_PROFILE`:
 
 ---
 
-### Phase 21 — Specialized Agent Definitions (Role Templates + Model Routing)
+### Phase 22 — Specialized Agent Definitions (Role Templates + Model Routing) ✅
 
 **Inspired by:** everything-claude-code (38 specialized agents with tool restrictions and model selection)
-**Depends on:** Phase 18+19 (multi-agent team tools — already complete)
+**Depends on:** Phase 19+20 (multi-agent team tools — already complete)
 
 **Goal:** Define a library of **24 specialized agent role templates** spanning coding, research, communication, operations, and creative work — each with a structured methodology, constrained tool access, and a **recommended capability level** (high/standard/fast). Templates specify what capability a task *needs*, not which vendor model to use — admins and users choose the actual model and API key. These templates are loaded by `TeamCreate` and `AgentTool` to spawn purpose-built sub-agents. Sovrant is a general-purpose agentic platform — coding is one vertical, not the entire product.
 
 #### Why this is high priority
 
-The team tools exist (Phase 18+19) but agents are generic — they get a role enum and a freeform prompt. Structured role templates with defined methodologies, tool restrictions, and output formats make agents dramatically more effective. This is the difference between "ask an LLM to do research" and "run a structured 6-step deep research workflow with source attribution and confidence scoring."
+The team tools exist (Phase 19+20) but agents are generic — they get a role enum and a freeform prompt. Structured role templates with defined methodologies, tool restrictions, and output formats make agents dramatically more effective. This is the difference between "ask an LLM to do research" and "run a structured 6-step deep research workflow with source attribution and confidence scoring."
 
 #### Agent Templates — General-Purpose (10 templates)
 
@@ -1091,9 +1097,9 @@ This keeps Sovrant provider-agnostic. Users who care about cost can route "high"
 
 ---
 
-### Phase 21.5 — Template Externalisation (Built-ins as Markdown Files)
+### Phase 23 — Template Externalisation (Built-ins as Markdown Files) ✅
 
-**Depends on:** Phase 21 (AgentTemplateRegistry already loads user templates from `.sovrant/agents/`)
+**Depends on:** Phase 22 (AgentTemplateRegistry already loads user templates from `.sovrant/agents/`)
 
 **Goal:** Move the 24 built-in agent templates out of `BuiltInTemplates.cs` and into
 plain markdown files on disk. This lets operators tune system prompts, adjust tool
@@ -1193,16 +1199,16 @@ unnecessary overhead in production.
 
 ---
 
-### Phase 22 — Verification Loop & Quality Gates
+### Phase 24 — Verification Loop & Quality Gates ✅
 
 **Inspired by:** everything-claude-code (6-phase verification loop, quality gate hooks, TDD workflow)
-**Depends on:** Phase 20 (hooks — gates run as post-stop hooks) or can be standalone tools
+**Depends on:** Phase 21 (hooks — gates run as post-stop hooks) or can be standalone tools
 
 **Goal:** A structured multi-phase quality verification pipeline that runs automatically before PR submission or on demand via a `/verify` skill. Covers: build, type check, lint, test (with coverage threshold), security scan, and diff review.
 
 #### Why this is high priority
 
-The code review (Phases A-F) was manual. A verification loop automates the same checks as repeatable, enforceable gates. Combined with hooks (Phase 20), this runs automatically at the end of every coding session.
+The code review (Phases A-F) was manual. A verification loop automates the same checks as repeatable, enforceable gates. Combined with hooks (Phase 21), this runs automatically at the end of every coding session.
 
 #### Verification Phases
 
@@ -1247,15 +1253,15 @@ Also a `/verify` skill that the model can invoke or that fires as a `Stop` hook.
 2. Implement `VerifyTool` — runs phases sequentially, collects results, returns structured report
 3. Auto-detect project type (`.csproj` → dotnet, `package.json` → npm, `go.mod` → Go) for default commands
 4. Add `/verify` skill registration
-5. Optionally wire as a `Stop` hook (Phase 20) for automatic end-of-session verification
+5. Optionally wire as a `Stop` hook (Phase 21) for automatic end-of-session verification
 6. Tests: each phase runner, threshold enforcement, skip list, auto-detection
 
 ---
 
-### Phase 23 — Governance, Security Monitoring & Audit
+### Phase 25 — Governance, Security Monitoring & Audit ✅
 
 **Inspired by:** everything-claude-code (governance capture, config protection, commit quality, enterprise controls)
-**Depends on:** Phase 20 (hooks — governance runs as PreToolUse/PostToolUse hooks)
+**Depends on:** Phase 21 (hooks — governance runs as PreToolUse/PostToolUse hooks)
 
 **Goal:** Defense-in-depth for agentic operations: detect secrets in tool outputs, block dangerous commands, protect configuration files, audit-log all bash commands, and provide enterprise control policies.
 
@@ -1306,16 +1312,16 @@ Three levels: `minimal` (audit only), `standard` (audit + warn), `strict` (audit
 4. Implement `ConfigProtectionRule` with configurable protected file globs
 5. Implement `AuditLogger` — append-only JSONL to `~/.sovrant/audit/`
 6. Implement `GovernanceMonitor` — aggregates all rules, returns `GovernanceVerdict`
-7. Wire into hook system (Phase 20) or directly into `DefaultToolExecutor` as a pre-execution check
+7. Wire into hook system (Phase 21) or directly into `DefaultToolExecutor` as a pre-execution check
 8. Add `SOVRANT_GOVERNANCE_LEVEL` env var
 9. Tests: secret detection patterns, command blocking, config protection, audit log format
 
 ---
 
-### Phase 24 — Skills System (Composable Workflow Packages)
+### Phase 26 — Skills System (Composable Workflow Packages) ✅
 
 **Inspired by:** everything-claude-code (156+ skills as directory-based workflow definitions)
-**Depends on:** Phase 20 (hooks — skills can trigger hooks), Phase 21 (agent templates — skills can spawn agents)
+**Depends on:** Phase 21 (hooks — skills can trigger hooks), Phase 22 (agent templates — skills can spawn agents)
 
 **Goal:** A modular system for packaging multi-step workflows as reusable, composable "skills" — each a single `.md` file with YAML frontmatter and a markdown body. Skills are invoked via `/skill-name` slash commands or programmatically by agents. Ship with **32 built-in skills** across 7 domains — coding is just one.
 
@@ -1323,7 +1329,7 @@ Three levels: `minimal` (audit only), `standard` (audit + warn), `strict` (audit
 
 Today Sovrant has a basic `SkillTool` that loads markdown files as system prompt overlays. The everything-claude-code approach is richer: skills are full workflow definitions with steps, agent delegation, tool restrictions, and cross-harness compatibility. Sovrant is a general-purpose agentic platform — chat, research, writing, business ops, project management, and coding. The skill system turns Sovrant from a tool-using agent into a workflow engine that serves all these verticals.
 
-#### Skill Structure — Flat .md Files (mirrors Phase 21.5 agent templates)
+#### Skill Structure — Flat .md Files (mirrors Phase 23 agent templates)
 
 Each skill is a single `.md` file — no directory-per-skill, no sidecar files. When a skill needs embedded code (JavaScript, Python, etc.), the code lives inside a fenced code block within the markdown body. This keeps skills self-contained and allows thousands of skills without directory explosion.
 
@@ -1429,7 +1435,7 @@ async function scrape(url) { ... }
 |---|---|---|
 | `tdd-workflow` | `/tdd` | Red-Green-Refactor with coverage enforcement |
 | `code-review` | `/review` | Multi-severity code review (CRITICAL/HIGH/MEDIUM/LOW) |
-| `verification-loop` | `/verify` | 6-phase quality gate (Phase 22) |
+| `verification-loop` | `/verify` | 6-phase quality gate (Phase 24) |
 | `security-review` | `/security` | OWASP-based security audit |
 | `refactor` | `/refactor` | Dead code detection + safe removal |
 | `doc-update` | `/docs` | Documentation maintenance synced with code changes |
@@ -1478,10 +1484,10 @@ src/Sovrant.Tools/Skills/
 
 ---
 
-### Phase 25 — Multi-Layered Memory System ✅
+### Phase 27 — Multi-Layered Memory System ✅
 
 **Inspired by:** everything-claude-code (session summaries, learned skills, instincts with confidence scoring)
-**Depends on:** Phase 20 (hooks — memory persisted via session start/end hooks)
+**Depends on:** Phase 21 (hooks — memory persisted via session start/end hooks)
 
 **Goal:** Evolve Sovrant's current flat memory files (`~/.sovrant/memory.md`) into a multi-layered memory system: session summaries (short-term), learned patterns (medium-term), and instincts with confidence scoring (long-term). Each layer has different persistence, scope, and retrieval characteristics.
 
@@ -1546,17 +1552,17 @@ src/Sovrant.Runtime/Memory/
 3. Implement `LearnedPatternStore` — markdown files in `.sovrant/learned/`
 4. Implement `InstinctStore` — YAML with confidence scoring and evidence
 5. Implement `MemoryInjector` — selects relevant memories based on project, recency, and confidence
-6. Wire session summary extraction into `SessionEnd` hook (Phase 20) or `RuntimeSessionPool.Evict`
+6. Wire session summary extraction into `SessionEnd` hook (Phase 21) or `RuntimeSessionPool.Evict`
 7. Update system prompt builder to inject multi-layered memory
 8. Add `/remember` and `/forget` commands for explicit memory management
 9. Tests: summary extraction, pattern storage, instinct confidence updates, memory selection
 
 ---
 
-### Phase 27 — Eval-Driven Development Framework
+### Phase 28 — Eval-Driven Development Framework ✅
 
 **Inspired by:** everything-claude-code (eval harness with pass@k metrics, capability/regression evals, multiple grader types)
-**Depends on:** Phase 22 (verification loop), Phase 21 (agent templates)
+**Depends on:** Phase 24 (verification loop), Phase 22 (agent templates)
 
 **Goal:** A formal evaluation framework for testing agent behavior itself — not just the code it produces. Define expected behaviors as evals, run them against agent sessions, and track pass@k metrics over time. This applies to all agent verticals: "Does the research agent cite sources?" "Does the content writer avoid slop phrases?" "Does the planner create actionable steps?" — not just coding tasks.
 
@@ -1621,18 +1627,18 @@ Evals stored in `.sovrant/evals/`:
 
 ---
 
-### Phase 28 — Swarm Orchestrator (Auto-Decomposition + DAG Execution) ✅
+### Phase 29 — Swarm Orchestrator (Auto-Decomposition + DAG Execution) ✅
 
 > **Status: ✅ Complete** — 17 new files, 62 new tests, 0 warnings. OFF by default; foundation for frontend-driven orchestration.
 
 **Inspired by:** [claude-swarm](https://github.com/affaan-m/claude-swarm) (parallel task decomposition with dependency DAGs, file locking, budget enforcement, quality gate)
-**Depends on:** Phase 18+19 (multi-agent team tools), Phase 21 (agent templates), Phase 36 (cost tracking — optional)
+**Depends on:** Phase 19+20 (multi-agent team tools), Phase 22 (agent templates), Phase 36 (cost tracking — optional)
 
-**Goal:** Add a **swarm orchestration layer** on top of Sovrant's existing multi-agent infrastructure. A user gives a single complex prompt; a high-capability model automatically decomposes it into a dependency graph of 2-8 subtasks; subtasks execute in parallel waves respecting dependencies, with file-level conflict prevention, budget enforcement, and a quality gate review phase. The swarm uses whatever models the admin/user has configured — decomposition and quality gates use the "high" level model, workers use the "standard" level (all provider-agnostic via Phase 21's model resolution). Available via CLI (`sovrant swarm "task"`), the `SwarmTool` for programmatic use, and `POST /v1/swarm` for frontend integration.
+**Goal:** Add a **swarm orchestration layer** on top of Sovrant's existing multi-agent infrastructure. A user gives a single complex prompt; a high-capability model automatically decomposes it into a dependency graph of 2-8 subtasks; subtasks execute in parallel waves respecting dependencies, with file-level conflict prevention, budget enforcement, and a quality gate review phase. The swarm uses whatever models the admin/user has configured — decomposition and quality gates use the "high" level model, workers use the "standard" level (all provider-agnostic via Phase 22's model resolution). Available via CLI (`sovrant swarm "task"`), the `SwarmTool` for programmatic use, and `POST /v1/swarm` for frontend integration.
 
 #### What Sovrant already has vs. what this adds
 
-| Existing (Phase 18+19) | This Phase adds |
+| Existing (Phase 19+20) | This Phase adds |
 |---|---|
 | Manual agent creation (`TeamCreate`) | **Auto-decomposition**: one prompt → task DAG |
 | Manual delegation (`TeamDelegate`) | **Dependency-aware scheduling**: topological wave execution |
@@ -1647,7 +1653,7 @@ Evals stored in `.sovrant/evals/`:
 **Phase 1 — Decomposition** (high-level model)
 1. User submits a single complex prompt
 2. Decomposer calls `IConversationRuntime` (using the admin's configured "high" model) with a structured system prompt instructing it to output a JSON task graph
-3. Each task in the graph has: `id`, `description`, `dependencies` (list of task IDs), `files_to_modify` (predicted), `agent_template` (from Phase 21), `allowed_tools`
+3. Each task in the graph has: `id`, `description`, `dependencies` (list of task IDs), `files_to_modify` (predicted), `agent_template` (from Phase 22), `allowed_tools`
 4. Tasks are organized into parallel waves (levels of the DAG) — wave 0 has no dependencies, wave 1 depends on wave 0, etc.
 
 **Phase 2 — Parallel Execution** (standard/fast-level workers)
@@ -1695,7 +1701,7 @@ swarm:
   budget_usd: 5.0            # hard cost ceiling
   max_retries: 1             # per-task retry limit
   quality_gate: true         # enable post-execution review
-  decomposer_level: high       # recommended level for decomposition (Phase 21 RecommendedLevel)
+  decomposer_level: high       # recommended level for decomposition (Phase 22 RecommendedLevel)
   worker_level: standard       # default recommended level for workers
 
 templates:                    # override agent templates per task type
@@ -1773,9 +1779,9 @@ Claude-swarm agents are isolated — downstream tasks wait for predecessors but 
 
 ---
 
-### Phase 29 — Registry Discovery API (Tools, Skills, Agent Templates)
+### Phase 30 — Registry Discovery API (Tools, Skills, Agent Templates) ✅
 
-**Depends on:** Phase 24 (skills system), Phase 21.5 (agent templates), existing tool registry
+**Depends on:** Phase 26 (skills system), Phase 23 (agent templates), existing tool registry
 **Difficulty:** Low–Medium
 
 **Goal:** Expose read-only API endpoints that let frontends discover what the engine can do — every registered tool, every built-in and user-defined skill, and every agent template. Today the engine has 43 tools, 32 skills, and 24 agent templates, but a frontend has no way to enumerate them or display their metadata to the user. These endpoints close that gap so UIs can render tool palettes, skill catalogs, and agent template pickers.
@@ -1858,16 +1864,16 @@ All endpoints are authenticated (same `SOVRANT_TOKEN` bearer auth as existing en
 
 ---
 
-### Phase 30 — Server Response Caching & Cache Infrastructure
+### Phase 31 — Server Response Caching & Cache Infrastructure ⏸️ Deferred
 
-**Depends on:** Phase 29 (registry discovery API — primary consumer), Phase 7 (server)
+**Depends on:** Phase 30 (registry discovery API — primary consumer), Phase 7 (server)
 **Difficulty:** Medium
 
 **Goal:** Add a caching layer to the server so that expensive or repeated reads (registry listings, session metadata, provider health) are served from cache with proper TTL expiry and invalidation on mutation. Ship with an in-memory cache by default and an optional Redis adapter for multi-instance deployments.
 
 #### Why this matters
 
-The Phase 29 registry endpoints (`/v1/tools`, `/v1/skills`, `/v1/agents/templates`) return data that changes only when skills are created or the server restarts. Without caching, every request re-enumerates the registry. Session metadata, provider health scores, and config are similarly stable between mutations. A cache with proper invalidation turns these into near-zero-cost reads and enables HTTP cache headers so frontends can cache client-side too.
+The Phase 30 registry endpoints (`/v1/tools`, `/v1/skills`, `/v1/agents/templates`) return data that changes only when skills are created or the server restarts. Without caching, every request re-enumerates the registry. Session metadata, provider health scores, and config are similarly stable between mutations. A cache with proper invalidation turns these into near-zero-cost reads and enables HTTP cache headers so frontends can cache client-side too.
 
 #### What gets cached
 
@@ -1915,7 +1921,7 @@ src/Sovrant.Server/Middleware/
 2. Implement `InMemoryCacheProvider` — `ConcurrentDictionary<string, CacheEntry>` with background `Timer` sweep (every 60s)
 3. Implement `RedisCacheProvider` — thin wrapper over `StackExchange.Redis` `IDatabase`; serialize values as JSON
 4. Add `CacheInvalidator` — subscribes to `SkillRegistry` changes, `RuntimeSessionPool` events, config mutations; calls `RemoveByPrefix`
-5. Wire caching into registry routes (Phase 29): check cache before enumerating, populate on miss
+5. Wire caching into registry routes (Phase 30): check cache before enumerating, populate on miss
 6. Wire caching into existing routes: `/v1/status`, `/v1/config`, `/v1/sessions/{id}` metadata
 7. Add `ETagMiddleware` — hash response body for GET routes, compare `If-None-Match`, return `304` or full response
 8. Register `ICacheProvider` in DI (factory selects implementation based on `SOVRANT_CACHE_PROVIDER`)
@@ -1923,9 +1929,9 @@ src/Sovrant.Server/Middleware/
 
 ---
 
-### Phase 31 — Persistence Layer (SQLite)
+### Phase 32 — Persistence Layer (SQLite)
 
-**Depends on:** Phase 8 (structured logging), Phase 23 (governance audit), Phase 25 (memory system)
+**Depends on:** Phase 7 (structured logging), Phase 25 (governance audit), Phase 27 (memory system)
 **Difficulty:** Medium–High
 
 **Goal:** Introduce SQLite as **the** persistence layer for the engine. Everything except `.md` files moves into a single database — config, sessions, audit, credentials, token usage, and CLI memory. SQLite is the starting point: zero-config, zero-infrastructure, works offline, ships as a single file. The abstraction (`IStorageProvider`) is designed so that a future phase can swap in Postgres, CockroachDB, or Turso without touching any consumer code.
@@ -1969,14 +1975,14 @@ Every place the engine currently writes data to disk:
 | **Config — governance** | `~/.sovrant/governance.json` + `.sovrant/governance.json` | JSON (merged) | Per-team governance rules; audit trail of rule changes |
 | **Config — verification** | `.sovrant/verify.json` | JSON | Per-project with team overrides; consistent with other config |
 | **Session transcripts** | `~/.sovrant/sessions/*.jsonl` | JSONL (AppendAllTextAsync) | Cross-session full-text search; per-user session isolation; no filesystem scanning; `GET /v1/sessions?query=...` |
-| **Governance audit log** (Phase 23) | `~/.sovrant/audit/governance.jsonl` | JSONL (AppendAllTextAsync) | Query by tool, session, severity, date range |
-| **Bash command audit log** (Phase 23) | `~/.sovrant/audit/bash-commands.jsonl` | JSONL (AppendAllTextAsync) | Query by command, exit code, session |
+| **Governance audit log** (Phase 25) | `~/.sovrant/audit/governance.jsonl` | JSONL (AppendAllTextAsync) | Query by tool, session, severity, date range |
+| **Bash command audit log** (Phase 25) | `~/.sovrant/audit/bash-commands.jsonl` | JSONL (AppendAllTextAsync) | Query by command, exit code, session |
 | **Session index** | Implicit (scan JSONL filenames) | No storage (derived) | Query by creation date, last access, project, message count, files touched, token totals |
-| **Token usage history** (Phase 9.5) | In-memory only (`SessionConfig.AddTokens()`) | Not persisted | Persist across restarts; query by date/model/session; historical cost analysis |
+| **Token usage history** (Phase 10) | In-memory only (`SessionConfig.AddTokens()`) | Not persisted | Persist across restarts; query by date/model/session; historical cost analysis |
 | **Encrypted credentials** (Phase 17) | `~/.sovrant/credentials/*.enc` + `.keystore` | Binary (AES-GCM) / Hex | Per-user credential isolation; no directory scanning; key rotation without file juggling |
 | **Memory entries** | `~/.sovrant/memory.md` + `.sovrant/memory.md` | Markdown (2 flat files) | Per-user, per-project, typed (user/feedback/project/reference); searchable; concurrent writes without file lock; multiple sessions can add entries simultaneously |
-| **CLI memory — learned patterns** (Phase 25) | `.sovrant/learned/*.md` (planned) | Markdown (planned) | Full-text search, confidence scoring, evidence trails, recency ranking |
-| **CLI memory — instincts** (Phase 25) | `~/.sovrant/instincts/*.yaml` (planned) | YAML (planned) | Query by trigger, confidence threshold, decay pruning |
+| **CLI memory — learned patterns** (Phase 27) | `.sovrant/learned/*.md` (planned) | Markdown (planned) | Full-text search, confidence scoring, evidence trails, recency ranking |
+| **CLI memory — instincts** (Phase 27) | `~/.sovrant/instincts/*.yaml` (planned) | YAML (planned) | Query by trigger, confidence threshold, decay pruning |
 
 **Stays as files**
 
@@ -1985,7 +1991,7 @@ Every place the engine currently writes data to disk:
 | **Skills** | `.sovrant/skills/*.md` + built-in `src/.../skills/` | Markdown + YAML frontmatter | Version-controlled, git-diffable, human-authored; loaded into memory at startup |
 | **Agent templates** | `.sovrant/agents/*.md` + built-in `src/.../agents/` | Markdown + YAML frontmatter | Same as skills |
 | **Memory `.md` bootstrap files** | `~/.sovrant/memory.md` + `.sovrant/memory.md` | Markdown | Read-only seed layer — imported into `memory_entries` table on first run; existing files still loaded as fallback if DB is empty; new entries go to SQLite |
-| **Rolling app logs** (Phase 8) | `~/.sovrant/logs/sovrant-{Date}.log` | Text or JSON | Standard log files consumed by log aggregators (Datadog, ELK, etc.); daily rotation; external tooling expects files |
+| **Rolling app logs** (Phase 7) | `~/.sovrant/logs/sovrant-{Date}.log` | Text or JSON | Standard log files consumed by log aggregators (Datadog, ELK, etc.); daily rotation; external tooling expects files |
 | **Temp scripts** | `{TempPath}/sovrant_*.{sh,ps1,cmd}` | Text | Ephemeral — created for tool execution, deleted immediately after |
 
 #### Shared by CLI and Server
@@ -2012,14 +2018,14 @@ Resolution: for a given key, the highest-priority scope wins. `ConfigLoader` bec
 
 #### Lightweight user identity
 
-Phase 31 introduces a `users` table — not full enterprise auth (that's Phase 32), just enough to give every other table an `owner_id` foreign key. This enables per-user config, session isolation, credential scoping, and usage attribution without building a login system.
+Phase 32 introduces a `users` table — not full enterprise auth (that's Phase 35), just enough to give every other table an `owner_id` foreign key. This enables per-user config, session isolation, credential scoping, and usage attribution without building a login system.
 
 | Context | How user ID is resolved |
 |---|---|
 | **CLI** | `SOVRANT_USER_ID` env var, or defaults to OS username (`Environment.UserName`) |
 | **Server** | Derived from bearer token → user mapping (simple `SOVRANT_TOKENS` JSON map: `{"token": "user_id"}`). Falls back to `"anonymous"` for single-token setups. |
 
-The `users` table is an anchor row — created on first seen, referenced everywhere by `user_id`. No passwords, no OAuth, no sessions-as-auth. Phase 32 adds real auth on top of this same schema.
+The `users` table is an anchor row — created on first seen, referenced everywhere by `user_id`. No passwords, no OAuth, no sessions-as-auth. Phase 35 adds real auth on top of this same schema.
 
 ```sql
 -- Every table references user_id for scoping
@@ -2056,7 +2062,7 @@ src/Sovrant.Runtime/Storage/
     instincts                  ← (id, user_id FK, trigger, action, confidence, evidence_json, created_at, updated_at)
 ```
 
-All tables except `users` and `config` have a `user_id` foreign key. Queries naturally scope by user without extra logic. Phase 32's enterprise auth adds token management and access control on top of this existing schema — the data model doesn't change, only who is allowed to set `user_id`.
+All tables except `users` and `config` have a `user_id` foreign key. Queries naturally scope by user without extra logic. Phase 35's enterprise auth adds token management and access control on top of this existing schema — the data model doesn't change, only who is allowed to set `user_id`.
 
 #### Database Location
 
@@ -2110,25 +2116,25 @@ SQLite is the starting persistence layer, not the final one. The `IStorageProvid
 
 Swapping backends is a DI registration change + migration script, not a rewrite. All consumers use `IStorageProvider` — they never touch `SqliteConnection` directly.
 
-#### Relationship to Phase 25 (Memory System → SQLite)
+#### Relationship to Phase 27 (Memory System → SQLite)
 
-Phase 25 introduces three memory layers that initially use flat files. Phase 31 migrates all three into SQLite:
+Phase 27 introduces three memory layers that initially use flat files. Phase 32 migrates all three into SQLite:
 
-| Memory layer | Phase 25 storage | Phase 31 table | What changes |
+| Memory layer | Phase 27 storage | Phase 32 table | What changes |
 |---|---|---|---|
 | **Session summaries** | `~/.sovrant/sessions/{project}/{ts}-summary.md` | `session_summaries` `(id, user_id, project, session_id, summary_md, tasks, tools_used, files_modified, outcome, tokens_in, tokens_out, created_at)` | Full-text search across summaries; per-user scoping; no filesystem scanning |
 | **Learned patterns** | `.sovrant/learned/*.md` | `learned_patterns` `(id, user_id, project, pattern, source_session, confidence, created_at, last_used)` | Query by project + confidence; automatic decay; concurrent multi-session writes |
 | **Instincts** | `~/.sovrant/instincts/*.yaml` | `instincts` `(id, user_id, trigger, action, confidence, evidence_json, created_at, updated_at)` | Query by trigger keyword; confidence-threshold pruning via SQL; evidence append without YAML rewrite |
 
 Migration strategy:
-- `StorageMigrator` reads existing Phase 25 flat files and inserts into respective tables
+- `StorageMigrator` reads existing Phase 27 flat files and inserts into respective tables
 - `IMemoryStore` implementations get a second constructor path accepting `IStorageProvider`
-- When `IStorageProvider` is available (Phase 31+), stores write to SQLite; otherwise fall back to flat files
+- When `IStorageProvider` is available (Phase 32+), stores write to SQLite; otherwise fall back to flat files
 - `.md` and `.yaml` files are kept as archival copies post-migration
 
-#### Relationship to Phase 30 (Caching)
+#### Relationship to Phase 31 (Caching)
 
-Phase 30's `ICacheProvider` is for **hot, ephemeral data** — fast reads with TTL expiry, no durability guarantee. Phase 31's `IStorageProvider` is for **cold, durable data** — structured records that survive restarts and support queries. They compose:
+Phase 31's `ICacheProvider` is for **hot, ephemeral data** — fast reads with TTL expiry, no durability guarantee. Phase 32's `IStorageProvider` is for **cold, durable data** — structured records that survive restarts and support queries. They compose:
 - Cache a query result from SQLite in the in-memory/Redis cache for repeated fast access
 - Invalidate the cache entry when the underlying SQLite data changes
 - Example: `GET /v1/audit?last=7d` → first request queries SQLite, caches for 30s; new audit event invalidates
@@ -2145,7 +2151,7 @@ Phase 30's `ICacheProvider` is for **hot, ephemeral data** — fast reads with T
 8. **Credential migration:** Replace `AesGcmCredentialStore` file I/O with `credentials` table; same AES-GCM encryption, different storage
 9. **Token usage:** Add `token_usage` table; wire `SessionConfig.AddTokens()` to persist
 10. **Memory migration:** Add `memory_entries` table; replace `MemoryCommand` file I/O with SQLite reads/writes; import existing `.md` files on first run; `/memory` command writes to DB
-11. Prepare `learned_patterns` and `instincts` tables (schema only — populated by Phase 25)
+11. Prepare `learned_patterns` and `instincts` tables (schema only — populated by Phase 27)
 12. Wire `IStorageProvider` into DI as singleton; CLI and Server share same registration
 13. Add server endpoints: `GET /v1/audit` (query events), `GET /v1/sessions?query=...` (full-text search)
 14. Import tool: `StorageMigrator` auto-imports existing flat files on first run
@@ -2153,18 +2159,163 @@ Phase 30's `ICacheProvider` is for **hot, ephemeral data** — fast reads with T
 
 ---
 
-### Phase 32 — User Management API
+### Phase 33 — Workspaces
 
-**Depends on:** Phase 31 (persistence layer — `users` table), Phase 9 (bearer token auth)
+**Depends on:** Phase 32 (SQLite persistence), Phase 35 (user management API), Phase 27 (memory system)
+
+**Goal:** Personal and team areas that house projects. Every user gets an isolated personal workspace by default; team workspaces allow groups to collaborate. Workspaces own their own memory, configuration, sessions, credentials, and audit data.
+
+#### Core concepts
+
+- **Personal workspace** — auto-created when a user is created. Single-owner, cannot be deleted, always exists. This is where a user's solo work lives.
+- **Team workspace** — created explicitly. Has membership (owner/admin/member/viewer) and invite-based onboarding. This is where teams collaborate.
+- **Fallback rule** — if no `workspace_id` is provided in a request, resolve to the authenticated user's personal workspace. No request is ever "unscoped."
+- **Isolation** — workspaces cannot see each other's data. Sessions, config, memory, credentials, audit — all scoped per-workspace.
+- **Memory** — Phase 27's memory layers (SessionSummary, LearnedPattern, Instinct) are scoped per-workspace. A team workspace accumulates shared learned patterns; a personal workspace keeps individual ones. Memory does not leak across workspace boundaries.
+
+#### Motivation
+
+Today Sovrant is single-user or flat multi-user (Phase 35). There's no separation between "my stuff" and "our team's stuff." Workspaces give every user a private area from day one (personal workspace) and let teams form shared areas when needed (team workspaces):
+- A user's personal workspace is their default — solo work, personal memory, personal config
+- A team workspace lets multiple users share sessions, memory, config, and projects
+- Isolation means workspace A cannot see workspace B's data, memory, or sessions
+- Users can belong to multiple team workspaces while always having their personal workspace as home base
+
+#### SQLite schema
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `workspaces` | `workspace_id` (PK), `type` (personal/team), `name`, `slug` (unique), `owner_id` (FK → users), `created_at`, `updated_at` | Personal workspaces: `type='personal'`, one per user, `owner_id` = user. Team workspaces: `type='team'`, `owner_id` = creator. |
+| `workspace_members` | `workspace_id` (FK), `user_id` (FK), `role` (owner/admin/member/viewer), `joined_at` | Personal workspaces have exactly one member (the owner). Team workspaces have many. |
+| `workspace_config` | `workspace_id` (FK), `key`, `value` | Workspace-scoped settings (model defaults, governance level, budget caps) |
+| `workspace_invites` | `invite_id` (PK), `workspace_id` (FK), `email`, `role`, `token`, `expires_at`, `accepted_at` | Team workspaces only — personal workspaces don't accept invites |
+| `workspace_memory` | `memory_id` (PK), `workspace_id` (FK), `layer` (summary/pattern/instinct), `content`, `confidence`, `project_id` (FK, nullable), `created_at`, `updated_at` | Replaces flat-file memory storage from Phase 27. Scoped to workspace, optionally to project. |
+
+All existing tables with `user_id` gain a `workspace_id` FK (not nullable — every row belongs to a workspace). Migration backfills existing data into each user's personal workspace.
+
+#### Workspace resolution
+
+1. Request includes `X-Workspace-Id` header → use that workspace (validate membership)
+2. Request includes no workspace context → resolve to the authenticated user's personal workspace
+3. Never unscoped — the personal workspace is always the fallback
+
+#### API surface
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/v1/workspaces` | GET | List workspaces the authenticated user belongs to (always includes personal) |
+| `/v1/workspaces` | POST | Create a team workspace (creator becomes owner) |
+| `/v1/workspaces/{id}` | GET/PUT | Workspace read/update. Personal workspaces can be renamed but not deleted. |
+| `/v1/workspaces/{id}` | DELETE | Delete team workspace only (personal workspaces cannot be deleted) |
+| `/v1/workspaces/{id}/members` | GET/POST/DELETE | Membership management (team workspaces only) |
+| `/v1/workspaces/{id}/invites` | POST/DELETE | Invite lifecycle (team workspaces only) |
+| `/v1/workspaces/{id}/config` | GET/PUT | Workspace-scoped configuration |
+| `/v1/workspaces/{id}/usage` | GET | Aggregated token/cost usage for workspace |
+| `/v1/workspaces/{id}/memory` | GET | Workspace memory (summaries, patterns, instincts) |
+
+#### Implementation plan
+
+1. Add SQLite tables (`workspaces`, `workspace_members`, `workspace_config`, `workspace_invites`, `workspace_memory`)
+2. Add `workspace_id` FK (not nullable) to `sessions`, `audit_events`, `credentials`, `usage`, `config` tables
+3. Auto-create personal workspace on user creation (Phase 35 user lifecycle hook)
+4. Migration: backfill existing data into each user's personal workspace
+5. Implement `IWorkspaceService` — CRUD, membership, invite token generation/validation, personal workspace creation
+6. Implement `WorkspaceContextMiddleware` — resolves workspace from `X-Workspace-Id` header, falls back to personal workspace
+7. Migrate Phase 27 `IMemoryStore` from flat files to `workspace_memory` table — `FileMemoryStore` becomes fallback for non-SQLite mode
+8. Scope all existing queries by `workspace_id` (no unscoped queries remain)
+9. Add workspace API endpoints
+10. Workspace-scoped config inheritance: workspace config → user config → global defaults
+11. Tests: personal workspace auto-creation, fallback resolution, isolation (workspace A can't see workspace B data), memory scoping, membership roles, invite flow (team only), personal workspace delete protection
+
+#### Relationship to Phase 37 (Enterprise Auth)
+
+Phase 37 adds external IdP login and RBAC on top of the workspace model — workspaces become the RBAC scope boundary.
+
+---
+
+### Phase 34 — Projects
+
+**Depends on:** Phase 33 (workspaces)
+
+**Goal:** Isolated containers within workspaces that group related work — sessions, config, memory, agent templates, and artifacts. A project belongs to exactly one workspace and inherits its isolation boundary.
+
+#### Core concepts
+
+- **Project** — a named container within a workspace (like a repo, initiative, or client engagement)
+- **Workspace-scoped** — projects belong to a workspace. Personal workspace projects are solo; team workspace projects are collaborative.
+- **Memory inheritance** — projects can accumulate their own learned patterns and instincts (stored in `workspace_memory` with `project_id` set). Project memory is a refinement of workspace memory, not a replacement — both layers are visible within the project.
+- **Membership** — project members are a subset of workspace members. If no project members are explicitly set, all workspace members have access (open by default within the workspace).
+
+#### Motivation
+
+Workspaces isolate people. Projects isolate work. Without projects:
+- All sessions in a workspace are in one flat list
+- Config overrides apply workspace-wide or per-session — no middle ground for "this initiative uses model X with budget Y"
+- Memory accumulates at the workspace level with no way to separate patterns learned on different initiatives
+- Agent templates and skills can't be scoped to a specific effort
+
+Projects let a team (or individual) say "this engagement has its own model config, budget, memory, and agent templates" without affecting other work in the same workspace.
+
+#### SQLite schema
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `projects` | `project_id` (PK), `workspace_id` (FK), `name`, `slug`, `description`, `created_at`, `updated_at`, `archived_at` | Belongs to exactly one workspace |
+| `project_members` | `project_id` (FK), `user_id` (FK), `role` (lead/contributor/viewer), `joined_at` | Subset of workspace members; optional — no rows means all workspace members have access |
+| `project_config` | `project_id` (FK), `key`, `value` | Project-scoped settings (model, budget, governance overrides) |
+
+Phase 33's `workspace_memory` table already has an optional `project_id` FK — project-scoped memory writes set this field. Existing tables gain optional `project_id` FK: `sessions`, `audit_events`, `usage`.
+
+#### Config and memory inheritance
+
+```
+project config  →  workspace config  →  user config  →  global defaults
+project memory  +  workspace memory  (both visible within project context)
+```
+
+#### API surface
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/v1/workspaces/{wid}/projects` | GET/POST | List/create projects in workspace |
+| `/v1/projects/{id}` | GET/PUT/DELETE | Project CRUD (delete archives by default) |
+| `/v1/projects/{id}/members` | GET/POST/DELETE | Project membership (subset of workspace) |
+| `/v1/projects/{id}/config` | GET/PUT | Project-scoped configuration |
+| `/v1/projects/{id}/sessions` | GET | Sessions scoped to project |
+| `/v1/projects/{id}/usage` | GET | Token/cost usage for project |
+| `/v1/projects/{id}/memory` | GET | Project-scoped memory (project + inherited workspace memory) |
+
+#### Implementation plan
+
+1. Add SQLite tables (`projects`, `project_members`, `project_config`)
+2. Add optional `project_id` FK to `sessions`, `audit_events`, `usage` tables
+3. Implement `IProjectService` — CRUD, membership, archival
+4. Implement `ProjectContextMiddleware` — resolves project from `X-Project-Id` header
+5. Config inheritance chain: project config → workspace config → user config → global defaults
+6. Memory scoping: project memory writes go to `workspace_memory` with `project_id` set; reads merge project + workspace layers
+7. Session creation auto-associates with active project context
+8. Project-scoped agent templates and skills (load from project config in addition to workspace/global)
+9. Budget enforcement at project level (Phase 36's `ICostModel` + project config budget cap)
+10. Tests: project isolation within workspace, config inheritance chain, memory scoping (project sees own + workspace memory), membership subset validation, archive behavior
+
+#### Relationship to Phase 38 (Artifact System)
+
+If Phase 38 is implemented, artifacts are scoped to projects rather than just teams. The `ITeamWorkspace` from Phase 38 becomes project-aware — artifacts persist in the project context and survive across team agent lifetimes.
+
+---
+
+### Phase 35 — User Management API
+
+**Depends on:** Phase 32 (persistence layer — `users` table), Phase 8 (bearer token auth)
 **Difficulty:** Medium
 
-**Goal:** Expose secure CRUD endpoints for user management so that frontends can register users, issue API tokens, manage profiles, and query per-user data. Phase 31 creates the `users` table and `user_id` foreign keys on every other table. This phase builds the API surface that lets frontends and admin tools actually manage those users.
+**Goal:** Expose secure CRUD endpoints for user management so that frontends can register users, issue API tokens, manage profiles, and query per-user data. Phase 32 creates the `users` table and `user_id` foreign keys on every other table. This phase builds the API surface that lets frontends and admin tools actually manage those users.
 
-This is **not** enterprise SSO or OAuth — it's the practical user management layer that a frontend needs to onboard users, assign tokens, and display per-user dashboards. Phase 33 (enterprise auth) adds external identity providers and fine-grained access control on top of this.
+This is **not** enterprise SSO or OAuth — it's the practical user management layer that a frontend needs to onboard users, assign tokens, and display per-user dashboards. Phase 37 (enterprise auth) adds external identity providers and fine-grained access control on top of this.
 
 #### Why this matters
 
-After Phase 31, the database has per-user scoping on config, sessions, audit, credentials, and usage. But there's no way to create or manage users through the API — they're auto-created on first seen. A frontend building a multi-user dashboard needs to:
+After Phase 32, the database has per-user scoping on config, sessions, audit, credentials, and usage. But there's no way to create or manage users through the API — they're auto-created on first seen. A frontend building a multi-user dashboard needs to:
 - Register new users and issue them API tokens
 - List and search users
 - View per-user usage, sessions, and audit history
@@ -2241,7 +2392,7 @@ All endpoints require admin authorization (`SOVRANT_ADMIN_TOKENS` or a user with
 }
 ```
 
-#### Schema additions (extends Phase 31)
+#### Schema additions (extends Phase 32)
 
 ```sql
 -- Extends users table
@@ -2294,13 +2445,13 @@ CREATE INDEX idx_api_tokens_hash ON api_tokens(token_hash);
 
 ### Phase 36 — Cost Tracking, Token Budgets & Model Pricing Registry ⏸️ Deferred (nice-to-have)
 
-**Depends on:** Phase 9.5 (token usage tracking — already complete)
+**Depends on:** Phase 10 (token usage tracking — already complete)
 
 **Goal:** End-to-end cost management — per-session/per-project token tracking with JSONL metrics log, budget enforcement, a `/cost` dashboard, and a multi-source pricing registry that maps model names to USD-per-token rates. Merges the former Phase 26 (cost tracking) with model pricing so the full cost pipeline ships as one coherent feature.
 
 #### What exists today
 
-Phase 9.5 already tracks `TotalInputTokens` and `TotalOutputTokens` per session in `SessionConfig`, and `GET /v1/usage` returns per-session token summaries. This phase adds budget limits, persistent metrics logging, a cost dashboard, and USD estimation via a layered pricing registry.
+Phase 10 already tracks `TotalInputTokens` and `TotalOutputTokens` per session in `SessionConfig`, and `GET /v1/usage` returns per-session token summaries. This phase adds budget limits, persistent metrics logging, a cost dashboard, and USD estimation via a layered pricing registry.
 
 #### Components
 
@@ -2364,30 +2515,30 @@ Phase 9.5 already tracks `TotalInputTokens` and `TotalOutputTokens` per session 
 
 ---
 
-### Phase 33 — Enterprise Auth & Multi-Tenancy ⏸️ Deferred
+### Phase 37 — Enterprise Auth & Multi-Tenancy ⏸️ Deferred
 
-**Depends on:** Phase 32 (user management API), Phase 37 (workspaces — provides tenant boundary), Phase 9.5 (session-scoped config)
+**Depends on:** Phase 35 (user management API), Phase 33 (workspaces — provides tenant boundary), Phase 10 (session-scoped config)
 
-**Goal:** Add external identity providers (OAuth/OIDC, SAML), fine-grained role-based access control (RBAC), and enterprise multi-tenancy on top of the Phase 37 workspace model. Workspaces provide the isolation boundary; this phase adds SSO login, granular permissions, and compliance controls on top.
+**Goal:** Add external identity providers (OAuth/OIDC, SAML), fine-grained role-based access control (RBAC), and enterprise multi-tenancy on top of the Phase 33 workspace model. Workspaces provide the isolation boundary; this phase adds SSO login, granular permissions, and compliance controls on top.
 
 #### When to implement
 
-This phase is deliberately deferred. Phase 32's token-based user management covers small-to-medium teams. Add this phase when:
+This phase is deliberately deferred. Phase 35's token-based user management covers small-to-medium teams. Add this phase when:
 - External identity providers (Google, GitHub, Azure AD, Okta) are required for login, **or**
 - Fine-grained permissions beyond admin/user/readonly are needed (e.g., "can use tool X but not Y"), **or**
 - Organizational boundaries require tenant isolation (separate data, separate billing)
 
-#### What it adds on top of Phase 37 (Workspaces)
+#### What it adds on top of Phase 33 (Workspaces)
 
-Phase 37 provides workspaces with membership and role-based access (owner/admin/member/viewer). This phase upgrades that model with external identity, granular permissions, and compliance tooling.
+Phase 33 provides workspaces with membership and role-based access (owner/admin/member/viewer). This phase upgrades that model with external identity, granular permissions, and compliance tooling.
 
 | Item | Change |
 |---|---|
 | External IdP | OAuth 2.0 / OIDC integration — login via Google, GitHub, Azure AD, Okta. Maps external identity to `users.user_id`. |
 | RBAC | Replace simple workspace/project `role` columns with a `roles` + `permissions` table. Define granular permissions: `tools:execute`, `config:write`, `sessions:read-all`, etc. |
 | SSO enforcement | Workspace admins can require SSO login — disable token-only access for their workspace. |
-| Billing isolation | Per-workspace token usage aggregation already exists (Phase 37); this adds billing plan association and usage alerts. |
-| Session ownership enforcement | Only owning user (or workspace admin) can read/delete sessions. Already partially implemented in Phase 32/37. |
+| Billing isolation | Per-workspace token usage aggregation already exists (Phase 33); this adds billing plan association and usage alerts. |
+| Session ownership enforcement | Only owning user (or workspace admin) can read/delete sessions. Already partially implemented in Phase 35/37. |
 | Audit | All auth events (login, token issue, token revoke, permission change) logged to `audit_events`. |
 
 #### Implementation Plan
@@ -2401,9 +2552,9 @@ Phase 37 provides workspaces with membership and role-based access (owner/admin/
 
 ---
 
-### Phase 34 — Artifact System ⏸️ Deferred
+### Phase 38 — Artifact System ⏸️ Deferred
 
-**Depends on:** Phase 18+19 (multi-agent team tools)
+**Depends on:** Phase 19+20 (multi-agent team tools)
 
 **Goal:** Give team agents a structured way to share work products — code files, plans, review notes, intermediate results — through a versioned artifact store rather than passing everything through prompt text.
 
@@ -2439,173 +2590,28 @@ Today, team agents communicate solely through prompt/response text via `TeamDele
 
 ---
 
-### Phase 35 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
+### Phase 39 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
 
 **Competitor precedent:** Claude Code ✅ · opencode ✅ (beta)
-**Depends on:** Phase 14 (MCP server mode) — once Sovrant exposes an MCP server, MCP-aware IDEs (VS Code with GitHub Copilot, Cursor, Windsurf) can connect without a bespoke extension.
-**Status:** Deferred. MCP-based IDE integration (Phase 14) covers the core use case. A native extension adds polish but is not required for the core product.
+**Depends on:** Phase 15 (MCP server mode) — once Sovrant exposes an MCP server, MCP-aware IDEs (VS Code with GitHub Copilot, Cursor, Windsurf) can connect without a bespoke extension.
+**Status:** Deferred. MCP-based IDE integration (Phase 15) covers the core use case. A native extension adds polish but is not required for the core product.
 
 **Goal:** Embed Sovrant into VS Code as a sidebar panel — chat interface, inline diff approval, tool event rendering, permission dialogs with file highlighting.
 
 #### Architecture
 
 Two-layer approach:
-1. **Phase 14 (MCP):** Zero-code IDE integration for MCP-aware clients. Sovrant appears as an MCP tool server. No extension required.
-2. **Phase 35 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
+1. **Phase 15 (MCP):** Zero-code IDE integration for MCP-aware clients. Sovrant appears as an MCP tool server. No extension required.
+2. **Phase 39 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
 
 #### Implementation Plan
 
 1. Publish `Sovrant.Server` as a local background service (`sovrant serve` command) with auto-start on VS Code activation
-2. Implement the VS Code extension (`vscode-sovrant`) — TypeScript, connects to `Sovrant.Server` via the Phase 13 frontend SDK
+2. Implement the VS Code extension (`vscode-sovrant`) — TypeScript, connects to `Sovrant.Server` via the Phase 14 frontend SDK
 3. Sidebar: chat panel backed by `useChat()` hook
 4. Inline diffs: intercept `Edit`/`Write` tool events, show diff decoration in the editor
 5. Permission dialogs: VS Code `window.showInformationMessage` with approve/deny buttons
 6. Publish to VS Code Marketplace
-
----
-
-### Phase 37 — Workspaces ⏸️ Deferred
-
-**Depends on:** Phase 31 (SQLite persistence), Phase 32 (user management API), Phase 25 (memory system)
-
-**Goal:** Personal and team areas that house projects. Every user gets an isolated personal workspace by default; team workspaces allow groups to collaborate. Workspaces own their own memory, configuration, sessions, credentials, and audit data.
-
-#### Core concepts
-
-- **Personal workspace** — auto-created when a user is created. Single-owner, cannot be deleted, always exists. This is where a user's solo work lives.
-- **Team workspace** — created explicitly. Has membership (owner/admin/member/viewer) and invite-based onboarding. This is where teams collaborate.
-- **Fallback rule** — if no `workspace_id` is provided in a request, resolve to the authenticated user's personal workspace. No request is ever "unscoped."
-- **Isolation** — workspaces cannot see each other's data. Sessions, config, memory, credentials, audit — all scoped per-workspace.
-- **Memory** — Phase 25's memory layers (SessionSummary, LearnedPattern, Instinct) are scoped per-workspace. A team workspace accumulates shared learned patterns; a personal workspace keeps individual ones. Memory does not leak across workspace boundaries.
-
-#### Motivation
-
-Today Sovrant is single-user or flat multi-user (Phase 32). There's no separation between "my stuff" and "our team's stuff." Workspaces give every user a private area from day one (personal workspace) and let teams form shared areas when needed (team workspaces):
-- A user's personal workspace is their default — solo work, personal memory, personal config
-- A team workspace lets multiple users share sessions, memory, config, and projects
-- Isolation means workspace A cannot see workspace B's data, memory, or sessions
-- Users can belong to multiple team workspaces while always having their personal workspace as home base
-
-#### SQLite schema
-
-| Table | Key columns | Notes |
-|---|---|---|
-| `workspaces` | `workspace_id` (PK), `type` (personal/team), `name`, `slug` (unique), `owner_id` (FK → users), `created_at`, `updated_at` | Personal workspaces: `type='personal'`, one per user, `owner_id` = user. Team workspaces: `type='team'`, `owner_id` = creator. |
-| `workspace_members` | `workspace_id` (FK), `user_id` (FK), `role` (owner/admin/member/viewer), `joined_at` | Personal workspaces have exactly one member (the owner). Team workspaces have many. |
-| `workspace_config` | `workspace_id` (FK), `key`, `value` | Workspace-scoped settings (model defaults, governance level, budget caps) |
-| `workspace_invites` | `invite_id` (PK), `workspace_id` (FK), `email`, `role`, `token`, `expires_at`, `accepted_at` | Team workspaces only — personal workspaces don't accept invites |
-| `workspace_memory` | `memory_id` (PK), `workspace_id` (FK), `layer` (summary/pattern/instinct), `content`, `confidence`, `project_id` (FK, nullable), `created_at`, `updated_at` | Replaces flat-file memory storage from Phase 25. Scoped to workspace, optionally to project. |
-
-All existing tables with `user_id` gain a `workspace_id` FK (not nullable — every row belongs to a workspace). Migration backfills existing data into each user's personal workspace.
-
-#### Workspace resolution
-
-1. Request includes `X-Workspace-Id` header → use that workspace (validate membership)
-2. Request includes no workspace context → resolve to the authenticated user's personal workspace
-3. Never unscoped — the personal workspace is always the fallback
-
-#### API surface
-
-| Endpoint | Method | Description |
-|---|---|---|
-| `/v1/workspaces` | GET | List workspaces the authenticated user belongs to (always includes personal) |
-| `/v1/workspaces` | POST | Create a team workspace (creator becomes owner) |
-| `/v1/workspaces/{id}` | GET/PUT | Workspace read/update. Personal workspaces can be renamed but not deleted. |
-| `/v1/workspaces/{id}` | DELETE | Delete team workspace only (personal workspaces cannot be deleted) |
-| `/v1/workspaces/{id}/members` | GET/POST/DELETE | Membership management (team workspaces only) |
-| `/v1/workspaces/{id}/invites` | POST/DELETE | Invite lifecycle (team workspaces only) |
-| `/v1/workspaces/{id}/config` | GET/PUT | Workspace-scoped configuration |
-| `/v1/workspaces/{id}/usage` | GET | Aggregated token/cost usage for workspace |
-| `/v1/workspaces/{id}/memory` | GET | Workspace memory (summaries, patterns, instincts) |
-
-#### Implementation plan
-
-1. Add SQLite tables (`workspaces`, `workspace_members`, `workspace_config`, `workspace_invites`, `workspace_memory`)
-2. Add `workspace_id` FK (not nullable) to `sessions`, `audit_events`, `credentials`, `usage`, `config` tables
-3. Auto-create personal workspace on user creation (Phase 32 user lifecycle hook)
-4. Migration: backfill existing data into each user's personal workspace
-5. Implement `IWorkspaceService` — CRUD, membership, invite token generation/validation, personal workspace creation
-6. Implement `WorkspaceContextMiddleware` — resolves workspace from `X-Workspace-Id` header, falls back to personal workspace
-7. Migrate Phase 25 `IMemoryStore` from flat files to `workspace_memory` table — `FileMemoryStore` becomes fallback for non-SQLite mode
-8. Scope all existing queries by `workspace_id` (no unscoped queries remain)
-9. Add workspace API endpoints
-10. Workspace-scoped config inheritance: workspace config → user config → global defaults
-11. Tests: personal workspace auto-creation, fallback resolution, isolation (workspace A can't see workspace B data), memory scoping, membership roles, invite flow (team only), personal workspace delete protection
-
-#### Relationship to Phase 33 (Enterprise Auth)
-
-Phase 33 adds external IdP login and RBAC on top of the workspace model — workspaces become the RBAC scope boundary.
-
----
-
-### Phase 38 — Projects ⏸️ Deferred
-
-**Depends on:** Phase 37 (workspaces)
-
-**Goal:** Isolated containers within workspaces that group related work — sessions, config, memory, agent templates, and artifacts. A project belongs to exactly one workspace and inherits its isolation boundary.
-
-#### Core concepts
-
-- **Project** — a named container within a workspace (like a repo, initiative, or client engagement)
-- **Workspace-scoped** — projects belong to a workspace. Personal workspace projects are solo; team workspace projects are collaborative.
-- **Memory inheritance** — projects can accumulate their own learned patterns and instincts (stored in `workspace_memory` with `project_id` set). Project memory is a refinement of workspace memory, not a replacement — both layers are visible within the project.
-- **Membership** — project members are a subset of workspace members. If no project members are explicitly set, all workspace members have access (open by default within the workspace).
-
-#### Motivation
-
-Workspaces isolate people. Projects isolate work. Without projects:
-- All sessions in a workspace are in one flat list
-- Config overrides apply workspace-wide or per-session — no middle ground for "this initiative uses model X with budget Y"
-- Memory accumulates at the workspace level with no way to separate patterns learned on different initiatives
-- Agent templates and skills can't be scoped to a specific effort
-
-Projects let a team (or individual) say "this engagement has its own model config, budget, memory, and agent templates" without affecting other work in the same workspace.
-
-#### SQLite schema
-
-| Table | Key columns | Notes |
-|---|---|---|
-| `projects` | `project_id` (PK), `workspace_id` (FK), `name`, `slug`, `description`, `created_at`, `updated_at`, `archived_at` | Belongs to exactly one workspace |
-| `project_members` | `project_id` (FK), `user_id` (FK), `role` (lead/contributor/viewer), `joined_at` | Subset of workspace members; optional — no rows means all workspace members have access |
-| `project_config` | `project_id` (FK), `key`, `value` | Project-scoped settings (model, budget, governance overrides) |
-
-Phase 37's `workspace_memory` table already has an optional `project_id` FK — project-scoped memory writes set this field. Existing tables gain optional `project_id` FK: `sessions`, `audit_events`, `usage`.
-
-#### Config and memory inheritance
-
-```
-project config  →  workspace config  →  user config  →  global defaults
-project memory  +  workspace memory  (both visible within project context)
-```
-
-#### API surface
-
-| Endpoint | Method | Description |
-|---|---|---|
-| `/v1/workspaces/{wid}/projects` | GET/POST | List/create projects in workspace |
-| `/v1/projects/{id}` | GET/PUT/DELETE | Project CRUD (delete archives by default) |
-| `/v1/projects/{id}/members` | GET/POST/DELETE | Project membership (subset of workspace) |
-| `/v1/projects/{id}/config` | GET/PUT | Project-scoped configuration |
-| `/v1/projects/{id}/sessions` | GET | Sessions scoped to project |
-| `/v1/projects/{id}/usage` | GET | Token/cost usage for project |
-| `/v1/projects/{id}/memory` | GET | Project-scoped memory (project + inherited workspace memory) |
-
-#### Implementation plan
-
-1. Add SQLite tables (`projects`, `project_members`, `project_config`)
-2. Add optional `project_id` FK to `sessions`, `audit_events`, `usage` tables
-3. Implement `IProjectService` — CRUD, membership, archival
-4. Implement `ProjectContextMiddleware` — resolves project from `X-Project-Id` header
-5. Config inheritance chain: project config → workspace config → user config → global defaults
-6. Memory scoping: project memory writes go to `workspace_memory` with `project_id` set; reads merge project + workspace layers
-7. Session creation auto-associates with active project context
-8. Project-scoped agent templates and skills (load from project config in addition to workspace/global)
-9. Budget enforcement at project level (Phase 36's `ICostModel` + project config budget cap)
-10. Tests: project isolation within workspace, config inheritance chain, memory scoping (project sees own + workspace memory), membership subset validation, archive behavior
-
-#### Relationship to Phase 34 (Artifact System)
-
-If Phase 34 is implemented, artifacts are scoped to projects rather than just teams. The `ITeamWorkspace` from Phase 34 becomes project-aware — artifacts persist in the project context and survive across team agent lifetimes.
 
 ---
 
@@ -2625,6 +2631,6 @@ If Phase 34 is implemented, artifacts are scoped to projects rather than just te
 |---|---|
 | Token counts always `0↑ 0↓` | ✅ `OpenAiCompatProvider` captures trailing OpenAI usage chunk |
 | SmartRouter crashes on WSL DNS failure | ✅ Falls back to configured providers when all fail startup ping |
-| Provider has no retry on 429/5xx | ✅ Phase 7.8 — 3 attempts with 1s/2s/4s backoff |
-| `EnterPlanMode`/`ExitPlanMode` are global in server mode | ✅ Phase 9.5 — session-scoped `SessionConfig` overlay |
-| `Sovrant.Agents` not wired into CLI or Server | ✅ Phase 18+19 — `AddMultiAgentSystem()` called in both hosts |
+| Provider has no retry on 429/5xx | ✅ Phase 5 — 3 attempts with 1s/2s/4s backoff |
+| `EnterPlanMode`/`ExitPlanMode` are global in server mode | ✅ Phase 10 — session-scoped `SessionConfig` overlay |
+| `Sovrant.Agents` not wired into CLI or Server | ✅ Phase 19+20 — `AddMultiAgentSystem()` called in both hosts |

@@ -161,6 +161,9 @@ WebhookRoutes.Map(app);
 McpAuthRoutes.Map(app);
 EvalRoutes.Map(app);
 SwarmRoutes.Map(app);
+ToolRegistryRoutes.Map(app);
+SkillRegistryRoutes.Map(app);
+AgentTemplateRoutes.Map(app);
 
 Sovrant.Server.ServerLog.LogServerReady(app.Logger, serverPort);
 
