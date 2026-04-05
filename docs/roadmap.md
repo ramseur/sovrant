@@ -83,9 +83,11 @@ The engine is fully functional for individual and small-team use:
 | Eval-driven development framework (3 grader types, 2 metrics) | Phase 27 | Lower |
 | Swarm orchestrator (auto-decomposition, DAG execution, file locking, quality gate) | Phase 28 | Lower |
 | Registry discovery API (tools, skills, agent templates for frontends) | Phase 29 | Low–Medium |
-| Enterprise auth & multi-tenancy (per-user tokens, session ownership) | Phase 30 (deferred) | Deferred |
-| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 31 (deferred) | Deferred |
-| VS Code native extension | Phase 32 (deferred — nice-to-have) | Deferred |
+| Server response caching & cache infrastructure (in-memory + Redis, ETag, TTL) | Phase 30 | Medium |
+| Persistent storage layer (SQLite for audit, session index, CLI memory, usage) | Phase 31 | Medium |
+| Enterprise auth & multi-tenancy (per-user tokens, session ownership) | Phase 32 (deferred) | Deferred |
+| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 33 (deferred) | Deferred |
+| VS Code native extension | Phase 34 (deferred — nice-to-have) | Deferred |
 | `/undo` / `/redo` (git-backed file rollback) | Phase 7.5 Tier 2 (deferred) | Deferred |
 | `ScheduleCron` / `ConfigTool` | Phase 7.5 Tier 3 (deferred) | Deferred |
 
@@ -1903,7 +1905,162 @@ All endpoints are authenticated (same `SOVRANT_TOKEN` bearer auth as existing en
 
 ---
 
-### Phase 30 — Enterprise Auth & Multi-Tenancy ⏸️ Deferred
+### Phase 30 — Server Response Caching & Cache Infrastructure
+
+**Depends on:** Phase 29 (registry discovery API — primary consumer), Phase 7 (server)
+**Difficulty:** Medium
+
+**Goal:** Add a caching layer to the server so that expensive or repeated reads (registry listings, session metadata, provider health) are served from cache with proper TTL expiry and invalidation on mutation. Ship with an in-memory cache by default and an optional Redis adapter for multi-instance deployments.
+
+#### Why this matters
+
+The Phase 29 registry endpoints (`/v1/tools`, `/v1/skills`, `/v1/agents/templates`) return data that changes only when skills are created or the server restarts. Without caching, every request re-enumerates the registry. Session metadata, provider health scores, and config are similarly stable between mutations. A cache with proper invalidation turns these into near-zero-cost reads and enables HTTP cache headers so frontends can cache client-side too.
+
+#### What gets cached
+
+| Resource | Cache key | TTL | Invalidation trigger |
+|---|---|---|---|
+| Tool registry listing | `tools:list` | 1 hour | Server restart (tools are static) |
+| Skill registry listing | `skills:list` | 5 min | `SkillCreate` tool execution, file watcher on `.sovrant/skills/` |
+| Agent template listing | `templates:list` | 5 min | File watcher on `.sovrant/agents/` |
+| Single tool/skill/template detail | `{type}:{name}` | Same as listing | Same as listing |
+| Session metadata (message count, token totals) | `session:{id}:meta` | 30 sec | Any turn completion on that session |
+| Provider health/status | `providers:health` | 10 sec | Health ping cycle |
+| `/v1/config` response | `config:current` | Until mutation | `PUT /v1/config`, `PUT /v1/sessions/{id}/config` |
+
+#### HTTP Cache Headers
+
+- `ETag` on all cacheable GET responses — computed from a hash of the serialized response
+- `Cache-Control: private, max-age={ttl}` matching the server-side TTL
+- `304 Not Modified` when client sends `If-None-Match` with a matching ETag
+- Mutable endpoints (`PUT`, `POST`, `DELETE`) return `Cache-Control: no-store`
+
+#### Architecture
+
+```
+src/Sovrant.Runtime/Caching/
+  ICacheProvider.cs            ← Get<T>, Set<T>(key, value, ttl), Remove(key), RemoveByPrefix(prefix)
+  InMemoryCacheProvider.cs     ← ConcurrentDictionary + timer-based TTL sweep (default)
+  RedisCacheProvider.cs        ← StackExchange.Redis adapter (opt-in via SOVRANT_CACHE_REDIS_URL)
+  CacheInvalidator.cs          ← event-driven: listens to registry changes, session events, config mutations
+
+src/Sovrant.Server/Middleware/
+  ETagMiddleware.cs            ← computes ETag for GET responses, handles If-None-Match → 304
+```
+
+#### Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `SOVRANT_CACHE_PROVIDER` | `memory` | `memory` or `redis` |
+| `SOVRANT_CACHE_REDIS_URL` | — | Redis connection string (required when provider is `redis`) |
+| `SOVRANT_CACHE_DEFAULT_TTL` | `300` | Default TTL in seconds for entries without an explicit TTL |
+
+#### Implementation Plan
+
+1. Define `ICacheProvider` interface (Get/Set/Remove/RemoveByPrefix with `TimeSpan` TTL)
+2. Implement `InMemoryCacheProvider` — `ConcurrentDictionary<string, CacheEntry>` with background `Timer` sweep (every 60s)
+3. Implement `RedisCacheProvider` — thin wrapper over `StackExchange.Redis` `IDatabase`; serialize values as JSON
+4. Add `CacheInvalidator` — subscribes to `SkillRegistry` changes, `RuntimeSessionPool` events, config mutations; calls `RemoveByPrefix`
+5. Wire caching into registry routes (Phase 29): check cache before enumerating, populate on miss
+6. Wire caching into existing routes: `/v1/status`, `/v1/config`, `/v1/sessions/{id}` metadata
+7. Add `ETagMiddleware` — hash response body for GET routes, compare `If-None-Match`, return `304` or full response
+8. Register `ICacheProvider` in DI (factory selects implementation based on `SOVRANT_CACHE_PROVIDER`)
+9. Tests: TTL expiry, invalidation on mutation, ETag match/mismatch, Redis adapter (integration test with Testcontainers or mock)
+
+---
+
+### Phase 31 — Persistent Storage Layer (SQLite)
+
+**Depends on:** Phase 8 (structured logging — audit logs are a migration candidate), Phase 25 (memory system — primary consumer)
+**Difficulty:** Medium
+
+**Goal:** Introduce SQLite as a structured, queryable persistence layer for data that is currently stored in flat files (JSONL audit logs, session index, CLI memory). SQLite is zero-config, works offline, ships as a single file, and gives indexed queries that JSONL scanning cannot. This phase does **not** replace JSONL session transcripts (those remain append-logs) — it targets the metadata and queryable data around them.
+
+#### Why this matters
+
+Today, finding "all governance violations in the last 7 days" means scanning every line of `~/.sovrant/audit/governance.jsonl`. Finding "which sessions touched file X" means opening every session JSONL. The CLI memory system (Phase 25) will need to search learned patterns and instincts by trigger, confidence, or recency — flat markdown files don't support that. SQLite gives us indexed queries with zero infrastructure.
+
+#### What moves to SQLite
+
+| Data | Current storage | Why SQLite is better |
+|---|---|---|
+| **Audit log** (Phase 23) | `~/.sovrant/audit/governance.jsonl` | Query by tool, session, severity, date range |
+| **Bash command log** (Phase 23) | `~/.sovrant/audit/bash-commands.jsonl` | Query by command, session, exit code |
+| **Session index** | Implicit (scan `~/.sovrant/sessions/*.jsonl` filenames) | Query by creation date, last access, project, token totals |
+| **CLI memory — learned patterns** (Phase 25) | `.sovrant/learned/*.md` (planned) | Full-text search, confidence scoring, evidence trails |
+| **CLI memory — instincts** (Phase 25) | `~/.sovrant/instincts/*.yaml` (planned) | Query by trigger, confidence threshold, decay pruning |
+| **Token usage history** | In-memory only (Phase 9.5) | Persist across restarts, query by date/model/session |
+
+#### What stays as files
+
+| Data | Why |
+|---|---|
+| **Session transcripts** (`.jsonl`) | Append-only write pattern; rarely queried by field; large |
+| **Skills** (`.md`) | Human-editable, git-friendly, loaded at startup |
+| **Agent templates** (`.md`) | Same as skills |
+| **Config** (`settings.json`) | Human-editable, small, loaded once |
+
+#### Architecture
+
+```
+src/Sovrant.Runtime/Storage/
+  IStorageProvider.cs           ← abstraction over structured storage (query, insert, update, delete)
+  SqliteStorageProvider.cs      ← Microsoft.Data.Sqlite, auto-creates tables + migrations
+  StorageMigrator.cs            ← versioned schema migrations (CREATE TABLE IF NOT EXISTS + ALTER TABLE)
+
+  Tables:
+    audit_events               ← (id, timestamp, session_id, tool, action, severity, detail)
+    bash_commands              ← (id, timestamp, session_id, command, exit_code, duration_ms)
+    session_index              ← (session_id, project, created_at, last_accessed, total_input_tokens, total_output_tokens)
+    learned_patterns           ← (id, project, pattern, source_session, confidence, created_at, last_used)
+    instincts                  ← (id, trigger, action, confidence, evidence_json, created_at, updated_at)
+    token_usage                ← (id, session_id, model, input_tokens, output_tokens, timestamp)
+```
+
+#### Database Location
+
+| Context | Path | Rationale |
+|---|---|---|
+| CLI (per-user) | `~/.sovrant/sovrant.db` | Single file, backed up with user data |
+| Server | `$SOVRANT_DATA_DIR/sovrant.db` or `~/.sovrant/sovrant.db` | Configurable for containers |
+
+#### Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `SOVRANT_STORAGE_PROVIDER` | `sqlite` | `sqlite` (future: `postgres` for enterprise) |
+| `SOVRANT_DB_PATH` | `~/.sovrant/sovrant.db` | SQLite database file path |
+
+#### Migration from flat files
+
+- On first run with SQLite enabled, `StorageMigrator` scans existing JSONL audit logs and indexes them into the `audit_events` table
+- Existing JSONL files are not deleted — they become the archival copy
+- Session index is built by scanning `~/.sovrant/sessions/*.jsonl` file headers
+- Future writes go to SQLite; JSONL audit logging becomes optional (`SOVRANT_AUDIT_JSONL=true` to keep both)
+
+#### Relationship to Phase 30 (Caching)
+
+Phase 30's `ICacheProvider` is for **hot, ephemeral data** — fast reads with TTL expiry, no durability guarantee. Phase 31's `IStorageProvider` is for **cold, durable data** — structured records that survive restarts and support queries. They are complementary:
+- Cache a query result from SQLite in the in-memory/Redis cache for repeated fast access
+- Invalidate the cache entry when the underlying SQLite data changes
+
+#### Implementation Plan
+
+1. Add `Microsoft.Data.Sqlite` package to `Sovrant.Runtime`
+2. Define `IStorageProvider` interface (generic query/insert/update/delete with typed results)
+3. Implement `SqliteStorageProvider` — connection pooling via `SqliteConnection`, WAL mode for concurrent reads
+4. Implement `StorageMigrator` — version table + ordered migration scripts, `CREATE TABLE IF NOT EXISTS`
+5. Migrate `AuditLogger` to write to SQLite (keep JSONL as optional dual-write)
+6. Add session index table; populate from existing JSONL files on first run
+7. Add token usage persistence (currently in-memory only in `SessionConfig`)
+8. Wire into DI as singleton; CLI and Server both use same `IStorageProvider`
+9. Add `GET /v1/audit` endpoint (query audit events by date, tool, session — depends on SQLite backing)
+10. Tests: migration idempotency, query correctness, concurrent write safety, JSONL import
+
+---
+
+### Phase 32 — Enterprise Auth & Multi-Tenancy ⏸️ Deferred
 
 **Depends on:** Phase 9.5 (session-scoped config) + Phase 9 (per-request credentials)
 
@@ -1944,7 +2101,7 @@ This phase is deliberately deferred. A small trusted team sharing a single deplo
 
 ---
 
-### Phase 31 — Artifact System ⏸️ Deferred
+### Phase 33 — Artifact System ⏸️ Deferred
 
 **Depends on:** Phase 18+19 (multi-agent team tools)
 
@@ -1982,7 +2139,7 @@ Today, team agents communicate solely through prompt/response text via `TeamDele
 
 ---
 
-### Phase 32 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
+### Phase 34 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
 
 **Competitor precedent:** Claude Code ✅ · opencode ✅ (beta)
 **Depends on:** Phase 14 (MCP server mode) — once Sovrant exposes an MCP server, MCP-aware IDEs (VS Code with GitHub Copilot, Cursor, Windsurf) can connect without a bespoke extension.
@@ -1994,7 +2151,7 @@ Today, team agents communicate solely through prompt/response text via `TeamDele
 
 Two-layer approach:
 1. **Phase 14 (MCP):** Zero-code IDE integration for MCP-aware clients. Sovrant appears as an MCP tool server. No extension required.
-2. **Phase 32 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
+2. **Phase 34 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
 
 #### Implementation Plan
 
