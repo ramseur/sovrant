@@ -27,7 +27,7 @@ public sealed class LspDiagnosticsTool : ITool
 
     public Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var filePath = GetString(input, "file_path");
+        var filePath = input.GetStringProp("file_path");
         if (string.IsNullOrWhiteSpace(filePath))
             return Task.FromResult("Error: file_path is required.");
 
@@ -55,8 +55,6 @@ public sealed class LspDiagnosticsTool : ITool
         return Task.FromResult(sb.ToString().TrimEnd());
     }
 
-    private static string GetString(JsonElement el, string prop) =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? string.Empty : string.Empty;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

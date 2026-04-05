@@ -21,15 +21,13 @@ public sealed class AskUserQuestionTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var question = GetString(input, "question");
+        var question = input.GetStringProp("question");
         if (string.IsNullOrWhiteSpace(question))
             return "Error: question is required.";
 
         return await _inputProvider.AskAsync(question, ct).ConfigureAwait(false);
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

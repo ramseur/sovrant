@@ -40,11 +40,11 @@ public sealed class TeamDelegateTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var memberId = GetString(input, "member_id");
+        var memberId = input.GetStringProp("member_id");
         if (string.IsNullOrWhiteSpace(memberId))
             return "Error: 'member_id' is required.";
 
-        var prompt = GetString(input, "prompt");
+        var prompt = input.GetStringProp("prompt");
         if (string.IsNullOrWhiteSpace(prompt))
             return "Error: 'prompt' is required.";
 
@@ -82,8 +82,6 @@ public sealed class TeamDelegateTool : ITool
             : $"Agent error: {result.Error}";
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

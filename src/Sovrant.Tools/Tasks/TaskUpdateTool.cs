@@ -19,11 +19,11 @@ public sealed class TaskUpdateTool : ITool
 
     public Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var taskId = GetString(input, "task_id");
+        var taskId = input.GetStringProp("task_id");
         if (string.IsNullOrWhiteSpace(taskId))
             return Task.FromResult("Error: task_id is required.");
 
-        var description = GetString(input, "description");
+        var description = input.GetStringProp("description");
         if (string.IsNullOrWhiteSpace(description))
             return Task.FromResult("Error: description is required.");
 
@@ -34,8 +34,6 @@ public sealed class TaskUpdateTool : ITool
         return Task.FromResult($"Task '{taskId}' description updated.");
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

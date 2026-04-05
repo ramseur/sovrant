@@ -31,10 +31,10 @@ public sealed class TodoWriteTool : ITool
         var items = new List<TodoItem>();
         foreach (var t in todosEl.EnumerateArray())
         {
-            var id = GetString(t, "id", Guid.NewGuid().ToString("N")[..8]);
-            var content = GetString(t, "content");
-            var status = ParseEnum(GetString(t, "status", "pending"), TodoStatus.Pending);
-            var priority = ParseEnum(GetString(t, "priority", "medium"), TodoPriority.Medium);
+            var id = t.GetStringProp("id", Guid.NewGuid().ToString("N")[..8]);
+            var content = t.GetStringProp("content");
+            var status = ParseEnum(t.GetStringProp("status", "pending"), TodoStatus.Pending);
+            var priority = ParseEnum(t.GetStringProp("priority", "medium"), TodoPriority.Medium);
             items.Add(new TodoItem(id, content, status, priority));
         }
 
@@ -55,8 +55,6 @@ public sealed class TodoWriteTool : ITool
         return Task.FromResult(sb.ToString().TrimEnd());
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static TEnum ParseEnum<TEnum>(string value, TEnum defaultValue) where TEnum : struct =>
         Enum.TryParse<TEnum>(value.Replace("_", string.Empty, StringComparison.Ordinal), ignoreCase: true, out var result)

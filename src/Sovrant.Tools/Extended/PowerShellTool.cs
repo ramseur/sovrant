@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Sovrant.Api.Types;
@@ -22,57 +20,22 @@ public sealed class PowerShellTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var command = GetString(input, "command");
+        var command = input.GetStringProp("command");
         if (string.IsNullOrWhiteSpace(command))
             return "Error: command is required.";
 
-        var timeoutMs = GetInt(input, "timeout", DefaultTimeoutMs);
+        var timeoutMs = input.GetIntProp("timeout", DefaultTimeoutMs);
         var shell = FindPowerShell();
 
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(timeoutMs);
-
-        var stdoutSb = new StringBuilder();
-        var stderrSb = new StringBuilder();
+        // Use -EncodedCommand with Base64 to avoid all shell escaping issues.
+        var encodedCommand = Convert.ToBase64String(Encoding.Unicode.GetBytes(command));
 
         try
         {
-            // Use -EncodedCommand with Base64 to avoid all shell escaping issues.
-            var encodedCommand = Convert.ToBase64String(Encoding.Unicode.GetBytes(command));
-
-            using var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = shell,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                },
-            };
-            process.StartInfo.ArgumentList.Add("-NonInteractive");
-            process.StartInfo.ArgumentList.Add("-EncodedCommand");
-            process.StartInfo.ArgumentList.Add(encodedCommand);
-
-            process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdoutSb.AppendLine(e.Data); };
-            process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderrSb.AppendLine(e.Data); };
-
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-            await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
-
-            var sb = new StringBuilder();
-            if (stdoutSb.Length > 0) sb.Append(stdoutSb);
-            if (stderrSb.Length > 0) sb.Append(CultureInfo.InvariantCulture, $"[stderr]\n{stderrSb}");
-            if (process.ExitCode != 0) sb.Append(CultureInfo.InvariantCulture, $"\n[exit code: {process.ExitCode}]");
-
-            return sb.Length > 0 ? sb.ToString() : string.Create(CultureInfo.InvariantCulture, $"[exit code: {process.ExitCode}]");
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            return $"Error: command timed out after {timeoutMs} ms.";
+            var result = await ProcessExecutor.RunAsync(
+                shell, ["-NonInteractive", "-EncodedCommand", encodedCommand],
+                timeoutMs, ct: ct).ConfigureAwait(false);
+            return result.Output;
         }
         catch (InvalidOperationException ex) { return $"Error starting PowerShell: {ex.Message}"; }
     }
@@ -90,12 +53,6 @@ public sealed class PowerShellTool : ITool
 
         return "pwsh";
     }
-
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
-
-    private static int GetInt(JsonElement el, string prop, int def) =>
-        el.TryGetProperty(prop, out var v) && v.TryGetInt32(out var n) ? n : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

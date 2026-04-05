@@ -17,15 +17,12 @@ public sealed class SleepTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var seconds = GetDouble(input, "duration_seconds", 1.0);
+        var seconds = input.GetDoubleProp("duration_seconds", 1.0);
         seconds = Math.Clamp(seconds, 0.0, MaxSeconds);
 
         await Task.Delay(TimeSpan.FromSeconds(seconds), ct).ConfigureAwait(false);
         return $"Slept for {seconds:F1} seconds.";
     }
-
-    private static double GetDouble(JsonElement el, string prop, double def) =>
-        el.TryGetProperty(prop, out var v) && v.TryGetDouble(out var d) ? d : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

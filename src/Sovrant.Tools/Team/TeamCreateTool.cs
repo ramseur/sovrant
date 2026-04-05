@@ -23,15 +23,15 @@ public sealed class TeamCreateTool : ITool
 
     public Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var name = GetString(input, "name");
+        var name = input.GetStringProp("name");
         if (string.IsNullOrWhiteSpace(name))
             return Task.FromResult("Error: 'name' is required.");
 
-        var prompt = GetString(input, "prompt");
+        var prompt = input.GetStringProp("prompt");
         if (string.IsNullOrWhiteSpace(prompt))
             return Task.FromResult("Error: 'prompt' is required.");
 
-        var roleStr = GetString(input, "role", "general");
+        var roleStr = input.GetStringProp("role", "general");
         if (!Enum.TryParse<AgentRole>(roleStr, ignoreCase: true, out var role))
             role = AgentRole.General;
 
@@ -70,8 +70,6 @@ public sealed class TeamCreateTool : ITool
         return Task.FromResult(result);
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static string? GetStringOrNull(JsonElement el, string prop) =>
         el.TryGetProperty(prop, out var v) ? v.GetString() : null;

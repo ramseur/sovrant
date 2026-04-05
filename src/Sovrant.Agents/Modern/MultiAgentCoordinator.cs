@@ -18,7 +18,6 @@ public sealed partial class MultiAgentCoordinator : IDisposable
         new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _taskCts =
         new(StringComparer.Ordinal);
-    private readonly ConcurrentBag<Task> _agentLoopTasks = [];
     private readonly SemaphoreSlim _semaphore;
     private readonly AgentSystemConfig _config;
     private readonly ILogger<MultiAgentCoordinator> _logger;
@@ -107,37 +106,12 @@ public sealed partial class MultiAgentCoordinator : IDisposable
             cts.Cancel();
     }
 
-    /// <summary>
-    /// Cancels all in-flight tasks and signals all <see cref="BaseAgent"/> instances
-    /// to drain their inboxes and stop.
-    /// </summary>
+    /// <summary>Cancels all in-flight tasks.</summary>
     public async Task ShutdownAsync(CancellationToken ct = default)
     {
         foreach (var cts in _taskCts.Values)
             await cts.CancelAsync().ConfigureAwait(false);
-
-        foreach (var agent in _agents.Values)
-        {
-            if (agent is BaseAgent ba)
-                ba.Complete();
-        }
-
-        // Wait for all tracked agent run-loop tasks to complete.
-        if (!_agentLoopTasks.IsEmpty)
-        {
-            try
-            {
-                await Task.WhenAll(_agentLoopTasks).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                // Expected during shutdown.
-            }
-        }
     }
-
-    /// <summary>Tracks an agent's <see cref="BaseAgent.RunLoopAsync"/> task for shutdown awaiting.</summary>
-    internal void TrackAgentLoop(Task loopTask) => _agentLoopTasks.Add(loopTask);
 
     /// <inheritdoc/>
     public void Dispose() => _semaphore.Dispose();

@@ -18,7 +18,7 @@ public sealed class WriteFileTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var filePath = GetString(input, "file_path");
+        var filePath = input.GetStringProp("file_path");
         if (string.IsNullOrWhiteSpace(filePath))
             return "Error: file_path is required.";
 
@@ -43,8 +43,6 @@ public sealed class WriteFileTool : ITool
         catch (UnauthorizedAccessException ex) { return $"Error: access denied: {ex.Message}"; }
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

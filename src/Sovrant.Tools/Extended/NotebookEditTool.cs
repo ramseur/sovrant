@@ -20,11 +20,11 @@ public sealed class NotebookEditTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var notebookPath = GetString(input, "notebook_path");
+        var notebookPath = input.GetStringProp("notebook_path");
         if (string.IsNullOrWhiteSpace(notebookPath))
             return "Error: notebook_path is required.";
 
-        var editModeEarly = GetString(input, "edit_mode");
+        var editModeEarly = input.GetStringProp("edit_mode");
         if (!File.Exists(notebookPath))
         {
             // Auto-create a blank notebook when inserting into a non-existent file.
@@ -64,14 +64,14 @@ public sealed class NotebookEditTool : ITool
             if (cells is null)
                 return "Error: notebook has no cells array.";
 
-            var editMode = GetString(input, "edit_mode");
+            var editMode = input.GetStringProp("edit_mode");
 
             if (string.IsNullOrEmpty(editMode))
                 return ReadNotebook(cells);
 
-            var cellNumber = GetInt(input, "cell_number", 0);
-            var newSource = GetString(input, "new_source");
-            var cellType = GetString(input, "cell_type", "code");
+            var cellNumber = input.GetIntProp("cell_number", 0);
+            var newSource = input.GetStringProp("new_source");
+            var cellType = input.GetStringProp("cell_type", "code");
 
             if (string.Equals(editMode, "replace", StringComparison.OrdinalIgnoreCase))
             {
@@ -129,11 +129,7 @@ public sealed class NotebookEditTool : ITool
         return sb.Length > 0 ? sb.ToString().TrimEnd() : "(empty notebook)";
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
-    private static int GetInt(JsonElement el, string prop, int def) =>
-        el.TryGetProperty(prop, out var v) && v.TryGetInt32(out var n) ? n : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

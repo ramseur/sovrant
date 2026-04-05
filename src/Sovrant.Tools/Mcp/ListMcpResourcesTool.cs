@@ -31,7 +31,7 @@ public sealed class ListMcpResourcesTool : ITool
         if (!_registry.HasClients)
             return "No MCP servers connected.";
 
-        var serverFilter = GetString(input, "server");
+        var serverFilter = input.GetStringProp("server");
 
         var clients = string.IsNullOrWhiteSpace(serverFilter)
             ? _registry.Clients
@@ -72,8 +72,6 @@ public sealed class ListMcpResourcesTool : ITool
         return sb.ToString().TrimEnd();
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

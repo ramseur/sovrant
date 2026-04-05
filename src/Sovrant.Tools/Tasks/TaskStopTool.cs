@@ -19,7 +19,7 @@ public sealed class TaskStopTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var taskId = GetString(input, "task_id");
+        var taskId = input.GetStringProp("task_id");
         if (string.IsNullOrWhiteSpace(taskId))
             return "Error: task_id is required.";
 
@@ -33,8 +33,6 @@ public sealed class TaskStopTool : ITool
         return $"Cancellation requested for task '{taskId}'.";
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

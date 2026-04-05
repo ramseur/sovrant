@@ -28,7 +28,7 @@ public sealed class AgentTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var prompt = GetString(input, "prompt");
+        var prompt = input.GetStringProp("prompt");
         if (string.IsNullOrWhiteSpace(prompt))
             return "Error: prompt is required.";
 
@@ -63,8 +63,6 @@ public sealed class AgentTool : ITool
         return sb.Length > 0 ? sb.ToString() : "(sub-agent returned no output)";
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

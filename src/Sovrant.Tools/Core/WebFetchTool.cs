@@ -28,11 +28,11 @@ public sealed class WebFetchTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var url = GetString(input, "url");
+        var url = input.GetStringProp("url");
         if (string.IsNullOrWhiteSpace(url))
             return "Error: url is required.";
 
-        var maxLength = GetInt(input, "max_length", DefaultMaxLength);
+        var maxLength = input.GetIntProp("max_length", DefaultMaxLength);
 
         try
         {
@@ -108,11 +108,7 @@ public sealed class WebFetchTool : ITool
         return false;
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
-    private static int GetInt(JsonElement el, string prop, int def) =>
-        el.TryGetProperty(prop, out var v) && v.TryGetInt32(out var n) ? n : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

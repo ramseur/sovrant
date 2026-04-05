@@ -19,7 +19,7 @@ public sealed class TaskGetTool : ITool
 
     public Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var taskId = GetString(input, "task_id");
+        var taskId = input.GetStringProp("task_id");
         if (string.IsNullOrWhiteSpace(taskId))
             return Task.FromResult("Error: task_id is required.");
 
@@ -45,8 +45,6 @@ public sealed class TaskGetTool : ITool
         return Task.FromResult(result.TrimEnd());
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

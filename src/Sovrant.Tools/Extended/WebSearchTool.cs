@@ -32,11 +32,11 @@ public sealed class WebSearchTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var query = GetString(input, "query");
+        var query = input.GetStringProp("query");
         if (string.IsNullOrWhiteSpace(query))
             return "Error: query is required.";
 
-        var count = Math.Clamp(GetInt(input, "count", 5), 1, 20);
+        var count = Math.Clamp(input.GetIntProp("count", 5), 1, 20);
 
         var braveKey = Environment.GetEnvironmentVariable("BRAVE_API_KEY");
         var firecrawlKey = Environment.GetEnvironmentVariable("FIRECRAWL_API_KEY");
@@ -129,11 +129,7 @@ public sealed class WebSearchTool : ITool
         catch (JsonException ex) { return $"Error parsing FireCrawl search response: {ex.Message}"; }
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
-    private static int GetInt(JsonElement el, string prop, int def) =>
-        el.TryGetProperty(prop, out var v) && v.TryGetInt32(out var n) ? n : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

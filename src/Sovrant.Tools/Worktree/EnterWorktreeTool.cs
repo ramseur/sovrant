@@ -27,8 +27,8 @@ public sealed class EnterWorktreeTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var path = GetString(input, "path");
-        var branch = GetString(input, "branch");
+        var path = input.GetStringProp("path");
+        var branch = input.GetStringProp("branch");
 
         if (string.IsNullOrWhiteSpace(path))
             return "Error: path is required.";
@@ -77,8 +77,6 @@ public sealed class EnterWorktreeTool : ITool
         return (sb.ToString().Trim(), proc.ExitCode);
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static string EscapeArg(string arg) =>
         arg.Contains(' ', StringComparison.Ordinal) ? $"\"{arg}\"" : arg;

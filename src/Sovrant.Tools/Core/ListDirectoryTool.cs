@@ -21,7 +21,7 @@ public sealed class ListDirectoryTool : ITool
 
     public Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var path = GetString(input, "path", Directory.GetCurrentDirectory());
+        var path = input.GetStringProp("path", Directory.GetCurrentDirectory());
 
         if (!Directory.Exists(path))
             return Task.FromResult(File.Exists(path)
@@ -67,8 +67,6 @@ public sealed class ListDirectoryTool : ITool
             sb.AppendLine(CultureInfo.InvariantCulture, $"{indent}  [listing truncated at {MaxEntries} entries]");
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

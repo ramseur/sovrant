@@ -29,14 +29,14 @@ public sealed class ReadMcpResourceTool : ITool
         if (!_registry.HasClients)
             return "No MCP servers connected.";
 
-        var uriString = GetString(input, "uri");
+        var uriString = input.GetStringProp("uri");
         if (string.IsNullOrWhiteSpace(uriString))
             return "Error: uri is required.";
 
         if (!Uri.TryCreate(uriString, UriKind.Absolute, out var uri))
             return $"Error: '{uriString}' is not a valid absolute URI.";
 
-        var serverFilter = GetString(input, "server");
+        var serverFilter = input.GetStringProp("server");
 
         // Find the right client: use server filter if given, else try all clients
         var candidates = string.IsNullOrWhiteSpace(serverFilter)
@@ -94,8 +94,6 @@ public sealed class ReadMcpResourceTool : ITool
         return $"Error reading resource '{uriString}': {lastError?.Message ?? "unknown error"}";
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

@@ -29,7 +29,7 @@ public sealed class SkillTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var name = GetString(input, "name");
+        var name = input.GetStringProp("name");
         if (string.IsNullOrWhiteSpace(name))
             return "Error: name is required.";
 
@@ -40,7 +40,7 @@ public sealed class SkillTool : ITool
             name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
             return "Error: name must be a plain filename without path separators or special characters.";
 
-        var args = GetString(input, "args");
+        var args = input.GetStringProp("args");
 
         var projectPath = Path.Combine(ProjectSkillsDir, string.Create(CultureInfo.InvariantCulture, $"{name}.md"));
         var globalPath  = Path.Combine(GlobalSkillsDir,  string.Create(CultureInfo.InvariantCulture, $"{name}.md"));
@@ -73,8 +73,6 @@ public sealed class SkillTool : ITool
         }
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

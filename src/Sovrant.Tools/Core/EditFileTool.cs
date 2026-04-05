@@ -18,7 +18,7 @@ public sealed class EditFileTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var filePath = GetString(input, "file_path");
+        var filePath = input.GetStringProp("file_path");
         if (string.IsNullOrWhiteSpace(filePath))
             return "Error: file_path is required.";
 
@@ -29,7 +29,7 @@ public sealed class EditFileTool : ITool
 
         var oldString = oldProp.GetString() ?? string.Empty;
         var newString = newProp.GetString() ?? string.Empty;
-        var replaceAll = GetBool(input, "replace_all", false);
+        var replaceAll = input.GetBoolProp("replace_all", false);
 
         if (!File.Exists(filePath))
             return $"Error: file not found: {filePath}";
@@ -76,14 +76,6 @@ public sealed class EditFileTool : ITool
 
         return count;
     }
-
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
-
-    private static bool GetBool(JsonElement el, string prop, bool def) =>
-        el.TryGetProperty(prop, out var v) && v.ValueKind is JsonValueKind.True or JsonValueKind.False
-            ? v.GetBoolean()
-            : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

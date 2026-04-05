@@ -1,6 +1,3 @@
-using System.Diagnostics;
-using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using Sovrant.Api.Types;
 
@@ -42,15 +39,15 @@ public sealed class ReplTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var language = GetString(input, "language");
+        var language = input.GetStringProp("language");
         if (string.IsNullOrWhiteSpace(language))
             return "Error: language is required.";
 
-        var code = GetString(input, "code");
+        var code = input.GetStringProp("code");
         if (string.IsNullOrWhiteSpace(code))
             return "Error: code is required.";
 
-        var timeoutMs = GetInt(input, "timeout", DefaultTimeoutMs);
+        var timeoutMs = input.GetIntProp("timeout", DefaultTimeoutMs);
 
         if (!s_runtimes.TryGetValue(language, out var runtime))
         {
@@ -58,63 +55,15 @@ public sealed class ReplTool : ITool
             return $"Error: unsupported language '{language}'. Supported: {supported}";
         }
 
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(timeoutMs);
-
-        // Write code to a temp file to avoid shell injection via argument escaping.
-        var scriptFile = Path.Combine(Path.GetTempPath(), $"sovrant_repl_{Guid.NewGuid():N}{runtime.Extension}");
-        var stdoutSb = new StringBuilder();
-        var stderrSb = new StringBuilder();
-
         try
         {
-            await File.WriteAllTextAsync(scriptFile, code, cts.Token).ConfigureAwait(false);
-
-            using var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = runtime.Exe,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                },
-            };
-            process.StartInfo.ArgumentList.Add(scriptFile);
-
-            process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdoutSb.AppendLine(e.Data); };
-            process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderrSb.AppendLine(e.Data); };
-
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-            await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
-
-            var sb = new StringBuilder();
-            if (stdoutSb.Length > 0) sb.Append(stdoutSb);
-            if (stderrSb.Length > 0) sb.Append(CultureInfo.InvariantCulture, $"[stderr]\n{stderrSb}");
-            if (process.ExitCode != 0) sb.Append(CultureInfo.InvariantCulture, $"\n[exit code: {process.ExitCode}]");
-
-            return sb.Length > 0 ? sb.ToString() : string.Create(CultureInfo.InvariantCulture, $"[exit code: {process.ExitCode}]");
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            return $"Error: execution timed out after {timeoutMs} ms.";
+            var result = await ProcessExecutor.RunWithTempFileAsync(
+                runtime.Exe, [], code, runtime.Extension, timeoutMs, ct: ct).ConfigureAwait(false);
+            return result.Output;
         }
         catch (InvalidOperationException ex) { return $"Error starting {runtime.Exe}: {ex.Message}"; }
         catch (System.ComponentModel.Win32Exception ex) { return $"Error starting {runtime.Exe}: {ex.Message}"; }
-        finally
-        {
-            try { File.Delete(scriptFile); } catch (IOException) { /* best-effort cleanup */ }
-        }
     }
-
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
-
-    private static int GetInt(JsonElement el, string prop, int def) =>
-        el.TryGetProperty(prop, out var v) && v.TryGetInt32(out var n) ? n : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

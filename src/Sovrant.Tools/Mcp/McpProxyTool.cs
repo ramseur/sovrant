@@ -35,11 +35,11 @@ public sealed class McpProxyTool : ITool
         if (!_registry.HasClients)
             return "No MCP servers connected.";
 
-        var toolName = GetString(input, "tool");
+        var toolName = input.GetStringProp("tool");
         if (string.IsNullOrWhiteSpace(toolName))
             return "The 'tool' parameter is required.";
 
-        var serverName = GetString(input, "server");
+        var serverName = input.GetStringProp("server");
 
         // Extract the nested 'input' object (arguments for the target tool).
         var toolInput = input.TryGetProperty("input", out var inputProp)
@@ -122,8 +122,6 @@ public sealed class McpProxyTool : ITool
         return dict;
     }
 
-    private static string GetString(JsonElement el, string prop) =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? string.Empty : string.Empty;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

@@ -20,11 +20,11 @@ public sealed class GlobTool : ITool
 
     public Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var pattern = GetString(input, "pattern");
+        var pattern = input.GetStringProp("pattern");
         if (string.IsNullOrWhiteSpace(pattern))
             return Task.FromResult("Error: pattern is required.");
 
-        var searchPath = GetString(input, "path", Directory.GetCurrentDirectory());
+        var searchPath = input.GetStringProp("path", Directory.GetCurrentDirectory());
         if (!Directory.Exists(searchPath))
             return Task.FromResult($"Error: directory not found: {searchPath}");
 
@@ -56,8 +56,6 @@ public sealed class GlobTool : ITool
         return Task.FromResult(output);
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

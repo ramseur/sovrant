@@ -25,14 +25,14 @@ public sealed class GrepTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var pattern = GetString(input, "pattern");
+        var pattern = input.GetStringProp("pattern");
         if (string.IsNullOrWhiteSpace(pattern))
             return "Error: pattern is required.";
 
-        var searchPath = GetString(input, "path", Directory.GetCurrentDirectory());
-        var glob = GetString(input, "glob", "**/*");
-        var outputMode = GetString(input, "output_mode", "files_with_matches");
-        var caseInsensitive = GetBool(input, "case_insensitive", false);
+        var searchPath = input.GetStringProp("path", Directory.GetCurrentDirectory());
+        var glob = input.GetStringProp("glob", "**/*");
+        var outputMode = input.GetStringProp("output_mode", "files_with_matches");
+        var caseInsensitive = input.GetBoolProp("case_insensitive", false);
 
         if (!Directory.Exists(searchPath) && !File.Exists(searchPath))
             return $"Error: path not found: {searchPath}";
@@ -101,13 +101,6 @@ public sealed class GrepTool : ITool
         var dirInfo = new DirectoryInfoWrapper(new DirectoryInfo(root));
         return matcher.Execute(dirInfo).Files.Select(f => Path.Combine(root, f.Path));
     }
-
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
-
-    private static bool GetBool(JsonElement el, string prop, bool def) =>
-        el.TryGetProperty(prop, out var v) && v.ValueKind is JsonValueKind.True or JsonValueKind.False
-            ? v.GetBoolean() : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

@@ -26,7 +26,7 @@ public sealed class TeamDeleteTool : ITool
 
     public Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var memberId = GetString(input, "member_id");
+        var memberId = input.GetStringProp("member_id");
         if (string.IsNullOrWhiteSpace(memberId))
             return Task.FromResult("Error: 'member_id' is required.");
 
@@ -47,8 +47,6 @@ public sealed class TeamDeleteTool : ITool
         }));
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

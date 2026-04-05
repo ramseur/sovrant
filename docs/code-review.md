@@ -405,14 +405,14 @@ finally {
 | M21 | Tool name sanitized before temp file path construction | Low | Path traversal in temp files |
 | M22 | SkillTool: invalid filename chars check + GetFullPath containment | Low | File access bypass |
 
-### Phase D — Code Quality & DRY (maintainability)
+### Phase D — Code Quality & DRY (maintainability) ✅ COMPLETE
 
 | # | Issue | Effort | Risk if Unfixed |
 |---|-------|--------|-----------------|
-| 2.21 | Shared parameter extraction | Medium | Maintenance burden |
-| 2.22 | Shared ProcessExecutor | Medium | Duplicated bug fixes |
-| 2.23 | Schema builder | High | Error-prone schema definitions |
-| 2.4 | Remove dead BaseAgent code | Low | Confusing architecture |
+| 2.21 | JsonElementExtensions — shared GetStringProp/GetIntProp/GetBoolProp (35 files) | Medium | Maintenance burden |
+| 2.22 | ProcessExecutor — shared RunAsync/RunWithTempFileAsync (BashTool, PowerShellTool, ReplTool) | Medium | Duplicated bug fixes |
+| 2.23 | Schema builder — **deferred** (High effort, current approach functional) | High | Error-prone schema definitions |
+| 2.4 | Removed dead BaseAgent inbox/channel/RunLoopAsync/EnqueueAsync code | Low | Confusing architecture |
 
 ### Phase E — SDK Improvements
 

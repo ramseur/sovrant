@@ -26,7 +26,7 @@ public sealed class ToolSearchTool : ITool
 
     public Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var query = GetString(input, "query").Trim();
+        var query = input.GetStringProp("query").Trim();
 
         var definitions = _registry.GetDefinitions();
 
@@ -58,8 +58,6 @@ public sealed class ToolSearchTool : ITool
         return Task.FromResult(sb.ToString().TrimEnd());
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

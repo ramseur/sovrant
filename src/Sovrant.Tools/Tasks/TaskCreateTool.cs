@@ -25,12 +25,12 @@ public sealed class TaskCreateTool : ITool
 
     public Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var command = GetString(input, "command");
+        var command = input.GetStringProp("command");
         if (string.IsNullOrWhiteSpace(command))
             return Task.FromResult("Error: command is required.");
 
-        var description = GetString(input, "description", command[..Math.Min(command.Length, 50)]);
-        var timeoutMs = GetInt(input, "timeout", DefaultTimeoutMs);
+        var description = input.GetStringProp("description", command[..Math.Min(command.Length, 50)]);
+        var timeoutMs = input.GetIntProp("timeout", DefaultTimeoutMs);
 
         var info = new BackgroundTaskInfo
         {
@@ -138,11 +138,7 @@ public sealed class TaskCreateTool : ITool
         }
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
-    private static int GetInt(JsonElement el, string prop, int def) =>
-        el.TryGetProperty(prop, out var v) && v.TryGetInt32(out var n) ? n : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

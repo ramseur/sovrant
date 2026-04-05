@@ -20,12 +20,12 @@ public sealed class ReadFileTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var filePath = GetString(input, "file_path");
+        var filePath = input.GetStringProp("file_path");
         if (string.IsNullOrWhiteSpace(filePath))
             return "Error: file_path is required.";
 
-        var offset = GetInt(input, "offset", 0);
-        var limit = GetInt(input, "limit", 2000);
+        var offset = input.GetIntProp("offset", 0);
+        var limit = input.GetIntProp("limit", 2000);
 
         if (!File.Exists(filePath))
             return $"Error: file not found: {filePath}";
@@ -54,11 +54,7 @@ public sealed class ReadFileTool : ITool
         catch (UnauthorizedAccessException ex) { return $"Error: access denied: {ex.Message}"; }
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
-    private static int GetInt(JsonElement el, string prop, int def) =>
-        el.TryGetProperty(prop, out var v) && v.TryGetInt32(out var n) ? n : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

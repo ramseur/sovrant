@@ -28,7 +28,7 @@ public sealed class ExitPlanModeTool : ITool
         if (_accessor.Mode != PermissionMode.Plan)
             return Task.FromResult($"Not in Plan mode (current: {_accessor.Mode}). No change made.");
 
-        var modeStr = GetString(input, "permission_mode");
+        var modeStr = input.GetStringProp("permission_mode");
         var targetMode = modeStr switch
         {
             "Default"            => PermissionMode.Default,
@@ -42,8 +42,6 @@ public sealed class ExitPlanModeTool : ITool
         return Task.FromResult($"Exited Plan mode. Permission mode is now: {targetMode}.");
     }
 
-    private static string GetString(JsonElement el, string prop, string def = "") =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? def : def;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

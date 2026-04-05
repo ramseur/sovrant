@@ -27,16 +27,16 @@ public sealed class LspRenameTool : ITool
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
-        var filePath = GetString(input, "file_path");
+        var filePath = input.GetStringProp("file_path");
         if (string.IsNullOrWhiteSpace(filePath))
             return "Error: file_path is required.";
 
-        var newName = GetString(input, "new_name");
+        var newName = input.GetStringProp("new_name");
         if (string.IsNullOrWhiteSpace(newName))
             return "Error: new_name is required.";
 
-        var line = GetInt(input, "line");
-        var character = GetInt(input, "character");
+        var line = input.GetIntProp("line");
+        var character = input.GetIntProp("character");
 
         var client = _manager.GetClientForFile(filePath);
         if (client is null)
@@ -70,11 +70,7 @@ public sealed class LspRenameTool : ITool
         return sb.ToString().TrimEnd();
     }
 
-    private static string GetString(JsonElement el, string prop) =>
-        el.TryGetProperty(prop, out var v) ? v.GetString() ?? string.Empty : string.Empty;
 
-    private static int GetInt(JsonElement el, string prop) =>
-        el.TryGetProperty(prop, out var v) && v.TryGetInt32(out var i) ? i : 0;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {
