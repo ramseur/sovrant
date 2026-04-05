@@ -72,7 +72,7 @@ The engine is fully functional for individual and small-team use:
 
 | Gap | Phase | Priority |
 |---|---|---|
-| Cost tracking & token budget management (4 components) | Phase 26 | Medium |
+| Cost tracking & token budget management (3 components, no pricing) | Phase 26 | Medium |
 | Eval-driven development framework (3 grader types, 2 metrics) | Phase 27 | Lower |
 | Swarm orchestrator (auto-decomposition, DAG execution, file locking, quality gate) | Phase 28 | Lower |
 | Registry discovery API (tools, skills, agent templates for frontends) | Phase 29 | Low–Medium |
@@ -84,6 +84,9 @@ The engine is fully functional for individual and small-team use:
 | VS Code native extension | Phase 35 (deferred — nice-to-have) | Deferred |
 | `/undo` / `/redo` (git-backed file rollback) | Phase 7.5 Tier 2 (deferred) | Deferred |
 | `ScheduleCron` / `ConfigTool` | Phase 7.5 Tier 3 (deferred) | Deferred |
+| Model pricing registry (multi-source, real-time pricing data) | Phase 36 (deferred — nice-to-have) | Deferred |
+| Workspaces (personal + team areas, isolated memory/config/sessions) | Phase 37 (deferred) | Deferred |
+| Projects (workspace-scoped containers for isolated work) | Phase 38 (deferred) | Deferred |
 
 ---
 
@@ -1556,43 +1559,30 @@ src/Sovrant.Runtime/Memory/
 **Inspired by:** everything-claude-code (cost-tracker hook with per-model USD estimation)
 **Depends on:** Phase 9.5 (token usage tracking — already complete)
 
-**Goal:** Per-session and per-project cost tracking with USD estimation by model tier, JSONL metrics log, budget enforcement, and a `/cost` dashboard.
+**Goal:** Per-session and per-project cost tracking with JSONL metrics log, budget enforcement, and a `/cost` dashboard. USD estimation is delegated to Phase 32.5 (model pricing registry); this phase tracks tokens and defers to `ICostModel` for pricing.
 
 #### What exists today
 
-Phase 9.5 already tracks `TotalInputTokens` and `TotalOutputTokens` per session in `SessionConfig`, and `GET /v1/usage` returns per-session token summaries. This phase adds USD estimation, budget limits, and persistent metrics.
+Phase 9.5 already tracks `TotalInputTokens` and `TotalOutputTokens` per session in `SessionConfig`, and `GET /v1/usage` returns per-session token summaries. This phase adds budget limits, persistent metrics logging, and a cost dashboard. Actual USD estimation depends on Phase 32.5's `ICostModel` — until that lands, the dashboard shows token counts only.
 
 #### Components
 
 | Component | What it does |
 |---|---|
-| **Cost Estimator** | Maps model name → cost per 1K tokens (input/output), estimates USD per session |
-| **Metrics Logger** | Appends per-turn cost events to `~/.sovrant/metrics/cost.jsonl` |
+| **Metrics Logger** | Appends per-turn token/cost events to `~/.sovrant/metrics/cost.jsonl` |
 | **Budget Enforcer** | Optional per-session or per-project budget cap; warns at 80%, blocks at 100% |
 | **Cost Dashboard** | `GET /v1/cost` endpoint and `/cost` CLI command — daily/weekly/monthly breakdown |
 
-#### Cost Model
-
-```json
-{
-  "models": {
-    "claude-opus-4-6":   { "input_per_1k": 0.015, "output_per_1k": 0.075 },
-    "claude-sonnet-4-6": { "input_per_1k": 0.003, "output_per_1k": 0.015 },
-    "gpt-4o":            { "input_per_1k": 0.005, "output_per_1k": 0.015 },
-    "gpt-4o-mini":       { "input_per_1k": 0.00015, "output_per_1k": 0.0006 }
-  }
-}
-```
-
 #### Implementation Plan
 
-1. Add `CostEstimator` to `Sovrant.Runtime/Metrics/` — model → cost mapping from config
-2. Add `CostMetricsLogger` — appends to `~/.sovrant/metrics/cost.jsonl` per turn
-3. Add optional `BudgetEnforcer` — reads `SOVRANT_SESSION_BUDGET_USD` and `SOVRANT_PROJECT_BUDGET_USD`
-4. Add `GET /v1/cost` endpoint with daily/weekly/monthly aggregation
-5. Update `/cost` CLI command to show estimated spend
-6. Wire cost logging into `TurnComplete` event handling
-7. Tests: cost estimation, budget enforcement, JSONL format
+1. Define `ICostModel` interface in `Sovrant.Runtime/Metrics/` — `decimal? EstimateCost(string model, long inputTokens, long outputTokens)` (returns null when no pricing available)
+2. Add `NullCostModel` (always returns null) as default — Phase 32.5 provides the real implementation
+3. Add `CostMetricsLogger` — appends to `~/.sovrant/metrics/cost.jsonl` per turn (tokens always, USD when `ICostModel` returns non-null)
+4. Add optional `BudgetEnforcer` — reads `SOVRANT_SESSION_BUDGET_USD` and `SOVRANT_PROJECT_BUDGET_USD` (only enforced when `ICostModel` can price the model)
+5. Add `GET /v1/cost` endpoint with daily/weekly/monthly aggregation
+6. Update `/cost` CLI command to show token counts + estimated spend (when available)
+7. Wire cost logging into `TurnComplete` event handling
+8. Tests: metrics logging, budget enforcement, JSONL format, graceful null-pricing fallback
 
 ---
 
@@ -2333,11 +2323,64 @@ CREATE INDEX idx_api_tokens_hash ON api_tokens(token_hash);
 
 ---
 
+### Phase 36 — Model Pricing Registry ⏸️ Deferred (nice-to-have)
+
+**Depends on:** Phase 26 (cost tracking — defines `ICostModel` interface)
+
+**Goal:** A multi-source, user-overridable pricing registry that maps model names to USD-per-token rates. Vendors change prices frequently; a hardcoded table goes stale immediately. This phase designs a layered system that stays current without requiring a Sovrant release for every price change. Requires real-time external data — not worth building until there's a reliable upstream source or enough demand to maintain one.
+
+#### Why this needs its own phase
+
+Pricing looks simple (a JSON lookup table) but has real complexity:
+- Vendors change prices without notice — any static table is immediately a liability
+- Provider-agnostic design means Sovrant must price models from OpenAI, Anthropic, Google, Mistral, Ollama (free), Azure (different pricing than direct), and arbitrary OpenAI-compatible endpoints
+- Model name aliasing: `gpt-4o-2024-08-06` vs `gpt-4o`, `claude-sonnet-4-6` vs `claude-sonnet-4-6-20250514`
+- Some deployments are free (Ollama, self-hosted) or have custom enterprise pricing
+- Cache tokens, batch API, and prompt caching have different rates
+
+#### Design space (needs resolution before implementation)
+
+| Approach | Pros | Cons |
+|---|---|---|
+| **User-editable local config** (`~/.sovrant/cost-models.json`) | Simple, no network, user controls everything | User must manually track vendor changes |
+| **Bundled defaults + user overrides** | Works offline, good defaults, overridable | Stale between releases |
+| **Remote pricing URL** (fetch on startup, cache locally) | Always current if maintained | Network dependency, who hosts it? |
+| **Provider API introspection** | Authoritative | Most providers don't expose pricing via API |
+| **Community-maintained registry** (e.g., GitHub-hosted JSON) | Crowdsourced freshness | Depends on external contributors |
+
+#### Recommended architecture (layered, highest priority wins)
+
+1. **User overrides** — `~/.sovrant/cost-models.json` (always wins)
+2. **Project overrides** — `.sovrant/cost-models.json` (per-project custom pricing)
+3. **Remote registry** (optional) — URL in config, fetched periodically, cached to disk
+4. **Bundled defaults** — ships with each release, covers major models at time of build
+
+#### Open questions
+
+- Should the remote registry be opt-in or opt-out?
+- What schema handles cache token pricing, batch discounts, and per-region Azure pricing?
+- Should `ICostModel` expose a confidence level (exact vs estimated vs unknown)?
+- How to handle model name normalization (fuzzy match? alias table?)
+- Is there value in a `sovrant update-pricing` CLI command that fetches latest?
+
+#### Skeleton implementation plan (pending design decisions)
+
+1. Define `CostModelEntry` record: `InputPer1KTokens`, `OutputPer1KTokens`, optional `CacheReadPer1KTokens`, `CacheWritePer1KTokens`
+2. Implement `LayeredCostModel : ICostModel` — walks the 4-tier chain
+3. `CostModelFileLoader` — reads/merges JSON from user → project → bundled paths
+4. Optional `RemoteCostModelFetcher` — periodic background refresh with local disk cache
+5. Model name normalization — alias map or prefix matching
+6. Ship bundled `cost-models.json` with current pricing for top ~20 models
+7. `sovrant update-pricing` CLI command (if remote registry enabled)
+8. Tests: layering precedence, alias resolution, offline fallback, stale cache behavior
+
+---
+
 ### Phase 33 — Enterprise Auth & Multi-Tenancy ⏸️ Deferred
 
-**Depends on:** Phase 32 (user management API), Phase 9.5 (session-scoped config)
+**Depends on:** Phase 32 (user management API), Phase 37 (workspaces — provides tenant boundary), Phase 9.5 (session-scoped config)
 
-**Goal:** Add external identity providers (OAuth/OIDC, SAML), fine-grained role-based access control (RBAC), and organizational multi-tenancy on top of the Phase 32 user management layer. This is the gate to offering Sovrant as a managed platform with SSO login.
+**Goal:** Add external identity providers (OAuth/OIDC, SAML), fine-grained role-based access control (RBAC), and enterprise multi-tenancy on top of the Phase 37 workspace model. Workspaces provide the isolation boundary; this phase adds SSO login, granular permissions, and compliance controls on top.
 
 #### When to implement
 
@@ -2346,24 +2389,26 @@ This phase is deliberately deferred. Phase 32's token-based user management cove
 - Fine-grained permissions beyond admin/user/readonly are needed (e.g., "can use tool X but not Y"), **or**
 - Organizational boundaries require tenant isolation (separate data, separate billing)
 
-#### What it adds on top of Phase 32
+#### What it adds on top of Phase 37 (Workspaces)
+
+Phase 37 provides workspaces with membership and role-based access (owner/admin/member/viewer). This phase upgrades that model with external identity, granular permissions, and compliance tooling.
 
 | Item | Change |
 |---|---|
 | External IdP | OAuth 2.0 / OIDC integration — login via Google, GitHub, Azure AD, Okta. Maps external identity to `users.user_id`. |
-| RBAC | Replace simple `role` column with a `roles` + `permissions` table. Define granular permissions: `tools:execute`, `config:write`, `sessions:read-all`, etc. |
-| Organizations | `organizations` table — users belong to orgs; sessions/config/audit scoped per-org. Multi-tenant data isolation. |
-| Billing isolation | Per-org token usage aggregation. `GET /v1/orgs/{id}/usage`. |
-| Session ownership enforcement | Only owning user (or org admin) can read/delete sessions. Already partially implemented in Phase 32. |
+| RBAC | Replace simple workspace/project `role` columns with a `roles` + `permissions` table. Define granular permissions: `tools:execute`, `config:write`, `sessions:read-all`, etc. |
+| SSO enforcement | Workspace admins can require SSO login — disable token-only access for their workspace. |
+| Billing isolation | Per-workspace token usage aggregation already exists (Phase 37); this adds billing plan association and usage alerts. |
+| Session ownership enforcement | Only owning user (or workspace admin) can read/delete sessions. Already partially implemented in Phase 32/37. |
 | Audit | All auth events (login, token issue, token revoke, permission change) logged to `audit_events`. |
 
 #### Implementation Plan
 
 1. Add OAuth/OIDC middleware — `Microsoft.AspNetCore.Authentication.OpenIdConnect`
-2. Add `organizations`, `org_members`, `roles`, `permissions` tables
+2. Add `roles`, `permissions` tables (replace simple role columns in `workspace_members`/`project_members`)
 3. Implement `IRbacService` — permission checks at endpoint and tool-execution level
 4. Update `BearerTokenMiddleware` to also accept JWT from external IdP
-5. Add org-scoped endpoints: `GET /v1/orgs`, `GET /v1/orgs/{id}/usage`, `GET /v1/orgs/{id}/members`
+5. Add SSO enforcement flag on workspace config
 6. Add `POST /v1/admin/reload` to hot-reload token registry without restart
 
 ---
@@ -2428,6 +2473,151 @@ Two-layer approach:
 4. Inline diffs: intercept `Edit`/`Write` tool events, show diff decoration in the editor
 5. Permission dialogs: VS Code `window.showInformationMessage` with approve/deny buttons
 6. Publish to VS Code Marketplace
+
+---
+
+### Phase 37 — Workspaces ⏸️ Deferred
+
+**Depends on:** Phase 31 (SQLite persistence), Phase 32 (user management API), Phase 25 (memory system)
+
+**Goal:** Personal and team areas that house projects. Every user gets an isolated personal workspace by default; team workspaces allow groups to collaborate. Workspaces own their own memory, configuration, sessions, credentials, and audit data.
+
+#### Core concepts
+
+- **Personal workspace** — auto-created when a user is created. Single-owner, cannot be deleted, always exists. This is where a user's solo work lives.
+- **Team workspace** — created explicitly. Has membership (owner/admin/member/viewer) and invite-based onboarding. This is where teams collaborate.
+- **Fallback rule** — if no `workspace_id` is provided in a request, resolve to the authenticated user's personal workspace. No request is ever "unscoped."
+- **Isolation** — workspaces cannot see each other's data. Sessions, config, memory, credentials, audit — all scoped per-workspace.
+- **Memory** — Phase 25's memory layers (SessionSummary, LearnedPattern, Instinct) are scoped per-workspace. A team workspace accumulates shared learned patterns; a personal workspace keeps individual ones. Memory does not leak across workspace boundaries.
+
+#### Motivation
+
+Today Sovrant is single-user or flat multi-user (Phase 32). There's no separation between "my stuff" and "our team's stuff." Workspaces give every user a private area from day one (personal workspace) and let teams form shared areas when needed (team workspaces):
+- A user's personal workspace is their default — solo work, personal memory, personal config
+- A team workspace lets multiple users share sessions, memory, config, and projects
+- Isolation means workspace A cannot see workspace B's data, memory, or sessions
+- Users can belong to multiple team workspaces while always having their personal workspace as home base
+
+#### SQLite schema
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `workspaces` | `workspace_id` (PK), `type` (personal/team), `name`, `slug` (unique), `owner_id` (FK → users), `created_at`, `updated_at` | Personal workspaces: `type='personal'`, one per user, `owner_id` = user. Team workspaces: `type='team'`, `owner_id` = creator. |
+| `workspace_members` | `workspace_id` (FK), `user_id` (FK), `role` (owner/admin/member/viewer), `joined_at` | Personal workspaces have exactly one member (the owner). Team workspaces have many. |
+| `workspace_config` | `workspace_id` (FK), `key`, `value` | Workspace-scoped settings (model defaults, governance level, budget caps) |
+| `workspace_invites` | `invite_id` (PK), `workspace_id` (FK), `email`, `role`, `token`, `expires_at`, `accepted_at` | Team workspaces only — personal workspaces don't accept invites |
+| `workspace_memory` | `memory_id` (PK), `workspace_id` (FK), `layer` (summary/pattern/instinct), `content`, `confidence`, `project_id` (FK, nullable), `created_at`, `updated_at` | Replaces flat-file memory storage from Phase 25. Scoped to workspace, optionally to project. |
+
+All existing tables with `user_id` gain a `workspace_id` FK (not nullable — every row belongs to a workspace). Migration backfills existing data into each user's personal workspace.
+
+#### Workspace resolution
+
+1. Request includes `X-Workspace-Id` header → use that workspace (validate membership)
+2. Request includes no workspace context → resolve to the authenticated user's personal workspace
+3. Never unscoped — the personal workspace is always the fallback
+
+#### API surface
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/v1/workspaces` | GET | List workspaces the authenticated user belongs to (always includes personal) |
+| `/v1/workspaces` | POST | Create a team workspace (creator becomes owner) |
+| `/v1/workspaces/{id}` | GET/PUT | Workspace read/update. Personal workspaces can be renamed but not deleted. |
+| `/v1/workspaces/{id}` | DELETE | Delete team workspace only (personal workspaces cannot be deleted) |
+| `/v1/workspaces/{id}/members` | GET/POST/DELETE | Membership management (team workspaces only) |
+| `/v1/workspaces/{id}/invites` | POST/DELETE | Invite lifecycle (team workspaces only) |
+| `/v1/workspaces/{id}/config` | GET/PUT | Workspace-scoped configuration |
+| `/v1/workspaces/{id}/usage` | GET | Aggregated token/cost usage for workspace |
+| `/v1/workspaces/{id}/memory` | GET | Workspace memory (summaries, patterns, instincts) |
+
+#### Implementation plan
+
+1. Add SQLite tables (`workspaces`, `workspace_members`, `workspace_config`, `workspace_invites`, `workspace_memory`)
+2. Add `workspace_id` FK (not nullable) to `sessions`, `audit_events`, `credentials`, `usage`, `config` tables
+3. Auto-create personal workspace on user creation (Phase 32 user lifecycle hook)
+4. Migration: backfill existing data into each user's personal workspace
+5. Implement `IWorkspaceService` — CRUD, membership, invite token generation/validation, personal workspace creation
+6. Implement `WorkspaceContextMiddleware` — resolves workspace from `X-Workspace-Id` header, falls back to personal workspace
+7. Migrate Phase 25 `IMemoryStore` from flat files to `workspace_memory` table — `FileMemoryStore` becomes fallback for non-SQLite mode
+8. Scope all existing queries by `workspace_id` (no unscoped queries remain)
+9. Add workspace API endpoints
+10. Workspace-scoped config inheritance: workspace config → user config → global defaults
+11. Tests: personal workspace auto-creation, fallback resolution, isolation (workspace A can't see workspace B data), memory scoping, membership roles, invite flow (team only), personal workspace delete protection
+
+#### Relationship to Phase 33 (Enterprise Auth)
+
+Phase 33 adds external IdP login and RBAC on top of the workspace model — workspaces become the RBAC scope boundary.
+
+---
+
+### Phase 38 — Projects ⏸️ Deferred
+
+**Depends on:** Phase 37 (workspaces)
+
+**Goal:** Isolated containers within workspaces that group related work — sessions, config, memory, agent templates, and artifacts. A project belongs to exactly one workspace and inherits its isolation boundary.
+
+#### Core concepts
+
+- **Project** — a named container within a workspace (like a repo, initiative, or client engagement)
+- **Workspace-scoped** — projects belong to a workspace. Personal workspace projects are solo; team workspace projects are collaborative.
+- **Memory inheritance** — projects can accumulate their own learned patterns and instincts (stored in `workspace_memory` with `project_id` set). Project memory is a refinement of workspace memory, not a replacement — both layers are visible within the project.
+- **Membership** — project members are a subset of workspace members. If no project members are explicitly set, all workspace members have access (open by default within the workspace).
+
+#### Motivation
+
+Workspaces isolate people. Projects isolate work. Without projects:
+- All sessions in a workspace are in one flat list
+- Config overrides apply workspace-wide or per-session — no middle ground for "this initiative uses model X with budget Y"
+- Memory accumulates at the workspace level with no way to separate patterns learned on different initiatives
+- Agent templates and skills can't be scoped to a specific effort
+
+Projects let a team (or individual) say "this engagement has its own model config, budget, memory, and agent templates" without affecting other work in the same workspace.
+
+#### SQLite schema
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `projects` | `project_id` (PK), `workspace_id` (FK), `name`, `slug`, `description`, `created_at`, `updated_at`, `archived_at` | Belongs to exactly one workspace |
+| `project_members` | `project_id` (FK), `user_id` (FK), `role` (lead/contributor/viewer), `joined_at` | Subset of workspace members; optional — no rows means all workspace members have access |
+| `project_config` | `project_id` (FK), `key`, `value` | Project-scoped settings (model, budget, governance overrides) |
+
+Phase 37's `workspace_memory` table already has an optional `project_id` FK — project-scoped memory writes set this field. Existing tables gain optional `project_id` FK: `sessions`, `audit_events`, `usage`.
+
+#### Config and memory inheritance
+
+```
+project config  →  workspace config  →  user config  →  global defaults
+project memory  +  workspace memory  (both visible within project context)
+```
+
+#### API surface
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/v1/workspaces/{wid}/projects` | GET/POST | List/create projects in workspace |
+| `/v1/projects/{id}` | GET/PUT/DELETE | Project CRUD (delete archives by default) |
+| `/v1/projects/{id}/members` | GET/POST/DELETE | Project membership (subset of workspace) |
+| `/v1/projects/{id}/config` | GET/PUT | Project-scoped configuration |
+| `/v1/projects/{id}/sessions` | GET | Sessions scoped to project |
+| `/v1/projects/{id}/usage` | GET | Token/cost usage for project |
+| `/v1/projects/{id}/memory` | GET | Project-scoped memory (project + inherited workspace memory) |
+
+#### Implementation plan
+
+1. Add SQLite tables (`projects`, `project_members`, `project_config`)
+2. Add optional `project_id` FK to `sessions`, `audit_events`, `usage` tables
+3. Implement `IProjectService` — CRUD, membership, archival
+4. Implement `ProjectContextMiddleware` — resolves project from `X-Project-Id` header
+5. Config inheritance chain: project config → workspace config → user config → global defaults
+6. Memory scoping: project memory writes go to `workspace_memory` with `project_id` set; reads merge project + workspace layers
+7. Session creation auto-associates with active project context
+8. Project-scoped agent templates and skills (load from project config in addition to workspace/global)
+9. Budget enforcement at project level (Phase 26's `ICostModel` + project config budget cap)
+10. Tests: project isolation within workspace, config inheritance chain, memory scoping (project sees own + workspace memory), membership subset validation, archive behavior
+
+#### Relationship to Phase 34 (Artifact System)
+
+If Phase 34 is implemented, artifacts are scoped to projects rather than just teams. The `ITeamWorkspace` from Phase 34 becomes project-aware — artifacts persist in the project context and survive across team agent lifetimes.
 
 ---
 
