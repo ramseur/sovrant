@@ -8,7 +8,7 @@ The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HT
 
 **Runtime:** .NET 10 / C# 13
 **License:** [see LICENSE]
-**Status:** Engine fully functional. 41 tools. 14 server endpoints. Multi-agent team orchestration. MCP server mode. Frontend SDK. 487 tests passing.
+**Status:** Engine fully functional. 43 tools. 24 agent templates. 32 built-in skills. 14 server endpoints. Multi-agent team orchestration. MCP server mode. Frontend SDK. 661 tests passing.
 
 ---
 
@@ -39,8 +39,14 @@ The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HT
 ### Provider-Agnostic LLM Routing
 Connect to **any OpenAI-compatible API** — OpenAI, Anthropic (via proxy), Google Gemini, Ollama (local), or any provider that speaks the OpenAI chat completions format. The `SmartRouter` pings all configured providers on startup, scores them by latency, cost, and error rate, and routes each request to the optimal one. Switch providers by changing an environment variable — no code changes.
 
-### 41 Built-in Tools
-Agents autonomously use tools for file operations (read, write, edit, glob, grep), shell execution (Bash, PowerShell, REPL), web access (fetch, search), task management, plan/worktree mode, notebook editing, MCP resource access, LSP code intelligence, and multi-agent delegation. Up to 20 tool rounds per turn with automatic retries.
+### 43 Built-in Tools
+Agents autonomously use tools for file operations (read, write, edit, glob, grep), shell execution (Bash, PowerShell, REPL), web access (fetch, search), task management, plan/worktree mode, notebook editing, MCP resource access, LSP code intelligence, code verification, skill execution, and multi-agent delegation. Up to 20 tool rounds per turn with automatic retries.
+
+### 24 Specialized Agent Templates
+Define reusable agent roles as `.md` files with YAML frontmatter — each specifying a name, recommended model tier, system prompt, and allowed tools. 24 built-in templates ship with the engine (10 general-purpose, 8 code-specific, 6 creative/domain). Drop custom templates into `.sovrant/agents/` to override built-ins or add your own. Agents spawned via the `Agent` tool or `TeamCreate` can reference a template by name for purpose-built behavior without manual prompt engineering.
+
+### 32 Built-in Skills (Composable Workflow Packages)
+Skills are single `.md` files — YAML frontmatter (name, trigger, agents, tools) plus a markdown body with steps and instructions. When a skill needs embedded code (JavaScript, Python, etc.), it lives inside a fenced code block in the body — no sidecar files, no directory-per-skill. 32 built-in skills across 7 domains: research (5), writing (5), business (5), project management (4), coding (7), media (3), and agent infrastructure (3). Invoke via `/trigger` slash commands or programmatically. Create new skills at runtime with `SkillCreate`.
 
 ### Multi-Agent Team Orchestration
 Create persistent named agents with specific roles, custom system prompts, and tool restrictions. Delegate tasks, track lifecycle status, and coordinate teams — all from within the agentic loop or via API. Two interchangeable backends: process-per-agent for hard isolation (default) or in-process async for lower overhead.
@@ -220,9 +226,9 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
 | `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus session management and live config. |
 | `Sovrant.Runtime` | Core agentic loop, session persistence (JSONL), permission system, tool executor, MCP client. |
 | `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, native messages API. SmartRouter with health/latency/cost scoring. |
-| `Sovrant.Tools` | All 41 tool implementations (core + LSP + team + MCP). |
+| `Sovrant.Tools` | All 43 tool implementations (core + LSP + team + MCP + quality + skills). 32 built-in skill `.md` files. |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/clear`, `/session`, `/memory`, etc.). |
-| `Sovrant.Agents` | Multi-agent orchestration: team registry, agent factory, dual backends (isolated process-per-agent + shared in-process), 24 role templates, tool filtering per agent. |
+| `Sovrant.Agents` | Multi-agent orchestration: team registry, agent factory, dual backends (isolated process-per-agent + shared in-process), 24 agent templates as `.md` files, tool filtering per agent. |
 | `Sovrant.McpServer` | MCP server mode: exposes all tools and resources via stdio transport for IDE integration. |
 | `Sovrant.Lsp` | Language Server Protocol client: JSON-RPC over stdio, manages language server lifecycle, 5 LSP tools. |
 | `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient`, SSE streaming, React `useChat()` hook. |
@@ -243,7 +249,7 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
 
 ## Tools
 
-41 tools available. All run inside the agentic loop with automatic retries up to 20 tool rounds per turn. Two additional tools (`MCPTool` and `McpAuth`) provide dynamic MCP server interaction.
+43 tools available. All run inside the agentic loop with automatic retries up to 20 tool rounds per turn. Two additional tools (`MCPTool` and `McpAuth`) provide dynamic MCP server interaction.
 
 ### File
 `Read` · `Write` · `Edit` · `Glob` · `Grep` · `LS`
@@ -269,7 +275,10 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
 *Create persistent named agents with roles, custom system prompts, and tool restrictions. Delegate tasks and track lifecycle. See [Agent System](#agent-system).*
 
 ### Discovery & Skills
-`ToolSearch` *(keyword search over registered tools)* · `Skill` *(loads `.sovrant/skills/{name}.md` prompt template)*
+`ToolSearch` *(keyword search over registered tools)* · `Skill` *(loads and executes a skill by name or /trigger)* · `SkillCreate` *(creates new `.md` skill files at runtime)*
+
+### Quality
+`Verify` *(6-phase quality gate: build, type-check, lint, test, security scan, diff review)*
 
 ### MCP Resources
 `ListMcpResources` · `ReadMcpResource` · `MCPTool` *(dynamic proxy — calls any tool on any connected MCP server)*
@@ -286,7 +295,7 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
 
 ## Agent System
 
-Sovrant provides two complementary approaches to multi-agent work.
+Sovrant provides three layers of multi-agent capability: ad-hoc sub-agents for quick delegation, reusable agent templates for purpose-built roles, and persistent team agents for structured orchestration.
 
 ### Ad-hoc Sub-Agents (`Agent` tool)
 
@@ -295,14 +304,38 @@ The `Agent` tool spawns a lightweight, stateless sub-agent for a single task. Th
 - Each sub-agent gets its own `ConversationRuntime` with a fresh session
 - No persistent identity — created, runs, and discarded
 - Recursion depth limited to 5
-- Same tool access as the parent
+- Same tool access as the parent (unless a template restricts it)
+
+### 24 Agent Templates (`.md` files)
+
+Agent templates are `.md` files with YAML frontmatter — each defines a reusable agent persona with a name, recommended model tier (High/Standard/Fast), system prompt body, and optional tool restrictions. Templates live in `src/Sovrant.Agents/agents/` (built-in) and can be overridden or extended by dropping `.md` files into `.sovrant/agents/`.
+
+**24 built-in templates across 3 categories:**
+
+| Category | Templates |
+|---|---|
+| **General-purpose (10)** | researcher, writer, analyst, planner, summarizer, translator, tutor, debater, advisor, fact-checker |
+| **Code-specific (8)** | coder, reviewer, debugger, refactorer, test-writer, architect, doc-writer, security-auditor |
+| **Creative / Domain (6)** | storyteller, copywriter, data-scientist, sysadmin, product-manager, interviewer |
+
+Use a template from the `Agent` tool or `TeamCreate`:
+
+```
+# Spawn a purpose-built agent from a template
+Agent(template: "security-auditor", prompt: "Audit the auth module for OWASP Top 10")
+
+# Create a team member backed by a template
+TeamCreate(name: "reviewer", template: "reviewer")
+```
+
+Each template specifies a `recommended_level` that maps to a model string via `ModelLevels` config — so a "Fast" agent can use a cheaper model while a "High" agent gets the most capable one, without hardcoding model names.
 
 ### Persistent Team Agents (Team tools)
 
 The team tools (`TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`) provide structured, user-controlled multi-agent orchestration.
 
 ```
-# Create a specialist agent
+# Create a specialist agent (with or without a template)
 TeamCreate(name: "reviewer", role: "reviewer",
            prompt: "You review code for bugs and security issues",
            allowed_tools: ["Read", "Grep", "Glob"])
@@ -317,6 +350,7 @@ TeamStatus()  →  [{ name: "reviewer", status: "Completed", last_output: "Found
 
 Each team member:
 - Has a **role** (General, Planner, Coder, Reviewer, Executor, Supervisor) with a role-specific system prompt
+- Can optionally be backed by an **agent template** for pre-configured behavior
 - Can be restricted to a **subset of tools** via `FilteredToolRegistry`
 - Tracks **lifecycle state**: Idle → Running → Completed/Failed
 - Is backed by a real `ConversationRuntime`, created lazily on first delegation
@@ -571,17 +605,17 @@ Replace `-r linux-x64` with `-r win-x64` in all commands above.
 ## Tests
 
 ```bash
-dotnet test Sovrant.slnx   # 487 tests across 9 projects
+dotnet test Sovrant.slnx   # 661 tests across 9 projects
 ```
 
 | Project | Tests |
 |---|---|
 | `Sovrant.Api.Tests` | 28 |
-| `Sovrant.Runtime.Tests` | 137 |
+| `Sovrant.Runtime.Tests` | 209 |
 | `Sovrant.Server.Tests` | 73 |
 | `Sovrant.McpServer.Tests` | 30 |
 | `Sovrant.Lsp.Tests` | 26 |
-| `Sovrant.Tools.Tests` | 72 |
+| `Sovrant.Tools.Tests` | 174 |
 | `Sovrant.Commands.Tests` | 22 |
 | `Sovrant.Agents.Tests` | 98 |
 | `Sovrant.Integration.Tests` | 1 |

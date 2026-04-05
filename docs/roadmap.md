@@ -1318,30 +1318,28 @@ Three levels: `minimal` (audit only), `standard` (audit + warn), `strict` (audit
 **Inspired by:** everything-claude-code (156+ skills as directory-based workflow definitions)
 **Depends on:** Phase 20 (hooks — skills can trigger hooks), Phase 21 (agent templates — skills can spawn agents)
 
-**Goal:** A modular system for packaging multi-step workflows as reusable, composable "skills" — each a directory containing a definition file (`SKILL.md`), optional agent configurations, and activation triggers. Skills are invoked via `/skill-name` slash commands or programmatically by agents. Ship with **32 built-in skills** across 7 domains — coding is just one.
+**Goal:** A modular system for packaging multi-step workflows as reusable, composable "skills" — each a single `.md` file with YAML frontmatter and a markdown body. Skills are invoked via `/skill-name` slash commands or programmatically by agents. Ship with **32 built-in skills** across 7 domains — coding is just one.
 
 #### Why this matters
 
 Today Sovrant has a basic `SkillTool` that loads markdown files as system prompt overlays. The everything-claude-code approach is richer: skills are full workflow definitions with steps, agent delegation, tool restrictions, and cross-harness compatibility. Sovrant is a general-purpose agentic platform — chat, research, writing, business ops, project management, and coding. The skill system turns Sovrant from a tool-using agent into a workflow engine that serves all these verticals.
 
-#### Skill Structure
+#### Skill Structure — Flat .md Files (mirrors Phase 21.5 agent templates)
+
+Each skill is a single `.md` file — no directory-per-skill, no sidecar files. When a skill needs embedded code (JavaScript, Python, etc.), the code lives inside a fenced code block within the markdown body. This keeps skills self-contained and allows thousands of skills without directory explosion.
 
 ```
 .sovrant/skills/
-  tdd-workflow/
-    SKILL.md              ← workflow definition (identity, steps, output format)
-    agents.json           ← optional: agent templates to spawn for this skill
-  code-review/
-    SKILL.md
-  deep-research/
-    SKILL.md
-  article-writing/
-    SKILL.md
-  market-research/
-    SKILL.md
+  tdd-workflow.md
+  code-review.md
+  deep-research.md
+  article-writing.md
+  market-research.md
 ```
 
-`SKILL.md` format:
+Built-in skills ship in `src/Sovrant.Tools/Skills/skills/` and are copied to the output directory at build time.
+
+Skill `.md` format:
 ```markdown
 ---
 name: deep-research
@@ -1366,6 +1364,23 @@ tools: [Read, Grep, Glob, WebSearch, WebFetch]
 - Detailed findings with citations
 - Confidence assessment per finding
 - Recommended next steps
+```
+
+Skills that need embedded code include it as a fenced block:
+```markdown
+---
+name: data-scraper
+description: Autonomous data collection pipeline
+trigger: /scrape
+tools: [WebFetch, Write]
+---
+
+## Handler
+
+\```js
+// Embedded JS — no separate file needed
+async function scrape(url) { ... }
+\```
 ```
 
 #### Built-in Skills — 32 skills across 7 domains
@@ -1441,22 +1456,26 @@ tools: [Read, Grep, Glob, WebSearch, WebFetch]
 
 ```
 src/Sovrant.Tools/Skills/
-  SkillDefinition.cs          ← parsed SKILL.md: name, description, trigger, agents, tools, steps
-  SkillRegistry.cs            ← discovers and indexes skills from .sovrant/skills/ and built-in
-  SkillRunner.cs              ← executes a skill: sets system prompt overlay, spawns agents if needed
-  SkillTool.cs                ← (existing) updated to use SkillRegistry
+  SkillDefinition.cs          ← record: Name, Description, Trigger, Agents, Tools, Body
+  SkillParser.cs              ← YAML frontmatter parser (same pattern as AgentTemplateRegistry)
+  SkillRegistry.cs            ← 3-tier discovery: assembly dir skills/ → ~/.sovrant/skills/ → .sovrant/skills/
+  SkillRunner.cs              ← resolves skill, formats prompt with metadata, $ARGUMENTS substitution
+  SkillTool.cs                ← registry-backed; supports "list" and args passthrough
+  SkillCreateTool.cs          ← creates .md files in .sovrant/skills/ at runtime
+  skills/                     ← 32 built-in .md files (copied to output dir via CopyToOutputDirectory)
 ```
 
-#### Implementation Plan
+#### Implementation (complete)
 
-1. Define `SkillDefinition` with YAML frontmatter parser
-2. Implement `SkillRegistry` — scans `.sovrant/skills/`, `~/.sovrant/skills/`, and embedded built-in skills
-3. Update `SkillTool` to use `SkillRegistry` for discovery and execution
-4. Implement `SkillRunner` — applies system prompt overlay, optionally spawns agent templates
-5. Add `SkillCreate` tool for agents to define new skills at runtime
-6. Ship **32 built-in skills**: 5 research, 5 writing, 5 business, 4 project management, 7 coding, 3 media, 3 agent infrastructure
-7. Register skill triggers as slash commands in `SlashCommandDispatcher`
-8. Tests: skill discovery, frontmatter parsing, execution, trigger registration
+1. `SkillDefinition` record with `IReadOnlyList<string>` for Agents and Tools
+2. `SkillParser` — parses .md files with YAML frontmatter; handles `[A, B]` and `A, B` list syntax
+3. `SkillRegistry` — 3-tier discovery (assembly dir → global → project-local), case-insensitive name + trigger dictionaries
+4. `SkillRunner` — formats prompt with metadata header, tool/agent constraints, body, `$ARGUMENTS` substitution
+5. `SkillTool` rewritten to use `SkillRunner`; `SkillCreateTool` writes .md files with path traversal protection
+6. 32 built-in skills shipped as flat .md files in `src/Sovrant.Tools/Skills/skills/`
+7. MSBuild: `<Content Include="Skills\skills\**" CopyToOutputDirectory="PreserveNewest" Link="skills\%(Filename)%(Extension)" />`
+8. DI: `SkillRegistry`, `SkillRunner` singletons + `SkillCreateTool` registered as `ITool`
+9. 46 tests across 5 test files (SkillParser, SkillRegistry, SkillRunner, SkillTool, SkillCreateTool)
 
 ---
 
