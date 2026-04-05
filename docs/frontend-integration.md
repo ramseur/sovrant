@@ -6,6 +6,20 @@ This guide covers connecting any frontend — browser, Node.js, React, or server
 
 ---
 
+## How authentication works
+
+`Sovrant.Server` uses a single bearer token (`SOVRANT_TOKEN` env var). Every request must include:
+
+```
+Authorization: Bearer <your-token>
+```
+
+If the token is missing or wrong, the server returns `401 Unauthorized`.
+
+**The SDK sends this header automatically** — you set the token once in the constructor and never touch it again.
+
+---
+
 ## Quick Start
 
 ### Install
@@ -14,14 +28,14 @@ This guide covers connecting any frontend — browser, Node.js, React, or server
 npm install @sovrant/sdk
 ```
 
-### Basic usage
+### Basic usage (server-side or internal tools)
 
 ```ts
 import { SovrantClient } from "@sovrant/sdk";
 
 const client = new SovrantClient({
   baseUrl: "http://localhost:5200",
-  token: process.env.SOVRANT_TOKEN!,
+  token: process.env.SOVRANT_TOKEN!,  // Never hardcode — always from environment
   model: "gpt-4o",
 });
 
@@ -43,27 +57,61 @@ await client.stream("Draft a project plan", {
 
 ## Architecture: Browser vs Server
 
-### Browser apps (recommended: proxy pattern)
+The `SOVRANT_TOKEN` is a **server secret**. Where you put the SDK depends on whether your app is public-facing or internal.
 
-Never expose `SOVRANT_TOKEN` to the browser. Use a backend proxy to inject the token server-side:
+### Public-facing browser apps — proxy pattern (required)
+
+Never send `SOVRANT_TOKEN` to a browser. Any user can read browser network requests, local storage, or bundle source maps. Instead, put the SDK and the token on a Node.js backend and have the browser call your proxy:
 
 ```
-Browser  ──►  Node.js proxy  ──►  Sovrant.Server (localhost:5200)
-                injects bearer         wraps the engine
-                token server-side
+Browser  ──►  Your Node.js proxy  ──►  Sovrant.Server :5200
+              (holds SOVRANT_TOKEN,       (validates token,
+               uses SDK server-side)       runs the agent)
 ```
 
-The SDK is used on the **proxy** (Node.js) side. The browser talks to your proxy on the same origin — no CORS issues, no credentials in the browser.
+The browser sends unauthenticated requests to your proxy at `/v1`. The proxy uses the SDK with the real token and streams responses back to the browser. See the [Proxy Setup Reference](#proxy-setup-reference) section.
 
-### Server-side or internal tools
+### Internal tools and admin dashboards
 
-For internal dashboards, CI scripts, automation pipelines, or any server-to-server integration, use the SDK directly with the token:
+If the application is protected by its own authentication layer (SSO, VPN, corporate identity provider) and the users are trusted members of your organisation, it is acceptable to issue a scoped token to authenticated sessions and use the SDK directly in the browser.
+
+In this pattern, your backend:
+1. Authenticates the user (SSO / login)
+2. Issues a **session-scoped credential** for that user's browser session — this can be the `SOVRANT_TOKEN` itself, or a short-lived proxy token that your backend validates
+3. The browser uses that credential with the SDK
+
+This is appropriate for: internal developer tools, admin dashboards, Replit-style sandboxes, or any app where you control who can log in.
 
 ```ts
+// Obtained from your auth endpoint — never from the bundle
+const sessionToken = await yourAuthApi.getSovrantToken();
+
 const client = new SovrantClient({
-  baseUrl: "https://sovrant.internal:5200",
+  baseUrl: "https://sovrant.internal",
+  token: sessionToken,
+  sessionId: `user:${currentUserId}`,
+});
+```
+
+### Server-side rendering (Next.js, Nuxt, etc.)
+
+Use the SDK in server components or API routes. The token never leaves the server:
+
+```ts
+// app/api/chat/route.ts (Next.js App Router — runs on the server)
+import { SovrantClient } from "@sovrant/sdk";
+import { NextRequest } from "next/server";
+
+const client = new SovrantClient({
+  baseUrl: process.env.SOVRANT_URL!,
   token: process.env.SOVRANT_TOKEN!,
 });
+
+export async function POST(req: NextRequest) {
+  const { message } = await req.json();
+  const { text } = await client.chat(message);
+  return Response.json({ text });
+}
 ```
 
 ---
@@ -209,6 +257,8 @@ const { status } = await client.health();
 
 The SDK includes a `useChat` hook for React apps with built-in streaming, state management, and tool event callbacks.
 
+> **Where to use this hook:** In internal tools, admin dashboards, or authenticated apps where you control who can access the token. For public-facing apps, run the SDK on your server and stream results to the browser via your own API — do not use this hook with the real `SOVRANT_TOKEN` in a public bundle.
+
 ### Install
 
 ```bash
@@ -221,14 +271,16 @@ npm install @sovrant/sdk react
 import { useChat } from "@sovrant/sdk/react";
 ```
 
-### Usage
+### Usage — internal tool (token obtained from your auth layer)
 
 ```tsx
-function Chat() {
+// Token comes from your authenticated session — never from a hardcoded string
+function Chat({ sovrantToken }: { sovrantToken: string }) {
   const { messages, send, isStreaming, error, clear } = useChat({
-    baseUrl: "/v1",            // Proxy path (browser) or full URL (server)
-    token: "proxy-injected",   // Token (use proxy in browser apps)
+    baseUrl: "https://sovrant.internal",
+    token: sovrantToken,
     model: "gpt-4o",
+    sessionId: `user:${currentUserId}`,
     onToolUse: (event) => console.log(`Tool: ${event.tool_name}`),
     onToolResult: (event) => console.log(`Done: ${event.tool_name}`),
     onError: (err) => console.error(err),
@@ -315,7 +367,7 @@ The parser includes built-in security hardening:
 
 The SDK enforces several security measures automatically. Here's what it does and what you should do on your side.
 
-### What the SDK handles
+### What the SDK handles automatically
 
 | Protection | Details |
 |------------|---------|
@@ -330,54 +382,39 @@ The SDK enforces several security measures automatically. Here's what it does an
 | **Automatic retries** | 429 (rate limited) and 5xx (server error) responses are retried with exponential backoff (1s, 2s, 4s). |
 | **Typed errors** | `SovrantApiError` includes `status`, `body`, `url` — but never the token. |
 
-### What you should do
+### What you must do
 
-#### 1. Never expose tokens to the browser
+#### 1. Never expose SOVRANT_TOKEN to a public browser bundle
 
-Use a backend proxy (Node.js, Express, nginx) to inject the `SOVRANT_TOKEN` server-side:
+`SOVRANT_TOKEN` is a **server secret** — treat it like a database password. It grants full access to the agent, all sessions, and all config endpoints.
 
-```js
-// proxy.js — Node.js/Express
-import { createProxyMiddleware } from "http-proxy-middleware";
+For public-facing browser apps, use one of these approaches:
 
-const SOVRANT_URL   = process.env.SOVRANT_URL   ?? "http://127.0.0.1:5200";
-const SOVRANT_TOKEN = process.env.SOVRANT_TOKEN ?? "";
+**Option A — Proxy (no token in browser):**
+Your backend proxy holds `SOVRANT_TOKEN` and the browser never sees it. See the [Proxy Setup Reference](#proxy-setup-reference) below.
 
-export const sovrantProxy = createProxyMiddleware({
-  target: SOVRANT_URL,
-  changeOrigin: true,
-  on: {
-    proxyReq(proxyReq) {
-      proxyReq.setHeader("Authorization", `Bearer ${SOVRANT_TOKEN}`);
-    },
-  },
-});
-```
+**Option B — Authenticated internal app:**
+If all users are trusted (employees, internal tool), authenticate them first (SSO / login), then provide the token only to authenticated sessions — not in the bundle, not in source code.
 
-```js
-// app.js
-import express from "express";
-import { sovrantProxy } from "./proxy.js";
-
-const app = express();
-app.use("/v1", sovrantProxy);
-app.listen(3000);
-```
+The SDK's `toJSON()` redaction protects against accidentally logging the token, but it **cannot** stop you from shipping it in a JavaScript bundle. If the token is in `new SovrantClient({ token: "sk-..." })` in your frontend code, users can find it.
 
 #### 2. Store tokens in environment variables
 
-Never hardcode tokens in source code. Use platform secrets management:
+Never hardcode tokens in source code or configuration files committed to git.
 
 | Platform | Where to set |
 |----------|-------------|
-| **Node.js** | `.env` file (excluded from git) + `dotenv` package |
+| **Node.js** | `.env` file (in `.gitignore`) + `dotenv` package |
 | **Replit** | Secrets panel |
 | **Docker** | `--env-file` or orchestrator secrets |
 | **CI/CD** | Pipeline secrets (GitHub Actions, GitLab CI) |
+| **Kubernetes** | `Secret` resource, mounted as env var |
 
 #### 3. Use HTTPS in production
 
-Always use `https://` base URLs in production. The SDK rejects non-HTTP(S) protocols, but it cannot enforce TLS — that's on your deployment.
+Always use `https://` base URLs in production. The SDK rejects non-HTTP(S) protocols at construction, but it cannot enforce TLS — that is on your deployment.
+
+Terminate TLS at your load balancer or nginx reverse proxy. The connection between nginx and Sovrant on localhost can remain plain HTTP.
 
 #### 4. Validate and sanitize user input before sending
 
@@ -391,7 +428,7 @@ function sanitize(input: string): string {
 await client.chat(sanitize(userInput));
 ```
 
-#### 5. Handle errors gracefully
+#### 5. Handle errors without leaking internals
 
 ```ts
 import { SovrantApiError } from "@sovrant/sdk";
@@ -400,29 +437,24 @@ try {
   await client.chat("Hello");
 } catch (err) {
   if (err instanceof SovrantApiError) {
-    if (err.status === 401) console.error("Invalid token");
-    else if (err.status === 429) console.error("Rate limited — try again");
-    else console.error(`API error ${err.status}: ${err.body}`);
+    // Do NOT forward err.body to the browser — it may contain internal details
+    if (err.status === 401) respondWithError("Authentication failed");
+    else if (err.status === 429) respondWithError("Rate limited — try again shortly");
+    else respondWithError("Something went wrong");
   } else {
-    console.error("Network error:", err);
+    respondWithError("Network error");
   }
 }
 ```
 
-#### 6. Scope sessions appropriately
+#### 6. Scope sessions per user
 
-Use separate session IDs per user, per conversation, or per context to prevent cross-contamination:
+Use separate session IDs per user and per conversation to prevent cross-contamination of history:
 
 ```ts
-// Per-user sessions
 const client = new SovrantClient({
-  baseUrl: "http://localhost:5200",
+  baseUrl: "https://sovrant.internal",
   token: process.env.SOVRANT_TOKEN!,
-  sessionId: `user:${userId}`,
-});
-
-// Per-conversation sessions
-const { text } = await client.chat("Continue our discussion", {
   sessionId: `user:${userId}:conv:${conversationId}`,
 });
 ```
@@ -440,6 +472,8 @@ const usage = await client.getUsage();
 
 ## Proxy Setup Reference
 
+For public-facing apps, the proxy holds `SOVRANT_TOKEN` server-side and the browser never touches it.
+
 ### Express (Node.js)
 
 ```js
@@ -448,12 +482,17 @@ import { createProxyMiddleware } from "http-proxy-middleware";
 
 const app = express();
 
-app.use("/v1", createProxyMiddleware({
+// Your own auth middleware goes here — validate the user's session
+// before forwarding to Sovrant
+app.use("/v1", requireAuth, createProxyMiddleware({
   target: process.env.SOVRANT_URL ?? "http://127.0.0.1:5200",
   changeOrigin: true,
   on: {
     proxyReq(proxyReq) {
+      // Inject the server secret — the browser never sees this
       proxyReq.setHeader("Authorization", `Bearer ${process.env.SOVRANT_TOKEN}`);
+      // Remove any Authorization header the browser sent — don't forward client creds
+      proxyReq.removeHeader("x-forwarded-authorization");
     },
   },
 }));
@@ -463,24 +502,35 @@ app.listen(3000);
 
 ### nginx
 
-```nginx
-location /v1/ {
-    proxy_pass http://127.0.0.1:5200;
-    proxy_set_header Authorization "Bearer YOUR_TOKEN";
-    proxy_set_header Host $host;
+Store the token as a variable (not hardcoded in the config file). One approach: load it from a separate secrets file:
 
-    # SSE support
-    proxy_buffering off;
-    proxy_cache off;
-    proxy_read_timeout 300s;
-    proxy_set_header Connection "";
-    chunked_transfer_encoding on;
+```nginx
+# /etc/nginx/sovrant_secrets  — not in version control, chmod 600
+# set $sovrant_token "your-secret-token-here";
+
+server {
+    location /v1/ {
+        include /etc/nginx/sovrant_secrets;
+
+        proxy_pass http://127.0.0.1:5200;
+        proxy_set_header Authorization "Bearer $sovrant_token";
+        proxy_set_header Host $host;
+
+        # Required for SSE streaming
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 300s;
+        proxy_set_header Connection "";
+        chunked_transfer_encoding on;
+    }
 }
 ```
 
-### Launching the server from Node.js (optional)
+Alternatively, pass the token via an environment variable using nginx's `env` directive and the `ngx_http_perl_module`, or use a secrets manager sidecar to write the include file at runtime.
 
-If you want Node to manage the server process:
+### Launching Sovrant.Server from Node.js
+
+If your Node process manages the server lifecycle:
 
 ```js
 import { spawn } from "child_process";
@@ -488,9 +538,7 @@ import { spawn } from "child_process";
 function startSovrant() {
   const proc = spawn("dotnet", ["run", "--project", "src/Sovrant.Server", "--no-build"], {
     env: {
-      ...process.env,
-      LLM_API_KEY: process.env.LLM_API_KEY,
-      SOVRANT_TOKEN: process.env.SOVRANT_TOKEN,
+      ...process.env,           // Inherit LLM_API_KEY, SOVRANT_TOKEN, etc. from the environment
     },
     stdio: "inherit",
   });
@@ -540,17 +588,18 @@ await client.stream("Find and fix the bug in auth.ts", {
 });
 ```
 
-Or using the React hook:
+Using the React hook:
 
 ```tsx
+// Token obtained from your authenticated session, not hardcoded
 const { messages } = useChat({
-  baseUrl: "/v1",
-  token: "t",
+  baseUrl: "https://sovrant.internal",
+  token: sessionToken,
   onToolUse: (event) => console.log(`Running: ${event.tool_name}`),
   onToolResult: (event) => console.log(`Done: ${event.tool_name}`),
 });
 
-// Each assistant message includes toolEvents array
+// Each assistant message includes a toolEvents array
 messages
   .filter((m) => m.role === "assistant" && m.toolEvents?.length)
   .forEach((m) => console.log(`${m.toolEvents!.length} tools used`));
