@@ -453,3 +453,60 @@ finally {
 3. **Process execution** — 6 tools duplicate the spawn-capture-timeout pattern. Single `ProcessExecutor` fixes all
 4. **Input validation** — most server endpoints accept user strings without format/length validation. Consider a shared validation layer or middleware
 5. **Error response format** — routes return JSON objects, HTML pages, and plain text. Standardize on `{ "error": string, "code"?: string }`
+
+---
+
+## 7. Code Coverage Report
+
+**Generated:** 2026-04-05 | **Test count:** 329 | **Tool:** XPlat Code Coverage + ReportGenerator
+
+### Overall
+
+| Metric | Value |
+|--------|-------|
+| Line coverage | **30.8%** (4,969 / 16,112) |
+| Branch coverage | **24.4%** (856 / 3,496) |
+| Method coverage | **34.6%** (577 / 1,664) |
+| Full method coverage | 27.2% (454 / 1,664) |
+| Assemblies | 9 |
+| Classes | 258 |
+
+### Per-Assembly Breakdown
+
+| Assembly | Line Coverage | Notes |
+|----------|-------------|-------|
+| **Sovrant.Agents** | **59.6%** | Best covered — MultiAgentCoordinator 91%, InMemoryTeamRegistry 100%, AgentPrompts 100% |
+| **Sovrant.Runtime** | **48.6%** | RuntimeSessionPool 99%, SovrantConfig 92%, FilteredToolRegistry 100%; gaps in logging, MCP, prompt builder |
+| **Sovrant.Commands** | **41.1%** | SlashCommandDispatcher 83%, TokenUsageTracker 100%; HelpCommand, MemoryCommand, SessionCommand at 0% |
+| **Sovrant.Api** | **33.0%** | FormatConverter 89%, ProviderInfo 93%; Responses API types and Ollama provider uncovered |
+| **Sovrant.McpServer** | **31.6%** | ToolFilter 100%, McpTokenValidator 100%; McpServerSetup 8% |
+| **Sovrant.Tools** | **25.4%** | ProcessExecutor 82%, TeamDelegateTool 72%; 18 tools at 0% (Glob, Grep, WebFetch, REPL, PowerShell, etc.) |
+| **Sovrant.Lsp** | **19.3%** | LspClientManager 63%; LspClient 11%, JsonRpc transport 0% |
+| **Sovrant.Server** | **3.9%** | Only webhook classes covered (100%); all routes, middleware, auth at 0% |
+| **sovrant (CLI)** | **0%** | No unit tests — requires integration testing |
+
+### Key Gaps (Priority Order)
+
+1. **Server routes (0%)** — ChatRoutes, SessionRoutes, ConfigRoutes have zero coverage. These are the primary API surface and contain the security fixes from Phases A-C.
+2. **Core tools (0%)** — GlobTool, GrepTool, ListDirectoryTool, WebFetchTool have no tests. These are high-usage tools.
+3. **CLI entry point (0%)** — Expected for a console host; integration tests recommended.
+4. **LSP transport (0%)** — JsonRpc layer untested; fragile protocol code.
+5. **Input validation (0%)** — `InputValidation` class (Phase C addition) has no dedicated tests.
+
+### Well-Covered Areas
+
+- **MultiAgentCoordinator** — 91.4% (Phase 19 core)
+- **RuntimeSessionPool** — 98.7%
+- **SovrantConfig** — 91.6%
+- **FormatConverter** — 89.2%
+- **ProcessExecutor** — 82.1% (Phase D addition)
+- **ModeAwarePermissionPolicy** — 96.4%
+- **EditFileTool** — 59.3%
+- **ReadFileTool** — 56.6%
+
+### Recommendations
+
+1. **Add server integration tests** — Use `WebApplicationFactory<Program>` to test routes with real middleware pipeline. Would cover ChatRoutes, SessionRoutes, ConfigRoutes, auth middleware, and InputValidation in one pass.
+2. **Add tool execution tests** — Mock `IToolRegistry` and test GlobTool, GrepTool, ReadFileTool edge cases (invalid paths, large files, binary detection).
+3. **Target 60% line coverage** — Focus on server (0% → 50%) and tools (25% → 50%) for highest ROI.
+4. **Add mutation testing** — Line coverage doesn't guarantee assertion quality. Consider Stryker.NET for mutation score.
