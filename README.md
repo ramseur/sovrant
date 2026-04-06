@@ -6,6 +6,8 @@ Sovrant is a general-purpose platform for running autonomous AI agents that can 
 
 The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HTTP server** for team and application integration, an **MCP server** for IDE embedding, or via **webhooks** from Slack, Teams, Discord, and custom systems. Agents read and write files, execute shell commands, search the web, call tools autonomously, delegate to sub-agents, and maintain full conversation history across sessions — all with configurable permission controls.
 
+> **Architecture note:** The CLI and Server are independent frontends. Both consume the runtime layer (`Sovrant.Runtime`) directly — the server does **not** depend on the CLI. You can deploy the HTTP server without any CLI components.
+
 **Runtime:** .NET 10 / C# 13
 **License:** [see LICENSE]
 **Status:** Engine fully functional. 45 tools. 24 agent templates. 32 built-in skills. 28 server endpoints. Multi-agent team orchestration. Swarm orchestrator. Eval framework. MCP server mode. Frontend SDK. 910 tests passing.
