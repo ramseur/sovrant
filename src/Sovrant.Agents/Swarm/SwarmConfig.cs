@@ -10,7 +10,7 @@ public sealed class SwarmConfig
 {
     /// <summary>Whether the swarm orchestrator is enabled. Defaults to <c>false</c>.</summary>
     [JsonPropertyName("enabled")]
-    public bool Enabled { get; init; }
+    public bool Enabled { get; set; }
 
     /// <summary>Maximum agents running concurrently within a wave.</summary>
     [JsonPropertyName("max_concurrent")]
