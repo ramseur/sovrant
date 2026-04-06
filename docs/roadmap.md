@@ -2743,10 +2743,10 @@ Two-layer approach:
 
 ### Phase 44 — Desktop Application (Cross-Platform)
 
-**Depends on:** Phase 14 (Frontend SDK — React hooks and TypeScript types), Phase 37 (User Management API), Phase 38 (Per-User Token Auth)
+**Depends on:** Phase 32 (SQLite persistence), Phase 34 (CLI visual polish)
 **Difficulty:** High
 
-**Goal:** A native desktop application that mirrors the Sovrant web frontend's design and UX, built with .NET and a cross-platform UI framework. Windows is the primary target, with macOS and Linux support as a goal. The app connects to `Sovrant.Server` via the same HTTP/SSE API the web frontend uses, providing a first-class desktop experience with native OS integration.
+**Goal:** A native desktop application that mirrors the Sovrant web frontend's design and UX, built with Avalonia UI on .NET 10. The app embeds the Sovrant runtime directly — same engine the CLI uses — so it works standalone without requiring `Sovrant.Server`. This gives desktop users zero-config, single-process operation with full tool execution, session persistence, and agent capabilities. Windows is the primary target, with macOS and Linux as a goal.
 
 #### Framework Evaluation
 
@@ -2760,59 +2760,65 @@ Two-layer approach:
 
 **Recommendation: Avalonia UI** — best cross-platform coverage (including Linux), most active community for desktop-focused .NET apps, XAML familiarity for .NET developers, and proven at scale. Uno Platform is a strong alternative if we later want to share XAML between desktop and a WASM web target. Photino is worth revisiting if we decide to simply wrap the existing web frontend in a native shell instead of building native UI.
 
-#### Architecture
+#### Architecture — Embedded Runtime (no server required)
+
+The desktop app references `Sovrant.Runtime`, `Sovrant.Tools`, `Sovrant.Commands`, and `Sovrant.Agents` directly as project references — the same way `Sovrant.Cli` does. The runtime runs in-process: `AddSovrantRuntime()`, `AddSovrantTools()`, `AddMultiAgentSystem()`, and `AddSovrantCommands()` wire up DI exactly as they do in the CLI. No HTTP layer, no server process, no network roundtrip.
 
 ```
-┌──────────────────────────────────────────┐
-│           Sovrant.Desktop                │
-│  (Avalonia UI — .NET 10)                 │
-│                                          │
-│  ┌────────────┐  ┌────────────────────┐  │
-│  │ Chat View  │  │ Session Sidebar    │  │
-│  │ (streaming │  │ (history, search,  │  │
-│  │  SSE text) │  │  resume, export)   │  │
-│  ├────────────┤  ├────────────────────┤  │
-│  │ Tool Panel │  │ Settings / Config  │  │
-│  │ (diffs,    │  │ (providers, keys,  │  │
-│  │  approvals)│  │  permissions)      │  │
-│  └────────────┘  └────────────────────┘  │
-│                                          │
-│  ┌──────────────────────────────────────┐│
-│  │ Sovrant.Desktop.Client               ││
-│  │ (HTTP + SSE → Sovrant.Server)        ││
-│  └──────────────────────────────────────┘│
-└──────────────────────────────────────────┘
-         │ HTTP/SSE
+┌───────────────────────────────────────────────┐
+│              Sovrant.Desktop                  │
+│         (Avalonia UI — .NET 10)               │
+│                                               │
+│  ┌─────────────┐  ┌───────────────────────┐   │
+│  │  Chat View  │  │  Session Sidebar      │   │
+│  │  (streaming │  │  (history, search,    │   │
+│  │   tokens)   │  │   resume, export)     │   │
+│  ├─────────────┤  ├───────────────────────┤   │
+│  │  Tool Panel │  │  Settings / Config    │   │
+│  │  (diffs,    │  │  (providers, keys,    │   │
+│  │   approvals)│  │   permissions, model) │   │
+│  └─────────────┘  └───────────────────────┘   │
+│                                               │
+│  ┌───────────────────────────────────────────┐│
+│  │         Sovrant Runtime (in-process)      ││
+│  │  ConversationRuntime · ToolExecutor ·     ││
+│  │  SmartRouter · SessionStore (SQLite) ·    ││
+│  │  AgentOrchestrator · HookRunner ·         ││
+│  │  MemoryManager · MCP Client               ││
+│  └───────────────────────────────────────────┘│
+└───────────────────────────────────────────────┘
+         │ direct .NET calls
          ▼
-┌──────────────────┐
-│ Sovrant.Server   │
-│ (existing API)   │
-└──────────────────┘
+   LLM Providers (OpenAI, Anthropic, etc.)
 ```
+
+This is the same relationship `Sovrant.Cli` has with the runtime — the desktop app is simply a GUI host for the same engine. `IAsyncEnumerable<RuntimeEvent>` streams tokens directly to the UI thread via Avalonia's dispatcher.
 
 #### Items
 
 | # | Item | Description |
 |---|---|---|
-| 1 | Project scaffolding | Create `src/Sovrant.Desktop/` as an Avalonia MVVM app targeting .NET 10. Set up `Sovrant.Desktop.csproj` with Avalonia packages, MVVM toolkit, and shared types from `Sovrant.Api.Types`. |
-| 2 | Design system | Port the web frontend's visual language to Avalonia: color palette (teal accents, dark/light themes), typography, spacing, iconography. Create a shared `Styles/` directory with reusable control templates and theme resources. |
-| 3 | Chat view | Main conversation panel with streaming SSE text display, Markdown rendering, code block syntax highlighting, and auto-scroll. Match the web frontend's message bubble layout and turn separation. |
-| 4 | Inline diff view | Render Edit/Write tool inputs as side-by-side or unified diffs with red/green coloring. Approval buttons (Allow / Deny) for tools requiring confirmation. |
-| 5 | Tool confirmation dialogs | Native modal dialogs for tool approval — show tool name, parameters, and risk level. Replace the CLI's text-based confirmation with rich UI controls. |
-| 6 | Session sidebar | List previous sessions with search, resume, and export. Pull from `GET /v1/sessions` API. Show session metadata (date, token count, model). |
-| 7 | Settings panel | Provider configuration, API key management (stored securely via OS credential store — Windows Credential Manager / macOS Keychain / libsecret on Linux), permission mode selection, model picker. |
+| 1 | Project scaffolding | Create `src/Sovrant.Desktop/` as an Avalonia MVVM app targeting .NET 10. Project-reference `Sovrant.Runtime`, `Sovrant.Tools`, `Sovrant.Commands`, `Sovrant.Agents`. Wire up DI with `AddSovrantRuntime()` etc. in `App.axaml.cs`. |
+| 2 | Design system | Port the web frontend's visual language to Avalonia: color palette (teal accents, dark/light themes), typography, spacing, iconography. Create `Styles/` with reusable control templates and theme resources. |
+| 3 | Chat view | Main conversation panel consuming `IAsyncEnumerable<RuntimeEvent>` directly. Markdown rendering, code block syntax highlighting, auto-scroll. `TextChunk` events append to the current message; `TurnComplete` finalizes it. Match the web frontend's message layout and turn separation. |
+| 4 | Inline diff view | Render `ToolUseRequested` events for Edit/Write tools as side-by-side or unified diffs with red/green coloring. Inline Allow/Deny buttons wired to `IToolConfirmationHandler`. |
+| 5 | Tool confirmation UI | Implement `IToolConfirmationHandler` as an Avalonia dialog — show tool name, parameters, risk level. `RequestConfirmationAsync` opens a modal and returns the user's choice. Replaces the CLI's console-based `AnsiConsole.Confirm`. |
+| 6 | Session sidebar | List previous sessions from `ISessionStore` (direct SQLite query, no HTTP). Search, resume, delete, export as Markdown. Show session metadata (date, token count, model, provider). |
+| 7 | Settings panel | Provider configuration, API key management via OS credential store (Windows Credential Manager / macOS Keychain / libsecret on Linux), permission mode selection, model picker. Writes to `sovrant.json` config file. |
 | 8 | System tray integration | Minimize to system tray, global hotkey to summon, notification badges for long-running agent completions. Windows: NotifyIcon. macOS: NSStatusItem. Linux: StatusNotifierItem/AppIndicator. |
-| 9 | Auto-update mechanism | Check for new versions on startup, download and apply updates. Windows: MSIX or Squirrel.Windows. macOS: Sparkle. Linux: AppImage with built-in update check. |
-| 10 | Embedded server mode | Option to launch `Sovrant.Server` as a child process (bundled in the app) for zero-config single-user use. No separate server install required. Detect if a server is already running and connect to it instead. |
-| 11 | Packaging & distribution | Platform-specific installers: MSIX/WinGet (Windows), DMG (macOS), AppImage/Flatpak (Linux). CI pipeline for all three. Code signing for Windows and macOS. |
+| 9 | Slash command palette | Searchable command palette (Ctrl+K / Cmd+K) surfacing all `ISlashCommand` implementations with their categories and descriptions. Equivalent to `/help` but as a filterable overlay. |
+| 10 | Auto-update mechanism | Check for new versions on startup, download and apply updates. Windows: MSIX or Squirrel.Windows. macOS: Sparkle. Linux: AppImage with built-in update check. |
+| 11 | Packaging & distribution | Platform-specific installers: MSIX/WinGet (Windows), DMG (macOS), AppImage/Flatpak (Linux). Self-contained single-file publish (no .NET runtime install). CI pipeline for all three. Code signing for Windows and macOS. |
 
 #### Acceptance Criteria
 
+- Desktop app runs standalone — no `Sovrant.Server` required
+- Runtime embedded in-process: same `ConversationRuntime`, tools, agents, sessions as CLI
 - Windows build runs on Windows 10+ with full feature parity to the web frontend
 - macOS and Linux builds launch and render correctly (may have reduced OS integration)
-- Chat streaming matches web frontend latency and visual fidelity
-- Tool confirmations work via native dialogs, not console prompts
-- Sessions persist and are resumable from the sidebar
+- Chat streaming is zero-latency (in-process, no HTTP overhead)
+- Tool confirmations work via native Avalonia dialogs implementing `IToolConfirmationHandler`
+- Sessions stored in local SQLite, browsable and resumable from sidebar
 - API keys stored in OS credential store, never in plaintext config files
 - Single self-contained executable per platform (no .NET runtime install required)
 - `dotnet build` and `dotnet test` pass with no new warnings
