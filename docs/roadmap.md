@@ -2746,7 +2746,7 @@ Two-layer approach:
 **Depends on:** Phase 32 (SQLite persistence), Phase 34 (CLI visual polish)
 **Difficulty:** High
 
-**Goal:** A native desktop application that mirrors the Sovrant web frontend's design and UX, built with Avalonia UI on .NET 10. The app embeds the Sovrant runtime directly — same engine the CLI uses — so it works standalone without requiring `Sovrant.Server`. This gives desktop users zero-config, single-process operation with full tool execution, session persistence, and agent capabilities. Windows is the primary target, with macOS and Linux as a goal.
+**Goal:** A native desktop application that mirrors the Sovrant web frontend's design and UX, built with Avalonia UI on .NET 10. The app embeds the Sovrant runtime directly in-process for maximum performance and security — no server, no CLI subprocess, no network overhead. The runtime (`ConversationRuntime`, `ToolExecutor`, `SessionStore`, `AgentOrchestrator`, etc.) runs in the same process as the UI, with SQLite persistence, OS credential store for API keys, and the full tool/agent/memory stack available natively. The GUI translates user actions into direct runtime calls and renders `RuntimeEvent` streams as rich UI. Windows is the primary target, with macOS and Linux as a goal.
 
 #### Framework Evaluation
 
@@ -2760,7 +2760,7 @@ Two-layer approach:
 
 **Recommendation: Avalonia UI** — best cross-platform coverage (including Linux), most active community for desktop-focused .NET apps, XAML familiarity for .NET developers, and proven at scale. Uno Platform is a strong alternative if we later want to share XAML between desktop and a WASM web target. Photino is worth revisiting if we decide to simply wrap the existing web frontend in a native shell instead of building native UI.
 
-#### Architecture — Embedded Runtime (no server required)
+#### Architecture — Embedded Runtime with GUI Shell
 
 The desktop app references `Sovrant.Runtime`, `Sovrant.Tools`, `Sovrant.Commands`, and `Sovrant.Agents` directly as project references — the same way `Sovrant.Cli` does. The runtime runs in-process: `AddSovrantRuntime()`, `AddSovrantTools()`, `AddMultiAgentSystem()`, and `AddSovrantCommands()` wire up DI exactly as they do in the CLI. No HTTP layer, no server process, no network roundtrip.
 
@@ -2792,17 +2792,20 @@ The desktop app references `Sovrant.Runtime`, `Sovrant.Tools`, `Sovrant.Commands
    LLM Providers (OpenAI, Anthropic, etc.)
 ```
 
-This is the same relationship `Sovrant.Cli` has with the runtime — the desktop app is simply a GUI host for the same engine. `IAsyncEnumerable<RuntimeEvent>` streams tokens directly to the UI thread via Avalonia's dispatcher.
+`IAsyncEnumerable<RuntimeEvent>` streams tokens directly to the UI thread via Avalonia's dispatcher. User actions (send message, approve tool, cancel generation) call `ConversationRuntime` and `SlashCommandDispatcher` directly — zero serialization, zero latency. SQLite sessions, memory, and audit data persist locally. The desktop app is the primary product for end users; the CLI and server remain available for developers and automation.
+
+**Future: Embedded Terminal (Phase 45)**
+A later phase adds an integrated terminal panel within the desktop app (similar to VS Code's terminal or Windows Terminal) that can optionally run the Sovrant CLI for power users who want raw terminal access.
 
 #### Items
 
 | # | Item | Description |
 |---|---|---|
-| 1 | Project scaffolding | Create `src/Sovrant.Desktop/` as an Avalonia MVVM app targeting .NET 10. Project-reference `Sovrant.Runtime`, `Sovrant.Tools`, `Sovrant.Commands`, `Sovrant.Agents`. Wire up DI with `AddSovrantRuntime()` etc. in `App.axaml.cs`. |
+| 1 | Project scaffolding | Create `src/Sovrant.Desktop/` as an Avalonia MVVM app targeting .NET 10. Project-reference `Sovrant.Runtime`, `Sovrant.Tools`, `Sovrant.Commands`, `Sovrant.Agents`. Wire up DI with `AddSovrantRuntime()`, `AddSovrantTools()`, `AddMultiAgentSystem()`, `AddSovrantCommands()` in `App.axaml.cs`. Single-process, no external dependencies. |
 | 2 | Design system | Port the web frontend's visual language to Avalonia: color palette (teal accents, dark/light themes), typography, spacing, iconography. Create `Styles/` with reusable control templates and theme resources. |
 | 3 | Chat view | Main conversation panel consuming `IAsyncEnumerable<RuntimeEvent>` directly. Markdown rendering, code block syntax highlighting, auto-scroll. `TextChunk` events append to the current message; `TurnComplete` finalizes it. Match the web frontend's message layout and turn separation. |
 | 4 | Inline diff view | Render `ToolUseRequested` events for Edit/Write tools as side-by-side or unified diffs with red/green coloring. Inline Allow/Deny buttons wired to `IToolConfirmationHandler`. |
-| 5 | Tool confirmation UI | Implement `IToolConfirmationHandler` as an Avalonia dialog — show tool name, parameters, risk level. `RequestConfirmationAsync` opens a modal and returns the user's choice. Replaces the CLI's console-based `AnsiConsole.Confirm`. |
+| 5 | Tool confirmation UI | Implement `IToolConfirmationHandler` as an Avalonia dialog — show tool name, parameters, risk level. `RequestConfirmationAsync` opens a modal and returns the user's choice. Native desktop experience for permission management. |
 | 6 | Session sidebar | List previous sessions from `ISessionStore` (direct SQLite query, no HTTP). Search, resume, delete, export as Markdown. Show session metadata (date, token count, model, provider). |
 | 7 | Settings panel | Provider configuration, API key management via OS credential store (Windows Credential Manager / macOS Keychain / libsecret on Linux), permission mode selection, model picker. Writes to `sovrant.json` config file. |
 | 8 | System tray integration | Minimize to system tray, global hotkey to summon, notification badges for long-running agent completions. Windows: NotifyIcon. macOS: NSStatusItem. Linux: StatusNotifierItem/AppIndicator. |
@@ -2812,16 +2815,42 @@ This is the same relationship `Sovrant.Cli` has with the runtime — the desktop
 
 #### Acceptance Criteria
 
-- Desktop app runs standalone — no `Sovrant.Server` required
-- Runtime embedded in-process: same `ConversationRuntime`, tools, agents, sessions as CLI
+- Single self-contained executable — no server, no CLI, no external process required
+- Runtime embedded in-process: full `ConversationRuntime`, tools, agents, memory, sessions
+- Zero-latency streaming: in-process `RuntimeEvent` delivery, no serialization overhead
+- SQLite persistence: sessions, memory, audit all stored locally and survive restarts
+- API keys stored in OS credential store (Windows Credential Manager / macOS Keychain / libsecret), never in plaintext
+- Tool confirmations via native Avalonia dialogs implementing `IToolConfirmationHandler`
 - Windows build runs on Windows 10+ with full feature parity to the web frontend
 - macOS and Linux builds launch and render correctly (may have reduced OS integration)
-- Chat streaming is zero-latency (in-process, no HTTP overhead)
-- Tool confirmations work via native Avalonia dialogs implementing `IToolConfirmationHandler`
-- Sessions stored in local SQLite, browsable and resumable from sidebar
-- API keys stored in OS credential store, never in plaintext config files
-- Single self-contained executable per platform (no .NET runtime install required)
 - `dotnet build` and `dotnet test` pass with no new warnings
+
+---
+
+### Phase 45 — Embedded Terminal Panel ⏸️ Deferred
+
+**Depends on:** Phase 44 (Desktop application)
+**Difficulty:** Medium
+
+**Goal:** Add an integrated terminal panel within the Sovrant desktop app, similar to VS Code's integrated terminal or Windows Terminal's tab system. Power users can drop into a full Sovrant CLI session without leaving the app, or open a raw shell for system commands.
+
+#### Items
+
+| # | Item | Description |
+|---|---|---|
+| 1 | Terminal emulator control | Embed a VT100/xterm-compatible terminal emulator as an Avalonia control. Evaluate existing .NET terminal libraries (e.g., Terminal.Gui, XtermSharp) or implement a minimal VT parser. |
+| 2 | Sovrant CLI integration | Launch `sovrant` CLI as a child process with stdin/stdout piped to the terminal control. Full REPL experience — banner, sticky input bar, thinking spinner, tool diffs — rendered natively in the terminal panel. |
+| 3 | Shell tab support | Support multiple terminal tabs: Sovrant CLI sessions, PowerShell/bash shells, or any arbitrary command. Tab management with keyboard shortcuts (Ctrl+` to toggle, Ctrl+Shift+T for new tab). |
+| 4 | Split panes | Horizontal/vertical split within the terminal area. Run a Sovrant session alongside a shell for manual verification. |
+| 5 | Shared context | Terminal sessions can reference files and sessions visible in the main desktop UI. Copy file paths, session IDs, or tool outputs between the GUI and terminal with a click. |
+
+#### Acceptance Criteria
+
+- Terminal panel toggles with a keyboard shortcut, docks to bottom or side
+- Sovrant CLI renders correctly in the embedded terminal (ANSI colors, cursor positioning, input bar)
+- Multiple tabs supported with independent sessions
+- Split pane layout with drag-to-resize
+- Works on Windows (PowerShell), macOS (zsh), Linux (bash)
 
 ---
 
