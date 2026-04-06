@@ -86,14 +86,16 @@ The engine is fully functional for individual and small-team use:
 
 | Gap | Phase | Priority |
 |---|---|---|
-| Workspaces (personal + team areas, isolated memory/config/sessions) | Phase 33 | Medium–High |
-| Projects (workspace-scoped containers for isolated work) | Phase 34 | Medium |
-| User management API (CRUD users, per-user data views) | Phase 35 | Low–Medium |
-| Per-user token auth & database hardening | Phase 36 | Medium |
-| Cost tracking, token budgets & model pricing registry | Phase 37 (deferred) | Deferred |
-| Enterprise auth & multi-tenancy (RBAC, OAuth/OIDC, SSO) | Phase 38 (deferred) | Deferred |
-| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 39 (deferred) | Deferred |
-| VS Code native extension | Phase 40 (deferred) | Deferred |
+| CLI quick wins (banner, env errors, thinking messages, escape cancel, sticky input, paste, /help audit) | Phase 33 | Low–Medium |
+| CLI visual polish (coloring, conversation separation, /help formatting, web search fix, Windows perms) | Phase 34 | Low–Medium |
+| Workspaces (personal + team areas, isolated memory/config/sessions) | Phase 35 | Medium–High |
+| Projects (workspace-scoped containers for isolated work) | Phase 36 | Medium |
+| User management API (CRUD users, per-user data views) | Phase 37 | Low–Medium |
+| Per-user token auth & database hardening | Phase 38 | Medium |
+| Cost tracking, token budgets & model pricing registry | Phase 39 (deferred) | Deferred |
+| Enterprise auth & multi-tenancy (RBAC, OAuth/OIDC, SSO) | Phase 40 (deferred) | Deferred |
+| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 41 (deferred) | Deferred |
+| VS Code native extension | Phase 42 (deferred) | Deferred |
 
 ---
 
@@ -1634,7 +1636,7 @@ Evals stored in `.sovrant/evals/`:
 > **Status: ✅ Complete** — 17 new files, 62 new tests, 0 warnings. OFF by default; foundation for frontend-driven orchestration.
 
 **Inspired by:** [claude-swarm](https://github.com/affaan-m/claude-swarm) (parallel task decomposition with dependency DAGs, file locking, budget enforcement, quality gate)
-**Depends on:** Phase 19+20 (multi-agent team tools), Phase 22 (agent templates), Phase 37 (cost tracking — optional)
+**Depends on:** Phase 19+20 (multi-agent team tools), Phase 22 (agent templates), Phase 39 (cost tracking — optional)
 
 **Goal:** Add a **swarm orchestration layer** on top of Sovrant's existing multi-agent infrastructure. A user gives a single complex prompt; a high-capability model automatically decomposes it into a dependency graph of 2-8 subtasks; subtasks execute in parallel waves respecting dependencies, with file-level conflict prevention, budget enforcement, and a quality gate review phase. The swarm uses whatever models the admin/user has configured — decomposition and quality gates use the "high" level model, workers use the "standard" level (all provider-agnostic via Phase 22's model resolution). Available via CLI (`sovrant swarm "task"`), the `SwarmTool` for programmatic use, and `POST /v1/swarm` for frontend integration.
 
@@ -2020,14 +2022,14 @@ Resolution: for a given key, the highest-priority scope wins. `ConfigLoader` bec
 
 #### Lightweight user identity
 
-Phase 32 introduces a `users` table — not full enterprise auth (that's Phase 35), just enough to give every other table an `owner_id` foreign key. This enables per-user config, session isolation, credential scoping, and usage attribution without building a login system.
+Phase 32 introduces a `users` table — not full enterprise auth (that's Phase 37), just enough to give every other table an `owner_id` foreign key. This enables per-user config, session isolation, credential scoping, and usage attribution without building a login system.
 
 | Context | How user ID is resolved |
 |---|---|
 | **CLI** | `SOVRANT_USER_ID` env var, or defaults to OS username (`Environment.UserName`) |
 | **Server** | Derived from bearer token → user mapping (simple `SOVRANT_TOKENS` JSON map: `{"token": "user_id"}`). Falls back to `"anonymous"` for single-token setups. |
 
-The `users` table is an anchor row — created on first seen, referenced everywhere by `user_id`. No passwords, no OAuth, no sessions-as-auth. Phase 35 adds real auth on top of this same schema.
+The `users` table is an anchor row — created on first seen, referenced everywhere by `user_id`. No passwords, no OAuth, no sessions-as-auth. Phase 38 adds per-user token auth on top of this same schema.
 
 ```sql
 -- Every table references user_id for scoping
@@ -2064,7 +2066,7 @@ src/Sovrant.Runtime/Storage/
     instincts                  ← (id, user_id FK, trigger, action, confidence, evidence_json, created_at, updated_at)
 ```
 
-All tables except `users` and `config` have a `user_id` foreign key. Queries naturally scope by user without extra logic. Phase 35's enterprise auth adds token management and access control on top of this existing schema — the data model doesn't change, only who is allowed to set `user_id`.
+All tables except `users` and `config` have a `user_id` foreign key. Queries naturally scope by user without extra logic. Phase 38's per-user token auth adds token management and access control on top of this existing schema — the data model doesn't change, only who is allowed to set `user_id`.
 
 #### Database Location
 
@@ -2161,7 +2163,67 @@ Phase 31's `ICacheProvider` is for **hot, ephemeral data** — fast reads with T
 
 ---
 
-### Phase 33 — Workspaces
+### Phase 33 — CLI Quick Wins
+
+**Depends on:** None (CLI presentation only)
+**Difficulty:** Low–Medium
+
+**Goal:** Foundational UX improvements that make the CLI feel polished and professional on first launch. All changes are CLI presentation and interaction only — no backend, server, agent, or runtime changes.
+
+#### Items
+
+| # | Item | Description |
+|---|---|---|
+| 1 | ASCII art home screen | Startup banner with "Sovrant" ASCII art, version number, and tagline. Displayed once on launch. Style modeled on Fastfetch/Angular CLI. |
+| 2 | Graceful env var errors | If `LLM_API_KEY` is missing, show a friendly message naming the variable, explaining its purpose, and showing the exact `export` command. Exit cleanly — no stack trace, no blank screen. |
+| 3 | Thinking messages | Randomly rotating warm teal phrases ("Thinking really hard...", "Consulting the oracle...", etc.) that cycle every 2–3 seconds while the model processes. Vanish the instant the first token arrives. Uses Spectre.Console. |
+| 4 | Escape to cancel | Detect Escape during generation, cancel the request mid-stream, clean up the display, and print `[Cancelled]`. Show a persistent `Esc to cancel` hint at the prompt in muted text. |
+| 5 | Sticky input bar | Input prompt pinned to the bottom of the terminal at all times. Output scrolls above it. Bar includes a horizontal rule, `You:` label, text input, and `Esc to cancel` hint. Redraws correctly on terminal resize. Uses Spectre.Console live rendering. |
+| 6 | Paste acknowledgment | Detect multi-line paste as a single operation, show `[Pasted N lines]`, hold content until Enter is pressed. No per-line echo. |
+| 7 | /help coverage audit | Audit all slash commands and ensure every one appears in `/help` output with a short description. Full visual formatting deferred to Phase 34. |
+
+#### Acceptance Criteria
+
+- `dotnet build` exits 0, no new warnings
+- ASCII banner on fresh launch, no repeat mid-session
+- Missing `LLM_API_KEY` → readable error + clean exit
+- Thinking phrases rotate in teal, vanish on first token
+- Escape cancels generation cleanly, prints `[Cancelled]`
+- Input bar pinned to bottom, redraws on resize
+- Multi-line paste → `[Pasted N lines]`, submits only on Enter
+- Every slash command appears in `/help`
+
+---
+
+### Phase 34 — CLI Visual Polish
+
+**Depends on:** Phase 33 (CLI quick wins — input bar, /help audit, thinking messages must be in place)
+**Difficulty:** Low–Medium
+
+**Goal:** Consistent visual language across all CLI output. Builds on Phase 33's interaction changes with color, spacing, and formatting polish. Includes two small functional fixes (web search, Windows write perms) that are CLI-scoped.
+
+#### Items
+
+| # | Item | Description |
+|---|---|---|
+| 1 | Output coloring | Apply consistent Spectre.Console coloring: bold headings, muted code blocks, distinct tool call names, dimmer tool results, red errors, amber warnings, gray system messages. No plain-white-on-black content remaining. |
+| 2 | Conversation visual separation | Clear rhythm between turns: blank line before user turn, bold colored `You:` label, blank line before assistant, teal bold `Sovrant:` label, subtle separator after each response. Scannable at a glance. |
+| 3 | /help formatting | Group commands by category (Session, Memory, Config, Navigation). Accent-colored command names, aligned descriptions, bold category headers. Builds on Phase 33's coverage audit. |
+| 4 | Web search indicator | Fix `LLM_WEB_SEARCH=true` pass-through to the provider layer. Add `[web search on]` status badge at the prompt. Warn if the provider doesn't support it. |
+| 5 | Windows write permissions | Detect access/permission errors on file writes (WriteFile, EditFile, session/memory files). Display a clear message instructing the user to restart as Administrator. Never fail silently. |
+
+#### Acceptance Criteria
+
+- `dotnet build` exits 0, no new warnings
+- All output types (headings, code, tool calls, errors, warnings, system) are distinctly colored
+- User/assistant turns visually separated with labels and spacing
+- `/help` grouped by category with aligned Spectre.Console columns
+- `LLM_WEB_SEARCH=true` → visible badge, search works end-to-end
+- Windows file write failure → readable permissions error with restart instructions
+
+---
+
+### Phase 35 — Workspaces
 
 **Depends on:** Phase 32 (SQLite persistence — `users` table already exists), Phase 27 (memory system)
 
@@ -2229,15 +2291,15 @@ All existing tables with `user_id` gain a `workspace_id` FK (not nullable — ev
 10. Workspace-scoped config inheritance: workspace config → user config → global defaults
 11. Tests: personal workspace auto-creation, fallback resolution, isolation (workspace A can't see workspace B data), memory scoping, membership roles, invite flow (team only), personal workspace delete protection
 
-#### Relationship to Phase 38 (Enterprise Auth)
+#### Relationship to Phase 40 (Enterprise Auth)
 
-Phase 38 adds external IdP login and RBAC on top of the workspace model — workspaces become the RBAC scope boundary.
+Phase 40 adds external IdP login and RBAC on top of the workspace model — workspaces become the RBAC scope boundary.
 
 ---
 
-### Phase 34 — Projects
+### Phase 36 — Projects
 
-**Depends on:** Phase 33 (workspaces)
+**Depends on:** Phase 35 (workspaces)
 
 **Goal:** Isolated containers within workspaces that group related work — sessions, config, memory, agent templates, and artifacts. A project belongs to exactly one workspace and inherits its isolation boundary.
 
@@ -2266,7 +2328,7 @@ Projects let a team (or individual) say "this engagement has its own model confi
 | `project_members` | `project_id` (FK), `user_id` (FK), `role` (lead/contributor/viewer), `joined_at` | Subset of workspace members; optional — no rows means all workspace members have access |
 | `project_config` | `project_id` (FK), `key`, `value` | Project-scoped settings (model, budget, governance overrides) |
 
-Phase 33's `workspace_memory` table already has an optional `project_id` FK — project-scoped memory writes set this field. Existing tables gain optional `project_id` FK: `sessions`, `audit_events`, `usage`.
+Phase 35's `workspace_memory` table already has an optional `project_id` FK — project-scoped memory writes set this field. Existing tables gain optional `project_id` FK: `sessions`, `audit_events`, `usage`.
 
 #### Config and memory inheritance
 
@@ -2297,23 +2359,23 @@ project memory  +  workspace memory  (both visible within project context)
 6. Memory scoping: project memory writes go to `workspace_memory` with `project_id` set; reads merge project + workspace layers
 7. Session creation auto-associates with active project context
 8. Project-scoped agent templates and skills (load from project config in addition to workspace/global)
-9. Budget enforcement at project level (Phase 37's `ICostModel` + project config budget cap)
+9. Budget enforcement at project level (Phase 39's `ICostModel` + project config budget cap)
 10. Tests: project isolation within workspace, config inheritance chain, memory scoping (project sees own + workspace memory), membership subset validation, archive behavior
 
-#### Relationship to Phase 39 (Artifact System)
+#### Relationship to Phase 41 (Artifact System)
 
-If Phase 39 is implemented, artifacts are scoped to projects rather than just teams. The `ITeamWorkspace` from Phase 39 becomes project-aware — artifacts persist in the project context and survive across team agent lifetimes.
+If Phase 41 is implemented, artifacts are scoped to projects rather than just teams. The `ITeamWorkspace` from Phase 41 becomes project-aware — artifacts persist in the project context and survive across team agent lifetimes.
 
 ---
 
-### Phase 35 — User Management API
+### Phase 37 — User Management API
 
 **Depends on:** Phase 32 (persistence layer — `users` table)
 **Difficulty:** Low–Medium
 
 **Goal:** Expose CRUD endpoints for user management so that frontends can create users, manage profiles, and view per-user data. Phase 32 creates the `users` table and `user_id` foreign keys on every other table. This phase builds the API surface to manage those users.
 
-This is **not** auth — there are no per-user tokens, no login, no RBAC. The existing `SOVRANT_TOKEN` gate remains the only auth mechanism. Per-user bearer tokens and token resolution are deferred to Phase 36 (per-user token auth). Role-based access control is deferred to Phase 38 (enterprise auth).
+This is **not** auth — there are no per-user tokens, no login, no RBAC. The existing `SOVRANT_TOKEN` gate remains the only auth mechanism. Per-user bearer tokens and token resolution are deferred to Phase 38 (per-user token auth). Role-based access control is deferred to Phase 40 (enterprise auth).
 
 #### Why this matters
 
@@ -2397,7 +2459,7 @@ No schema changes needed — Phase 32 already created the `users` table with `ro
 4. Update `docs/server.md` with new endpoints
 5. Tests: user CRUD, soft-delete preserves data, per-user data views filter correctly
 
-#### What this does NOT include (deferred to Phase 36)
+#### What this does NOT include (deferred to Phase 38)
 
 - Per-user bearer tokens and `api_tokens` table population
 - Token hash-based user resolution middleware
@@ -2408,18 +2470,18 @@ No schema changes needed — Phase 32 already created the `users` table with `ro
 
 ---
 
-### Phase 36 — Per-User Token Auth & Database Hardening
+### Phase 38 — Per-User Token Auth & Database Hardening
 
-**Depends on:** Phase 35 (user management API — users exist in the DB)
+**Depends on:** Phase 37 (user management API — users exist in the DB)
 **Difficulty:** Medium
 
 **Goal:** Replace the single shared `SOVRANT_TOKEN` with per-user bearer tokens so the frontend can authenticate individual users. Each user gets their own tokens stored as SHA-256 hashes in the `api_tokens` table (created empty in Phase 32). Also hardens the SQLite layer now that per-user identity is enforceable.
 
-This is the bridge between "everyone shares one token" (Phase 8) and "enterprise SSO with RBAC" (Phase 38). It gives the frontend what it needs — user-specific auth — without the complexity of OAuth/OIDC.
+This is the bridge between "everyone shares one token" (Phase 8) and "enterprise SSO with RBAC" (Phase 40). It gives the frontend what it needs — user-specific auth — without the complexity of OAuth/OIDC.
 
 #### Why this matters
 
-After Phase 35, the server can CRUD users but still authenticates everyone with a single shared token. The frontend can't tell which user is making a request. This phase resolves that:
+After Phase 37, the server can CRUD users but still authenticates everyone with a single shared token. The frontend can't tell which user is making a request. This phase resolves that:
 - Each user gets their own bearer tokens
 - The server resolves incoming tokens to a `user_id`
 - Session, audit, and usage data is scoped to the authenticated user
@@ -2477,7 +2539,7 @@ Applied in this phase because per-user identity makes ownership enforcement mean
 
 ---
 
-### Phase 37 — Cost Tracking, Token Budgets & Model Pricing Registry ⏸️ Deferred (nice-to-have)
+### Phase 39 — Cost Tracking, Token Budgets & Model Pricing Registry ⏸️ Deferred (nice-to-have)
 
 **Depends on:** Phase 10 (token usage tracking — already complete)
 
@@ -2549,29 +2611,29 @@ Phase 10 already tracks `TotalInputTokens` and `TotalOutputTokens` per session i
 
 ---
 
-### Phase 38 — Enterprise Auth & Multi-Tenancy ⏸️ Deferred
+### Phase 40 — Enterprise Auth & Multi-Tenancy ⏸️ Deferred
 
-**Depends on:** Phase 36 (per-user token auth), Phase 33 (workspaces — provides tenant boundary)
+**Depends on:** Phase 38 (per-user token auth), Phase 35 (workspaces — provides tenant boundary)
 
-**Goal:** Add external identity providers (OAuth/OIDC, SAML), fine-grained role-based access control (RBAC), and enterprise multi-tenancy on top of the Phase 36 per-user token model. This is where the RBAC tables (created empty in Phase 32) get populated and enforced.
+**Goal:** Add external identity providers (OAuth/OIDC, SAML), fine-grained role-based access control (RBAC), and enterprise multi-tenancy on top of the Phase 38 per-user token model. This is where the RBAC tables (created empty in Phase 32) get populated and enforced.
 
 #### When to implement
 
-This phase is deliberately deferred. Phase 36's per-user tokens cover small-to-medium teams. Add this phase when:
+This phase is deliberately deferred. Phase 38's per-user tokens cover small-to-medium teams. Add this phase when:
 - External identity providers (Google, GitHub, Azure AD, Okta) are required for login, **or**
 - Fine-grained permissions beyond admin/user/readonly are needed (e.g., "can use tool X but not Y"), **or**
 - Organizational boundaries require tenant isolation (separate data, separate billing)
 
-#### What it adds on top of Phase 36 (Per-User Tokens)
+#### What it adds on top of Phase 38 (Per-User Tokens)
 
-Phase 36 gives each user their own bearer tokens with admin/user role enforcement. This phase upgrades that model with external identity, granular permissions, and compliance tooling.
+Phase 38 gives each user their own bearer tokens with admin/user role enforcement. This phase upgrades that model with external identity, granular permissions, and compliance tooling.
 
 | Item | Change |
 |---|---|
 | External IdP | OAuth 2.0 / OIDC integration — login via Google, GitHub, Azure AD, Okta. Maps external identity to `users.user_id`. |
 | RBAC | Populate `roles` + `permissions` + `role_permissions` + `user_roles` tables. Define granular permissions: `tools:execute`, `config:write`, `sessions:read-all`, etc. |
 | SSO enforcement | Workspace admins can require SSO login — disable token-only access for their workspace. |
-| Billing isolation | Per-workspace token usage aggregation already exists (Phase 33); this adds billing plan association and usage alerts. |
+| Billing isolation | Per-workspace token usage aggregation already exists (Phase 35); this adds billing plan association and usage alerts. |
 | Audit | All auth events (login, token issue, token revoke, permission change) logged to `audit_events`. |
 
 #### Implementation Plan
@@ -2586,7 +2648,7 @@ Phase 36 gives each user their own bearer tokens with admin/user role enforcemen
 
 ---
 
-### Phase 39 — Artifact System ⏸️ Deferred
+### Phase 41 — Artifact System ⏸️ Deferred
 
 **Depends on:** Phase 19+20 (multi-agent team tools)
 
@@ -2624,7 +2686,7 @@ Today, team agents communicate solely through prompt/response text via `TeamDele
 
 ---
 
-### Phase 40 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
+### Phase 42 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
 
 **Competitor precedent:** Claude Code ✅ · opencode ✅ (beta)
 **Depends on:** Phase 15 (MCP server mode) — once Sovrant exposes an MCP server, MCP-aware IDEs (VS Code with GitHub Copilot, Cursor, Windsurf) can connect without a bespoke extension.
@@ -2636,7 +2698,7 @@ Today, team agents communicate solely through prompt/response text via `TeamDele
 
 Two-layer approach:
 1. **Phase 15 (MCP):** Zero-code IDE integration for MCP-aware clients. Sovrant appears as an MCP tool server. No extension required.
-2. **Phase 39 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
+2. **Phase 42 (native extension):** A dedicated VS Code extension that connects to `Sovrant.Server` via HTTP/SSE for richer UX — inline diffs, file decorations, permission dialogs anchored to the relevant file.
 
 #### Implementation Plan
 
