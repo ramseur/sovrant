@@ -25,6 +25,11 @@ internal sealed class SovrantInputReader
 
     private const string AnsiHideCursor = "\x1b[?25l";
     private const string AnsiShowCursor = "\x1b[?25h";
+    private const string AnsiSolidCursor = "\x1b[2 q";  // Steady block cursor.
+    private const string AnsiDefaultCursor = "\x1b[0 q"; // Restore terminal default cursor.
+
+    // Saved output cursor row — where normal output should continue after the input bar is cleared.
+    private static int s_savedOutputRow;
 
     /// <summary>
     /// Reads a line of input from the user with a sticky bottom bar.
@@ -54,6 +59,9 @@ internal sealed class SovrantInputReader
         var lastRenderTime = Environment.TickCount64;
         var isPaste = false;
         var needsRender = true;
+
+        // Save current cursor row before we start drawing the input bar.
+        s_savedOutputRow = Console.CursorTop;
 
         while (!ct.IsCancellationRequested)
         {
@@ -182,7 +190,8 @@ internal sealed class SovrantInputReader
         // Place cursor right after the typed text on the input bar line.
         Console.SetCursorPosition(label.Length + display.Length, bottom);
 
-        // Show cursor again.
+        // Show a solid (non-blinking) block cursor.
+        Console.Write(AnsiSolidCursor);
         Console.Write(AnsiShowCursor);
     }
 
@@ -203,10 +212,17 @@ internal sealed class SovrantInputReader
         if (bottom < 2)
             return;
 
+        Console.Write(AnsiHideCursor);
         Console.SetCursorPosition(0, bottom - 1);
         Console.Write(new string(' ', width));
         Console.SetCursorPosition(0, bottom);
         Console.Write(new string(' ', width));
-        Console.SetCursorPosition(0, 0);
+
+        // Restore cursor to where output was before the input bar was drawn.
+        // Clamp to avoid landing on the input bar area.
+        var restoreRow = Math.Min(s_savedOutputRow, bottom - 2);
+        Console.SetCursorPosition(0, restoreRow);
+        Console.Write(AnsiDefaultCursor);
+        Console.Write(AnsiShowCursor);
     }
 }
