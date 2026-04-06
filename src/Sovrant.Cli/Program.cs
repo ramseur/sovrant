@@ -379,7 +379,7 @@ async Task RunReplAsync(IConversationRuntime runtime, SlashCommandDispatcher dis
         if (string.IsNullOrEmpty(line)) continue;
 
         // Echo the user's input above the output area.
-        AnsiConsole.MarkupLine($"[bold cyan]You:[/] {Markup.Escape(line.Contains('\n', StringComparison.Ordinal) ? line[..line.IndexOf('\n', StringComparison.Ordinal)] + "..." : line)}");
+        AnsiConsole.MarkupLine($"[bold cyan]>[/] {Markup.Escape(line.Contains('\n', StringComparison.Ordinal) ? line[..line.IndexOf('\n', StringComparison.Ordinal)] + "..." : line)}");
 
         // Try to dispatch as a slash command first.
         var cmdResult = await dispatcher.TryDispatchAsync(line, ct).ConfigureAwait(false);

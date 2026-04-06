@@ -23,9 +23,8 @@ internal sealed class SovrantInputReader
     /// <summary>Idle redraw interval (ms) for terminal resize handling.</summary>
     private const int IdleRedrawMs = 500;
 
-    // ANSI escape sequences for cursor save/restore.
-    private const string AnsiSaveCursor = "\x1b[s";
-    private const string AnsiRestoreCursor = "\x1b[u";
+    private const string AnsiHideCursor = "\x1b[?25l";
+    private const string AnsiShowCursor = "\x1b[?25h";
 
     /// <summary>
     /// Reads a line of input from the user with a sticky bottom bar.
@@ -82,7 +81,7 @@ internal sealed class SovrantInputReader
                 case ConsoleKey.Enter:
                     ClearInputBar();
                     if (isPaste)
-                        AnsiConsole.MarkupLine($"[grey]\\[Pasted {lineCount} lines][/]");
+                        AnsiConsole.MarkupLine($"[grey][[Pasted {lineCount} lines]][/]");
                     return new InputResult(buffer.ToString(), false, isPaste, lineCount);
 
                 case ConsoleKey.Escape:
@@ -145,8 +144,8 @@ internal sealed class SovrantInputReader
         if (width < 20 || bottom < 2)
             return;
 
-        // Save cursor position.
-        Console.Write(AnsiSaveCursor);
+        // Hide cursor during redraw to prevent flicker.
+        Console.Write(AnsiHideCursor);
 
         // Draw horizontal rule on the second-to-last line.
         Console.SetCursorPosition(0, bottom - 1);
@@ -155,7 +154,7 @@ internal sealed class SovrantInputReader
         // Draw input bar on the last line.
         Console.SetCursorPosition(0, bottom);
 
-        const string label = "You: ";
+        const string label = "> ";
         const string hint = "  Esc to cancel";
         var maxInput = width - label.Length - hint.Length - 1;
 
@@ -167,9 +166,8 @@ internal sealed class SovrantInputReader
             ? displayLine[^maxInput..]
             : displayLine;
 
-        // Bold cyan label + text + muted hint.
-        var textPart = $"\x1b[1;36m{label}\x1b[0m{display}";
-        Console.Write(textPart);
+        // Bold cyan label + text + padding + muted hint.
+        Console.Write($"\x1b[1;36m{label}\x1b[0m{display}");
 
         var remaining = width - label.Length - display.Length - hint.Length;
         if (remaining > 0)
@@ -177,8 +175,11 @@ internal sealed class SovrantInputReader
 
         Console.Write($"\x1b[2m{hint}\x1b[0m");
 
-        // Restore cursor position.
-        Console.Write(AnsiRestoreCursor);
+        // Place cursor right after the typed text on the input bar line.
+        Console.SetCursorPosition(label.Length + display.Length, bottom);
+
+        // Show cursor again.
+        Console.Write(AnsiShowCursor);
     }
 
     private static void ClearInputBar()
@@ -198,11 +199,10 @@ internal sealed class SovrantInputReader
         if (bottom < 2)
             return;
 
-        Console.Write(AnsiSaveCursor);
         Console.SetCursorPosition(0, bottom - 1);
         Console.Write(new string(' ', width));
         Console.SetCursorPosition(0, bottom);
         Console.Write(new string(' ', width));
-        Console.Write(AnsiRestoreCursor);
+        Console.SetCursorPosition(0, 0);
     }
 }
