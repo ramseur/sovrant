@@ -49,7 +49,7 @@ internal sealed class CliSwarmProgressReporter : ISwarmProgressReporter
 
             case SwarmEvent.SwarmCompleted sc:
                 AnsiConsole.MarkupLine(string.Create(CultureInfo.InvariantCulture,
-                    $"  [teal bold]Swarm {sc.FinalStatus}[/] — {sc.TotalTokens} tokens, {sc.DurationSeconds:F1}s"));
+                    $"  [teal bold]Swarm {Markup.Escape(sc.FinalStatus.ToString())}[/] — {sc.TotalTokens} tokens, {sc.DurationSeconds:F1}s"));
                 break;
         }
     }

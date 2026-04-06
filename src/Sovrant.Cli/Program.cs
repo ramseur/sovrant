@@ -203,7 +203,7 @@ swarmCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
             AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture, $"\n[bold]Wave {w}[/]");
             foreach (var t in plan.GetWave(w))
                 AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
-                    $"  [cyan]{t.Id}[/]: {Markup.Escape(t.Description)}");
+                    $"  [cyan]{Markup.Escape(t.Id)}[/]: {Markup.Escape(t.Description)}");
         }
         return;
     }
@@ -215,27 +215,27 @@ swarmCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
         {
             case Sovrant.Agents.Swarm.SwarmEvent.TaskStarted ts:
                 AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
-                    $"  [blue]▶[/] {ts.TaskId} → {Markup.Escape(ts.AgentName)}");
+                    $"  [blue]\u25b6[/] {Markup.Escape(ts.TaskId)} \u2192 {Markup.Escape(ts.AgentName)}");
                 break;
             case Sovrant.Agents.Swarm.SwarmEvent.TaskCompleted tc:
                 AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
-                    $"  [green]✓[/] {tc.TaskId} ({tc.TokensUsed} tokens)");
+                    $"  [green]\u2713[/] {Markup.Escape(tc.TaskId)} ({tc.TokensUsed} tokens)");
                 break;
             case Sovrant.Agents.Swarm.SwarmEvent.TaskFailed tf:
                 AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
-                    $"  [red]✗[/] {tf.TaskId}: {Markup.Escape(tf.Error)}");
+                    $"  [red]\u2717[/] {Markup.Escape(tf.TaskId)}: {Markup.Escape(tf.Error)}");
                 break;
         }
     }, ct).ConfigureAwait(false);
 
     AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
-        $"\n[bold]Status:[/] {result.Status} | Tokens: {result.TotalTokensUsed} | Duration: {result.Duration.TotalSeconds:F1}s");
+        $"\n[bold]Status:[/] {Markup.Escape(result.Status.ToString())} | Tokens: {result.TotalTokensUsed} | Duration: {result.Duration.TotalSeconds:F1}s");
 
     if (swarmConfig.QualityGateEnabled && result.Status == Sovrant.Agents.Swarm.SwarmStatus.Completed)
     {
         var verdict = await qualityGate.ReviewAsync(result.SwarmId, task, result.CombinedOutput, ct).ConfigureAwait(false);
         AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
-            $"[bold]Quality Gate:[/] {verdict.Verdict} (score {verdict.Score})");
+            $"[bold]Quality Gate:[/] {Markup.Escape(verdict.Verdict)} (score {verdict.Score})");
     }
 });
 root.Add(swarmCmd);
