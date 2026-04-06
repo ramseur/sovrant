@@ -24,19 +24,22 @@ public sealed class SwarmTool : ITool
     private readonly SwarmOrchestrator _orchestrator;
     private readonly SwarmQualityGate _qualityGate;
     private readonly SwarmStateTracker _stateTracker;
+    private readonly ISwarmProgressReporter _progress;
 
     public SwarmTool(
         SwarmConfig config,
         ISwarmDecomposer decomposer,
         SwarmOrchestrator orchestrator,
         SwarmQualityGate qualityGate,
-        SwarmStateTracker stateTracker)
+        SwarmStateTracker stateTracker,
+        ISwarmProgressReporter progress)
     {
         _config = config;
         _decomposer = decomposer;
         _orchestrator = orchestrator;
         _qualityGate = qualityGate;
         _stateTracker = stateTracker;
+        _progress = progress;
     }
 
     public ToolDefinition Definition => s_definition;
@@ -44,7 +47,7 @@ public sealed class SwarmTool : ITool
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
         if (!_config.Enabled)
-            return "Error: Swarm orchestration is disabled. Enable it in .sovrant/swarm.json by setting \"enabled\": true.";
+            return "Error: Swarm orchestration is disabled. Use /swarm enable to turn it on.";
 
         var prompt = input.GetStringProp("prompt");
         if (string.IsNullOrWhiteSpace(prompt))
@@ -70,7 +73,7 @@ public sealed class SwarmTool : ITool
             return FormatDryRun(plan);
 
         // Phase 2: Execute
-        var result = await _orchestrator.ExecuteAsync(plan, _config, onEvent: null, ct).ConfigureAwait(false);
+        var result = await _orchestrator.ExecuteAsync(plan, _config, onEvent: _progress.Report, ct).ConfigureAwait(false);
 
         // Phase 3: Quality gate (optional)
         if (_config.QualityGateEnabled && result.Status == SwarmStatus.Completed)

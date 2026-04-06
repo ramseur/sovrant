@@ -333,6 +333,8 @@ ServiceProvider BuildServices(ParseResult pr)
         services.AddSingleton<IUserInputProvider, ConsoleUserInputProvider>();
         // Replace the default deny-all confirmation handler with the interactive one.
         services.AddSingleton<IToolConfirmationHandler, InteractiveConfirmationHandler>();
+        // Replace the null swarm reporter with the CLI one for live progress.
+        services.AddSingleton<Sovrant.Tools.Swarm.ISwarmProgressReporter, CliSwarmProgressReporter>();
     }
 
     var sp = services.BuildServiceProvider();
@@ -486,7 +488,7 @@ async Task RunTurnWithCancelAsync(IConversationRuntime runtime, string message, 
     {
         await spinner.StopAsync().ConfigureAwait(false);
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[yellow]\\[Cancelled][/]");
+        AnsiConsole.MarkupLine("[yellow][[Cancelled]][/]");
     }
     finally
     {

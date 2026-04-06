@@ -32,8 +32,11 @@ public sealed class SwarmSession
         Directory.CreateDirectory(_sessionsDir);
 
         var path = GetSessionPath(evt.SwarmId);
-        var line = JsonSerializer.Serialize<object>(evt, s_jsonOptions);
-        await File.AppendAllTextAsync(path, line + Environment.NewLine, ct).ConfigureAwait(false);
+        var line = JsonSerializer.Serialize<object>(evt, s_jsonOptions) + Environment.NewLine;
+        var bytes = System.Text.Encoding.UTF8.GetBytes(line);
+
+        using var fs = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+        await fs.WriteAsync(bytes, ct).ConfigureAwait(false);
     }
 
     /// <summary>Replays all events from a swarm session as an async enumerable.</summary>

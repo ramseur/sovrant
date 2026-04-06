@@ -110,6 +110,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITool, VerifyTool>();
 
         // Swarm tools
+        services.AddSingleton<ISwarmProgressReporter, NullSwarmProgressReporter>();
         services.AddSingleton<ITool, SwarmTool>();
         services.AddSingleton<ITool, SwarmStatusTool>();
 
