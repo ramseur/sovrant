@@ -16,7 +16,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Sovrant.Api\Sovrant.Api.csproj" />
+    <ProjectReference Include="..\Sovrant.Agents\Sovrant.Agents.csproj" />
     <ProjectReference Include="..\Sovrant.Runtime\Sovrant.Runtime.csproj" />
+    <ProjectReference Include="..\Sovrant.Tools\Sovrant.Tools.csproj" />
   </ItemGroup>
 
 </Project>
