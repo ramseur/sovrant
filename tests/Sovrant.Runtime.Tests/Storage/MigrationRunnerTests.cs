@@ -25,7 +25,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
     public async Task AllMigrations_RunSuccessfully()
     {
         await _provider.InitializeAsync();
-        Assert.Equal(5, _provider.SchemaVersion);
+        Assert.Equal(6, _provider.SchemaVersion);
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
     {
         await _provider.InitializeAsync();
         await _provider.InitializeAsync();
-        Assert.Equal(5, _provider.SchemaVersion);
+        Assert.Equal(6, _provider.SchemaVersion);
     }
 
     [Fact]
@@ -47,11 +47,11 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
             "roles", "permissions", "sessions", "session_entries", "token_usage",
             "session_summaries", "learned_patterns", "instincts",
             "credentials", "swarm_events", "eval_runs", "eval_results",
-            "audit_governance", "audit_bash",
+            "audit_governance", "audit_bash", "workspace_memory",
         };
 
         // Verify tables exist by checking the DB file was created and schema version is correct.
         Assert.True(File.Exists(_dbPath));
-        Assert.Equal(5, _provider.SchemaVersion);
+        Assert.Equal(6, _provider.SchemaVersion);
     }
 }

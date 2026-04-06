@@ -35,8 +35,8 @@ public sealed class SqliteStorageProviderTests : IAsyncDisposable
     {
         await _provider.InitializeAsync();
 
-        // We have 5 migration scripts.
-        Assert.Equal(5, _provider.SchemaVersion);
+        // We have 6 migration scripts.
+        Assert.Equal(6, _provider.SchemaVersion);
     }
 
     [Fact]

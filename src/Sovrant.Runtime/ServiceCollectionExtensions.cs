@@ -13,6 +13,7 @@ using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.Tools;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime;
 
@@ -109,6 +110,10 @@ public static class ServiceCollectionExtensions
             new SqliteMemoryStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
         services.AddSingleton<MemoryInjector>();
         services.AddSingleton<SessionEndMemoryHandler>();
+
+        // Workspace service (Phase 35)
+        services.AddSingleton<IWorkspaceService>(sp =>
+            new SqliteWorkspaceStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
         // Eval framework (Phase 27)
         services.AddSingleton<IEvalResultStore, EvalResultStore>();

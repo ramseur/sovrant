@@ -3,6 +3,7 @@ namespace Sovrant.Runtime.Memory;
 /// <summary>
 /// Unified interface for the three memory layers: session summaries, learned patterns, and instincts.
 /// Each layer has different persistence, scope, and retrieval characteristics.
+/// All methods accept an optional <c>workspaceId</c> parameter for workspace-scoped queries (Phase 35).
 /// </summary>
 public interface IMemoryStore
 {
@@ -14,6 +15,9 @@ public interface IMemoryStore
     /// <summary>Loads the most recent session summaries for a project (up to <paramref name="maxCount"/>).</summary>
     Task<IReadOnlyList<SessionSummary>> LoadSummariesAsync(string project, int maxCount = 5, CancellationToken ct = default);
 
+    /// <summary>Loads summaries scoped to a workspace.</summary>
+    Task<IReadOnlyList<SessionSummary>> LoadSummariesAsync(string project, string workspaceId, int maxCount = 5, CancellationToken ct = default);
+
     // ── Learned Patterns ────────────────────────────────────────────────
 
     /// <summary>Adds or updates a learned pattern for a project.</summary>
@@ -21,6 +25,9 @@ public interface IMemoryStore
 
     /// <summary>Loads all learned patterns for a project, ordered by confidence descending.</summary>
     Task<IReadOnlyList<LearnedPattern>> LoadPatternsAsync(string project, CancellationToken ct = default);
+
+    /// <summary>Loads patterns scoped to a workspace.</summary>
+    Task<IReadOnlyList<LearnedPattern>> LoadPatternsAsync(string project, string workspaceId, CancellationToken ct = default);
 
     /// <summary>Removes a learned pattern by ID.</summary>
     Task RemovePatternAsync(string id, string project, CancellationToken ct = default);

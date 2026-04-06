@@ -143,6 +143,43 @@ public sealed partial class SqliteStorageProvider : IStorageProvider, ISqliteCon
         cmd.Parameters.AddWithValue("$id", userId);
         cmd.Parameters.AddWithValue("$name", userId);
         cmd.ExecuteNonQuery();
+
+        // Auto-create personal workspace (Phase 35).
+        SeedPersonalWorkspace(connection, userId);
+    }
+
+    private static void SeedPersonalWorkspace(SqliteConnection connection, string userId)
+    {
+        // Only seed if the workspaces table exists.
+        using var check = connection.CreateCommand();
+        check.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name='workspaces'";
+        if (check.ExecuteScalar() is null)
+            return;
+
+        var workspaceId = $"ws-personal-{userId}";
+        var slug = $"personal-{userId}";
+
+        using var wsCmd = connection.CreateCommand();
+        wsCmd.CommandText = """
+            INSERT OR IGNORE INTO workspaces (workspace_id, type, name, slug, owner_id, created_at, updated_at)
+            VALUES ($wid, 'personal', $name, $slug, $owner,
+                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+            """;
+        wsCmd.Parameters.AddWithValue("$wid", workspaceId);
+        wsCmd.Parameters.AddWithValue("$name", $"{userId}'s Workspace");
+        wsCmd.Parameters.AddWithValue("$slug", slug);
+        wsCmd.Parameters.AddWithValue("$owner", userId);
+        wsCmd.ExecuteNonQuery();
+
+        using var memberCmd = connection.CreateCommand();
+        memberCmd.CommandText = """
+            INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, role, joined_at)
+            VALUES ($wid, $uid, 'owner', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+            """;
+        memberCmd.Parameters.AddWithValue("$wid", workspaceId);
+        memberCmd.Parameters.AddWithValue("$uid", userId);
+        memberCmd.ExecuteNonQuery();
     }
 
     /// <inheritdoc />

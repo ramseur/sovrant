@@ -78,6 +78,46 @@ internal sealed class SqliteMemoryStore(ISqliteConnectionFactory connectionFacto
         return results;
     }
 
+    public async Task<IReadOnlyList<SessionSummary>> LoadSummariesAsync(string project, string workspaceId, int maxCount = 5, CancellationToken ct = default)
+    {
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT session_id, project, started_at, ended_at, tasks, tools_used, files_modified,
+                   outcome, total_input_tokens, total_output_tokens, turn_count, error_count
+            FROM session_summaries
+            WHERE project = $proj AND workspace_id = $wid
+            ORDER BY ended_at DESC
+            LIMIT $limit
+            """;
+        cmd.Parameters.AddWithValue("$proj", project);
+        cmd.Parameters.AddWithValue("$wid", workspaceId);
+        cmd.Parameters.AddWithValue("$limit", maxCount);
+
+        using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        var results = new List<SessionSummary>();
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            results.Add(new SessionSummary
+            {
+                SessionId = reader.GetString(0),
+                Project = reader.GetString(1),
+                StartedAt = DateTimeOffset.Parse(reader.GetString(2), CultureInfo.InvariantCulture),
+                EndedAt = DateTimeOffset.Parse(reader.GetString(3), CultureInfo.InvariantCulture),
+                Tasks = JsonSerializer.Deserialize<List<string>>(reader.GetString(4)) ?? [],
+                ToolsUsed = JsonSerializer.Deserialize<List<string>>(reader.GetString(5)) ?? [],
+                FilesModified = JsonSerializer.Deserialize<List<string>>(reader.GetString(6)) ?? [],
+                Outcome = Enum.TryParse<SessionOutcome>(reader.GetString(7), out var o) ? o : SessionOutcome.Unknown,
+                TotalInputTokens = reader.GetInt32(8),
+                TotalOutputTokens = reader.GetInt32(9),
+                TurnCount = reader.GetInt32(10),
+                ErrorCount = reader.GetInt32(11),
+            });
+        }
+
+        return results;
+    }
+
     // ── Learned Patterns ───────────────────────────────────────────────────
 
     public async Task SavePatternAsync(LearnedPattern pattern, CancellationToken ct = default)
@@ -109,6 +149,39 @@ internal sealed class SqliteMemoryStore(ISqliteConnectionFactory connectionFacto
             ORDER BY confidence DESC
             """;
         cmd.Parameters.AddWithValue("$proj", project);
+
+        using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        var results = new List<LearnedPattern>();
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            results.Add(new LearnedPattern
+            {
+                Id = reader.GetString(0),
+                Pattern = reader.GetString(1),
+                Project = reader.GetString(2),
+                SourceSession = await reader.IsDBNullAsync(3, ct).ConfigureAwait(false) ? null : reader.GetString(3),
+                Confidence = reader.GetDouble(4),
+                CreatedAt = DateTimeOffset.Parse(reader.GetString(5), CultureInfo.InvariantCulture),
+                LastUsed = DateTimeOffset.Parse(reader.GetString(6), CultureInfo.InvariantCulture),
+            });
+        }
+
+        return results;
+    }
+
+    public async Task<IReadOnlyList<LearnedPattern>> LoadPatternsAsync(string project, string workspaceId, CancellationToken ct = default)
+    {
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT lp.id, lp.pattern, lp.project, lp.source_session, lp.confidence, lp.created_at, lp.last_used
+            FROM learned_patterns lp
+            INNER JOIN session_summaries ss ON lp.source_session = ss.session_id
+            WHERE lp.project = $proj AND ss.workspace_id = $wid
+            ORDER BY lp.confidence DESC
+            """;
+        cmd.Parameters.AddWithValue("$proj", project);
+        cmd.Parameters.AddWithValue("$wid", workspaceId);
 
         using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         var results = new List<LearnedPattern>();

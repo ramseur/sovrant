@@ -100,6 +100,10 @@ public sealed partial class FileMemoryStore : IMemoryStore, IDisposable
         return summaries;
     }
 
+    /// <summary>Workspace-scoped overload — file store ignores workspace, delegates to unscoped version.</summary>
+    public Task<IReadOnlyList<SessionSummary>> LoadSummariesAsync(string project, string workspaceId, int maxCount = 5, CancellationToken ct = default) =>
+        LoadSummariesAsync(project, maxCount, ct);
+
     // ─��� Learned Patterns ────────────���───────────────────────────────────
 
     public async Task SavePatternAsync(LearnedPattern pattern, CancellationToken ct = default)
@@ -134,6 +138,10 @@ public sealed partial class FileMemoryStore : IMemoryStore, IDisposable
             .OrderByDescending(p => p.Confidence)
             .ToList();
     }
+
+    /// <summary>Workspace-scoped overload — file store ignores workspace, delegates to unscoped version.</summary>
+    public Task<IReadOnlyList<LearnedPattern>> LoadPatternsAsync(string project, string workspaceId, CancellationToken ct = default) =>
+        LoadPatternsAsync(project, ct);
 
     public Task RemovePatternAsync(string id, string project, CancellationToken ct = default)
     {
