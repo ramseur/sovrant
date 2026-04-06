@@ -11,6 +11,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Spectre.Console" Version="0.55.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Sovrant.Api\Sovrant.Api.csproj" />
     <ProjectReference Include="..\Sovrant.Runtime\Sovrant.Runtime.csproj" />
   </ItemGroup>

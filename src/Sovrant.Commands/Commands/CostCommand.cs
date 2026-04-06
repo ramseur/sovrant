@@ -18,6 +18,7 @@ public sealed class CostCommand : ISlashCommand
     public string Name => "cost";
     public IReadOnlyList<string> Aliases => [];
     public string Description => "Show accumulated token usage and estimated cost.";
+    public string Category => "Config";
 
     public Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {

@@ -23,6 +23,7 @@ public sealed class ResumeCommand : ISlashCommand
     public string Name => "resume";
     public IReadOnlyList<string> Aliases => [];
     public string Description => "List saved sessions or show how to resume one.";
+    public string Category => "Session";
 
     public async Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {

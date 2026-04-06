@@ -23,6 +23,7 @@ public sealed class RememberCommand : ISlashCommand
     public string Name => "remember";
     public IReadOnlyList<string> Aliases => ["rem"];
     public string Description => "Save a learned pattern or instinct to memory.";
+    public string Category => "Memory";
 
     public async Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {

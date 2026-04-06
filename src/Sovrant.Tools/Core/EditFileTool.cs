@@ -55,7 +55,12 @@ public sealed class EditFileTool : ITool
             return $"Edited {filePath} — replaced {count} occurrence(s).";
         }
         catch (IOException ex) { return $"Error editing file: {ex.Message}"; }
-        catch (UnauthorizedAccessException ex) { return $"Error: access denied: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex)
+        {
+            return OperatingSystem.IsWindows()
+                ? $"Error: access denied editing {filePath}. Try restarting as Administrator. ({ex.Message})"
+                : $"Error: access denied: {ex.Message}";
+        }
     }
 
     private static string ReplaceFirst(string text, string search, string replace)

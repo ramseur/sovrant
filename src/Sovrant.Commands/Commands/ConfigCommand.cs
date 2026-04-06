@@ -14,6 +14,7 @@ public sealed class ConfigCommand : ISlashCommand
     public string Name => "config";
     public IReadOnlyList<string> Aliases => [];
     public string Description => "Show active configuration.";
+    public string Category => "Config";
 
     public Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {

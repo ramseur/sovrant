@@ -14,6 +14,7 @@ public sealed class StatusCommand : ISlashCommand
     public string Name => "status";
     public IReadOnlyList<string> Aliases => [];
     public string Description => "Show provider health and routing statistics.";
+    public string Category => "Config";
 
     public Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {

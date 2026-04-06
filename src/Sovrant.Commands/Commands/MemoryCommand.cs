@@ -23,6 +23,7 @@ public sealed class MemoryCommand : ISlashCommand
     public string Name => "memory";
     public IReadOnlyList<string> Aliases => ["mem"];
     public string Description => "Show or edit Sovrant memory files injected into the system prompt.";
+    public string Category => "Memory";
 
     public Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {

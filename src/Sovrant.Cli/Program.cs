@@ -379,7 +379,8 @@ async Task RunReplAsync(IConversationRuntime runtime, SlashCommandDispatcher dis
         if (string.IsNullOrEmpty(line)) continue;
 
         // Echo the user's input above the output area.
-        AnsiConsole.MarkupLine($"[bold cyan]>[/] {Markup.Escape(line.Contains('\n', StringComparison.Ordinal) ? line[..line.IndexOf('\n', StringComparison.Ordinal)] + "..." : line)}");
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine($"[bold cyan]You:[/] {Markup.Escape(line.Contains('\n', StringComparison.Ordinal) ? line[..line.IndexOf('\n', StringComparison.Ordinal)] + "..." : line)}");
 
         // Try to dispatch as a slash command first.
         var cmdResult = await dispatcher.TryDispatchAsync(line, ct).ConfigureAwait(false);
@@ -423,6 +424,7 @@ async Task RunTurnWithCancelAsync(IConversationRuntime runtime, string message, 
                     if (firstToken)
                     {
                         await spinner.StopAsync().ConfigureAwait(false);
+                        AnsiConsole.MarkupLine("[bold teal]Sovrant:[/]");
                         firstToken = false;
                     }
                     AnsiConsole.Write(text);
@@ -435,18 +437,26 @@ async Task RunTurnWithCancelAsync(IConversationRuntime runtime, string message, 
                         firstToken = false;
                     }
                     AnsiConsole.WriteLine();
-                    AnsiConsole.MarkupLine($"[grey]\u2699 {Markup.Escape(toolName)}[/]");
+                    AnsiConsole.MarkupLine($"  [blue bold]\u2699 {Markup.Escape(toolName)}[/]");
                     if (DiffRenderer.IsFileModifyTool(toolName))
                         DiffRenderer.RenderToolInput(toolName, input);
                     break;
 
+                case RuntimeEvent.ToolResult { ToolName: var toolName, Content: var content, IsError: var isErr }:
+                    if (isErr)
+                        AnsiConsole.MarkupLine($"  [red dim]\u2717 {Markup.Escape(toolName)}: {Markup.Escape(Truncate(content, 200))}[/]");
+                    else
+                        AnsiConsole.MarkupLine($"  [grey dim]\u2713 {Markup.Escape(toolName)}[/]");
+                    break;
+
                 case RuntimeEvent.PermissionDenied { ToolName: var toolName, Reason: var reason }:
-                    AnsiConsole.MarkupLine($"[yellow]\u26a0 {Markup.Escape(toolName)}: {Markup.Escape(reason)}[/]");
+                    AnsiConsole.MarkupLine($"  [yellow]\u26a0 {Markup.Escape(toolName)}: {Markup.Escape(reason)}[/]");
                     break;
 
                 case RuntimeEvent.TurnComplete { InputTokens: var inTok, OutputTokens: var outTok }:
                     AnsiConsole.WriteLine();
                     AnsiConsole.MarkupLine($"[grey dim]({inTok}\u2191 {outTok}\u2193 tokens)[/]");
+                    AnsiConsole.Write(new Rule().RuleStyle("grey dim"));
                     break;
 
                 case RuntimeEvent.RuntimeError { Message: var msg }:
@@ -455,7 +465,7 @@ async Task RunTurnWithCancelAsync(IConversationRuntime runtime, string message, 
                         await spinner.StopAsync().ConfigureAwait(false);
                         firstToken = false;
                     }
-                    AnsiConsole.MarkupLine($"[red]Error: {Markup.Escape(msg)}[/]");
+                    AnsiConsole.MarkupLine($"[red bold]Error:[/] [red]{Markup.Escape(msg)}[/]");
                     break;
             }
         }
@@ -490,6 +500,7 @@ async Task RunTurnAsync(IConversationRuntime runtime, string message, Cancellati
                 if (firstToken)
                 {
                     await spinner.StopAsync().ConfigureAwait(false);
+                    AnsiConsole.MarkupLine("[bold teal]Sovrant:[/]");
                     firstToken = false;
                 }
                 AnsiConsole.Write(text);
@@ -502,13 +513,20 @@ async Task RunTurnAsync(IConversationRuntime runtime, string message, Cancellati
                     firstToken = false;
                 }
                 AnsiConsole.WriteLine();
-                AnsiConsole.MarkupLine($"[grey]\u2699 {Markup.Escape(toolName)}[/]");
+                AnsiConsole.MarkupLine($"  [blue bold]\u2699 {Markup.Escape(toolName)}[/]");
                 if (DiffRenderer.IsFileModifyTool(toolName))
                     DiffRenderer.RenderToolInput(toolName, input);
                 break;
 
+            case RuntimeEvent.ToolResult { ToolName: var toolName, Content: var content, IsError: var isErr }:
+                if (isErr)
+                    AnsiConsole.MarkupLine($"  [red dim]\u2717 {Markup.Escape(toolName)}: {Markup.Escape(Truncate(content, 200))}[/]");
+                else
+                    AnsiConsole.MarkupLine($"  [grey dim]\u2713 {Markup.Escape(toolName)}[/]");
+                break;
+
             case RuntimeEvent.PermissionDenied { ToolName: var toolName, Reason: var reason }:
-                AnsiConsole.MarkupLine($"[yellow]\u26a0 {Markup.Escape(toolName)}: {Markup.Escape(reason)}[/]");
+                AnsiConsole.MarkupLine($"  [yellow]\u26a0 {Markup.Escape(toolName)}: {Markup.Escape(reason)}[/]");
                 break;
 
             case RuntimeEvent.TurnComplete { InputTokens: var inTok, OutputTokens: var outTok }:
@@ -522,13 +540,16 @@ async Task RunTurnAsync(IConversationRuntime runtime, string message, Cancellati
                     await spinner.StopAsync().ConfigureAwait(false);
                     firstToken = false;
                 }
-                AnsiConsole.MarkupLine($"[red]Error: {Markup.Escape(msg)}[/]");
+                AnsiConsole.MarkupLine($"[red bold]Error:[/] [red]{Markup.Escape(msg)}[/]");
                 break;
         }
     }
 
     AnsiConsole.WriteLine();
 }
+
+static string Truncate(string text, int maxLen) =>
+    text.Length > maxLen ? string.Concat(text.AsSpan(0, maxLen), "...") : text;
 
 async Task<int> RunCiTurnAsync(IConversationRuntime runtime, string message, CancellationToken ct)
 {

@@ -12,6 +12,7 @@ public sealed class ModelCommand : ISlashCommand
     public string Name => "model";
     public IReadOnlyList<string> Aliases => [];
     public string Description => "Show the active model (use --model to change).";
+    public string Category => "Config";
 
     public Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {

@@ -12,6 +12,9 @@ public interface ISlashCommand
     /// <summary>One-line description shown by /help.</summary>
     string Description { get; }
 
+    /// <summary>Category for grouping in /help output (e.g. "Session", "Memory", "Config").</summary>
+    string Category => "General";
+
     /// <summary>
     /// Executes the command with the given arguments (everything after the command name).
     /// Returns <see cref="SlashCommandResult"/> describing what the REPL should do next.

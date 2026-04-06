@@ -12,6 +12,7 @@ public sealed class SwarmCommand : ISlashCommand
     public string Name => "swarm";
     public IReadOnlyList<string> Aliases => [];
     public string Description => "Decompose and execute a task via parallel agent swarm.";
+    public string Category => "Advanced";
 
     public Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {

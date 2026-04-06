@@ -20,6 +20,7 @@ public sealed class CompactCommand : ISlashCommand
     public string Name => "compact";
     public IReadOnlyList<string> Aliases => [];
     public string Description => "Clear in-memory history to free context space.";
+    public string Category => "Session";
 
     public Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {

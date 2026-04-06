@@ -1,10 +1,11 @@
 using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
+using Spectre.Console;
 
 namespace Sovrant.Commands.Commands;
 
-/// <summary>Lists all available slash commands.</summary>
+/// <summary>Lists all available slash commands grouped by category.</summary>
 public sealed class HelpCommand : ISlashCommand
 {
     private readonly IServiceProvider _serviceProvider;
@@ -15,26 +16,45 @@ public sealed class HelpCommand : ISlashCommand
     public IReadOnlyList<string> Aliases => [];
     public string Description => "Show this help message.";
 
+    // Category display order.
+    private static readonly string[] s_categoryOrder =
+        ["Session", "Memory", "Config", "Advanced", "General"];
+
     public Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {
-        // Resolve lazily to avoid the circular dependency that would occur at construction time
-        // (HelpCommand is itself an ISlashCommand).
         var commands = _serviceProvider.GetServices<ISlashCommand>()
             .DistinctBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(c => c.Name);
+            .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var grouped = commands
+            .GroupBy(c => c.Category, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
         var sb = new StringBuilder();
-        sb.AppendLine("Available commands:");
         sb.AppendLine();
 
-        foreach (var cmd in commands)
+        foreach (var category in s_categoryOrder)
         {
-            var aliases = cmd.Aliases.Count > 0
-                ? $" (/{string.Join(", /", cmd.Aliases)})"
-                : string.Empty;
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  /{cmd.Name,-14} {cmd.Description}{aliases}");
+            if (!grouped.TryGetValue(category, out var cmds))
+                continue;
+
+            sb.AppendLine(CultureInfo.InvariantCulture, $"[bold]{category}[/]");
+
+            foreach (var cmd in cmds)
+            {
+                var aliases = cmd.Aliases.Count > 0
+                    ? $" [grey]({string.Join(", ", cmd.Aliases.Select(a => "/" + a))})[/]"
+                    : string.Empty;
+                sb.AppendLine(CultureInfo.InvariantCulture,
+                    $"  [teal]/{cmd.Name,-14}[/] {Markup.Escape(cmd.Description)}{aliases}");
+            }
+
+            sb.AppendLine();
         }
 
-        return Task.FromResult(new SlashCommandResult(sb.ToString().TrimEnd()));
+        // Render via Spectre markup so colors work.
+        AnsiConsole.Markup(sb.ToString());
+        return Task.FromResult(new SlashCommandResult());
     }
 }

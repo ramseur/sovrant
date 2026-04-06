@@ -16,6 +16,7 @@ public sealed class ProviderCommand : ISlashCommand
     public string Name => "provider";
     public IReadOnlyList<string> Aliases => [];
     public string Description => "Show provider health (/provider), or pin to one (/provider <name>).";
+    public string Category => "Config";
 
     public async Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {

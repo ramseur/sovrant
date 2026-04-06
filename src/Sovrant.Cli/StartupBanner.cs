@@ -26,6 +26,13 @@ internal static class StartupBanner
         AnsiConsole.MarkupLine($"  [teal]User:[/]    [white]{Markup.Escape(user)}[/]");
         if (sessionId is not null)
             AnsiConsole.MarkupLine($"  [teal]Session:[/] [white]{Markup.Escape(sessionId)}[/]");
+
+        // Web search indicator.
+        var webSearch = string.Equals(
+            Environment.GetEnvironmentVariable("LLM_WEB_SEARCH"), "true", StringComparison.OrdinalIgnoreCase);
+        if (webSearch)
+            AnsiConsole.MarkupLine("  [green][[web search on]][/]");
+
         AnsiConsole.WriteLine();
     }
 }

@@ -20,6 +20,7 @@ public sealed class SessionCommand : ISlashCommand
     public string Name => "session";
     public IReadOnlyList<string> Aliases => [];
     public string Description => "Show current session info. Use 'list' to see all sessions.";
+    public string Category => "Session";
 
     public async Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {

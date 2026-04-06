@@ -15,6 +15,7 @@ public sealed class PermissionsCommand : ISlashCommand
     public string Name => "permissions";
     public IReadOnlyList<string> Aliases => [];
     public string Description => "Show active permission mode and available modes.";
+    public string Category => "Config";
 
     public Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {

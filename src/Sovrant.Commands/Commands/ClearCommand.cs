@@ -17,6 +17,7 @@ public sealed class ClearCommand : ISlashCommand
     public string Name => "clear";
     public IReadOnlyList<string> Aliases => [];
     public string Description => "Clear conversation history.";
+    public string Category => "Session";
 
     public Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {

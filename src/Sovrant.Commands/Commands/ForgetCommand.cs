@@ -25,6 +25,7 @@ public sealed class ForgetCommand : ISlashCommand
     public string Name => "forget";
     public IReadOnlyList<string> Aliases => [];
     public string Description => "Remove or list memories (patterns, instincts).";
+    public string Category => "Memory";
 
     public async Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {

@@ -40,7 +40,12 @@ public sealed class WriteFileTool : ITool
             return $"File written: {filePath} ({lineCount} lines)";
         }
         catch (IOException ex) { return $"Error writing file: {ex.Message}"; }
-        catch (UnauthorizedAccessException ex) { return $"Error: access denied: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex)
+        {
+            return OperatingSystem.IsWindows()
+                ? $"Error: access denied writing {filePath}. Try restarting as Administrator. ({ex.Message})"
+                : $"Error: access denied: {ex.Message}";
+        }
     }
 
 

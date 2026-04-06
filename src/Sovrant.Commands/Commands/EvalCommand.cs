@@ -22,6 +22,7 @@ public sealed class EvalCommand : ISlashCommand
     public string Name => "eval";
     public IReadOnlyList<string> Aliases => ["evals"];
     public string Description => "Run eval suites or view eval history.";
+    public string Category => "Advanced";
 
     public async Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {
