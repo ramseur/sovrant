@@ -103,6 +103,41 @@ public sealed partial class JsonlSessionStore : ISessionStore, IDisposable
         return Task.FromResult<IReadOnlyList<string>>(ids);
     }
 
+    /// <inheritdoc/>
+    public Task<bool> DeleteAsync(string sessionId, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        var path = GetSessionPath(sessionId);
+        if (!File.Exists(path))
+            return Task.FromResult(false);
+
+        File.Delete(path);
+        // Also delete rotations (e.g. id.1.jsonl, id.2.jsonl)
+        var dir = Path.GetDirectoryName(path)!;
+        foreach (var rotation in Directory.EnumerateFiles(dir, $"{sessionId}.*.jsonl"))
+        {
+            try { File.Delete(rotation); } catch (IOException) { }
+        }
+
+        return Task.FromResult(true);
+    }
+
+    /// <inheritdoc/>
+    public Task<int> DeleteAllAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (!Directory.Exists(_sessionsDir))
+            return Task.FromResult(0);
+
+        var files = Directory.GetFiles(_sessionsDir, "*.jsonl");
+        foreach (var file in files)
+        {
+            try { File.Delete(file); } catch (IOException) { }
+        }
+
+        return Task.FromResult(files.Length);
+    }
+
     private string GetSessionPath(string sessionId)
     {
         var path = Path.Combine(_sessionsDir, $"{sessionId}.jsonl");

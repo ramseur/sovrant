@@ -101,4 +101,34 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
 
         return ids;
     }
+
+    public async Task<bool> DeleteAsync(string sessionId, CancellationToken ct = default)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        using var delEntries = connection.CreateCommand();
+        delEntries.CommandText = "DELETE FROM session_entries WHERE session_id = $sid";
+        delEntries.Parameters.AddWithValue("$sid", sessionId);
+        await delEntries.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+
+        using var delSession = connection.CreateCommand();
+        delSession.CommandText = "DELETE FROM sessions WHERE session_id = $sid";
+        delSession.Parameters.AddWithValue("$sid", sessionId);
+        var rows = await delSession.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+
+        return rows > 0;
+    }
+
+    public async Task<int> DeleteAllAsync(CancellationToken ct = default)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        using var delEntries = connection.CreateCommand();
+        delEntries.CommandText = "DELETE FROM session_entries";
+        await delEntries.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+
+        using var delSessions = connection.CreateCommand();
+        delSessions.CommandText = "DELETE FROM sessions";
+        return await delSessions.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
 }

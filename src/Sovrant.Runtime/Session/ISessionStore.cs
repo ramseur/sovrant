@@ -11,4 +11,10 @@ public interface ISessionStore
 
     /// <summary>Lists all session IDs that have at least one entry.</summary>
     Task<IReadOnlyList<string>> ListAsync(CancellationToken ct = default);
+
+    /// <summary>Deletes a single session and all its entries.</summary>
+    Task<bool> DeleteAsync(string sessionId, CancellationToken ct = default);
+
+    /// <summary>Deletes all sessions and their entries.</summary>
+    Task<int> DeleteAllAsync(CancellationToken ct = default);
 }

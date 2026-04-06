@@ -271,5 +271,9 @@ public sealed class RuntimeSessionPoolTests
             => Task.FromResult<IReadOnlyList<SessionEntry>>([]);
         public Task<IReadOnlyList<string>> ListAsync(CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<string>>([]);
+        public Task<bool> DeleteAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult(false);
+        public Task<int> DeleteAllAsync(CancellationToken ct = default)
+            => Task.FromResult(0);
     }
 }

@@ -19,4 +19,18 @@ internal sealed class DualWriteSessionStore(ISessionStore primary, ISessionStore
 
     public Task<IReadOnlyList<string>> ListAsync(CancellationToken ct = default)
         => primary.ListAsync(ct);
+
+    public async Task<bool> DeleteAsync(string sessionId, CancellationToken ct = default)
+    {
+        var deleted = await primary.DeleteAsync(sessionId, ct).ConfigureAwait(false);
+        await secondary.DeleteAsync(sessionId, ct).ConfigureAwait(false);
+        return deleted;
+    }
+
+    public async Task<int> DeleteAllAsync(CancellationToken ct = default)
+    {
+        var count = await primary.DeleteAllAsync(ct).ConfigureAwait(false);
+        await secondary.DeleteAllAsync(ct).ConfigureAwait(false);
+        return count;
+    }
 }

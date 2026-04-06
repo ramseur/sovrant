@@ -397,15 +397,18 @@ async Task RunReplAsync(IConversationRuntime runtime, SlashCommandDispatcher dis
         var cmdResult = await dispatcher.TryDispatchAsync(line, ct).ConfigureAwait(false);
         if (cmdResult is not null)
         {
+            if (cmdResult.ShouldExit)
+                break;
+            if (cmdResult.ShouldClearHistory)
+            {
+                runtime.Reset();
+                AnsiConsole.Clear();
+            }
             if (cmdResult.Output is not null)
             {
                 AnsiConsole.WriteLine(cmdResult.Output);
                 AnsiConsole.WriteLine();
             }
-            if (cmdResult.ShouldExit)
-                break;
-            if (cmdResult.ShouldClearHistory)
-                runtime.Reset();
             if (cmdResult.InjectAsUserMessage is not null)
                 await RunTurnWithCancelAsync(runtime, cmdResult.InjectAsUserMessage, ct).ConfigureAwait(false);
             continue;
@@ -415,7 +418,9 @@ async Task RunReplAsync(IConversationRuntime runtime, SlashCommandDispatcher dis
         await RunTurnWithCancelAsync(runtime, line, ct).ConfigureAwait(false);
     }
 
-    // Restore terminal default cursor on exit.
+    // Ensure the cursor is on a clean line after the input box is cleared,
+    // then restore the default cursor shape so the shell prompt renders correctly.
+    Console.WriteLine();
     Console.Write("\x1b[0 q");
 }
 

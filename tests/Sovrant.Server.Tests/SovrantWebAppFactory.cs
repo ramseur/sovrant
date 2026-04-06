@@ -116,6 +116,18 @@ public sealed class FakeSessionStore : ISessionStore
     {
         return Task.FromResult<IReadOnlyList<string>>(_sessions.Keys.ToList());
     }
+
+    public Task<bool> DeleteAsync(string sessionId, CancellationToken ct = default)
+    {
+        return Task.FromResult(_sessions.Remove(sessionId));
+    }
+
+    public Task<int> DeleteAllAsync(CancellationToken ct = default)
+    {
+        var count = _sessions.Count;
+        _sessions.Clear();
+        return Task.FromResult(count);
+    }
 }
 
 /// <summary>Fake smart router that returns a canned provider list.</summary>

@@ -478,22 +478,9 @@ internal sealed class SovrantInputReader
         if (bottom < 2)
             return;
 
-        var fb = new System.Text.StringBuilder(width * (boxHeight + autocompleteLines + 4));
-        fb.Append(AnsiHideCursor);
-
-        var totalClear = boxHeight + autocompleteLines + 2;
-        for (var i = 0; i < totalClear; i++)
-        {
-            var row = bottom - i;
-            if (row < 0) break;
-            fb.Append(CursorTo(row));
-            fb.Append(new string(' ', width));
-        }
-
-        fb.Append(AnsiRestoreCursor);
-        fb.Append(AnsiSolidCursor);
-        fb.Append(AnsiShowCursor);
-
-        Console.Write(fb.ToString());
+        // Restore cursor to the position saved before the box was drawn,
+        // then erase everything from there to the end of the screen.
+        // This removes the box and any leftover blank rows in one shot.
+        Console.Write($"{AnsiHideCursor}{AnsiRestoreCursor}\x1b[J{AnsiSolidCursor}{AnsiShowCursor}");
     }
 }

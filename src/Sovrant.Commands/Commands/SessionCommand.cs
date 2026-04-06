@@ -19,13 +19,21 @@ public sealed class SessionCommand : ISlashCommand
 
     public string Name => "session";
     public IReadOnlyList<string> Aliases => [];
-    public string Description => "Show current session info. Use 'list' to see all sessions.";
+    public string Description => "Session management: list, delete <id>, purge.";
     public string Category => "Session";
 
     public async Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(args);
+
         if (string.Equals(args, "list", StringComparison.OrdinalIgnoreCase))
             return await ListSessionsAsync(ct).ConfigureAwait(false);
+
+        if (string.Equals(args, "purge", StringComparison.OrdinalIgnoreCase))
+            return await PurgeSessionsAsync(ct).ConfigureAwait(false);
+
+        if (args.StartsWith("delete ", StringComparison.OrdinalIgnoreCase))
+            return await DeleteSessionAsync(args[7..].Trim(), ct).ConfigureAwait(false);
 
         var entries = await _store.LoadAsync(_runtime.SessionId, ct).ConfigureAwait(false);
         var sb = new StringBuilder();
@@ -60,7 +68,28 @@ public sealed class SessionCommand : ISlashCommand
             sb.AppendLine(CultureInfo.InvariantCulture, $"  {id}{marker}");
         }
 
-        sb.Append("Use '/resume <session-id>' to resume a session.");
+        sb.AppendLine("Use '/resume <session-id>' to resume a session.");
+        sb.Append("Use '/session delete <id>' to delete, '/session purge' to delete all.");
         return new SlashCommandResult(sb.ToString());
+    }
+
+    private async Task<SlashCommandResult> DeleteSessionAsync(string sessionId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+            return new SlashCommandResult("Usage: /session delete <session-id>");
+
+        if (sessionId == _runtime.SessionId)
+            return new SlashCommandResult("Cannot delete the current session. Use /clear instead.");
+
+        var deleted = await _store.DeleteAsync(sessionId, ct).ConfigureAwait(false);
+        return deleted
+            ? new SlashCommandResult(string.Create(CultureInfo.InvariantCulture, $"Session '{sessionId}' deleted."))
+            : new SlashCommandResult(string.Create(CultureInfo.InvariantCulture, $"Session '{sessionId}' not found."));
+    }
+
+    private async Task<SlashCommandResult> PurgeSessionsAsync(CancellationToken ct)
+    {
+        var count = await _store.DeleteAllAsync(ct).ConfigureAwait(false);
+        return new SlashCommandResult(string.Create(CultureInfo.InvariantCulture, $"{count} session(s) deleted."));
     }
 }
