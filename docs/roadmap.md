@@ -2854,6 +2854,41 @@ A later phase adds an integrated terminal panel within the desktop app (similar 
 
 ---
 
+---
+
+## Phase 46 — n8n Automation Integration
+
+**Goal:** Give Sovrant access to 1,000+ third-party integrations (Slack, Gmail, Sheets, Salesforce, Jira, etc.) by integrating with n8n as a headless automation engine. The runtime orchestrates n8n workflows via API, turning Sovrant agents into automation controllers that can trigger and receive data from external services without building each integration from scratch.
+
+**Integration approaches (not mutually exclusive):**
+
+| Approach | How It Works | Best For |
+|---|---|---|
+| **API-First** | `HttpClient` triggers n8n workflows via Webhook nodes; n8n returns data to the calling agent | Simple request/response automations, synchronous tool use |
+| **Headless Orchestration** | n8n runs in a Docker container alongside Sovrant; the runtime acts as the "brain", n8n as a "worker" for third-party APIs | Complex multi-step workflows, scheduled automations |
+| **.NET Aspire Composition** | Aspire orchestrates Sovrant services + n8n container as a managed distributed app | Cloud-native deployments, dev/test parity, health monitoring |
+
+**Items:**
+1. `AutomationTool` — agent-callable tool that triggers n8n workflows by name/ID via webhook, returns the result
+2. `AutomationListTool` — lists available n8n workflows the agent can trigger
+3. n8n Docker Compose profile — `docker-compose.automation.yml` with n8n container, shared network, volume for workflow persistence
+4. Webhook callback endpoint — `POST /v1/automation/callback` so n8n can push async results back to Sovrant
+5. Workflow template library — starter n8n workflows for common patterns (Slack notify, email send, spreadsheet update, Jira ticket create)
+6. .NET Aspire resource definition — `AddN8nContainer()` extension for orchestrated deployments
+7. Credential bridging — securely pass API keys from Sovrant's credential store to n8n at container startup
+8. `/automation` slash command — list, trigger, and check status of n8n workflows from the CLI
+9. Rate limiting and circuit breaker — protect against n8n overload or downstream service failures
+10. Documentation — setup guide, workflow authoring, security model
+
+**Verification:**
+- `dotnet build` exits 0
+- Agent can trigger an n8n workflow via the `Automation` tool and receive structured results
+- n8n container starts via Docker Compose with persistent workflow storage
+- Webhook callback delivers async results to the correct session
+- Aspire orchestration starts both Sovrant and n8n with health checks
+
+---
+
 ### Known Issues / Debt
 
 | Issue | Priority | Notes |
