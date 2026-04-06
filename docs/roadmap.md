@@ -2163,7 +2163,7 @@ Phase 31's `ICacheProvider` is for **hot, ephemeral data** — fast reads with T
 
 ---
 
-### Phase 33 — CLI Quick Wins
+### Phase 33 — CLI Quick Wins ✅
 
 **Depends on:** None (CLI presentation only)
 **Difficulty:** Low–Medium
@@ -2195,7 +2195,7 @@ Phase 31's `ICacheProvider` is for **hot, ephemeral data** — fast reads with T
 
 ---
 
-### Phase 34 — CLI Visual Polish
+### Phase 34 — CLI Visual Polish ✅
 
 **Depends on:** Phase 33 (CLI quick wins — input bar, /help audit, thinking messages must be in place)
 **Difficulty:** Low–Medium
@@ -2708,6 +2708,36 @@ Two-layer approach:
 4. Inline diffs: intercept `Edit`/`Write` tool events, show diff decoration in the editor
 5. Permission dialogs: VS Code `window.showInformationMessage` with approve/deny buttons
 6. Publish to VS Code Marketplace
+
+---
+
+### Phase 43 — Windows PowerShell Integration & Platform Shell Strategy
+
+**Depends on:** Phase 34 (CLI visual polish — BashTool already switched to PowerShell on Windows)
+**Difficulty:** Medium
+
+**Goal:** Fully leverage PowerShell capabilities on Windows environments. The current BashTool was designed for Unix shells and uses PowerShell on Windows only as a compatibility shim. This phase explores native PowerShell idioms, cmdlet access, and Windows-specific capabilities to make Sovrant a first-class citizen on Windows.
+
+#### Items
+
+| # | Item | Description |
+|---|---|---|
+| 1 | PowerShell-native command generation | Teach the system prompt / tool descriptions that Windows uses PowerShell, so the LLM generates `New-Item`, `Get-ChildItem`, `Remove-Item` etc. instead of `mkdir`, `ls`, `rm` with Unix flags. |
+| 2 | PowerShell module discovery | Detect installed PowerShell modules and surface them as available capabilities (e.g., `Az`, `SqlServer`, `ActiveDirectory`). |
+| 3 | Windows API access via cmdlets | Leverage PowerShell's access to .NET types, COM objects, WMI/CIM, and the Windows registry — capabilities unavailable in bash. |
+| 4 | Execution policy handling | Robust detection and handling of PowerShell execution policies. Provide clear guidance when scripts are blocked by policy. |
+| 5 | PowerShell 7+ vs 5.1 feature matrix | Detect which PowerShell version is available and adjust generated commands accordingly (e.g., `pwsh` supports `ForEach-Object -Parallel`, `ConvertFrom-Json -Depth`). |
+| 6 | Credential & secret management | Integrate with PowerShell `SecretManagement` module for secure credential handling on Windows. |
+| 7 | Windows-specific file operations | Leverage NTFS features: ACLs (`Get-Acl`/`Set-Acl`), alternate data streams, symbolic links with proper elevation detection. |
+| 8 | Admin elevation detection | Detect whether the current session is elevated (Administrator) and adjust tool behavior — warn before operations that require elevation, suggest `Start-Process -Verb RunAs` when needed. |
+
+#### Acceptance Criteria
+
+- LLM generates idiomatic PowerShell on Windows (not bash-translated-to-PS)
+- Available PowerShell modules are discoverable by the agent
+- Execution policy errors produce actionable guidance, not raw errors
+- Admin elevation status is detected and surfaced in tool confirmations
+- All existing Unix/macOS behavior is preserved (no regressions on non-Windows)
 
 ---
 
