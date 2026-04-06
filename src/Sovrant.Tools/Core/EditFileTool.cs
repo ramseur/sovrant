@@ -31,6 +31,9 @@ public sealed class EditFileTool : ITool
         var newString = newProp.GetString() ?? string.Empty;
         var replaceAll = input.GetBoolProp("replace_all", false);
 
+        if (string.IsNullOrEmpty(oldString))
+            return "Error: old_string must not be empty.";
+
         if (!File.Exists(filePath))
             return $"Error: file not found: {filePath}";
 
