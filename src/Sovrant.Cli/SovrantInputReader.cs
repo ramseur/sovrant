@@ -1,3 +1,4 @@
+using System.Globalization;
 using Spectre.Console;
 
 namespace Sovrant.Cli;
@@ -38,6 +39,10 @@ internal sealed class SovrantInputReader
     private const string AnsiReset = "\x1b[0m";
     private const string AnsiDim = "\x1b[2m";
     private const string AnsiBoldCyan = "\x1b[1;36m";
+
+    /// <summary>Returns ANSI CSI sequence to move the cursor to the given 0-based row and col.</summary>
+    private static string CursorTo(int row, int col = 0) =>
+        string.Create(CultureInfo.InvariantCulture, $"\x1b[{row + 1};{col + 1}H");
 
     // Box-drawing characters.
     private const char HorzBar = '\u2500';
@@ -84,6 +89,10 @@ internal sealed class SovrantInputReader
         var acVisible = false;
         var prevBoxHeight = 0; // track previous render height for cleanup
 
+        // Track terminal size to detect resizes without constant redraws.
+        var lastWidth = 0;
+        var lastHeight = 0;
+
         Console.Write(AnsiSaveCursor);
 
         while (!ct.IsCancellationRequested)
@@ -94,17 +103,30 @@ internal sealed class SovrantInputReader
                 {
                     UpdateAutocomplete(buffer.ToString(), commandNames, ref acMatches, ref acIndex, ref acVisible);
                     prevBoxHeight = RenderInputBox(buffer.ToString(), acMatches, acIndex, acVisible, prevBoxHeight);
+                    try { lastWidth = Console.WindowWidth; lastHeight = Console.WindowHeight; } catch (IOException) { }
                     lastRenderTime = Environment.TickCount64;
                     needsRender = false;
                 }
 
                 Thread.Sleep(10);
 
+                // Only redraw on idle if the terminal was actually resized.
                 var now = Environment.TickCount64;
                 if (now - lastRenderTime > IdleRedrawMs)
                 {
-                    prevBoxHeight = RenderInputBox(buffer.ToString(), acMatches, acIndex, acVisible, prevBoxHeight);
                     lastRenderTime = now;
+                    try
+                    {
+                        var w = Console.WindowWidth;
+                        var h = Console.WindowHeight;
+                        if (w != lastWidth || h != lastHeight)
+                        {
+                            lastWidth = w;
+                            lastHeight = h;
+                            needsRender = true;
+                        }
+                    }
+                    catch (IOException) { }
                 }
 
                 continue;
@@ -220,10 +242,21 @@ internal sealed class SovrantInputReader
         }
 
         var prefix = text[1..];
+
+        // Don't show autocomplete until the user has typed at least one character
+        // after the slash — avoids a huge menu listing every command on bare "/".
+        if (prefix.Length == 0)
+        {
+            matches = [];
+            selectedIndex = -1;
+            visible = false;
+            return;
+        }
+
         matches = commandNames
             .Where(n => n.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
-            .Take(10)
+            .Take(8) // cap visible items to avoid overrunning the screen
             .ToArray();
 
         visible = matches.Length > 0;
@@ -235,6 +268,11 @@ internal sealed class SovrantInputReader
     /// Renders the input box with blue borders. The box grows upward as the user
     /// types more lines. Returns the total height of the rendered box (for cleanup).
     /// </summary>
+    /// <remarks>
+    /// The entire frame is built in a single <see cref="System.Text.StringBuilder"/>
+    /// and flushed with one <see cref="Console.Write(string)"/> call to eliminate
+    /// flicker caused by intermediate cursor-move + write pairs.
+    /// </remarks>
     private static int RenderInputBox(
         string currentText, string[] acMatches, int acIndex, bool acVisible, int prevHeight)
     {
@@ -253,8 +291,6 @@ internal sealed class SovrantInputReader
         if (width < 20 || termHeight < 4)
             return prevHeight;
 
-        Console.Write(AnsiHideCursor);
-
         // Calculate how many input lines we need to show.
         var innerWidth = width - 4; // "│ " + content + " │"
         var wrappedLines = WrapText(currentText, innerWidth);
@@ -268,60 +304,67 @@ internal sealed class SovrantInputReader
         var acLineCount = acVisible ? acMatches.Length : 0;
         var totalHeight = boxHeight + acLineCount;
 
-        // Clear previous render area if it was taller
-        var maxClear = Math.Max(prevHeight, totalHeight) + 2;
         var bottom = termHeight - 1;
-        for (var i = 0; i < maxClear; i++)
-        {
-            var row = bottom - i;
-            if (row < 0) break;
-            Console.SetCursorPosition(0, row);
-            Console.Write(new string(' ', width));
-        }
-
-        // Starting row for autocomplete (topmost element)
         var startRow = bottom - totalHeight + 1;
 
-        // Draw autocomplete menu
+        // Hide cursor once, build the full frame, show cursor at the end.
+        // This prevents any visible cursor jumping during the write.
+        var fb = new System.Text.StringBuilder(width * (totalHeight + 4));
+        fb.Append(AnsiHideCursor);
+
+        // Only blank rows that are above the current render area (box shrank).
+        // Content rows are overwritten in-place with full-width padding — no blank pass needed.
+        if (prevHeight > totalHeight)
+        {
+            var prevStartRow = bottom - prevHeight + 1;
+            for (var row = prevStartRow; row < startRow; row++)
+            {
+                if (row < 0) continue;
+                fb.Append(CursorTo(row));
+                fb.Append(new string(' ', width));
+            }
+        }
+
+        // Autocomplete menu
         if (acVisible)
         {
             for (var i = 0; i < acMatches.Length; i++)
             {
                 var row = startRow + i;
                 if (row < 0) continue;
-                Console.SetCursorPosition(0, row);
+                fb.Append(CursorTo(row));
 
                 var label = $"  /{acMatches[i]}";
-                if (label.Length > width - 1)
-                    label = label[..(width - 1)];
+                if (label.Length > width - 2)
+                    label = label[..(width - 2)];
 
+                // Write label then erase-to-EOL to clear old content without wrapping.
                 if (i == acIndex)
-                    Console.Write($"\x1b[7m\x1b[36m{label}{new string(' ', Math.Max(0, width - label.Length))}{AnsiReset}");
+                    fb.Append("\x1b[7m\x1b[36m").Append(label).Append("\x1b[K").Append(AnsiReset);
                 else
-                    Console.Write($"{AnsiDim}{label}{AnsiReset}{new string(' ', Math.Max(0, width - label.Length))}");
+                    fb.Append(AnsiDim).Append(label).Append(AnsiReset).Append("\x1b[K");
             }
         }
 
-        // Draw top border: ╭───────────────────────────────────╮
+        // Top border: ╭───────╮
         var boxTop = startRow + acLineCount;
         if (boxTop >= 0)
         {
-            Console.SetCursorPosition(0, boxTop);
-            Console.Write($"{AnsiBoldBlue}{TopLeft}{new string(HorzBar, width - 2)}{TopRight}{AnsiReset}");
+            fb.Append(CursorTo(boxTop));
+            fb.Append(AnsiBoldBlue).Append(TopLeft).Append(new string(HorzBar, width - 2)).Append(TopRight).Append(AnsiReset);
         }
 
-        // Draw input content lines
+        // Input content lines — each line is padded to full inner width.
         var scrollStart = Math.Max(0, wrappedLines.Count - MaxVisibleLines);
         for (var i = 0; i < visibleInputLines; i++)
         {
             var row = boxTop + 1 + i;
             if (row < 0 || row > bottom) continue;
-            Console.SetCursorPosition(0, row);
+            fb.Append(CursorTo(row));
 
             var lineIdx = scrollStart + i;
             var lineText = lineIdx < wrappedLines.Count ? wrappedLines[lineIdx] : string.Empty;
 
-            // Pad or truncate to fill inner width
             if (lineText.Length > innerWidth)
                 lineText = lineText[..innerWidth];
 
@@ -329,7 +372,6 @@ internal sealed class SovrantInputReader
 
             if (i == 0 && wrappedLines.Count <= 1)
             {
-                // Single-line: show prompt and hint
                 const string prompt = "> ";
                 const string hint = " Esc to cancel";
                 var contentWidth = innerWidth - prompt.Length - hint.Length;
@@ -340,27 +382,31 @@ internal sealed class SovrantInputReader
                     displayText = displayText[^contentWidth..];
                 var contentPad = contentWidth - displayText.Length;
 
-                Console.Write(
-                    $"{AnsiBoldBlue}{Vert}{AnsiReset} {AnsiBoldCyan}{prompt}{AnsiReset}{displayText}" +
-                    $"{new string(' ', Math.Max(0, contentPad))}{AnsiDim}{hint}{AnsiReset} {AnsiBoldBlue}{Vert}{AnsiReset}");
+                fb.Append(AnsiBoldBlue).Append(Vert).Append(AnsiReset)
+                  .Append(' ').Append(AnsiBoldCyan).Append(prompt).Append(AnsiReset)
+                  .Append(displayText)
+                  .Append(new string(' ', Math.Max(0, contentPad)))
+                  .Append(AnsiDim).Append(hint).Append(AnsiReset)
+                  .Append(' ').Append(AnsiBoldBlue).Append(Vert).Append(AnsiReset);
             }
             else
             {
-                // Multi-line: just show content
-                Console.Write(
-                    $"{AnsiBoldBlue}{Vert}{AnsiReset} {lineText}{new string(' ', Math.Max(0, padding))} {AnsiBoldBlue}{Vert}{AnsiReset}");
+                fb.Append(AnsiBoldBlue).Append(Vert).Append(AnsiReset)
+                  .Append(' ').Append(lineText)
+                  .Append(new string(' ', Math.Max(0, padding)))
+                  .Append(' ').Append(AnsiBoldBlue).Append(Vert).Append(AnsiReset);
             }
         }
 
-        // Draw bottom border: ╰───────────────────────────────────╯
+        // Bottom border: ╰───────╯
         var boxBottom = boxTop + visibleInputLines + 1;
         if (boxBottom >= 0 && boxBottom <= bottom)
         {
-            Console.SetCursorPosition(0, boxBottom);
-            Console.Write($"{AnsiBoldBlue}{BotLeft}{new string(HorzBar, width - 2)}{BotRight}{AnsiReset}");
+            fb.Append(CursorTo(boxBottom));
+            fb.Append(AnsiBoldBlue).Append(BotLeft).Append(new string(HorzBar, width - 2)).Append(BotRight).Append(AnsiReset);
         }
 
-        // Position cursor inside the box at the end of the current text
+        // Position cursor inside the box, then make it visible again.
         var cursorLineInBox = Math.Min(wrappedLines.Count, MaxVisibleLines) - 1;
         var lastWrappedLine = wrappedLines.Count > 0 ? wrappedLines[^1] : string.Empty;
         var cursorCol = 2; // after "│ "
@@ -371,10 +417,12 @@ internal sealed class SovrantInputReader
 
         var cursorRow = boxTop + 1 + cursorLineInBox;
         if (cursorRow >= 0 && cursorRow <= bottom && cursorCol < width - 1)
-            Console.SetCursorPosition(cursorCol, cursorRow);
+            fb.Append(CursorTo(cursorRow, cursorCol));
 
-        Console.Write(AnsiSolidCursor);
-        Console.Write(AnsiShowCursor);
+        fb.Append(AnsiShowCursor);
+
+        // Single atomic write.
+        Console.Write(fb.ToString());
 
         return totalHeight;
     }
@@ -430,19 +478,22 @@ internal sealed class SovrantInputReader
         if (bottom < 2)
             return;
 
-        Console.Write(AnsiHideCursor);
+        var fb = new System.Text.StringBuilder(width * (boxHeight + autocompleteLines + 4));
+        fb.Append(AnsiHideCursor);
 
         var totalClear = boxHeight + autocompleteLines + 2;
         for (var i = 0; i < totalClear; i++)
         {
             var row = bottom - i;
             if (row < 0) break;
-            Console.SetCursorPosition(0, row);
-            Console.Write(new string(' ', width));
+            fb.Append(CursorTo(row));
+            fb.Append(new string(' ', width));
         }
 
-        Console.Write(AnsiRestoreCursor);
-        Console.Write(AnsiSolidCursor);
-        Console.Write(AnsiShowCursor);
+        fb.Append(AnsiRestoreCursor);
+        fb.Append(AnsiSolidCursor);
+        fb.Append(AnsiShowCursor);
+
+        Console.Write(fb.ToString());
     }
 }

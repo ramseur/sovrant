@@ -77,6 +77,10 @@ internal static class ProcessExecutor
         {
             return new Result($"Error: command timed out after {timeoutMs} ms.", -1);
         }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            return new Result($"Error: failed to start '{fileName}': {ex.Message}", -1);
+        }
 
         var stdout = stdoutSb.ToString();
         if (stdoutTruncated) stdout += $"\n[stdout truncated at {outputCapChars / 1024} KB]";

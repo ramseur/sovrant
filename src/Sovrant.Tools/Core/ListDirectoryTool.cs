@@ -41,6 +41,14 @@ public sealed class ListDirectoryTool : ITool
         {
             sb.AppendLine(CultureInfo.InvariantCulture, $"  [access denied: {ex.Message}]");
         }
+        catch (DirectoryNotFoundException)
+        {
+            sb.AppendLine("  [directory no longer exists]");
+        }
+        catch (IOException ex)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"  [IO error: {ex.Message}]");
+        }
 
         return Task.FromResult(sb.ToString().TrimEnd());
     }

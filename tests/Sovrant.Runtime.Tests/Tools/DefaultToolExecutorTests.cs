@@ -68,6 +68,6 @@ public sealed class DefaultToolExecutorTests
 
         Assert.False(result.Success);
         Assert.True(result.IsError);
-        Assert.Contains("confirmation", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("denied", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 }

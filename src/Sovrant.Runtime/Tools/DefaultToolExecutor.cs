@@ -153,6 +153,22 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
             LogExecutionComplete(_logger, toolName, sw.ElapsedMilliseconds, true);
             return new ToolExecutionResult(false, ex.Message, IsError: true);
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            sw.Stop();
+            LogToolException(_logger, toolName, ex);
+            LogExecutionComplete(_logger, toolName, sw.ElapsedMilliseconds, true);
+            return new ToolExecutionResult(false, $"Access denied: {ex.Message}", IsError: true);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+        {
+            // Catch-all so that unexpected tool failures (Win32Exception, etc.)
+            // never crash the REPL — they are returned as error results to the LLM.
+            sw.Stop();
+            LogToolException(_logger, toolName, ex);
+            LogExecutionComplete(_logger, toolName, sw.ElapsedMilliseconds, true);
+            return new ToolExecutionResult(false, $"{ex.GetType().Name}: {ex.Message}", IsError: true);
+        }
     }
 
     private static async Task<string> OffloadToTempFileAsync(

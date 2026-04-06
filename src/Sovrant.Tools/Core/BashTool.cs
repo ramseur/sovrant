@@ -47,6 +47,8 @@ public sealed class BashTool : ITool
             return result.Output;
         }
         catch (InvalidOperationException ex) { return $"Error starting process: {ex.Message}"; }
+        catch (System.ComponentModel.Win32Exception ex) { return $"Error starting shell: {ex.Message}"; }
+        catch (IOException ex) { return $"Error executing command: {ex.Message}"; }
     }
 
     /// <summary>Finds pwsh (PowerShell 7+) first, falls back to Windows PowerShell.</summary>
