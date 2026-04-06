@@ -80,6 +80,7 @@ public static class ServiceCollectionExtensions
 
         // Tool registry and executor
         services.AddSingleton<IToolRegistry, InMemoryToolRegistry>();
+        services.AddSingleton<IToolConfirmationHandler, DenyAllConfirmationHandler>();
         services.AddSingleton<IToolExecutor, DefaultToolExecutor>();
 
         // Session store — SQLite primary, optional JSONL dual-write.

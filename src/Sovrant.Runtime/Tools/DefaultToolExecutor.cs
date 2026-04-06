@@ -12,6 +12,7 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
     private readonly IToolRegistry _registry;
     private readonly IPermissionPolicy _policy;
     private readonly IGovernanceMonitor _governance;
+    private readonly IToolConfirmationHandler _confirmationHandler;
     private readonly ILogger<DefaultToolExecutor> _logger;
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Executing tool '{ToolName}'")]
@@ -39,11 +40,13 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
         IToolRegistry registry,
         IPermissionPolicy policy,
         IGovernanceMonitor governance,
+        IToolConfirmationHandler confirmationHandler,
         ILogger<DefaultToolExecutor> logger)
     {
         _registry = registry;
         _policy = policy;
         _governance = governance;
+        _confirmationHandler = confirmationHandler;
         _logger = logger;
     }
 
@@ -65,10 +68,15 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
 
             case PolicyDecision.RequireConfirmation:
                 LogConfirmationRequired(_logger, toolName);
-                // In non-interactive contexts, treat RequireConfirmation as Deny.
-                // Interactive confirmation is handled by the CLI layer.
-                return new ToolExecutionResult(false,
-                    $"Tool '{toolName}' requires user confirmation.", IsError: true);
+                var confirmed = await _confirmationHandler
+                    .RequestConfirmationAsync(toolName, input, ct).ConfigureAwait(false);
+                if (!confirmed)
+                {
+                    LogDenied(_logger, toolName);
+                    return new ToolExecutionResult(false,
+                        $"Tool '{toolName}' was denied by the user.", IsError: true);
+                }
+                break;
         }
 
         if (!_registry.TryGetHandler(toolName, out var handler) || handler is null)

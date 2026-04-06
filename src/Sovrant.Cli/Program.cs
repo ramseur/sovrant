@@ -331,6 +331,8 @@ ServiceProvider BuildServices(ParseResult pr)
     {
         // Replace the null input provider with the real console one.
         services.AddSingleton<IUserInputProvider, ConsoleUserInputProvider>();
+        // Replace the default deny-all confirmation handler with the interactive one.
+        services.AddSingleton<IToolConfirmationHandler, InteractiveConfirmationHandler>();
     }
 
     var sp = services.BuildServiceProvider();

@@ -21,7 +21,7 @@ public sealed class DefaultToolExecutorTests
     {
         var policy = new ModeAwarePermissionPolicy(mode);
         registry ??= new InMemoryToolRegistry();
-        return new DefaultToolExecutor(registry, policy, new NullGovernanceMonitor(), NullLogger<DefaultToolExecutor>.Instance);
+        return new DefaultToolExecutor(registry, policy, new NullGovernanceMonitor(), new DenyAllConfirmationHandler(), NullLogger<DefaultToolExecutor>.Instance);
     }
 
     [Fact]
