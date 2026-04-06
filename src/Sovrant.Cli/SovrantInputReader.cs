@@ -53,13 +53,20 @@ internal sealed class SovrantInputReader
         var lastKeyTime = Environment.TickCount64;
         var lastRenderTime = Environment.TickCount64;
         var isPaste = false;
-
-        RenderInputBar(string.Empty);
+        var needsRender = true;
 
         while (!ct.IsCancellationRequested)
         {
             if (!Console.KeyAvailable)
             {
+                // Render once after all buffered keys are drained.
+                if (needsRender)
+                {
+                    RenderInputBar(buffer.ToString());
+                    lastRenderTime = Environment.TickCount64;
+                    needsRender = false;
+                }
+
                 Thread.Sleep(10);
 
                 // Periodic redraw for terminal resize.
@@ -91,12 +98,10 @@ internal sealed class SovrantInputReader
                 case ConsoleKey.Backspace:
                     if (buffer.Length > 0)
                     {
-                        // Handle backspace across newlines.
                         if (buffer[^1] == '\n')
                             lineCount = Math.Max(1, lineCount - 1);
                         buffer.Remove(buffer.Length - 1, 1);
-                        RenderInputBar(buffer.ToString());
-                        lastRenderTime = keyTime;
+                        needsRender = true;
                     }
                     break;
 
@@ -115,8 +120,7 @@ internal sealed class SovrantInputReader
                             isPaste = true;
                     }
 
-                    RenderInputBar(buffer.ToString());
-                    lastRenderTime = keyTime;
+                    needsRender = true;
                     break;
             }
 

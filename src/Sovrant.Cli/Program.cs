@@ -359,8 +359,8 @@ async Task InitAsync(ServiceProvider sp, ParseResult pr, CancellationToken ct)
 
 async Task RunReplAsync(IConversationRuntime runtime, SlashCommandDispatcher dispatcher, CancellationToken ct)
 {
-    StartupBanner.Render();
-    AnsiConsole.MarkupLine("Type [grey]/help[/] for commands, [grey]/exit[/] to quit.");
+    StartupBanner.Render(runtime.SessionId);
+    AnsiConsole.MarkupLine("  Type [grey]/help[/] for commands, [grey]/exit[/] to quit.");
     AnsiConsole.WriteLine();
 
     while (!ct.IsCancellationRequested)
