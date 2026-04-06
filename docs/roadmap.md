@@ -88,11 +88,12 @@ The engine is fully functional for individual and small-team use:
 |---|---|---|
 | Workspaces (personal + team areas, isolated memory/config/sessions) | Phase 33 | Medium–High |
 | Projects (workspace-scoped containers for isolated work) | Phase 34 | Medium |
-| User management API (CRUD users, issue/revoke tokens, per-user data views) | Phase 35 | Medium |
-| Cost tracking, token budgets & model pricing registry | Phase 36 (deferred) | Deferred |
-| Enterprise auth & multi-tenancy (OAuth/OIDC, RBAC, org isolation) | Phase 37 (deferred) | Deferred |
-| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 38 (deferred) | Deferred |
-| VS Code native extension | Phase 39 (deferred) | Deferred |
+| User management API (CRUD users, per-user data views) | Phase 35 | Low–Medium |
+| Per-user token auth & database hardening | Phase 36 | Medium |
+| Cost tracking, token budgets & model pricing registry | Phase 37 (deferred) | Deferred |
+| Enterprise auth & multi-tenancy (RBAC, OAuth/OIDC, SSO) | Phase 38 (deferred) | Deferred |
+| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 39 (deferred) | Deferred |
+| VS Code native extension | Phase 40 (deferred) | Deferred |
 
 ---
 
@@ -1633,7 +1634,7 @@ Evals stored in `.sovrant/evals/`:
 > **Status: ✅ Complete** — 17 new files, 62 new tests, 0 warnings. OFF by default; foundation for frontend-driven orchestration.
 
 **Inspired by:** [claude-swarm](https://github.com/affaan-m/claude-swarm) (parallel task decomposition with dependency DAGs, file locking, budget enforcement, quality gate)
-**Depends on:** Phase 19+20 (multi-agent team tools), Phase 22 (agent templates), Phase 36 (cost tracking — optional)
+**Depends on:** Phase 19+20 (multi-agent team tools), Phase 22 (agent templates), Phase 37 (cost tracking — optional)
 
 **Goal:** Add a **swarm orchestration layer** on top of Sovrant's existing multi-agent infrastructure. A user gives a single complex prompt; a high-capability model automatically decomposes it into a dependency graph of 2-8 subtasks; subtasks execute in parallel waves respecting dependencies, with file-level conflict prevention, budget enforcement, and a quality gate review phase. The swarm uses whatever models the admin/user has configured — decomposition and quality gates use the "high" level model, workers use the "standard" level (all provider-agnostic via Phase 22's model resolution). Available via CLI (`sovrant swarm "task"`), the `SwarmTool` for programmatic use, and `POST /v1/swarm` for frontend integration.
 
@@ -2162,7 +2163,7 @@ Phase 31's `ICacheProvider` is for **hot, ephemeral data** — fast reads with T
 
 ### Phase 33 — Workspaces
 
-**Depends on:** Phase 32 (SQLite persistence), Phase 35 (user management API), Phase 27 (memory system)
+**Depends on:** Phase 32 (SQLite persistence — `users` table already exists), Phase 27 (memory system)
 
 **Goal:** Personal and team areas that house projects. Every user gets an isolated personal workspace by default; team workspaces allow groups to collaborate. Workspaces own their own memory, configuration, sessions, credentials, and audit data.
 
@@ -2176,7 +2177,7 @@ Phase 31's `ICacheProvider` is for **hot, ephemeral data** — fast reads with T
 
 #### Motivation
 
-Today Sovrant is single-user or flat multi-user (Phase 35). There's no separation between "my stuff" and "our team's stuff." Workspaces give every user a private area from day one (personal workspace) and let teams form shared areas when needed (team workspaces):
+Today Sovrant is single-user (the `users` table from Phase 32 seeds one user). There's no separation between "my stuff" and "our team's stuff." Workspaces give every user a private area from day one (personal workspace) and let teams form shared areas when needed (team workspaces):
 - A user's personal workspace is their default — solo work, personal memory, personal config
 - A team workspace lets multiple users share sessions, memory, config, and projects
 - Isolation means workspace A cannot see workspace B's data, memory, or sessions
@@ -2218,7 +2219,7 @@ All existing tables with `user_id` gain a `workspace_id` FK (not nullable — ev
 
 1. Add SQLite tables (`workspaces`, `workspace_members`, `workspace_config`, `workspace_invites`, `workspace_memory`)
 2. Add `workspace_id` FK (not nullable) to `sessions`, `audit_events`, `credentials`, `usage`, `config` tables
-3. Auto-create personal workspace on user creation (Phase 35 user lifecycle hook)
+3. Auto-create personal workspace on user creation (triggered when a new user row is inserted)
 4. Migration: backfill existing data into each user's personal workspace
 5. Implement `IWorkspaceService` — CRUD, membership, invite token generation/validation, personal workspace creation
 6. Implement `WorkspaceContextMiddleware` — resolves workspace from `X-Workspace-Id` header, falls back to personal workspace
@@ -2228,9 +2229,9 @@ All existing tables with `user_id` gain a `workspace_id` FK (not nullable — ev
 10. Workspace-scoped config inheritance: workspace config → user config → global defaults
 11. Tests: personal workspace auto-creation, fallback resolution, isolation (workspace A can't see workspace B data), memory scoping, membership roles, invite flow (team only), personal workspace delete protection
 
-#### Relationship to Phase 37 (Enterprise Auth)
+#### Relationship to Phase 38 (Enterprise Auth)
 
-Phase 37 adds external IdP login and RBAC on top of the workspace model — workspaces become the RBAC scope boundary.
+Phase 38 adds external IdP login and RBAC on top of the workspace model — workspaces become the RBAC scope boundary.
 
 ---
 
@@ -2296,54 +2297,45 @@ project memory  +  workspace memory  (both visible within project context)
 6. Memory scoping: project memory writes go to `workspace_memory` with `project_id` set; reads merge project + workspace layers
 7. Session creation auto-associates with active project context
 8. Project-scoped agent templates and skills (load from project config in addition to workspace/global)
-9. Budget enforcement at project level (Phase 36's `ICostModel` + project config budget cap)
+9. Budget enforcement at project level (Phase 37's `ICostModel` + project config budget cap)
 10. Tests: project isolation within workspace, config inheritance chain, memory scoping (project sees own + workspace memory), membership subset validation, archive behavior
 
-#### Relationship to Phase 38 (Artifact System)
+#### Relationship to Phase 39 (Artifact System)
 
-If Phase 38 is implemented, artifacts are scoped to projects rather than just teams. The `ITeamWorkspace` from Phase 38 becomes project-aware — artifacts persist in the project context and survive across team agent lifetimes.
+If Phase 39 is implemented, artifacts are scoped to projects rather than just teams. The `ITeamWorkspace` from Phase 39 becomes project-aware — artifacts persist in the project context and survive across team agent lifetimes.
 
 ---
 
 ### Phase 35 — User Management API
 
-**Depends on:** Phase 32 (persistence layer — `users` table), Phase 8 (bearer token auth)
-**Difficulty:** Medium
+**Depends on:** Phase 32 (persistence layer — `users` table)
+**Difficulty:** Low–Medium
 
-**Goal:** Expose secure CRUD endpoints for user management so that frontends can register users, issue API tokens, manage profiles, and query per-user data. Phase 32 creates the `users` table and `user_id` foreign keys on every other table. This phase builds the API surface that lets frontends and admin tools actually manage those users.
+**Goal:** Expose CRUD endpoints for user management so that frontends can create users, manage profiles, and view per-user data. Phase 32 creates the `users` table and `user_id` foreign keys on every other table. This phase builds the API surface to manage those users.
 
-This is **not** enterprise SSO or OAuth — it's the practical user management layer that a frontend needs to onboard users, assign tokens, and display per-user dashboards. Phase 37 (enterprise auth) adds external identity providers and fine-grained access control on top of this.
+This is **not** auth — there are no per-user tokens, no login, no RBAC. The existing `SOVRANT_TOKEN` gate remains the only auth mechanism. Per-user bearer tokens and token resolution are deferred to Phase 36 (per-user token auth). Role-based access control is deferred to Phase 38 (enterprise auth).
 
 #### Why this matters
 
-After Phase 32, the database has per-user scoping on config, sessions, audit, credentials, and usage. But there's no way to create or manage users through the API — they're auto-created on first seen. A frontend building a multi-user dashboard needs to:
-- Register new users and issue them API tokens
-- List and search users
+After Phase 32, the database has per-user scoping on sessions, audit, credentials, and usage. But there's no way to create or manage users through the API — they're auto-seeded from the OS username. A frontend building a multi-user dashboard needs to:
+- Create and list users
 - View per-user usage, sessions, and audit history
 - Deactivate users without deleting their data
-- Assign users to teams for config scoping
+- Assign users to teams for organizational grouping
 
 #### Endpoints
 
-All endpoints require admin authorization (`SOVRANT_ADMIN_TOKENS` or a user with `admin` role).
+All endpoints are protected by the existing `SOVRANT_TOKEN` bearer auth (same as all other endpoints).
 
 **User CRUD**
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/v1/users` | Create a user — returns `user_id` and a generated API token |
-| `GET` | `/v1/users` | List all users (paginated, filterable by status/team/role) |
-| `GET` | `/v1/users/{id}` | Get user profile, token count, session count, total tokens consumed |
+| `POST` | `/v1/users` | Create a user — returns `user_id` |
+| `GET` | `/v1/users` | List all users (filterable by status/team/role) |
+| `GET` | `/v1/users/{id}` | Get user profile, session count, total tokens consumed |
 | `PUT` | `/v1/users/{id}` | Update display name, role, team, status |
-| `DELETE` | `/v1/users/{id}` | Soft-delete (deactivate) — sets `status: inactive`, revokes tokens, preserves data for audit |
-
-**Token Management**
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/v1/users/{id}/tokens` | Issue a new API token for this user (returns token once, never again) |
-| `GET` | `/v1/users/{id}/tokens` | List active tokens (masked — shows prefix + last 4 chars only) |
-| `DELETE` | `/v1/users/{id}/tokens/{token_id}` | Revoke a specific token |
+| `DELETE` | `/v1/users/{id}` | Soft-delete (deactivate) — sets `status: inactive`, preserves data for audit |
 
 **Per-User Data Views**
 
@@ -2367,7 +2359,7 @@ All endpoints require admin authorization (`SOVRANT_ADMIN_TOKENS` or a user with
   "role": "user",
   "team": "engineering",
   "status": "active",
-  "api_token": "svt_k8m2p5..."  // shown once, never retrievable again
+  "created_at": "2026-04-06T..."
 }
 ```
 
@@ -2393,34 +2385,76 @@ All endpoints require admin authorization (`SOVRANT_ADMIN_TOKENS` or a user with
 }
 ```
 
-#### Schema additions (extends Phase 32)
+#### Schema notes
 
-```sql
--- Extends users table
-ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user';     -- 'admin', 'user', 'readonly'
-ALTER TABLE users ADD COLUMN team TEXT;                              -- team scoping
-ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'; -- 'active', 'inactive'
+No schema changes needed — Phase 32 already created the `users` table with `role`, `team`, and `status` columns. This phase only adds the API surface.
 
--- New table: API tokens (one user → many tokens)
-CREATE TABLE api_tokens (
-    token_id    TEXT PRIMARY KEY,
-    user_id     TEXT NOT NULL REFERENCES users(user_id),
-    token_hash  TEXT NOT NULL UNIQUE,     -- SHA-256 hash of the token (never store plaintext)
-    token_prefix TEXT NOT NULL,            -- first 8 chars for display ("svt_k8m2...")
-    created_at  TEXT NOT NULL,
-    expires_at  TEXT,                      -- NULL = never expires
-    revoked_at  TEXT                       -- NULL = active; set on revoke
-);
-CREATE INDEX idx_api_tokens_hash ON api_tokens(token_hash);
-```
+#### Implementation Plan
 
-#### Auth model
+1. Implement `IUserService` — CRUD operations backed by `ISqliteConnectionFactory`
+2. Add `UserRoutes` route group: `/v1/users` CRUD
+3. Add per-user data view routes: `/v1/users/{id}/sessions`, `/v1/users/{id}/usage`, `/v1/users/{id}/audit`
+4. Update `docs/server.md` with new endpoints
+5. Tests: user CRUD, soft-delete preserves data, per-user data views filter correctly
 
-- **Token resolution:** `BearerTokenMiddleware` hashes the incoming token, looks up `api_tokens` by `token_hash`, resolves `user_id`, checks `status: active` and `revoked_at IS NULL`. Attaches `user_id` and `role` to `HttpContext.Items`.
-- **Admin check:** Endpoints under `/v1/users` require `role = 'admin'`. Non-admin users can only `GET /v1/users/{own-id}` (self-read).
-- **Token generation:** `svt_` prefix + 32 bytes crypto-random (base64url). Plaintext returned once on creation; only the SHA-256 hash is stored.
-- **Backward compatibility:** `SOVRANT_TOKEN` (single shared token) still works — mapped to a built-in `admin` user on first run. Existing deployments don't break.
-- **Tokens never appear in:** logs, audit events, error responses, session data.
+#### What this does NOT include (deferred to Phase 36)
+
+- Per-user bearer tokens and `api_tokens` table population
+- Token hash-based user resolution middleware
+- Admin vs user role enforcement
+- `SOVRANT_ADMIN_TOKENS` environment variable
+- Per-user auth scoping (any authenticated request can access any user's data)
+- Database hardening (secure_delete, file permissions, read-only connections)
+
+---
+
+### Phase 36 — Per-User Token Auth & Database Hardening
+
+**Depends on:** Phase 35 (user management API — users exist in the DB)
+**Difficulty:** Medium
+
+**Goal:** Replace the single shared `SOVRANT_TOKEN` with per-user bearer tokens so the frontend can authenticate individual users. Each user gets their own tokens stored as SHA-256 hashes in the `api_tokens` table (created empty in Phase 32). Also hardens the SQLite layer now that per-user identity is enforceable.
+
+This is the bridge between "everyone shares one token" (Phase 8) and "enterprise SSO with RBAC" (Phase 38). It gives the frontend what it needs — user-specific auth — without the complexity of OAuth/OIDC.
+
+#### Why this matters
+
+After Phase 35, the server can CRUD users but still authenticates everyone with a single shared token. The frontend can't tell which user is making a request. This phase resolves that:
+- Each user gets their own bearer tokens
+- The server resolves incoming tokens to a `user_id`
+- Session, audit, and usage data is scoped to the authenticated user
+- Admin users can manage other users; regular users can only access their own data
+
+#### Token Model
+
+| Item | Description |
+|---|---|
+| Token format | `svt_` prefix + 32 bytes crypto-random (base64url) |
+| Storage | Only the SHA-256 hash is stored in `api_tokens`. Plaintext is returned once on creation, never retrievable again. |
+| Resolution | `BearerTokenMiddleware` hashes the incoming token, looks up `api_tokens` by `token_hash`, resolves `user_id`, checks `status: active` and `revoked_at IS NULL`. Attaches `user_id` and `role` to `HttpContext.Items`. |
+| Admin check | User management endpoints require `role = 'admin'`. Non-admin users can only access their own data. |
+| Backward compat | `SOVRANT_TOKEN` (single shared token) still works — mapped to a built-in `admin` user on first run. Existing deployments don't break. |
+| Security | Tokens never appear in logs, audit events, error responses, or session data. |
+
+#### Token Management Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/v1/users/{id}/tokens` | Issue a new API token for this user (returns token once, never again) |
+| `GET` | `/v1/users/{id}/tokens` | List active tokens (masked — shows prefix + last 4 chars only) |
+| `DELETE` | `/v1/users/{id}/tokens/{token_id}` | Revoke a specific token |
+
+#### Database Hardening
+
+Applied in this phase because per-user identity makes ownership enforcement meaningful:
+
+| Hardening | Description |
+|---|---|
+| `secure_delete=ON` pragma | Zeros deleted rows on disk instead of leaving residual data. No write performance impact in WAL mode. |
+| File permissions on creation | `chmod 600` on Linux/macOS, restricted ACL on Windows for `sovrant.db` and `.keystore`. |
+| Connection-scoped read-only mode | Read-only endpoints use a read-only SQLite connection. |
+| Token hash timing-safe comparison | `CryptographicOperations.FixedTimeEquals` prevents timing attacks on token lookups. |
+| Session ownership enforcement | All session/audit/usage queries filter by authenticated `user_id`. Admin role bypasses for management endpoints only. |
 
 #### Environment Variables
 
@@ -2431,34 +2465,19 @@ CREATE INDEX idx_api_tokens_hash ON api_tokens(token_hash);
 
 #### Implementation Plan
 
-1. Extend `users` table schema: add `role`, `team`, `status` columns via `StorageMigrator`
-2. Add `api_tokens` table with hash-based lookup index
-3. Implement `IUserService` — CRUD operations backed by `IStorageProvider`, token generation with `RandomNumberGenerator`
-4. Implement `ITokenResolver` — replaces current `BearerTokenMiddleware` boolean check with hash-based user resolution
-5. Add `UserRoutes` route group: `/v1/users` CRUD + `/v1/users/{id}/tokens` management
-6. Add per-user data view routes: `/v1/users/{id}/sessions`, `/v1/users/{id}/usage`, `/v1/users/{id}/audit`
-7. Admin authorization middleware: check `role = 'admin'` for user management endpoints; allow self-read for non-admins
-8. Backward compat: `SOVRANT_TOKEN` auto-creates a built-in admin user + token on first run
-9. Update `docs/server.md` with new endpoints
-10. Tests: user CRUD, token issuance/revocation, admin-only access, self-read, backward compat with `SOVRANT_TOKEN`, soft-delete preserves data
-
-#### Database Hardening (post-user-management)
-
-Once user creation and token-based auth are in place, harden the SQLite layer without disrupting server writes:
-
-| Hardening | Description |
-|---|---|
-| `secure_delete=ON` pragma | Zeros deleted rows on disk instead of leaving residual data. No write performance impact in WAL mode. |
-| File permissions on creation | `chmod 600` on Linux/macOS, restricted ACL on Windows for `sovrant.db` and `.keystore`. Prevents other OS users from reading the database. |
-| Connection-scoped read-only mode | Endpoints that only read (session list, usage, audit views) use a read-only SQLite connection. Write operations go through the normal connection. |
-| Token hash timing-safe comparison | Use `CryptographicOperations.FixedTimeEquals` for token hash lookups to prevent timing attacks. |
-| Session ownership enforcement | All session/audit/usage queries filter by the authenticated `user_id`. Admin role bypasses for management endpoints only. |
-
-These changes depend on Phase 35's token-to-user resolution being complete — without per-user auth, ownership enforcement has nothing to scope against.
+1. Implement `ITokenService` — token generation (`svt_` + crypto-random), SHA-256 hashing, issuance, revocation
+2. Implement `ITokenResolver` — hash-based token-to-user resolution middleware, replaces boolean `SOVRANT_TOKEN` check
+3. Add token management endpoints (`/v1/users/{id}/tokens`)
+4. Add admin authorization middleware — `role = 'admin'` for user/token management; self-access for regular users
+5. Scope all data view queries by authenticated `user_id` (sessions, audit, usage)
+6. Backward compat: `SOVRANT_TOKEN` auto-creates a built-in admin user + token on first run
+7. Apply database hardening (secure_delete pragma, file permissions, read-only connections, timing-safe comparison)
+8. Update `docs/server.md` with token endpoints and auth model
+9. Tests: token issuance/revocation, hash-based resolution, admin-only access, self-read, ownership enforcement, timing-safe comparison, backward compat with `SOVRANT_TOKEN`
 
 ---
 
-### Phase 36 — Cost Tracking, Token Budgets & Model Pricing Registry ⏸️ Deferred (nice-to-have)
+### Phase 37 — Cost Tracking, Token Budgets & Model Pricing Registry ⏸️ Deferred (nice-to-have)
 
 **Depends on:** Phase 10 (token usage tracking — already complete)
 
@@ -2530,44 +2549,44 @@ Phase 10 already tracks `TotalInputTokens` and `TotalOutputTokens` per session i
 
 ---
 
-### Phase 37 — Enterprise Auth & Multi-Tenancy ⏸️ Deferred
+### Phase 38 — Enterprise Auth & Multi-Tenancy ⏸️ Deferred
 
-**Depends on:** Phase 35 (user management API), Phase 33 (workspaces — provides tenant boundary), Phase 10 (session-scoped config)
+**Depends on:** Phase 36 (per-user token auth), Phase 33 (workspaces — provides tenant boundary)
 
-**Goal:** Add external identity providers (OAuth/OIDC, SAML), fine-grained role-based access control (RBAC), and enterprise multi-tenancy on top of the Phase 33 workspace model. Workspaces provide the isolation boundary; this phase adds SSO login, granular permissions, and compliance controls on top.
+**Goal:** Add external identity providers (OAuth/OIDC, SAML), fine-grained role-based access control (RBAC), and enterprise multi-tenancy on top of the Phase 36 per-user token model. This is where the RBAC tables (created empty in Phase 32) get populated and enforced.
 
 #### When to implement
 
-This phase is deliberately deferred. Phase 35's token-based user management covers small-to-medium teams. Add this phase when:
+This phase is deliberately deferred. Phase 36's per-user tokens cover small-to-medium teams. Add this phase when:
 - External identity providers (Google, GitHub, Azure AD, Okta) are required for login, **or**
 - Fine-grained permissions beyond admin/user/readonly are needed (e.g., "can use tool X but not Y"), **or**
 - Organizational boundaries require tenant isolation (separate data, separate billing)
 
-#### What it adds on top of Phase 33 (Workspaces)
+#### What it adds on top of Phase 36 (Per-User Tokens)
 
-Phase 33 provides workspaces with membership and role-based access (owner/admin/member/viewer). This phase upgrades that model with external identity, granular permissions, and compliance tooling.
+Phase 36 gives each user their own bearer tokens with admin/user role enforcement. This phase upgrades that model with external identity, granular permissions, and compliance tooling.
 
 | Item | Change |
 |---|---|
 | External IdP | OAuth 2.0 / OIDC integration — login via Google, GitHub, Azure AD, Okta. Maps external identity to `users.user_id`. |
-| RBAC | Replace simple workspace/project `role` columns with a `roles` + `permissions` table. Define granular permissions: `tools:execute`, `config:write`, `sessions:read-all`, etc. |
+| RBAC | Populate `roles` + `permissions` + `role_permissions` + `user_roles` tables. Define granular permissions: `tools:execute`, `config:write`, `sessions:read-all`, etc. |
 | SSO enforcement | Workspace admins can require SSO login — disable token-only access for their workspace. |
 | Billing isolation | Per-workspace token usage aggregation already exists (Phase 33); this adds billing plan association and usage alerts. |
-| Session ownership enforcement | Only owning user (or workspace admin) can read/delete sessions. Already partially implemented in Phase 35/37. |
 | Audit | All auth events (login, token issue, token revoke, permission change) logged to `audit_events`. |
 
 #### Implementation Plan
 
 1. Add OAuth/OIDC middleware — `Microsoft.AspNetCore.Authentication.OpenIdConnect`
-2. Add `roles`, `permissions` tables (replace simple role columns in `workspace_members`/`project_members`)
+2. Populate `roles`, `permissions` tables (replace simple role columns in `workspace_members`/`project_members`)
 3. Implement `IRbacService` — permission checks at endpoint and tool-execution level
 4. Update `BearerTokenMiddleware` to also accept JWT from external IdP
 5. Add SSO enforcement flag on workspace config
 6. Add `POST /v1/admin/reload` to hot-reload token registry without restart
+7. Tests: OAuth flow, RBAC permission checks, SSO enforcement, JWT + svt_ token coexistence
 
 ---
 
-### Phase 38 — Artifact System ⏸️ Deferred
+### Phase 39 — Artifact System ⏸️ Deferred
 
 **Depends on:** Phase 19+20 (multi-agent team tools)
 
@@ -2605,7 +2624,7 @@ Today, team agents communicate solely through prompt/response text via `TeamDele
 
 ---
 
-### Phase 39 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
+### Phase 40 — IDE Extension (VS Code) ⏸️ Deferred (nice-to-have)
 
 **Competitor precedent:** Claude Code ✅ · opencode ✅ (beta)
 **Depends on:** Phase 15 (MCP server mode) — once Sovrant exposes an MCP server, MCP-aware IDEs (VS Code with GitHub Copilot, Cursor, Windsurf) can connect without a bespoke extension.
