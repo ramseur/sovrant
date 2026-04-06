@@ -8,7 +8,7 @@ The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HT
 
 **Runtime:** .NET 10 / C# 13
 **License:** [see LICENSE]
-**Status:** Engine fully functional. 45 tools. 24 agent templates. 32 built-in skills. 28 server endpoints. Multi-agent team orchestration. Swarm orchestrator. Eval framework. MCP server mode. Frontend SDK. 879 tests passing.
+**Status:** Engine fully functional. 45 tools. 24 agent templates. 32 built-in skills. 28 server endpoints. Multi-agent team orchestration. Swarm orchestrator. Eval framework. MCP server mode. Frontend SDK. 910 tests passing.
 
 ---
 
@@ -60,7 +60,7 @@ Skills are single `.md` files — YAML frontmatter (name, trigger, agents, tools
 Create persistent named agents with specific roles, custom system prompts, and tool restrictions. Delegate tasks, track lifecycle status, and coordinate teams — all from within the agentic loop or via API. Two interchangeable backends: process-per-agent for hard isolation (default) or in-process async for lower overhead.
 
 ### Session Persistence
-Every conversation is stored as a JSONL append-log. Resume sessions by name across CLI invocations or HTTP requests. The server keeps one runtime per session in memory for instant history access. Automatic context compaction when conversations exceed token limits.
+Every conversation is stored in a SQLite database (`~/.sovrant/data/sovrant.db`) with full-text search via FTS5. Resume sessions by name across CLI invocations or HTTP requests. The server keeps one runtime per session in memory for instant history access. Automatic context compaction when conversations exceed token limits. Optional dual-write to legacy JSONL files via `SOVRANT_SESSION_JSONL=true`. See [Persistence](docs/persistence.md).
 
 ### OpenAI-Compatible HTTP Server
 Drop-in replacement for OpenAI's chat completions API with streaming (SSE) support. 14 endpoints covering chat, sessions, config, status, models, usage, and webhooks. Any frontend built for the OpenAI API works with Sovrant.
@@ -218,7 +218,7 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
          │  └── MCP client (tool registration)            │
          │                                                │
          │  IRuntimeSessionPool  (one runtime/session_id) │
-         │  ISessionStore  (JSONL ~/.sovrant/sessions/)   │
+         │  ISessionStore  (SQLite ~/.sovrant/data/)       │
          └──────────┬──────────────────┬──────────────────┘
                     │                  │
          ┌──────────▼───────┐  ┌───────▼───────��──────────────┐
@@ -269,7 +269,7 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
 |---|---|
 | `Sovrant.Cli` | Interactive REPL and one-shot `prompt` CLI. Entry point for local use. |
 | `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus session management and live config. |
-| `Sovrant.Runtime` | Core agentic loop, session persistence (JSONL), permission system, tool executor, MCP client. |
+| `Sovrant.Runtime` | Core agentic loop, SQLite persistence layer (sessions, memory, audit, credentials, token usage), permission system, tool executor, MCP client. |
 | `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, native messages API. SmartRouter with health/latency/cost scoring. |
 | `Sovrant.Tools` | All 45 tool implementations (core + LSP + team + swarm + MCP + quality + skills). 32 built-in skill `.md` files. |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/clear`, `/session`, `/memory`, etc.). |
@@ -282,7 +282,7 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
 
 **Always streaming internally.** `ConversationRuntime` always sets `Stream: true` on every `MessagesRequest`. The server decides independently whether to forward chunks as SSE or buffer into a single JSON response. One code path in the agentic loop regardless of the client's preference.
 
-**One runtime per session.** The server keeps one `ConversationRuntime` alive per `session_id` in a `ConcurrentDictionary`. Each runtime holds its own message history in memory, loaded from JSONL on first access.
+**One runtime per session.** The server keeps one `ConversationRuntime` alive per `session_id` in a `ConcurrentDictionary`. Each runtime holds its own message history in memory, loaded from SQLite on first access.
 
 **SmartRouter with health fallback.** All LLM calls go through `ISmartRouter`. On startup it pings every configured provider and scores them by latency, cost, and error rate. If all providers fail the startup ping, the router falls back to the configured list rather than refusing to start.
 
@@ -499,7 +499,7 @@ Define evaluation suites as JSON files in `.sovrant/evals/`. Run them from the C
 
 - **pass@1** — did the first attempt pass?
 - **pass@k** — did any of k attempts pass? (configurable via `attempts` per eval)
-- Trend tracking: results persisted to `~/.sovrant/evals/results/` for historical comparison
+- Trend tracking: results persisted to `~/.sovrant/evals/results/` for historical comparison (SQLite tables ready for future migration)
 
 ### Usage
 
@@ -611,7 +611,7 @@ Any language server that speaks LSP over stdio can be plugged in.
 
 ## Session Persistence
 
-Sessions are stored as JSONL append-logs at `~/.sovrant/sessions/{id}.jsonl`.
+Sessions are stored in a SQLite database at `~/.sovrant/data/sovrant.db` with full-text search (FTS5) on message content. Override the path with `SOVRANT_DB_PATH`.
 
 ```bash
 # CLI: resume a session
@@ -621,7 +621,9 @@ dotnet run --project src/Sovrant.Cli -- --session my-project prompt "What did we
 { "session_id": "user-123", "messages": [...] }
 ```
 
-The server keeps one `ConversationRuntime` alive per `session_id` in an in-memory pool — history is available immediately without a disk read on every turn.
+The server keeps one `ConversationRuntime` alive per `session_id` in an in-memory pool — history is available immediately without a disk read on every turn. Set `SOVRANT_SESSION_JSONL=true` to also write sessions to legacy JSONL files during migration.
+
+For full details on the persistence architecture, schema, and security model, see [docs/persistence.md](docs/persistence.md).
 
 ---
 
@@ -675,6 +677,10 @@ Place a markdown file at `.sovrant/commands/{name}.md`. Invoking `/{name}` in th
 | `SOVRANT_LOG_CONSOLE` | No | Write logs to stdout (default: `true`). Set to `false` to silence. |
 | `SOVRANT_LOG_FORMAT` | No | `text` (default) or `json` (structured) |
 | `SOVRANT_RATE_LIMIT_RPM` | No | Per-session rate limit: requests per minute (default: `60`). Returns `429` when exceeded. |
+| `SOVRANT_DB_PATH` | No | SQLite database path (default: `~/.sovrant/data/sovrant.db`) |
+| `SOVRANT_USER_ID` | No | User identity for session ownership and audit (default: OS username) |
+| `SOVRANT_SESSION_JSONL` | No | Set to `true` to also write sessions to legacy JSONL files (dual-write) |
+| `SOVRANT_AUDIT_JSONL` | No | Set to `true` to also write audit events to legacy JSONL files (dual-write) |
 | `SOVRANT_MCP_TOKEN` | No | Required bearer token for MCP server mode. Unset = no auth. |
 | `SOVRANT_MCP_TOOLS` | No | Comma-separated allow-list of tools to expose in MCP server mode. Unset = all tools. |
 
@@ -761,7 +767,7 @@ Replace `-r linux-x64` with `-r win-x64` in all commands above.
 ## Tests
 
 ```bash
-dotnet test Sovrant.slnx   # 879 tests across 9 projects
+dotnet test Sovrant.slnx   # 910 tests across 9 projects
 ```
 
 | Project | Tests |

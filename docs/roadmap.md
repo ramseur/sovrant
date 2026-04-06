@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-05 (Phase 31 Server Response Caching complete)
+**Last updated:** 2026-04-05 (Phase 32 SQLite Persistence Layer complete)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -12,11 +12,12 @@ This document tracks planned features, architectural decisions, and the reasonin
 The engine is fully functional for individual and small-team use:
 
 - **45 tools** across 8 categories (file, shell, web, task, agent, team, MCP, LSP)
-- **879 tests** across 9 projects, 0 warnings
+- **910 tests** across 9 projects, 0 warnings
 - **28 server endpoints** (OpenAI-compatible chat, sessions, config, usage, webhooks, export, registry discovery, swarm, evals)
 - CLI REPL, one-shot `prompt`, CI mode (`--ci`), MCP server mode (`mcp-server`)
 - Agentic loop with up to 20 tool rounds per turn
-- JSONL session persistence with in-memory pool (one `ConversationRuntime` per `session_id`)
+- SQLite persistence layer with 5 versioned migrations, 26+ tables (Phase 32 ✅)
+- Session, memory, audit, credential, and token usage stores backed by SQLite
 - SmartRouter with health/latency/cost scoring across multiple providers
 - Multi-provider support: OpenAI, Gemini, Ollama, native messages API, OpenAI Responses API (`LLM_WEB_SEARCH=true`)
 - Per-session config overlay, rate limiting, token usage tracking (Phase 10 ✅)
@@ -79,12 +80,12 @@ The engine is fully functional for individual and small-team use:
 | 29 | Swarm orchestrator (auto-decomposition, DAG execution, file locking, quality gate, 62 tests) |
 | 30 | Registry discovery API (tools, skills, agent templates — 11 tests) |
 | 31 | Server response caching & cache infrastructure (in-memory, ETag, TTL — 32 tests) |
+| 32 | SQLite persistence layer — 5 migrations, 26+ tables, 7 SQLite stores, dual-write decorators, graceful error handling (31 tests) |
 
 ### Still pending
 
 | Gap | Phase | Priority |
 |---|---|---|
-| Persistence layer — SQLite (config, sessions, audit, credentials, usage, user identity) | Phase 32 | **Next** |
 | Workspaces (personal + team areas, isolated memory/config/sessions) | Phase 33 | Medium–High |
 | Projects (workspace-scoped containers for isolated work) | Phase 34 | Medium |
 | User management API (CRUD users, issue/revoke tokens, per-user data views) | Phase 35 | Medium |

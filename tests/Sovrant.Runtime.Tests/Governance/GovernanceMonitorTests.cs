@@ -3,26 +3,24 @@ using Sovrant.Runtime.Governance;
 
 namespace Sovrant.Runtime.Tests.Governance;
 
-public sealed class GovernanceMonitorTests : IDisposable
+public sealed class GovernanceMonitorTests
 {
-    private GovernanceMonitor CreateMonitor(GovernanceLevel level = GovernanceLevel.Strict)
+    private static GovernanceMonitor CreateMonitor(GovernanceLevel level = GovernanceLevel.Strict)
     {
         var config = new GovernanceConfig
         {
             GovernanceLevelName = level.ToString(),
             AuditLog = false, // Disable file I/O in tests
         };
-        return new GovernanceMonitor(config, NullLogger<GovernanceMonitor>.Instance);
+        return new GovernanceMonitor(config, NullAuditStore.Instance, NullLogger<GovernanceMonitor>.Instance);
     }
-
-    public void Dispose() { /* monitors are lightweight */ }
 
     // --- Pre-execution: Dangerous commands ---
 
     [Fact]
     public async Task Pre_DangerousCommand_Strict_Blocks()
     {
-        using var monitor = CreateMonitor(GovernanceLevel.Strict);
+        var monitor = CreateMonitor(GovernanceLevel.Strict);
         var ctx = new GovernanceContext(GovernancePhase.Pre, "Bash", ToolInput: "rm -rf /");
         var verdict = await monitor.EvaluateAsync(ctx);
 
@@ -33,7 +31,7 @@ public sealed class GovernanceMonitorTests : IDisposable
     [Fact]
     public async Task Pre_DangerousCommand_Standard_Warns()
     {
-        using var monitor = CreateMonitor(GovernanceLevel.Standard);
+        var monitor = CreateMonitor(GovernanceLevel.Standard);
         var ctx = new GovernanceContext(GovernancePhase.Pre, "Bash", ToolInput: "rm -rf /");
         var verdict = await monitor.EvaluateAsync(ctx);
 
@@ -44,7 +42,7 @@ public sealed class GovernanceMonitorTests : IDisposable
     [Fact]
     public async Task Pre_DangerousCommand_Minimal_Allows()
     {
-        using var monitor = CreateMonitor(GovernanceLevel.Minimal);
+        var monitor = CreateMonitor(GovernanceLevel.Minimal);
         var ctx = new GovernanceContext(GovernancePhase.Pre, "Bash", ToolInput: "rm -rf /");
         var verdict = await monitor.EvaluateAsync(ctx);
 
@@ -54,7 +52,7 @@ public sealed class GovernanceMonitorTests : IDisposable
     [Fact]
     public async Task Pre_SafeCommand_Allows()
     {
-        using var monitor = CreateMonitor(GovernanceLevel.Strict);
+        var monitor = CreateMonitor(GovernanceLevel.Strict);
         var ctx = new GovernanceContext(GovernancePhase.Pre, "Bash", ToolInput: "ls -la");
         var verdict = await monitor.EvaluateAsync(ctx);
 
@@ -66,7 +64,7 @@ public sealed class GovernanceMonitorTests : IDisposable
     [Fact]
     public async Task Pre_ProtectedFile_Strict_Blocks()
     {
-        using var monitor = CreateMonitor(GovernanceLevel.Strict);
+        var monitor = CreateMonitor(GovernanceLevel.Strict);
         var ctx = new GovernanceContext(GovernancePhase.Pre, "Edit", FilePath: ".editorconfig");
         var verdict = await monitor.EvaluateAsync(ctx);
 
@@ -77,7 +75,7 @@ public sealed class GovernanceMonitorTests : IDisposable
     [Fact]
     public async Task Pre_ProtectedFile_Standard_Warns()
     {
-        using var monitor = CreateMonitor(GovernanceLevel.Standard);
+        var monitor = CreateMonitor(GovernanceLevel.Standard);
         var ctx = new GovernanceContext(GovernancePhase.Pre, "Edit", FilePath: ".editorconfig");
         var verdict = await monitor.EvaluateAsync(ctx);
 
@@ -87,7 +85,7 @@ public sealed class GovernanceMonitorTests : IDisposable
     [Fact]
     public async Task Pre_RegularFile_Allows()
     {
-        using var monitor = CreateMonitor(GovernanceLevel.Strict);
+        var monitor = CreateMonitor(GovernanceLevel.Strict);
         var ctx = new GovernanceContext(GovernancePhase.Pre, "Edit", FilePath: "src/Foo.cs");
         var verdict = await monitor.EvaluateAsync(ctx);
 
@@ -99,7 +97,7 @@ public sealed class GovernanceMonitorTests : IDisposable
     [Fact]
     public async Task Pre_GitCommit_Strict_Warns()
     {
-        using var monitor = CreateMonitor(GovernanceLevel.Strict);
+        var monitor = CreateMonitor(GovernanceLevel.Strict);
         var ctx = new GovernanceContext(GovernancePhase.Pre, "Bash", ToolInput: "git commit -m 'test'");
         var verdict = await monitor.EvaluateAsync(ctx);
 
@@ -112,7 +110,7 @@ public sealed class GovernanceMonitorTests : IDisposable
     [Fact]
     public async Task Post_SecretInOutput_Strict_Warns()
     {
-        using var monitor = CreateMonitor(GovernanceLevel.Strict);
+        var monitor = CreateMonitor(GovernanceLevel.Strict);
         var ctx = new GovernanceContext(GovernancePhase.Post, "Bash",
             ToolOutput: "Found key: AKIAIOSFODNN7EXAMPLE");
         var verdict = await monitor.EvaluateAsync(ctx);
@@ -124,7 +122,7 @@ public sealed class GovernanceMonitorTests : IDisposable
     [Fact]
     public async Task Post_SecretInInput_Strict_Warns()
     {
-        using var monitor = CreateMonitor(GovernanceLevel.Strict);
+        var monitor = CreateMonitor(GovernanceLevel.Strict);
         var ctx = new GovernanceContext(GovernancePhase.Post, "Bash",
             ToolInput: "echo AKIAIOSFODNN7EXAMPLE");
         var verdict = await monitor.EvaluateAsync(ctx);
@@ -136,7 +134,7 @@ public sealed class GovernanceMonitorTests : IDisposable
     [Fact]
     public async Task Post_CleanOutput_Allows()
     {
-        using var monitor = CreateMonitor(GovernanceLevel.Strict);
+        var monitor = CreateMonitor(GovernanceLevel.Strict);
         var ctx = new GovernanceContext(GovernancePhase.Post, "Bash",
             ToolOutput: "Build succeeded.");
         var verdict = await monitor.EvaluateAsync(ctx);
@@ -147,7 +145,7 @@ public sealed class GovernanceMonitorTests : IDisposable
     [Fact]
     public async Task Post_Secret_Minimal_Allows()
     {
-        using var monitor = CreateMonitor(GovernanceLevel.Minimal);
+        var monitor = CreateMonitor(GovernanceLevel.Minimal);
         var ctx = new GovernanceContext(GovernancePhase.Post, "Bash",
             ToolOutput: "AKIAIOSFODNN7EXAMPLE");
         var verdict = await monitor.EvaluateAsync(ctx);
@@ -160,10 +158,24 @@ public sealed class GovernanceMonitorTests : IDisposable
     [Fact]
     public async Task Pre_NonShellTool_Allows()
     {
-        using var monitor = CreateMonitor(GovernanceLevel.Strict);
+        var monitor = CreateMonitor(GovernanceLevel.Strict);
         var ctx = new GovernanceContext(GovernancePhase.Pre, "Glob", ToolInput: "**/*.cs");
         var verdict = await monitor.EvaluateAsync(ctx);
 
         Assert.Equal(GovernanceAction.Allow, verdict.Action);
     }
+}
+
+/// <summary>No-op audit store for unit tests.</summary>
+internal sealed class NullAuditStore : IAuditStore
+{
+    public static readonly NullAuditStore Instance = new();
+
+    public Task LogGovernanceEventAsync(GovernanceContext context, GovernanceVerdict verdict, CancellationToken ct = default)
+        => Task.CompletedTask;
+
+    public Task LogBashCommandAsync(string command, string? sessionId, int exitCode, CancellationToken ct = default)
+        => Task.CompletedTask;
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-05 (Phase 28 Swarm Orchestrator + Phase 27 Eval Framework — 45 tools, 836 tests)
+**Last updated:** 2026-04-06 (Phase 32 SQLite Persistence Layer — 45 tools, 910 tests)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -14,7 +14,7 @@
 | REPL loop (`sovrant`) | ✅ Working | Slash commands, history, Spectre.Console rendering |
 | SmartRouter | ✅ Working | Pings providers on startup, routes by latency/cost/health. Falls back to configured providers when all fail startup ping (WSL/CI DNS resilience). |
 | Agentic loop | ✅ Working | Multi-turn tool use, up to 20 rounds per turn |
-| Session persistence (JSONL) | ✅ Working | `~/.sovrant/sessions/{id}.jsonl` append-log |
+| Session persistence (SQLite) | ✅ Working | `~/.sovrant/data/sovrant.db` — sessions + session_entries tables with FTS5 search. Legacy JSONL dual-write via `SOVRANT_SESSION_JSONL=true`. |
 | Session resumption (`--session <id>`) | ✅ Working | History replayed correctly across separate process invocations |
 | Permission system | ✅ Working | `bypassPermissions` / `dontAsk` / `default` / `plan` all functional |
 | SSE streaming | ✅ Working | Text chunks stream to console in real time |
@@ -32,7 +32,8 @@
 | Session export | ✅ Implemented | `GET /v1/sessions/{id}/export` — markdown rendering of full session history |
 | MCP server mode | ✅ Implemented | `sovrant mcp-server` — stdio transport (JSON-RPC 2.0). Bridges all `IToolRegistry` tools + synthetic `chat` tool + session/config resources to MCP protocol. Zero overlap with HTTP server. Bearer token auth via `SOVRANT_MCP_TOKEN` + `--token`. |
 | Dynamic MCP Tool Proxy (`MCPTool`) | ✅ Implemented | Calls any tool on any connected MCP server dynamically at execution time — no static registration needed. Optional `server` param; searches all clients when omitted. |
-| Unit test suite | ✅ 836/836 passing | Api(28) + Runtime(302) + Server(73) + Lsp(26) + Tools(174) + Commands(42) + McpServer(30) + Agents(160) + Integration(1) |
+| SQLite persistence layer | ✅ Implemented | `IStorageProvider` + `SqliteStorageProvider` + 5 versioned migrations (26+ tables). Stores: sessions, memory, audit, credentials, token usage. Schema pre-built for Phases 33-37. See [persistence.md](persistence.md). |
+| Unit test suite | ✅ 910/910 passing | Api(28) + Runtime(348) + Server(101) + Lsp(26) + Tools(174) + Commands(42) + McpServer(30) + Agents(160) + Integration(1) |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |

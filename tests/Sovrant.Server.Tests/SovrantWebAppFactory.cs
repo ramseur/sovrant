@@ -1,11 +1,15 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Sovrant.Api.Providers;
 using Sovrant.Api.Routing;
 using Sovrant.Api.Types;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Session;
+using Sovrant.Runtime.Governance;
+using Sovrant.Runtime.Storage;
 
 namespace Sovrant.Server.Tests;
 
@@ -32,8 +36,26 @@ public sealed class SovrantWebAppFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("LLM_API_KEY", "fake-key");
         Environment.SetEnvironmentVariable("LLM_BASE_URL", "https://api.example.com/v1");
 
+        // Use a unique named in-memory DB per factory instance so tests are isolated
+        // but all connections within one test share the same in-memory DB via Cache=Shared.
+        var testDbName = $"file:sovrant_test_{Guid.NewGuid():N}?mode=memory&cache=shared";
+
         builder.ConfigureServices(services =>
         {
+            // Replace only the concrete SqliteStorageProvider with a test-isolated instance.
+            // The IStorageProvider and ISqliteConnectionFactory forward-registrations from
+            // AddSovrantRuntime will resolve against this replacement automatically.
+            services.RemoveAll(typeof(SqliteStorageProvider));
+            services.AddSingleton(sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<SqliteStorageProvider>>();
+                return new SqliteStorageProvider(logger, dbPath: testDbName);
+            });
+
+            // Use no-op audit store (avoids needing DB tables for audit in simple tests).
+            services.RemoveAll(typeof(IAuditStore));
+            services.AddSingleton<IAuditStore>(new FakeAuditStore());
+
             // Replace ISessionStore with in-memory fake.
             Replace<ISessionStore>(services, SessionStore);
 
@@ -51,6 +73,14 @@ public sealed class SovrantWebAppFactory : WebApplicationFactory<Program>
         if (existing is not null)
             services.Remove(existing);
         services.AddSingleton(typeof(T), implementation);
+    }
+
+    private static void ReplaceFactory<T>(IServiceCollection services, Func<IServiceProvider, T> factory) where T : class
+    {
+        // Remove all registrations for the service type (concrete + interface).
+        services.RemoveAll(typeof(T));
+        services.RemoveAll(typeof(SqliteStorageProvider));
+        services.AddSingleton(typeof(T), sp => factory(sp)!);
     }
 }
 
@@ -126,6 +156,18 @@ public sealed class FakeLlmProvider : ILlmProvider
 
     public IAsyncEnumerable<StreamEvent> StreamAsync(MessagesRequest request, CancellationToken ct = default) =>
         throw new NotImplementedException("Tests should not reach the LLM provider.");
+}
+
+/// <summary>No-op audit store for server tests.</summary>
+public sealed class FakeAuditStore : IAuditStore
+{
+    public Task LogGovernanceEventAsync(GovernanceContext context, GovernanceVerdict verdict, CancellationToken ct = default)
+        => Task.CompletedTask;
+
+    public Task LogBashCommandAsync(string command, string? sessionId, int exitCode, CancellationToken ct = default)
+        => Task.CompletedTask;
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }
 
 /// <summary>Fake conversation runtime that yields a canned response.</summary>

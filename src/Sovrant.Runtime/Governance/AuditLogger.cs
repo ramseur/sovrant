@@ -8,7 +8,7 @@ namespace Sovrant.Runtime.Governance;
 /// <c>~/.sovrant/audit/governance.jsonl</c> and bash commands to
 /// <c>~/.sovrant/audit/bash-commands.jsonl</c>.
 /// </summary>
-internal sealed class AuditLogger : IDisposable
+internal sealed class AuditLogger : IAuditStore, IDisposable
 {
     private static readonly string AuditDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
@@ -17,8 +17,8 @@ internal sealed class AuditLogger : IDisposable
     private readonly SemaphoreSlim _lock = new(1, 1);
     private bool _disposed;
 
-    /// <summary>Logs a governance event (verdict) to the governance audit log.</summary>
-    internal async Task LogGovernanceEventAsync(
+    /// <inheritdoc />
+    public async Task LogGovernanceEventAsync(
         GovernanceContext context,
         GovernanceVerdict verdict,
         CancellationToken ct = default)
@@ -39,8 +39,8 @@ internal sealed class AuditLogger : IDisposable
         await AppendAsync("governance.jsonl", entry, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Logs a bash command execution to the bash audit log.</summary>
-    internal async Task LogBashCommandAsync(
+    /// <inheritdoc />
+    public async Task LogBashCommandAsync(
         string command,
         string? sessionId,
         int exitCode,
@@ -81,5 +81,11 @@ internal sealed class AuditLogger : IDisposable
         if (_disposed) return;
         _disposed = true;
         _lock.Dispose();
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 }

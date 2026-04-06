@@ -11,9 +11,9 @@ namespace Sovrant.Commands.Commands;
 public sealed class EvalCommand : ISlashCommand
 {
     private readonly IEvalRunner _runner;
-    private readonly EvalResultStore _resultStore;
+    private readonly IEvalResultStore _resultStore;
 
-    public EvalCommand(IEvalRunner runner, EvalResultStore resultStore)
+    public EvalCommand(IEvalRunner runner, IEvalResultStore resultStore)
     {
         _runner = runner;
         _resultStore = resultStore;

@@ -26,7 +26,7 @@ internal static class EvalRoutes
         });
 
         // GET /v1/evals/{suiteName}/history — get trend data
-        app.MapGet("/v1/evals/{suiteName}/history", (string suiteName, EvalResultStore resultStore) =>
+        app.MapGet("/v1/evals/{suiteName}/history", (string suiteName, IEvalResultStore resultStore) =>
         {
             var history = resultStore.LoadHistory(suiteName);
             return Results.Ok(history);

@@ -6,14 +6,14 @@ namespace Sovrant.Runtime.Governance;
 /// Aggregates all governance rules (secret detection, dangerous commands, config protection)
 /// and evaluates tool operations. Respects the configured <see cref="GovernanceLevel"/>.
 /// </summary>
-public sealed partial class GovernanceMonitor : IGovernanceMonitor, IDisposable
+public sealed partial class GovernanceMonitor : IGovernanceMonitor
 {
     private readonly GovernanceConfig _config;
     private readonly GovernanceLevel _level;
     private readonly SecretDetector _secretDetector;
     private readonly DangerousCommandDetector _commandDetector;
     private readonly ConfigProtectionRule _configProtection;
-    private readonly AuditLogger _auditLogger;
+    private readonly IAuditStore _auditStore;
     private readonly ILogger<GovernanceMonitor> _logger;
 
     // Tool names that execute shell commands
@@ -37,16 +37,16 @@ public sealed partial class GovernanceMonitor : IGovernanceMonitor, IDisposable
     [LoggerMessage(Level = LogLevel.Debug, Message = "Governance audit: {Rule} — {Reason} (tool={ToolName})")]
     private static partial void LogAudit(ILogger logger, string rule, string reason, string toolName);
 
-    public GovernanceMonitor(GovernanceConfig config, ILogger<GovernanceMonitor> logger)
+    public GovernanceMonitor(GovernanceConfig config, IAuditStore auditStore, ILogger<GovernanceMonitor> logger)
     {
         ArgumentNullException.ThrowIfNull(config);
         _config = config;
         _level = config.Level;
         _logger = logger;
+        _auditStore = auditStore;
         _secretDetector = new SecretDetector(config.SecretPatterns);
         _commandDetector = new DangerousCommandDetector(config.BlockedCommands);
         _configProtection = new ConfigProtectionRule(config.ProtectedFiles);
-        _auditLogger = new AuditLogger();
     }
 
     /// <inheritdoc/>
@@ -63,7 +63,7 @@ public sealed partial class GovernanceMonitor : IGovernanceMonitor, IDisposable
         // Audit logging (if enabled)
         if (_config.AuditLog && verdict.Action != GovernanceAction.Allow)
         {
-            await _auditLogger.LogGovernanceEventAsync(context, verdict, ct).ConfigureAwait(false);
+            await _auditStore.LogGovernanceEventAsync(context, verdict, ct).ConfigureAwait(false);
         }
 
         // Log bash commands (post-execution audit)
@@ -72,7 +72,7 @@ public sealed partial class GovernanceMonitor : IGovernanceMonitor, IDisposable
             ShellTools.Contains(context.ToolName) &&
             !string.IsNullOrEmpty(context.ToolInput))
         {
-            await _auditLogger.LogBashCommandAsync(
+            await _auditStore.LogBashCommandAsync(
                 context.ToolInput,
                 context.SessionId,
                 exitCode: 0, // We don't have exit code in this context; log as 0 for successful execution
@@ -155,5 +155,4 @@ public sealed partial class GovernanceMonitor : IGovernanceMonitor, IDisposable
         return GovernanceVerdict.Allowed;
     }
 
-    public void Dispose() => _auditLogger.Dispose();
 }

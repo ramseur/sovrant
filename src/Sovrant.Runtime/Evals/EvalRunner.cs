@@ -12,10 +12,10 @@ namespace Sovrant.Runtime.Evals;
 public sealed partial class EvalRunner : IEvalRunner
 {
     private readonly ISmartRouter _router;
-    private readonly EvalResultStore _resultStore;
+    private readonly IEvalResultStore _resultStore;
     private readonly ILogger<EvalRunner> _logger;
 
-    public EvalRunner(ISmartRouter router, EvalResultStore resultStore, ILogger<EvalRunner> logger)
+    public EvalRunner(ISmartRouter router, IEvalResultStore resultStore, ILogger<EvalRunner> logger)
     {
         _router = router;
         _resultStore = resultStore;

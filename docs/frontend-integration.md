@@ -298,7 +298,7 @@ const sessionIds = await client.listSessions();
 // Get session details (history, token totals)
 const session = await client.getSession("session-abc");
 
-// Delete a session (evicts from pool + deletes JSONL)
+// Delete a session (evicts from pool + removes from database)
 await client.deleteSession("session-abc");
 
 // Export session as markdown

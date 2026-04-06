@@ -66,7 +66,7 @@ The SmartRouter routes each LLM call across configured providers (OpenAI-compati
 | **Desktop app** | ❌ | ❌ | ✅ Tauri (beta) | ❌ |
 | **Web UI** | ✅ claude.ai/code | ❌ | ✅ (beta) | ❌ (roadmap frontend SDK) |
 | **Remote server mode** | ❌ | ❌ | ✅ | ✅ |
-| **Session persistence** | Managed cloud | None | SQLite | JSONL (file-based) |
+| **Session persistence** | Managed cloud | None | SQLite | SQLite (Phase 32) |
 | **Session resumption** | ✅ | ❌ | ✅ | ✅ |
 | **Tool count** | ~40 | ~40 (inherited) | 20+ | 27 |
 | **LSP integration** | ❌ | ❌ | ✅ 20+ languages | ❌ (roadmap) |
@@ -113,9 +113,9 @@ Claude Code and OpenClaude are CLI-only tools — there is no HTTP server compon
 
 ### Session Persistence
 
-Claude Code's session state is managed in Anthropic's cloud — opaque, inaccessible to the user, and non-portable. OpenClaude has no session persistence. opencode uses SQLite, which is queryable and richer than flat files but adds a database dependency. Sovrant uses JSONL — human-readable, portable, appendable without locking, trivially processable with standard tooling, and easy to migrate or export.
+Claude Code's session state is managed in Anthropic's cloud — opaque, inaccessible to the user, and non-portable. OpenClaude has no session persistence. opencode uses SQLite. Sovrant now also uses SQLite (Phase 32) with FTS5 full-text search, 5 versioned migrations, and 26+ tables covering sessions, memory, audit, credentials, and token usage. Legacy JSONL dual-write is available via environment variables for migration.
 
-**opencode advantage** for complex querying; **Sovrant advantage** for simplicity, portability, and auditability.
+**Sovrant advantage:** same queryability as opencode, plus full-text search, multi-domain persistence (not just sessions), and a schema pre-built for workspace/project scoping.
 
 ### Tool Parity
 

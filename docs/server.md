@@ -47,6 +47,10 @@ The server binds to `http://127.0.0.1:5200` by default.
 | `SOVRANT_LOG_CONSOLE` | No | `true` | Write logs to stdout. Set to `false` to silence console output. |
 | `SOVRANT_LOG_FORMAT` | No | `text` | `text` (human-readable) or `json` (structured) |
 | `SOVRANT_RATE_LIMIT_RPM` | No | `60` | Per-session request rate limit (requests per minute). Keyed on `X-Session-Id` header or client IP. Returns `429` when exceeded. |
+| `SOVRANT_DB_PATH` | No | `~/.sovrant/data/sovrant.db` | SQLite database file path. CLI and server share the same database. |
+| `SOVRANT_USER_ID` | No | OS username | User identity for session ownership and audit logging |
+| `SOVRANT_SESSION_JSONL` | No | `false` | Set to `true` to also write sessions to legacy JSONL files (dual-write for migration) |
+| `SOVRANT_AUDIT_JSONL` | No | `false` | Set to `true` to also write audit events to legacy JSONL files (dual-write for migration) |
 
 ---
 
@@ -100,7 +104,7 @@ X-LLM-Base-Url: https://api.openai.com/v1
 ```
 
 - `model` — overrides server default for this request
-- `session_id` — if supplied the server resumes that JSONL session from `~/.sovrant/sessions/{id}.jsonl`
+- `session_id` — if supplied the server resumes that session from the SQLite database
 - `stream` — defaults to `true`; set `false` for a single JSON response
 - `X-LLM-Api-Key` header — per-request LLM API key; overrides the server's global `LLM_API_KEY` for this call only. The server never logs, persists, or includes this value in error responses.
 - `X-LLM-Base-Url` header — per-request LLM base URL; overrides the server's global `LLM_BASE_URL` for this call only. When combined with `X-LLM-Api-Key`, creates a request-scoped provider.
@@ -240,7 +244,7 @@ Returns `404` if the session does not exist.
 
 ### Sessions — `DELETE /v1/sessions/{id}`
 
-Permanently deletes the JSONL file for the session.
+Permanently deletes the session and all its entries from the database.
 
 ```json
 { "deleted": "abc123" }
@@ -303,7 +307,7 @@ Returns per-session token usage summary across all sessions.
 }
 ```
 
-Active sessions report live in-memory counters. Inactive sessions sum from persisted JSONL entries.
+Active sessions report live in-memory counters. Inactive sessions sum from persisted SQLite entries.
 
 ---
 
@@ -347,13 +351,11 @@ Valid values: `Default`, `AcceptEdits`, `BypassPermissions`, `DontAsk`, `Plan`
 
 ## Session Persistence
 
-Sessions are stored as JSONL append-logs at:
+Sessions are stored in the SQLite database at `~/.sovrant/data/sovrant.db` (override with `SOVRANT_DB_PATH`). Session entries include full-text search via FTS5.
 
-```
-~/.sovrant/sessions/{session_id}.jsonl
-```
+Pass `session_id` in the chat request body to resume a conversation. If the ID does not exist a new session is created with that ID. Set `SOVRANT_SESSION_JSONL=true` to also write to legacy JSONL files.
 
-Pass `session_id` in the chat request body to resume a conversation. If the ID does not exist a new session is created with that ID. Session files rotate at 256 KB (3 rotations kept).
+For the full persistence architecture, see [persistence.md](persistence.md).
 
 ---
 

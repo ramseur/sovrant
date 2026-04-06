@@ -7,7 +7,7 @@ namespace Sovrant.Runtime.Evals;
 /// Persists eval reports to <c>~/.sovrant/evals/results/</c> as JSON files
 /// for trend tracking over time.
 /// </summary>
-public sealed class EvalResultStore
+public sealed class EvalResultStore : IEvalResultStore
 {
     private static readonly JsonSerializerOptions s_jsonOptions = new()
     {

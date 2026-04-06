@@ -11,6 +11,7 @@ using Sovrant.Runtime.Evals;
 using Sovrant.Runtime.Memory;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Session;
+using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.Tools;
 
 namespace Sovrant.Runtime;
@@ -34,6 +35,11 @@ public static class ServiceCollectionExtensions
         // Register config as singleton
         services.AddSingleton(config);
 
+        // Storage provider (Phase 32) — SQLite by default.
+        services.AddSingleton<SqliteStorageProvider>();
+        services.AddSingleton<IStorageProvider>(sp => sp.GetRequiredService<SqliteStorageProvider>());
+        services.AddSingleton<ISqliteConnectionFactory>(sp => sp.GetRequiredService<SqliteStorageProvider>());
+
         // Caching infrastructure (Phase 31) — in-memory by default.
         services.AddSingleton<ICacheProvider, InMemoryCacheProvider>();
         services.AddSingleton<CacheInvalidator>();
@@ -52,6 +58,22 @@ public static class ServiceCollectionExtensions
         // Hook runner — loads hooks.json from disk on first construction.
         services.AddSingleton<IHookRunner, HookRunner>();
 
+        // Audit store — SQLite primary, optional JSONL dual-write.
+        services.AddSingleton<IAuditStore>(sp =>
+        {
+            var factory = sp.GetRequiredService<ISqliteConnectionFactory>();
+            IAuditStore primary = new SqliteAuditStore(factory);
+
+            if (string.Equals(
+                    Environment.GetEnvironmentVariable("SOVRANT_AUDIT_JSONL"),
+                    "true", StringComparison.OrdinalIgnoreCase))
+            {
+                return new DualWriteAuditStore(primary, new AuditLogger());
+            }
+
+            return primary;
+        });
+
         // Governance monitor — loads governance.json from disk.
         services.AddSingleton<GovernanceConfig>(_ => GovernanceConfig.Load());
         services.AddSingleton<IGovernanceMonitor, GovernanceMonitor>();
@@ -60,23 +82,43 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IToolRegistry, InMemoryToolRegistry>();
         services.AddSingleton<IToolExecutor, DefaultToolExecutor>();
 
-        // Session store
-        services.AddSingleton<ISessionStore, JsonlSessionStore>();
+        // Session store — SQLite primary, optional JSONL dual-write.
+        services.AddSingleton<ISessionStore>(sp =>
+        {
+            var factory = sp.GetRequiredService<ISqliteConnectionFactory>();
+            ISessionStore primary = new SqliteSessionStore(factory);
 
-        // Memory system (Phase 25)
-        services.AddSingleton<IMemoryStore, FileMemoryStore>();
+            if (string.Equals(
+                    Environment.GetEnvironmentVariable("SOVRANT_SESSION_JSONL"),
+                    "true", StringComparison.OrdinalIgnoreCase))
+            {
+                var jsonlLogger = sp.GetRequiredService<ILogger<JsonlSessionStore>>();
+                return new DualWriteSessionStore(primary, new JsonlSessionStore(jsonlLogger));
+            }
+
+            return primary;
+        });
+
+        // Token usage tracking
+        services.AddSingleton<ITokenUsageStore>(sp =>
+            new SqliteTokenUsageStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+
+        // Memory system (Phase 25) — SQLite-backed.
+        services.AddSingleton<IMemoryStore>(sp =>
+            new SqliteMemoryStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
         services.AddSingleton<MemoryInjector>();
         services.AddSingleton<SessionEndMemoryHandler>();
 
         // Eval framework (Phase 27)
-        services.AddSingleton<EvalResultStore>();
+        services.AddSingleton<IEvalResultStore, EvalResultStore>();
         services.AddSingleton<IEvalRunner, EvalRunner>();
 
         // MCP
         services.AddSingleton<IMcpClientFactory, SovrantMcpClientFactory>();
         services.AddSingleton<McpClientRegistry>();
         services.AddSingleton<McpToolRegistrar>();
-        services.AddSingleton<ICredentialStore, AesGcmCredentialStore>();
+        services.AddSingleton<ICredentialStore>(sp =>
+            new SqliteCredentialStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
         services.AddSingleton<McpOAuthService>();
 
         // Conversation runtime — transient so the pool creates independent instances per session.
@@ -97,6 +139,10 @@ public static class ServiceCollectionExtensions
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(services);
+
+        // Initialize SQLite storage (runs migrations).
+        var storage = services.GetRequiredService<IStorageProvider>();
+        await storage.InitializeAsync(ct).ConfigureAwait(false);
 
         var config = services.GetRequiredService<SovrantConfig>();
         if (config.McpServers.Count == 0)
