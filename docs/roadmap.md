@@ -2741,6 +2741,84 @@ Two-layer approach:
 
 ---
 
+### Phase 44 — Desktop Application (Cross-Platform)
+
+**Depends on:** Phase 14 (Frontend SDK — React hooks and TypeScript types), Phase 37 (User Management API), Phase 38 (Per-User Token Auth)
+**Difficulty:** High
+
+**Goal:** A native desktop application that mirrors the Sovrant web frontend's design and UX, built with .NET and a cross-platform UI framework. Windows is the primary target, with macOS and Linux support as a goal. The app connects to `Sovrant.Server` via the same HTTP/SSE API the web frontend uses, providing a first-class desktop experience with native OS integration.
+
+#### Framework Evaluation
+
+| Framework | Windows | macOS | Linux | Maturity | Notes |
+|---|---|---|---|---|---|
+| **Avalonia UI** | ✅ | ✅ | ✅ | Stable (11.x) | XAML-based, CSS-like styling, JetBrains uses it. Best Linux story. Single codebase → all 3 platforms. Hot reload, design-time preview. **Recommended.** |
+| **Uno Platform** | ✅ | ✅ | ✅ (via Skia/GTK) | Stable (5.x) | WinUI 3 / XAML dialect. Also targets web (WASM) and mobile. Heavier runtime. Good if we want web+desktop from one XAML codebase. |
+| **.NET MAUI** | ✅ | ✅ | ❌ | Stable but desktop-weak | Microsoft official. No Linux support. Desktop experience is secondary to mobile. Community frustration with bugs and slow fixes. |
+| **Blazor Hybrid** | ✅ | ✅ | ❌ (needs MAUI) | Stable | Renders web UI inside a native WebView. Could reuse the existing React/TypeScript frontend directly. But tied to MAUI for the host shell → no Linux. |
+| **Photino** | ✅ | ✅ | ✅ | Early | Lightweight native WebView wrapper. Tiny footprint. Could host the existing web frontend as-is. Less mature, small community. |
+
+**Recommendation: Avalonia UI** — best cross-platform coverage (including Linux), most active community for desktop-focused .NET apps, XAML familiarity for .NET developers, and proven at scale. Uno Platform is a strong alternative if we later want to share XAML between desktop and a WASM web target. Photino is worth revisiting if we decide to simply wrap the existing web frontend in a native shell instead of building native UI.
+
+#### Architecture
+
+```
+┌──────────────────────────────────────────┐
+│           Sovrant.Desktop                │
+│  (Avalonia UI — .NET 10)                 │
+│                                          │
+│  ┌────────────┐  ┌────────────────────┐  │
+│  │ Chat View  │  │ Session Sidebar    │  │
+│  │ (streaming │  │ (history, search,  │  │
+│  │  SSE text) │  │  resume, export)   │  │
+│  ├────────────┤  ├────────────────────┤  │
+│  │ Tool Panel │  │ Settings / Config  │  │
+│  │ (diffs,    │  │ (providers, keys,  │  │
+│  │  approvals)│  │  permissions)      │  │
+│  └────────────┘  └────────────────────┘  │
+│                                          │
+│  ┌──────────────────────────────────────┐│
+│  │ Sovrant.Desktop.Client               ││
+│  │ (HTTP + SSE → Sovrant.Server)        ││
+│  └──────────────────────────────────────┘│
+└──────────────────────────────────────────┘
+         │ HTTP/SSE
+         ▼
+┌──────────────────┐
+│ Sovrant.Server   │
+│ (existing API)   │
+└──────────────────┘
+```
+
+#### Items
+
+| # | Item | Description |
+|---|---|---|
+| 1 | Project scaffolding | Create `src/Sovrant.Desktop/` as an Avalonia MVVM app targeting .NET 10. Set up `Sovrant.Desktop.csproj` with Avalonia packages, MVVM toolkit, and shared types from `Sovrant.Api.Types`. |
+| 2 | Design system | Port the web frontend's visual language to Avalonia: color palette (teal accents, dark/light themes), typography, spacing, iconography. Create a shared `Styles/` directory with reusable control templates and theme resources. |
+| 3 | Chat view | Main conversation panel with streaming SSE text display, Markdown rendering, code block syntax highlighting, and auto-scroll. Match the web frontend's message bubble layout and turn separation. |
+| 4 | Inline diff view | Render Edit/Write tool inputs as side-by-side or unified diffs with red/green coloring. Approval buttons (Allow / Deny) for tools requiring confirmation. |
+| 5 | Tool confirmation dialogs | Native modal dialogs for tool approval — show tool name, parameters, and risk level. Replace the CLI's text-based confirmation with rich UI controls. |
+| 6 | Session sidebar | List previous sessions with search, resume, and export. Pull from `GET /v1/sessions` API. Show session metadata (date, token count, model). |
+| 7 | Settings panel | Provider configuration, API key management (stored securely via OS credential store — Windows Credential Manager / macOS Keychain / libsecret on Linux), permission mode selection, model picker. |
+| 8 | System tray integration | Minimize to system tray, global hotkey to summon, notification badges for long-running agent completions. Windows: NotifyIcon. macOS: NSStatusItem. Linux: StatusNotifierItem/AppIndicator. |
+| 9 | Auto-update mechanism | Check for new versions on startup, download and apply updates. Windows: MSIX or Squirrel.Windows. macOS: Sparkle. Linux: AppImage with built-in update check. |
+| 10 | Embedded server mode | Option to launch `Sovrant.Server` as a child process (bundled in the app) for zero-config single-user use. No separate server install required. Detect if a server is already running and connect to it instead. |
+| 11 | Packaging & distribution | Platform-specific installers: MSIX/WinGet (Windows), DMG (macOS), AppImage/Flatpak (Linux). CI pipeline for all three. Code signing for Windows and macOS. |
+
+#### Acceptance Criteria
+
+- Windows build runs on Windows 10+ with full feature parity to the web frontend
+- macOS and Linux builds launch and render correctly (may have reduced OS integration)
+- Chat streaming matches web frontend latency and visual fidelity
+- Tool confirmations work via native dialogs, not console prompts
+- Sessions persist and are resumable from the sidebar
+- API keys stored in OS credential store, never in plaintext config files
+- Single self-contained executable per platform (no .NET runtime install required)
+- `dotnet build` and `dotnet test` pass with no new warnings
+
+---
+
 ### Known Issues / Debt
 
 | Issue | Priority | Notes |
