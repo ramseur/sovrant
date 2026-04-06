@@ -2442,6 +2442,20 @@ CREATE INDEX idx_api_tokens_hash ON api_tokens(token_hash);
 9. Update `docs/server.md` with new endpoints
 10. Tests: user CRUD, token issuance/revocation, admin-only access, self-read, backward compat with `SOVRANT_TOKEN`, soft-delete preserves data
 
+#### Database Hardening (post-user-management)
+
+Once user creation and token-based auth are in place, harden the SQLite layer without disrupting server writes:
+
+| Hardening | Description |
+|---|---|
+| `secure_delete=ON` pragma | Zeros deleted rows on disk instead of leaving residual data. No write performance impact in WAL mode. |
+| File permissions on creation | `chmod 600` on Linux/macOS, restricted ACL on Windows for `sovrant.db` and `.keystore`. Prevents other OS users from reading the database. |
+| Connection-scoped read-only mode | Endpoints that only read (session list, usage, audit views) use a read-only SQLite connection. Write operations go through the normal connection. |
+| Token hash timing-safe comparison | Use `CryptographicOperations.FixedTimeEquals` for token hash lookups to prevent timing attacks. |
+| Session ownership enforcement | All session/audit/usage queries filter by the authenticated `user_id`. Admin role bypasses for management endpoints only. |
+
+These changes depend on Phase 35's token-to-user resolution being complete — without per-user auth, ownership enforcement has nothing to scope against.
+
 ---
 
 ### Phase 36 — Cost Tracking, Token Budgets & Model Pricing Registry ⏸️ Deferred (nice-to-have)

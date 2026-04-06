@@ -686,6 +686,26 @@ Place a markdown file at `.sovrant/commands/{name}.md`. Invoking `/{name}` in th
 
 ---
 
+## File Locations
+
+Sovrant stores all runtime data under `~/.sovrant/`. On each platform this resolves to:
+
+| Directory / File | Windows | Linux / macOS | Purpose |
+|---|---|---|---|
+| `~/.sovrant/` | `C:\Users\{user}\.sovrant\` | `/home/{user}/.sovrant/` | Root data directory |
+| `~/.sovrant/data/sovrant.db` | `C:\Users\{user}\.sovrant\data\sovrant.db` | `/home/{user}/.sovrant/data/sovrant.db` | SQLite database (sessions, audit, memory, credentials, evals, swarm) |
+| `~/.sovrant/logs/` | `C:\Users\{user}\.sovrant\logs\` | `/home/{user}/.sovrant/logs/` | Rolling application log files |
+| `~/.sovrant/credentials/.keystore` | `C:\Users\{user}\.sovrant\credentials\.keystore` | `/home/{user}/.sovrant/credentials/.keystore` | AES-256-GCM master key (auto-generated on first use) |
+| `~/.sovrant/sessions/` | `C:\Users\{user}\.sovrant\sessions\` | `/home/{user}/.sovrant/sessions/` | Legacy JSONL session files (only when `SOVRANT_SESSION_JSONL=true`) |
+| `~/.sovrant/settings.json` | `C:\Users\{user}\.sovrant\settings.json` | `/home/{user}/.sovrant/settings.json` | User settings |
+| `~/.sovrant/evals/` | `C:\Users\{user}\.sovrant\evals\` | `/home/{user}/.sovrant/evals/` | Eval suite definitions and results |
+
+> **Auto-creation:** The `data/` directory and SQLite database are created automatically on first run — no installer required. If directory creation fails (e.g. permissions), the error is logged and the application continues with degraded persistence.
+
+> **Override:** Set `SOVRANT_DB_PATH` to place the database anywhere (e.g. `D:\sovrant\data\sovrant.db`).
+
+---
+
 ## Production Deployment
 
 ### CLI — Native AOT
