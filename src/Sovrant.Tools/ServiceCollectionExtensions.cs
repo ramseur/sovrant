@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Sovrant.Lsp;
 using Sovrant.Runtime.Config;
 using Sovrant.Tools.Agent;
@@ -52,7 +53,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITool, WebFetchTool>();
 
         // Extended tools
-        services.AddSingleton<ITool, WebSearchTool>();
+        services.AddSingleton<ITool>(sp =>
+            new WebSearchTool(
+                sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetService<Sovrant.Api.Routing.ISmartRouter>(),
+                sp.GetService<Sovrant.Runtime.Config.SovrantConfig>()));
         services.AddSingleton<ITool, NotebookEditTool>();
         services.AddSingleton<ITool, ReplTool>();
         services.AddSingleton<ITool, PowerShellTool>();
@@ -101,8 +106,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITool>(sp =>
         {
             var registry = sp.GetRequiredService<Sovrant.Agents.Teams.ITeamRegistry>();
-            var agentSystem = sp.GetRequiredService<Sovrant.Agents.Abstractions.IMultiAgentSystem>();
             var factory = sp.GetRequiredService<Sovrant.Agents.Shared.SovrantAgentFactory>();
+
+            // SovrantAgentFactory always creates in-process SovrantAgent instances,
+            // so team delegation must use InProcessMultiAgentSystem regardless of
+            // the global AGENT_MODE setting (which may be ProcessBased).
+            var coordinator = sp.GetRequiredService<Sovrant.Agents.Shared.MultiAgentCoordinator>();
+            var workspace = sp.GetRequiredService<Sovrant.Agents.Shared.WorkspaceContext>();
+            var logger = sp.GetRequiredService<ILogger<Sovrant.Agents.Shared.InProcessMultiAgentSystem>>();
+            var agentSystem = new Sovrant.Agents.Shared.InProcessMultiAgentSystem(coordinator, workspace, logger);
+
             return new TeamDelegateTool(registry, agentSystem, member => factory.Create(member));
         });
 

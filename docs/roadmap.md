@@ -2889,6 +2889,193 @@ A later phase adds an integrated terminal panel within the desktop app (similar 
 
 ---
 
+## Phase 47 — Workspace Backup, Import & Export
+
+**Depends on:** Phase 35 (Workspaces), Phase 32 (SQLite persistence)
+
+**Goal:** Enable full backup, restore, import, and export of Sovrant workspaces so users can snapshot their work, migrate between machines, share workspace templates, and recover from data loss. A workspace export is a self-contained portable archive containing all sessions, memory, config, credentials (encrypted), agent templates, skills, and audit history.
+
+#### Motivation
+
+As workspaces accumulate sessions, learned patterns, custom agents, and configuration, they become valuable intellectual property. Users need to:
+- **Back up** before risky operations or machine migrations
+- **Restore** a workspace to a known-good state after corruption or accidental deletion
+- **Export** a workspace to share with teammates or move to another Sovrant instance
+- **Import** a workspace archive received from another user or CI pipeline
+- **Template** a workspace setup (agents, skills, config) for repeatable project bootstrapping
+
+#### Archive format
+
+A workspace export is a `.sovrant-workspace` file (ZIP archive) with a deterministic internal layout:
+
+```
+workspace-export/
+├── manifest.json          # version, workspace metadata, export timestamp, checksums
+├── sessions/              # session history (JSONL per session)
+│   ├── session-abc.jsonl
+│   └── session-def.jsonl
+├── memory/
+│   ├── summaries.json     # session summaries
+│   ├── patterns.json      # learned patterns
+│   └── instincts.json     # instinct rules
+├── config/
+│   ├── workspace.json     # workspace-level settings
+│   └── sovrant.json       # project-level config snapshot
+├── agents/                # custom agent templates (.md files)
+├── skills/                # custom skills (.md files)
+├── commands/              # custom slash commands (.md files)
+├── credentials.enc        # encrypted credential vault (AES-256-GCM, key derived from user passphrase)
+└── audit/
+    └── audit-log.jsonl    # governance and tool audit events
+```
+
+#### Core operations
+
+| Operation | CLI | API | Description |
+|---|---|---|---|
+| **Backup** | `sovrant backup [--output path]` | `POST /v1/workspaces/{id}/backup` | Full snapshot of current workspace to `.sovrant-workspace` archive |
+| **Restore** | `sovrant restore <archive>` | `POST /v1/workspaces/{id}/restore` | Replace current workspace data with archive contents |
+| **Export** | `sovrant export [--exclude sessions,audit]` | `POST /v1/workspaces/{id}/export` | Selective export with optional exclusions |
+| **Import** | `sovrant import <archive> [--merge\|--replace]` | `POST /v1/workspaces/import` | Import archive as new workspace or merge into existing |
+| **Schedule** | `/backup schedule daily 02:00` | `POST /v1/workspaces/{id}/backup/schedule` | Automated periodic backups with retention policy |
+
+#### Import modes
+
+- **Replace** (default for restore): Drops existing workspace data and replaces with archive contents. Destructive — requires confirmation.
+- **Merge**: Adds archive data alongside existing data. Sessions are deduplicated by ID. Config values from the archive override existing where keys collide. Memory entries are merged (no duplicates by content hash). Agent/skill/command files are overwritten if names match.
+
+#### Security
+
+- Credential vault is encrypted with AES-256-GCM; passphrase required on export and import
+- Archives can optionally exclude credentials entirely (`--no-credentials`)
+- Manifest includes SHA-256 checksums for every file — import validates integrity before applying
+- Audit log records all backup/restore/import/export operations with timestamp and user
+
+#### Scheduled backups
+
+- Configurable via workspace config or CLI slash command
+- Retention policy: keep last N backups, or backups from last N days
+- Storage: local filesystem (`~/.sovrant/backups/`) or configurable path
+- Backup rotation: oldest archives pruned when retention limit is exceeded
+
+#### Implementation plan
+
+1. Define `WorkspaceArchive` model — manifest schema, file layout, version numbering
+2. Implement `IWorkspaceExporter` — reads workspace data from SQLite/filesystem, writes ZIP archive
+3. Implement `IWorkspaceImporter` — reads ZIP archive, validates manifest checksums, applies data
+4. Implement credential encryption/decryption with passphrase-derived key (PBKDF2 + AES-256-GCM)
+5. Add `sovrant backup` / `sovrant restore` / `sovrant export` / `sovrant import` CLI subcommands
+6. Add `/backup` slash command for in-session backup/schedule management
+7. Add API endpoints: backup, restore, export, import (streaming file upload/download)
+8. Implement merge logic — session dedup, config merge, memory content-hash dedup
+9. Implement scheduled backup service with retention policy and rotation
+10. Tests: round-trip export→import, merge vs replace modes, credential encryption, checksum validation, scheduled backup trigger, retention pruning
+
+**Verification:**
+- `dotnet build` exits 0
+- `sovrant backup` produces a valid `.sovrant-workspace` archive
+- `sovrant restore <archive>` restores all workspace data
+- `sovrant export --exclude credentials` omits credential vault
+- `sovrant import <archive> --merge` merges without data loss
+- Round-trip: export workspace A → import into workspace B → B has identical data
+- Credential vault requires passphrase and is AES-256-GCM encrypted
+- Scheduled backup fires at configured time and prunes old archives
+
+---
+
+## Phase 48 — Intent-Aware Model Routing
+
+**Depends on:** Phase 8 (multi-provider), SmartRouter
+
+**Goal:** Automatically select the best LLM model for each turn based on the input's intent, complexity, and task type — without the user switching models manually. Simple questions route to fast/cheap models; complex reasoning, code generation, and multi-step planning route to high-capability models. Users can override with explicit model selection, but the default is intelligent automatic routing.
+
+#### Motivation
+
+Today the SmartRouter picks a provider based on latency, cost, and error rate — but it always uses the same model tier. Users must manually `/model <name>` to switch. In practice:
+- A simple "what time is it?" doesn't need Opus-class reasoning
+- A complex "refactor this module and write tests" benefits from the strongest model
+- Creative writing, code review, and data analysis have different optimal model tiers
+- Cost-conscious users want cheap models by default with automatic escalation for hard tasks
+
+Intent-aware routing solves this by classifying each input and routing to the appropriate model tier automatically.
+
+#### Core concepts
+
+- **Intent classifier** — lightweight local classifier (rule-based + optional small LLM call) that categorizes user input into intent classes: `simple_qa`, `code_generation`, `code_review`, `refactor`, `planning`, `creative`, `analysis`, `debugging`, `conversation`, `tool_heavy`
+- **Complexity estimator** — scores input complexity (0.0–1.0) based on token count, question depth, number of files referenced, presence of code blocks, multi-step indicators ("first...then...finally")
+- **Model tier mapping** — maps intent + complexity to model tiers: `fast` (Haiku-class), `standard` (Sonnet-class), `high` (Opus-class)
+- **Escalation** — if the model produces a low-confidence or incomplete response, automatically retry with a higher-tier model
+- **User override** — `/model <name>` pins to a specific model; `/model auto` re-enables intent routing
+- **Cost budget awareness** — if a cost budget is set (Phase 39), prefer cheaper models when budget is running low
+
+#### Routing rules (configurable)
+
+| Intent | Default tier | Escalation trigger |
+|---|---|---|
+| `simple_qa` | fast | N/A |
+| `conversation` | fast | Multi-turn depth > 5 |
+| `code_review` | standard | File count > 3 |
+| `code_generation` | standard | Complexity > 0.7 → high |
+| `refactor` | high | Always high |
+| `planning` | high | Always high |
+| `debugging` | standard | After 2 failed tool rounds → high |
+| `creative` | standard | Length > 2000 tokens → high |
+| `analysis` | standard | Data size indicators → high |
+| `tool_heavy` | standard | Tool round count > 5 → high |
+
+#### Configuration
+
+```json
+// .sovrant/routing.json
+{
+  "intent_routing": true,
+  "default_tier": "standard",
+  "tier_models": {
+    "fast": "claude-haiku-4-5",
+    "standard": "claude-sonnet-4-6",
+    "high": "claude-opus-4-6"
+  },
+  "escalation": true,
+  "max_escalations_per_turn": 1,
+  "custom_rules": [
+    { "pattern": "*.test.*", "tier": "standard" },
+    { "pattern": "security|vulnerability|CVE", "tier": "high" }
+  ]
+}
+```
+
+#### API surface
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/v1/config/routing` | GET/PUT | View or update intent routing configuration |
+| `/v1/chat/completions` | POST | Existing endpoint — adds `X-Model-Tier` response header showing which tier was selected |
+
+#### Implementation plan
+
+1. Define `IntentClass` enum and `IntentClassification` record (intent, complexity score, recommended tier)
+2. Implement `RuleBasedIntentClassifier` — keyword matching, regex patterns, structural analysis (code blocks, file references, question indicators)
+3. Implement `IModelTierResolver` — maps intent classification to concrete model name using tier config
+4. Integrate into `SmartRouter.RouteAsync` — classify intent before selecting provider, use tier to filter eligible providers
+5. Add `/model auto` support to `ModelCommand` — sets session config to use intent routing
+6. Add `X-Model-Tier` and `X-Intent-Class` response headers to chat completions endpoint
+7. Implement escalation logic in `ConversationRuntime.RunTurnAsync` — detect low-quality responses and retry with higher tier
+8. Add routing config file loading (`RoutingConfigLoader`)
+9. Add custom rule support (pattern-based tier overrides)
+10. CLI: show selected tier in token usage line (e.g., `(150↑ 200↓ tokens · standard)`)
+11. Tests: intent classification accuracy, tier selection, escalation triggers, user override, budget awareness
+
+**Verification:**
+- `dotnet build` exits 0
+- Simple questions route to fast tier, complex tasks route to high tier
+- `/model auto` enables intent routing; `/model claude-opus-4-6` pins to specific model
+- Escalation retries with higher tier on low-quality responses
+- `X-Model-Tier` header present in API responses
+- Custom routing rules override default tier mapping
+- Cost budget reduces tier preference when budget is low
+
+---
+
 ### Known Issues / Debt
 
 | Issue | Priority | Notes |

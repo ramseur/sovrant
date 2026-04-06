@@ -8,19 +8,19 @@ public abstract record SwarmEvent(string SwarmId, DateTimeOffset Timestamp)
         : SwarmEvent(SwarmId, DateTimeOffset.UtcNow);
 
     /// <summary>A task has started execution.</summary>
-    public sealed record TaskStarted(string SwarmId, string TaskId, string AgentName, int Wave)
+    public sealed record TaskStarted(string SwarmId, string TaskId, string AgentName, string TaskDescription, int Wave)
         : SwarmEvent(SwarmId, DateTimeOffset.UtcNow);
 
     /// <summary>A task completed successfully.</summary>
-    public sealed record TaskCompleted(string SwarmId, string TaskId, string Output, int TokensUsed)
+    public sealed record TaskCompleted(string SwarmId, string TaskId, string AgentName, string TaskDescription, string Output, int TokensUsed)
         : SwarmEvent(SwarmId, DateTimeOffset.UtcNow);
 
     /// <summary>A task failed.</summary>
-    public sealed record TaskFailed(string SwarmId, string TaskId, string Error, int RetryCount)
+    public sealed record TaskFailed(string SwarmId, string TaskId, string AgentName, string TaskDescription, string Error, int RetryCount)
         : SwarmEvent(SwarmId, DateTimeOffset.UtcNow);
 
     /// <summary>A file conflict was detected (task blocked by another task's lock).</summary>
-    public sealed record FileConflict(string SwarmId, string TaskId, string FilePath, string HeldByTaskId)
+    public sealed record FileConflict(string SwarmId, string TaskId, string AgentName, string FilePath, string HeldByTaskId, string HeldByAgentName)
         : SwarmEvent(SwarmId, DateTimeOffset.UtcNow);
 
     /// <summary>Token budget has been exceeded.</summary>

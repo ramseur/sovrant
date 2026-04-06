@@ -388,34 +388,40 @@ async Task RunReplAsync(IConversationRuntime runtime, SlashCommandDispatcher dis
         var line = input.Text.Trim();
         if (string.IsNullOrEmpty(line)) continue;
 
-        // Echo the user's input above the output area.
-        AnsiConsole.WriteLine();
+        // Echo the user's input with a blank line before the response.
         AnsiConsole.MarkupLine($"[bold cyan]{Markup.Escape(Environment.UserName)}:[/] {Markup.Escape(line.Contains('\n', StringComparison.Ordinal) ? line[..line.IndexOf('\n', StringComparison.Ordinal)] + "..." : line)}");
         AnsiConsole.WriteLine();
 
-        // Try to dispatch as a slash command first.
-        var cmdResult = await dispatcher.TryDispatchAsync(line, ct).ConfigureAwait(false);
-        if (cmdResult is not null)
+        try
         {
-            if (cmdResult.ShouldExit)
-                break;
-            if (cmdResult.ShouldClearHistory)
+            // Try to dispatch as a slash command first.
+            var cmdResult = await dispatcher.TryDispatchAsync(line, ct).ConfigureAwait(false);
+            if (cmdResult is not null)
             {
-                runtime.Reset();
-                AnsiConsole.Clear();
+                if (cmdResult.ShouldExit)
+                    break;
+                if (cmdResult.ShouldClearHistory)
+                {
+                    runtime.Reset();
+                    AnsiConsole.Clear();
+                }
+                if (cmdResult.Output is not null)
+                {
+                    AnsiConsole.WriteLine(cmdResult.Output);
+                    AnsiConsole.Write(new Rule().RuleStyle("grey dim"));
+                }
+                if (cmdResult.InjectAsUserMessage is not null)
+                    await RunTurnWithCancelAsync(runtime, cmdResult.InjectAsUserMessage, ct).ConfigureAwait(false);
+                continue;
             }
-            if (cmdResult.Output is not null)
-            {
-                AnsiConsole.WriteLine(cmdResult.Output);
-                AnsiConsole.WriteLine();
-            }
-            if (cmdResult.InjectAsUserMessage is not null)
-                await RunTurnWithCancelAsync(runtime, cmdResult.InjectAsUserMessage, ct).ConfigureAwait(false);
-            continue;
-        }
 
-        // Otherwise send to the LLM.
-        await RunTurnWithCancelAsync(runtime, line, ct).ConfigureAwait(false);
+            // Otherwise send to the LLM.
+            await RunTurnWithCancelAsync(runtime, line, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+        {
+            AnsiConsole.MarkupLine($"[red bold]Error:[/] [red]{Markup.Escape(ex.Message)}[/]");
+        }
     }
 
     // Ensure the cursor is on a clean line after the input box is cleared,
@@ -429,6 +435,11 @@ async Task RunTurnWithCancelAsync(IConversationRuntime runtime, string message, 
     using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(outerCt);
     using var escMonitor = new EscapeKeyMonitor(turnCts);
     using var spinner = new ThinkingSpinner();
+
+    // Show a read-only input box so the user knows they can press Escape.
+    // Render before the spinner so the cursor is positioned in the content
+    // area above the box — the spinner's \r writes stay above the box.
+    SovrantInputReader.RenderProcessingBox();
 
     spinner.Start();
     if (!Console.IsInputRedirected)
@@ -445,6 +456,7 @@ async Task RunTurnWithCancelAsync(IConversationRuntime runtime, string message, 
                 case RuntimeEvent.TextChunk { Text: var text }:
                     if (firstToken)
                     {
+                        SovrantInputReader.ClearProcessingBox();
                         await spinner.StopAsync().ConfigureAwait(false);
                         AnsiConsole.MarkupLine("[bold teal]Sovrant:[/]");
                         firstToken = false;
@@ -455,11 +467,11 @@ async Task RunTurnWithCancelAsync(IConversationRuntime runtime, string message, 
                 case RuntimeEvent.ToolUseRequested { ToolName: var toolName, Input: var input }:
                     if (firstToken)
                     {
+                        SovrantInputReader.ClearProcessingBox();
                         await spinner.StopAsync().ConfigureAwait(false);
                         firstToken = false;
                     }
-                    AnsiConsole.WriteLine();
-                    AnsiConsole.MarkupLine($"  [blue bold]\u2699 {Markup.Escape(toolName)}[/]");
+                    AnsiConsole.MarkupLine($"\n  [blue bold]\u2699 {Markup.Escape(toolName)}[/]");
                     if (DiffRenderer.IsFileModifyTool(toolName))
                         DiffRenderer.RenderToolInput(toolName, input);
                     break;
@@ -476,14 +488,14 @@ async Task RunTurnWithCancelAsync(IConversationRuntime runtime, string message, 
                     break;
 
                 case RuntimeEvent.TurnComplete { InputTokens: var inTok, OutputTokens: var outTok }:
-                    AnsiConsole.WriteLine();
-                    AnsiConsole.MarkupLine($"[grey dim]({inTok}\u2191 {outTok}\u2193 tokens)[/]");
+                    AnsiConsole.MarkupLine($"\n[grey dim]({inTok}\u2191 {outTok}\u2193 tokens)[/]");
                     AnsiConsole.Write(new Rule().RuleStyle("grey dim"));
                     break;
 
                 case RuntimeEvent.RuntimeError { Message: var msg }:
                     if (firstToken)
                     {
+                        SovrantInputReader.ClearProcessingBox();
                         await spinner.StopAsync().ConfigureAwait(false);
                         firstToken = false;
                     }
@@ -494,18 +506,19 @@ async Task RunTurnWithCancelAsync(IConversationRuntime runtime, string message, 
     }
     catch (OperationCanceledException) when (turnCts.IsCancellationRequested && !outerCt.IsCancellationRequested)
     {
+        SovrantInputReader.ClearProcessingBox();
         await spinner.StopAsync().ConfigureAwait(false);
-        AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine("[yellow][[Cancelled]][/]");
     }
     finally
     {
         await escMonitor.StopAsync().ConfigureAwait(false);
         if (firstToken)
+        {
+            SovrantInputReader.ClearProcessingBox();
             await spinner.StopAsync().ConfigureAwait(false);
+        }
     }
-
-    AnsiConsole.WriteLine();
 }
 
 async Task RunTurnAsync(IConversationRuntime runtime, string message, CancellationToken ct)
@@ -534,8 +547,7 @@ async Task RunTurnAsync(IConversationRuntime runtime, string message, Cancellati
                     await spinner.StopAsync().ConfigureAwait(false);
                     firstToken = false;
                 }
-                AnsiConsole.WriteLine();
-                AnsiConsole.MarkupLine($"  [blue bold]\u2699 {Markup.Escape(toolName)}[/]");
+                AnsiConsole.MarkupLine($"\n  [blue bold]\u2699 {Markup.Escape(toolName)}[/]");
                 if (DiffRenderer.IsFileModifyTool(toolName))
                     DiffRenderer.RenderToolInput(toolName, input);
                 break;
@@ -552,8 +564,7 @@ async Task RunTurnAsync(IConversationRuntime runtime, string message, Cancellati
                 break;
 
             case RuntimeEvent.TurnComplete { InputTokens: var inTok, OutputTokens: var outTok }:
-                AnsiConsole.WriteLine();
-                AnsiConsole.MarkupLine($"[grey dim]({inTok}\u2191 {outTok}\u2193 tokens)[/]");
+                AnsiConsole.MarkupLine($"\n[grey dim]({inTok}\u2191 {outTok}\u2193 tokens)[/]");
                 break;
 
             case RuntimeEvent.RuntimeError { Message: var msg }:
@@ -566,8 +577,6 @@ async Task RunTurnAsync(IConversationRuntime runtime, string message, Cancellati
                 break;
         }
     }
-
-    AnsiConsole.WriteLine();
 }
 
 static string Truncate(string text, int maxLen) =>

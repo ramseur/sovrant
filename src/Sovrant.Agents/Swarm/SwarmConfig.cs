@@ -41,6 +41,14 @@ public sealed class SwarmConfig
     public int TaskTimeoutSeconds { get; init; } = 300;
 
     /// <summary>
+    /// Permission mode for swarm agents. Controls whether agents auto-accept write
+    /// operations or prompt the user each time. Default is <c>"ask"</c> (prompt).
+    /// Options: <c>"ask"</c>, <c>"accept-edits"</c>, <c>"yolo"</c> (auto-accept all).
+    /// </summary>
+    [JsonPropertyName("permissions")]
+    public string Permissions { get; set; } = "ask";
+
+    /// <summary>
     /// Override agent templates per task type (e.g. <c>{ "code_change": "coder", "review": "security-reviewer" }</c>).
     /// </summary>
     [JsonPropertyName("templates")]

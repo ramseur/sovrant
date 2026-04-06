@@ -18,7 +18,7 @@ public sealed class HelpCommand : ISlashCommand
 
     // Category display order.
     private static readonly string[] s_categoryOrder =
-        ["Session", "Memory", "Config", "Advanced", "General"];
+        ["Session", "Memory", "Config", "Tools", "Advanced", "General"];
 
     public Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {
@@ -32,12 +32,15 @@ public sealed class HelpCommand : ISlashCommand
             .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
         var sb = new StringBuilder();
-        sb.AppendLine();
+        var first = true;
 
         foreach (var category in s_categoryOrder)
         {
             if (!grouped.TryGetValue(category, out var cmds))
                 continue;
+
+            if (!first) sb.AppendLine();
+            first = false;
 
             sb.AppendLine(CultureInfo.InvariantCulture, $"[bold]{category}[/]");
 
@@ -49,8 +52,6 @@ public sealed class HelpCommand : ISlashCommand
                 sb.AppendLine(CultureInfo.InvariantCulture,
                     $"  [teal]/{cmd.Name,-14}[/] {Markup.Escape(cmd.Description)}{aliases}");
             }
-
-            sb.AppendLine();
         }
 
         // Render via Spectre markup so colors work.

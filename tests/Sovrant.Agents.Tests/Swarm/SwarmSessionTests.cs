@@ -43,8 +43,8 @@ public class SwarmSessionTests : IDisposable
     {
         var swarmId = "test-swarm-2";
         await _session.RecordAsync(new SwarmEvent.PlanCreated(swarmId, 2, 1));
-        await _session.RecordAsync(new SwarmEvent.TaskStarted(swarmId, "t1", "coder", 0));
-        await _session.RecordAsync(new SwarmEvent.TaskCompleted(swarmId, "t1", "done", 500));
+        await _session.RecordAsync(new SwarmEvent.TaskStarted(swarmId, "t1", "coder", "Write the code", 0));
+        await _session.RecordAsync(new SwarmEvent.TaskCompleted(swarmId, "t1", "coder", "Write the code", "done", 500));
 
         var events = new List<SwarmEvent?>();
         await foreach (var e in _session.ReplayAsync(swarmId))
@@ -101,7 +101,7 @@ public class SwarmSessionTests : IDisposable
     public async Task RecordTaskFailed_Replays()
     {
         var swarmId = "test-swarm-3";
-        await _session.RecordAsync(new SwarmEvent.TaskFailed(swarmId, "t1", "timeout", 2));
+        await _session.RecordAsync(new SwarmEvent.TaskFailed(swarmId, "t1", "coder", "Write the code", "timeout", 2));
 
         var events = new List<SwarmEvent?>();
         await foreach (var e in _session.ReplayAsync(swarmId))
@@ -116,7 +116,7 @@ public class SwarmSessionTests : IDisposable
     public async Task RecordFileConflict_Replays()
     {
         var swarmId = "test-swarm-4";
-        await _session.RecordAsync(new SwarmEvent.FileConflict(swarmId, "t2", "/src/foo.cs", "t1"));
+        await _session.RecordAsync(new SwarmEvent.FileConflict(swarmId, "t2", "reviewer", "/src/foo.cs", "t1", "coder"));
 
         var events = new List<SwarmEvent?>();
         await foreach (var e in _session.ReplayAsync(swarmId))

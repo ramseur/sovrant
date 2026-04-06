@@ -92,17 +92,17 @@ public sealed class SwarmSession
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
 
-        // Discriminate by presence of unique properties
+        // Discriminate by presence of unique properties (check most-specific first)
         if (root.TryGetProperty("TaskCount", out _))
             return JsonSerializer.Deserialize<SwarmEvent.PlanCreated>(json, s_jsonOptions);
-        if (root.TryGetProperty("AgentName", out _))
-            return JsonSerializer.Deserialize<SwarmEvent.TaskStarted>(json, s_jsonOptions);
+        if (root.TryGetProperty("FilePath", out _))
+            return JsonSerializer.Deserialize<SwarmEvent.FileConflict>(json, s_jsonOptions);
         if (root.TryGetProperty("Output", out _))
             return JsonSerializer.Deserialize<SwarmEvent.TaskCompleted>(json, s_jsonOptions);
         if (root.TryGetProperty("Error", out _))
             return JsonSerializer.Deserialize<SwarmEvent.TaskFailed>(json, s_jsonOptions);
-        if (root.TryGetProperty("FilePath", out _))
-            return JsonSerializer.Deserialize<SwarmEvent.FileConflict>(json, s_jsonOptions);
+        if (root.TryGetProperty("Wave", out _))
+            return JsonSerializer.Deserialize<SwarmEvent.TaskStarted>(json, s_jsonOptions);
         if (root.TryGetProperty("Limit", out _))
             return JsonSerializer.Deserialize<SwarmEvent.BudgetExceeded>(json, s_jsonOptions);
         if (root.TryGetProperty("FinalStatus", out _))

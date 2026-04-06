@@ -24,22 +24,22 @@ internal sealed class CliSwarmProgressReporter : ISwarmProgressReporter
 
             case SwarmEvent.TaskStarted ts:
                 AnsiConsole.MarkupLine(string.Create(CultureInfo.InvariantCulture,
-                    $"  [blue]\u25b6[/] {Markup.Escape(ts.TaskId)} [grey]\u2192 {Markup.Escape(ts.AgentName)} (wave {ts.Wave})[/]"));
+                    $"  [blue]\u25b6[/] [bold]{Markup.Escape(ts.AgentName)}[/] [grey]{Markup.Escape(Truncate(ts.TaskDescription, 80))} (wave {ts.Wave})[/]"));
                 break;
 
             case SwarmEvent.TaskCompleted tc:
                 AnsiConsole.MarkupLine(string.Create(CultureInfo.InvariantCulture,
-                    $"  [green]\u2713[/] {Markup.Escape(tc.TaskId)} [grey]({tc.TokensUsed} tokens)[/]"));
+                    $"  [green]\u2713[/] [bold]{Markup.Escape(tc.AgentName)}[/] [grey]{Markup.Escape(Truncate(tc.TaskDescription, 60))} ({tc.TokensUsed} tokens)[/]"));
                 break;
 
             case SwarmEvent.TaskFailed tf:
                 AnsiConsole.MarkupLine(string.Create(CultureInfo.InvariantCulture,
-                    $"  [red]\u2717[/] {Markup.Escape(tf.TaskId)} [grey](attempt {tf.RetryCount})[/]: {Markup.Escape(tf.Error)}"));
+                    $"  [red]\u2717[/] [bold]{Markup.Escape(tf.AgentName)}[/] [grey]{Markup.Escape(Truncate(tf.TaskDescription, 60))} (attempt {tf.RetryCount})[/]: {Markup.Escape(tf.Error)}"));
                 break;
 
             case SwarmEvent.FileConflict fc:
                 AnsiConsole.MarkupLine(
-                    $"  [yellow]\u26a0[/] File conflict: {Markup.Escape(fc.FilePath)} claimed by {Markup.Escape(fc.HeldByTaskId)}");
+                    $"  [yellow]\u26a0[/] {Markup.Escape(fc.AgentName)} blocked — [grey]{Markup.Escape(fc.FilePath)} locked by {Markup.Escape(fc.HeldByAgentName)}[/]");
                 break;
 
             case SwarmEvent.BudgetExceeded be:
@@ -53,4 +53,7 @@ internal sealed class CliSwarmProgressReporter : ISwarmProgressReporter
                 break;
         }
     }
+
+    private static string Truncate(string text, int maxLen) =>
+        text.Length <= maxLen ? text : string.Concat(text.AsSpan(0, maxLen - 3), "...");
 }

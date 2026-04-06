@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 
 namespace Sovrant.Agents.Shared;
 
@@ -7,7 +8,7 @@ namespace Sovrant.Agents.Shared;
 /// variables, the current working directory, and any state that needs to be visible
 /// across agent boundaries within a single multi-agent run.
 /// </summary>
-public sealed class WorkspaceContext
+public sealed partial class WorkspaceContext
 {
     private readonly ConcurrentDictionary<string, string> _state =
         new(StringComparer.Ordinal);
@@ -17,6 +18,73 @@ public sealed class WorkspaceContext
     /// Defaults to <see cref="Directory.GetCurrentDirectory()"/> at construction time.
     /// </summary>
     public string WorkingDirectory { get; init; } = Directory.GetCurrentDirectory();
+
+    /// <summary>
+    /// Root directory for agent-generated artifacts. Defaults to <c>artifacts/</c>
+    /// under the <see cref="WorkingDirectory"/>.
+    /// </summary>
+    public string ArtifactsRoot => Path.Combine(WorkingDirectory, "artifacts");
+
+    /// <summary>
+    /// Creates (if needed) and returns an artifacts subdirectory for the given prompt,
+    /// using a filesystem-safe slug derived from the first ~60 chars of the prompt.
+    /// </summary>
+    public string GetOrCreateArtifactsDirectory(string prompt)
+    {
+        ArgumentNullException.ThrowIfNull(prompt);
+        var slug = Slugify(prompt);
+        var dir = Path.Combine(ArtifactsRoot, slug);
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    /// <summary>
+    /// Converts a prompt into a filesystem-safe folder name.
+    /// Strips filler words, keeps up to 40 characters, lowercase, hyphen-separated.
+    /// Safe on both Windows and Linux.
+    /// </summary>
+    internal static string Slugify(string text)
+    {
+#pragma warning disable CA1308 // Folder names should be lowercase for readability
+        var lower = text.ToLowerInvariant();
+#pragma warning restore CA1308
+
+        // Replace non-alphanumeric with spaces for word splitting
+        var cleaned = NonAlphanumericRegex().Replace(lower, " ");
+
+        // Split into words and remove common filler
+        var words = cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => !s_stopWords.Contains(w))
+            .ToList();
+
+        // Rejoin with hyphens
+        var slug = string.Join('-', words);
+
+        // Cap at 40 characters, trim at last word boundary
+        if (slug.Length > 40)
+        {
+            slug = slug[..40];
+            var lastHyphen = slug.LastIndexOf('-');
+            if (lastHyphen > 10)
+                slug = slug[..lastHyphen];
+        }
+
+        return string.IsNullOrEmpty(slug) ? "output" : slug;
+    }
+
+    private static readonly HashSet<string> s_stopWords = new(StringComparer.Ordinal)
+    {
+        "a", "an", "the", "in", "on", "of", "for", "to", "and", "or", "but",
+        "is", "are", "was", "were", "be", "been", "being", "by", "at", "from",
+        "with", "as", "into", "that", "this", "it", "its", "do", "does",
+        "create", "write", "make", "generate", "build", "produce",
+        "please", "can", "you", "me", "my", "i", "we", "our",
+        "using", "about", "how", "what", "which", "where", "when",
+        "md", "form", "format", "file", "document",
+    };
+
+    [GeneratedRegex("[^a-z0-9]+")]
+    private static partial Regex NonAlphanumericRegex();
 
     /// <summary>Gets a named workspace variable, or <see langword="null"/> if not set.</summary>
     public string? Get(string key) =>

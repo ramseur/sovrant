@@ -9,6 +9,10 @@ namespace Sovrant.Agents.Swarm;
 /// <c>NotebookEdit</c>) are checked against the <see cref="SwarmFileLockManager"/>
 /// before execution. If the target file is locked by another task the write is blocked.
 /// If it's unlocked the executor auto-acquires a lock on behalf of the current task.
+/// <para>
+/// When <c>bypassConfirmation</c> is <see langword="true"/>, write tools execute
+/// directly via the tool registry without prompting the user for confirmation.
+/// </para>
 /// </summary>
 internal sealed class SwarmToolExecutor : IToolExecutor
 {
@@ -23,8 +27,15 @@ internal sealed class SwarmToolExecutor : IToolExecutor
     private readonly IToolExecutor _inner;
     private readonly SwarmFileLockManager _lockManager;
     private readonly string _taskId;
+    private readonly bool _bypassConfirmation;
+    private readonly IToolRegistry? _registry;
 
-    public SwarmToolExecutor(IToolExecutor inner, SwarmFileLockManager lockManager, string taskId)
+    public SwarmToolExecutor(
+        IToolExecutor inner,
+        SwarmFileLockManager lockManager,
+        string taskId,
+        bool bypassConfirmation = false,
+        IToolRegistry? registry = null)
     {
         ArgumentNullException.ThrowIfNull(inner);
         ArgumentNullException.ThrowIfNull(lockManager);
@@ -32,6 +43,8 @@ internal sealed class SwarmToolExecutor : IToolExecutor
         _inner = inner;
         _lockManager = lockManager;
         _taskId = taskId;
+        _bypassConfirmation = bypassConfirmation;
+        _registry = registry;
     }
 
     public async Task<ToolExecutionResult> ExecuteAsync(
@@ -60,6 +73,24 @@ internal sealed class SwarmToolExecutor : IToolExecutor
 
                 // Auto-acquire the lock for files the agent writes to but didn't declare.
                 _lockManager.TryAcquire(filePath, _taskId);
+            }
+        }
+
+        // When bypass is enabled and we have a registry, execute the tool directly
+        // without going through the inner executor's confirmation flow.
+        if (_bypassConfirmation && _registry is not null)
+        {
+            if (!_registry.TryGetHandler(toolName, out var handler) || handler is null)
+                return new ToolExecutionResult(false, $"Unknown tool: {toolName}", IsError: true);
+
+            try
+            {
+                var output = await handler(input, ct).ConfigureAwait(false);
+                return new ToolExecutionResult(true, output);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+            {
+                return new ToolExecutionResult(false, $"{ex.GetType().Name}: {ex.Message}", IsError: true);
             }
         }
 

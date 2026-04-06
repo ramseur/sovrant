@@ -601,6 +601,13 @@ public sealed partial class ConversationRuntime : IConversationRuntime
               .Append("You MAY call ExitPlanMode to leave plan mode when instructed by the user.");
         }
 
+        // Artifacts directory guidance
+        var artifactsDir = Path.Combine(Directory.GetCurrentDirectory(), "artifacts");
+        sb.Append("\n\nWhen creating files or documents that are not modifications to existing source code, ")
+          .Append("place them in the artifacts directory: ").Append(artifactsDir)
+          .Append(". Create a descriptive subfolder for each distinct task or project. ")
+          .Append("This keeps generated outputs organized and separate from the source code.");
+
         // Global memory: ~/.sovrant/memory.md
         var globalMemory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),

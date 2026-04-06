@@ -35,6 +35,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISlashCommand, ForgetCommand>();
         services.AddSingleton<ISlashCommand, EvalCommand>();
         services.AddSingleton<ISlashCommand, SwarmCommand>();
+        services.AddSingleton<ISlashCommand, WebSearchCommand>();
         services.AddSingleton<ISlashCommand, AgentsCommand>();
         services.AddSingleton<ISlashCommand, SkillsCommand>();
         services.AddSingleton<ISlashCommand, TeamCommand>();

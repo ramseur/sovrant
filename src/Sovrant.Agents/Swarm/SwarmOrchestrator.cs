@@ -22,6 +22,8 @@ public sealed partial class SwarmOrchestrator
     private readonly SwarmFileLockManager _fileLockManager;
     private readonly SwarmStateTracker _stateTracker;
     private readonly SwarmSession _session;
+    private readonly IToolRegistry _toolRegistry;
+    private readonly WorkspaceContext _workspace;
     private readonly ILogger<SwarmOrchestrator> _logger;
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Starting swarm '{SwarmId}' — {TaskCount} tasks, {WaveCount} waves")]
@@ -55,6 +57,8 @@ public sealed partial class SwarmOrchestrator
         SwarmFileLockManager fileLockManager,
         SwarmStateTracker stateTracker,
         SwarmSession session,
+        IToolRegistry toolRegistry,
+        WorkspaceContext workspace,
         ILogger<SwarmOrchestrator> logger)
     {
         ArgumentNullException.ThrowIfNull(factory);
@@ -63,6 +67,8 @@ public sealed partial class SwarmOrchestrator
         ArgumentNullException.ThrowIfNull(fileLockManager);
         ArgumentNullException.ThrowIfNull(stateTracker);
         ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(toolRegistry);
+        ArgumentNullException.ThrowIfNull(workspace);
         ArgumentNullException.ThrowIfNull(logger);
         _factory = factory;
         _templates = templates;
@@ -70,6 +76,8 @@ public sealed partial class SwarmOrchestrator
         _fileLockManager = fileLockManager;
         _stateTracker = stateTracker;
         _session = session;
+        _toolRegistry = toolRegistry;
+        _workspace = workspace;
         _logger = logger;
     }
 
@@ -87,6 +95,9 @@ public sealed partial class SwarmOrchestrator
 
         var sw = Stopwatch.StartNew();
         var tokenCounter = new TokenCounter();
+
+        // Create an artifacts subdirectory for this swarm's outputs.
+        var artifactsDir = _workspace.GetOrCreateArtifactsDirectory(plan.OriginalPrompt);
 
         var result = new SwarmResult
         {
@@ -124,7 +135,7 @@ public sealed partial class SwarmOrchestrator
                     }
 
 #pragma warning disable CA2025 // Semaphore is disposed after Task.WhenAll ensures all tasks complete
-                    execTasks.Add(ExecuteTaskAsync(node, plan, config, semaphore, tokenCounter, onEvent, ct));
+                    execTasks.Add(ExecuteTaskAsync(node, plan, config, semaphore, tokenCounter, artifactsDir, onEvent, ct));
 #pragma warning restore CA2025
                 }
 
@@ -182,13 +193,14 @@ public sealed partial class SwarmOrchestrator
         SwarmConfig config,
         SemaphoreSlim semaphore,
         TokenCounter tokenCounter,
+        string artifactsDir,
         Action<SwarmEvent>? onEvent,
         CancellationToken ct)
     {
         await semaphore.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await ExecuteTaskCoreAsync(node, plan, config, tokenCounter, onEvent, ct).ConfigureAwait(false);
+            await ExecuteTaskCoreAsync(node, plan, config, tokenCounter, artifactsDir, onEvent, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -202,29 +214,34 @@ public sealed partial class SwarmOrchestrator
         SwarmPlan plan,
         SwarmConfig config,
         TokenCounter tokenCounter,
+        string artifactsDir,
         Action<SwarmEvent>? onEvent,
         CancellationToken ct)
     {
+        var agentName = ResolveAgentName(node, config);
+
         // Acquire file locks
         foreach (var file in node.FilesToModify)
         {
             if (_fileLockManager.IsLockedByOther(file, node.Id))
             {
-                var holder = _fileLockManager.GetHolder(file) ?? "unknown";
-                LogFileConflict(_logger, node.Id, file, holder);
-                await EmitAsync(new SwarmEvent.FileConflict(plan.Id, node.Id, file, holder), onEvent, ct).ConfigureAwait(false);
+                var holderTaskId = _fileLockManager.GetHolder(file) ?? "unknown";
+                // Look up the holder's agent name from the plan.
+                var holderNode = plan.Tasks.FirstOrDefault(t => t.Id == holderTaskId);
+                var holderAgentName = holderNode is not null ? ResolveAgentName(holderNode, config) : holderTaskId;
+
+                LogFileConflict(_logger, node.Id, file, holderTaskId);
+                await EmitAsync(new SwarmEvent.FileConflict(plan.Id, node.Id, agentName, file, holderTaskId, holderAgentName), onEvent, ct).ConfigureAwait(false);
 
                 node.Status = SwarmTaskStatus.Blocked;
-                node.Error = $"File '{file}' locked by task '{holder}'.";
+                node.Error = $"File '{file}' locked by task '{holderTaskId}'.";
                 return;
             }
             _fileLockManager.TryAcquire(file, node.Id);
         }
-
-        var agentName = ResolveAgentName(node, config);
         node.Status = SwarmTaskStatus.Running;
         LogTaskStart(_logger, node.Id, agentName);
-        await EmitAsync(new SwarmEvent.TaskStarted(plan.Id, node.Id, agentName, node.Wave), onEvent, ct).ConfigureAwait(false);
+        await EmitAsync(new SwarmEvent.TaskStarted(plan.Id, node.Id, agentName, node.Description, node.Wave), onEvent, ct).ConfigureAwait(false);
 
         var attempt = 0;
         while (attempt <= config.MaxRetries)
@@ -232,7 +249,7 @@ public sealed partial class SwarmOrchestrator
             try
             {
                 var agent = CreateAgent(node, plan, config);
-                var prompt = BuildTaskPrompt(node, plan);
+                var prompt = BuildTaskPrompt(node, plan, artifactsDir);
 
                 using var taskCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 taskCts.CancelAfter(TimeSpan.FromSeconds(config.TaskTimeoutSeconds));
@@ -250,7 +267,7 @@ public sealed partial class SwarmOrchestrator
                     tokenCounter.Add(estimatedTokens);
 
                     LogTaskComplete(_logger, node.Id, estimatedTokens);
-                    await EmitAsync(new SwarmEvent.TaskCompleted(plan.Id, node.Id, result.Output, estimatedTokens), onEvent, ct).ConfigureAwait(false);
+                    await EmitAsync(new SwarmEvent.TaskCompleted(plan.Id, node.Id, agentName, node.Description, result.Output, estimatedTokens), onEvent, ct).ConfigureAwait(false);
                     return;
                 }
 
@@ -263,7 +280,7 @@ public sealed partial class SwarmOrchestrator
                 {
                     node.Status = SwarmTaskStatus.Failed;
                     node.Error = result.Error ?? "Agent returned failure.";
-                    await EmitAsync(new SwarmEvent.TaskFailed(plan.Id, node.Id, node.Error, attempt), onEvent, ct).ConfigureAwait(false);
+                    await EmitAsync(new SwarmEvent.TaskFailed(plan.Id, node.Id, agentName, node.Description, node.Error, attempt), onEvent, ct).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -277,7 +294,7 @@ public sealed partial class SwarmOrchestrator
                 {
                     node.Status = SwarmTaskStatus.Failed;
                     node.Error = "Task timed out.";
-                    await EmitAsync(new SwarmEvent.TaskFailed(plan.Id, node.Id, node.Error, attempt), onEvent, ct).ConfigureAwait(false);
+                    await EmitAsync(new SwarmEvent.TaskFailed(plan.Id, node.Id, agentName, node.Description, node.Error, attempt), onEvent, ct).ConfigureAwait(false);
                 }
             }
         }
@@ -287,8 +304,11 @@ public sealed partial class SwarmOrchestrator
     {
         // Each swarm task gets its own file-lock-aware executor so concurrent agents
         // cannot write to the same file. Auto-acquires locks for undeclared writes.
+        // When permissions are set to "yolo" or "accept-edits", bypass confirmation prompts.
+        var bypass = config.Permissions.Equals("yolo", StringComparison.OrdinalIgnoreCase)
+                  || config.Permissions.Equals("accept-edits", StringComparison.OrdinalIgnoreCase);
         var innerExecutor = _factory.GetDefaultExecutor();
-        var swarmExecutor = new SwarmToolExecutor(innerExecutor, _fileLockManager, node.Id);
+        var swarmExecutor = new SwarmToolExecutor(innerExecutor, _fileLockManager, node.Id, bypass, bypass ? _toolRegistry : null);
 
         // Priority 1: If the plan references a team, try to find a matching team member.
         if (plan.TeamId is not null)
@@ -320,10 +340,15 @@ public sealed partial class SwarmOrchestrator
             executorOverride: swarmExecutor);
     }
 
-    private static string BuildTaskPrompt(SwarmTaskNode node, SwarmPlan plan)
+    private static string BuildTaskPrompt(SwarmTaskNode node, SwarmPlan plan, string artifactsDir)
     {
         var sb = new StringBuilder();
         sb.Append("## Task: ").AppendLine(node.Description);
+        sb.AppendLine();
+
+        // Tell the agent where to write output files
+        sb.Append("### Output directory: ").AppendLine(artifactsDir);
+        sb.AppendLine("All files you create or modify should be placed in this directory unless the task explicitly references an existing file elsewhere.");
         sb.AppendLine();
 
         // Include predecessor outputs as context

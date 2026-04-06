@@ -30,10 +30,14 @@ public sealed class SwarmCommand : ISlashCommand
             return Task.FromResult(new SlashCommandResult(
                 $"Swarm is currently {status}.\n\n" +
                 "Usage:\n" +
+                "  /swarm <prompt>     Run a swarm task (auto-enables if needed)\n" +
+                "  /swarm <prompt> --dry-run  Show plan without executing\n" +
                 "  /swarm enable       Enable swarm orchestration\n" +
                 "  /swarm disable      Disable swarm orchestration\n" +
-                "  /swarm <prompt>     Run a swarm task\n" +
-                "  /swarm <prompt> --dry-run  Show plan without executing"));
+                "  /swarm yolo         Auto-accept all agent writes (no prompts)\n" +
+                "  /swarm accept-edits Auto-accept file edits, prompt for bash\n" +
+                "  /swarm ask          Prompt before every write (default)\n" +
+                "  /swarm status       Show swarm configuration"));
         }
 
         // Enable/disable subcommands
@@ -60,10 +64,59 @@ public sealed class SwarmCommand : ISlashCommand
                 string.Create(CultureInfo.InvariantCulture,
                     $"Token budget: {_config.MaxTokenBudget:N0}\n") +
                 string.Create(CultureInfo.InvariantCulture,
-                    $"Quality gate: {(_config.QualityGateEnabled ? "on" : "off")}")));
+                    $"Quality gate: {(_config.QualityGateEnabled ? "on" : "off")}\n") +
+                $"Permissions: {_config.Permissions}"));
         }
 
-        // Otherwise treat as a swarm task prompt
+        if (parts[0].Equals("yolo", StringComparison.OrdinalIgnoreCase))
+        {
+            _config.Permissions = "yolo";
+            // If there's a prompt after "yolo", set permission AND run the task.
+            if (parts.Length > 1)
+            {
+                if (!_config.Enabled) _config.Enabled = true;
+                var yoloPrompt = string.Join(' ', parts.Skip(1).Where(p =>
+                    !p.StartsWith("--", StringComparison.Ordinal)));
+                var yoloDryRun = parts.Any(p => p.Equals("--dry-run", StringComparison.OrdinalIgnoreCase));
+                var yoloDryRunSuffix = yoloDryRun ? " Use dry_run mode to show the plan only." : string.Empty;
+                return Task.FromResult(new SlashCommandResult(
+                    InjectAsUserMessage: string.Create(CultureInfo.InvariantCulture,
+                        $"Use the Swarm tool to execute: {yoloPrompt}{yoloDryRunSuffix}")));
+            }
+            return Task.FromResult(new SlashCommandResult(
+                "Swarm permissions: YOLO — agents auto-accept all writes without prompting."));
+        }
+
+        if (parts[0].Equals("ask", StringComparison.OrdinalIgnoreCase))
+        {
+            _config.Permissions = "ask";
+            return Task.FromResult(new SlashCommandResult(
+                "Swarm permissions: ask — agents prompt before writes."));
+        }
+
+        if (parts[0].Equals("accept-edits", StringComparison.OrdinalIgnoreCase))
+        {
+            _config.Permissions = "accept-edits";
+            // If there's a prompt after "accept-edits", set permission AND run the task.
+            if (parts.Length > 1)
+            {
+                if (!_config.Enabled) _config.Enabled = true;
+                var aePrompt = string.Join(' ', parts.Skip(1).Where(p =>
+                    !p.StartsWith("--", StringComparison.Ordinal)));
+                var aeDryRun = parts.Any(p => p.Equals("--dry-run", StringComparison.OrdinalIgnoreCase));
+                var aeDryRunSuffix = aeDryRun ? " Use dry_run mode to show the plan only." : string.Empty;
+                return Task.FromResult(new SlashCommandResult(
+                    InjectAsUserMessage: string.Create(CultureInfo.InvariantCulture,
+                        $"Use the Swarm tool to execute: {aePrompt}{aeDryRunSuffix}")));
+            }
+            return Task.FromResult(new SlashCommandResult(
+                "Swarm permissions: accept-edits — file writes auto-accepted, bash still prompts."));
+        }
+
+        // Otherwise treat as a swarm task prompt — auto-enable if needed.
+        if (!_config.Enabled)
+            _config.Enabled = true;
+
         var dryRun = parts.Any(p => p.Equals("--dry-run", StringComparison.OrdinalIgnoreCase));
 
         var prompt = string.Join(' ', parts.Where(p =>

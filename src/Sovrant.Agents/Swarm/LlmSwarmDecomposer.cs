@@ -178,14 +178,18 @@ public sealed partial class LlmSwarmDecomposer : ISwarmDecomposer
             - "id": unique task ID like "task-01", "task-02", etc.
             - "description": what the task does
             - "dependencies": array of task IDs that must complete first (empty if none)
-            - "files_to_modify": array of file paths this task will modify (for conflict detection)
+            - "files_to_modify": array of file paths this task will modify (for conflict detection).
+              Use distinct file names per task — do NOT have parallel tasks writing to the same file.
+              Use relative file names only (e.g. "intro.md", "analysis.md") — the orchestrator will
+              resolve them to the correct output directory.
             - "agent_template": which template to use (from available list, or null for default)
             - "allowed_tools": optional tool whitelist (null for default)
 
             Rules:
             1. Maximize parallelism — only add dependencies where strictly required
             2. Each task should be self-contained enough for one agent
-            3. File conflicts between parallel tasks should be avoided via dependencies
+            3. File conflicts between parallel tasks MUST be avoided — each parallel task should
+               write to its own file(s). If a final merge is needed, add a dependent task.
             4. Keep tasks granular but not trivial
 
             User request:
