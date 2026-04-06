@@ -454,6 +454,28 @@ curl -X POST http://localhost:5200/v1/swarm \
   -d '{"prompt": "Add pagination", "team": "backend-team"}'
 ```
 
+### Agent Isolation Model
+
+Swarm agents are isolated in execution context but share the working directory — they can all read and write files in the same project folder. Isolation is enforced through a layered system that prevents conflicts without requiring separate copies of the codebase.
+
+| Resource | Isolation Level | How |
+|---|---|---|
+| **Conversation history** | Per agent | Each agent gets its own `ConversationRuntime` with independent session history |
+| **Tool executor** | Per task | Each swarm task gets a `SwarmToolExecutor` decorator that enforces file locks at the tool level |
+| **File writes** | Enforced | `WriteFile`, `EditFile`, and `NotebookEdit` are intercepted — blocks if another task holds the lock, auto-acquires on first write |
+| **File reads** | Shared | Any agent can read any file at any time |
+| **Console prompts** | Serialized | Interactive confirmation prompts queue via `SemaphoreSlim` — no Spectre.Console concurrency crashes |
+| **Token tracking** | Thread-safe | `Interlocked.Add` for concurrent budget enforcement |
+| **Working directory** | Shared | All agents operate on the same folder — no git worktrees or copies required |
+
+**File lock enforcement** works at two levels:
+
+1. **Declared locks (pre-execution):** The LLM decomposer predicts which files each task will modify (`FilesToModify`). The orchestrator acquires pessimistic locks before a task starts. If a file is already held by another task, the task is blocked.
+
+2. **Auto-acquired locks (during execution):** When an agent writes to a file it didn't declare, the `SwarmToolExecutor` automatically acquires a lock before allowing the write. If the file is already locked by a different task, the write is rejected with an error explaining the conflict.
+
+This means agents are safe to run in parallel on the same codebase — they won't silently overwrite each other's work. The model scales to future peer-to-peer agent communication where agents can coordinate directly without going through the orchestrator.
+
 ### Configuration
 
 Config lives in `.sovrant/swarm.json` (OFF by default, designed for SQLite migration later):

@@ -6,6 +6,7 @@ using Sovrant.Agents.Shared;
 using Sovrant.Agents.Teams;
 using Sovrant.Agents.Templates;
 using Sovrant.Runtime.Conversation;
+using Sovrant.Runtime.Tools;
 
 namespace Sovrant.Agents.Swarm;
 
@@ -284,8 +285,12 @@ public sealed partial class SwarmOrchestrator
 
     private SovrantAgent CreateAgent(SwarmTaskNode node, SwarmPlan plan, SwarmConfig config)
     {
+        // Each swarm task gets its own file-lock-aware executor so concurrent agents
+        // cannot write to the same file. Auto-acquires locks for undeclared writes.
+        var innerExecutor = _factory.GetDefaultExecutor();
+        var swarmExecutor = new SwarmToolExecutor(innerExecutor, _fileLockManager, node.Id);
+
         // Priority 1: If the plan references a team, try to find a matching team member.
-        // This lets users define reusable multi-agent teams and plug them into different orchestrations.
         if (plan.TeamId is not null)
         {
             var agentName = ResolveAgentName(node, config);
@@ -293,7 +298,7 @@ public sealed partial class SwarmOrchestrator
             var member = teamMembers.FirstOrDefault(m =>
                 m.Name.Equals(agentName, StringComparison.OrdinalIgnoreCase));
             if (member is not null)
-                return _factory.Create(member);
+                return _factory.Create(member, swarmExecutor);
         }
 
         // Priority 2: Resolve from agent templates (built-in or user-defined)
@@ -305,13 +310,14 @@ public sealed partial class SwarmOrchestrator
 
         var template = _templates.TryGet(templateName);
         if (template is not null)
-            return _factory.Create(template);
+            return _factory.Create(template, executorOverride: swarmExecutor);
 
         // Priority 3: Fallback to raw parameters
         return _factory.Create(
             name: $"swarm-worker-{node.Id}",
             role: AgentRole.Coder,
-            allowedTools: node.AllowedTools?.ToList());
+            allowedTools: node.AllowedTools?.ToList(),
+            executorOverride: swarmExecutor);
     }
 
     private static string BuildTaskPrompt(SwarmTaskNode node, SwarmPlan plan)

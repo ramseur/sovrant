@@ -28,12 +28,12 @@ public sealed class SovrantAgentFactory
     }
 
     /// <summary>Creates a <see cref="SovrantAgent"/> from a team member definition.</summary>
-    public SovrantAgent Create(TeamMemberInfo member)
+    public SovrantAgent Create(TeamMemberInfo member, IToolExecutor? executorOverride = null)
     {
         ArgumentNullException.ThrowIfNull(member);
 
         var systemPrompt = AgentPrompts.GetSystemPrompt(member.Role, member.SystemPrompt);
-        var runtime = CreateRuntime(systemPrompt, member.AllowedTools, member.Model);
+        var runtime = CreateRuntime(systemPrompt, member.AllowedTools, member.Model, executorOverride);
         var logger = _loggerFactory.CreateLogger($"Sovrant.Agents.{member.Name}");
         return new SovrantAgent(member.Name, member.Role, runtime, logger);
     }
@@ -42,10 +42,12 @@ public sealed class SovrantAgentFactory
     /// <param name="template">The template providing system prompt and tool restrictions.</param>
     /// <param name="customInstructions">Additional instructions appended to the template's prompt.</param>
     /// <param name="modelOverride">Explicit model override. Resolved via ModelLevels if null.</param>
+    /// <param name="executorOverride">Optional tool executor override (e.g. for swarm file-lock enforcement).</param>
     public SovrantAgent Create(
         AgentTemplate template,
         string? customInstructions = null,
-        string? modelOverride = null)
+        string? modelOverride = null,
+        IToolExecutor? executorOverride = null)
     {
         ArgumentNullException.ThrowIfNull(template);
 
@@ -57,7 +59,7 @@ public sealed class SovrantAgentFactory
             : template.SystemPrompt + "\n\n" + customInstructions;
 
         var tools = template.AllowedTools.Count > 0 ? template.AllowedTools : null;
-        var runtime = CreateRuntime(prompt, tools, resolvedModel == config.Model ? null : resolvedModel);
+        var runtime = CreateRuntime(prompt, tools, resolvedModel == config.Model ? null : resolvedModel, executorOverride);
         var logger = _loggerFactory.CreateLogger($"Sovrant.Agents.{template.Name}");
         return new SovrantAgent(template.Name, template.Role, runtime, logger);
     }
@@ -67,13 +69,18 @@ public sealed class SovrantAgentFactory
         string name,
         AgentRole role,
         string? customInstructions = null,
-        IReadOnlyList<string>? allowedTools = null)
+        IReadOnlyList<string>? allowedTools = null,
+        IToolExecutor? executorOverride = null)
     {
         var systemPrompt = AgentPrompts.GetSystemPrompt(role, customInstructions);
-        var runtime = CreateRuntime(systemPrompt, allowedTools, modelOverride: null);
+        var runtime = CreateRuntime(systemPrompt, allowedTools, modelOverride: null, executorOverride);
         var logger = _loggerFactory.CreateLogger($"Sovrant.Agents.{name}");
         return new SovrantAgent(name, role, runtime, logger);
     }
+
+    /// <summary>Returns the default <see cref="IToolExecutor"/> from DI (for wrapping in decorators).</summary>
+    public IToolExecutor GetDefaultExecutor() =>
+        _services.GetRequiredService<IToolExecutor>();
 
     /// <summary>
     /// Resolves the model to use for an agent.
@@ -92,10 +99,11 @@ public sealed class SovrantAgentFactory
     private ConversationRuntime CreateRuntime(
         string systemPrompt,
         IReadOnlyList<string>? allowedTools,
-        string? modelOverride)
+        string? modelOverride,
+        IToolExecutor? executorOverride = null)
     {
         var router = _services.GetRequiredService<Api.Routing.ISmartRouter>();
-        var executor = _services.GetRequiredService<IToolExecutor>();
+        var executor = executorOverride ?? _services.GetRequiredService<IToolExecutor>();
         var sessionStore = _services.GetRequiredService<Runtime.Session.ISessionStore>();
         var config = _services.GetRequiredService<Runtime.Config.SovrantConfig>();
         var logger = _loggerFactory.CreateLogger<ConversationRuntime>();

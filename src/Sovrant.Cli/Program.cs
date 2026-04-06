@@ -370,9 +370,12 @@ async Task RunReplAsync(IConversationRuntime runtime, SlashCommandDispatcher dis
     // Use a solid (non-blinking) block cursor for the entire session.
     Console.Write("\x1b[2 q");
 
+    // Gather slash command names for autocomplete.
+    var commandNames = dispatcher.Commands.Select(c => c.Name).ToList();
+
     while (!ct.IsCancellationRequested)
     {
-        var input = SovrantInputReader.ReadLine(ct);
+        var input = SovrantInputReader.ReadLine(commandNames, ct);
 
         if (input.WasCancelled)
         {
