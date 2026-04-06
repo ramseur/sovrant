@@ -28,7 +28,6 @@ internal sealed class SovrantInputReader
     private const string AnsiSaveCursor = "\x1b[s";
     private const string AnsiRestoreCursor = "\x1b[u";
     private const string AnsiSolidCursor = "\x1b[2 q";
-    private const string AnsiDefaultCursor = "\x1b[0 q";
 
     /// <summary>
     /// Reads a line of input from the user with a sticky bottom bar.
@@ -210,7 +209,7 @@ internal sealed class SovrantInputReader
 
         // Restore cursor to the position saved before the input bar was drawn.
         Console.Write(AnsiRestoreCursor);
-        Console.Write(AnsiDefaultCursor);
+        Console.Write(AnsiSolidCursor);
         Console.Write(AnsiShowCursor);
     }
 }

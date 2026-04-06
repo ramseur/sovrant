@@ -363,6 +363,9 @@ async Task RunReplAsync(IConversationRuntime runtime, SlashCommandDispatcher dis
     AnsiConsole.MarkupLine("  Type [grey]/help[/] for commands, [grey]/exit[/] to quit.");
     AnsiConsole.WriteLine();
 
+    // Use a solid (non-blinking) block cursor for the entire session.
+    Console.Write("\x1b[2 q");
+
     while (!ct.IsCancellationRequested)
     {
         var input = SovrantInputReader.ReadLine(ct);
@@ -404,6 +407,9 @@ async Task RunReplAsync(IConversationRuntime runtime, SlashCommandDispatcher dis
         // Otherwise send to the LLM.
         await RunTurnWithCancelAsync(runtime, line, ct).ConfigureAwait(false);
     }
+
+    // Restore terminal default cursor on exit.
+    Console.Write("\x1b[0 q");
 }
 
 async Task RunTurnWithCancelAsync(IConversationRuntime runtime, string message, CancellationToken outerCt)
