@@ -1933,7 +1933,7 @@ src/Sovrant.Server/Middleware/
 
 ---
 
-### Phase 32 — Persistence Layer (SQLite)
+### Phase 32 — Persistence Layer (SQLite) ✅
 
 **Depends on:** Phase 7 (structured logging), Phase 25 (governance audit), Phase 27 (memory system)
 **Difficulty:** Medium–High
@@ -2458,6 +2458,7 @@ No schema changes needed — Phase 32 already created the `users` table with `ro
 3. Add per-user data view routes: `/v1/users/{id}/sessions`, `/v1/users/{id}/usage`, `/v1/users/{id}/audit`
 4. Update `docs/server.md` with new endpoints
 5. Tests: user CRUD, soft-delete preserves data, per-user data views filter correctly
+6. **Update the Frontend SDK** — extend the TypeScript client to cover the new `/v1/users/*` endpoints (and the Phase 35 `/v1/workspaces/*` and Phase 36 `/v1/workspaces/{wid}/projects/*` surfaces if not already wired). Bump the SDK version, regenerate types, and publish so frontends/apps can consume users, workspaces, and projects through a single typed client.
 
 #### What this does NOT include (deferred to Phase 38)
 
