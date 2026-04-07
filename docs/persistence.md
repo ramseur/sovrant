@@ -63,8 +63,9 @@ Migrations are embedded SQL resources named `V{NNN}__{description}.sql` inside t
 | V005 | `V005__swarm_evals.sql` | `swarm_events`, `eval_runs`, `eval_results` |
 | V006 | `V006__workspaces.sql` | `workspace_memory` table; `IF NOT EXISTS` indexes on `sessions`, `token_usage`, `session_summaries`, `audit_governance`, `audit_bash`, `swarm_events`, `eval_runs` keyed on `workspace_id` |
 | V007 | `V007__projects.sql` | `IF NOT EXISTS` indexes on `sessions(project_id)`, `token_usage(project_id)`, `workspace_memory(workspace_id, project_id)`, `project_members(user_id)` |
+| V008 | `V008__backfill_orphan_workspaces.sql` | One-time data backfill: sets `workspace_id = 'ws-personal-' \|\| user_id` on orphan rows in `sessions`, `token_usage`, `credentials`, then propagates the new value to `audit_governance`, `audit_bash`, `session_summaries` via `session_id` joins. Only fills rows where the matching `ws-personal-{user_id}` workspace already exists; rows for users without one are left alone. |
 
-All V006/V007 statements are **additive** (`CREATE TABLE`, `CREATE INDEX IF NOT EXISTS`), so a database created at V005 or earlier upgrades cleanly on next boot — no manual intervention.
+All V006/V007 statements are **additive** (`CREATE TABLE`, `CREATE INDEX IF NOT EXISTS`), so a database created at V005 or earlier upgrades cleanly on next boot — no manual intervention. V008 then backfills any orphan rows from those upgraded databases.
 
 Migrations are idempotent — running `InitializeAsync` multiple times is safe. The runner skips already-applied versions and records SHA-256 checksums of each script in `schema_version` to detect drift (drift detection itself is a Phase 42.5 item — today the runner records the checksum but does not raise on mismatch).
 
@@ -79,19 +80,98 @@ The schema is designed upfront so that Phases 33–37 can ship without `ALTER TA
 
 ---
 
-## SQLite Configuration
+## Database Inventory (authoritative)
 
-Every connection applies these PRAGMAs:
+The list below is generated from the migration scripts in `src/Sovrant.Runtime/Storage/Migrations/V00*.sql` and was cross-checked against a live `~/.sovrant/data/sovrant.db` on 2026-04-07 after migrations V006–V008 had been applied. After all 8 migrations apply, a fresh database contains **27 application tables** + **1 metadata table** (`schema_version`) + **1 FTS5 virtual table** + **5 FTS5 internal shadow tables** = **34 objects in `sqlite_master`**, plus **26 indexes** and **3 triggers**. V008 ships no schema, only data updates, so it does not change the inventory.
 
-```sql
-PRAGMA journal_mode = WAL;        -- Write-Ahead Logging for concurrent reads
-PRAGMA synchronous = NORMAL;      -- Balance durability/performance
-PRAGMA foreign_keys = ON;         -- Enforce referential integrity
-PRAGMA busy_timeout = 5000;       -- Wait up to 5s on lock contention
-PRAGMA cache_size = -20000;       -- 20 MB page cache
+### Tables by purpose
+
+| Category | Tables | Migration | Notes |
+|---|---|---|---|
+| **Identity & access** | `users`, `api_tokens`, `roles`, `permissions`, `role_permissions`, `user_roles` | V001 | `users` is the only one populated today; the rest are placeholders for Phase 38 (api_tokens) and Phase 40 (RBAC). |
+| **Workspaces** | `workspaces`, `workspace_members`, `workspace_config`, `workspace_invites`, `workspace_memory` | V001 + V006 | `workspace_memory` is the only addition in V006; the other four shipped in V001 as placeholders. |
+| **Projects** | `projects`, `project_members`, `project_config` | V001 | All structural; V007 only adds indexes. |
+| **Generic config** | `config` | V001 | Scoped key-value (`scope`, `key`, `value`). Used by global settings overrides. |
+| **Sessions** | `sessions`, `session_entries`, `session_entries_fts` (+ 5 FTS5 internals), `token_usage` | V002 | `session_entries_fts` is a `CREATE VIRTUAL TABLE … USING fts5`. SQLite materializes 5 internal tables: `session_entries_fts_config`, `_data`, `_docsize`, `_idx`. Three triggers (`session_entries_ai/ad/au`) keep FTS in sync with `session_entries`. |
+| **Memory** | `session_summaries`, `learned_patterns`, `instincts` | V003 | Three-layer agent memory. JSON arrays stored as TEXT (`tasks`, `tools_used`, `files_modified`, `evidence`). |
+| **Credentials** | `credentials` | V004 | Encrypted blobs (nonce + tag + ciphertext columns). |
+| **Swarm & evals** | `swarm_events`, `eval_runs`, `eval_results` | V005 | `swarm_events` is wired but not yet written to (swarm still dual-writes to JSONL — see Phase 42.5). |
+| **Audit** | `audit_governance`, `audit_bash` | V001 | INTEGER PK AUTOINCREMENT, no FK to sessions. |
+| **Migration metadata** | `schema_version` | bootstrapped by `MigrationRunner` | Stores version, `applied_at`, and SHA-256 `checksum` of each script. |
+
+### Foreign-key topology
+
+```
+users ──┬── workspaces.owner_id           (RESTRICT — blocks hard-delete)
+        ├── workspace_members.user_id     (RESTRICT)
+        ├── workspace_invites             (no direct FK, email-based)
+        ├── project_members.user_id       (RESTRICT)
+        ├── api_tokens.user_id            (RESTRICT — Phase 38)
+        └── user_roles.user_id            (RESTRICT — Phase 40)
+
+workspaces ──┬── workspace_members.workspace_id
+             ├── workspace_config.workspace_id
+             ├── workspace_invites.workspace_id
+             ├── workspace_memory.workspace_id    (CASCADE on delete)
+             └── projects.workspace_id            (NULLable)
+
+projects ──┬── project_members.project_id
+           └── project_config.project_id
+
+sessions ──── session_entries.session_id          (CASCADE on delete)
+eval_runs ──── eval_results.run_id                (CASCADE on delete)
 ```
 
-**WAL mode** is critical for CLI + server sharing the same database file — multiple readers never block each other, and a single writer doesn't block readers.
+`sessions`, `token_usage`, `audit_governance`, `audit_bash`, `credentials`, `session_summaries`, `swarm_events`, and `eval_runs` all carry `workspace_id` / `project_id` as **nullable, unconstrained TEXT** columns — no FK, by design, so legacy rows from before workspaces existed remain valid.
+
+### Indexes after V001–V007
+
+| Table | Indexes |
+|---|---|
+| `api_tokens` | `ix_api_tokens_user`, `ix_api_tokens_hash` |
+| `audit_bash` | `ix_audit_bash_session`, `ix_audit_bash_workspace` (V006), `ix_audit_bash_project` (V007) |
+| `audit_governance` | `ix_audit_governance_session`, `ix_audit_governance_workspace` (V006), `ix_audit_governance_project` (V007) |
+| `eval_results` | `ix_eval_results_run` |
+| `eval_runs` | `ix_eval_runs_suite`, `ix_eval_runs_workspace` (V006) |
+| `learned_patterns` | `ix_learned_patterns_project` (legacy text "project" column, not `project_id`) |
+| `project_members` | `ix_project_members_user` (V007) |
+| `projects` | `ix_projects_workspace` (V007) |
+| `session_entries` | `ix_session_entries_session` |
+| `session_summaries` | `ix_session_summaries_project`, `ix_session_summaries_workspace` (V006) |
+| `sessions` | `ix_sessions_user`, `ix_sessions_status`, `ix_sessions_workspace` (V006), `ix_sessions_project` (V007) |
+| `swarm_events` | `ix_swarm_events_swarm`, `ix_swarm_events_workspace` (V006), `ix_swarm_events_project` (V007) |
+| `token_usage` | `ix_token_usage_session`, `ix_token_usage_user`, `ix_token_usage_workspace` (V006), `ix_token_usage_project` (V007) |
+| `workspace_memory` | `ix_workspace_memory_workspace` (V006), `ix_workspace_memory_layer` (V006), `ix_workspace_memory_project` (V007) |
+
+26 indexes total at V007. **Notably absent**: there is no index on `users.username` or `users.email` beyond the implicit unique constraint indexes — that is sufficient for lookups since SQLite auto-creates a B-tree for every `UNIQUE` column. There is also no covering index for the per-user audit join (`audit_governance` → `sessions(user_id)`); for now the join is small enough that it's not measurable, but it's listed under Phase 42.5.
+
+### Triggers
+
+| Trigger | Table | Purpose |
+|---|---|---|
+| `session_entries_ai` | `session_entries` | After insert: mirror new row into `session_entries_fts` |
+| `session_entries_ad` | `session_entries` | After delete: tombstone the row in FTS |
+| `session_entries_au` | `session_entries` | After update: tombstone old + insert new |
+
+These three triggers are the entire FTS5 sync layer. There are no triggers anywhere else in the schema — no `updated_at` triggers, no soft-delete triggers, no audit triggers. All `updated_at` columns are written explicitly by the application code.
+
+---
+
+## SQLite Configuration
+
+Every connection opened via `SqliteStorageProvider.CreateConnection` applies these PRAGMAs in a single batch:
+
+```sql
+PRAGMA journal_mode = WAL;        -- persistent: written to the DB header (one-shot)
+PRAGMA synchronous = NORMAL;      -- per-connection
+PRAGMA foreign_keys = ON;         -- per-connection
+PRAGMA busy_timeout = 5000;       -- per-connection (5s lock wait)
+PRAGMA cache_size = -20000;       -- per-connection (20 MB page cache)
+```
+
+> **Pragma scope matters.** Only `journal_mode=WAL` is persisted in the database header — every other PRAGMA is a per-connection setting and reverts to SQLite defaults for any connection that doesn't run the batch. If you ever connect to the DB with `sqlite3` directly, with a one-off audit script, or with a third-party tool, **expect to see `synchronous=2`, `busy_timeout=0`, `cache_size=-2000`, `foreign_keys=0`** unless that tool also runs the batch. This is a frequent source of "the docs lied" confusion when comparing the file against this document.
+
+**WAL mode** is critical for CLI + server sharing the same database file — multiple readers never block each other, and a single writer doesn't block readers. WAL persists across processes; it does not need to be re-set on every connection (the second `PRAGMA journal_mode=WAL` is a no-op).
 
 ---
 
@@ -306,6 +386,26 @@ Not everything moved to SQLite. These remain file-based by design:
 
 The following concerns were surfaced during the Phase 37 audit of the SQLite layer. None are blocking, but all are tracked under **Phase 42.5 — Database Lifecycle: Setup, Upgrade Safety & Introspection** in the roadmap.
 
+> **Real-world V005 → V008 upgrade walkthrough, captured 2026-04-07 from `~/.sovrant/data/sovrant.db` on a developer workstation:**
+>
+> **Before** (binary predated V006):
+> - `schema_version` rows: 5 (V001–V005 only).
+> - `workspace_memory` table: absent. All `_workspace`/`_project` indexes from V006/V007: absent.
+> - `users`: 1 (`eramseur`). `workspaces`: 0. `sessions`: 34 (all `workspace_id` NULL). `session_entries`: 132. `audit_bash`: 10.
+>
+> **After running a V008-aware binary once** (server boot is enough — `InitializeAsync` runs on every startup):
+> - `schema_version` rows: **8** (V006, V007, V008 all applied in one boot).
+> - `workspace_memory` table: present. 19 new workspace/project indexes added.
+> - `SeedPersonalWorkspace` ran with `INSERT OR IGNORE` and created `ws-personal-eramseur` plus the matching `workspace_members` row.
+> - V008 backfilled `sessions.workspace_id` for the 34 orphan rows (and `audit_bash` via the `session_id` join).
+>
+> **What this proves:**
+> 1. Additive migrations work — the legacy DB serves reads/writes against V005 tables with no errors right up until the upgrade.
+> 2. The upgrade requires zero manual intervention. Booting any V008-aware binary applies V006 + V007 + V008 in order and seeds the personal workspace.
+> 3. V008 only backfills when a personal workspace exists for the row's user, so multi-user installs are safe — users without one are left untouched until their personal workspace is created.
+> 4. The CLI `status` subcommand currently does **not** trigger `InitializeRuntimeAsync`, so it does not run migrations. Use the server (`dotnet run --project src/Sovrant.Server`) or any CLI command that goes through `InitAsync` (e.g. `prompt`). This gap is also tracked under Phase 42.5 (concern #11 — `sovrant init` / `sovrant db migrate`).
+> 5. Without a `sovrant db status` CLI, **users still have no way to know which schema version their DB is on**, which is precisely why concerns #2, #3, #11 below exist.
+
 | # | Concern | Why it matters | Planned mitigation |
 |---|---|---|---|
 | 1 | **Parallel JSONL persistence is still wired in.** `SOVRANT_SESSION_JSONL` and `SOVRANT_AUDIT_JSONL` dual-write to flat files. | Two stores of truth drift; consumers don't know which is canonical. | Consolidate into SQLite as the sole source; keep dual-write only as a one-shot migration tool. |
@@ -327,7 +427,7 @@ Roadmap entry: see **Phase 42.5** in `docs/roadmap.md`.
 
 ## Testing
 
-The persistence layer is exercised by **985 tests** across 9 test projects (all green as of 2026-04-06). Storage-focused suites include:
+The persistence layer is exercised by **987 tests** across 9 test projects (all green as of 2026-04-07). Storage-focused suites include:
 
 | Test Class | Validates |
 |---|---|
@@ -336,7 +436,7 @@ The persistence layer is exercised by **985 tests** across 9 test projects (all 
 | `SqliteMemoryStoreTests` | Summaries, patterns, instincts, reinforcement, correction, pruning |
 | `SqliteAuditStoreTests` | Governance events, bash commands, batch writes |
 | `SqliteTokenUsageStoreTests` | Record/aggregate, empty session, cost tracking |
-| `MigrationRunnerTests` | All migrations apply in order, idempotency, expected tables present |
+| `MigrationRunnerTests` | All migrations apply in order, idempotency, expected tables present, V008 backfills only for users with a personal workspace |
 | `SqliteWorkspaceStoreTests` | Workspace CRUD, personal-workspace idempotency, members, invites, config, memory, usage aggregation |
 | `SqliteProjectStoreTests` | Project CRUD, archive/unarchive, open-by-default access, member roles, 3-tier config inheritance, merged memory views |
 | `SqliteUserStoreTests` | Server-generated IDs, validation (username/email/role), duplicate detection, list filters, profile derived stats, soft-delete idempotency, FK preservation, usage aggregation, mass-assignment safety |

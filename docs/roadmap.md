@@ -91,6 +91,7 @@ The engine is fully functional for individual and small-team use:
 | Workspaces (personal + team areas, isolated memory/config/sessions) | Phase 35 | Medium–High |
 | Projects (workspace-scoped containers for isolated work) | Phase 36 | Medium |
 | User management API (CRUD users, per-user data views) | Phase 37 | Low–Medium |
+| Swarm sessions into the database (replace JSONL store) | Phase 37.5 | Medium |
 | Per-user token auth & database hardening | Phase 38 | Medium |
 | Cost tracking, token budgets & model pricing registry | Phase 39 (deferred) | Deferred |
 | Enterprise auth & multi-tenancy (RBAC, OAuth/OIDC, SSO) | Phase 40 (deferred) | Deferred |
@@ -2471,6 +2472,55 @@ No schema changes needed — Phase 32 already created the `users` table with `ro
 
 ---
 
+### Phase 37.5 — Swarm Sessions Into the Database
+
+**Depends on:** Phase 32 (SQLite persistence — `swarm_events` table exists from V005)
+**Difficulty:** Small–Medium
+
+**Goal:** Replace the JSONL-only swarm session store (`SwarmSession` writing `.sovrant/swarm/sessions/{id}.jsonl`) with a SQLite-backed `ISwarmEventStore` that writes to the existing `swarm_events` table. Promotes item #14 from Phase 42.5's deferred list to a discrete phase so swarm runs become queryable, joinable to users/workspaces, and covered by the same backup/migration story as everything else.
+
+#### Why this matters
+
+Today swarm is the **only** subsystem that still treats flat files as the source of truth. The `swarm_events` table was created in V005 and has sat empty ever since. As a result:
+
+- Swarm runs are invisible to per-user / per-workspace queries (`/v1/users/{id}/sessions` won't find them).
+- They are not covered by the SQLite backup story — only by ad-hoc filesystem copies of `~/.sovrant/swarm/sessions/`.
+- The directory grows unbounded with no rotation.
+- There is no foreign-key linkage to `users`, `workspaces`, or `sessions`, so cross-cutting analytics (cost per swarm, swarm-vs-direct usage breakdown) require ad-hoc JSONL parsing.
+- The audit trail for governance events triggered inside swarm sub-agents is split across two stores.
+
+#### Items
+
+| # | Item | Description |
+|---|---|---|
+| 1 | Define `ISwarmEventStore` | New interface in `Sovrant.Runtime/Storage` with `RecordEventAsync(SwarmEvent)`, `LoadEventsAsync(swarmId)`, `ListSwarmsAsync(filter)`, `DeleteSwarmAsync(swarmId)`. |
+| 2 | Implement `SqliteSwarmEventStore` | Backed by the existing `swarm_events` table. Stores `swarm_id`, `event_type`, `agent_id`, `workspace_id`, `project_id`, `payload` (JSON), `timestamp`. Reuses `ISqliteConnectionFactory`. |
+| 3 | Refactor `SwarmSession` | Take `ISwarmEventStore` via constructor injection. Replace `File.AppendAllText(...)` writes with `_store.RecordEventAsync(...)`. Replace directory globbing in `LoadAsync` with a SQL query keyed on `swarm_id`. |
+| 4 | DI registration | Add `services.AddSingleton<ISwarmEventStore, SqliteSwarmEventStore>()` in `Sovrant.Runtime.ServiceCollectionExtensions`. |
+| 5 | Workspace + project scoping | When `SwarmOrchestrator` starts a swarm, capture the active `workspace_id` / `project_id` from the request context and stamp every event with it. This is what enables the per-workspace and per-project queries. |
+| 6 | One-shot JSONL importer | `sovrant db import-swarm` (or a one-time migration helper) that reads any existing `~/.sovrant/swarm/sessions/*.jsonl` files and inserts the events into `swarm_events`, then optionally deletes the source files with `--delete-source`. |
+| 7 | Update `/v1/swarms` routes | Existing `SwarmRoutes` reads from the JSONL store. Switch them to query through `ISwarmEventStore`. Add workspace/project filters to the list endpoint. |
+| 8 | Tests | `SqliteSwarmEventStoreTests` (CRUD, filters, workspace scoping), `SwarmSessionTests` against the new store, and an integration test that runs a real swarm and verifies the events land in `swarm_events`. |
+| 9 | Update persistence.md | Move swarm out of "What Stays as Files", add it to the Domain Stores section, and remove items #14 (and partial #13) from the Phase 42.5 known-concerns table. |
+| 10 | Update server.md | Document the new query/filter capabilities on `/v1/swarms`. |
+
+#### Acceptance Criteria
+
+- `swarm_events` table is the canonical store for all new swarm runs after upgrade.
+- `~/.sovrant/swarm/sessions/` is no longer written to by default; opt-in JSONL export via a flag if needed.
+- A swarm started inside a workspace is queryable via `/v1/workspaces/{wid}/swarms`.
+- A one-shot importer migrates existing JSONL session files into the DB.
+- All existing swarm tests pass against the new store; new tests cover workspace scoping.
+- `docs/persistence.md` no longer lists swarm under "What Stays as Files".
+
+#### What this does NOT include
+
+- Backfilling `user_id` onto historical swarm events (the JSONL files don't carry it).
+- Per-event session linkage to `sessions` / `session_entries` — that's a future enhancement (would let you join a swarm event to its parent agent's full chat history).
+- Live progress streaming via Server-Sent Events — `SwarmRoutes` already has SSE; this phase preserves it but doesn't expand it.
+
+---
+
 ### Phase 38 — Per-User Token Auth & Database Hardening
 
 **Depends on:** Phase 37 (user management API — users exist in the DB)
@@ -2739,9 +2789,9 @@ Today every test starts from a fresh empty SQLite file. The migration runner is 
 | 10 | First-boot UX | Today the first-boot DB creation is invisible unless you have INFO logging on. Surface a one-line "Created Sovrant database at {path} (schema v{N})" at WARN-or-higher on a fresh install so it's visible by default. |
 | 11 | `--db-path` CLI flag | `SOVRANT_DB_PATH` is the only way to override the location and it's undocumented. Add a CLI flag and document both. |
 | 12 | Fail-loud option for init failures | Today `SqliteStorageProvider.InitializeAsync` swallows exceptions to a log line ("data will not be persisted") and the server keeps running. Add `SOVRANT_DB_REQUIRE=true` to make startup fail hard if the DB can't be initialized — recommended for production. |
-| 13 | Consolidate parallel JSONL persistence | `audit/`, `sessions/`, and `swarm/sessions/` directories still write JSONL files alongside the DB (`DualWriteAuditStore`, `DualWriteSessionStore`, swarm orchestrator). With SQLite as the source of truth, the JSONL streams should become an opt-in **export**, not a parallel write path. Otherwise these files grow unbounded. |
-| 14 | Move swarm sessions into the DB | Phase 29's swarm orchestrator writes its own JSONL session files under `swarm/sessions/` instead of the `sessions` / `session_entries` tables. Migrate it onto the existing schema so swarm runs are queryable, joinable to users, and covered by backup. |
-| 15 | Empty-string `user_id` cleanup | `sessions`, `token_usage`, and `credentials` all use `user_id TEXT NOT NULL DEFAULT ''`. Rows with `''` won't appear in any user-scoped query (Phase 37's `/v1/users/{id}/sessions` etc.). One-shot migration to backfill `''` rows to the boot identity, plus drop the empty-string default going forward. |
+| 13 | Consolidate parallel JSONL persistence | `audit/` and `sessions/` directories still write JSONL files alongside the DB when `SOVRANT_AUDIT_JSONL=true` / `SOVRANT_SESSION_JSONL=true` (`DualWriteAuditStore`, `DualWriteSessionStore`). With SQLite as the source of truth, the JSONL streams should become an opt-in **export**, not a parallel write path. (Swarm's separate JSONL store is now tracked under Phase 37.5.) |
+| 14 | ~~Move swarm sessions into the DB~~ | **Promoted to Phase 37.5.** |
+| 15 | Empty-string `user_id` cleanup | `sessions`, `token_usage`, and `credentials` all use `user_id TEXT NOT NULL DEFAULT ''`. Rows with `''` won't appear in any user-scoped query (Phase 37's `/v1/users/{id}/sessions` etc.). One-shot migration to backfill `''` rows to the boot identity, plus drop the empty-string default going forward. (Note: V008 already handles the related "orphan workspace_id" backfill — this item is the parallel cleanup for `user_id`.) |
 | 16 | Connection pooling | Every store call opens a new `SqliteConnection`. `Cache=Shared` mitigates the cost, but a real pool would help under load — especially on Windows where connection-open is non-trivial. |
 | 17 | Health-check endpoint coverage | `/health` should report DB status (path, schema version, last successful query) so monitors can detect a degraded "running but DB broken" state. Currently `/health` only returns `{ status: "ok" }`. |
 | 18 | `sovrant init` / reset | For demos/CI/onboarding, a `sovrant init` command that bootstraps a fresh DB at the chosen path (with optional `--reset` to wipe an existing one with confirmation). |
