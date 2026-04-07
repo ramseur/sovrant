@@ -2223,7 +2223,7 @@ Phase 31's `ICacheProvider` is for **hot, ephemeral data** — fast reads with T
 
 ---
 
-### Phase 35 — Workspaces
+### Phase 35 — Workspaces ✅
 
 **Depends on:** Phase 32 (SQLite persistence — `users` table already exists), Phase 27 (memory system)
 
@@ -2297,7 +2297,7 @@ Phase 40 adds external IdP login and RBAC on top of the workspace model — work
 
 ---
 
-### Phase 36 — Projects
+### Phase 36 — Projects ✅
 
 **Depends on:** Phase 35 (workspaces)
 
@@ -2368,7 +2368,7 @@ If Phase 41 is implemented, artifacts are scoped to projects rather than just te
 
 ---
 
-### Phase 37 — User Management API
+### Phase 37 — User Management API ✅
 
 **Depends on:** Phase 32 (persistence layer — `users` table)
 **Difficulty:** Low–Medium
@@ -2709,6 +2709,54 @@ Two-layer approach:
 4. Inline diffs: intercept `Edit`/`Write` tool events, show diff decoration in the editor
 5. Permission dialogs: VS Code `window.showInformationMessage` with approve/deny buttons
 6. Publish to VS Code Marketplace
+
+---
+
+### Phase 42.5 — Database Lifecycle: Setup, Upgrade Safety & Introspection
+
+**Depends on:** Phase 32 (SQLite persistence), Phases 35–37 (workspaces, projects, users)
+**Difficulty:** Medium
+
+**Goal:** Make the SQLite layer a first-class, observable, recoverable system. Today the database is created and migrated transparently on first boot — which is great for new users, but failures are silent, there is no introspection, multiple persistence stores still write parallel JSONL files, and we have no automated proof that an old DB upgrades cleanly. This phase closes those gaps.
+
+**Why this matters**
+
+Today every test starts from a fresh empty SQLite file. The migration runner is correctly designed to be additive (`CREATE TABLE`, `CREATE INDEX IF NOT EXISTS`) and skips already-applied versions, so in principle an old DB upgrades in place on next boot — but we have **no automated proof**, no docs telling users this, and no recovery story when something goes wrong. Users hitting "I have an old DB and the new server crashes" today have no guidance other than "delete the file".
+
+#### Items
+
+| # | Item | Description |
+|---|---|---|
+| 1 | Old-DB upgrade tests | Add tests that build a DB at schema version N (e.g. by applying only V001–V005), insert representative rows, then bring the DB up to current and assert all data survives and new tables/indexes exist. One test per supported upgrade path. |
+| 2 | Idempotent re-seed verification | Test that `SeedDefaultUser` + `SeedPersonalWorkspace` correctly add a personal workspace to a pre-Phase-35 user row without duplicating or breaking the existing user. |
+| 3 | Migration checksum drift detection | The runner already records a SHA-256 of each migration; surface a clear error (not a silent skip) if a previously-applied migration's checksum no longer matches the embedded resource — this catches "someone edited an old V005__*.sql in-place". |
+| 4 | Backup-before-migrate flag | Optional `SOVRANT_DB_BACKUP_ON_UPGRADE=true` that copies `sovrant.db` to `sovrant.db.bak-{schema_version}` before running any pending migrations. Off by default; recommended in upgrade docs. |
+| 5 | Upgrade docs page | New `docs/db-upgrades.md` covering: where the DB lives, what happens on first boot of a new build, how to take a manual backup, how to roll back (restore the .bak), how to read `schema_version` to find your current version. |
+| 6 | Server startup log line | At boot, log `Database schema is at version N (latest=M)`; if N < M, log each migration as it runs. Already partially done — confirm log lines are emitted at INFO level so users see them in normal output. |
+| 7 | Hard-failure reporting | If a migration throws, surface the failing version + a one-line "to recover, restore your backup" message instead of a raw `SqliteException` stack trace. |
+| 8 | Per-table data-loss audit | One-time review: are there any cases where a future migration might need to drop or rename a column? If so, document the safe-rename pattern (add new col → backfill → switch reads → drop old col across two releases). |
+| 9 | `sovrant db` CLI subcommand | Add `sovrant db status` (path, schema version, table sizes), `sovrant db version`, `sovrant db migrate --dry-run`, `sovrant db backup [path]`, `sovrant db inspect <table>`. None of these exist today — users have to query `schema_version` by hand. |
+| 10 | First-boot UX | Today the first-boot DB creation is invisible unless you have INFO logging on. Surface a one-line "Created Sovrant database at {path} (schema v{N})" at WARN-or-higher on a fresh install so it's visible by default. |
+| 11 | `--db-path` CLI flag | `SOVRANT_DB_PATH` is the only way to override the location and it's undocumented. Add a CLI flag and document both. |
+| 12 | Fail-loud option for init failures | Today `SqliteStorageProvider.InitializeAsync` swallows exceptions to a log line ("data will not be persisted") and the server keeps running. Add `SOVRANT_DB_REQUIRE=true` to make startup fail hard if the DB can't be initialized — recommended for production. |
+| 13 | Consolidate parallel JSONL persistence | `audit/`, `sessions/`, and `swarm/sessions/` directories still write JSONL files alongside the DB (`DualWriteAuditStore`, `DualWriteSessionStore`, swarm orchestrator). With SQLite as the source of truth, the JSONL streams should become an opt-in **export**, not a parallel write path. Otherwise these files grow unbounded. |
+| 14 | Move swarm sessions into the DB | Phase 29's swarm orchestrator writes its own JSONL session files under `swarm/sessions/` instead of the `sessions` / `session_entries` tables. Migrate it onto the existing schema so swarm runs are queryable, joinable to users, and covered by backup. |
+| 15 | Empty-string `user_id` cleanup | `sessions`, `token_usage`, and `credentials` all use `user_id TEXT NOT NULL DEFAULT ''`. Rows with `''` won't appear in any user-scoped query (Phase 37's `/v1/users/{id}/sessions` etc.). One-shot migration to backfill `''` rows to the boot identity, plus drop the empty-string default going forward. |
+| 16 | Connection pooling | Every store call opens a new `SqliteConnection`. `Cache=Shared` mitigates the cost, but a real pool would help under load — especially on Windows where connection-open is non-trivial. |
+| 17 | Health-check endpoint coverage | `/health` should report DB status (path, schema version, last successful query) so monitors can detect a degraded "running but DB broken" state. Currently `/health` only returns `{ status: "ok" }`. |
+| 18 | `sovrant init` / reset | For demos/CI/onboarding, a `sovrant init` command that bootstraps a fresh DB at the chosen path (with optional `--reset` to wipe an existing one with confirmation). |
+
+#### Acceptance Criteria
+
+- A test suite that takes a "Phase 32 era" DB through to current and verifies workspaces, projects, and users all coexist with pre-existing rows.
+- Documented upgrade procedure in `docs/db-upgrades.md`.
+- A failing migration produces a friendly, actionable error.
+- `SOVRANT_DB_BACKUP_ON_UPGRADE` works end-to-end.
+- `sovrant db status` reports path, schema version, and table sizes.
+- `/health` reports DB status (degraded vs ok).
+- JSONL parallel writes are gated behind explicit export flags, not on by default.
+- Swarm orchestrator sessions live in the `sessions` table.
+- All `user_id = ''` rows are backfilled or migrated.
 
 ---
 

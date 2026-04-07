@@ -169,6 +169,7 @@ SkillRegistryRoutes.Map(app);
 AgentTemplateRoutes.Map(app);
 WorkspaceRoutes.Map(app);
 ProjectRoutes.Map(app);
+UserRoutes.Map(app);
 
 Sovrant.Server.ServerLog.LogServerReady(app.Logger, serverPort);
 

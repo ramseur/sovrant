@@ -14,6 +14,7 @@ using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.Tools;
 using Sovrant.Runtime.Projects;
+using Sovrant.Runtime.Users;
 using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime;
@@ -121,6 +122,12 @@ public static class ServiceCollectionExtensions
             new SqliteProjectStore(
                 sp.GetRequiredService<ISqliteConnectionFactory>(),
                 sp.GetRequiredService<IWorkspaceService>()));
+
+        // User service (Phase 37)
+        services.AddSingleton<IUserService>(sp =>
+            new SqliteUserStore(
+                sp.GetRequiredService<ISqliteConnectionFactory>(),
+                sp.GetRequiredService<ILogger<SqliteUserStore>>()));
 
         // Eval framework (Phase 27)
         services.AddSingleton<IEvalResultStore, EvalResultStore>();

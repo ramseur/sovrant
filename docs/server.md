@@ -418,3 +418,88 @@ Replays the full JSONL event log for a swarm session.
 ### List Swarm Sessions — `GET /v1/swarm/sessions`
 
 Returns all recorded swarm session IDs.
+
+## User Management (Phase 37)
+
+CRUD over the `users` table plus per-user data views. **Auth model:** every endpoint is gated by the same `SOVRANT_TOKEN` bearer middleware as everything else. There is **no per-user authentication** — any holder of the shared token can manage any user. Per-user bearer tokens, role enforcement, and admin-only routes are deferred to Phase 38.
+
+**Soft-delete only.** `DELETE /v1/users/{id}` flips `status='inactive'`; the row is preserved so all FK references (workspaces, projects, sessions, audit) remain valid. Hard-delete is intentionally not exposed.
+
+**Mass-assignment protection.** Request bodies only accept client-writable fields (`username`, `email`, `role`, `team`, `status`). `user_id`, `created_at`, and `updated_at` are server-controlled and cannot be set via JSON.
+
+**Validation.**
+- `username` must match `^[a-zA-Z0-9._-]{1,64}$`
+- `email` is optional, ≤ 254 chars, must contain `@` and `.`
+- `role` ∈ {`user`, `admin`}
+- `status` ∈ {`active`, `inactive`}
+- `team` is optional, ≤ 64 chars
+
+### Create User — `POST /v1/users`
+
+Request:
+```json
+{
+  "username": "alice",
+  "email": "alice@example.com",
+  "role": "user",
+  "team": "engineering"
+}
+```
+
+Response (`201 Created`):
+```json
+{
+  "user_id": "usr_a1b2c3d4e5f60718",
+  "username": "alice",
+  "email": "alice@example.com",
+  "role": "user",
+  "team": "engineering",
+  "status": "active",
+  "created_at": "2026-04-06T...",
+  "updated_at": "2026-04-06T..."
+}
+```
+
+The server generates a `usr_{16hex}` `user_id` and **auto-creates a personal workspace** for the new user (mirrors the seeded default user behavior). Returns `400` for validation failures and `409` if the username or email is already taken.
+
+### List Users — `GET /v1/users`
+
+Query params: `status`, `role`, `team`, `limit` (1–1000, default 100), `offset` (default 0).
+
+Response:
+```json
+{ "users": [ ... ], "count": 5, "total": 17 }
+```
+
+### Get User — `GET /v1/users/{id}`
+
+Returns the user profile with derived stats: `session_count`, `total_input_tokens`, `total_output_tokens`, `total_cost_usd`, and `last_seen_at` (computed from `MAX(updated_at)` on the user's sessions; `null` if the user has no sessions).
+
+### Update User — `PUT /v1/users/{id}`
+
+Request body — every field optional; only the provided fields are changed:
+```json
+{ "username": "alice2", "email": "new@example.com", "role": "admin", "team": "ops", "status": "active" }
+```
+
+Returns `404` if the user does not exist, `400` for validation failures, `409` for unique-constraint violations.
+
+### Deactivate User — `DELETE /v1/users/{id}`
+
+Sets `status='inactive'`. Returns `409` if the target is the **server boot identity** (the row matching `SOVRANT_USER_ID` / OS username) — deactivating it would brick session seeding on the next restart.
+
+### Reactivate User — `POST /v1/users/{id}/reactivate`
+
+Restores `status='active'` for a previously deactivated user.
+
+### List User Sessions — `GET /v1/users/{id}/sessions`
+
+Query params: `limit`, `offset`. Returns session IDs newest-first.
+
+### Get User Usage — `GET /v1/users/{id}/usage`
+
+Query params: `model`, `from`, `to`. Returns aggregated token totals plus a per-model breakdown sourced from `token_usage`.
+
+### List User Audit — `GET /v1/users/{id}/audit`
+
+Query param: `limit`. Joins `audit_governance` through `sessions.user_id`. **Known limitation:** today every session is created with `user_id = Environment.UserName`, so audit events for users created via this API will appear empty until per-user identity flows through session creation in Phase 38.
