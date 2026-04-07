@@ -96,7 +96,7 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(policy =>
             "http://127.0.0.1:5173",
             "http://127.0.0.1:8080")
         .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-        .WithHeaders("Content-Type", "Accept", "Authorization", "X-Session-Id", "X-Workspace-Id", "X-LLM-Api-Key", "X-LLM-Base-Url")
+        .WithHeaders("Content-Type", "Accept", "Authorization", "X-Session-Id", "X-Workspace-Id", "X-Project-Id", "X-LLM-Api-Key", "X-LLM-Base-Url")
         .AllowCredentials()));
 
 // Per-session rate limiting — keyed on session_id from the request body or "anonymous".
@@ -142,6 +142,7 @@ app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseMiddleware<BearerTokenMiddleware>();
 app.UseMiddleware<Sovrant.Server.Middleware.ETagMiddleware>();
 app.UseMiddleware<Sovrant.Server.Middleware.WorkspaceContextMiddleware>();
+app.UseMiddleware<Sovrant.Server.Middleware.ProjectContextMiddleware>();
 
 // Health check — unauthenticated so load balancers / monitors can ping it.
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
@@ -167,6 +168,7 @@ ToolRegistryRoutes.Map(app);
 SkillRegistryRoutes.Map(app);
 AgentTemplateRoutes.Map(app);
 WorkspaceRoutes.Map(app);
+ProjectRoutes.Map(app);
 
 Sovrant.Server.ServerLog.LogServerReady(app.Logger, serverPort);
 
