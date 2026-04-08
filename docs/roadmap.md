@@ -84,20 +84,25 @@ The engine is fully functional for individual and small-team use:
 
 ### Still pending
 
+> **Last audited:** 2026-04-08. Phases 1–37.5 are complete (see ✅ markers in the section headers below). Everything in this table is *not yet shipped*; verified by checking the codebase for the key markers of each phase.
+
 | Gap | Phase | Priority |
 |---|---|---|
-| CLI quick wins (banner, env errors, thinking messages, escape cancel, sticky input, paste, /help audit) | Phase 33 | Low–Medium |
-| CLI visual polish (coloring, conversation separation, /help formatting, web search fix, Windows perms) | Phase 34 | Low–Medium |
-| Workspaces (personal + team areas, isolated memory/config/sessions) | Phase 35 | Medium–High |
-| Projects (workspace-scoped containers for isolated work) | Phase 36 | Medium |
-| User management API (CRUD users, per-user data views) | Phase 37 | Low–Medium |
 | Per-user token auth & database hardening | Phase 38 | Medium |
 | Cost tracking, token budgets & model pricing registry | Phase 39 (deferred) | Deferred |
 | Enterprise auth & multi-tenancy (RBAC, OAuth/OIDC, SSO) | Phase 40 (deferred) | Deferred |
 | Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 41 (deferred) | Deferred |
 | VS Code native extension | Phase 42 (deferred) | Deferred |
+| Database lifecycle: setup, upgrade safety, introspection (`sovrant db status`, backups, `/health` DB status) | Phase 42.5 | Medium |
+| Windows PowerShell native integration (cmdlet generation, module discovery, elevation detection) | Phase 43 | Medium |
+| Cross-platform desktop application (Avalonia, embedded runtime) | Phase 44 | High |
+| Embedded terminal panel inside the desktop app | Phase 45 (deferred) | Deferred |
+| n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |
+| Workspace backup, import & export | Phase 47 | Medium |
+| Intent-aware, capability-discovered model routing | Phase 48 | Medium |
 | SearXNG web search backend (self-hosted, key-free) | Phase 49 | Low–Medium |
 | OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | Medium–High |
+| Sophisticated runtime + autonomous mission loop (planner/executor split, per-step model routing, mission ledger, cost/PM/priority guard) | Phase 51 | High |
 
 ---
 
@@ -3409,6 +3414,220 @@ OpenClaw solves all four with a single routing primitive: **the route**. A route
 - Reimplementing OpenClaw's routing or channel adapters in Sovrant — the whole value of this phase is that OpenClaw already does that
 - Treating OpenClaw routes as durable storage. The bus is for live distribution; the SQLite `swarm_events` table is still the source of truth. If a subscriber is offline, they catch up via `messages_read`, not by replaying a Sovrant-side queue.
 - Cross-tenant federation (one Sovrant install, one OpenClaw gateway, in this phase). Multi-tenant federation can come later if there's demand.
+
+---
+
+## Phase 51 — Sophisticated Runtime + Autonomous Mission Loop (End-to-End Tasks With Cost, PM & Priority Awareness)
+
+**Depends on:** Phase 22 (agent templates + model routing), Phase 24 (verification loop), Phase 27 (memory), Phase 29 (Swarm orchestrator), Phase 32 (persistence), Phase 37.5 (swarm event store), Phase 39 (cost tracking — currently deferred; this phase un-defers the parts it needs), Phase 48 (intent-aware model routing), Phase 50 (federated bus, optional)
+
+**Goal:** Make the Sovrant **engine and runtime** materially more sophisticated, then put a **long-running autonomous mission loop** on top of it. Today the engine runs one agentic turn at a time and the swarm runs one decomposition + one DAG + one quality gate before exiting. Competitors are shipping engines that re-plan mid-turn, route every sub-step to a different model, hold parallel sub-agents against a shared scratchpad, compact their own context, and own a task across hours of wall-clock time. This phase closes that gap on two layers at once because they reinforce each other:
+
+1. **Engine layer.** A real planner/executor split, dynamic mid-turn re-planning, parallel sub-agents with a shared scratchpad, per-sub-step model routing on top of Phase 48, structured reasoning traces, mid-conversation context compaction, and a runtime introspection API. This is the sophistication the user explicitly asked for.
+2. **Mission layer.** A first-class `Mission` entity that takes a high-level goal ("ship the OAuth refactor", "investigate the latency regression", "draft and merge the v2 release"), decomposes it into a tracked plan with priorities and acceptance criteria, executes it across many turns and possibly many days, manages its own cost ceiling, escalates to a human only when policy says it must, and produces a verifiable artifact at the end. The mission layer is what makes the engine improvements *visible to the user* — without missions, a smarter engine just makes single turns marginally better; with missions, a smarter engine compounds across hours of work.
+
+These ship together because each is half-useful alone: a sophisticated engine with no mission abstraction is still single-shot; a mission abstraction over today's engine would inherit today's brittleness on long horizons. Built together, they let Sovrant take an ambiguous goal and own it.
+
+#### Why now — competitor landscape
+
+| Product | Autonomous-loop story | What we can learn |
+|---|---|---|
+| **OpenClaude / Claude Code** | Single agentic session with tool use; user drives turns. No persistent mission state across sessions, no built-in cost-aware re-planning. | Best-in-class single-turn agent; we already match this. The gap is *across turns and sessions*. |
+| **Devin (Cognition)** | Long-running "engineer" that holds a task for hours, re-plans, asks for help on a chat surface, ships a PR. Closed source, opinionated environment. | Mission-as-first-class entity with persistent state, planner/executor split, and a clear escalation surface. |
+| **OpenHands (formerly OpenDevin)** | Open-source agent with explicit `Plan` / `Action` / `Observation` loop, runtime sandbox, headless mode. | Good reference for the loop shape, sandboxed execution model, and headless API surface. |
+| **Aider** | Repo-aware single-loop coder. Strong at edits, weak at multi-day planning or PM-style tracking. | Confirms that "good edits" alone is not enough — users want a *plan* they can inspect. |
+| **Cline / Roo / Continue** | Editor-embedded agents with task lists and approval flows. | Validates that an explicit, *visible* task list (not just hidden DAG) is what humans actually trust. |
+| **AutoGPT / BabyAGI lineage** | Recursive task spawners with no real cost or termination story. | Cautionary tale: without budget, priority, and acceptance criteria these loops thrash forever. |
+| **GitHub Copilot Workspace** | Spec → plan → implementation → review pipeline tied to issues/PRs. | Validates the "issue tracker is the mission ledger" pattern. |
+| **Sovrant today** | Phase 29 swarm (one decomposition, one DAG run, one quality gate, exit). Phase 24 verification loop (per-task). Phase 27 memory (cross-session knowledge but not mission state). | We have most of the building blocks; what we lack is a *mission* abstraction that owns them across time. |
+
+The user-visible gap, in one line: **today Sovrant can complete a well-scoped task in one shot; it cannot yet take ownership of an ambiguous goal, hold the plan over hours, decide when to spend more vs. ask, and ship a checkable result.**
+
+#### What Sovrant already has vs. what this phase adds
+
+**Engine layer**
+
+| Existing | This phase adds |
+|---|---|
+| Single agentic loop: model picks a tool, runs it, model sees the result, repeat | **Planner/executor split**: a planner produces a structured intermediate plan and an executor runs it, with the executor allowed to fail-fast back to the planner instead of thrashing the model on a wrong path |
+| Re-planning only at swarm boundaries (Phase 29 quality gate) | **Mid-turn dynamic re-planning**: the executor can call the planner again on a single tool failure or a contradiction in observations, without unwinding the whole swarm |
+| One model per session (`SmartRouter` chooses on session start) | **Per-sub-step model routing** on top of Phase 48: the planner picks the model *per step* — high tier for ambiguous reasoning, standard for code edits, fast/cheap for grep/parse — instead of paying the high-tier price for every turn |
+| Sub-agents are independent processes with no shared state | **Shared scratchpad**: parallel sub-agents within one turn write to a structured, per-mission scratchpad (`MissionScratchpad`) so sibling agents can see each other's intermediate findings without going through the orchestrator |
+| Tool calls are opaque (only `name` and `args` are recorded) | **Structured reasoning traces**: every tool call is wrapped with the planner's *intent* ("I'm calling Grep to confirm the function exists before I edit it"), persisted alongside the tool result so re-plans and humans can read the reasoning, not just the actions |
+| Context grows monotonically until the model cuts off | **Mid-conversation context compaction**: a background compactor summarises stale tool results and old reasoning into a compact form when the conversation crosses a threshold, preserving identifiers and acceptance criteria verbatim |
+| No introspection of the running engine | **Runtime introspection API** (`GET /v1/engine/state`, `GET /v1/engine/trace/{id}`): the current plan, the active sub-agents, the scratchpad, and the live reasoning trace are all queryable from outside the process |
+| Tool routing by hard-coded allow-lists per agent template | **Tool composition**: the planner can compose existing tools into reusable *macros* for the duration of a mission (e.g. "find-then-edit", "grep-then-test") so common sequences don't burn a planner round-trip every time |
+
+**Mission layer**
+
+| Existing | This phase adds |
+|---|---|
+| Phase 29 swarm: decompose → wave-execute → quality-gate → exit | **Mission**: a persistent first-class entity that owns one or more swarm runs, plus re-plans, plus escalations, across sessions |
+| Phase 24 verification loop (per-task quality gate) | **Acceptance criteria** as data: each mission carries explicit, machine-checkable success conditions used by the gate and the human reviewer |
+| Phase 27 memory (summaries, learned patterns, instincts) | **Mission journal**: append-only narrative of what was tried, what worked, what was rejected, scoped to the mission (separate from cross-session memory) |
+| Phase 37.5 swarm event store (SQLite) | **`missions` table** + child `mission_steps`, `mission_artifacts`, `mission_decisions` — the mission ledger lives next to swarm events |
+| Per-session token tracking (Phase 10) | **Mission-level cost envelope**: budget enforced across many sessions and re-plans, not just one swarm run |
+| `IPermissionPolicy` + Phase 50 chat-channel approvals | **Escalation policy**: when the mission must stop and ask vs. when it can keep spending; declarative, not hard-coded per tool |
+| Manual `/swarm` invocation | **`sovrant mission`** command + `POST /v1/missions` API — a mission can be created from a CLI prompt, an issue tracker hook, or a chat message |
+
+#### Engine sophistication — what actually changes in the runtime
+
+These are concrete changes to `Sovrant.Runtime` and `Sovrant.Agents`, not new top-level products.
+
+- **`IPlanner` / `IExecutor` split.** Today `ConversationRuntime` runs a single loop where the model is both planner and executor. Phase 51 introduces `IPlanner` (produces a `RuntimePlan` of intended steps with intent, expected outcome, model tier, and tool allow-list) and `IExecutor` (runs steps and reports `StepOutcome`). The default `LlmPlanner` calls a high-tier model with a structured-output schema; the default `LlmExecutor` runs each step with the planner-chosen model. The existing single-loop runtime stays as `LegacyRuntime` for callers that don't want planning overhead.
+- **Dynamic re-planning.** `IExecutor` exposes `RequestReplan(reason, observations)`. The executor calls it when a tool fails twice, when an observation contradicts a plan assumption, or when the planner-declared `expected_outcome` doesn't match the actual outcome. Re-plan is a cheap call: the planner sees the current `RuntimePlan`, the journal of completed steps, and the observation that triggered the re-plan, and returns a *patch* to the plan rather than starting over. This is the core "engine sophistication" — instead of letting the model thrash on a wrong path, the engine notices and re-plans deliberately.
+- **Per-sub-step model routing.** `RuntimePlan.Step.ModelTier` declares which Phase 22 tier (`high` / `standard` / `fast`) and optionally which Phase 48 capability profile the executor should use for that step. The executor passes this to `SmartRouter` per call. Effect: a 10-step plan that would have burned 10 calls of the high-tier model now burns 2 high-tier (planning + tricky reasoning) and 8 standard/fast (mechanical edits, greps, file reads). This is where the cost wins live.
+- **`MissionScratchpad` (shared state for parallel sub-agents).** A typed, append-only structured store keyed by mission and namespaced by step. Sub-agents within one wave write findings, partial outputs, and contradictions to it; the next wave's planner reads it before producing the next plan. Replaces the today-pattern where sibling agents are blind to each other and the orchestrator is the only integration point. Backed by SQLite (lives in `mission_scratchpad` table) so it survives process restarts.
+- **Structured reasoning traces.** Every step in a `RuntimePlan` carries the planner's `intent` field. The executor persists `(intent, tool_call, observation, outcome)` tuples to `runtime_traces` rather than just the raw tool history. The mission journal, the runtime introspection API, and the re-planner all read from this richer trace. Cost is bounded: traces are subject to the same compactor as the conversation context.
+- **Mid-conversation context compaction.** A background `IContextCompactor` runs when token usage on a session crosses a configurable threshold (default 70% of model limit). It summarises stale tool results, drops fully-superseded reasoning, and preserves identifiers, acceptance criteria, and unresolved blockers verbatim. Compaction is *idempotent and reversible* — the original tool history is kept in `runtime_traces`, only the in-context view is compacted. A re-plan can hydrate the original on demand if it needs detail the compactor dropped.
+- **Tool macros.** A planner can declare a `MacroDefinition` ("find_and_edit": grep → read → edit) and the executor expands it inline without a planner round-trip per call. Macros are mission-scoped (defined for the lifetime of the mission, not globally). This is what stops the planner from burning a turn deciding what to do every single time it needs to do an obvious sequence.
+- **Runtime introspection API.** `GET /v1/engine/state` returns the active runtimes, their current `RuntimePlan`, the live scratchpad, and the recent reasoning trace. `GET /v1/engine/trace/{runtime_id}` streams the structured trace via SSE. Used by the frontend, the CLI `sovrant engine tail`, and (with Phase 50) by an OpenClaw operator on a phone. This is the difference between "the agent is doing something, hopefully" and "I can see exactly what the agent is reasoning about, right now".
+- **Crash safety as a runtime property, not a mission property.** Every state transition in `IExecutor` is committed to SQLite before the side effect runs. On process restart, an `EngineRecovery` service walks `runtime_traces` and resumes any executor that was mid-step at the moment of crash. Missions inherit this for free.
+
+#### Core concepts
+
+- **`Mission`** — first-class persisted entity. Fields: `id`, `goal`, `acceptance_criteria` (list of checkable predicates in plain English + optional structured form), `priority` (`p0`/`p1`/`p2`/`p3`), `cost_envelope_usd`, `time_envelope_hours`, `escalation_policy` (`autonomous` / `ask-on-blocker` / `ask-on-spend-threshold` / `human-pair`), `status` (`drafting` / `running` / `blocked` / `awaiting_human` / `succeeded` / `failed` / `cancelled`), `workspace_id`, `project_id`, `owner_user_id`, `created_at`, `updated_at`.
+- **`MissionPlan`** — a structured plan composed of `MissionStep`s. Each step has its own acceptance criteria, estimated cost, and references to the swarm runs (Phase 29) or single-agent runs that executed it. Plans are versioned; a re-plan creates a new `MissionPlan` row linked to the same `Mission` so the history is visible.
+- **`MissionStep`** — the unit of execution. A step can be (a) a single-agent task, (b) a swarm run (Phase 29), (c) a human action ("review and approve PR #123"), or (d) a wait condition ("CI green on branch X"). Steps have priorities inherited from the mission but overridable.
+- **`MissionExecutor`** — the long-running loop. Picks the next ready step by priority, dispatches it (single agent / swarm / wait / human), records the result and cost, decides whether to continue, re-plan, escalate, or terminate. Crash-safe: every state transition is committed to the DB before the action happens, so a process restart resumes where it left off.
+- **`MissionPlanner`** — splits a goal into the initial `MissionPlan` and re-plans on demand. Uses the Phase 22 "high" model. Re-plan triggers: a step failed twice, budget burn rate exceeds projection by 1.5x, a step's outputs invalidate the plan's assumptions, or the human inserts a directive.
+- **`MissionGuard`** — evaluates the cost envelope, time envelope, and escalation policy on every loop iteration. Decides between *continue*, *reduce scope*, *escalate*, *halt*. Uses Phase 39 cost model (which this phase un-defers the minimum of).
+- **`MissionJournal`** — append-only narrative scoped to the mission. Distinct from Phase 27 memory: memory is the user's long-term knowledge across projects; the journal is the *mission's own* short-term reasoning record so a re-plan can read what was already tried. Stored as `mission_decisions` rows plus optional summaries.
+- **Acceptance gate** — when the executor thinks the mission is done, it runs the acceptance criteria through a checker (high-level model + any structured assertions). Only on `pass` does the mission move to `succeeded`. On `needs_revision`, the planner re-plans the gap. On `fail`, the mission moves to `blocked` and waits for human input via the escalation policy.
+- **Human surface** — every mission gets a *mission view* (`GET /v1/missions/{id}` and `sovrant mission show <id>`) that shows goal, plan version history, current step, cost burned vs. envelope, journal entries, blockers, and pending approvals. If Phase 50 is enabled, missions can also publish status to an OpenClaw route so the human gets pinged on a phone instead of having to poll.
+
+#### Cost & PM management
+
+This is the part the user explicitly asked about — making the runtime sophisticated enough to manage *cost*, *project management*, and *priorities*, not just execute steps.
+
+- **Cost envelope.** Every mission carries a `cost_envelope_usd` (hard ceiling) and an internal *projection* maintained by the planner. The guard re-evaluates after every step: actual / projected. If burn rate > 1.5x projection, the guard either escalates (per policy) or asks the planner to *reduce scope* (drop p2/p3 steps before touching p0/p1). This requires Phase 39's pricing registry to be live for at least the configured providers — Phase 51 un-defers the *minimum viable* slice of Phase 39 (layered cost model + bundled defaults + per-turn metrics) without requiring the full dashboard or remote registry.
+- **Priority management.** Mission-level priority sets defaults; per-step priority overrides. The executor always picks the highest-priority *ready* step. When the guard decides to reduce scope, it walks the plan from lowest priority up. Priorities are also exposed on the API so an external PM tool (Linear, GitHub, Jira) can push priority changes mid-mission and the executor will pick them up on the next loop iteration.
+- **PM-style tracking.** The mission ledger is intentionally close to a lightweight issue tracker: each mission has a status, an owner, a plan, steps with priorities, a cost burn, and a journal of decisions. The same data shape is what a PM tool would store. Phase 51 ships a one-way export (`mission → GitHub issue / Linear ticket`) and leaves a two-way sync hook for a later phase. The point is not to *replace* the PM tool — it is to make Sovrant *legible* to the PM tool so a human looking at a Linear ticket can see the autonomous work happening underneath.
+- **Escalation policy as data.** Today escalations are tool-by-tool (`IPermissionPolicy` per tool call). For autonomous missions that is too granular — a mission needs *mission-level* policies like "ask before exceeding $X", "ask before any production deploy", "ask if any step retries more than twice", "never ask, log and continue" (for unattended overnight runs). These are declared in `escalation_policy` and evaluated by the guard. Per-tool policies still apply underneath.
+- **Time envelope.** Wall-clock budget complementary to cost. A mission can be told "spend up to $5 *and* up to 4 hours"; whichever ceiling is hit first triggers the guard.
+
+#### Architecture
+
+```
+src/Sovrant.Runtime/Engine/
+  IPlanner.cs / LlmPlanner.cs        ← structured-output planner with intent + per-step model tier
+  IExecutor.cs / LlmExecutor.cs      ← runs RuntimePlan steps, requests re-plans on contradictions
+  RuntimePlan.cs / RuntimeStep.cs    ← typed plan with intent, expected_outcome, model_tier, allowed_tools
+  MissionScratchpad.cs               ← typed shared store for parallel sub-agents
+  IContextCompactor.cs / LlmContextCompactor.cs
+  MacroDefinition.cs / MacroExpander.cs
+  EngineRecovery.cs                  ← walks runtime_traces, resumes mid-step executors after crash
+src/Sovrant.Runtime/Storage/
+  IRuntimeTraceStore.cs / SqliteRuntimeTraceStore.cs   ← runtime_traces, mission_scratchpad
+  IMissionStore.cs / SqliteMissionStore.cs             ← missions, mission_steps, mission_artifacts, mission_decisions
+src/Sovrant.Runtime/Metrics/
+  ICostModel.cs / LayeredCostModel.cs                  ← minimal Phase 39 slice
+src/Sovrant.Agents/Missions/
+  Mission.cs / MissionPlan.cs / MissionStep.cs
+  IMissionPlanner.cs / LlmMissionPlanner.cs            ← thin wrapper over IPlanner that adds acceptance criteria
+  IMissionExecutor.cs / MissionExecutor.cs             ← thin wrapper over IExecutor that adds the cost/time guard
+  MissionGuard.cs / MissionJournal.cs / AcceptanceGate.cs / EscalationPolicy.cs
+src/Sovrant.Server/Routes/
+  MissionRoutes.cs            ← /v1/missions CRUD + status + control
+  EngineRoutes.cs             ← /v1/engine/state and /v1/engine/trace/{id} (SSE)
+src/Sovrant.Cli/
+  MissionCommand.cs           ← `sovrant mission {create|show|list|cancel|approve|tail}`
+  EngineCommand.cs            ← `sovrant engine {state|tail <id>}`
+src/Sovrant.Tools/Missions/
+  MissionTool.cs              ← agent-callable: an agent inside a swarm can spawn a sub-mission
+```
+
+#### Configuration
+
+```jsonc
+// .sovrant/missions.json
+{
+  "defaults": {
+    "cost_envelope_usd": 5.00,
+    "time_envelope_hours": 2.0,
+    "priority": "p2",
+    "escalation_policy": "ask-on-blocker",       // see below
+    "acceptance_checker_level": "high",          // Phase 22 model level
+    "planner_level": "high",
+    "executor_level": "standard"
+  },
+  "policies": {
+    "ask-on-blocker":         { "ask_on_blocker": true,  "ask_on_spend_pct": null, "ask_on_retry_count": 2 },
+    "ask-on-spend-threshold": { "ask_on_blocker": true,  "ask_on_spend_pct": 80,   "ask_on_retry_count": 3 },
+    "autonomous":             { "ask_on_blocker": false, "ask_on_spend_pct": null, "ask_on_retry_count": 5 },
+    "human-pair":             { "ask_on_blocker": true,  "ask_on_spend_pct": 25,   "ask_on_retry_count": 1 }
+  },
+  "scope_reduction": {
+    "drop_priorities_in_order": ["p3", "p2"]     // never drops p0/p1 to stay under budget
+  },
+  "pm_export": {
+    "enabled": false,
+    "target": "github",                          // "github" | "linear" | "none"
+    "repo": "myorg/myrepo"                       // for github
+  }
+}
+```
+
+#### Implementation plan
+
+**Engine layer (lands first, mission layer rides on top)**
+
+A. `RuntimePlan` / `RuntimeStep` records and the `IPlanner` / `IExecutor` interfaces. Default `LlmPlanner` uses structured output against the Phase 22 high-tier model. Default `LlmExecutor` runs steps with the planner-chosen tier.
+B. `IRuntimeTraceStore` + `SqliteRuntimeTraceStore` and the `runtime_traces` schema migration. Every step transition commits before the side effect.
+C. Re-plan loop: `IExecutor.RequestReplan(reason, observations)` → planner returns a *patch* to the existing plan. Bound the re-plan depth (default 3) to prevent runaway loops.
+D. `MissionScratchpad` typed store + `mission_scratchpad` table migration. Wire it into the planner (read on next plan) and into sub-agents (write during execution).
+E. `IContextCompactor` + `LlmContextCompactor` with a configurable trigger threshold. Tests cover idempotency and that identifiers / acceptance criteria survive a compaction round-trip.
+F. `MacroDefinition` + `MacroExpander`. The planner can declare macros for the lifetime of a mission; the executor expands them inline. Macros are validated against the active tool allow-list.
+G. `EngineRecovery`: on process startup, scan `runtime_traces` for executors that were mid-step at crash time and resume them. Test by killing the process mid-step and asserting no double-execute.
+H. `EngineRoutes`: `GET /v1/engine/state`, `GET /v1/engine/trace/{id}` (SSE). `EngineCommand`: `sovrant engine {state|tail <id>}`.
+I. Wire `LlmExecutor` into `SmartRouter` so per-step model tier actually changes which provider/model handles the call. Verify on a recorded run that high-tier calls drop from N to ~2 and the rest go to standard/fast.
+
+**Mission layer (rides on the engine layer above)**
+
+1. Schema: new migration `Vxxx__missions.sql` creating `missions`, `mission_steps`, `mission_artifacts`, `mission_decisions` tables (workspace/project scoped, foreign keys to existing tables, indexes on `status`, `priority`, `updated_at`).
+2. `IMissionStore` + `SqliteMissionStore` with crash-safe state transitions (every status change is its own committed row before the side effect runs).
+3. `Mission`, `MissionPlan`, `MissionStep`, `EscalationPolicy` records and their JSON serialization.
+4. `LlmMissionPlanner`: structured-output prompt that takes a goal + acceptance criteria draft and returns an initial plan with priorities and per-step cost estimates. Reuses the Phase 22 "high" model.
+5. `MissionExecutor` loop: pick ready step by priority → dispatch (single agent, Phase 29 swarm, wait, or human) → record outcome + cost → ask the guard → continue or transition. Idempotent on restart.
+6. `MissionGuard`: pure function over `(Mission, latest costs, escalation policy, time elapsed)` returning `Continue` / `ReduceScope` / `Escalate(reason)` / `Halt(reason)`.
+7. Minimum-viable Phase 39 cost model: `ICostModel`, `LayeredCostModel` (user → project → bundled), bundled JSON for top ~10 models, `CostMetricsLogger` writing to `~/.sovrant/metrics/cost.jsonl`. Dashboard and remote registry remain deferred under Phase 39.
+8. `AcceptanceGate`: high-level model verifies acceptance criteria against the mission's outputs and journal; structured assertions (e.g., "tests pass") run as concrete commands.
+9. `MissionJournal` append API + auto-summarisation when entry count crosses a threshold (so a long-running mission doesn't blow the planner's context on the next re-plan).
+10. CLI: `sovrant mission create "<goal>" --priority p1 --budget 5 --hours 2 --policy ask-on-blocker --accept "<criteria>"`, plus `mission show`, `mission list`, `mission tail <id>`, `mission cancel <id>`, `mission approve <id> <step>`.
+11. API routes under `/v1/missions`: `POST` create, `GET` list/show, `POST /{id}/cancel`, `POST /{id}/approve`, `GET /{id}/tail` (SSE).
+12. `MissionTool` (agent-callable) so a Sovrant agent inside a swarm can spawn a sub-mission for a substantial side quest without the parent loop having to wait synchronously.
+13. Optional `pm_export` adapter: GitHub-issue and Linear-ticket creators that mirror mission status. One-way for this phase.
+14. Phase 50 hookup (if enabled): mission status events publish to a `sovrant/mission/{id}/outbox` OpenClaw route so a phone subscriber gets pings without polling.
+15. Tests:
+    - `MissionGuard` table-driven tests over (cost, time, policy) → decision matrix
+    - `MissionExecutor` crash recovery: kill the process mid-step, restart, assert it resumes from the last committed state and does not double-execute
+    - `LlmMissionPlanner` against a fake LLM provider, verifying structured plan output
+    - `AcceptanceGate` happy path + revision-loop path + fail path
+    - End-to-end: a small mission ("add a hello-world endpoint and a test") runs to `succeeded` against a test repo with a real LLM provider, gated behind `MISSION_E2E=1`
+    - Priority preemption: a p0 step inserted mid-mission preempts an in-progress p2 step on the next loop iteration
+    - Scope reduction: when burn > 1.5x projection, p3 then p2 steps are dropped, p0/p1 untouched
+16. Docs: new `docs/missions.md` (concept + lifecycle + escalation policies), updates to `roadmap.md` (this phase, plus un-deferring the Phase 39 minimum slice with a note), `docs/persistence.md` (new tables), `docs/server.md` (new routes), `README.md` § Missions.
+
+**Verification:**
+- `dotnet build` exits 0
+- A recorded run of a 10-step mission shows ≤3 high-tier model calls and ≥7 standard/fast-tier calls (proves per-sub-step routing is live), with total cost meaningfully below the same mission run on `LegacyRuntime`
+- Killing the process mid-executor-step and restarting resumes from the last committed `runtime_traces` row, with no double-execution of the in-flight step
+- Triggering `IContextCompactor` on a long session preserves all acceptance criteria and unresolved blockers verbatim, drops superseded reasoning, and reduces in-context token count by ≥40%
+- A planner re-plan triggered by a contradictory observation produces a *patch* (diff against the existing `RuntimePlan`), not a full restart, and the executor resumes on the patched plan
+- `GET /v1/engine/state` returns the live plan, scratchpad, and recent trace for an in-progress runtime; `sovrant engine tail <id>` streams new trace entries as they happen
+- `sovrant mission create "Add /healthz endpoint with a test" --budget 2 --policy autonomous` runs to `succeeded` against a test repo, with a non-empty journal, an acceptance-gate pass, and a final cost recorded under the envelope
+- A mission whose budget is exceeded transitions to `blocked` (not `failed`), records a `BudgetExceeded` decision in the journal, and waits for human input
+- Killing the executor process mid-step and restarting resumes the same mission at the same step without re-running the prior step
+- A p0 step injected mid-run is picked next, preempting any p2/p3 work on the ready queue
+- A mission with `escalation_policy: human-pair` pauses on every blocker and on every 25% spend tick, and resumes via `mission approve`
+- With Phase 50 enabled, mission status events appear on the configured OpenClaw outbox route as well as in the local DB
+
+**Non-goals:**
+- Replacing existing PM tools (GitHub Issues, Linear, Jira). The export is one-way and intentionally minimal — the goal is *legibility*, not vendor lock-in.
+- Shipping the full Phase 39 cost dashboard or remote pricing registry. Only the minimum-viable layered cost model + bundled defaults + per-turn metrics ship here; the dashboard and remote sync remain Phase 39's job.
+- Inventing a new agent runtime. Missions sit on top of the existing Phase 19/20/22/24/29 stack; this phase adds the *loop and the ledger*, not a new executor.
+- Long-horizon multi-agent negotiation between *missions* (one mission contracting work to another). Sub-missions spawn synchronously via `MissionTool`; cross-mission negotiation is a later phase if there's demand.
+- True open-ended autonomy with no human surface. Every mission has at least one escalation pathway; "autonomous" mode just means the threshold is high, not absent.
 
 ---
 
