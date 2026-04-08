@@ -21,6 +21,7 @@ The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HT
 - [Architecture](#architecture)
 - [Tools](#tools)
 - [Agent System](#agent-system)
+  - [Team vs Swarm — When to Use Which](#team-vs-swarm--when-to-use-which)
 - [Swarm Orchestrator](#swarm-orchestrator)
 - [Eval Framework](#eval-framework)
 - [Providers](#providers)
@@ -417,11 +418,37 @@ Each team member:
 | **Cancellation** | Process tree kill on cancel | Linked `CancellationTokenSource` (caller token + timeout) |
 | **Best for** | Security-sensitive workloads, untrusted code, production defaults | Lower overhead when agents share trusted memory space |
 
+### Team vs Swarm — When to Use Which
+
+Sovrant ships **two distinct multi-agent systems** that share the same agent factory and templates underneath but solve very different problems. The short version:
+
+> **Team** is "the LLM has co-workers it can hire and fire mid-conversation."
+> **Swarm** is "the user has a build system for one big task — break it up, schedule it, run it in parallel, gate the result."
+
+| Dimension | **Team** | **Swarm** |
+|---|---|---|
+| **Trigger** | LLM tool calls (`TeamCreate`, `TeamDelegate`, …) inside a conversation | User runs `sovrant swarm "<goal>"` from the CLI, or POST `/v1/swarm` |
+| **Lifecycle** | Persistent across turns — the LLM creates members and reuses them | Ephemeral — one swarm, one task, torn down at the end |
+| **Decomposition** | Caller (the LLM) decides what to delegate and when | `LlmSwarmDecomposer` calls an LLM to produce a task DAG with deps and predicted file touches |
+| **Concurrency** | Sequential — one delegation at a time | Wave-based parallelism with topological sort + concurrency cap |
+| **Coordination** | None — each delegation is independent | File locks (`SwarmFileLockManager`), retries, quality gate, token budget |
+| **State / observability** | In-memory `ConcurrentDictionary`, lost on restart | JSONL session files (Phase 37.5: SQLite-backed) — fully replayable |
+| **Code footprint** | ~90 LOC + 4 small tools | ~1,376 LOC across 14 files |
+| **Workspace scoping** | Not yet (process-global registry) | Wired into `SwarmOrchestrator` (`WorkspaceContext`); Phase 37.5 stamps it onto every event |
+
+**Use Team when** the model needs persistent specialists it can call repeatedly during the same conversation — e.g., spin up a "security reviewer" with restricted tools at the start of a session and call back to it 10 turns later with new context.
+
+**Use Swarm when** you have one large task that benefits from parallel sub-tasks with file-touch coordination — e.g., "refactor auth across the whole codebase" where multiple files can be edited concurrently as long as no two agents touch the same file. The decomposition cost is an LLM call up front, so it only pays off when parallelism actually saves wall-clock time vs. the decomposition overhead.
+
+**They are not exclusive.** A swarm plan can have a `TeamId` to draw its workers from a Team registry instead of from templates — see [Using Teams with Swarms](#using-teams-with-swarms) below.
+
+For the full architectural comparison, value-add analysis, and consolidation roadmap, see [`docs/agent-systems.md`](docs/agent-systems.md).
+
 ---
 
 ## Swarm Orchestrator
 
-The swarm orchestrator auto-decomposes complex tasks into parallel DAGs and executes them across multiple agents. It is a separate feature from multi-agent teams — teams define **who** (reusable agent rosters), swarms define **how** (execution patterns). Both are independently controllable from the frontend.
+The swarm orchestrator auto-decomposes complex tasks into parallel DAGs and executes them across multiple agents. See [Team vs Swarm](#team-vs-swarm--when-to-use-which) above for how it differs from the persistent Team system.
 
 ### How It Works
 

@@ -97,6 +97,7 @@ The engine is fully functional for individual and small-team use:
 | Enterprise auth & multi-tenancy (RBAC, OAuth/OIDC, SSO) | Phase 40 (deferred) | Deferred |
 | Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 41 (deferred) | Deferred |
 | VS Code native extension | Phase 42 (deferred) | Deferred |
+| SearXNG web search backend (self-hosted, key-free) | Phase 49 | Low–Medium |
 
 ---
 
@@ -3082,11 +3083,11 @@ workspace-export/
 
 ---
 
-## Phase 48 — Intent-Aware Model Routing
+## Phase 48 — Intent-Aware, Capability-Discovered Model Routing
 
 **Depends on:** Phase 8 (multi-provider), SmartRouter
 
-**Goal:** Automatically select the best LLM model for each turn based on the input's intent, complexity, and task type — without the user switching models manually. Simple questions route to fast/cheap models; complex reasoning, code generation, and multi-step planning route to high-capability models. Users can override with explicit model selection, but the default is intelligent automatic routing.
+**Goal:** Automatically select the best LLM model for each turn based on (a) what models the user actually has connected and (b) the input's intent, complexity, and task type — without the user switching models manually. The router discovers each provider's available models at startup, builds a tier ladder from the user's real fleet (Anthropic, OpenAI, Ollama, fine-tunes, or any mix), and routes simple questions to fast/cheap models while sending complex reasoning, code generation, and multi-step planning to high-capability models. Users can override with explicit model selection, but the default is intelligent automatic routing that adapts to whatever they have wired up.
 
 #### Motivation
 
@@ -3106,6 +3107,7 @@ Intent-aware routing solves this by classifying each input and routing to the ap
 - **Escalation** — if the model produces a low-confidence or incomplete response, automatically retry with a higher-tier model
 - **User override** — `/model <name>` pins to a specific model; `/model auto` re-enables intent routing
 - **Cost budget awareness** — if a cost budget is set (Phase 39), prefer cheaper models when budget is running low
+- **Capability-aware tier resolution** — the tier map (`fast` / `standard` / `high`) is **not hardcoded to Claude names**. At startup, the router enumerates every connected provider's available models (via `/v1/models` for OpenAI-compatible endpoints, `/api/tags` for Ollama, the configured model list for native providers) and builds the tier map from what is actually reachable. A user running only Ollama gets tiers populated from local models (e.g. `qwen2.5:3b` → fast, `qwen2.5:14b` → standard, `qwen2.5:72b` → high); a user with GPT-4o-mini + GPT-4o gets those; a user with the full Anthropic suite gets Haiku/Sonnet/Opus. If a tier has no candidate, it collapses to the next-best available tier rather than failing.
 
 #### Routing rules (configurable)
 
@@ -3122,6 +3124,27 @@ Intent-aware routing solves this by classifying each input and routing to the ap
 | `analysis` | standard | Data size indicators → high |
 | `tool_heavy` | standard | Tool round count > 5 → high |
 
+#### Model capability discovery
+
+The router needs to know **which models the user actually has connected** and what each one is good at before it can pick one for a task. This is a discrete subsystem that runs alongside the existing health pings:
+
+- **Discovery pass** at startup (and on `/v1/router/refresh`):
+  - OpenAI-compatible providers → `GET /v1/models`
+  - Ollama → `GET /api/tags`
+  - Native Anthropic / Gemini → declared model list from config
+  - Per-user credential overrides (Phase 8 headers) → discovery is per-session, not just per-process
+- **Capability metadata** for each discovered model — stored in a `model_capabilities` registry seeded with known data and overridable by the user:
+  - `tier_hint` (`fast` / `standard` / `high`) — derived from model family + parameter count
+  - `context_window`, `max_output_tokens`
+  - `supports_tools`, `supports_vision`, `supports_json_mode`, `supports_thinking`
+  - `intent_affinity` — optional per-intent score boost (e.g. a coding-specialised model gets +0.3 on `code_generation`)
+  - `cost_per_1k_input`, `cost_per_1k_output` (feeds Phase 39)
+- **Auto-tier assignment** — when discovery finishes, the router groups every reachable model by `tier_hint`, picks the cheapest healthy one in each bucket as the default for that tier, and falls back to the next bucket up if a tier is empty (e.g. user only has one large local model → `fast` collapses to `standard`).
+- **User override** — `.sovrant/routing.json` can pin specific models to specific tiers, overriding auto-assignment. Discovery still runs so unknown models surface in `/v1/router/status`.
+- **Re-discovery triggers** — startup, manual refresh, provider added/removed, ping recovery from unhealthy.
+
+This is what makes the routing "user-aware" rather than Anthropic-flavoured: a developer running pure-local Ollama gets a working tier ladder out of the box, and a team mixing OpenAI + Anthropic + a fine-tune gets tiers built from their actual fleet.
+
 #### Configuration
 
 ```json
@@ -3129,10 +3152,14 @@ Intent-aware routing solves this by classifying each input and routing to the ap
 {
   "intent_routing": true,
   "default_tier": "standard",
+  "auto_tier_assignment": true,
   "tier_models": {
-    "fast": "claude-haiku-4-5",
-    "standard": "claude-sonnet-4-6",
-    "high": "claude-opus-4-6"
+    "fast": "auto",
+    "standard": "auto",
+    "high": "auto"
+  },
+  "model_overrides": {
+    "qwen2.5-coder:14b": { "intent_affinity": { "code_generation": 0.4, "refactor": 0.3 } }
   },
   "escalation": true,
   "max_escalations_per_turn": 1,
@@ -3154,24 +3181,90 @@ Intent-aware routing solves this by classifying each input and routing to the ap
 
 1. Define `IntentClass` enum and `IntentClassification` record (intent, complexity score, recommended tier)
 2. Implement `RuleBasedIntentClassifier` — keyword matching, regex patterns, structural analysis (code blocks, file references, question indicators)
-3. Implement `IModelTierResolver` — maps intent classification to concrete model name using tier config
-4. Integrate into `SmartRouter.RouteAsync` — classify intent before selecting provider, use tier to filter eligible providers
-5. Add `/model auto` support to `ModelCommand` — sets session config to use intent routing
-6. Add `X-Model-Tier` and `X-Intent-Class` response headers to chat completions endpoint
-7. Implement escalation logic in `ConversationRuntime.RunTurnAsync` — detect low-quality responses and retry with higher tier
-8. Add routing config file loading (`RoutingConfigLoader`)
-9. Add custom rule support (pattern-based tier overrides)
-10. CLI: show selected tier in token usage line (e.g., `(150↑ 200↓ tokens · standard)`)
-11. Tests: intent classification accuracy, tier selection, escalation triggers, user override, budget awareness
+3. Implement `IModelCapabilityRegistry` — discovers reachable models per provider (`/v1/models`, `/api/tags`, declared lists), stores capability metadata, supports per-session re-discovery for credential overrides, persists to SQLite so first-run latency is hidden on warm starts
+4. Implement `IModelTierResolver` — maps intent classification to a concrete model name using the discovered registry; auto-assigns tier defaults from `tier_hint`; collapses missing tiers to the next-best available
+5. Integrate into `SmartRouter.RouteAsync` — classify intent before selecting provider, use tier to filter eligible providers, prefer models with higher `intent_affinity` for the classified intent
+6. Add `/model auto` support to `ModelCommand` — sets session config to use intent routing
+7. Add `X-Model-Tier` and `X-Intent-Class` response headers to chat completions endpoint
+8. Implement escalation logic in `ConversationRuntime.RunTurnAsync` — detect low-quality responses and retry with higher tier
+9. Add routing config file loading (`RoutingConfigLoader`)
+10. Add custom rule support (pattern-based tier overrides)
+11. CLI: show selected tier in token usage line (e.g., `(150↑ 200↓ tokens · standard)`)
+12. Surface discovered models + tier assignments in `/v1/router/status` and a new `sovrant router models` CLI command so the user can see which models the router knows about and which tier each one is in
+13. Tests: capability discovery per provider type, auto-tier assignment with sparse fleets (Ollama-only, OpenAI-only, mixed), tier collapse when buckets are empty, intent classification accuracy, tier selection, escalation triggers, user override, budget awareness
 
 **Verification:**
 - `dotnet build` exits 0
+- Capability discovery enumerates models from every connected provider (OpenAI-compatible, Ollama, native)
+- Auto-tier assignment produces a working `fast`/`standard`/`high` ladder for an Ollama-only setup, an OpenAI-only setup, and a mixed setup
+- Empty tier buckets collapse to the next-best tier without erroring
 - Simple questions route to fast tier, complex tasks route to high tier
 - `/model auto` enables intent routing; `/model claude-opus-4-6` pins to specific model
 - Escalation retries with higher tier on low-quality responses
 - `X-Model-Tier` header present in API responses
 - Custom routing rules override default tier mapping
 - Cost budget reduces tier preference when budget is low
+- `sovrant router models` lists discovered models grouped by assigned tier
+
+---
+
+## Phase 49 — SearXNG Web Search Backend
+
+**Depends on:** existing `WebSearch` tool, multi-provider infrastructure
+
+**Goal:** Add a self-hosted, key-free, privacy-preserving web search backend by integrating [SearXNG](https://github.com/searxng/searxng) as a `WebSearch` provider option. Lets users running a local-first stack (Ollama + SQLite + local memory) close the last cloud dependency in the agent loop without paying for Brave / Tavily / SerpAPI keys.
+
+#### Motivation
+
+Today `WebSearch` requires either the OpenAI Responses API native tool (`LLM_WEB_SEARCH=true`, paid) or one of the configured external search APIs. For users who:
+- run Ollama for the LLM
+- run Sovrant Server locally
+- already self-host other infra in a homelab
+
+…there is no fully-offline-capable search option. SearXNG is the natural fit: a single Docker container that aggregates 70+ upstream search engines (Google, Bing, DuckDuckGo, Brave, Wikipedia, GitHub, Stack Overflow, arXiv, …) behind a clean JSON API, with no API keys, no tracking, and per-category source selection.
+
+#### Core concepts
+
+- **`SearxngSearchProvider`** — implements the same internal search-provider interface used by the existing `WebSearch` tool. Calls `GET {SEARXNG_BASE_URL}/search?q=...&format=json` and maps the result list (`title`, `url`, `content`, `engine`, `category`) to Sovrant's existing `WebSearchResult` shape.
+- **Selection via env var** — `SOVRANT_WEB_SEARCH=searxng` (alongside the existing `brave`, `tavily`, etc. options) plus `SEARXNG_BASE_URL=http://localhost:8080`. No code changes required for users on other backends.
+- **Category filtering** — the `WebSearch` tool gains an optional `category` argument (`general`, `code`, `news`, `science`, `images`, `files`). Maps to SearXNG's `categories=` query param. Other backends ignore the argument.
+- **Rate-limit hygiene** — local SearXNG instances are rate-limited by their *own* IP against upstream engines. Provider applies a small per-request delay budget (configurable via `SEARXNG_MIN_INTERVAL_MS`) and surfaces 429s clearly so users learn to back off rather than burn upstream goodwill.
+- **Health check** — registered with `SmartRouter`'s health-ping framework so a dead SearXNG container shows up in `/v1/router/status` instead of failing silently mid-conversation.
+- **No public-instance default** — `SEARXNG_BASE_URL` must be set explicitly. We will not ship a default pointing at `searx.space` instances; they have their own rate limits and reliability varies.
+
+#### Configuration
+
+```bash
+# Self-hosted SearXNG (recommended)
+docker run -d --name searxng -p 8080:8080 searxng/searxng
+
+# Sovrant
+export SOVRANT_WEB_SEARCH=searxng
+export SEARXNG_BASE_URL=http://localhost:8080
+export SEARXNG_MIN_INTERVAL_MS=500   # optional, default 0
+```
+
+#### Implementation plan
+
+1. Add `SearxngSearchProvider` under `src/Sovrant.Tools/Web/Providers/` (or wherever the existing `BraveSearchProvider` / equivalent lives)
+2. Wire selection in the `WebSearch` tool's provider factory keyed on `SOVRANT_WEB_SEARCH=searxng`
+3. Add `category` argument to the `WebSearch` tool schema (optional, defaults to `general`)
+4. Register a health-check ping (`GET /healthz`) with `SmartRouter` so status shows up in `/v1/router/status`
+5. Document the Docker one-liner and env vars in `README.md` § Web Search and `docs/configuration.md`
+6. Tests: provider unit tests with a mocked HTTP client, category mapping, error path on 429, health-check integration
+
+**Verification:**
+- `dotnet build` exits 0
+- With a local SearXNG container running, `WebSearch` returns aggregated results from multiple engines
+- `SOVRANT_WEB_SEARCH=searxng` with no `SEARXNG_BASE_URL` fails fast with a clear error
+- `category=code` returns developer-oriented results (GitHub, Stack Overflow, etc.)
+- `/v1/router/status` shows SearXNG health when configured
+- Other web search backends (Brave, Tavily, OpenAI Responses) continue to work unchanged
+
+**Non-goals:**
+- Shipping a bundled SearXNG container (users self-host)
+- Crawling / indexing — this is purely query-time aggregation; tools like Crawl4AI / Firecrawl are out of scope
+- Public-instance fallback — explicitly not provided for rate-limit hygiene reasons
 
 ---
 
