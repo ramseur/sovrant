@@ -170,6 +170,7 @@ AgentTemplateRoutes.Map(app);
 WorkspaceRoutes.Map(app);
 ProjectRoutes.Map(app);
 UserRoutes.Map(app);
+WhoAmIRoutes.Map(app);
 
 Sovrant.Server.ServerLog.LogServerReady(app.Logger, serverPort);
 

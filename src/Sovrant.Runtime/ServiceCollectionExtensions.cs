@@ -129,6 +129,12 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<ISqliteConnectionFactory>(),
                 sp.GetRequiredService<ILogger<SqliteUserStore>>()));
 
+        // Token service (Phase 38) — per-user API tokens.
+        services.AddSingleton<Sovrant.Runtime.Auth.ITokenService>(sp =>
+            new Sovrant.Runtime.Auth.SqliteTokenService(
+                sp.GetRequiredService<ISqliteConnectionFactory>(),
+                sp.GetRequiredService<ILogger<Sovrant.Runtime.Auth.SqliteTokenService>>()));
+
         // Swarm event store (Phase 37.5) — SQLite-backed, replaces the JSONL session store.
         services.AddSingleton<ISwarmEventStore>(sp =>
             new SqliteSwarmEventStore(sp.GetRequiredService<ISqliteConnectionFactory>()));

@@ -19,6 +19,15 @@ namespace Sovrant.Runtime.Auth;
 public interface ITokenService
 {
     /// <summary>
+    /// The plaintext prefix used to identify a Sovrant per-user token at a
+    /// glance — currently <c>svt_</c>. Exposed on the interface so middleware
+    /// and CLI tooling can route on the prefix without depending on the
+    /// concrete implementation.
+    /// </summary>
+    public const string TokenPrefix = "svt_";
+
+
+    /// <summary>
     /// Mints a fresh token for the given user. Returns the metadata row plus
     /// the plaintext secret — <b>this is the only time the plaintext is ever
     /// exposed</b>. The caller must surrender it to the user immediately.

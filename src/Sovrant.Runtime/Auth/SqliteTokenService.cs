@@ -27,7 +27,7 @@ namespace Sovrant.Runtime.Auth;
 internal sealed partial class SqliteTokenService : ITokenService
 {
     /// <summary>Plaintext token prefix. Identifies a Sovrant token at a glance.</summary>
-    public const string TokenPrefix = "svt_";
+    public const string TokenPrefix = ITokenService.TokenPrefix;
 
     /// <summary>Number of random bytes in the secret portion of the token.</summary>
     private const int SecretByteLength = 32;
