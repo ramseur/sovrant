@@ -103,6 +103,7 @@ The engine is fully functional for individual and small-team use:
 | SearXNG web search backend (self-hosted, key-free) | Phase 49 | Low–Medium |
 | OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | Medium–High |
 | Sophisticated runtime + autonomous mission loop (planner/executor split, per-step model routing, mission ledger, cost/PM/priority guard) | Phase 51 | High |
+| Unified agent orchestration: collapse Team and Swarm into one DB-backed abstraction with three creation modes (one team / multiple teams / engine-decided) | Phase 52 | High |
 
 ---
 
@@ -3639,6 +3640,173 @@ I. Wire `LlmExecutor` into `SmartRouter` so per-step model tier actually changes
 - Inventing a new agent runtime. Missions sit on top of the existing Phase 19/20/22/24/29 stack; this phase adds the *loop and the ledger*, not a new executor.
 - Long-horizon multi-agent negotiation between *missions* (one mission contracting work to another). Sub-missions spawn synchronously via `MissionTool`; cross-mission negotiation is a later phase if there's demand.
 - True open-ended autonomy with no human surface. Every mission has at least one escalation pathway; "autonomous" mode just means the threshold is high, not absent.
+
+---
+
+## Phase 52 — Unified Agent Orchestration: One Team-or-Swarm Abstraction in the Database
+
+**Depends on:** Phase 19+20 (multi-agent teams), Phase 22 (agent templates), Phase 29 (Swarm orchestrator), Phase 32 (persistence), Phase 35 (workspaces), Phase 36 (projects), Phase 37 (users), **Phase 37.5 (swarm sessions in the DB — the prerequisite that makes this phase possible)**
+
+**Goal:** Collapse Sovrant's two parallel multi-agent systems — **Team** (LLM-driven, conversational, persistent personas, in-memory only) and **Swarm** (user-driven, ephemeral, parallel, file-locked, DAG-decomposed) — into a **single orchestration abstraction** with one persistent home in the SQLite database. After this phase, "team" is no longer a separate concept from "swarm"; it is one of three ways to compose a swarm. All members, runs, plans, locks, and events live in the same tables, queryable per user / workspace / project, surviving restarts and exportable like every other persisted entity.
+
+This is the unification that `docs/agent-systems.md` previewed at the bottom of the doc as a "possible future". Phase 37.5 is what makes it possible: once swarm events live in the database, the rest of the agent state (team members, agent runs, conversation links) can join them in the same store under the same backup, query, and scoping story.
+
+#### Why now
+
+Today Sovrant has two stovepipes that share the same `SovrantAgentFactory` and `AgentTemplateRegistry` underneath but diverge above:
+
+| Today | The cost |
+|---|---|
+| `InMemoryTeamRegistry` (`ConcurrentDictionary`) holds team members | Lost on restart. No per-workspace scoping. Survives nothing. |
+| `SwarmStateTracker` + JSONL files held swarm state (until Phase 37.5 moved events into `swarm_events`) | Was unjoinable to users/workspaces. Phase 37.5 fixed events; team members and agent runs are still parallel paths. |
+| `TeamCreate` / `TeamDelegate` / `TeamStatus` are LLM-callable | The LLM can build a team in conversation but cannot then say "now run this plan in parallel with file locks" — that requires dropping out of the conversation and into the swarm CLI. |
+| `sovrant swarm "<task>"` always spawns ephemeral workers from templates | The user cannot say "use the team I already built" — the swarm decomposer ignores any pre-existing team members. |
+| Two observability stories | One API surface (`TeamStatus` tool) and one storage surface (`/v1/swarm/sessions` + `swarm_events` table). Same underlying activity, different consumers. |
+
+The Phase 37.5 doc note already calls this out: *"this is the unification of team and swarm into a single orchestration concept"* is one of the explicit reasons the swarm-into-DB work was a prerequisite, not just a persistence cleanup.
+
+#### What "unified" means concretely
+
+After this phase there is **one** persisted concept — call it an `AgentEnsemble` (working name; could stay "team" or "swarm" if we want to preserve a familiar word) — with:
+
+- **One member registry.** A new `SqliteTeamRegistry : ITeamRegistry` replaces `InMemoryTeamRegistry`. Members live in a `team_members` table keyed by `(workspace_id, project_id, team_id, member_id)`. Created via `TeamCreate` in conversation **or** via the server API **or** by a swarm decomposer that elects to publish its ephemeral workers as a named team.
+- **One run ledger.** A new `agent_runs` table records every agentic execution — single-shot tool delegation (today's `TeamDelegate`), wave step (today's swarm worker), or mission step (Phase 51) — with foreign keys to the team that ran it, the user who triggered it, the workspace/project, and the parent run if it was spawned by another agent.
+- **One event store.** Phase 37.5's `swarm_events` table generalises to `agent_events` (or stays named `swarm_events` with a `kind` column added — TBD by the migration). Both single-agent delegations and multi-agent waves stream into the same event stream.
+- **Three creation modes for an orchestration**, all going through the same `AgentOrchestrator`:
+  1. **One pre-existing team.** Caller hands the orchestrator a `team_id`; the orchestrator runs the work using *only* members of that team (single delegation, parallel wave, or DAG — same engine, different surface). This is "use the team I already built." The LLM can do this from a conversation tool (`TeamRun`), the user can do it from the CLI (`sovrant team run <team_id> "<task>"`), and the API can do it (`POST /v1/teams/{id}/runs`).
+  2. **Multiple pre-existing teams (composition).** Caller hands the orchestrator a list of `team_id`s — e.g. `[security-reviewers, perf-team, frontend]` — plus a task. The decomposer routes each step to the most appropriate team based on member capabilities (template + tool whitelist + recommended model tier). This is "use these specialised teams together."
+  3. **Engine-decided (current behavior).** Caller hands the orchestrator a goal and no team. The decomposer (today's `LlmSwarmDecomposer`) builds a plan, spawns ephemeral workers from templates, and *optionally* publishes the resulting workers as a named team at the end so the user can re-use them later. This is the existing `sovrant swarm "<task>"` flow, unchanged from the user's perspective, but now with the side-effect that the workers it spawned become first-class persisted members the LLM can call back to in a later conversation.
+
+The point is that the same orchestrator code handles all three modes; the only difference is *where the member roster comes from*. File locking, wave scheduling, retries, the quality gate, and the decomposer all sit underneath the orchestrator and apply uniformly regardless of how the team was assembled.
+
+#### Architecture
+
+```
+src/Sovrant.Agents/Orchestration/
+  IAgentOrchestrator.cs           ← unified entry point (replaces SwarmOrchestrator's public surface)
+  AgentOrchestrator.cs            ← merges TeamDelegate path and SwarmOrchestrator engine
+  EnsembleSelector.cs             ← takes (task, team_ids[]) and produces a worker roster
+  TeamRunRequest.cs / EnsembleRunRequest.cs
+
+src/Sovrant.Agents/Teams/
+  ITeamRegistry.cs                ← unchanged interface
+  SqliteTeamRegistry.cs           ← NEW: replaces InMemoryTeamRegistry as the default DI binding
+  InMemoryTeamRegistry.cs         ← kept for tests only
+
+src/Sovrant.Runtime/Storage/
+  ITeamMemberStore.cs / SqliteTeamMemberStore.cs
+  IAgentRunStore.cs / SqliteAgentRunStore.cs
+  IAgentEventStore.cs             ← either generalises ISwarmEventStore or coexists with a kind discriminator
+
+src/Sovrant.Runtime/Storage/Migrations/
+  Vxxx__unified_orchestration.sql ← team_members, agent_runs, parent_run_id, kind columns
+
+src/Sovrant.Tools/Team/
+  TeamCreateTool.cs / TeamDelegateTool.cs / TeamStatusTool.cs / TeamDeleteTool.cs ← unchanged surface
+  TeamRunTool.cs                  ← NEW: lets the LLM run an existing team against a task with parallelism
+  TeamPublishTool.cs              ← NEW: lets a swarm publish its ephemeral workers as a named team after completion
+
+src/Sovrant.Server/Routes/
+  TeamRoutes.cs                   ← /v1/teams (CRUD), /v1/teams/{id}/runs (start), /v1/teams/{id}/members
+  SwarmRoutes.cs                  ← stays for backward compat; internally calls AgentOrchestrator with mode=engine-decided
+
+src/Sovrant.Cli/
+  TeamCommand.cs                  ← `sovrant team {list|show|create|run|delete}` next to existing `swarm` command
+```
+
+#### Schema sketch
+
+```sql
+-- New
+CREATE TABLE team_members (
+    member_id        TEXT PRIMARY KEY,
+    team_id          TEXT NOT NULL,
+    workspace_id     TEXT NOT NULL,
+    project_id       TEXT,
+    name             TEXT NOT NULL,
+    role             TEXT NOT NULL,
+    template         TEXT,                  -- agent template name from Phase 22
+    system_prompt    TEXT,
+    allowed_tools    TEXT,                  -- JSON array
+    model_level      TEXT,                  -- high / standard / fast (Phase 22)
+    created_by       TEXT NOT NULL,         -- user_id
+    created_at       INTEGER NOT NULL,
+    last_used_at     INTEGER,
+    status           TEXT NOT NULL DEFAULT 'active'
+);
+
+CREATE TABLE teams (
+    team_id          TEXT PRIMARY KEY,
+    workspace_id     TEXT NOT NULL,
+    project_id       TEXT,
+    name             TEXT NOT NULL,
+    description      TEXT,
+    origin           TEXT NOT NULL,         -- 'user', 'llm-created', 'swarm-published'
+    created_by       TEXT NOT NULL,
+    created_at       INTEGER NOT NULL
+);
+
+CREATE TABLE agent_runs (
+    run_id           TEXT PRIMARY KEY,
+    parent_run_id    TEXT,                  -- for sub-spawns (swarm wave step, mission sub-step)
+    team_id          TEXT,                  -- nullable: ad-hoc runs may have no team
+    member_id        TEXT,                  -- nullable: ephemeral workers
+    workspace_id     TEXT NOT NULL,
+    project_id       TEXT,
+    user_id          TEXT NOT NULL,
+    kind             TEXT NOT NULL,         -- 'delegation', 'swarm-task', 'mission-step'
+    status           TEXT NOT NULL,         -- 'queued', 'running', 'succeeded', 'failed', 'cancelled'
+    started_at       INTEGER NOT NULL,
+    ended_at         INTEGER,
+    input_tokens     INTEGER NOT NULL DEFAULT 0,
+    output_tokens    INTEGER NOT NULL DEFAULT 0,
+    cost_usd         REAL
+);
+
+-- Extend Phase 37.5's swarm_events with a kind discriminator + run linkage
+ALTER TABLE swarm_events ADD COLUMN kind TEXT NOT NULL DEFAULT 'swarm';
+ALTER TABLE swarm_events ADD COLUMN run_id TEXT;
+CREATE INDEX idx_swarm_events_run_id ON swarm_events(run_id);
+```
+
+#### Implementation plan
+
+1. **Migration `Vxxx__unified_orchestration.sql`**: create `teams`, `team_members`, `agent_runs`. Extend `swarm_events` with `kind` + `run_id`. All scoped by `workspace_id`/`project_id`/`user_id` so existing isolation rules apply automatically.
+2. **`SqliteTeamRegistry`**: drop-in replacement for `InMemoryTeamRegistry` with the same `ITeamRegistry` interface. Reads/writes `teams` and `team_members`. Default DI binding switches to it; `InMemoryTeamRegistry` stays for unit tests.
+3. **`IAgentRunStore` + `SqliteAgentRunStore`**: tracks runs across all three orchestration modes. Wired into `AgentOrchestrator` as the canonical run ledger. Existing `SwarmStateTracker` becomes a thin in-memory cache backed by this store.
+4. **`AgentOrchestrator` (unification)**: merge the public surface of `SwarmOrchestrator` and the internals of `TeamDelegateTool`. New `RunAsync(EnsembleRunRequest)` accepts one of `{ team_id, [team_ids], goal-only }` and dispatches accordingly. Existing `SwarmOrchestrator` becomes a thin wrapper that builds a `goal-only` request — backward compatibility for current `Swarm` tool callers.
+5. **`EnsembleSelector`**: given a list of teams and a task, picks workers from each team for each task in the plan based on template / tool / model-level fitness. Used by mode (2). Falls back to ephemeral spawning when no team member matches a task slot.
+6. **`TeamRunTool` (new LLM-callable tool)**: lets the LLM say "run team `code-review` against this diff with parallelism" in a single tool call. Parallelism + locking + quality gate happen automatically because the same orchestrator runs the work.
+7. **`TeamPublishTool` (new LLM-callable tool)**: after a swarm finishes in mode (3), the LLM (or a quality-gate hook) can publish the ephemeral workers as a named team in the current workspace, marking the team's `origin = 'swarm-published'`. Side benefit: the user can read `sovrant team list` after a swarm and see exactly who did the work.
+8. **CLI**: `sovrant team {list|show|create|run|delete|members}` mirrors the existing `swarm` command. `sovrant swarm` keeps working as a synonym for "engine-decided run with no pre-existing team."
+9. **Server routes**: `/v1/teams` CRUD, `/v1/teams/{id}/runs` (start a run), `/v1/teams/{id}/members`, `/v1/runs/{id}` (read any run regardless of mode), `/v1/runs/{id}/events` (SSE). Existing `/v1/swarm/*` routes stay and become aliases for engine-decided runs.
+10. **Backward compatibility**: existing `TeamCreate` / `TeamDelegate` / `TeamStatus` / `TeamDelete` tools keep their wire format. Underneath, `TeamCreate` now writes to SQLite instead of the in-memory dict; `TeamDelegate` calls `AgentOrchestrator.RunAsync` with a single-step plan. No prompt changes for existing LLM users.
+11. **`agent-systems.md`** rewrite (post-merge): the "two stovepipes" framing comes out, replaced with "one orchestration concept, three creation modes." The existing comparison table becomes an *historical* note for context. Phase 51 mission docs reference the unified `IAgentOrchestrator` instead of having to choose between Team and Swarm.
+12. **Tests**:
+    - `SqliteTeamRegistry`: round-trips members, scopes by workspace, survives recreation
+    - `AgentOrchestrator` mode 1 (one team): a pre-built team of three runs a 5-task plan; file locks honoured; no ephemeral workers spawned
+    - Mode 2 (multiple teams): given two teams, the selector routes a 6-task plan to the right specialists per task; falls back to ephemeral on no-fit
+    - Mode 3 (engine-decided): existing `LlmSwarmDecomposer` flow still produces the same plans; `TeamPublishTool` materialises workers into a named team
+    - Backward compat: `TeamDelegate` against the new SQLite registry produces identical observable behaviour to the old in-memory path
+    - Cross-restart: build a team in process A, restart, query members in process B, run a task against them
+    - `agent_runs` joined with `users` and `workspaces` returns sensible per-user, per-workspace activity reports
+
+**Verification:**
+- `dotnet build` exits 0
+- `sovrant team create code-review --template reviewer && sovrant team run code-review "review src/Foo.cs"` runs against a persisted team, with file locks engaged and a row in `agent_runs`
+- After restarting the process, `sovrant team list` still shows `code-review` and `sovrant team run code-review` works without recreating it
+- A swarm run `sovrant swarm "refactor parser"` followed by `sovrant team list` shows the ephemeral workers materialised as a named team (because `TeamPublishTool` ran in the quality-gate hook)
+- A multi-team run (`sovrant team run --teams security,perf "audit the auth flow"`) routes the security tasks to security-reviewer members and the perf tasks to perf members, with the routing visible in `agent_runs.team_id` per row
+- `GET /v1/runs/{id}/events` returns the full event stream regardless of whether the run came from `TeamDelegate`, `sovrant swarm`, or a mission step (Phase 51)
+- `agent_runs` joined with `users` produces a per-user activity report; same join with `workspaces` produces a per-workspace report
+- All existing `Team*` and `Swarm*` tools and routes still work without prompt changes
+
+**Non-goals:**
+- Renaming the wire format. `TeamCreate`, `TeamDelegate`, `Swarm` tool, `/v1/swarm/*` — all stay. The unification is internal; users see strictly more functionality, not a migration burden.
+- Removing the `LlmSwarmDecomposer`. It is the engine behind mode (3) and stays unchanged.
+- Building a UI for team management. CLI + API only in this phase; the desktop app (Phase 44) and the frontend SDK (Phase 14) can consume the new routes when they want to.
+- Cross-workspace team sharing. Teams stay scoped by workspace; sharing across workspaces is a later phase if it turns out users want it.
+- Replacing Phase 51's `MissionExecutor`. Missions sit *on top of* the unified `IAgentOrchestrator` — Phase 52 makes Phase 51's life easier, not the other way around. The two phases can ship in either order; if 52 ships first, Phase 51's mission steps dispatch through the unified orchestrator from day one.
 
 ---
 

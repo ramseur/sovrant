@@ -103,7 +103,7 @@ If you wanted to consolidate, the natural path would be:
 
 This would let you keep Swarm's hard-won machinery (file locks, decomposer, quality gate) without maintaining two parallel concepts on top of the same agent factory.
 
-This is **not on the roadmap yet** — it is a sketch for a possible future phase, included here so the architectural intent is documented while it is fresh. If you choose to pursue it, the right time is after **Phase 37.5 (Swarm Sessions Into the Database)** — that phase already does the hard work of moving swarm state into SQLite, which is the prerequisite for any unification.
+This is now tracked as **[Phase 52 — Unified Agent Orchestration](roadmap.md#phase-52--unified-agent-orchestration-one-team-or-swarm-abstraction-in-the-database)** in the roadmap. Phase 37.5 (Swarm Sessions Into the Database) shipped the prerequisite — swarm events live in SQLite, so the rest of the agent state (team members, agent runs, conversation links) can join them in the same store under the same backup, query, and scoping story. Phase 52 adds three explicit creation modes so a swarm can run against (1) one pre-existing team, (2) multiple composed teams, or (3) the engine's own decomposition (current behavior), with all three going through the same orchestrator and persisting to the same tables.
 
 ---
 
@@ -112,5 +112,6 @@ This is **not on the roadmap yet** — it is a sketch for a possible future phas
 - [`README.md` § Agent System](../README.md#agent-system) — user-facing overview
 - [`README.md` § Team vs Swarm — When to Use Which](../README.md#team-vs-swarm--when-to-use-which) — short-form comparison
 - [`README.md` § Swarm Orchestrator](../README.md#swarm-orchestrator) — swarm execution details, locking, API
-- [`docs/roadmap.md` § Phase 37.5](roadmap.md#phase-375--swarm-sessions-into-the-database) — moving swarm state into the DB (prerequisite for any unification)
+- [`docs/roadmap.md` § Phase 37.5](roadmap.md#phase-375--swarm-sessions-into-the-database) — moving swarm state into the DB (prerequisite, shipped)
+- [`docs/roadmap.md` § Phase 52](roadmap.md#phase-52--unified-agent-orchestration-one-team-or-swarm-abstraction-in-the-database) — the unification phase itself
 - [`docs/persistence.md`](persistence.md) — where agent state lives today and where it is going
