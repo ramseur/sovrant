@@ -3832,6 +3832,119 @@ CREATE INDEX idx_swarm_events_run_id ON swarm_events(run_id);
 
 ---
 
+## Phase 53 — Scoped Artifact Storage (User / Workspace / Project, Disk Now → Cloud Later)
+
+**Depends on:** Phase 35 (workspaces), Phase 36 (projects), Phase 37 (users)
+**Relates to:** Phase 41 (team agent artifact system — this phase is the storage substrate it will sit on), Phase 44 (desktop app — needs per-user scoping), Phase 47 (workspace export — needs a tenant-scoped artifact tree to export)
+**Difficulty:** Medium
+
+**Goal:** Replace today's flat `artifacts/` folder with a tenant-scoped layout rooted at `{user_id}/{workspace_id}/{project_id}/{run_id}/`, behind a single `IArtifactStore` abstraction. On-disk `LocalArtifactStore` ships first; a cloud-backed store (S3 / Azure Blob / R2) slots in later without touching callers.
+
+### What exists today
+
+`WorkspaceContext.ArtifactsRoot` returns `{cwd}/artifacts` and `GetOrCreateArtifactsDirectory(prompt)` derives a **prompt slug** as the only subdirectory (`src/Sovrant.Agents/Shared/WorkspaceContext.cs:26`). Every agent run — regardless of user, workspace, or project — writes into the same flat tree. Consequences:
+- No isolation between users or workspaces; one tenant can see another's outputs on a shared deployment.
+- Reruns of the same prompt collide into the same slug directory and overwrite prior outputs.
+- Phase 35 workspaces and Phase 36 projects have no storage counterpart — there's nothing to back up, export, or quota per workspace.
+- The existing `artifacts/create-a-guide-detailing-a-list-of-features-requested-by/` is a concrete example of the collision-and-leak problem in the current repo.
+
+### Target layout
+
+```
+{ArtifactsRoot}/
+  {user_id}/
+    {workspace_id}/
+      {project_id}/
+        {run_id}/
+          <files written by the agent for this run>
+          _manifest.json      ← run metadata (prompt, agent, timestamps, file list)
+```
+
+- `ArtifactsRoot` defaults to `~/.sovrant/artifacts/` (not `{cwd}/artifacts/`) so outputs are not mixed into the user's source tree. Overridable via `SOVRANT_ARTIFACTS_ROOT`.
+- `run_id` is the session/run id (already tracked in `agent_runs` / sessions), **not** a prompt slug. Reruns get fresh directories; a prompt-derived slug is kept as a human-readable symlink/alias inside `_manifest.json`.
+- Unknown scopes fall back to sentinel segments: `default-user`, `personal` (the seeded personal workspace from Phase 35), `default-project`. Nothing breaks on a fresh install with no users configured.
+- Single-user CLI mode still works — it just resolves to `default-user/personal/default-project/{run_id}/`.
+
+### `IArtifactStore` abstraction
+
+| Member | Description |
+|---|---|
+| `Task<ArtifactHandle> CreateRunScopeAsync(ArtifactScope scope, CancellationToken ct)` | Materializes the scope tree and returns an opaque handle for the run. `ArtifactScope` = `(UserId, WorkspaceId, ProjectId, RunId)`. |
+| `Task WriteAsync(ArtifactHandle handle, string relativePath, Stream content, string? contentType, CancellationToken ct)` | Writes a single artifact file under the run scope. Rejects `..` traversal. |
+| `Task<Stream> ReadAsync(ArtifactHandle handle, string relativePath, CancellationToken ct)` | Reads an artifact back. |
+| `IAsyncEnumerable<ArtifactEntry> ListAsync(ArtifactScope scope, CancellationToken ct)` | Lists files at any scope level (run, project, workspace, user). Used by `/v1/artifacts` and the desktop app sidebar. |
+| `Task DeleteAsync(ArtifactScope scope, CancellationToken ct)` | Recursive delete at any scope level — powers cleanup when a run/project/workspace is deleted. |
+| `Task<Uri?> GetAccessUrlAsync(ArtifactHandle handle, string relativePath, TimeSpan ttl, CancellationToken ct)` | Optional. Local store returns `file://`; cloud stores return presigned URLs. |
+
+Implementations:
+- **`LocalArtifactStore`** — ships in this phase. Writes to `SOVRANT_ARTIFACTS_ROOT`. Path-traversal-safe. Chmod 700 on the user segment where the OS supports it.
+- **`S3ArtifactStore` / `AzureBlobArtifactStore`** — follow-up phase, same interface. Bucket/container per deployment; same `{user}/{workspace}/{project}/{run}/` prefix. Nothing else needs to change.
+
+### Changes to existing code
+
+1. `WorkspaceContext` — deprecate the flat `ArtifactsRoot` + `GetOrCreateArtifactsDirectory(prompt)`. Replace with `ArtifactScope` + an injected `IArtifactStore`. Callers that used the prompt-slug method get a shim that logs a warning and routes into the scoped store under `default-user/personal/default-project/{runId}/`.
+2. `ConversationRuntime` + `SwarmOrchestrator` — resolve `ArtifactScope` from the current session's `user_id` / `workspace_id` / `project_id` (these already exist after Phases 35–37) and plumb the resulting `ArtifactHandle` through to tool execution.
+3. `Write` / `Edit` / file-producing tools — when a tool writes into the artifacts tree, it goes through `IArtifactStore.WriteAsync`, not raw `File.WriteAllText` on a path computed from `WorkspaceContext`.
+4. Phase 41's `FileBackedTeamWorkspace` — rebased on `IArtifactStore` instead of writing directly to `~/.sovrant/workspaces/{team_id}/`. Team artifacts become a subkey under the team's workspace scope.
+5. Server: add `GET /v1/artifacts?scope=...` (list) and `GET /v1/artifacts/{runId}/{path}` (download) — authorized by Phase 38 per-user tokens; users can only read scopes they own, admins see all.
+6. CLI: `sovrant artifacts ls [--workspace ... --project ... --run ...]`, `sovrant artifacts open <run>`, `sovrant artifacts rm <run>`.
+
+### Migration
+
+One-shot importer runs at startup if `{cwd}/artifacts/` is non-empty and `SOVRANT_ARTIFACTS_ROOT` is unset:
+- Move existing subdirectories under `{cwd}/artifacts/<slug>/` into `~/.sovrant/artifacts/default-user/personal/default-project/legacy-{slug}/`.
+- Write a `_manifest.json` for each with `{ "migrated_from": "legacy", "original_slug": "<slug>" }`.
+- Log the move at WARN so users see it once.
+- Leave the old `artifacts/` directory empty (not deleted) with a `README.migrated` breadcrumb.
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `SOVRANT_ARTIFACTS_ROOT` | `~/.sovrant/artifacts` | On-disk root for `LocalArtifactStore`. |
+| `SOVRANT_ARTIFACTS_BACKEND` | `local` | `local` \| `s3` \| `azure` — chooses the registered `IArtifactStore` implementation. |
+| `SOVRANT_ARTIFACTS_MIGRATE_LEGACY` | `true` | Set to `false` to skip the one-shot importer. |
+
+### Implementation Plan
+
+1. Define `ArtifactScope`, `ArtifactHandle`, `ArtifactEntry`, and `IArtifactStore` in `Sovrant.Runtime/Artifacts/`.
+2. Implement `LocalArtifactStore` with path-traversal guards and per-segment `Directory.CreateDirectory` (permissions-aware).
+3. Wire DI: `AddSovrantArtifacts()` picks the backend from `SOVRANT_ARTIFACTS_BACKEND`.
+4. Refactor `WorkspaceContext` to expose `ArtifactScope` + `IArtifactStore` instead of raw paths. Keep a deprecated compatibility shim for one release.
+5. Update `ConversationRuntime` and `SwarmOrchestrator` to resolve scope from session context and hand an `ArtifactHandle` to tools.
+6. Update `Write`/`Edit`/file-emitting tools to route writes through `IArtifactStore` when the target falls under the artifacts tree.
+7. Rebase Phase 41's `FileBackedTeamWorkspace` on `IArtifactStore`.
+8. Add `/v1/artifacts` server endpoints (list + download), gated by Phase 38 user-scoped auth.
+9. Add `sovrant artifacts` CLI subcommand (`ls`, `open`, `rm`).
+10. Implement the one-shot legacy importer + boot-time warning.
+11. Docs: new `docs/artifacts.md` covering layout, env vars, backend selection, and how to export/backup per workspace (feeds Phase 47).
+12. Tests:
+    - Scope isolation: user A cannot `ListAsync` or `ReadAsync` under user B's segment via the server API.
+    - Path traversal rejection: `relativePath = "../../etc/passwd"` throws.
+    - Rerun does not overwrite: two runs with the same prompt produce two distinct `run_id` directories.
+    - Legacy importer: seeded `{cwd}/artifacts/<slug>/` content lands under `default-user/personal/default-project/legacy-<slug>/` with a manifest.
+    - Fallback scope: runs with no user/workspace/project resolve to sentinel segments and succeed.
+    - Phase 41 team workspace round-trip still passes once rebased on `IArtifactStore`.
+    - `IArtifactStore` contract tests run against `LocalArtifactStore` now and can be re-run against future cloud backends unchanged.
+
+### Acceptance Criteria
+
+- All agent-generated files land under `{root}/{user}/{workspace}/{project}/{run}/` — no writes to a flat `artifacts/` directory remain in the codebase.
+- A fresh install with no users/workspaces configured still works and writes under `default-user/personal/default-project/`.
+- The server API refuses cross-tenant artifact reads under Phase 38 auth.
+- The existing `sovrant/artifacts/create-a-guide-detailing-a-list-of-features-requested-by/` content migrates into the scoped layout on first boot of the new build.
+- `IArtifactStore` is the only code path writing artifacts — grep confirms no direct `Path.Combine(..., "artifacts", ...)` survives outside the store.
+- Phase 41's artifact tools, Phase 47's workspace export, and the Phase 44 desktop sidebar can all enumerate artifacts via a single abstraction.
+
+### Non-goals
+
+- Shipping the cloud backend. S3/Azure/R2 implementations are a follow-up; this phase only guarantees they can be added without touching callers.
+- Artifact versioning or diffing. Phase 41's `IArtifact` version counter covers team-workspace versioning; this phase is about *where bytes live*, not history.
+- Quotas and retention policies. Tenant quotas belong with Phase 39 (cost) and Phase 40 (multi-tenancy).
+- A GC/sweeper for orphaned runs. Cleanup happens via `DeleteAsync` when sessions/projects/workspaces are deleted; a background sweeper is a later concern.
+
+---
+
 ### Known Issues / Debt
 
 | Issue | Priority | Notes |
