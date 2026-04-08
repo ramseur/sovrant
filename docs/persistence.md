@@ -1,6 +1,6 @@
 # Sovrant — Persistence Layer
 
-**Phases 32, 35, 36, 37 (active) — Phase 42.5 planned** | **Last updated:** 2026-04-06
+**Phases 32, 35, 36, 37, 37.5 (active) — Phase 42.5 planned** | **Last updated:** 2026-04-08
 
 This document describes how Sovrant stores durable operational data. All persistent state (sessions, memory, audit, credentials, token usage, workspaces, projects, users) is managed by a SQLite database. Flat-file stores (JSONL, JSON) remain available as a dual-write option during migration, but they are now considered legacy and will be consolidated as part of Phase 42.5.
 
@@ -95,7 +95,7 @@ The list below is generated from the migration scripts in `src/Sovrant.Runtime/S
 | **Sessions** | `sessions`, `session_entries`, `session_entries_fts` (+ 5 FTS5 internals), `token_usage` | V002 | `session_entries_fts` is a `CREATE VIRTUAL TABLE … USING fts5`. SQLite materializes 5 internal tables: `session_entries_fts_config`, `_data`, `_docsize`, `_idx`. Three triggers (`session_entries_ai/ad/au`) keep FTS in sync with `session_entries`. |
 | **Memory** | `session_summaries`, `learned_patterns`, `instincts` | V003 | Three-layer agent memory. JSON arrays stored as TEXT (`tasks`, `tools_used`, `files_modified`, `evidence`). |
 | **Credentials** | `credentials` | V004 | Encrypted blobs (nonce + tag + ciphertext columns). |
-| **Swarm & evals** | `swarm_events`, `eval_runs`, `eval_results` | V005 | `swarm_events` is wired but not yet written to (swarm still dual-writes to JSONL — see Phase 42.5). |
+| **Swarm & evals** | `swarm_events`, `eval_runs`, `eval_results` | V005 | `swarm_events` is the canonical store for swarm history as of **Phase 37.5** — see [Swarm Event Store](#swarm-event-store-sqliteswarmeventstore--phase-375) below. |
 | **Audit** | `audit_governance`, `audit_bash` | V001 | INTEGER PK AUTOINCREMENT, no FK to sessions. |
 | **Migration metadata** | `schema_version` | bootstrapped by `MigrationRunner` | Stores version, `applied_at`, and SHA-256 `checksum` of each script. |
 
@@ -297,6 +297,25 @@ Owners are implicitly added as `workspace_members` with `role='owner'` and canno
 
 **Known limitation (deferred to Phase 38):** Today every session is created with `user_id = Environment.UserName`, so sessions, token usage, and audit events for users created via the API will appear empty until per-user identity flows through `SqliteSessionStore`.
 
+### Swarm Event Store (`SqliteSwarmEventStore`) — Phase 37.5
+
+| Interface | `ISwarmEventStore` |
+|---|---|
+| Tables | `swarm_events` (read/write); indexes `ix_swarm_events_swarm`, `ix_swarm_events_workspace` (V006), `ix_swarm_events_project` (V007) |
+| Features | Append-only event log per `swarm_id`; replay in insertion order; `ListSwarmsAsync` filtering by `workspace_id` / `project_id` / `limit`; per-event `agent_id` extraction so UIs can group by worker |
+
+`SwarmSession` now writes through `ISwarmEventStore` instead of `~/.sovrant/swarm/sessions/{swarmId}.jsonl`. The contract is unchanged for callers — `RecordAsync`, `ReplayAsync`, `ListSessions`, `Exists` still exist — but the underlying rows land in the `swarm_events` table that has been waiting empty since V005.
+
+`SwarmOrchestrator.ExecuteAsync` accepts a `SwarmExecutionContext(UserId, WorkspaceId, ProjectId)` that the server's `SwarmRoutes` populates from `WorkspaceContextMiddleware` (`HttpContext.Items["WorkspaceId"]` + `X-Project-Id` header). Every event written during a run is stamped with that scope, so `GET /v1/swarm/sessions?workspace_id=…&project_id=…` returns only the swarms a user is allowed to see.
+
+**Migration of legacy data:** existing JSONL files are imported by:
+
+```
+sovrant db import-swarm [--dir <path>] [--delete-source]
+```
+
+The importer reads each `~/.sovrant/swarm/sessions/*.jsonl` file, classifies each line by the same property-sniffing rule the legacy `SwarmSession.DeserializeEvent` used, and inserts the row into `swarm_events` via `ISwarmEventStore`. Imported rows have `workspace_id` / `project_id` left null because legacy files were never scope-stamped. After a clean run, `--delete-source` removes the JSONL files.
+
 ---
 
 ## Dependency Injection
@@ -313,6 +332,7 @@ SqliteCredentialStore  →  ICredentialStore
 SqliteWorkspaceStore   →  IWorkspaceService                    (Phase 35)
 SqliteProjectStore     →  IProjectService                      (Phase 36)
 SqliteUserStore        →  IUserService                         (Phase 37)
+SqliteSwarmEventStore  →  ISwarmEventStore                     (Phase 37.5)
 EvalResultStore        →  IEvalResultStore   (file-based, interface extracted)
 ```
 
@@ -376,7 +396,6 @@ Not everything moved to SQLite. These remain file-based by design:
 | Rolling logs | `~/.sovrant/logs/` | Append-only text files, rotated daily |
 | Master key | `~/.sovrant/credentials/.keystore` | Separate from DB for defense-in-depth |
 | Temp scripts | `~/.sovrant/scripts/` | Short-lived, cleaned up automatically |
-| Swarm sessions | `~/.sovrant/swarm/sessions/` | JSONL event replay (SQLite table ready for future migration) |
 | Eval definitions | `.sovrant/evals/*.json` | Human-authored, version-controlled |
 | Eval results | `~/.sovrant/evals/results/` | File-based (SQLite table ready for future migration) |
 
@@ -414,7 +433,6 @@ The following concerns were surfaced during the Phase 37 audit of the SQLite lay
 | 4 | **`SOVRANT_DB_PATH` is undocumented in user-facing docs.** It is honored by code but only mentioned in this doc. | Power users can't easily relocate the DB to a network share or alternate disk. | Document in `server.md`, README, and `sovrant --help`. |
 | 5 | **No backup-before-migrate.** The migration runner applies V006/V007 in place, with no snapshot of the prior file. | A migration bug or a power failure mid-migration leaves the DB in an undefined state with no rollback. | Add `--backup` flag (default on for major versions) that copies the file before running the runner. |
 | 6 | **Migration checksum drift is recorded but not enforced.** `schema_version` stores SHA-256 of each script, but the runner does not raise on mismatch. | A patched migration silently shipping to users would pass checks. | Promote drift detection to a hard error with an opt-out for development. |
-| 7 | **Swarm sessions still bypass the DB.** `~/.sovrant/swarm/sessions/*.jsonl` is the only home for swarm events even though `swarm_events` exists in V005. | Swarm history is invisible to per-user/per-workspace queries and excluded from backups. | Swap `JsonlSwarmEventStore` for a SQLite-backed implementation. |
 | 8 | **Empty `user_id` defaults.** Sessions, audits, and token usage are all written with `user_id = Environment.UserName`. | API-created users (Phase 37) have no derived stats until per-user identity propagates through the agentic loop. | Phase 38 token + identity flow. |
 | 9 | **No shared bootstrap helper.** `SqliteStorageProvider.InitializeAsync` is called once, but other code paths (test fixtures, future CLI tools) re-implement parts of the boot flow. | Drift between server boot and test boot can mask bugs. | Extract a `SovrantStorageBootstrap.InitializeAsync` shared helper. |
 | 10 | **Connection-per-call with no pool.** Every store opens a fresh `SqliteConnection`. WAL + connection cache helps, but there is no explicit pool. | Under load (server + parallel CLI), we may starve on file handles. | Evaluate `Microsoft.Data.Sqlite` connection pooling; benchmark before/after. |
@@ -461,7 +479,7 @@ After a fresh install and first run, `~/.sovrant/` contains:
 ├── memory.md                ← Global memory (human-edited)
 ├── sessions/                ← (legacy, only if SOVRANT_SESSION_JSONL=true)
 ├── audit/                   ← (legacy, only if SOVRANT_AUDIT_JSONL=true)
-├── swarm/sessions/          ← Swarm event JSONL replay (Phase 42.5: migrate to swarm_events table)
+├── swarm/sessions/          ← (legacy, pre-Phase 37.5; import via `sovrant db import-swarm`)
 └── evals/results/           ← Eval report JSON files (Phase 42.5: migrate to eval_results table)
 ```
 

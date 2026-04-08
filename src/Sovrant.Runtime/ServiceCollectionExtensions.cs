@@ -129,6 +129,10 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<ISqliteConnectionFactory>(),
                 sp.GetRequiredService<ILogger<SqliteUserStore>>()));
 
+        // Swarm event store (Phase 37.5) — SQLite-backed, replaces the JSONL session store.
+        services.AddSingleton<ISwarmEventStore>(sp =>
+            new SqliteSwarmEventStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+
         // Eval framework (Phase 27)
         services.AddSingleton<IEvalResultStore, EvalResultStore>();
         services.AddSingleton<IEvalRunner, EvalRunner>();

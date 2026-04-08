@@ -73,7 +73,7 @@ public sealed class SwarmTool : ITool
             return FormatDryRun(plan);
 
         // Phase 2: Execute
-        var result = await _orchestrator.ExecuteAsync(plan, _config, onEvent: _progress.Report, ct).ConfigureAwait(false);
+        var result = await _orchestrator.ExecuteAsync(plan, _config, onEvent: _progress.Report, ct: ct).ConfigureAwait(false);
 
         // Phase 3: Quality gate (optional)
         if (_config.QualityGateEnabled && result.Status == SwarmStatus.Completed)

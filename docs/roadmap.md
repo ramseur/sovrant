@@ -91,13 +91,13 @@ The engine is fully functional for individual and small-team use:
 | Workspaces (personal + team areas, isolated memory/config/sessions) | Phase 35 | Medium–High |
 | Projects (workspace-scoped containers for isolated work) | Phase 36 | Medium |
 | User management API (CRUD users, per-user data views) | Phase 37 | Low–Medium |
-| Swarm sessions into the database (replace JSONL store) | Phase 37.5 | Medium |
 | Per-user token auth & database hardening | Phase 38 | Medium |
 | Cost tracking, token budgets & model pricing registry | Phase 39 (deferred) | Deferred |
 | Enterprise auth & multi-tenancy (RBAC, OAuth/OIDC, SSO) | Phase 40 (deferred) | Deferred |
 | Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 41 (deferred) | Deferred |
 | VS Code native extension | Phase 42 (deferred) | Deferred |
 | SearXNG web search backend (self-hosted, key-free) | Phase 49 | Low–Medium |
+| OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | Medium–High |
 
 ---
 
@@ -2473,10 +2473,21 @@ No schema changes needed — Phase 32 already created the `users` table with `ro
 
 ---
 
-### Phase 37.5 — Swarm Sessions Into the Database
+### Phase 37.5 — Swarm Sessions Into the Database ✅
 
+**Status:** Complete (2026-04-08)
 **Depends on:** Phase 32 (SQLite persistence — `swarm_events` table exists from V005)
 **Difficulty:** Small–Medium
+
+**What shipped:**
+- `ISwarmEventStore` + `SqliteSwarmEventStore` against the existing `swarm_events` table — no schema migration was needed (V005 columns + V006/V007 indexes were already in place).
+- `SwarmSession` rewritten to write through the new store; public surface (`RecordAsync` / `ReplayAsync` / `ListSessions` / `Exists`) preserved.
+- `SwarmExecutionContext(UserId, WorkspaceId, ProjectId)` threaded through `SwarmOrchestrator.ExecuteAsync` so every event is stamped with scope. `SwarmRoutes` populates it from `WorkspaceContextMiddleware`'s `HttpContext.Items` plus the `X-Project-Id` header.
+- `GET /v1/swarm/sessions` accepts `workspace_id`, `project_id`, `limit` query parameters (handed to `SwarmListFilter`).
+- `sovrant db import-swarm [--dir <path>] [--delete-source]` migrates legacy `~/.sovrant/swarm/sessions/*.jsonl` files into `swarm_events` for existing installs.
+- New tests: `SqliteSwarmEventStoreTests` (12 cases) plus 2 workspace-scoping tests added to `SwarmSessionTests`. Full suite green.
+- `persistence.md` updated (new Swarm Event Store subsection, swarm row dropped from "Stays as Files", concern #7 retired).
+
 
 **Goal:** Replace the JSONL-only swarm session store (`SwarmSession` writing `.sovrant/swarm/sessions/{id}.jsonl`) with a SQLite-backed `ISwarmEventStore` that writes to the existing `swarm_events` table. Promotes item #14 from Phase 42.5's deferred list to a discrete phase so swarm runs become queryable, joinable to users/workspaces, and covered by the same backup/migration story as everything else.
 
@@ -3265,6 +3276,139 @@ export SEARXNG_MIN_INTERVAL_MS=500   # optional, default 0
 - Shipping a bundled SearXNG container (users self-host)
 - Crawling / indexing — this is purely query-time aggregation; tools like Crawl4AI / Firecrawl are out of scope
 - Public-instance fallback — explicitly not provided for rate-limit hygiene reasons
+
+---
+
+## Phase 50 — OpenClaw Integration & Federated Swarms Over a Routed Bus
+
+**Depends on:** Phase 16 (Dynamic MCP Tool Proxy), Phase 29 (Swarm Orchestrator), Phase 35 (Workspaces), Phase 37.5 (Swarm event store), Phase 19+20 (Multi-agent teams)
+
+**Goal:** Make [OpenClaw](https://docs.openclaw.ai/) the **routed message bus** for federated Sovrant swarms. Sovrant swarms (running Sovrant's own workers — not OpenClaw workers, because OpenClaw isn't a coding agent) post events, findings, and approval requests into OpenClaw routes; other swarms and human operators on Discord / Telegram / WhatsApp / Slack / Signal / iMessage / Matrix subscribe to those routes and respond. Three federation modes (`silo`, `federated`, `manager-led`) map onto OpenClaw's routing primitives so multiple swarms can run side-by-side either fully isolated, sharing a common channel, or reporting up to a manager. As a free side-effect, every running swarm becomes reachable from a phone.
+
+#### What OpenClaw is (and isn't)
+
+OpenClaw is a **self-hosted gateway/orchestrator** that bridges messaging platforms (Discord, Telegram, WhatsApp, Slack, Signal, iMessage, Matrix, …) to AI agents. It is *not* a coding agent and does not execute swarm tasks itself — it routes messages, attachments, events, and approval requests between channels and the agents that consume them. Routes are isolated per agent / workspace / sender.
+
+**Integration surface — verified:** OpenClaw ships an **MCP server mode** invoked as `openclaw mcp serve` over **stdio**. The bridge exposes nine standard MCP tools:
+
+| Tool | Purpose |
+|---|---|
+| `conversations_list` / `conversation_get` | Discover and retrieve routed conversations |
+| `messages_read` / `attachments_fetch` | Read transcript history and message metadata |
+| `messages_send` | Send replies through existing routes |
+| `events_poll` / `events_wait` | Consume the live event queue (`events_wait` is a long-poll) |
+| `permissions_list_open` / `permissions_respond` | Manage approval requests |
+
+The server holds an in-memory event queue that starts when the bridge connects; older history is fetched separately via `messages_read`. With Claude channel mode enabled it also emits `notifications/claude/channel`.
+
+**Why this matters for performance:** Sovrant already speaks MCP fluently — Phase 16 (`MCPTool`) lets any MCP server's tools surface inside the Sovrant agentic loop, and Phase 17 covers OAuth. **Adding OpenClaw is mostly configuration**, not a new transport layer. We launch `openclaw mcp serve` as a managed MCP child process (the same way every other MCP server is launched today), the nine OpenClaw tools become callable by Sovrant agents on first start, and the existing MCP infrastructure handles framing, lifecycle, restarts, and audit. No gRPC, no protobuf, no new IPC, no parallel transport story — and the long-lived stdio connection means the per-call overhead is dominated by the underlying messaging-platform RTT, not by Sovrant's wire format.
+
+#### Motivation
+
+Today Sovrant swarms run in isolation. There is no way for:
+- Two swarms to share intermediate findings without going through the parent orchestrator's event store
+- A human operator to be notified on their phone when a swarm hits a permission prompt or finishes a long-running task
+- A "manager" swarm to fan tasks out to several "worker" swarms and collect their results through anything other than direct in-process function calls
+- Adversarial / red-team workflows to guarantee that two competing swarms cannot read each other's intermediate state
+
+OpenClaw solves all four with a single routing primitive: **the route**. A route is a named channel that one or more agents subscribe to, with isolation guarantees enforced by the gateway. Mapping Sovrant's federation modes onto OpenClaw routes gives us inter-swarm communication, human-in-the-loop chat-channel access, and red-team isolation in one phase.
+
+#### Core concepts
+
+- **`OpenClawBusClient`** — a thin Sovrant-side wrapper around the existing MCP tool proxy that exposes named, ergonomic methods (`PublishAsync`, `SubscribeAsync`, `RequestApprovalAsync`) backed by `messages_send`, `events_wait`, and `permissions_*`. Workers and the manager don't call MCP tools directly; they call this wrapper. Reuses the channel and lifecycle that Phase 16 already provides.
+- **Route naming convention** — every Sovrant swarm gets a deterministic OpenClaw route derived from its `swarm_id` plus federation key, e.g. `sovrant/swarm/{swarmId}` for silo mode and `sovrant/federation/{federationId}` for federated mode. The naming convention is enforced by `SwarmExecutionContext` so workers cannot accidentally subscribe to a route outside their scope.
+- **`SwarmFederationMode`** — new field on `SwarmConfig`:
+  - `silo` (default) — each swarm posts to and reads from a private route `sovrant/swarm/{swarmId}`. No other swarm has the route name. OpenClaw's per-route isolation gives us red-team-grade separation for free.
+  - `federated` — every child swarm of a parent shares one route `sovrant/federation/{parentSwarmId}`. Workers can `events_wait` on this route to consume each other's intermediate findings without going through the manager.
+  - `manager-led` — workers post to a manager-owned route `sovrant/manager/{managerId}/inbox`; only the manager is subscribed via `events_wait`. Worker-to-worker traffic is impossible. The manager re-publishes rolled-up events onto a separate `sovrant/manager/{managerId}/outbox` route that the parent swarm and any human operators subscribe to.
+- **`SwarmManagerAgent`** — a regular Sovrant agent template (`swarm-manager.md`) that owns a parent `swarm_id`, spawns child swarms, holds an open `events_wait` against its inbox route, and emits roll-up events (`ChildSwarmCompleted`, `ChildSwarmFailed`, `FederationFinding`) onto its outbox route **and** into the local `swarm_events` table via the Phase 37.5 store. Persistence is unchanged — the manager just dual-publishes to the bus.
+- **Human-in-the-loop for free** — because OpenClaw routes are first-class channels in Discord / Slack / Telegram / etc., a human operator who joins `sovrant/manager/{managerId}/outbox` from their phone instantly sees the swarm's rolled-up status, and replies routed back via `messages_send` reach the manager agent. The same plumbing handles `permissions_list_open` / `permissions_respond` so an approval prompt from a Sovrant tool call can be answered from a phone without any extra Sovrant code.
+- **Permission bridge** — when a Sovrant tool inside a swarm hits the existing `IPermissionPolicy` and the policy returns "ask", Sovrant publishes the request via `permissions_list_open` (with the route in scope) and blocks on `permissions_respond`. From the operator's view this is identical to the existing in-process permission flow; the only difference is that the answer can come from any subscribed channel.
+- **Auth & isolation** — every published message inherits the parent swarm's `SwarmExecutionContext` (workspace, project, user) and is tagged in OpenClaw via the route name plus message metadata. Silo mode also enforces filesystem isolation by running workers in scratch directories (or `EnterWorktree` clones) that are torn down on completion.
+- **Health & status** — the OpenClaw MCP server is registered with `SmartRouter`'s health-ping framework via the existing MCP server lifecycle. `GET /v1/swarm/openclaw/routes` lists active routes Sovrant currently has subscriptions or publishers on, with last-event timestamps.
+
+#### Configuration
+
+```jsonc
+// .sovrant/swarm.json
+{
+  "enabled": true,
+  "openClaw": {
+    "enabled": true,
+    // Sovrant launches `openclaw mcp serve` as a managed MCP child process via the existing
+    // MCP server config (Phase 16). No new transport. The block below is just sugar over the
+    // standard MCP server entry — the launcher and lifecycle live in mcp.json.
+    "mcpServerName": "openclaw",
+    "claudeChannelMode": "auto",            // maps to --claude-channel-mode
+    "gateway": {
+      "url": "wss://openclaw.local/gateway", // --url
+      "tokenFile": "~/.sovrant/openclaw/token" // --token-file
+    },
+    "routePrefix": "sovrant",
+    "approvalTimeoutSec": 300                 // how long Sovrant blocks on permissions_respond
+  },
+  "federation": {
+    "mode": "manager-led",                    // "silo" | "federated" | "manager-led"
+    "managerAgent": "swarm-manager",          // template name under .sovrant/agents/templates
+    "maxChildSwarms": 8
+  }
+}
+```
+
+```jsonc
+// .sovrant/mcp.json — the standard MCP server entry Sovrant already understands
+{
+  "mcpServers": {
+    "openclaw": {
+      "command": "openclaw",
+      "args": ["mcp", "serve",
+               "--url", "wss://openclaw.local/gateway",
+               "--token-file", "/home/me/.sovrant/openclaw/token",
+               "--claude-channel-mode", "auto"]
+    }
+  }
+}
+```
+
+#### Implementation plan
+
+1. Add `OpenClawBusClient` under `src/Sovrant.Agents/Swarm/Bus/OpenClaw/`. It is a thin facade over the existing `MCPTool` proxy — given the MCP server name `openclaw`, it resolves the nine bridge tools and exposes `PublishAsync`, `SubscribeAsync`, `RequestApprovalAsync`, `LoadHistoryAsync`. **No new transport code** — Phase 16's `MCPTool` does the wire work.
+2. Extend `SwarmConfig` with the `OpenClaw` and `Federation` blocks. Default `OpenClaw.Enabled = false` so existing installs are unaffected. Validate that the named MCP server exists in `mcp.json` at startup.
+3. Add `SwarmFederationMode` enum + per-swarm field. Add a `RouteResolver` that maps `(SwarmExecutionContext, federationMode)` → route name using the documented convention so workers cannot fabricate route names.
+4. Add `parent_swarm_id` column to `swarm_events` in a new migration `Vxxx__swarm_federation.sql`. Index it. Extend `SwarmListFilter` and `ISwarmEventStore.LoadEventsAsync` with an optional `parentSwarmId` filter. The manager's roll-up roll-up still lands in the local store; the bus is for live distribution, not durable history.
+5. `SwarmOrchestrator.ExecuteAsync` honors the federation mode: in `silo` it publishes only to the per-swarm route, in `federated` it publishes to and reads from the shared parent route, in `manager-led` it publishes to the manager inbox and refuses to subscribe to anything else.
+6. Implement `SwarmManagerAgent` as a regular Sovrant agent template (`swarm-manager.md`). Its system prompt encodes the fan-out / fan-in protocol: decompose, spawn child swarms with appropriate `SwarmExecutionContext`, hold an `events_wait` long-poll on the inbox, aggregate, publish to outbox, persist roll-up to `swarm_events`.
+7. Wire approval routing: when `IToolConfirmationHandler` is asked to confirm a tool call inside a swarm with OpenClaw enabled, it publishes via `permissions_list_open` and blocks on `permissions_respond` (with timeout from config).
+8. Extend the existing `Swarm` tool with a `federation` argument (`silo` / `federated` / `manager-led`) plus an optional `parent_swarm_id` so Sovrant agents can spawn child swarms from the agentic loop without a brand-new tool.
+9. New routes:
+    - `POST /v1/swarm/manager` — start a manager-led federated swarm with N child sub-tasks
+    - `GET  /v1/swarm/openclaw/routes` — active OpenClaw routes Sovrant has subscriptions or publishers on
+    - `GET  /v1/swarm/{id}/children` — child swarms of a parent (uses `parent_swarm_id`)
+10. CLI subcommand `sovrant openclaw routes {list|tail <route>}` so operators can inspect what's flowing on a route from the terminal without opening a chat client.
+11. Tests:
+    - `OpenClawBusClient` against an in-process fake MCP server that implements the nine bridge tools (no real OpenClaw needed for unit tests)
+    - `RouteResolver`: silo / federated / manager-led modes produce the documented route names and reject attempts to subscribe outside scope
+    - Federation behavior: 3 child swarms in silo mode see zero cross-traffic; in federated mode they see each other's findings; in manager-led mode workers see only the manager
+    - Approval round-trip: tool call → `permissions_list_open` → simulated `permissions_respond` → tool call resumes
+    - Manager roll-up: 3 child swarms emit `SwarmCompleted`, manager aggregates into one parent event in `swarm_events` and one outbox publish
+    - One slow integration test gated behind `OPENCLAW_E2E=1` that exercises a real `openclaw mcp serve` against a test gateway
+12. Docs: `docs/persistence.md` (new column on `swarm_events`), `docs/server.md` (new routes), `README.md` § Swarms (federation modes + OpenClaw bus), `agent-systems.md` (manager-led pattern with chat-channel HITL).
+
+**Verification:**
+- `dotnet build` exits 0
+- With OpenClaw configured and a test gateway running, `sovrant swarm "Refactor X" --federation manager-led` runs three child swarms and lands a single rolled-up event in the parent's `swarm_events` row
+- `mode=silo`: spawning two child swarms shows zero cross-route events; each only sees its own route
+- `mode=federated`: worker B can `events_wait` on the shared route and see worker A's findings
+- `mode=manager-led`: manager `events_wait` receives every child event; worker-to-worker traffic returns nothing
+- A permission prompt raised inside a swarm tool call appears via `permissions_list_open` and resumes the tool call when answered via `permissions_respond` from a chat channel
+- Killing the manager mid-run leaves child swarms in a terminal state (either completed or explicitly cancelled), not orphaned
+- A human in a Discord/Slack channel subscribed to the manager outbox receives the same roll-up events Sovrant writes to `swarm_events`
+
+**Non-goals:**
+- Bundling or distributing OpenClaw itself (users install and configure it separately, including any messaging-platform credentials)
+- Reimplementing OpenClaw's routing or channel adapters in Sovrant — the whole value of this phase is that OpenClaw already does that
+- Treating OpenClaw routes as durable storage. The bus is for live distribution; the SQLite `swarm_events` table is still the source of truth. If a subscriber is offline, they catch up via `messages_read`, not by replaying a Sovrant-side queue.
+- Cross-tenant federation (one Sovrant install, one OpenClaw gateway, in this phase). Multi-tenant federation can come later if there's demand.
 
 ---
 

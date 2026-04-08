@@ -413,11 +413,25 @@ Returns the current status and task states for a swarm.
 
 ### Swarm Events — `GET /v1/swarm/{id}/events`
 
-Replays the full JSONL event log for a swarm session.
+Replays the full event log for a swarm session from the `swarm_events` table (Phase 37.5 — previously read from JSONL files).
 
 ### List Swarm Sessions — `GET /v1/swarm/sessions`
 
-Returns all recorded swarm session IDs.
+Returns recorded swarm session IDs, most-recently-active first. As of Phase 37.5 the response is sourced from the `swarm_events` table and supports server-side filtering:
+
+| Query parameter | Meaning |
+|---|---|
+| `workspace_id` | Restrict to swarms whose events were stamped with this workspace |
+| `project_id`   | Restrict to swarms whose events were stamped with this project |
+| `limit`        | Maximum number of swarm IDs to return |
+
+When `POST /v1/swarm` runs, the workspace/project scope is taken from `WorkspaceContextMiddleware` (`HttpContext.Items["WorkspaceId"]`) and the optional `X-Project-Id` request header — every event written during that swarm's run is stamped with that scope, so subsequent calls to `GET /v1/swarm/sessions?workspace_id=…` will only see swarms the caller was scoped to.
+
+Legacy JSONL session files from before Phase 37.5 can be imported into the table with the CLI helper:
+
+```
+sovrant db import-swarm [--dir <path>] [--delete-source]
+```
 
 ## User Management (Phase 37)
 

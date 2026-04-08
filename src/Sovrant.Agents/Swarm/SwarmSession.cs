@@ -1,13 +1,22 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Sovrant.Runtime.Storage;
 
 namespace Sovrant.Agents.Swarm;
 
 /// <summary>
-/// Records swarm events to JSONL files and replays them for status queries.
-/// Sessions are stored under <c>.sovrant/swarm/sessions/{swarmId}.jsonl</c>.
+/// Records swarm events to the SQLite-backed <see cref="ISwarmEventStore"/>
+/// (Phase 37.5). Replays the same events for status queries and SSE catch-up.
 /// </summary>
+/// <remarks>
+/// Before Phase 37.5 this class wrote JSONL files under
+/// <c>~/.sovrant/swarm/sessions/{swarmId}.jsonl</c>. The public surface
+/// (<see cref="RecordAsync"/>, <see cref="ReplayAsync"/>, <see cref="ListSessions"/>,
+/// <see cref="Exists"/>) is unchanged so callers do not need updates — only
+/// the underlying storage moved from a flat file to the <c>swarm_events</c>
+/// table that has been waiting empty since V005.
+/// </remarks>
 public sealed class SwarmSession
 {
     private static readonly JsonSerializerOptions s_jsonOptions = new()
@@ -16,27 +25,36 @@ public sealed class SwarmSession
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    private readonly string _sessionsDir;
+    private readonly ISwarmEventStore _store;
 
-    public SwarmSession(string? sessionsDir = null)
+    public SwarmSession(ISwarmEventStore store)
     {
-        _sessionsDir = sessionsDir ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".sovrant", "swarm", "sessions");
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
     }
 
-    /// <summary>Records a single event to the swarm's JSONL session file.</summary>
-    public async Task RecordAsync(SwarmEvent evt, CancellationToken ct = default)
+    /// <summary>
+    /// Records a single event for a swarm run. The optional
+    /// <paramref name="context"/> stamps the row with workspace / project /
+    /// agent identifiers so the event can later be filtered by scope.
+    /// </summary>
+    public async Task RecordAsync(
+        SwarmEvent evt,
+        SwarmExecutionContext? context = null,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(evt);
-        Directory.CreateDirectory(_sessionsDir);
 
-        var path = GetSessionPath(evt.SwarmId);
-        var line = JsonSerializer.Serialize<object>(evt, s_jsonOptions) + Environment.NewLine;
-        var bytes = System.Text.Encoding.UTF8.GetBytes(line);
+        var record = new SwarmEventRecord(
+            SwarmId: evt.SwarmId,
+            EventType: evt.GetType().Name,
+            Payload: JsonSerializer.Serialize<object>(evt, s_jsonOptions),
+            Timestamp: evt.Timestamp,
+            AgentId: ExtractAgentName(evt),
+            WorkspaceId: context?.WorkspaceId,
+            ProjectId: context?.ProjectId);
 
-        using var fs = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-        await fs.WriteAsync(bytes, ct).ConfigureAwait(false);
+        await _store.RecordEventAsync(record, ct).ConfigureAwait(false);
     }
 
     /// <summary>Replays all events from a swarm session as an async enumerable.</summary>
@@ -44,24 +62,17 @@ public sealed class SwarmSession
         string swarmId,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var path = GetSessionPath(swarmId);
-        if (!File.Exists(path))
-            yield break;
-
-        using var reader = new StreamReader(path);
-        while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
+        var rows = await _store.LoadEventsAsync(swarmId, ct).ConfigureAwait(false);
+        foreach (var row in rows)
         {
-            if (string.IsNullOrWhiteSpace(line))
-                continue;
-
             SwarmEvent? evt = null;
             try
             {
-                evt = DeserializeEvent(line);
+                evt = DeserializeEvent(row.EventType, row.Payload);
             }
             catch (JsonException)
             {
-                // Skip malformed lines
+                // Skip malformed payloads — preserves the legacy "be lenient on replay" behaviour.
             }
 
             if (evt is not null)
@@ -69,52 +80,65 @@ public sealed class SwarmSession
         }
     }
 
-    /// <summary>Lists all swarm session IDs (from file names).</summary>
-    public IReadOnlyList<string> ListSessions()
+    /// <summary>
+    /// Lists all swarm IDs known to the store, most-recently-active first.
+    /// Optional filter narrows by workspace and/or project.
+    /// </summary>
+    public IReadOnlyList<string> ListSessions(SwarmListFilter? filter = null)
     {
-        if (!Directory.Exists(_sessionsDir))
-            return [];
-
-        return Directory.GetFiles(_sessionsDir, "*.jsonl")
-            .Select(f => Path.GetFileNameWithoutExtension(f))
-            .OrderByDescending(id => id)
-            .ToList();
+        // Sync wrapper preserved for backwards compatibility with the old file-based API.
+        return _store.ListSwarmsAsync(filter).GetAwaiter().GetResult();
     }
 
-    /// <summary>Returns whether a session file exists for the given swarm ID.</summary>
-    public bool Exists(string swarmId) => File.Exists(GetSessionPath(swarmId));
+    /// <summary>Returns whether any events exist for the given swarm ID.</summary>
+    public bool Exists(string swarmId) =>
+        _store.ExistsAsync(swarmId).GetAwaiter().GetResult();
 
-    private string GetSessionPath(string swarmId) =>
-        Path.Combine(_sessionsDir, $"{swarmId}.jsonl");
-
-    private static SwarmEvent? DeserializeEvent(string json)
+    /// <summary>
+    /// Pulls the agent name out of an event when present, so it can be
+    /// indexed into the <c>agent_id</c> column. Best-effort — many event
+    /// types do not carry an agent name.
+    /// </summary>
+    private static string? ExtractAgentName(SwarmEvent evt) => evt switch
     {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
+        SwarmEvent.TaskStarted s => s.AgentName,
+        SwarmEvent.TaskCompleted c => c.AgentName,
+        SwarmEvent.TaskFailed f => f.AgentName,
+        SwarmEvent.FileConflict fc => fc.AgentName,
+        _ => null,
+    };
 
-        // Discriminate by presence of unique properties (check most-specific first)
-        if (root.TryGetProperty("TaskCount", out _))
-            return JsonSerializer.Deserialize<SwarmEvent.PlanCreated>(json, s_jsonOptions);
-        if (root.TryGetProperty("FilePath", out _))
-            return JsonSerializer.Deserialize<SwarmEvent.FileConflict>(json, s_jsonOptions);
-        if (root.TryGetProperty("Output", out _))
-            return JsonSerializer.Deserialize<SwarmEvent.TaskCompleted>(json, s_jsonOptions);
-        if (root.TryGetProperty("Error", out _))
-            return JsonSerializer.Deserialize<SwarmEvent.TaskFailed>(json, s_jsonOptions);
-        if (root.TryGetProperty("Wave", out _))
-            return JsonSerializer.Deserialize<SwarmEvent.TaskStarted>(json, s_jsonOptions);
-        if (root.TryGetProperty("Limit", out _))
-            return JsonSerializer.Deserialize<SwarmEvent.BudgetExceeded>(json, s_jsonOptions);
-        if (root.TryGetProperty("FinalStatus", out _))
-            return JsonSerializer.Deserialize<SwarmEvent.SwarmCompleted>(json, s_jsonOptions);
-        if (root.TryGetProperty("Verdict", out _))
-            return JsonSerializer.Deserialize<SwarmEvent.QualityGateCompleted>(json, s_jsonOptions);
+    /// <summary>
+    /// Reconstructs a strongly-typed <see cref="SwarmEvent"/> from the stored
+    /// payload. The discriminator is the simple type name written by
+    /// <see cref="RecordAsync"/>.
+    /// </summary>
+    private static SwarmEvent? DeserializeEvent(string eventType, string payload) => eventType switch
+    {
+        nameof(SwarmEvent.PlanCreated) => JsonSerializer.Deserialize<SwarmEvent.PlanCreated>(payload, s_jsonOptions),
+        nameof(SwarmEvent.TaskStarted) => JsonSerializer.Deserialize<SwarmEvent.TaskStarted>(payload, s_jsonOptions),
+        nameof(SwarmEvent.TaskCompleted) => JsonSerializer.Deserialize<SwarmEvent.TaskCompleted>(payload, s_jsonOptions),
+        nameof(SwarmEvent.TaskFailed) => JsonSerializer.Deserialize<SwarmEvent.TaskFailed>(payload, s_jsonOptions),
+        nameof(SwarmEvent.FileConflict) => JsonSerializer.Deserialize<SwarmEvent.FileConflict>(payload, s_jsonOptions),
+        nameof(SwarmEvent.BudgetExceeded) => JsonSerializer.Deserialize<SwarmEvent.BudgetExceeded>(payload, s_jsonOptions),
+        nameof(SwarmEvent.QualityGateStarted) => JsonSerializer.Deserialize<SwarmEvent.QualityGateStarted>(payload, s_jsonOptions),
+        nameof(SwarmEvent.QualityGateCompleted) => JsonSerializer.Deserialize<SwarmEvent.QualityGateCompleted>(payload, s_jsonOptions),
+        nameof(SwarmEvent.SwarmCompleted) => JsonSerializer.Deserialize<SwarmEvent.SwarmCompleted>(payload, s_jsonOptions),
+        _ => null,
+    };
+}
 
-        // QualityGateStarted has no unique properties beyond SwarmId/Timestamp
-        // Check if it only has SwarmId + Timestamp (2 properties)
-        if (root.EnumerateObject().Count() == 2)
-            return JsonSerializer.Deserialize<SwarmEvent.QualityGateStarted>(json, s_jsonOptions);
-
-        return null;
-    }
+/// <summary>
+/// Identifies the user/workspace/project that owns a running swarm so that
+/// every persisted event can be filtered by scope. Carried explicitly through
+/// <see cref="SwarmOrchestrator.ExecuteAsync"/> so the call site is honest
+/// about which row a swarm event will land under.
+/// </summary>
+public sealed record SwarmExecutionContext(
+    string? UserId = null,
+    string? WorkspaceId = null,
+    string? ProjectId = null)
+{
+    /// <summary>An empty context — useful for tests and back-compat call sites.</summary>
+    public static SwarmExecutionContext Empty { get; } = new();
 }

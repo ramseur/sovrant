@@ -8,6 +8,7 @@ using Sovrant.Runtime;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Permissions;
+using Sovrant.Runtime.Storage;
 using Sovrant.Agents;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
@@ -160,13 +161,21 @@ mcpCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
 root.Add(mcpCmd);
 
 // ── 'swarm' subcommand ───────────────────────────────────────────────────────
-var swarmTaskArg = new Argument<string>("task") { Description = "The task to decompose and execute via swarm." };
+// The positional `task` argument is *optional* because it can also come from a
+// file via --file/-f. Long master prompts (multi-paragraph design briefs) are
+// painful to paste on a terminal, especially with embedded quotes/backticks
+// that the shell mangles, so reading from disk is the more accurate path.
+var swarmTaskArg = new Argument<string?>("task")
+    { Description = "The task to decompose and execute via swarm. Optional when --file is set.", Arity = ArgumentArity.ZeroOrOne };
+var swarmFileOpt = new Option<string?>("--file", "-f")
+    { Description = "Path to a .md or .txt file whose contents are the master prompt. Mutually exclusive with the positional task argument." };
 var swarmBudgetOpt = new Option<int?>("--budget") { Description = "Override the token budget." };
 var swarmMaxAgentsOpt = new Option<int?>("--max-agents") { Description = "Override max concurrent agents." };
 var swarmDryRunOpt = new Option<bool>("--dry-run") { Description = "Show decomposed plan without executing." };
 
 var swarmCmd = new Command("swarm", "Decompose and execute a task via parallel agent swarm.");
 swarmCmd.Add(swarmTaskArg);
+swarmCmd.Add(swarmFileOpt);
 swarmCmd.Add(swarmBudgetOpt);
 swarmCmd.Add(swarmMaxAgentsOpt);
 swarmCmd.Add(swarmDryRunOpt);
@@ -183,7 +192,42 @@ swarmCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
         return;
     }
 
-    var task = pr.GetValue(swarmTaskArg)!;
+    // Resolve the task: --file wins, then positional, then error.
+    var positionalTask = pr.GetValue(swarmTaskArg);
+    var filePath = pr.GetValue(swarmFileOpt);
+    string task;
+    if (!string.IsNullOrWhiteSpace(filePath))
+    {
+        if (!string.IsNullOrWhiteSpace(positionalTask))
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] pass either a task argument or --file, not both.");
+            Environment.ExitCode = 1;
+            return;
+        }
+        try
+        {
+            task = await Sovrant.Agents.Swarm.SwarmPromptFile.LoadAsync(filePath, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidOperationException)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] {Markup.Escape(ex.Message)}");
+            Environment.ExitCode = 1;
+            return;
+        }
+        AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
+            $"[grey dim]Loaded {task.Length} chars from {Markup.Escape(Sovrant.Agents.Swarm.SwarmPromptFile.ResolvePath(filePath))}[/]");
+    }
+    else if (!string.IsNullOrWhiteSpace(positionalTask))
+    {
+        task = positionalTask;
+    }
+    else
+    {
+        AnsiConsole.MarkupLine("[red]Error:[/] provide a task argument or --file <path>.");
+        Environment.ExitCode = 1;
+        return;
+    }
+
     var dryRun = pr.GetValue(swarmDryRunOpt);
 
     var decomposer = sp.GetRequiredService<Sovrant.Agents.Swarm.ISwarmDecomposer>();
@@ -226,7 +270,7 @@ swarmCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
                     $"  [red]\u2717[/] {Markup.Escape(tf.TaskId)}: {Markup.Escape(tf.Error)}");
                 break;
         }
-    }, ct).ConfigureAwait(false);
+    }, ct: ct).ConfigureAwait(false);
 
     AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
         $"\n[bold]Status:[/] {Markup.Escape(result.Status.ToString())} | Tokens: {result.TotalTokensUsed} | Duration: {result.Duration.TotalSeconds:F1}s");
@@ -239,6 +283,94 @@ swarmCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
     }
 });
 root.Add(swarmCmd);
+
+// ── 'db import-swarm' subcommand ──────────────────────────────────────────────
+// One-shot migration helper: imports legacy ~/.sovrant/swarm/sessions/*.jsonl
+// files into the swarm_events table (Phase 37.5). Safe to re-run; existing rows
+// for the same swarmId are not deduped at the row level — operators are expected
+// to use --delete-source after a clean run.
+var importDirOpt = new Option<string?>("--dir")
+    { Description = "Sessions directory to import. Defaults to ~/.sovrant/swarm/sessions." };
+var importDeleteSourceOpt = new Option<bool>("--delete-source")
+    { Description = "Delete each JSONL file after it has been imported successfully." };
+
+var dbCmd = new Command("db", "Database maintenance and migration helpers.");
+var importSwarmCmd = new Command("import-swarm", "Import legacy JSONL swarm sessions into the swarm_events table.");
+importSwarmCmd.Add(importDirOpt);
+importSwarmCmd.Add(importDeleteSourceOpt);
+importSwarmCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    var dir = pr.GetValue(importDirOpt) ?? Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".sovrant", "swarm", "sessions");
+    var deleteSource = pr.GetValue(importDeleteSourceOpt);
+
+    if (!Directory.Exists(dir))
+    {
+        AnsiConsole.MarkupLine($"[yellow]No sessions directory at[/] {Markup.Escape(dir)} — nothing to import.");
+        return;
+    }
+
+    var files = Directory.GetFiles(dir, "*.jsonl");
+    if (files.Length == 0)
+    {
+        AnsiConsole.MarkupLine($"[yellow]No .jsonl files in[/] {Markup.Escape(dir)} — nothing to import.");
+        return;
+    }
+
+    await using var sp = BuildServices(pr);
+    var store = sp.GetRequiredService<ISwarmEventStore>();
+
+    var totalEvents = 0;
+    var skipped = 0;
+    var importedFiles = 0;
+
+    foreach (var file in files)
+    {
+        var swarmId = Path.GetFileNameWithoutExtension(file);
+        var eventsInFile = 0;
+
+        try
+        {
+            using var reader = new StreamReader(file);
+            while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                var record = JsonlSwarmImport.TryBuildRecord(swarmId, line);
+                if (record is null)
+                {
+                    skipped++;
+                    continue;
+                }
+
+                await store.RecordEventAsync(record, ct).ConfigureAwait(false);
+                eventsInFile++;
+            }
+
+            totalEvents += eventsInFile;
+            importedFiles++;
+            AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
+                $"  [green]\u2713[/] {Markup.Escape(Path.GetFileName(file))} \u2192 {eventsInFile} events");
+
+            if (deleteSource)
+                File.Delete(file);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+        {
+            AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
+                $"  [red]\u2717[/] {Markup.Escape(Path.GetFileName(file))}: {Markup.Escape(ex.Message)}");
+        }
+    }
+
+    AnsiConsole.MarkupLine(System.Globalization.CultureInfo.InvariantCulture,
+        $"\n[bold]Imported[/] {totalEvents} events from {importedFiles} file(s){(skipped > 0 ? $", skipped {skipped} unparseable line(s)" : "")}.");
+    if (deleteSource && importedFiles > 0)
+        AnsiConsole.MarkupLine("[grey dim]Source files deleted (--delete-source).[/]");
+});
+dbCmd.Add(importSwarmCmd);
+root.Add(dbCmd);
 
 // ── REPL (default handler) ────────────────────────────────────────────────────
 root.SetAction(async (ParseResult pr, CancellationToken ct) =>

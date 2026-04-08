@@ -84,10 +84,22 @@ public sealed partial class SwarmOrchestrator
     /// <summary>
     /// Executes a swarm plan end-to-end. Emits events via <paramref name="onEvent"/> callback.
     /// </summary>
+    /// <param name="plan">The decomposed plan to execute.</param>
+    /// <param name="config">Swarm configuration.</param>
+    /// <param name="onEvent">Optional event callback (used by SSE streaming).</param>
+    /// <param name="executionContext">
+    /// Identifies the user / workspace / project that owns this run. Every
+    /// persisted swarm event is stamped with the workspace and project IDs
+    /// from this context, which is what enables per-workspace and per-project
+    /// queries on the <c>swarm_events</c> table. Pass <c>null</c> from CLI
+    /// callers that don't have a workspace context yet.
+    /// </param>
+    /// <param name="ct">Cancellation token.</param>
     public async Task<SwarmResult> ExecuteAsync(
         SwarmPlan plan,
         SwarmConfig config,
         Action<SwarmEvent>? onEvent = null,
+        SwarmExecutionContext? executionContext = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
@@ -95,6 +107,7 @@ public sealed partial class SwarmOrchestrator
 
         var sw = Stopwatch.StartNew();
         var tokenCounter = new TokenCounter();
+        var swarmContext = executionContext ?? SwarmExecutionContext.Empty;
 
         // Create an artifacts subdirectory for this swarm's outputs.
         var artifactsDir = _workspace.GetOrCreateArtifactsDirectory(plan.OriginalPrompt);
@@ -109,7 +122,7 @@ public sealed partial class SwarmOrchestrator
         _stateTracker.Update(plan.Id, result);
 
         LogSwarmStart(_logger, plan.Id, plan.Tasks.Count, plan.WaveCount);
-        await EmitAsync(new SwarmEvent.PlanCreated(plan.Id, plan.Tasks.Count, plan.WaveCount), onEvent, ct).ConfigureAwait(false);
+        await EmitAsync(new SwarmEvent.PlanCreated(plan.Id, plan.Tasks.Count, plan.WaveCount), onEvent, swarmContext, ct).ConfigureAwait(false);
 
         var semaphore = new SemaphoreSlim(config.MaxConcurrent, config.MaxConcurrent);
         try
@@ -135,7 +148,7 @@ public sealed partial class SwarmOrchestrator
                     }
 
 #pragma warning disable CA2025 // Semaphore is disposed after Task.WhenAll ensures all tasks complete
-                    execTasks.Add(ExecuteTaskAsync(node, plan, config, semaphore, tokenCounter, artifactsDir, onEvent, ct));
+                    execTasks.Add(ExecuteTaskAsync(node, plan, config, semaphore, tokenCounter, artifactsDir, onEvent, swarmContext, ct));
 #pragma warning restore CA2025
                 }
 
@@ -145,7 +158,7 @@ public sealed partial class SwarmOrchestrator
                 if (tokenCounter.Value > config.MaxTokenBudget)
                 {
                     LogBudgetExceeded(_logger, plan.Id, tokenCounter.Value, config.MaxTokenBudget);
-                    await EmitAsync(new SwarmEvent.BudgetExceeded(plan.Id, tokenCounter.Value, config.MaxTokenBudget), onEvent, ct).ConfigureAwait(false);
+                    await EmitAsync(new SwarmEvent.BudgetExceeded(plan.Id, tokenCounter.Value, config.MaxTokenBudget), onEvent, swarmContext, ct).ConfigureAwait(false);
 
                     // Cancel remaining waves
                     CancelRemainingTasks(plan.Tasks, wave + 1);
@@ -181,7 +194,7 @@ public sealed partial class SwarmOrchestrator
             LogSwarmComplete(_logger, plan.Id, result.Status, sw.ElapsedMilliseconds);
             await EmitAsync(
                 new SwarmEvent.SwarmCompleted(plan.Id, result.Status, tokenCounter.Value, sw.Elapsed.TotalSeconds),
-                onEvent, ct).ConfigureAwait(false);
+                onEvent, swarmContext, ct).ConfigureAwait(false);
         }
 
         return result;
@@ -195,12 +208,13 @@ public sealed partial class SwarmOrchestrator
         TokenCounter tokenCounter,
         string artifactsDir,
         Action<SwarmEvent>? onEvent,
+        SwarmExecutionContext swarmContext,
         CancellationToken ct)
     {
         await semaphore.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await ExecuteTaskCoreAsync(node, plan, config, tokenCounter, artifactsDir, onEvent, ct).ConfigureAwait(false);
+            await ExecuteTaskCoreAsync(node, plan, config, tokenCounter, artifactsDir, onEvent, swarmContext, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -216,6 +230,7 @@ public sealed partial class SwarmOrchestrator
         TokenCounter tokenCounter,
         string artifactsDir,
         Action<SwarmEvent>? onEvent,
+        SwarmExecutionContext swarmContext,
         CancellationToken ct)
     {
         var agentName = ResolveAgentName(node, config);
@@ -231,7 +246,7 @@ public sealed partial class SwarmOrchestrator
                 var holderAgentName = holderNode is not null ? ResolveAgentName(holderNode, config) : holderTaskId;
 
                 LogFileConflict(_logger, node.Id, file, holderTaskId);
-                await EmitAsync(new SwarmEvent.FileConflict(plan.Id, node.Id, agentName, file, holderTaskId, holderAgentName), onEvent, ct).ConfigureAwait(false);
+                await EmitAsync(new SwarmEvent.FileConflict(plan.Id, node.Id, agentName, file, holderTaskId, holderAgentName), onEvent, swarmContext, ct).ConfigureAwait(false);
 
                 node.Status = SwarmTaskStatus.Blocked;
                 node.Error = $"File '{file}' locked by task '{holderTaskId}'.";
@@ -241,7 +256,7 @@ public sealed partial class SwarmOrchestrator
         }
         node.Status = SwarmTaskStatus.Running;
         LogTaskStart(_logger, node.Id, agentName);
-        await EmitAsync(new SwarmEvent.TaskStarted(plan.Id, node.Id, agentName, node.Description, node.Wave), onEvent, ct).ConfigureAwait(false);
+        await EmitAsync(new SwarmEvent.TaskStarted(plan.Id, node.Id, agentName, node.Description, node.Wave), onEvent, swarmContext, ct).ConfigureAwait(false);
 
         var attempt = 0;
         while (attempt <= config.MaxRetries)
@@ -267,7 +282,7 @@ public sealed partial class SwarmOrchestrator
                     tokenCounter.Add(estimatedTokens);
 
                     LogTaskComplete(_logger, node.Id, estimatedTokens);
-                    await EmitAsync(new SwarmEvent.TaskCompleted(plan.Id, node.Id, agentName, node.Description, result.Output, estimatedTokens), onEvent, ct).ConfigureAwait(false);
+                    await EmitAsync(new SwarmEvent.TaskCompleted(plan.Id, node.Id, agentName, node.Description, result.Output, estimatedTokens), onEvent, swarmContext, ct).ConfigureAwait(false);
                     return;
                 }
 
@@ -280,7 +295,7 @@ public sealed partial class SwarmOrchestrator
                 {
                     node.Status = SwarmTaskStatus.Failed;
                     node.Error = result.Error ?? "Agent returned failure.";
-                    await EmitAsync(new SwarmEvent.TaskFailed(plan.Id, node.Id, agentName, node.Description, node.Error, attempt), onEvent, ct).ConfigureAwait(false);
+                    await EmitAsync(new SwarmEvent.TaskFailed(plan.Id, node.Id, agentName, node.Description, node.Error, attempt), onEvent, swarmContext, ct).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -294,7 +309,7 @@ public sealed partial class SwarmOrchestrator
                 {
                     node.Status = SwarmTaskStatus.Failed;
                     node.Error = "Task timed out.";
-                    await EmitAsync(new SwarmEvent.TaskFailed(plan.Id, node.Id, agentName, node.Description, node.Error, attempt), onEvent, ct).ConfigureAwait(false);
+                    await EmitAsync(new SwarmEvent.TaskFailed(plan.Id, node.Id, agentName, node.Description, node.Error, attempt), onEvent, swarmContext, ct).ConfigureAwait(false);
                 }
             }
         }
@@ -419,10 +434,14 @@ public sealed partial class SwarmOrchestrator
         return sb.ToString();
     }
 
-    private async Task EmitAsync(SwarmEvent evt, Action<SwarmEvent>? onEvent, CancellationToken ct)
+    private async Task EmitAsync(
+        SwarmEvent evt,
+        Action<SwarmEvent>? onEvent,
+        SwarmExecutionContext swarmContext,
+        CancellationToken ct)
     {
         onEvent?.Invoke(evt);
-        await _session.RecordAsync(evt, ct).ConfigureAwait(false);
+        await _session.RecordAsync(evt, swarmContext, ct).ConfigureAwait(false);
     }
 
     /// <summary>Thread-safe token counter for concurrent task execution.</summary>

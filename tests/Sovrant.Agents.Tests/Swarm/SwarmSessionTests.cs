@@ -1,22 +1,36 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Agents.Swarm;
+using Sovrant.Runtime.Storage;
 
 namespace Sovrant.Agents.Tests.Swarm;
 
-public class SwarmSessionTests : IDisposable
+/// <summary>
+/// Round-trip tests for <see cref="SwarmSession"/> against a real
+/// <see cref="SqliteSwarmEventStore"/> backed by a temp SQLite file.
+/// As of Phase 37.5 the session writes to the <c>swarm_events</c> table
+/// rather than JSONL files, so these tests now also exercise the SQLite
+/// store and the workspace-scoping path.
+/// </summary>
+public class SwarmSessionTests : IAsyncDisposable
 {
-    private readonly string _tempDir;
+    private readonly string _dbPath;
+    private readonly SqliteStorageProvider _provider;
     private readonly SwarmSession _session;
 
     public SwarmSessionTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), $"swarm-test-{Guid.NewGuid():N}");
-        _session = new SwarmSession(_tempDir);
+        _dbPath = Path.Combine(Path.GetTempPath(), $"swarm_session_test_{Guid.NewGuid():N}.db");
+        _provider = new SqliteStorageProvider(NullLogger<SqliteStorageProvider>.Instance, _dbPath);
+        _provider.InitializeAsync().GetAwaiter().GetResult();
+        var store = new SqliteSwarmEventStore(_provider);
+        _session = new SwarmSession(store);
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        await _provider.DisposeAsync();
+        if (File.Exists(_dbPath))
+            File.Delete(_dbPath);
     }
 
     [Fact]
@@ -79,7 +93,7 @@ public class SwarmSessionTests : IDisposable
     }
 
     [Fact]
-    public void ListSessions_EmptyDir_ReturnsEmpty()
+    public void ListSessions_EmptyStore_ReturnsEmpty()
     {
         Assert.Empty(_session.ListSessions());
     }
@@ -155,5 +169,49 @@ public class SwarmSessionTests : IDisposable
         var completed = Assert.IsType<SwarmEvent.SwarmCompleted>(events[0]);
         Assert.Equal(SwarmStatus.Completed, completed.FinalStatus);
         Assert.Equal(10000, completed.TotalTokens);
+    }
+
+    [Fact]
+    public async Task RecordWithContext_StampsWorkspaceAndProject()
+    {
+        var swarmId = "scoped-swarm";
+        var context = new SwarmExecutionContext(
+            UserId: "alice",
+            WorkspaceId: "ws-personal-alice",
+            ProjectId: "proj-1");
+
+        await _session.RecordAsync(new SwarmEvent.PlanCreated(swarmId, 1, 1), context);
+
+        // The session can find it back
+        Assert.True(_session.Exists(swarmId));
+
+        // And ListSessions filtered by workspace surfaces it; filtering by a different workspace does not.
+        var inWorkspace = _session.ListSessions(new SwarmListFilter(WorkspaceId: "ws-personal-alice"));
+        Assert.Contains(swarmId, inWorkspace);
+
+        var inOtherWorkspace = _session.ListSessions(new SwarmListFilter(WorkspaceId: "ws-other"));
+        Assert.DoesNotContain(swarmId, inOtherWorkspace);
+
+        // Project filter is independent.
+        var inProject = _session.ListSessions(new SwarmListFilter(ProjectId: "proj-1"));
+        Assert.Contains(swarmId, inProject);
+    }
+
+    [Fact]
+    public async Task ListSessions_WithNoFilter_ReturnsAllScopes()
+    {
+        await _session.RecordAsync(
+            new SwarmEvent.PlanCreated("s-personal", 1, 1),
+            new SwarmExecutionContext(WorkspaceId: "ws-personal-alice"));
+        await _session.RecordAsync(
+            new SwarmEvent.PlanCreated("s-team", 1, 1),
+            new SwarmExecutionContext(WorkspaceId: "ws-team-1"));
+        await _session.RecordAsync(new SwarmEvent.PlanCreated("s-unscoped", 1, 1));
+
+        var all = _session.ListSessions();
+        Assert.Equal(3, all.Count);
+        Assert.Contains("s-personal", all);
+        Assert.Contains("s-team", all);
+        Assert.Contains("s-unscoped", all);
     }
 }

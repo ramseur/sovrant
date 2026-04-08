@@ -2,6 +2,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Sovrant.Agents.Swarm;
+using Sovrant.Runtime.Storage;
+using Sovrant.Server.Middleware;
 
 namespace Sovrant.Server.Routes;
 
@@ -10,9 +12,11 @@ namespace Sovrant.Server.Routes;
 /// <list type="bullet">
 ///   <item><c>POST /v1/swarm</c> — start a swarm (SSE stream)</item>
 ///   <item><c>GET /v1/swarm/{id}</c> — get swarm status</item>
-///   <item><c>GET /v1/swarm/{id}/events</c> — replay JSONL events</item>
-///   <item><c>GET /v1/swarm/sessions</c> — list all swarm sessions</item>
+///   <item><c>GET /v1/swarm/{id}/events</c> — replay events from <c>swarm_events</c></item>
+///   <item><c>GET /v1/swarm/sessions</c> — list all swarm sessions, optionally filtered by workspace/project</item>
 /// </list>
+/// As of Phase 37.5 these read/write through <see cref="ISwarmEventStore"/>
+/// instead of the legacy JSONL files under <c>~/.sovrant/swarm/sessions/</c>.
 /// </summary>
 internal static class SwarmRoutes
 {
@@ -69,12 +73,20 @@ internal static class SwarmRoutes
                 return Results.Empty;
             }
 
+            // Build the per-run scoping context from the workspace middleware. Every
+            // event written to swarm_events will be stamped with these IDs so the run
+            // can later be filtered by workspace / project.
+            var swarmContext = new SwarmExecutionContext(
+                UserId: ctx.GetUserId(),
+                WorkspaceId: ctx.GetWorkspaceId(),
+                ProjectId: ctx.Request.Headers["X-Project-Id"].FirstOrDefault());
+
             // Execute with SSE streaming
             var result = await orchestrator.ExecuteAsync(plan, config, onEvent: evt =>
             {
                 // Fire-and-forget SSE write (best effort for streaming)
                 _ = WriteSseEventAsync(ctx.Response, evt.GetType().Name, evt, CancellationToken.None);
-            }, ct);
+            }, executionContext: swarmContext, ct: ct);
 
             // Quality gate
             if (config.QualityGateEnabled && result.Status == SwarmStatus.Completed)
@@ -103,7 +115,7 @@ internal static class SwarmRoutes
                 : Results.Ok(result);
         });
 
-        // GET /v1/swarm/{id}/events — replay JSONL events
+        // GET /v1/swarm/{id}/events — replay events from swarm_events
         app.MapGet("/v1/swarm/{id}/events", async (string id, SwarmSession session, CancellationToken ct) =>
         {
             if (!session.Exists(id))
@@ -118,10 +130,20 @@ internal static class SwarmRoutes
             return Results.Ok(events);
         });
 
-        // GET /v1/swarm/sessions — list all sessions
-        app.MapGet("/v1/swarm/sessions", (SwarmSession session) =>
+        // GET /v1/swarm/sessions — list all sessions, optionally filtered by workspace/project.
+        // Query params:  ?workspace_id=ws-...   ?project_id=proj-...   ?limit=50
+        app.MapGet("/v1/swarm/sessions", (HttpContext ctx, SwarmSession session) =>
         {
-            return Results.Ok(session.ListSessions());
+            var workspaceId = ctx.Request.Query["workspace_id"].FirstOrDefault();
+            var projectId = ctx.Request.Query["project_id"].FirstOrDefault();
+            int? limit = int.TryParse(ctx.Request.Query["limit"].FirstOrDefault(), out var n) ? n : null;
+
+            var filter = new SwarmListFilter(
+                WorkspaceId: string.IsNullOrEmpty(workspaceId) ? null : workspaceId,
+                ProjectId: string.IsNullOrEmpty(projectId) ? null : projectId,
+                Limit: limit);
+
+            return Results.Ok(session.ListSessions(filter));
         });
     }
 
