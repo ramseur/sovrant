@@ -157,6 +157,11 @@ public static class ServiceCollectionExtensions
         // an LLM-backed summariser without touching executor or planner.
         services.AddSingleton<Engine.IContextCompactor, Engine.NaiveContextCompactor>();
 
+        // Engine recovery (Phase 51) — closes out in-flight runs from the
+        // previous process at startup so the trace log stays internally
+        // consistent after a crash.
+        services.AddSingleton<Engine.IEngineRecovery, Engine.EngineRecovery>();
+
         // Eval framework (Phase 27)
         services.AddSingleton<IEvalResultStore, EvalResultStore>();
         services.AddSingleton<IEvalRunner, EvalRunner>();
