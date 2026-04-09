@@ -145,6 +145,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRuntimeTraceStore>(sp =>
             new SqliteRuntimeTraceStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
+        // Mission scratchpad (Phase 51) — typed, append-only shared store for
+        // parallel sub-agents within one mission to publish intermediate
+        // findings the next plan wave can read.
+        services.AddSingleton<IMissionScratchpadStore>(sp =>
+            new SqliteMissionScratchpadStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+
         // Eval framework (Phase 27)
         services.AddSingleton<IEvalResultStore, EvalResultStore>();
         services.AddSingleton<IEvalRunner, EvalRunner>();
