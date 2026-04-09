@@ -75,7 +75,43 @@ public sealed partial class SqliteStorageProvider : IStorageProvider, ISqliteCon
             LogInitFailed(_logger, _dbPath, ex.Message);
         }
 
+        // Phase 38 PR 4 — tighten file permissions after the DB file has
+        // been created by the first Open(). Done post-init so it also
+        // applies to the WAL and SHM sidecars that SetPragmas created.
+        HardenDbFilePermissions();
+
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Restricts the on-disk SQLite files (main + WAL + SHM) to owner-only
+    /// read/write on Unix (<c>0600</c>). On Windows the default ACL for
+    /// files under the user profile already grants access only to the
+    /// owner and SYSTEM, so no programmatic hardening is attempted —
+    /// operators running in multi-user server deployments should manage
+    /// NTFS ACLs through group policy or the install script.
+    /// </summary>
+    private void HardenDbFilePermissions()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS() && !OperatingSystem.IsFreeBSD())
+            return;
+
+        foreach (var suffix in new[] { "", "-wal", "-shm" })
+        {
+            var path = _dbPath + suffix;
+            if (!File.Exists(path)) continue;
+            try
+            {
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                // Non-fatal: the server keeps running with the default
+                // umask-derived permissions. Log once per path so operators
+                // can notice.
+                LogInitFailed(_logger, path, $"chmod 600 failed: {ex.Message}");
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -112,12 +148,20 @@ public sealed partial class SqliteStorageProvider : IStorageProvider, ISqliteCon
     private static void SetPragmas(SqliteConnection connection)
     {
         using var cmd = connection.CreateCommand();
+        // secure_delete = ON (Phase 38 PR 4): when a row is deleted, SQLite
+        // overwrites the freed pages with zeros instead of leaving the old
+        // bytes in place. Matters because this DB holds token hashes,
+        // credential blobs, and audit content — deletions should not leave
+        // recoverable tails on disk. Per-connection cost is tiny; the write
+        // amplification is only paid on actual DELETEs, not on inserts or
+        // updates.
         cmd.CommandText = """
             PRAGMA journal_mode = WAL;
             PRAGMA synchronous = NORMAL;
             PRAGMA foreign_keys = ON;
             PRAGMA busy_timeout = 5000;
             PRAGMA cache_size = -20000;
+            PRAGMA secure_delete = ON;
             """;
         cmd.ExecuteNonQuery();
     }

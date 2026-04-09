@@ -86,6 +86,50 @@ public sealed class SqliteStorageProviderTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task CreateConnection_AppliesSecureDeletePragma()
+    {
+        // Phase 38 PR 4 — secure_delete must be ON so freed pages
+        // (containing token hashes, credentials, audit content) are
+        // zeroed rather than left recoverable on disk.
+        await _provider.InitializeAsync();
+
+        using var connection = ((ISqliteConnectionFactory)_provider).CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "PRAGMA secure_delete;";
+        var result = cmd.ExecuteScalar();
+
+        Assert.Equal(1L, Convert.ToInt64(result));
+    }
+
+    [Fact]
+    public async Task InitializeAsync_HardensDbFilePermissionsOnUnix()
+    {
+        // Phase 38 PR 4 — on Unix the DB file (and WAL/SHM sidecars) must
+        // be 0600 so another local user cannot read token hashes or
+        // credential blobs. On Windows this is a no-op (user-profile ACLs
+        // already restrict access) so we skip.
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS() && !OperatingSystem.IsFreeBSD())
+            return;
+
+        await _provider.InitializeAsync();
+
+        // Touch a write so WAL/SHM sidecars materialize.
+        await _provider.ExecuteInTransactionAsync(_ => Task.CompletedTask);
+
+        foreach (var suffix in new[] { "", "-wal", "-shm" })
+        {
+            var path = _dbPath + suffix;
+            if (!File.Exists(path)) continue;
+
+            var mode = File.GetUnixFileMode(path);
+            var expected = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+            Assert.Equal(expected, mode & ~UnixFileMode.None);
+            Assert.Equal(UnixFileMode.None, mode & (UnixFileMode.GroupRead | UnixFileMode.GroupWrite
+                | UnixFileMode.OtherRead | UnixFileMode.OtherWrite));
+        }
+    }
+
+    [Fact]
     public async Task InitializeAsync_GracefullyHandlesInvalidPath()
     {
         // Use a path with characters invalid on Windows (NUL byte in path).
