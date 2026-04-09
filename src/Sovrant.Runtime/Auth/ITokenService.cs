@@ -62,13 +62,15 @@ public interface ITokenService
     Task<bool> RevokeAsync(string tokenId, CancellationToken ct = default);
 
     /// <summary>
-    /// Resolves an incoming plaintext bearer token to its <see cref="ApiToken"/>
-    /// row. Returns <c>null</c> for any of: unknown token, revoked token, expired
-    /// token, or token belonging to an inactive user.
+    /// Resolves an incoming plaintext bearer token to its
+    /// <see cref="ResolvedToken"/> (token row + owning user's role). Returns
+    /// <c>null</c> for any of: unknown token, revoked token, expired token,
+    /// or token belonging to an inactive user.
     ///
     /// <para>This is the hot path called by <c>BearerTokenMiddleware</c> on every
     /// authenticated request. It performs a single indexed SELECT against
-    /// <c>token_hash</c> joined with <c>users</c>.</para>
+    /// <c>token_hash</c> joined with <c>users</c> — the role comes from the
+    /// same JOIN, so authorization decisions don't cost an extra query.</para>
     /// </summary>
-    Task<ApiToken?> ResolveAsync(string plaintextToken, CancellationToken ct = default);
+    Task<ResolvedToken?> ResolveAsync(string plaintextToken, CancellationToken ct = default);
 }

@@ -29,6 +29,15 @@ internal static class SovrantHttpContextKeys
     /// </summary>
     public const string AuthMode = "sovrant.auth_mode";
 
+    /// <summary>
+    /// The owning user's role (e.g. <c>"user"</c> or <c>"admin"</c>) for
+    /// per-user-token requests. Absent for static-token requests — those
+    /// are treated as admin via the legacy bootstrap path.
+    /// </summary>
+    public const string Role = "sovrant.role";
+
     public const string AuthModeToken = "token";
     public const string AuthModeStatic = "static";
+
+    public const string RoleAdmin = "admin";
 }

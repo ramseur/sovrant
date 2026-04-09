@@ -193,7 +193,7 @@ public sealed class SqliteTokenServiceTests : IAsyncDisposable
     // ── Resolve ───────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Resolve_ValidPlaintext_ReturnsToken()
+    public async Task Resolve_ValidPlaintext_ReturnsTokenAndRole()
     {
         var u = await _users.CreateAsync("resolver");
         var issued = await _tokens.IssueAsync(u.UserId, name: "cli");
@@ -201,9 +201,22 @@ public sealed class SqliteTokenServiceTests : IAsyncDisposable
         var resolved = await _tokens.ResolveAsync(issued.Plaintext);
 
         Assert.NotNull(resolved);
-        Assert.Equal(issued.Token.TokenId, resolved.TokenId);
-        Assert.Equal(u.UserId, resolved.UserId);
-        Assert.Equal("cli", resolved.Name);
+        Assert.Equal(issued.Token.TokenId, resolved.Token.TokenId);
+        Assert.Equal(u.UserId, resolved.Token.UserId);
+        Assert.Equal("cli", resolved.Token.Name);
+        Assert.Equal("user", resolved.Role); // default role from CreateAsync
+    }
+
+    [Fact]
+    public async Task Resolve_AdminUser_ReturnsAdminRole()
+    {
+        var u = await _users.CreateAsync("resolver-admin", role: "admin");
+        var issued = await _tokens.IssueAsync(u.UserId);
+
+        var resolved = await _tokens.ResolveAsync(issued.Plaintext);
+
+        Assert.NotNull(resolved);
+        Assert.Equal("admin", resolved.Role);
     }
 
     [Fact]

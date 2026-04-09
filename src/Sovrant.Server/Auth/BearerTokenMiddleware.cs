@@ -81,8 +81,9 @@ internal sealed class BearerTokenMiddleware : IMiddleware
                 return;
             }
 
-            context.Items[SovrantHttpContextKeys.UserId] = resolved.UserId;
-            context.Items[SovrantHttpContextKeys.TokenId] = resolved.TokenId;
+            context.Items[SovrantHttpContextKeys.UserId] = resolved.Token.UserId;
+            context.Items[SovrantHttpContextKeys.TokenId] = resolved.Token.TokenId;
+            context.Items[SovrantHttpContextKeys.Role] = resolved.Role;
             context.Items[SovrantHttpContextKeys.AuthMode] = SovrantHttpContextKeys.AuthModeToken;
 
             await next(context).ConfigureAwait(false);

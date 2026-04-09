@@ -157,7 +157,7 @@ internal sealed partial class SqliteTokenService : ITokenService
         return rows > 0;
     }
 
-    public async Task<ApiToken?> ResolveAsync(string plaintextToken, CancellationToken ct = default)
+    public async Task<ResolvedToken?> ResolveAsync(string plaintextToken, CancellationToken ct = default)
     {
         // Defensive: reject anything that doesn't even look like one of our tokens.
         // This is not the security boundary — the hash lookup is — but it short-circuits
@@ -170,10 +170,12 @@ internal sealed partial class SqliteTokenService : ITokenService
         using var connection = _connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
         // Join users so an inactive user cannot authenticate even if they
-        // somehow still hold a non-revoked token.
+        // somehow still hold a non-revoked token, and pull the role in the
+        // same round-trip so authorization decisions don't cost a 2nd query.
         cmd.CommandText = """
             SELECT t.token_id, t.user_id, t.token_prefix, t.name, t.scopes,
-                   t.created_at, t.expires_at, t.revoked_at
+                   t.created_at, t.expires_at, t.revoked_at,
+                   u.role
             FROM api_tokens t
             INNER JOIN users u ON u.user_id = t.user_id
             WHERE t.token_hash = $hash
@@ -187,6 +189,7 @@ internal sealed partial class SqliteTokenService : ITokenService
             return null;
 
         var token = ReadToken(reader);
+        var role = reader.GetString(8);
 
         // Reject expired tokens. We check in code rather than SQL so that the
         // expiry semantics are obvious from the test surface and so SQLite's
@@ -195,7 +198,7 @@ internal sealed partial class SqliteTokenService : ITokenService
         if (token.ExpiresAt.HasValue && token.ExpiresAt.Value <= DateTimeOffset.UtcNow)
             return null;
 
-        return token;
+        return new ResolvedToken { Token = token, Role = role };
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────

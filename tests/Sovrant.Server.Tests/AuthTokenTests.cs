@@ -9,9 +9,9 @@ using Sovrant.Runtime.Users;
 namespace Sovrant.Server.Tests;
 
 /// <summary>
-/// Phase 38 PR 2 — covers per-user (<c>svt_*</c>) bearer authentication via
+/// Phase 38 PR 2/3 — covers per-user (<c>svt_*</c>) bearer authentication via
 /// <see cref="ITokenService"/>. Asserts both the status-code outcome AND the
-/// identity attached to the request via <c>/v1/whoami</c>, so a buggy
+/// identity attached to the request via <c>GET /v1/users/me</c>, so a buggy
 /// middleware that lets requests through without setting <c>user_id</c>
 /// would still be caught.
 /// </summary>
@@ -31,13 +31,11 @@ public sealed class AuthTokenTests : IClassFixture<SovrantWebAppFactory>
     {
         var (user, plaintext) = await IssueAsync("auth-token-alice");
 
-        var who = await CallWhoAmI(plaintext);
+        var profile = await GetMe(plaintext);
 
-        Assert.NotNull(who);
-        Assert.Equal("token", who!.AuthMode);
-        Assert.Equal(user.UserId, who.UserId);
-        Assert.NotNull(who.TokenId);
-        Assert.StartsWith("tok_", who.TokenId);
+        Assert.NotNull(profile);
+        Assert.Equal(user.UserId, profile!.UserId);
+        Assert.Equal("auth-token-alice", profile.Username);
     }
 
     [Fact]
@@ -50,7 +48,7 @@ public sealed class AuthTokenTests : IClassFixture<SovrantWebAppFactory>
         var listed = await tokens.ListAsync(u!.UserId);
         await tokens.RevokeAsync(listed[0].TokenId);
 
-        var resp = await SendWithToken("/v1/whoami", plaintext);
+        var resp = await SendWithToken(HttpMethod.Get, "/v1/users/me", plaintext);
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
 
@@ -61,59 +59,48 @@ public sealed class AuthTokenTests : IClassFixture<SovrantWebAppFactory>
         var users = _factory.Services.GetRequiredService<IUserService>();
         await users.DeactivateAsync(user.UserId);
 
-        var resp = await SendWithToken("/v1/whoami", plaintext);
+        var resp = await SendWithToken(HttpMethod.Get, "/v1/users/me", plaintext);
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
 
     [Fact]
     public async Task UnknownPerUserToken_Returns401()
     {
-        var resp = await SendWithToken("/v1/whoami", "svt_completely-unknown-token");
+        var resp = await SendWithToken(HttpMethod.Get, "/v1/users/me", "svt_completely-unknown-token");
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
-    }
-
-    [Fact]
-    public async Task StaticToken_StillWorks_ButHasNoUserId()
-    {
-        // The legacy SOVRANT_TOKEN path: factory sets it to "test-token-123".
-        var who = await CallWhoAmI("test-token-123");
-
-        Assert.NotNull(who);
-        Assert.Equal("static", who!.AuthMode);
-        Assert.Null(who.UserId);
-        Assert.Null(who.TokenId);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────
 
-    private async Task<(User user, string plaintext)> IssueAsync(string username)
+    internal async Task<(User user, string plaintext)> IssueAsync(string username, string role = "user")
     {
         var users = _factory.Services.GetRequiredService<IUserService>();
         var tokens = _factory.Services.GetRequiredService<ITokenService>();
 
-        var user = await users.GetByUsernameAsync(username) ?? await users.CreateAsync(username);
+        var user = await users.GetByUsernameAsync(username) ?? await users.CreateAsync(username, role: role);
         var issued = await tokens.IssueAsync(user.UserId, name: "test");
         return (user, issued.Plaintext);
     }
 
-    private Task<HttpResponseMessage> SendWithToken(string path, string token)
+    internal Task<HttpResponseMessage> SendWithToken(HttpMethod method, string path, string token, HttpContent? body = null)
     {
-        var req = new HttpRequestMessage(HttpMethod.Get, path);
+        var req = new HttpRequestMessage(method, path);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (body is not null) req.Content = body;
         return _client.SendAsync(req);
     }
 
-    private async Task<WhoAmIDto?> CallWhoAmI(string token)
+    private async Task<UserProfileDto?> GetMe(string token)
     {
-        var resp = await SendWithToken("/v1/whoami", token);
+        var resp = await SendWithToken(HttpMethod.Get, "/v1/users/me", token);
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-        return await resp.Content.ReadFromJsonAsync<WhoAmIDto>();
+        return await resp.Content.ReadFromJsonAsync<UserProfileDto>();
     }
 
-    private sealed record WhoAmIDto
+    internal sealed record UserProfileDto
     {
-        [JsonPropertyName("auth_mode")] public string AuthMode { get; init; } = "";
-        [JsonPropertyName("user_id")] public string? UserId { get; init; }
-        [JsonPropertyName("token_id")] public string? TokenId { get; init; }
+        [JsonPropertyName("user_id")] public string UserId { get; init; } = "";
+        [JsonPropertyName("username")] public string Username { get; init; } = "";
+        [JsonPropertyName("role")] public string? Role { get; init; }
     }
 }

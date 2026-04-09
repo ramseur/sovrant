@@ -3,16 +3,26 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Sovrant.Runtime.Users;
 using Sovrant.Runtime.Workspaces;
+using Sovrant.Server.Auth;
 
 namespace Sovrant.Server.Routes;
 
 /// <summary>
-/// Phase 37 — user management endpoints.
+/// Phase 37 — user management endpoints. Phase 38 added admin/self
+/// enforcement on top.
 ///
-/// <para><b>Auth model:</b> Every endpoint here is gated by the existing
-/// <c>SOVRANT_TOKEN</c> bearer middleware. There is no per-user authentication
-/// yet — any holder of the shared token can manage any user. Per-user bearer
-/// tokens, role enforcement, and admin-only routes are deferred to Phase 38.</para>
+/// <para><b>Auth model (Phase 38):</b></para>
+/// <list type="bullet">
+///   <item>CRUD on the user roster (<c>POST/GET /v1/users</c>, <c>PUT/DELETE
+///         /v1/users/{id}</c>, reactivate) requires <b>admin</b>. Static-token
+///         requests count as admin (the legacy bootstrap god-token).</item>
+///   <item>Reading a single user (<c>GET /v1/users/{id}</c>) and the per-user
+///         data views (<c>sessions/usage/audit</c>) are <b>self-or-admin</b>:
+///         a non-admin caller may only read their own row.</item>
+///   <item>Self-service operations (current user profile, per-user token
+///         management) live under <c>/v1/users/me</c> in <see cref="MeRoutes"/>
+///         and have no <c>{id}</c> to forge.</item>
+/// </list>
 ///
 /// <para><b>Soft-delete only:</b> <c>DELETE</c> flips <c>status='inactive'</c>;
 /// it never removes the row. This preserves all FK references and audit history.</para>
@@ -41,12 +51,14 @@ internal static class UserRoutes
 
     private static async Task<IResult> CreateUser(
         CreateUserRequest req,
+        HttpContext ctx,
         IUserService users,
         IWorkspaceService workspaces,
         ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
+        if (!ctx.IsAdmin()) return Forbidden();
         if (string.IsNullOrWhiteSpace(req.Username))
             return Results.BadRequest(new { error = "username is required." });
 
@@ -91,9 +103,11 @@ internal static class UserRoutes
         string? team,
         int? limit,
         int? offset,
+        HttpContext ctx,
         IUserService users,
         CancellationToken ct)
     {
+        if (!ctx.IsAdmin()) return Forbidden();
         var filter = new UserListFilter
         {
             Status = status,
@@ -116,8 +130,9 @@ internal static class UserRoutes
     }
 
     private static async Task<IResult> GetUser(
-        string id, IUserService users, CancellationToken ct)
+        string id, HttpContext ctx, IUserService users, CancellationToken ct)
     {
+        if (!ctx.CanActOnUser(id)) return Forbidden();
         var profile = await users.GetProfileAsync(id, ct).ConfigureAwait(false);
         return profile is null
             ? Results.NotFound(new { error = "User not found." })
@@ -125,9 +140,10 @@ internal static class UserRoutes
     }
 
     private static async Task<IResult> UpdateUser(
-        string id, UpdateUserRequest req, IUserService users, CancellationToken ct)
+        string id, UpdateUserRequest req, HttpContext ctx, IUserService users, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
+        if (!ctx.IsAdmin()) return Forbidden();
 
         try
         {
@@ -155,8 +171,9 @@ internal static class UserRoutes
     }
 
     private static async Task<IResult> DeactivateUser(
-        string id, IUserService users, CancellationToken ct)
+        string id, HttpContext ctx, IUserService users, CancellationToken ct)
     {
+        if (!ctx.IsAdmin()) return Forbidden();
         // Self-protection: refuse to deactivate the boot identity, otherwise
         // the server will be unable to seed sessions on its next restart.
         var bootIdentity = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
@@ -176,8 +193,9 @@ internal static class UserRoutes
     }
 
     private static async Task<IResult> ReactivateUser(
-        string id, IUserService users, CancellationToken ct)
+        string id, HttpContext ctx, IUserService users, CancellationToken ct)
     {
+        if (!ctx.IsAdmin()) return Forbidden();
         var reactivated = await users.ReactivateAsync(id, ct).ConfigureAwait(false);
         return reactivated
             ? Results.Ok(new { reactivated = id })
@@ -187,8 +205,9 @@ internal static class UserRoutes
     // ── Per-user data views ────────────────────────────────────────────────
 
     private static async Task<IResult> ListUserSessions(
-        string id, int? limit, int? offset, IUserService users, CancellationToken ct)
+        string id, int? limit, int? offset, HttpContext ctx, IUserService users, CancellationToken ct)
     {
+        if (!ctx.CanActOnUser(id)) return Forbidden();
         var sessions = await users.ListSessionsAsync(id, limit ?? 100, offset ?? 0, ct).ConfigureAwait(false);
         return Results.Ok(new { sessions, count = sessions.Count });
     }
@@ -198,19 +217,27 @@ internal static class UserRoutes
         string? model,
         DateTimeOffset? from,
         DateTimeOffset? to,
+        HttpContext ctx,
         IUserService users,
         CancellationToken ct)
     {
+        if (!ctx.CanActOnUser(id)) return Forbidden();
         var usage = await users.GetUsageAsync(id, model, from, to, ct).ConfigureAwait(false);
         return Results.Ok(usage);
     }
 
     private static async Task<IResult> ListUserAudit(
-        string id, int? limit, IUserService users, CancellationToken ct)
+        string id, int? limit, HttpContext ctx, IUserService users, CancellationToken ct)
     {
+        if (!ctx.CanActOnUser(id)) return Forbidden();
         var events = await users.ListAuditEventsAsync(id, limit ?? 100, ct).ConfigureAwait(false);
         return Results.Ok(new { events, count = events.Count });
     }
+
+    // ── Authorization helper ───────────────────────────────────────────────
+
+    private static IResult Forbidden() =>
+        Results.Json(new { error = "Forbidden" }, statusCode: StatusCodes.Status403Forbidden);
 }
 
 // ── Request DTOs ───────────────────────────────────────────────────────────

@@ -53,6 +53,22 @@ public sealed record ApiToken
 }
 
 /// <summary>
+/// Resolved bearer-token context returned by
+/// <see cref="ITokenService.ResolveAsync"/>. Bundles the persisted token row
+/// with the owning user's <c>role</c> so that middleware can perform
+/// authorization decisions in a single round-trip — the role is read from
+/// the same JOIN that already validates <c>status='active'</c>.
+/// </summary>
+public sealed record ResolvedToken
+{
+    /// <summary>The persisted token metadata row.</summary>
+    public required ApiToken Token { get; init; }
+
+    /// <summary>The owning user's role (e.g. <c>"user"</c> or <c>"admin"</c>).</summary>
+    public required string Role { get; init; }
+}
+
+/// <summary>
 /// Returned <b>once</b> at issuance time. Carries the plaintext secret that
 /// the caller must store (or surrender to the user) immediately — it cannot
 /// be recovered later because only the SHA-256 hash is persisted.
