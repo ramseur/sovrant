@@ -88,7 +88,7 @@ The engine is fully functional for individual and small-team use:
 
 | Gap | Phase | Priority |
 |---|---|---|
-| **Sophisticated runtime + autonomous mission loop (planner/executor split, per-step model routing, mission ledger, PM/priority guard)** | **Phase 51** | **Next** |
+| ~~Sophisticated runtime + autonomous mission loop~~ — **engine + mission layer shipped 2026-04-09** (see Phase 51 section below for what landed vs. what is deferred) | Phase 51 ✅ | Shipped |
 | **Unified agent orchestration: collapse Team and Swarm into one DB-backed abstraction with three creation modes (one team / multiple teams / engine-decided)** | **Phase 52** | **Next** |
 | **Scoped artifact storage (user / workspace / project, disk now → cloud later)** | **Phase 53** | **Next** |
 | **Gemma 4 support (OpenRouter primary, Ollama local-only) + capability-detection registry for models with incomplete tool-use metadata** | **Phase 54** | **Next** |
@@ -3443,6 +3443,52 @@ OpenClaw solves all four with a single routing primitive: **the route**. A route
 ---
 
 ## Phase 51 — Sophisticated Runtime + Autonomous Mission Loop (End-to-End Tasks With PM & Priority Awareness)
+
+### ✅ Shipped 2026-04-09 — what actually landed and why it matters
+
+This box is the post-delivery summary. Everything below the horizontal rule that follows is the original specification; it is kept verbatim so the design intent stays on record. If the two disagree, this box is the source of truth for **what exists in the repo today**; the spec is the source of truth for **what the phase ultimately wants to become**.
+
+**Engine layer — planner/executor split with crash-safe traces.** Steps A–I landed as nine small, independently reviewable commits rather than one monolithic drop:
+
+| Step | What it adds | Value — why this is better than the old agentic loop |
+|---|---|---|
+| A — `RuntimePlan` / `IPlanner` / `StepOutcome` | Typed plan contract between the planner and the executor: `RuntimePlan` carries an id, version, goal, and an ordered list of `RuntimeStep`s; each step carries intent, expected outcome, model tier, and an optional tool allow-list | The planner commits to a short sequence of *intended* steps up front instead of letting the model thrash inside a tool loop. The executor can now notice contradictions (actual outcome ≠ expected outcome) and request a cheap re-plan instead of silently drifting. |
+| B — `SqliteRuntimeTraceStore` + V010 `runtime_traces` | Append-only structured reasoning trace; every step_started, step_completed, step_failed, and replan_requested is a row | Crash-safe by construction: every state transition is committed to SQLite *before* the side effect runs. A process crash mid-step leaves a trace we can recover from. |
+| C — `LlmExecutor` + `IStepRunner` seam | Default `IExecutor` with bounded re-plan loop, `MaxReplans`/`MaxStepRetries` knobs, and a narrow `IStepRunner` seam so step dispatch can be mocked | The re-plan budget stops runaway missions. The `IStepRunner` seam lets us test the whole executor without touching an LLM — a big win for the test surface. |
+| D — `IMissionScratchpadStore` + V010 `mission_scratchpad` | Typed, append-only shared store: `(mission_id, step_index, namespace, key, value, agent_id)` with `LoadAsync` / `ReadLatestAsync` / `DeleteMissionAsync` | Parallel sub-agents within one mission can publish intermediate findings that the next plan wave can read, without stomping on each other. Append-only means history is auditable. |
+| E — `IContextCompactor` + `NaiveContextCompactor` | Seam that folds older step outcomes into a prose summary when prior-outcome history exceeds the planner's character budget; default keeps the last N outcomes verbatim | Long missions no longer blow the planner's context window. Swapping in an LLM-backed compactor later requires zero changes to executor or planner. |
+| F — `MacroDefinition` + `MacroExpander` + `IMacroRegistry` | Named, reusable step sequences that the planner can reference by name; expander flattens them inline with contiguous indexes, and also renumbers sparse indexes from replanner patches | Common sequences (e.g. "run tests, then format, then commit") become first-class instead of having to be re-planned from scratch each time. |
+| G — `EngineRecovery` + `IEngineRecovery` | Startup-time scan of `runtime_traces` for orphaned `step_started` rows with no matching `step_completed` or `step_failed`; writes synthetic `step_failed` + `run_completed(Cancelled)` rows | Idempotent recovery — after a crash the trace log is internally consistent, so replays and audits are trustworthy. |
+| H — `EngineRoutes` at `/v1/engine/*` | `GET /runs/{id}/trace`, `GET /runs/in-flight`, `POST /runs/recover`, `DELETE /runs/{id}`; wired into `Program.cs` next to `SwarmRoutes` | CLI / UI / mission layer can inspect and recover engine runs without direct DB access. Prerequisite for `sovrant engine tail`. |
+| I — `LlmStepRunner` production `IStepRunner` | Bridges the executor to the existing agentic loop via `IRuntimeSessionPool` + `IConversationRuntime`; maps `RuntimeEvent`s (TextChunk / ToolResult / RuntimeError / PermissionDenied / TurnComplete) to `StepOutcome` statuses; serialises turns through the per-session lock | Closes the loop: the engine layer now runs real LLM turns against real tools in production, not just test doubles. |
+
+**Mission layer — long-lived goals with an event journal.** Built on top of the engine layer as a separate Missions namespace:
+
+| Component | What it adds | Value |
+|---|---|---|
+| V011 `missions` + `mission_events` | Canonical mission record with cached `status` / `plan_json` / timestamps / scoping, plus an append-only event journal covering `mission_created`, `plan_revised`, `run_started`, `run_completed`, `acceptance_approved`, `acceptance_rejected`, `paused`, `resumed`, `completed`, `failed`, `cancelled` | Mission history is fully reconstructable from the journal alone without trusting the mutable `missions` row — same invariant as `runtime_traces` at the engine layer. |
+| `Mission` / `MissionStatus` / `MissionEvent` / `MissionEventTypes` | Typed records and a frozen vocabulary for event type strings | Downstream consumers (UI, `pm_export`, Phase 50 outbox) match on a stable set of strings, not open-ended text. |
+| `IMissionStore` + `SqliteMissionStore` | `Create` / `Get` / `List(ownerUserId?, status?, limit)` / `UpdateState` / `AppendEvent` / `GetEvents`; every state mutation is paired with a journal write | Single enforcement point for the journal-is-canonical rule. Filtering by owner and status lets the CLI show just the user's in-flight missions. |
+| `IMissionPlanner` + `SimpleMissionPlanner` | Seam for mission-level planning; default stub produces a one-step plan whose intent is the mission goal | Proves the seam. An LLM-backed mission planner can slot in later without touching the store, executor, or routes. |
+| `IAcceptanceGate` + `AllStepsSucceededGate` | Seam deciding whether a completed engine run satisfies the mission's acceptance criteria; default rule is "every step Succeeded and terminal state Completed" | Acceptance is a swappable policy instead of being hard-coded. `RequiresHuman` path already exists, so `AwaitingHuman` transitions are plumbed end-to-end. |
+| `LlmMissionExecutor` | Drives one mission forward one engine cycle: plan → `IExecutor.ExecuteAsync` → acceptance gate → journal → terminal state. Idempotent on already-terminal missions so a double `RunAsync` is a cheap no-op. Catches engine exceptions and journals them as `Failed` with an error payload so crashes are visible in the timeline | Missions are now first-class — the user can POST a goal and repeatedly POST `/run` to drive it forward, with every transition recorded in the journal. |
+| `MissionRoutes` at `/v1/missions/*` | `POST /v1/missions` (create), `GET /v1/missions` (list with owner/status filters), `GET /v1/missions/{id}`, `POST /v1/missions/{id}/run`, `GET /v1/missions/{id}/events` | HTTP surface for the CLI and UI. Same integration-test pattern as `EngineRoutes` so the routes are exercised against the real `SqliteMissionStore` via `SovrantWebAppFactory`. |
+
+**Tests.** 532 runtime tests + 5 mission-routes integration tests all passing (`MigrationRunnerTests`, `SqliteStorageProviderTests`, `OldDbUpgradeTests`, `LlmExecutorTests`, `SqliteRuntimeTraceStoreTests`, `SqliteMissionScratchpadStoreTests`, `NaiveContextCompactorTests`, `MacroExpanderTests`, `EngineRecoveryTests`, `LlmStepRunnerTests`, `SqliteMissionStoreTests`, `LlmMissionExecutorTests`, `EngineRoutesTests`, `MissionRoutesTests`). Schema version bumped to **V011** across migration tests and old-db upgrade tests.
+
+**What is deferred (not shipped this pass, tracked as follow-ups).** The spec below calls out ~16 items for the mission layer; the core primitive is the above. Explicitly deferred:
+
+- **`MissionGuard` + cost/time envelopes.** Requires Phase 55's `ICostModel`, which has not shipped. Until then the acceptance gate is pure pass/fail on step status. The `MissionGuard` interface can slot into `LlmMissionExecutor` at the same point `_gate` runs today.
+- **`MissionTool` for sub-mission spawning.** The executor can already run a mission; wrapping it as a tool so a running agent can spawn a sub-mission is a small addition on top of `IMissionExecutor`.
+- **`pm_export`** (mission → Markdown/JSON report). One-shot read-path over `GetEventsAsync` + `GetAsync`.
+- **`sovrant mission` CLI verbs** (`create` / `show` / `run` / `events` / `cancel`). Thin wrappers over the existing HTTP surface.
+- **Phase 50 outbox hookup.** Publishing mission events to an OpenClaw route is a consumer of the existing journal; no changes required in the mission layer itself.
+- **LLM-backed `IMissionPlanner`** and **LLM-backed `IContextCompactor`**. Both seams exist; production can plug in implementations without touching callers.
+- **Parallel sub-agent fan-out during a single `RunAsync`.** `IMissionScratchpadStore` is ready to receive entries from concurrent sub-agents, but `LlmMissionExecutor` runs one engine cycle per call today. Fan-out is additive on the executor side.
+
+**Why we landed a minimal-but-complete mission loop instead of all 16 items at once.** The spec below treats the mission layer as a single unit of work. In practice the *orchestration primitive* (plan → execute → gate → journal → terminal state) is the hard part; the deferred items are either (a) gated on Phase 55, (b) surface polish (CLI, exports, outbox), or (c) additive scaling (parallel fan-out, LLM planner). Shipping the primitive now means the engine layer has a real consumer today, the V011 schema is locked in before downstream phases depend on it, and every deferred item can land independently without re-opening the engine/mission seam.
+
+---
 
 **Depends on:** Phase 22 (agent templates + model routing), Phase 24 (verification loop), Phase 27 (memory), Phase 29 (Swarm orchestrator), Phase 32 (persistence), Phase 37.5 (swarm event store), Phase 48 (intent-aware model routing), Phase 50 (federated bus, optional), **Phase 55 (live OpenRouter cost tracking — provides `ICostModel` and per-turn cost capture so `MissionGuard` has real numbers to gate on)**
 
