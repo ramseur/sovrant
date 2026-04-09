@@ -94,7 +94,7 @@ The engine is fully functional for individual and small-team use:
 | Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 41 (deferred) | Deferred |
 | VS Code native extension | Phase 42 (deferred) | Deferred |
 | Database lifecycle: setup, upgrade safety, introspection (`sovrant db status`, backups, `/health` DB status) | Phase 42.5 | Medium |
-| Windows PowerShell native integration (cmdlet generation, module discovery, elevation detection) | Phase 43 | Medium |
+| Windows PowerShell native integration (cwd persistence, version detection, elevation, exec-policy hints) | Phase 43 ✅ | Medium |
 | Cross-platform desktop application (Avalonia, embedded runtime) | Phase 44 | High |
 | Embedded terminal panel inside the desktop app | Phase 45 (deferred) | Deferred |
 | n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |
@@ -2829,33 +2829,51 @@ Today every test starts from a fresh empty SQLite file. The migration runner is 
 
 ---
 
-### Phase 43 — Windows PowerShell Integration & Platform Shell Strategy
+### Phase 43 — Windows PowerShell Integration & Platform Shell Strategy ✅ Core complete
 
 **Depends on:** Phase 34 (CLI visual polish — BashTool already switched to PowerShell on Windows)
 **Difficulty:** Medium
+**Status:** Core items ✅ complete (2026-04-09, commit `7619e19`). The original scope also included speculative items (module discovery, SecretManagement integration, NTFS ACL helpers) that we deferred — see the Status column below.
 
 **Goal:** Fully leverage PowerShell capabilities on Windows environments. The current BashTool was designed for Unix shells and uses PowerShell on Windows only as a compatibility shim. This phase explores native PowerShell idioms, cmdlet access, and Windows-specific capabilities to make Sovrant a first-class citizen on Windows.
 
+**What was actually driving the phase:** two real bugs surfaced in practice — (a) `cd` in one BashTool invocation didn't persist into the next because `ProcessStartInfo.WorkingDirectory` was never set and no per-session cwd state existed; (b) `FindPowerShell()` had dead-code PATH lookup so pwsh-on-PATH was never picked over Windows PowerShell 5.1. Both fixed.
+
 #### Items
 
-| # | Item | Description |
-|---|---|---|
-| 1 | PowerShell-native command generation | Teach the system prompt / tool descriptions that Windows uses PowerShell, so the LLM generates `New-Item`, `Get-ChildItem`, `Remove-Item` etc. instead of `mkdir`, `ls`, `rm` with Unix flags. |
-| 2 | PowerShell module discovery | Detect installed PowerShell modules and surface them as available capabilities (e.g., `Az`, `SqlServer`, `ActiveDirectory`). |
-| 3 | Windows API access via cmdlets | Leverage PowerShell's access to .NET types, COM objects, WMI/CIM, and the Windows registry — capabilities unavailable in bash. |
-| 4 | Execution policy handling | Robust detection and handling of PowerShell execution policies. Provide clear guidance when scripts are blocked by policy. |
-| 5 | PowerShell 7+ vs 5.1 feature matrix | Detect which PowerShell version is available and adjust generated commands accordingly (e.g., `pwsh` supports `ForEach-Object -Parallel`, `ConvertFrom-Json -Depth`). |
-| 6 | Credential & secret management | Integrate with PowerShell `SecretManagement` module for secure credential handling on Windows. |
-| 7 | Windows-specific file operations | Leverage NTFS features: ACLs (`Get-Acl`/`Set-Acl`), alternate data streams, symbolic links with proper elevation detection. |
-| 8 | Admin elevation detection | Detect whether the current session is elevated (Administrator) and adjust tool behavior — warn before operations that require elevation, suggest `Start-Process -Verb RunAs` when needed. |
+| # | Item | Status | Description |
+|---|---|---|---|
+| 0 | **cwd persistence across BashTool calls** (added mid-phase) | ✅ | Root cause of the pwd/traversal bug. `ShellSessionState` singleton + sentinel-based cwd readback (`printf` on bash, `Write-Output` on PowerShell) so `cd` in one call survives into the next. Linux `/bin/bash` and Windows PowerShell both use the same plumbing. |
+| 1 | PowerShell-native command generation | ✅ | `SystemPromptBuilder` now emits OS-specific shell guidance: on Windows it tells the model the Bash tool runs through PowerShell, to use `;` instead of `&&` (unsupported in PS 5.1), and to prefer `Get-ChildItem`/`Remove-Item`/`Copy-Item`/`Get-Content`/`Set-Location` over Unix aliases when switches matter. |
+| 2 | PowerShell module discovery | ⏸️ Deferred | Speculative — no observed need yet. Revisit when a tool actually wants to enumerate `Get-Module -ListAvailable`. |
+| 3 | Windows API access via cmdlets | ⏸️ Deferred | The existing BashTool already invokes PowerShell, so .NET types / WMI / registry access is implicitly available to generated commands. No dedicated wrapper needed until a specific use case appears. |
+| 4 | Execution policy handling | ✅ | `BashTool` detects the "running scripts is disabled" / "UnauthorizedAccess" / "cannot be loaded" error strings and appends an actionable hint: `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`. |
+| 5 | PowerShell 7+ vs 5.1 detection | ✅ | `ShellEnvironment` probes `$PSVersionTable.PSVersion` + `$PSEdition` once at first use and caches `PowerShellInfo { Path, Version, Edition, IsPwsh7Plus, IsWindowsPowerShell51 }`. Also fixed the dead-code PATH lookup so a winget-installed `pwsh.exe` is now preferred over `powershell.exe`. |
+| 6 | Credential & secret management | ⏸️ Deferred | SecretManagement integration was speculative. Credentials flow through `SovrantConfig` and env vars today; revisit if Phase 44 desktop app wants OS-credential-store for API keys (its own item covers this). |
+| 7 | Windows-specific file operations | ⏸️ Deferred | No consumer yet. Phase 38 PR 4 already handles the one case we cared about (`File.SetUnixFileMode` for DB files on Unix; Windows relies on inherited ACLs). |
+| 8 | Admin elevation detection | ✅ | `ShellEnvironment.IsElevated` — `WindowsPrincipal.IsInRole(Administrator)` on Windows, `geteuid() == 0` on Unix. `InteractiveConfirmationHandler` shows a red "running as Administrator/root" warning on `Bash`/`PowerShell`/`Repl`/`Verify` confirmations. |
 
 #### Acceptance Criteria
 
-- LLM generates idiomatic PowerShell on Windows (not bash-translated-to-PS)
-- Available PowerShell modules are discoverable by the agent
-- Execution policy errors produce actionable guidance, not raw errors
-- Admin elevation status is detected and surfaced in tool confirmations
-- All existing Unix/macOS behavior is preserved (no regressions on non-Windows)
+- ✅ LLM generates PowerShell-appropriate syntax on Windows — system prompt tells it so
+- ⏸️ Available PowerShell modules are discoverable by the agent — deferred with item #2
+- ✅ Execution policy errors produce actionable guidance — hint appended on detection
+- ✅ Admin elevation status is detected and surfaced in tool confirmations
+- ✅ All existing Unix/macOS behavior is preserved — `/bin/bash` code path unchanged except for the new `WorkingDirectory` assignment and the POSIX `printf` sentinel; all 176 tool tests + 1,085 suite tests pass
+- ✅ Bonus: fresh-regression for cwd persistence (two new tests in `BashToolTests`: cd-across-invocations, deleted-cwd fallback)
+
+#### Files touched
+
+- `src/Sovrant.Tools/ShellSessionState.cs` (new)
+- `src/Sovrant.Tools/Shell/ShellEnvironment.cs` (new, with `PowerShellInfo` record)
+- `src/Sovrant.Tools/ProcessExecutor.cs` (added `workingDirectory` param)
+- `src/Sovrant.Tools/Core/BashTool.cs` (sentinel wrap, ShellEnvironment injection, exec-policy hint, PATH-aware pwsh lookup)
+- `src/Sovrant.Tools/Quality/VerifyTool.cs` (named-arg `ct:` for signature compat)
+- `src/Sovrant.Tools/ServiceCollectionExtensions.cs` (DI registrations)
+- `src/Sovrant.Runtime/Prompt/SystemPromptBuilder.cs` (OS-specific shell hint)
+- `src/Sovrant.Cli/InteractiveConfirmationHandler.cs` (elevation warning on shell tools)
+- `tests/Sovrant.Tools.Tests/Core/BashToolTests.cs` (+2 tests)
+- `tests/Sovrant.Agents.Tests/Shared/SovrantAgentTests.cs`, `tests/Sovrant.Commands.Tests/Commands/ExitClearCommandTests.cs` (pre-existing Phase 38 signature drift in test fakes)
 
 ---
 
