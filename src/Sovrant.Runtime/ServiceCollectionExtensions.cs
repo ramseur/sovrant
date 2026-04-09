@@ -151,6 +151,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMissionScratchpadStore>(sp =>
             new SqliteMissionScratchpadStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
+        // Context compactor (Phase 51) — folds older step outcomes into a
+        // summary when the run history won't fit in the planner budget.
+        // Default is the naive deterministic impl; production can swap in
+        // an LLM-backed summariser without touching executor or planner.
+        services.AddSingleton<Engine.IContextCompactor, Engine.NaiveContextCompactor>();
+
         // Eval framework (Phase 27)
         services.AddSingleton<IEvalResultStore, EvalResultStore>();
         services.AddSingleton<IEvalRunner, EvalRunner>();
