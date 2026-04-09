@@ -22,6 +22,24 @@ public sealed class AuthTests : IClassFixture<SovrantWebAppFactory>
     }
 
     [Fact]
+    public async Task Health_ReportsDbStatus()
+    {
+        // Phase 42.5 — /health must include a db block with status,
+        // schema_version, and path so monitors can detect a "running but
+        // DB broken" state.
+        var resp = await _client.GetAsync("/health");
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+
+        var body = await resp.Content.ReadAsStringAsync();
+        using var doc = System.Text.Json.JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        Assert.True(root.TryGetProperty("db", out var db));
+        Assert.Equal("ok", db.GetProperty("status").GetString());
+        Assert.True(db.GetProperty("schema_version").GetInt32() > 0);
+    }
+
+    [Fact]
     public async Task AuthenticatedRoute_NoToken_Returns401()
     {
         var resp = await _client.GetAsync("/v1/config");

@@ -25,12 +25,19 @@ internal sealed partial class MigrationRunner(ILogger logger)
     {
         EnsureVersionTable(connection);
 
-        var applied = GetAppliedVersions(connection);
+        var applied = GetAppliedChecksums(connection);
         var migrations = DiscoverMigrations();
+
+        // Phase 42.5 — drift detection. Before applying any new migration,
+        // verify every already-applied migration still matches the embedded
+        // SQL. If a previously-applied V00X.sql has been edited in place,
+        // the checksum will no longer match and we fail loudly rather than
+        // silently skipping the edited version.
+        VerifyNoChecksumDrift(applied, migrations);
 
         foreach (var m in migrations)
         {
-            if (applied.Contains(m.Version))
+            if (applied.ContainsKey(m.Version))
                 continue;
 
             LogApplying(logger, m.Version, m.Description);
@@ -62,6 +69,24 @@ internal sealed partial class MigrationRunner(ILogger logger)
         return GetCurrentVersion(connection);
     }
 
+    /// <summary>
+    /// Returns the list of embedded migrations that have not yet been applied
+    /// to the given database. Used by <c>sovrant db migrate --dry-run</c> so
+    /// operators can see exactly what a real migration run would do.
+    /// </summary>
+    public static IReadOnlyList<(int Version, string Description)> GetPendingMigrations(SqliteConnection connection)
+    {
+        EnsureVersionTable(connection);
+        var applied = GetAppliedChecksums(connection);
+        var result = new List<(int, string)>();
+        foreach (var m in DiscoverMigrations())
+        {
+            if (!applied.ContainsKey(m.Version))
+                result.Add((m.Version, m.Description));
+        }
+        return result;
+    }
+
     private static void EnsureVersionTable(SqliteConnection connection)
     {
         using var cmd = connection.CreateCommand();
@@ -76,15 +101,41 @@ internal sealed partial class MigrationRunner(ILogger logger)
         cmd.ExecuteNonQuery();
     }
 
-    private static HashSet<int> GetAppliedVersions(SqliteConnection connection)
+    private static Dictionary<int, string?> GetAppliedChecksums(SqliteConnection connection)
     {
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = $"SELECT version FROM {VersionTable}";
+        cmd.CommandText = $"SELECT version, checksum FROM {VersionTable}";
         using var reader = cmd.ExecuteReader();
-        var versions = new HashSet<int>();
+        var result = new Dictionary<int, string?>();
         while (reader.Read())
-            versions.Add(reader.GetInt32(0));
-        return versions;
+        {
+            var version = reader.GetInt32(0);
+            var checksum = reader.IsDBNull(1) ? null : reader.GetString(1);
+            result[version] = checksum;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Throws <see cref="MigrationDriftException"/> if any previously-applied
+    /// migration's stored checksum no longer matches the embedded SQL. A null
+    /// stored checksum (legacy pre-Phase-42.5 rows) is tolerated since we
+    /// can't retroactively prove drift on those.
+    /// </summary>
+    private static void VerifyNoChecksumDrift(
+        Dictionary<int, string?> applied,
+        List<Migration> embedded)
+    {
+        foreach (var m in embedded)
+        {
+            if (!applied.TryGetValue(m.Version, out var storedChecksum))
+                continue; // not applied yet — no drift possible
+            if (storedChecksum is null)
+                continue; // legacy row with no checksum recorded
+            var expected = ComputeChecksum(m.Sql);
+            if (!string.Equals(expected, storedChecksum, StringComparison.Ordinal))
+                throw new MigrationDriftException(m.Version, m.Description, storedChecksum, expected);
+        }
     }
 
     private static int GetCurrentVersion(SqliteConnection connection)
@@ -132,4 +183,48 @@ internal sealed partial class MigrationRunner(ILogger logger)
     }
 
     private sealed record Migration(int Version, string Description, string Sql);
+}
+
+/// <summary>
+/// Thrown when a previously-applied migration's recorded checksum no longer
+/// matches the embedded SQL. Indicates that someone edited a V00X__*.sql
+/// file in place after it had already been applied to the database — a
+/// change that silently does nothing because the runner skips applied
+/// versions. Catching this at boot prevents corrupt "I edited the old
+/// migration but nothing happened" states.
+/// </summary>
+public sealed class MigrationDriftException : InvalidOperationException
+{
+    public int Version { get; }
+    public string Description { get; }
+    public string StoredChecksum { get; }
+    public string EmbeddedChecksum { get; }
+
+    public MigrationDriftException() : this(0, string.Empty, string.Empty, string.Empty) { }
+    public MigrationDriftException(string message) : base(message)
+    {
+        Description = string.Empty;
+        StoredChecksum = string.Empty;
+        EmbeddedChecksum = string.Empty;
+    }
+    public MigrationDriftException(string message, Exception innerException) : base(message, innerException)
+    {
+        Description = string.Empty;
+        StoredChecksum = string.Empty;
+        EmbeddedChecksum = string.Empty;
+    }
+
+    internal MigrationDriftException(int version, string description, string storedChecksum, string embeddedChecksum)
+        : base(
+            $"Migration V{version:D3} ('{description}') has drifted: the embedded SQL checksum " +
+            $"({embeddedChecksum[..Math.Min(12, embeddedChecksum.Length)]}…) does not match the checksum " +
+            $"recorded when it was applied ({storedChecksum[..Math.Min(12, storedChecksum.Length)]}…). " +
+            "Edit migrations by adding a new V-numbered file instead of modifying an existing one; " +
+            "if this drift is intentional, bump the version number or manually update schema_version.checksum.")
+    {
+        Version = version;
+        Description = description;
+        StoredChecksum = storedChecksum;
+        EmbeddedChecksum = embeddedChecksum;
+    }
 }

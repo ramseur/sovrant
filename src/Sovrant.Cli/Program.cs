@@ -80,7 +80,7 @@ promptCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
     var runtime = sp.GetRequiredService<IConversationRuntime>();
     var sessionId = pr.GetValue(sessionOpt);
     if (sessionId is not null)
-        await runtime.InitializeSessionAsync(sessionId, ct).ConfigureAwait(false);
+        await runtime.InitializeSessionAsync(sessionId, ownerUserId: null, ct).ConfigureAwait(false);
 
     if (ciMode)
     {
@@ -370,6 +370,231 @@ importSwarmCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
         AnsiConsole.MarkupLine("[grey dim]Source files deleted (--delete-source).[/]");
 });
 dbCmd.Add(importSwarmCmd);
+
+// ── 'db status' — path, schema version, table row counts ─────────────────────
+var dbStatusCmd = new Command("status", "Show DB path, schema version, and row counts per table.");
+dbStatusCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    await using var sp = BuildServices(pr);
+    var storage = sp.GetRequiredService<IStorageProvider>();
+    await storage.InitializeAsync(ct).ConfigureAwait(false);
+    var health = storage.CheckHealth();
+
+    AnsiConsole.MarkupLine($"[bold]DB path:[/]        {Markup.Escape(storage.DatabasePath ?? "(unknown)")}");
+    AnsiConsole.MarkupLine($"[bold]Schema version:[/] {storage.SchemaVersion}");
+    AnsiConsole.MarkupLine($"[bold]Health:[/]         {(health.Ok ? "[green]ok[/]" : $"[red]error[/] — {Markup.Escape(health.Error ?? "unknown")}")}");
+
+    if (!health.Ok || storage is not ISqliteConnectionFactory factory)
+        return;
+
+    await using var conn = factory.CreateReadOnlyConnection();
+    var tables = new List<string>();
+    await using (var cmd = conn.CreateCommand())
+    {
+        cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name";
+        await using var r = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await r.ReadAsync(ct).ConfigureAwait(false))
+            tables.Add(r.GetString(0));
+    }
+
+    var table = new Table().AddColumns("Table", "Rows");
+    foreach (var t in tables)
+    {
+        await using var cmd = conn.CreateCommand();
+#pragma warning disable CA2100 // table names come from sqlite_master, not user input
+        cmd.CommandText = $"SELECT COUNT(*) FROM \"{t}\"";
+#pragma warning restore CA2100
+        var count = Convert.ToInt64(
+            await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false),
+            System.Globalization.CultureInfo.InvariantCulture);
+        table.AddRow(t, count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+    AnsiConsole.Write(table);
+});
+dbCmd.Add(dbStatusCmd);
+
+// ── 'db version' — just the integer schema version ──────────────────────────
+var dbVersionCmd = new Command("version", "Print the current schema version integer.");
+dbVersionCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    await using var sp = BuildServices(pr);
+    var storage = sp.GetRequiredService<IStorageProvider>();
+    await storage.InitializeAsync(ct).ConfigureAwait(false);
+    Console.WriteLine(storage.SchemaVersion);
+});
+dbCmd.Add(dbVersionCmd);
+
+// ── 'db migrate --dry-run' — list pending migrations without applying ───────
+var dryRunOpt = new Option<bool>("--dry-run")
+    { Description = "List pending migrations without applying them." };
+var dbMigrateCmd = new Command("migrate", "Apply pending migrations, or list them with --dry-run.");
+dbMigrateCmd.Add(dryRunOpt);
+dbMigrateCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    var dryRun = pr.GetValue(dryRunOpt);
+    await using var sp = BuildServices(pr);
+    var storage = sp.GetRequiredService<IStorageProvider>();
+
+    if (!dryRun)
+    {
+        await storage.InitializeAsync(ct).ConfigureAwait(false);
+        AnsiConsole.MarkupLine($"[green]\u2713[/] Migrated to schema version {storage.SchemaVersion}.");
+        return;
+    }
+
+    // Dry-run: open a read-only connection, ask MigrationRunner for pending.
+    if (storage is not ISqliteConnectionFactory factory)
+    {
+        AnsiConsole.MarkupLine("[red]Current storage provider does not support dry-run.[/]");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    using var conn = factory.CreateConnection();
+    var pending = MigrationRunner.GetPendingMigrations(conn);
+
+    if (pending.Count == 0)
+    {
+        AnsiConsole.MarkupLine("[grey]No pending migrations — DB is up to date.[/]");
+        return;
+    }
+
+    AnsiConsole.MarkupLine($"[bold]{pending.Count} pending migration(s):[/]");
+    foreach (var (v, d) in pending)
+        AnsiConsole.MarkupLine($"  V{v:D3} — {Markup.Escape(d)}");
+});
+dbCmd.Add(dbMigrateCmd);
+
+// ── 'db backup' — checkpoint WAL and copy the DB file ───────────────────────
+var backupPathArg = new Argument<string?>("path")
+{
+    Description = "Destination path. Defaults to {db}.bak-{schema_version}.",
+    Arity = ArgumentArity.ZeroOrOne,
+};
+var dbBackupCmd = new Command("backup", "Checkpoint the WAL and copy the DB file to a backup path.");
+dbBackupCmd.Add(backupPathArg);
+dbBackupCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    await using var sp = BuildServices(pr);
+    var storage = sp.GetRequiredService<IStorageProvider>();
+    await storage.InitializeAsync(ct).ConfigureAwait(false);
+
+    var dbPath = storage.DatabasePath;
+    if (string.IsNullOrEmpty(dbPath) || !File.Exists(dbPath))
+    {
+        AnsiConsole.MarkupLine("[red]No DB file to back up.[/]");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    var dest = pr.GetValue(backupPathArg)
+        ?? $"{dbPath}.bak-{storage.SchemaVersion}";
+
+    if (storage is ISqliteConnectionFactory factory)
+    {
+        await using var conn = factory.CreateConnection();
+        await using var cmd = conn.CreateCommand();
+        // Fold the WAL into the main file so a plain File.Copy captures
+        // a consistent snapshot. TRUNCATE mode flushes then resets the WAL.
+        cmd.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    File.Copy(dbPath, dest, overwrite: true);
+    AnsiConsole.MarkupLine($"[green]\u2713[/] Backed up to {Markup.Escape(dest)}");
+});
+dbCmd.Add(dbBackupCmd);
+
+// ── 'db inspect <table>' — print schema + first N rows ──────────────────────
+var inspectTableArg = new Argument<string>("table") { Description = "Name of the table to inspect." };
+var inspectLimitOpt = new Option<int>("--limit")
+    { Description = "Number of rows to print (default 20).", DefaultValueFactory = _ => 20 };
+var dbInspectCmd = new Command("inspect", "Print a table's schema and first N rows.");
+dbInspectCmd.Add(inspectTableArg);
+dbInspectCmd.Add(inspectLimitOpt);
+dbInspectCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    var tableName = pr.GetValue(inspectTableArg)!;
+    var limit = pr.GetValue(inspectLimitOpt);
+
+    await using var sp = BuildServices(pr);
+    var storage = sp.GetRequiredService<IStorageProvider>();
+    await storage.InitializeAsync(ct).ConfigureAwait(false);
+
+    if (storage is not ISqliteConnectionFactory factory)
+    {
+        AnsiConsole.MarkupLine("[red]Current storage provider does not support inspect.[/]");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    // Validate the table name against sqlite_master to avoid injection via
+    // the command-line argument, then interpolate the validated name.
+    await using var conn = factory.CreateReadOnlyConnection();
+    await using (var check = conn.CreateCommand())
+    {
+        check.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name=$n";
+        check.Parameters.AddWithValue("$n", tableName);
+        if (await check.ExecuteScalarAsync(ct).ConfigureAwait(false) is null)
+        {
+            AnsiConsole.MarkupLine($"[red]No such table:[/] {Markup.Escape(tableName)}");
+            Environment.ExitCode = 1;
+            return;
+        }
+    }
+
+    // Schema.
+    AnsiConsole.MarkupLine($"[bold]Schema for[/] {Markup.Escape(tableName)}");
+    await using (var cmd = conn.CreateCommand())
+    {
+#pragma warning disable CA2100 // name validated above against sqlite_master
+        cmd.CommandText = $"PRAGMA table_info(\"{tableName}\")";
+#pragma warning restore CA2100
+        await using var r = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        var st = new Table().AddColumns("cid", "name", "type", "notnull", "dflt_value", "pk");
+        while (await r.ReadAsync(ct).ConfigureAwait(false))
+        {
+            st.AddRow(
+                r.GetValue(0)?.ToString() ?? "",
+                r.GetValue(1)?.ToString() ?? "",
+                r.GetValue(2)?.ToString() ?? "",
+                r.GetValue(3)?.ToString() ?? "",
+                r.GetValue(4)?.ToString() ?? "",
+                r.GetValue(5)?.ToString() ?? "");
+        }
+        AnsiConsole.Write(st);
+    }
+
+    // Rows.
+    AnsiConsole.MarkupLine($"[bold]First {limit} row(s)[/]");
+    await using (var cmd = conn.CreateCommand())
+    {
+#pragma warning disable CA2100 // table name validated; limit bound as parameter
+        cmd.CommandText = $"SELECT * FROM \"{tableName}\" LIMIT $lim";
+#pragma warning restore CA2100
+        cmd.Parameters.AddWithValue("$lim", limit);
+        await using var r = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        var cols = new string[r.FieldCount];
+        for (int i = 0; i < r.FieldCount; i++) cols[i] = r.GetName(i);
+        var rt = new Table().AddColumns(cols);
+        while (await r.ReadAsync(ct).ConfigureAwait(false))
+        {
+            var row = new string[r.FieldCount];
+            for (int i = 0; i < r.FieldCount; i++)
+            {
+                var v = await r.IsDBNullAsync(i, ct).ConfigureAwait(false)
+                    ? "null"
+                    : r.GetValue(i)?.ToString() ?? "";
+                if (v.Length > 80) v = v[..77] + "...";
+                row[i] = Markup.Escape(v);
+            }
+            rt.AddRow(row);
+        }
+        AnsiConsole.Write(rt);
+    }
+});
+dbCmd.Add(dbInspectCmd);
+
 root.Add(dbCmd);
 
 // ── REPL (default handler) ────────────────────────────────────────────────────
@@ -391,7 +616,7 @@ root.SetAction(async (ParseResult pr, CancellationToken ct) =>
     var runtime = sp.GetRequiredService<IConversationRuntime>();
     var sessionId = pr.GetValue(sessionOpt);
     if (sessionId is not null)
-        await runtime.InitializeSessionAsync(sessionId, ct).ConfigureAwait(false);
+        await runtime.InitializeSessionAsync(sessionId, ownerUserId: null, ct).ConfigureAwait(false);
     var dispatcher = sp.GetRequiredService<SlashCommandDispatcher>();
     await RunReplAsync(runtime, dispatcher, ct).ConfigureAwait(false);
 });

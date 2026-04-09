@@ -25,7 +25,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
     public async Task AllMigrations_RunSuccessfully()
     {
         await _provider.InitializeAsync();
-        Assert.Equal(8, _provider.SchemaVersion);
+        Assert.Equal(9, _provider.SchemaVersion);
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
     {
         await _provider.InitializeAsync();
         await _provider.InitializeAsync();
-        Assert.Equal(8, _provider.SchemaVersion);
+        Assert.Equal(9, _provider.SchemaVersion);
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
 
         // Verify tables exist by checking the DB file was created and schema version is correct.
         Assert.True(File.Exists(_dbPath));
-        Assert.Equal(8, _provider.SchemaVersion);
+        Assert.Equal(9, _provider.SchemaVersion);
     }
 
     [Fact]
@@ -136,6 +136,153 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
             ab[abR.GetString(0)] = abR.IsDBNull(1) ? "" : abR.GetString(1);
         Assert.Equal("ws-personal-alice", ab["s_alice_1"]);
         Assert.Equal("", ab["s_bob_1"]);
+    }
+
+    [Fact]
+    public async Task V009_BackfillsEmptyUserIds_ToOldestAdmin()
+    {
+        // Phase 42.5 — rows written before Phase 38 may carry user_id = ''
+        // because sessions/token_usage/credentials used NOT NULL DEFAULT ''.
+        // V009 backfills those to the oldest active admin so they become
+        // visible to ownership-scoped queries.
+        await _provider.InitializeAsync();
+
+        var factory = (ISqliteConnectionFactory)_provider;
+
+        // Seed an admin user and two legacy rows with user_id = ''.
+        using (var conn = factory.CreateConnection())
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = """
+                INSERT INTO users (user_id, username, role, status, created_at)
+                VALUES ('boot-admin', 'boot-admin', 'admin', 'active', '2020-01-01T00:00:00Z');
+
+                INSERT INTO sessions (session_id, user_id, status)
+                VALUES ('legacy_1', '', 'ended'),
+                       ('legacy_2', '', 'ended');
+
+                INSERT INTO token_usage (session_id, user_id, model, input_tokens, output_tokens)
+                VALUES ('legacy_1', '', 'gpt-4o', 10, 5);
+                """;
+            cmd.ExecuteNonQuery();
+        }
+
+        // Re-run V009 SQL directly so we can observe the backfill independent
+        // of the first-boot initialization path.
+        var sql = await File.ReadAllTextAsync(
+            FindMigrationFile("V009__backfill_empty_user_ids.sql"));
+
+        using (var conn = factory.CreateConnection())
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = sql;
+            cmd.ExecuteNonQuery();
+        }
+
+        // Verify the '' rows were backfilled to boot-admin.
+        using var verify = factory.CreateConnection();
+        using (var check = verify.CreateCommand())
+        {
+            check.CommandText = "SELECT user_id FROM sessions WHERE session_id IN ('legacy_1','legacy_2')";
+            using var r = check.ExecuteReader();
+            var ids = new List<string>();
+            while (r.Read()) ids.Add(r.GetString(0));
+            Assert.Equal(2, ids.Count);
+            Assert.All(ids, id => Assert.Equal("boot-admin", id));
+        }
+        using (var check = verify.CreateCommand())
+        {
+            check.CommandText = "SELECT user_id FROM token_usage WHERE session_id = 'legacy_1'";
+            Assert.Equal("boot-admin", (string)check.ExecuteScalar()!);
+        }
+    }
+
+    [Fact]
+    public async Task V009_NoUsers_IsNoOp()
+    {
+        // If the users table is empty, V009 must leave '' rows alone
+        // rather than corrupting them to NULL or crashing.
+        await _provider.InitializeAsync();
+
+        var factory = (ISqliteConnectionFactory)_provider;
+
+        // Clear all seeded users so V009 finds no target.
+        using (var conn = factory.CreateConnection())
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = """
+                DELETE FROM workspace_members;
+                DELETE FROM workspaces;
+                DELETE FROM users;
+                INSERT INTO sessions (session_id, user_id, status)
+                VALUES ('orphan_1', '', 'ended');
+                """;
+            cmd.ExecuteNonQuery();
+        }
+
+        var sql = await File.ReadAllTextAsync(
+            FindMigrationFile("V009__backfill_empty_user_ids.sql"));
+        using (var conn = factory.CreateConnection())
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = sql;
+            cmd.ExecuteNonQuery();
+        }
+
+        using var verify = factory.CreateConnection();
+        using var check = verify.CreateCommand();
+        check.CommandText = "SELECT user_id FROM sessions WHERE session_id = 'orphan_1'";
+        Assert.Equal("", (string)check.ExecuteScalar()!);
+    }
+
+    [Fact]
+    public async Task ChecksumDrift_IsDetected_OnNextBoot()
+    {
+        // First boot: apply migrations normally.
+        await _provider.InitializeAsync();
+        Assert.Equal(9, _provider.SchemaVersion);
+
+        var factory = (ISqliteConnectionFactory)_provider;
+
+        // Corrupt the stored checksum for V001 to simulate someone editing
+        // the embedded migration after it had already been applied.
+        using (var conn = factory.CreateConnection())
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "UPDATE schema_version SET checksum = 'deadbeef_corrupted_checksum' WHERE version = 1";
+            cmd.ExecuteNonQuery();
+        }
+
+        // Second boot: drift should be detected and surfaced as an exception.
+        // SqliteStorageProvider currently swallows init exceptions to a log
+        // line, so call the runner directly to observe the throw.
+        using var probe = factory.CreateConnection();
+        var runner = new MigrationRunner(NullLogger<MigrationRunner>.Instance);
+        var ex = Assert.Throws<MigrationDriftException>(() => runner.RunPendingMigrations(probe));
+        Assert.Equal(1, ex.Version);
+        Assert.Contains("drifted", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ChecksumDrift_NullStoredChecksum_IsTolerated()
+    {
+        // Legacy rows written before Phase 42.5 may have NULL checksums.
+        // We can't retroactively prove drift on those, so they must not
+        // trip the drift detector.
+        await _provider.InitializeAsync();
+
+        var factory = (ISqliteConnectionFactory)_provider;
+        using (var conn = factory.CreateConnection())
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "UPDATE schema_version SET checksum = NULL WHERE version = 1";
+            cmd.ExecuteNonQuery();
+        }
+
+        using var probe = factory.CreateConnection();
+        var runner = new MigrationRunner(NullLogger<MigrationRunner>.Instance);
+        var version = runner.RunPendingMigrations(probe);
+        Assert.Equal(9, version);
     }
 
     private static string FindMigrationFile(string name)

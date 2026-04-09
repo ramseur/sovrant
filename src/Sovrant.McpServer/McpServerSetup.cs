@@ -152,7 +152,7 @@ public static class McpServerSetup
         if (string.Equals(uri, "sovrant://sessions", StringComparison.Ordinal))
         {
             var store = services.GetRequiredService<ISessionStore>();
-            var sessions = await store.ListAsync(ct).ConfigureAwait(false);
+            var sessions = await store.ListAsync(ownerUserId: null, ct).ConfigureAwait(false);
             var json = JsonSerializer.Serialize(sessions, s_jsonOptions);
             return new ReadResourceResult
             {
@@ -176,7 +176,7 @@ public static class McpServerSetup
         {
             var sessionId = Uri.UnescapeDataString(uri[sessionsPrefix.Length..]);
             var store = services.GetRequiredService<ISessionStore>();
-            var entries = await store.LoadAsync(sessionId, ct).ConfigureAwait(false);
+            var entries = await store.LoadAsync(sessionId, ownerUserId: null, ct).ConfigureAwait(false);
             var json = JsonSerializer.Serialize(entries, s_jsonOptions);
             return new ReadResourceResult
             {

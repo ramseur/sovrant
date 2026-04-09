@@ -1,6 +1,6 @@
 # Sovrant — Persistence Layer
 
-**Phases 32, 35, 36, 37, 37.5 (active) — Phase 42.5 planned** | **Last updated:** 2026-04-08
+**Phases 32, 35, 36, 37, 37.5, 42.5 (active)** | **Last updated:** 2026-04-09
 
 This document describes how Sovrant stores durable operational data. All persistent state (sessions, memory, audit, credentials, token usage, workspaces, projects, users) is managed by a SQLite database. Flat-file stores (JSONL, JSON) remain available as a dual-write option during migration, but they are now considered legacy and will be consolidated as part of Phase 42.5.
 
@@ -46,7 +46,7 @@ Resolution order (`SqliteStorageProvider` constructor):
 2. `SOVRANT_DB_PATH` environment variable.
 3. Default: `{UserProfile}/.sovrant/data/sovrant.db`.
 
-The data directory is created automatically on first run. If the directory cannot be created or the database cannot be opened, Sovrant logs an `ERROR` (`"Failed to initialize SQLite storage at {DbPath}. The application will continue but data will not be persisted."`) and continues — no crash on a bad path. **This graceful degradation is by design but can mask broken installs**; see [Known Concerns](#known-concerns--future-work-phase-425) below for the planned `SOVRANT_DB_REQUIRE` opt-in.
+The data directory is created automatically on first run. If the directory cannot be created or the database cannot be opened, Sovrant logs an `ERROR` (`"Failed to initialize SQLite storage at {DbPath}. The application will continue but data will not be persisted."`) and continues — no crash on a bad path. **This graceful degradation is by design but can mask broken installs.** Production installs should set `SOVRANT_DB_REQUIRE=true` (Phase 42.5) so init failures throw `InvalidOperationException` at boot instead. See [DB Upgrades](#db-upgrades-phase-425) for the full lifecycle flow.
 
 ---
 
@@ -64,10 +64,11 @@ Migrations are embedded SQL resources named `V{NNN}__{description}.sql` inside t
 | V006 | `V006__workspaces.sql` | `workspace_memory` table; `IF NOT EXISTS` indexes on `sessions`, `token_usage`, `session_summaries`, `audit_governance`, `audit_bash`, `swarm_events`, `eval_runs` keyed on `workspace_id` |
 | V007 | `V007__projects.sql` | `IF NOT EXISTS` indexes on `sessions(project_id)`, `token_usage(project_id)`, `workspace_memory(workspace_id, project_id)`, `project_members(user_id)` |
 | V008 | `V008__backfill_orphan_workspaces.sql` | One-time data backfill: sets `workspace_id = 'ws-personal-' \|\| user_id` on orphan rows in `sessions`, `token_usage`, `credentials`, then propagates the new value to `audit_governance`, `audit_bash`, `session_summaries` via `session_id` joins. Only fills rows where the matching `ws-personal-{user_id}` workspace already exists; rows for users without one are left alone. |
+| V009 | `V009__backfill_empty_user_ids.sql` | Phase 42.5 one-time data backfill for legacy `user_id = ''` rows in `sessions`, `token_usage`, `credentials`. Picks the oldest active admin user as the backfill target (deterministic without reading env vars); if no active admin exists, the migration is a no-op and leaves the empty strings in place. |
 
-All V006/V007 statements are **additive** (`CREATE TABLE`, `CREATE INDEX IF NOT EXISTS`), so a database created at V005 or earlier upgrades cleanly on next boot — no manual intervention. V008 then backfills any orphan rows from those upgraded databases.
+All V006/V007 statements are **additive** (`CREATE TABLE`, `CREATE INDEX IF NOT EXISTS`), so a database created at V005 or earlier upgrades cleanly on next boot — no manual intervention. V008 then backfills any orphan rows from those upgraded databases, and V009 backfills any empty-string `user_id` rows left over from the pre-Phase-38 seeding flow.
 
-Migrations are idempotent — running `InitializeAsync` multiple times is safe. The runner skips already-applied versions and records SHA-256 checksums of each script in `schema_version` to detect drift (drift detection itself is a Phase 42.5 item — today the runner records the checksum but does not raise on mismatch).
+Migrations are idempotent — running `InitializeAsync` multiple times is safe. The runner skips already-applied versions and records the SHA-256 checksum of each script in `schema_version.checksum`. **Checksum drift is enforced as of Phase 42.5**: if a previously-applied `V00X__*.sql` file has been edited in place, the embedded checksum no longer matches the stored one and `InitializeAsync` throws `MigrationDriftException` on the next boot. Rows stamped before Phase 42.5 landed have `checksum = NULL` and are tolerated so legacy installs upgrade cleanly — drift detection only triggers on rows that were recorded *with* a checksum.
 
 ### Future-proofing
 
@@ -77,6 +78,99 @@ The schema is designed upfront so that Phases 33–37 can ship without `ALTER TA
 - **`users.role`**, **`users.team`**, **`users.status`** existed in V001. **Phase 37 added the API surface only — no schema changes.**
 - **RBAC tables** (`roles`, `permissions`, `role_permissions`, `user_roles`) exist in V001 (still empty). Phase 40 will populate them.
 - **`api_tokens`** table exists in V001 (still empty). Phase 38 will populate it.
+
+---
+
+## DB Upgrades (Phase 42.5)
+
+This section covers the lifecycle of an in-place upgrade from any prior schema version to the current one. Every operational guarantee below is enforced by an automated test in `tests/Sovrant.Runtime.Tests/Storage/OldDbUpgradeTests.cs` — the "V005 → current" path is the one we exercise on every CI run, which transitively covers V001–V005 since the runner always applies migrations in order.
+
+### When migrations run
+
+`InitializeAsync` is invoked exactly once per process boot, from `InitializeRuntimeAsync` in the server and from `InitAsync` in the CLI. The flow is:
+
+```
+CreateConnection
+     ↓
+SetPragmas  (WAL, foreign_keys, busy_timeout, secure_delete)
+     ↓
+(optional) BackupBeforeUpgrade  ← if SOVRANT_DB_BACKUP_ON_UPGRADE=true AND pending > 0 AND current > 0
+     ↓
+MigrationRunner.RunPendingMigrations
+     ├─ VerifyNoChecksumDrift  → throws MigrationDriftException if a stored checksum no longer matches
+     └─ apply each pending migration inside its own transaction
+     ↓
+SeedDefaultUser  (INSERT OR IGNORE)
+     ↓
+SeedPersonalWorkspace  (INSERT OR IGNORE)
+     ↓
+HardenDbFilePermissions  (Unix chmod 600 on main + -wal + -shm)
+```
+
+Any failure at the migration step is caught and logged. With `SOVRANT_DB_REQUIRE=true` the failure is rethrown as `InvalidOperationException` so the process exits; without the flag the engine continues running with `SchemaVersion = 0` and no persistence. `MigrationDriftException` is always rethrown regardless of `SOVRANT_DB_REQUIRE` because continuing would mean running on an unknown schema.
+
+### Recommended first-boot and upgrade procedure
+
+1. **Before upgrading a production install**, set `SOVRANT_DB_BACKUP_ON_UPGRADE=true` *and* `SOVRANT_DB_REQUIRE=true`. The first flag makes the boot take a snapshot before mutating anything; the second flag makes any migration or backup failure halt the process instead of running silently.
+2. **Run `sovrant db migrate --dry-run`** to see exactly which versions would be applied. This opens the existing DB read-only and lists pending migrations without touching them.
+3. **Run `sovrant db status`** to record the current schema version and table row counts. Save the output so you can diff it against the post-upgrade state.
+4. **Boot the new binary once** (CLI `sovrant db migrate` or a server start is enough). Migrations apply in insertion order inside per-version transactions, and the runner stamps each row in `schema_version` with its SHA-256 checksum.
+5. **Verify** with `sovrant db status` and `sovrant db version`. If row counts regressed or `schema_version` is unexpected, **do not write to the DB** — restore the backup (see below).
+
+### Rolling back
+
+Rollback is always a file-level operation — SQLite migrations are forward-only. The backup created by `SOVRANT_DB_BACKUP_ON_UPGRADE` lives next to the main DB as `sovrant.db.bak-{previousVersion}` and is a bit-for-bit copy of the file *after* a WAL checkpoint, so it can replace the main DB in place:
+
+```bash
+# Stop every process that is using the DB first (server + any CLI).
+cp ~/.sovrant/data/sovrant.db.bak-8   ~/.sovrant/data/sovrant.db
+rm ~/.sovrant/data/sovrant.db-wal     2>/dev/null
+rm ~/.sovrant/data/sovrant.db-shm     2>/dev/null
+```
+
+The `-wal` and `-shm` sidecars are deleted because they belong to the post-migration DB; leaving them in place will confuse SQLite on the next open. The backup itself was taken after `PRAGMA wal_checkpoint(TRUNCATE)` so all prior WAL contents are already folded into the main file.
+
+A manual backup (outside the flag) uses the same mechanism:
+
+```bash
+sovrant db backup                      # → ~/.sovrant/data/sovrant.db.bak-{version}
+sovrant db backup /var/tmp/snapshot.db # → custom path
+```
+
+Both forms run the checkpoint before copying.
+
+### Migration drift
+
+`schema_version.checksum` carries the SHA-256 of the migration SQL at the time it was applied. On every boot the runner recomputes the checksum of each embedded `V00X__*.sql` and compares it to the stored value. A mismatch throws `MigrationDriftException` (which is always rethrown even without `SOVRANT_DB_REQUIRE`) with a message naming the offending version.
+
+To recover:
+- **If drift is unintentional** (someone edited a V-numbered file that had already shipped): revert the edit so the embedded SQL matches the stored checksum again.
+- **If the drift is intentional** (you need a correction to an already-shipped migration): add a *new* V-numbered migration that performs the correction. Editing an old migration is not supported.
+- **Last resort for developer machines only**: restore from the backup, or manually update `schema_version.checksum` to the new value via `sqlite3` and document why.
+
+Null stored checksums (legacy rows from before Phase 42.5) are tolerated — the runner treats them as "can't prove drift, assume clean" so no one is forced to re-stamp their existing DBs.
+
+### Inspecting the DB
+
+`sovrant db inspect <table> [--limit N]` prints `PRAGMA table_info` followed by the first N rows (default 20). The table name is validated against `sqlite_master` before being interpolated into the query, so it is safe against injection from the shell argument. Use this for post-upgrade spot checks instead of shelling out to `sqlite3`.
+
+### Health endpoint coverage
+
+`GET /health` now reports a `db` block alongside the overall status:
+
+```json
+{
+  "status": "ok",
+  "db": {
+    "status": "ok",
+    "schema_version": 9,
+    "path": "/home/eramseur/.sovrant/data/sovrant.db",
+    "error": null
+  }
+}
+```
+
+If the DB probe fails (disk full, permissions change, corrupt file), `db.status` flips to `"error"` and `status` flips to `"degraded"` — both are still returned with HTTP 200 so load balancers can distinguish "server down" from "server up but DB broken." The probe uses a read-only connection and a cheap `COUNT(*) FROM schema_version`, so it is safe to call from unauthenticated monitors.
 
 ---
 
@@ -358,16 +452,19 @@ Both seeders are idempotent — they're safe to run on every boot, and they back
 | `SOVRANT_USER_ID` | OS username | User identity for session ownership and audit |
 | `SOVRANT_SESSION_JSONL` | `false` | Also write sessions to JSONL (dual-write) |
 | `SOVRANT_AUDIT_JSONL` | `false` | Also write audit events to JSONL (dual-write) |
+| `SOVRANT_DB_REQUIRE` | `false` | Phase 42.5. When `true`/`1`/`yes`, `InitializeAsync` throws on any init failure (bad path, unwritable dir, corrupt file) instead of logging ERROR and continuing with no persistence. Recommended in production so a broken install fails fast at boot. |
+| `SOVRANT_DB_BACKUP_ON_UPGRADE` | `false` | Phase 42.5. When `true`/`1`/`yes`, `InitializeAsync` checkpoints the WAL and copies `sovrant.db` to `sovrant.db.bak-{currentVersion}` before running any pending migrations. A backup is only taken when there are pending migrations *and* the DB is not a fresh install (`currentVersion > 0`). If the copy itself fails, migration is aborted with `InvalidOperationException`. |
 
 ---
 
 ## Error Handling
 
-- **Directory creation failure** — logged at ERROR level, app continues
-- **Database open/migration failure** — logged at ERROR level, `SchemaVersion` stays at 0, app continues
+- **Directory creation failure** — logged at ERROR level, app continues (unless `SOVRANT_DB_REQUIRE=true`)
+- **Database open/migration failure** — logged at ERROR level, `SchemaVersion` stays at 0, app continues (unless `SOVRANT_DB_REQUIRE=true`)
+- **Migration checksum drift** — always thrown as `MigrationDriftException`, regardless of `SOVRANT_DB_REQUIRE`
 - **Individual store operations** — propagate exceptions to callers (the agentic loop, server endpoints)
 
-The design prioritizes availability over consistency: if the database can't be created, the engine still runs — session history and audit are lost for that run, but the core agentic loop functions normally.
+The design prioritizes availability over consistency by default: if the database can't be created, the engine still runs — session history and audit are lost for that run, but the core agentic loop functions normally. Production deployments should flip this trade-off with `SOVRANT_DB_REQUIRE=true`.
 
 ---
 
@@ -401,9 +498,9 @@ Not everything moved to SQLite. These remain file-based by design:
 
 ---
 
-## Known Concerns & Future Work (Phase 42.5)
+## Known Concerns & Future Work
 
-The following concerns were surfaced during the Phase 37 audit of the SQLite layer. None are blocking, but all are tracked under **Phase 42.5 — Database Lifecycle: Setup, Upgrade Safety & Introspection** in the roadmap.
+The following concerns were surfaced during the Phase 37 audit of the SQLite layer. Items marked **✓ Resolved in Phase 42.5** have landed; the remainder are deferred.
 
 > **Real-world V005 → V008 upgrade walkthrough, captured 2026-04-07 from `~/.sovrant/data/sovrant.db` on a developer workstation:**
 >
@@ -422,24 +519,22 @@ The following concerns were surfaced during the Phase 37 audit of the SQLite lay
 > 1. Additive migrations work — the legacy DB serves reads/writes against V005 tables with no errors right up until the upgrade.
 > 2. The upgrade requires zero manual intervention. Booting any V008-aware binary applies V006 + V007 + V008 in order and seeds the personal workspace.
 > 3. V008 only backfills when a personal workspace exists for the row's user, so multi-user installs are safe — users without one are left untouched until their personal workspace is created.
-> 4. The CLI `status` subcommand currently does **not** trigger `InitializeRuntimeAsync`, so it does not run migrations. Use the server (`dotnet run --project src/Sovrant.Server`) or any CLI command that goes through `InitAsync` (e.g. `prompt`). This gap is also tracked under Phase 42.5 (concern #11 — `sovrant init` / `sovrant db migrate`).
-> 5. Without a `sovrant db status` CLI, **users still have no way to know which schema version their DB is on**, which is precisely why concerns #2, #3, #11 below exist.
+> 4. As of Phase 42.5 the CLI now has `sovrant db migrate` (and `--dry-run`), `sovrant db status`, `sovrant db version`, `sovrant db backup`, and `sovrant db inspect` — all call through `IStorageProvider.InitializeAsync` directly so migrations apply without needing to boot the full server. The pre-42.5 gap where the CLI `status` subcommand didn't touch migrations is closed.
+> 5. Operators can query the running schema version any time with `sovrant db version`, or get a full row-count breakdown with `sovrant db status`. The same information is also exposed to unauthenticated monitors via `GET /health`'s new `db` block.
 
-| # | Concern | Why it matters | Planned mitigation |
+| # | Concern | Why it matters | Status |
 |---|---|---|---|
-| 1 | **Parallel JSONL persistence is still wired in.** `SOVRANT_SESSION_JSONL` and `SOVRANT_AUDIT_JSONL` dual-write to flat files. | Two stores of truth drift; consumers don't know which is canonical. | Consolidate into SQLite as the sole source; keep dual-write only as a one-shot migration tool. |
-| 2 | **Silent init failures.** A bad `SOVRANT_DB_PATH`, an unwritable home directory, or a permissions error logs ERROR and *continues*. | Production installs can run for hours with zero persistence and nobody notices. | Add `SOVRANT_DB_REQUIRE=true` opt-in that causes `InitializeAsync` to throw on any failure. |
-| 3 | **No CLI introspection.** There is no `sovrant db status / migrate / backup / vacuum / path` subcommand. | Users have no supported way to see schema version, force a migration, or take a backup before upgrades. | Add a `sovrant db` subcommand group. |
-| 4 | **`SOVRANT_DB_PATH` is undocumented in user-facing docs.** It is honored by code but only mentioned in this doc. | Power users can't easily relocate the DB to a network share or alternate disk. | Document in `server.md`, README, and `sovrant --help`. |
-| 5 | **No backup-before-migrate.** The migration runner applies V006/V007 in place, with no snapshot of the prior file. | A migration bug or a power failure mid-migration leaves the DB in an undefined state with no rollback. | Add `--backup` flag (default on for major versions) that copies the file before running the runner. |
-| 6 | **Migration checksum drift is recorded but not enforced.** `schema_version` stores SHA-256 of each script, but the runner does not raise on mismatch. | A patched migration silently shipping to users would pass checks. | Promote drift detection to a hard error with an opt-out for development. |
-| 8 | **Empty `user_id` defaults.** Sessions, audits, and token usage are all written with `user_id = Environment.UserName`. | API-created users (Phase 37) have no derived stats until per-user identity propagates through the agentic loop. | Phase 38 token + identity flow. |
-| 9 | **No shared bootstrap helper.** `SqliteStorageProvider.InitializeAsync` is called once, but other code paths (test fixtures, future CLI tools) re-implement parts of the boot flow. | Drift between server boot and test boot can mask bugs. | Extract a `SovrantStorageBootstrap.InitializeAsync` shared helper. |
-| 10 | **Connection-per-call with no pool.** Every store opens a fresh `SqliteConnection`. WAL + connection cache helps, but there is no explicit pool. | Under load (server + parallel CLI), we may starve on file handles. | Evaluate `Microsoft.Data.Sqlite` connection pooling; benchmark before/after. |
-| 11 | **No `sovrant init` first-boot UX.** A user installing fresh has no clear "the DB is ready" feedback. | Discovery is poor; failures are invisible. | Add `sovrant init` that prints DB path, schema version, and a self-check. |
-| 12 | **Health-check coverage is partial.** `/health` does not exercise a write path against the DB. | A DB that is read-only (disk full, permissions) reports healthy. | Add a write-canary to `/health`. |
-
-Roadmap entry: see **Phase 42.5** in `docs/roadmap.md`.
+| 1 | **Parallel JSONL persistence is still wired in.** `SOVRANT_SESSION_JSONL` and `SOVRANT_AUDIT_JSONL` dual-write to flat files. | Two stores of truth drift; consumers don't know which is canonical. | Deferred — consolidate into SQLite as the sole source; keep dual-write only as a one-shot migration tool. |
+| 2 | **Silent init failures.** A bad `SOVRANT_DB_PATH`, an unwritable home directory, or a permissions error logs ERROR and continues. | Production installs can run for hours with zero persistence and nobody notices. | **✓ Resolved in Phase 42.5.** `SOVRANT_DB_REQUIRE=true` makes `InitializeAsync` rethrow any init failure as `InvalidOperationException`. |
+| 3 | **No CLI introspection.** There was no `sovrant db status / migrate / backup` subcommand. | Users had no supported way to see schema version, force a migration, or take a backup before upgrades. | **✓ Resolved in Phase 42.5.** `sovrant db status`, `sovrant db version`, `sovrant db migrate [--dry-run]`, `sovrant db backup [path]`, and `sovrant db inspect <table> [--limit N]` all live next to `sovrant db import-swarm`. |
+| 4 | **`SOVRANT_DB_PATH` is undocumented in user-facing docs.** It is honored by code but only mentioned in this doc. | Power users can't easily relocate the DB to a network share or alternate disk. | Partially addressed — documented in this file and in `sovrant db` help. README coverage is still pending. |
+| 5 | **No backup-before-migrate.** The migration runner applied V006/V007 in place, with no snapshot of the prior file. | A migration bug or a power failure mid-migration leaves the DB in an undefined state with no rollback. | **✓ Resolved in Phase 42.5.** `SOVRANT_DB_BACKUP_ON_UPGRADE=true` checkpoints the WAL and copies the DB to `{path}.bak-{currentVersion}` before applying pending migrations. Failure to back up aborts the migration rather than proceeding without a snapshot. See [DB Upgrades](#db-upgrades-phase-425). |
+| 6 | **Migration checksum drift is recorded but not enforced.** `schema_version` stored SHA-256 of each script, but the runner did not raise on mismatch. | A patched migration silently shipping to users would pass checks. | **✓ Resolved in Phase 42.5.** `MigrationRunner.VerifyNoChecksumDrift` runs before applying new migrations and throws `MigrationDriftException` on any mismatch. Null legacy checksums are tolerated so existing installs upgrade cleanly. |
+| 8 | **Empty `user_id` defaults.** Sessions, audits, and token usage were written with `user_id = ''` or `Environment.UserName`. | API-created users (Phase 37) had no derived stats until per-user identity propagated through the agentic loop. | **✓ Resolved in Phase 38 (identity plumbing) + Phase 42.5 V009 (data backfill).** V009 backfills any pre-existing empty-string rows to the oldest active admin user. |
+| 9 | **No shared bootstrap helper.** `SqliteStorageProvider.InitializeAsync` is called once, but other code paths (test fixtures, future CLI tools) re-implement parts of the boot flow. | Drift between server boot and test boot can mask bugs. | Deferred — extract a `SovrantStorageBootstrap.InitializeAsync` shared helper. |
+| 10 | **Connection-per-call with no pool.** Every store opens a fresh `SqliteConnection`. WAL + connection cache helps, but there is no explicit pool. | Under load (server + parallel CLI), we may starve on file handles. | Deferred — evaluate `Microsoft.Data.Sqlite` connection pooling; benchmark before/after. |
+| 11 | **No `sovrant init` first-boot UX.** A user installing fresh has no clear "the DB is ready" feedback. | Discovery is poor; failures are invisible. | Partially addressed — `sovrant db status` now prints path, schema version, and row counts after a one-shot init. A top-level `sovrant init` wrapper is still pending. |
+| 12 | **Health-check coverage is partial.** `/health` did not exercise the DB at all. | A DB that is read-only (disk full, permissions) reported healthy. | **✓ Resolved in Phase 42.5.** `/health` now calls `IStorageProvider.CheckHealth()` and returns a `db` block with `status`, `schema_version`, `path`, and optional `error`. A failing probe flips the overall status to `degraded` while still returning HTTP 200. A write canary remains a future refinement. |
 
 ---
 
@@ -484,7 +579,7 @@ After a fresh install and first run, `~/.sovrant/` contains:
 ```
 
 A fresh boot with no existing DB produces:
-- `data/sovrant.db` at schema version 7 (V001–V007 applied in order)
+- `data/sovrant.db` at schema version 9 (V001–V009 applied in order)
 - A `users` row for the OS username (or `SOVRANT_USER_ID`) inserted via `SeedDefaultUser`
 - A `workspaces` row `ws-personal-{userId}` inserted via `SeedPersonalWorkspace`
 - A `workspace_members` row linking the seeded user as `owner`

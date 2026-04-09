@@ -35,8 +35,8 @@ public sealed class SqliteStorageProviderTests : IAsyncDisposable
     {
         await _provider.InitializeAsync();
 
-        // We have 8 migration scripts.
-        Assert.Equal(8, _provider.SchemaVersion);
+        // Bumped to 9 after V009 (user_id='' backfill).
+        Assert.Equal(9, _provider.SchemaVersion);
     }
 
     [Fact]
@@ -126,6 +126,51 @@ public sealed class SqliteStorageProviderTests : IAsyncDisposable
             Assert.Equal(expected, mode & ~UnixFileMode.None);
             Assert.Equal(UnixFileMode.None, mode & (UnixFileMode.GroupRead | UnixFileMode.GroupWrite
                 | UnixFileMode.OtherRead | UnixFileMode.OtherWrite));
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_DriftDetection_Throws()
+    {
+        // Phase 42.5 — MigrationDriftException must propagate out of
+        // InitializeAsync. Drift is always a hard error because continuing
+        // means running on an unknown schema.
+        await _provider.InitializeAsync();
+
+        // Corrupt the stored checksum for V001.
+        using (var conn = ((ISqliteConnectionFactory)_provider).CreateConnection())
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "UPDATE schema_version SET checksum = 'deadbeef' WHERE version = 1";
+            cmd.ExecuteNonQuery();
+        }
+
+        var freshProvider = new SqliteStorageProvider(
+            NullLogger<SqliteStorageProvider>.Instance, _dbPath);
+        await Assert.ThrowsAsync<MigrationDriftException>(() => freshProvider.InitializeAsync());
+    }
+
+    [Fact]
+    public async Task InitializeAsync_DbRequired_ThrowsOnFailure()
+    {
+        // Phase 42.5 — SOVRANT_DB_REQUIRE=true makes init failures throw
+        // so production servers exit at boot instead of running with no
+        // persistence. Use a path that will definitely fail to create.
+        var badPath = OperatingSystem.IsWindows()
+            ? @"\\?\CON\invalid\sovrant.db"
+            : "/proc/0/invalid/sovrant.db";
+
+        Environment.SetEnvironmentVariable("SOVRANT_DB_REQUIRE", "true");
+        try
+        {
+            var badProvider = new SqliteStorageProvider(
+                NullLogger<SqliteStorageProvider>.Instance, badPath);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => badProvider.InitializeAsync());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SOVRANT_DB_REQUIRE", null);
         }
     }
 

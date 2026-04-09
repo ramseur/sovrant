@@ -4,6 +4,7 @@ using Sovrant.Agents;
 using Sovrant.Runtime;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Permissions;
+using Sovrant.Runtime.Storage;
 using Sovrant.Server.Auth;
 using Sovrant.Server.Permissions;
 using Sovrant.Server.Routes;
@@ -145,7 +146,25 @@ app.UseMiddleware<Sovrant.Server.Middleware.WorkspaceContextMiddleware>();
 app.UseMiddleware<Sovrant.Server.Middleware.ProjectContextMiddleware>();
 
 // Health check — unauthenticated so load balancers / monitors can ping it.
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+// Phase 42.5 — also reports DB path/schema/liveness so operators can detect
+// a "running but DB broken" state. The DB probe is a cheap COUNT against
+// schema_version; any failure flips db.status to "error".
+app.MapGet("/health", (IStorageProvider storage) =>
+{
+    var health = storage.CheckHealth();
+    var overall = health.Ok ? "ok" : "degraded";
+    return Results.Ok(new
+    {
+        status = overall,
+        db = new
+        {
+            status = health.Ok ? "ok" : "error",
+            schema_version = health.SchemaVersion,
+            path = health.Path,
+            error = health.Error,
+        },
+    });
+});
 
 // Seed tool registry.
 app.Services.GetRequiredService<ToolRegistrar>().RegisterAll();

@@ -68,7 +68,7 @@ internal static class ChatToolHandler
         var runtime = services.GetRequiredService<IConversationRuntime>();
 
         if (sessionId is not null)
-            await runtime.InitializeSessionAsync(sessionId, ct).ConfigureAwait(false);
+            await runtime.InitializeSessionAsync(sessionId, ownerUserId: null, ct).ConfigureAwait(false);
 
         var textBuilder = new StringBuilder();
         var toolSummaries = new List<string>();
