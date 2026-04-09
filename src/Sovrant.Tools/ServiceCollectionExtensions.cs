@@ -12,6 +12,7 @@ using Sovrant.Tools.Skills;
 using Sovrant.Tools.Tasks;
 using Sovrant.Tools.Todo;
 using Sovrant.Tools.Quality;
+using Sovrant.Tools.Shell;
 using Sovrant.Tools.Swarm;
 using Sovrant.Tools.Team;
 using Sovrant.Tools.Worktree;
@@ -41,6 +42,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<TodoState>();
         services.AddSingleton<BackgroundTaskRegistry>();
         services.AddSingleton<WorktreeState>();
+        services.AddSingleton<ShellSessionState>();
+        services.AddSingleton<ShellEnvironment>();
 
         // Core tools
         services.AddSingleton<ITool, ReadFileTool>();

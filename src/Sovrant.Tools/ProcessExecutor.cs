@@ -20,12 +20,18 @@ internal static class ProcessExecutor
     /// <param name="arguments">Arguments to pass (added via <see cref="ProcessStartInfo.ArgumentList"/>).</param>
     /// <param name="timeoutMs">Maximum runtime in milliseconds.</param>
     /// <param name="outputCapChars">Maximum characters to capture per stream (0 = unlimited).</param>
+    /// <param name="workingDirectory">
+    /// Optional cwd for the spawned process. When null, the child inherits the
+    /// current process's cwd (default .NET behavior). Phase 43 — shell tools
+    /// pass in a logical cwd tracked across invocations so <c>cd</c> persists.
+    /// </param>
     /// <param name="ct">Caller cancellation token.</param>
     internal static async Task<Result> RunAsync(
         string fileName,
         IReadOnlyList<string> arguments,
         int timeoutMs,
         int outputCapChars = 0,
+        string? workingDirectory = null,
         CancellationToken ct = default)
     {
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -44,6 +50,8 @@ internal static class ProcessExecutor
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        if (!string.IsNullOrEmpty(workingDirectory))
+            psi.WorkingDirectory = workingDirectory;
         foreach (var arg in arguments)
             psi.ArgumentList.Add(arg);
 
@@ -110,6 +118,7 @@ internal static class ProcessExecutor
         string tempFileExtension,
         int timeoutMs,
         int outputCapChars = 0,
+        string? workingDirectory = null,
         CancellationToken ct = default)
     {
         var scriptFile = Path.Combine(Path.GetTempPath(), $"sovrant_{Guid.NewGuid():N}{tempFileExtension}");
@@ -117,7 +126,7 @@ internal static class ProcessExecutor
         {
             await File.WriteAllTextAsync(scriptFile, content, ct).ConfigureAwait(false);
             var args = new List<string>(prefixArgs) { scriptFile };
-            return await RunAsync(fileName, args, timeoutMs, outputCapChars, ct).ConfigureAwait(false);
+            return await RunAsync(fileName, args, timeoutMs, outputCapChars, workingDirectory, ct).ConfigureAwait(false);
         }
         finally
         {

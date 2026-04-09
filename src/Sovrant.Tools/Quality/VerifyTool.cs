@@ -103,7 +103,7 @@ public sealed class VerifyTool : ITool
             shellArgs,
             DefaultTimeoutMs,
             OutputCapChars,
-            ct).ConfigureAwait(false);
+            ct: ct).ConfigureAwait(false);
 
         return new PhaseResult(phase, proc.ExitCode == 0, proc.Output);
     }
@@ -127,7 +127,7 @@ public sealed class VerifyTool : ITool
             shellArgs,
             60_000,
             OutputCapChars,
-            ct).ConfigureAwait(false);
+            ct: ct).ConfigureAwait(false);
 
         if (proc.ExitCode != 0)
         {

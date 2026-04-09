@@ -19,6 +19,35 @@ public sealed class SystemPromptBuilder
 
         parts.Add("You are a highly capable agentic AI assistant.");
 
+        // Phase 43 — tell the model what shell will run its commands so it
+        // generates native syntax instead of producing bash one-liners that
+        // PowerShell can't parse. On Windows we run commands through
+        // PowerShell (pwsh or Windows PowerShell 5.1). Without this hint,
+        // models default to bash-isms like `&&`, `||`, backticks for command
+        // substitution, `ls -la`, and `rm -rf`, which either error out or
+        // behave differently under PowerShell 5.1.
+        if (OperatingSystem.IsWindows())
+        {
+            parts.Add(
+                "The Bash tool on this system runs commands through PowerShell " +
+                "(pwsh 7+ if available, otherwise Windows PowerShell 5.1). " +
+                "Generate PowerShell-native syntax rather than bash: use `;` to " +
+                "chain commands (not `&&` — it is not supported in Windows PowerShell 5.1), " +
+                "use `Get-ChildItem`, `Remove-Item`, `Copy-Item`, `Get-Content`, " +
+                "and `Set-Location` instead of `ls`, `rm`, `cp`, `cat`, and `cd` " +
+                "when you need switches beyond the basic aliases. " +
+                "Use forward slashes in paths — PowerShell accepts them. " +
+                "The working directory persists across Bash invocations, so " +
+                "`cd` in one call is visible to the next.");
+        }
+        else
+        {
+            parts.Add(
+                "The Bash tool on this system runs commands through /bin/bash. " +
+                "Use standard POSIX shell syntax. The working directory persists " +
+                "across Bash invocations, so `cd` in one call is visible to the next.");
+        }
+
         if (_config.PermissionMode == PermissionMode.Plan)
         {
             parts.Add(

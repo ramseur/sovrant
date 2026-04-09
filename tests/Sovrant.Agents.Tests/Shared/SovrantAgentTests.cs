@@ -87,7 +87,7 @@ public sealed class SovrantAgentTests
 
         public string SessionId => "fake-session";
 
-        public Task InitializeSessionAsync(string? sessionId, CancellationToken ct = default) =>
+        public Task InitializeSessionAsync(string? sessionId, string? ownerUserId = null, CancellationToken ct = default) =>
             Task.CompletedTask;
 
         public async IAsyncEnumerable<RuntimeEvent> RunTurnAsync(
@@ -111,7 +111,7 @@ public sealed class SovrantAgentTests
     {
         public string SessionId => "fake-session";
 
-        public Task InitializeSessionAsync(string? sessionId, CancellationToken ct = default) =>
+        public Task InitializeSessionAsync(string? sessionId, string? ownerUserId = null, CancellationToken ct = default) =>
             Task.CompletedTask;
 
         public async IAsyncEnumerable<RuntimeEvent> RunTurnAsync(
