@@ -6,14 +6,33 @@ namespace Sovrant.Runtime.Storage;
 /// <summary>
 /// SQLite-backed session store. Persists session entries to <c>sessions</c>
 /// and <c>session_entries</c> tables with FTS5 auto-sync.
+///
+/// <para>Phase 38 — enforces per-user ownership via the <c>sessions.user_id</c>
+/// column. When <c>ownerUserId</c> is passed to read/delete methods, queries
+/// are scoped to that user. When null, no filter is applied (admin/system).</para>
 /// </summary>
 internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFactory) : ISessionStore
 {
-    public async Task AppendAsync(string sessionId, SessionEntry entry, CancellationToken ct = default)
+    /// <summary>
+    /// Fallback owner recorded on session rows created from a code path that
+    /// did not supply an authenticated user id (e.g. the CLI, tests, or
+    /// pre-Phase-38 callers). Matches the seeded default user so legacy
+    /// admin callers keep working.
+    /// </summary>
+    private static string LegacyOwner =>
+        Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
+
+    public async Task AppendAsync(
+        string sessionId,
+        SessionEntry entry,
+        string? ownerUserId = null,
+        CancellationToken ct = default)
     {
         using var connection = connectionFactory.CreateConnection();
 
-        // Ensure the session row exists.
+        // Ensure the session row exists. INSERT OR IGNORE means the owner is
+        // only written on first-touch — later appends cannot overwrite the
+        // recorded owner, which is what makes ownership stable.
         using var ensureCmd = connection.CreateCommand();
         ensureCmd.CommandText = """
             INSERT OR IGNORE INTO sessions (session_id, user_id, model, started_at, updated_at)
@@ -22,7 +41,7 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
             """;
         ensureCmd.Parameters.AddWithValue("$sid", sessionId);
-        ensureCmd.Parameters.AddWithValue("$uid", Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName);
+        ensureCmd.Parameters.AddWithValue("$uid", ownerUserId ?? LegacyOwner);
         ensureCmd.Parameters.AddWithValue("$model", (object?)entry.Model ?? DBNull.Value);
         await ensureCmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
@@ -53,9 +72,25 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    public async Task<IReadOnlyList<SessionEntry>> LoadAsync(string sessionId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<SessionEntry>> LoadAsync(
+        string sessionId,
+        string? ownerUserId = null,
+        CancellationToken ct = default)
     {
         using var connection = connectionFactory.CreateConnection();
+
+        // Pre-flight ownership check — cheap and avoids leaking whether a
+        // session exists across users via row-count side channels.
+        if (ownerUserId is not null)
+        {
+            using var ownerCheck = connection.CreateCommand();
+            ownerCheck.CommandText = "SELECT user_id FROM sessions WHERE session_id = $sid";
+            ownerCheck.Parameters.AddWithValue("$sid", sessionId);
+            var owner = await ownerCheck.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
+            if (owner is null || !string.Equals(owner, ownerUserId, StringComparison.Ordinal))
+                return [];
+        }
+
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
             SELECT entry_uid, timestamp, role, content, model, input_tokens, output_tokens,
@@ -88,11 +123,21 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
         return entries;
     }
 
-    public async Task<IReadOnlyList<string>> ListAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<string>> ListAsync(
+        string? ownerUserId = null,
+        CancellationToken ct = default)
     {
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT session_id FROM sessions ORDER BY updated_at DESC";
+        if (ownerUserId is null)
+        {
+            cmd.CommandText = "SELECT session_id FROM sessions ORDER BY updated_at DESC";
+        }
+        else
+        {
+            cmd.CommandText = "SELECT session_id FROM sessions WHERE user_id = $uid ORDER BY updated_at DESC";
+            cmd.Parameters.AddWithValue("$uid", ownerUserId);
+        }
 
         using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         var ids = new List<string>();
@@ -102,9 +147,22 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
         return ids;
     }
 
-    public async Task<bool> DeleteAsync(string sessionId, CancellationToken ct = default)
+    public async Task<bool> DeleteAsync(
+        string sessionId,
+        string? ownerUserId = null,
+        CancellationToken ct = default)
     {
         using var connection = connectionFactory.CreateConnection();
+
+        if (ownerUserId is not null)
+        {
+            using var ownerCheck = connection.CreateCommand();
+            ownerCheck.CommandText = "SELECT user_id FROM sessions WHERE session_id = $sid";
+            ownerCheck.Parameters.AddWithValue("$sid", sessionId);
+            var owner = await ownerCheck.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
+            if (owner is null || !string.Equals(owner, ownerUserId, StringComparison.Ordinal))
+                return false;
+        }
 
         using var delEntries = connection.CreateCommand();
         delEntries.CommandText = "DELETE FROM session_entries WHERE session_id = $sid";
@@ -130,5 +188,15 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
         using var delSessions = connection.CreateCommand();
         delSessions.CommandText = "DELETE FROM sessions";
         return await delSessions.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task<string?> GetOwnerAsync(string sessionId, CancellationToken ct = default)
+    {
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT user_id FROM sessions WHERE session_id = $sid";
+        cmd.Parameters.AddWithValue("$sid", sessionId);
+        var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        return result as string;
     }
 }

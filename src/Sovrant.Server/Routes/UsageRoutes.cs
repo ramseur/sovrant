@@ -1,10 +1,16 @@
 using System.Text.Json.Serialization;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Session;
+using Sovrant.Server.Auth;
 
 namespace Sovrant.Server.Routes;
 
-/// <summary>Registers <c>GET /v1/usage</c> — per-session token usage summary.</summary>
+/// <summary>
+/// Registers <c>GET /v1/usage</c> — per-session token usage summary.
+///
+/// <para>Phase 38 — scopes the session list and per-session entries to the
+/// authenticated caller. Admins see all sessions in the store.</para>
+/// </summary>
 internal static class UsageRoutes
 {
     public static void Map(WebApplication app)
@@ -13,16 +19,18 @@ internal static class UsageRoutes
     }
 
     private static async Task<IResult> GetUsage(
+        HttpContext ctx,
         ISessionStore store,
         IRuntimeSessionPool pool,
         CancellationToken ct)
     {
-        var sessionIds = await store.ListAsync(ct).ConfigureAwait(false);
+        var ownerFilter = ctx.IsAdmin() ? null : ctx.GetUserId();
+        var sessionIds = await store.ListAsync(ownerFilter, ct).ConfigureAwait(false);
         var sessions = new List<SessionUsageDto>(sessionIds.Count);
 
         foreach (var id in sessionIds)
         {
-            var config = pool.TryGetConfig(id);
+            var config = pool.TryGetConfig(id, ctx.GetUserId());
             if (config is not null)
             {
                 // Active session — use live counters.
@@ -36,8 +44,10 @@ internal static class UsageRoutes
             }
             else
             {
-                // Inactive session — sum from persisted JSONL entries.
-                var entries = await store.LoadAsync(id, ct).ConfigureAwait(false);
+                // Inactive session — sum from persisted entries. The list is
+                // already owner-filtered so LoadAsync can run unfiltered here
+                // and avoid an extra ownership check on every row.
+                var entries = await store.LoadAsync(id, ownerUserId: null, ct).ConfigureAwait(false);
                 var inp = entries.Sum(e => (long)e.InputTokens);
                 var outp = entries.Sum(e => (long)e.OutputTokens);
                 sessions.Add(new SessionUsageDto

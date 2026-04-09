@@ -54,15 +54,43 @@ The server binds to `http://127.0.0.1:5200` by default.
 
 ---
 
-## Authentication
+## Authentication (Phase 38)
 
 Every request (except `GET /health` and CORS preflight `OPTIONS`) must include:
 
 ```
-Authorization: Bearer <SOVRANT_TOKEN>
+Authorization: Bearer <token>
 ```
 
-A missing or wrong token returns `401 Unauthorized`.
+The server accepts **two** kinds of bearer token, checked in this order by `BearerTokenMiddleware`:
+
+1. **Per-user tokens** — strings of the form `svt_<base64url-secret>`, issued to a specific user via `POST /v1/users/me/tokens` (self-service) or `POST /v1/users/{id}/tokens` (admin). Tokens are stored as SHA-256 hashes in the `api_tokens` table; the plaintext is returned **exactly once** at issuance and is never recoverable. The middleware resolves the caller's `user_id` and role from this token and stamps them onto `HttpContext` for downstream ownership checks. Revoked or expired tokens return `401`.
+
+2. **Legacy static token** — the value of the `SOVRANT_TOKEN` env var, used for server-to-server / bootstrap scenarios. Requests authenticated with the static token are treated as **admin** (unrestricted cross-user view) but have no associated `user_id`. `/v1/users/me/*` routes reject static-token callers with `400` since "me" is meaningless without a user identity.
+
+A missing, malformed, expired, or revoked token returns `401 Unauthorized`. Token comparison is timing-safe (`CryptographicOperations.FixedTimeEquals`).
+
+### Admin bypass
+
+A request is treated as admin when **any** of the following holds:
+
+- it is authenticated with the legacy `SOVRANT_TOKEN`, or
+- it is authenticated with an `svt_*` token whose owning user has `users.role = 'admin'`.
+
+Admins bypass ownership scoping on session/usage routes (see below) and can manage any user via `/v1/users/{id}/*`. Non-admin `svt_*` callers see only their own data.
+
+### Ownership scoping
+
+All session-bearing endpoints — `GET /v1/sessions`, `GET /v1/sessions/{id}`, `DELETE /v1/sessions/{id}`, `GET /v1/sessions/{id}/export`, `GET/PUT /v1/sessions/{id}/config`, and `GET /v1/usage` — filter results by the caller's `user_id`. A non-admin caller attempting to read, modify, or delete another user's session receives `404 Not Found` (not `403`) so that session IDs cannot be enumerated across users. Admin callers (static token or `users.role = 'admin'`) see the full set.
+
+Ownership is stamped at the `SqliteSessionStore` layer with `INSERT OR IGNORE` semantics: the first append to a given `session_id` records the owner in `sessions.user_id`; subsequent appends from any caller cannot overwrite it. The `POST /v1/chat/completions` path performs a pre-flight `GetOwnerAsync` check and rejects attempts to attach to an already-owned session belonging to a different user. The runtime session pool is keyed on `{session_id}##{owner_user_id}` so two concurrent users cannot race to share a pool entry.
+
+### Database hardening
+
+- The SQLite file is created with mode `0600` (user-only) on first initialization.
+- `PRAGMA secure_delete = ON` so revoked tokens and deleted session entries do not linger in free pages.
+- `ISqliteConnectionFactory.CreateReadOnlyConnection()` opens the database with `Mode=ReadOnly` and `PRAGMA query_only = ON` for read-only code paths that must not mutate state.
+- Token hashes are 32 raw bytes (SHA-256) — no reversible encoding, no pepper stored alongside.
 
 ---
 
@@ -211,7 +239,7 @@ OpenAI-compatible model list built from known providers.
 
 ### Sessions — `GET /v1/sessions`
 
-Lists all saved session IDs.
+Lists saved session IDs. Non-admin callers see only sessions they own; admin callers see all sessions.
 
 ```json
 { "sessions": [{ "id": "abc123" }, { "id": "def456" }] }
@@ -221,7 +249,7 @@ Lists all saved session IDs.
 
 ### Sessions — `GET /v1/sessions/{id}`
 
-Returns the user/assistant message history for a session.
+Returns the user/assistant message history for a session. Non-admin callers attempting to read a session they do not own receive `404 Not Found`.
 
 ```json
 {
@@ -244,13 +272,13 @@ Returns `404` if the session does not exist.
 
 ### Sessions — `DELETE /v1/sessions/{id}`
 
-Permanently deletes the session and all its entries from the database.
+Permanently deletes the session and all its entries from the database. The deletion goes through `ISessionStore.DeleteAsync` which enforces ownership at the storage layer — non-admin callers attempting to delete a session they do not own receive `404 Not Found` and the session is left untouched.
 
 ```json
 { "deleted": "abc123" }
 ```
 
-Returns `404` if the session does not exist.
+Returns `404` if the session does not exist or is not visible to the caller.
 
 ---
 
@@ -289,7 +317,7 @@ Per-session config shadows the global defaults set via `PUT /v1/config`. Only th
 
 ### Usage — `GET /v1/usage`
 
-Returns per-session token usage summary across all sessions.
+Returns per-session token usage. Non-admin callers see only their own sessions; admin callers see all sessions.
 
 ```json
 {
@@ -433,9 +461,9 @@ Legacy JSONL session files from before Phase 37.5 can be imported into the table
 sovrant db import-swarm [--dir <path>] [--delete-source]
 ```
 
-## User Management (Phase 37)
+## User Management
 
-CRUD over the `users` table plus per-user data views. **Auth model:** every endpoint is gated by the same `SOVRANT_TOKEN` bearer middleware as everything else. There is **no per-user authentication** — any holder of the shared token can manage any user. Per-user bearer tokens, role enforcement, and admin-only routes are deferred to Phase 38.
+CRUD over the `users` table plus per-user data views. **Auth model (Phase 38):** these endpoints require an **admin** bearer token — either the legacy `SOVRANT_TOKEN` or an `svt_*` token belonging to a user with `users.role = 'admin'`. Non-admin `svt_*` callers receive `403 Forbidden`. Self-service profile and token routes that don't require admin live under `/v1/users/me/*` (see [Self-Service](#self-service-phase-38) below).
 
 **Soft-delete only.** `DELETE /v1/users/{id}` flips `status='inactive'`; the row is preserved so all FK references (workspaces, projects, sessions, audit) remain valid. Hard-delete is intentionally not exposed.
 
@@ -516,4 +544,54 @@ Query params: `model`, `from`, `to`. Returns aggregated token totals plus a per-
 
 ### List User Audit — `GET /v1/users/{id}/audit`
 
-Query param: `limit`. Joins `audit_governance` through `sessions.user_id`. **Known limitation:** today every session is created with `user_id = Environment.UserName`, so audit events for users created via this API will appear empty until per-user identity flows through session creation in Phase 38.
+Query param: `limit`. Joins `audit_governance` through `sessions.user_id`. As of Phase 38, sessions are stamped with the authenticated caller's `user_id` at creation (pulled from the `svt_*` token), so audit views reflect real per-user activity. Sessions created via the legacy `SOVRANT_TOKEN` fall back to `SOVRANT_USER_ID` / OS username.
+
+---
+
+## Self-Service (Phase 38)
+
+Routes scoped to the authenticated caller. Every endpoint resolves the target user from the `svt_*` token's identity — there is no `{userId}` path parameter to forge. Static-token callers receive `400` since "me" is meaningless without a user identity.
+
+### Profile — `GET /v1/users/me`
+
+Returns the caller's own profile plus derived stats (same shape as `GET /v1/users/{id}`).
+
+### Issue Token — `POST /v1/users/me/tokens`
+
+Issues a new `svt_*` bearer token for the caller. The plaintext secret is returned **exactly once** — capture it immediately.
+
+Request:
+```json
+{
+  "name": "laptop-dev",
+  "scopes": "chat,sessions",
+  "expires_at": "2026-12-31T23:59:59Z"
+}
+```
+
+All fields optional. `scopes` is a free-form comma-separated string persisted for future use (not yet enforced beyond admin/user roles). `expires_at` is optional — omit for a non-expiring token.
+
+Response (`201 Created`):
+```json
+{
+  "token": {
+    "token_id": "tok_...",
+    "user_id": "usr_...",
+    "name": "laptop-dev",
+    "scopes": "chat,sessions",
+    "created_at": "2026-04-09T...",
+    "last_used_at": null,
+    "expires_at": "2026-12-31T23:59:59+00:00",
+    "revoked_at": null
+  },
+  "plaintext": "svt_BASE64URL..."
+}
+```
+
+### List Tokens — `GET /v1/users/me/tokens`
+
+Returns the caller's tokens (metadata only — no plaintext, no hash).
+
+### Revoke Token — `DELETE /v1/users/me/tokens/{tokenId}`
+
+Marks the token as revoked (`revoked_at = now()`). Callers cannot revoke tokens they do not own — the server verifies ownership by listing the caller's tokens before issuing the revoke, returning `404` otherwise.

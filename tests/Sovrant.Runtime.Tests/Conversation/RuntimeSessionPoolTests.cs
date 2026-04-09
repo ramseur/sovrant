@@ -265,15 +265,17 @@ public sealed class RuntimeSessionPoolTests
 
     private sealed class NullSessionStore : ISessionStore
     {
-        public Task AppendAsync(string sessionId, SessionEntry entry, CancellationToken ct = default)
+        public Task AppendAsync(string sessionId, SessionEntry entry, string? ownerUserId = null, CancellationToken ct = default)
             => Task.CompletedTask;
-        public Task<IReadOnlyList<SessionEntry>> LoadAsync(string sessionId, CancellationToken ct = default)
+        public Task<IReadOnlyList<SessionEntry>> LoadAsync(string sessionId, string? ownerUserId = null, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<SessionEntry>>([]);
-        public Task<IReadOnlyList<string>> ListAsync(CancellationToken ct = default)
+        public Task<IReadOnlyList<string>> ListAsync(string? ownerUserId = null, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<string>>([]);
-        public Task<bool> DeleteAsync(string sessionId, CancellationToken ct = default)
+        public Task<bool> DeleteAsync(string sessionId, string? ownerUserId = null, CancellationToken ct = default)
             => Task.FromResult(false);
         public Task<int> DeleteAllAsync(CancellationToken ct = default)
             => Task.FromResult(0);
+        public Task<string?> GetOwnerAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
     }
 }

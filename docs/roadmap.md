@@ -2539,7 +2539,7 @@ Today swarm is the **only** subsystem that still treats flat files as the source
 
 ---
 
-### Phase 38 — Per-User Token Auth & Database Hardening
+### Phase 38 — Per-User Token Auth & Database Hardening ✅ Complete
 
 **Depends on:** Phase 37 (user management API — users exist in the DB)
 **Difficulty:** Medium
@@ -2596,15 +2596,15 @@ Applied in this phase because per-user identity makes ownership enforcement mean
 
 #### Implementation Plan
 
-1. Implement `ITokenService` — token generation (`svt_` + crypto-random), SHA-256 hashing, issuance, revocation
-2. Implement `ITokenResolver` — hash-based token-to-user resolution middleware, replaces boolean `SOVRANT_TOKEN` check
-3. Add token management endpoints (`/v1/users/{id}/tokens`)
-4. Add admin authorization middleware — `role = 'admin'` for user/token management; self-access for regular users
-5. Scope all data view queries by authenticated `user_id` (sessions, audit, usage)
-6. Backward compat: `SOVRANT_TOKEN` auto-creates a built-in admin user + token on first run
-7. Apply database hardening (secure_delete pragma, file permissions, read-only connections, timing-safe comparison)
-8. Update `docs/server.md` with token endpoints and auth model
-9. Tests: token issuance/revocation, hash-based resolution, admin-only access, self-read, ownership enforcement, timing-safe comparison, backward compat with `SOVRANT_TOKEN`
+1. ✅ Implement `ITokenService` — token generation (`svt_` + crypto-random), SHA-256 hashing, issuance, revocation
+2. ✅ Implement `BearerTokenMiddleware` — hash-based token-to-user resolution, replaces boolean `SOVRANT_TOKEN` check
+3. ✅ Add self-service token management endpoints (`/v1/users/me/tokens`)
+4. ✅ Add admin authorization — `role = 'admin'` for user management; self-access for regular users; static `SOVRANT_TOKEN` treated as admin
+5. ✅ Scope all data view queries by authenticated `user_id` (sessions, audit, usage) — enforced at `ISessionStore` layer with `INSERT OR IGNORE` first-touch ownership; routes do pre-flight `GetOwnerAsync` checks and return 404 (not 403) for cross-user access
+6. ✅ Backward compat: `SOVRANT_TOKEN` still works as admin bootstrap
+7. ✅ Apply database hardening (secure_delete pragma, 0600 file permissions, read-only connections via `CreateReadOnlyConnection()` + `PRAGMA query_only`, timing-safe comparison via `CryptographicOperations.FixedTimeEquals`)
+8. ✅ Update `docs/server.md` with token endpoints and auth model
+9. ✅ Tests: token issuance/revocation, hash-based resolution, admin-only access, self-read, ownership enforcement (9 SqliteSessionStore + 9 SessionOwnership tests), timing-safe comparison, backward compat with `SOVRANT_TOKEN`
 
 ---
 

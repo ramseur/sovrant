@@ -66,6 +66,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private static partial void LogProviderSelected(ILogger logger, string provider);
 
     private string _sessionId = Guid.NewGuid().ToString("N");
+    private string? _ownerUserId;
 
     /// <inheritdoc/>
     public string SessionId => _sessionId;
@@ -93,14 +94,22 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     }
 
     /// <inheritdoc/>
-    public async Task InitializeSessionAsync(string? sessionId, CancellationToken ct = default)
+    public async Task InitializeSessionAsync(
+        string? sessionId,
+        string? ownerUserId = null,
+        CancellationToken ct = default)
     {
+        // Even for transient (null sessionId) runtimes we still want to stamp
+        // the caller's user id on the auto-generated session row so Phase 38
+        // ownership is enforced for stateless one-shot requests as well.
+        _ownerUserId = ownerUserId;
+
         if (sessionId is null) return;
 
         _sessionId = sessionId;
         _history.Clear();
 
-        var entries = await _sessionStore.LoadAsync(sessionId, ct).ConfigureAwait(false);
+        var entries = await _sessionStore.LoadAsync(sessionId, ownerUserId, ct).ConfigureAwait(false);
         foreach (var entry in entries)
         {
             switch (entry.Role)
@@ -585,7 +594,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             IsError = isError,
         };
 
-        await _sessionStore.AppendAsync(SessionId, entry, ct).ConfigureAwait(false);
+        await _sessionStore.AppendAsync(SessionId, entry, _ownerUserId, ct).ConfigureAwait(false);
     }
 
     private string BuildSystemPrompt()

@@ -9,6 +9,7 @@ using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Hooks;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Tools;
+using Sovrant.Server.Auth;
 using Sovrant.Server.OpenAi;
 using Sovrant.Server.Permissions;
 using Sovrant.Server.ServerConfig;
@@ -44,6 +45,11 @@ internal static class ChatRoutes
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
+
+        // Phase 38 — pull the authenticated caller so sessions created by
+        // this request are owner-tagged in SQLite. Null for legacy static
+        // SOVRANT_TOKEN callers (treated as admin; owner stays legacy default).
+        var ownerUserId = ctx.GetUserId();
 
         // Seed tools (no-op if already registered).
         toolRegistrar.RegisterAll();
@@ -119,6 +125,23 @@ internal static class ChatRoutes
                 return;
             }
 
+            // Phase 38 — reject attempts by a non-owner to attach to an
+            // existing session. Unknown sessions (owner == null) fall through
+            // so the first append creates the row with ownerUserId stamped.
+            // Admin callers (static token or users.role = 'admin') bypass.
+            if (ownerUserId is not null && !ctx.IsAdmin())
+            {
+                var recordedOwner = await sessionStore.GetOwnerAsync(req.SessionId, ct).ConfigureAwait(false);
+                if (recordedOwner is not null && !string.Equals(recordedOwner, ownerUserId, StringComparison.Ordinal))
+                {
+                    ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+                    await ctx.Response.WriteAsJsonAsync(
+                        new { error = $"Session '{req.SessionId}' not found." }, ct)
+                        .ConfigureAwait(false);
+                    return;
+                }
+            }
+
             // Session pool key includes the provider tag when per-request credentials are used
             // so two users with the same session_id but different providers stay isolated.
             var status = activeRouter.GetStatus();
@@ -128,8 +151,8 @@ internal static class ChatRoutes
                 : req.SessionId;
 
             var pooled = hasScopedCredentials
-                ? await sessionPool.GetOrCreateAsync(poolKey, activeRouter, ct).ConfigureAwait(false)
-                : await sessionPool.GetOrCreateAsync(poolKey, ct: ct).ConfigureAwait(false);
+                ? await sessionPool.GetOrCreateAsync(poolKey, activeRouter, ownerUserId, ct).ConfigureAwait(false)
+                : await sessionPool.GetOrCreateAsync(poolKey, scopedRouterOverride: null, ownerUserId: ownerUserId, ct: ct).ConfigureAwait(false);
 
             runtime = pooled.Runtime;
             sessionLock = pooled.Lock;
@@ -141,10 +164,14 @@ internal static class ChatRoutes
             var runtimeLogger = loggerFactory.CreateLogger<ConversationRuntime>();
             runtime = new ConversationRuntime(
                 activeRouter, toolExecutor, toolRegistry, sessionStore, sovrantConfig, runtimeLogger, hookRunner);
+            await runtime.InitializeSessionAsync(sessionId: null, ownerUserId: ownerUserId, ct).ConfigureAwait(false);
         }
         else
         {
             runtime = transientRuntime;
+            // The transient runtime is DI-scoped (one per request) so stamping
+            // it with the caller is safe — it will not leak to the next request.
+            await runtime.InitializeSessionAsync(sessionId: null, ownerUserId: ownerUserId, ct).ConfigureAwait(false);
         }
 
         // The user message is the last message with role "user".

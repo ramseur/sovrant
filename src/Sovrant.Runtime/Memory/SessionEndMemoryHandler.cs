@@ -43,7 +43,7 @@ public sealed partial class SessionEndMemoryHandler
     {
         try
         {
-            var entries = await _sessionStore.LoadAsync(sessionId, ct).ConfigureAwait(false);
+            var entries = await _sessionStore.LoadAsync(sessionId, ownerUserId: null, ct).ConfigureAwait(false);
             if (entries.Count < MinEntriesForSummary)
             {
                 LogSkippedTooFew(_logger, sessionId, entries.Count);

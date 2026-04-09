@@ -9,6 +9,15 @@ namespace Sovrant.Runtime.Storage;
 /// </summary>
 internal interface ISqliteConnectionFactory
 {
-    /// <summary>Creates and opens a new <see cref="SqliteConnection"/>.</summary>
+    /// <summary>Creates and opens a new read-write <see cref="SqliteConnection"/>.</summary>
     SqliteConnection CreateConnection();
+
+    /// <summary>
+    /// Phase 38 — creates and opens a read-only <see cref="SqliteConnection"/>.
+    /// The connection uses <c>Mode=ReadOnly</c>, which causes SQLite to reject
+    /// any statement that attempts to mutate the database. Use this for query
+    /// endpoints (sessions list, usage, audit reads) so a SQL-injection bug
+    /// in a read path cannot escalate to data corruption.
+    /// </summary>
+    SqliteConnection CreateReadOnlyConnection();
 }

@@ -35,7 +35,7 @@ public sealed class SessionCommand : ISlashCommand
         if (args.StartsWith("delete ", StringComparison.OrdinalIgnoreCase))
             return await DeleteSessionAsync(args[7..].Trim(), ct).ConfigureAwait(false);
 
-        var entries = await _store.LoadAsync(_runtime.SessionId, ct).ConfigureAwait(false);
+        var entries = await _store.LoadAsync(_runtime.SessionId, ownerUserId: null, ct).ConfigureAwait(false);
         var sb = new StringBuilder();
         sb.AppendLine(CultureInfo.InvariantCulture, $"Session ID:  {_runtime.SessionId}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"Entries:     {entries.Count}");
@@ -56,7 +56,7 @@ public sealed class SessionCommand : ISlashCommand
 
     private async Task<SlashCommandResult> ListSessionsAsync(CancellationToken ct)
     {
-        var ids = await _store.ListAsync(ct).ConfigureAwait(false);
+        var ids = await _store.ListAsync(ownerUserId: null, ct).ConfigureAwait(false);
         if (ids.Count == 0)
             return new SlashCommandResult("No saved sessions.");
 
@@ -81,7 +81,7 @@ public sealed class SessionCommand : ISlashCommand
         if (sessionId == _runtime.SessionId)
             return new SlashCommandResult("Cannot delete the current session. Use /clear instead.");
 
-        var deleted = await _store.DeleteAsync(sessionId, ct).ConfigureAwait(false);
+        var deleted = await _store.DeleteAsync(sessionId, ownerUserId: null, ct).ConfigureAwait(false);
         return deleted
             ? new SlashCommandResult(string.Create(CultureInfo.InvariantCulture, $"Session '{sessionId}' deleted."))
             : new SlashCommandResult(string.Create(CultureInfo.InvariantCulture, $"Session '{sessionId}' not found."));

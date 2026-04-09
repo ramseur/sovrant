@@ -27,7 +27,7 @@ public sealed class ResumeCommand : ISlashCommand
 
     public async Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {
-        var ids = await _store.ListAsync(ct).ConfigureAwait(false);
+        var ids = await _store.ListAsync(ownerUserId: null, ct).ConfigureAwait(false);
 
         if (string.IsNullOrWhiteSpace(args))
         {

@@ -40,8 +40,18 @@ public sealed partial class JsonlSessionStore : ISessionStore, IDisposable
     }
 
     /// <inheritdoc/>
-    public async Task AppendAsync(string sessionId, SessionEntry entry, CancellationToken ct = default)
+    /// <remarks>
+    /// JSONL fallback does not track ownership — <paramref name="ownerUserId"/>
+    /// is accepted for interface parity and ignored. Ownership enforcement in
+    /// production is provided by SQLite as the DualWrite primary.
+    /// </remarks>
+    public async Task AppendAsync(
+        string sessionId,
+        SessionEntry entry,
+        string? ownerUserId = null,
+        CancellationToken ct = default)
     {
+        _ = ownerUserId;
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -65,8 +75,12 @@ public sealed partial class JsonlSessionStore : ISessionStore, IDisposable
     }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<SessionEntry>> LoadAsync(string sessionId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<SessionEntry>> LoadAsync(
+        string sessionId,
+        string? ownerUserId = null,
+        CancellationToken ct = default)
     {
+        _ = ownerUserId;
         var path = GetSessionPath(sessionId);
         if (!File.Exists(path))
             return [];
@@ -87,8 +101,11 @@ public sealed partial class JsonlSessionStore : ISessionStore, IDisposable
     }
 
     /// <inheritdoc/>
-    public Task<IReadOnlyList<string>> ListAsync(CancellationToken ct = default)
+    public Task<IReadOnlyList<string>> ListAsync(
+        string? ownerUserId = null,
+        CancellationToken ct = default)
     {
+        _ = ownerUserId;
         ct.ThrowIfCancellationRequested();
 
         if (!Directory.Exists(_sessionsDir))
@@ -104,8 +121,12 @@ public sealed partial class JsonlSessionStore : ISessionStore, IDisposable
     }
 
     /// <inheritdoc/>
-    public Task<bool> DeleteAsync(string sessionId, CancellationToken ct = default)
+    public Task<bool> DeleteAsync(
+        string sessionId,
+        string? ownerUserId = null,
+        CancellationToken ct = default)
     {
+        _ = ownerUserId;
         ct.ThrowIfCancellationRequested();
         var path = GetSessionPath(sessionId);
         if (!File.Exists(path))
@@ -120,6 +141,14 @@ public sealed partial class JsonlSessionStore : ISessionStore, IDisposable
         }
 
         return Task.FromResult(true);
+    }
+
+    /// <inheritdoc/>
+    public Task<string?> GetOwnerAsync(string sessionId, CancellationToken ct = default)
+    {
+        // JSONL fallback has no ownership metadata.
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult<string?>(null);
     }
 
     /// <inheritdoc/>

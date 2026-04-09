@@ -4,11 +4,18 @@ using System.Text.Json.Serialization;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Session;
+using Sovrant.Server.Auth;
 using Sovrant.Server.ServerConfig;
 
 namespace Sovrant.Server.Routes;
 
-/// <summary>Registers session management endpoints.</summary>
+/// <summary>
+/// Registers session management endpoints.
+///
+/// <para>Phase 38 — all endpoints scope reads and deletes to the authenticated
+/// user's owned sessions. Admin callers (legacy static token, or
+/// <c>users.role = 'admin'</c>) see the full set without a filter.</para>
+/// </summary>
 internal static class SessionRoutes
 {
     public static void Map(WebApplication app)
@@ -21,15 +28,26 @@ internal static class SessionRoutes
         app.MapGet("/v1/sessions/{id}/export", ExportSession);
     }
 
-    private static async Task<IResult> ListSessions(ISessionStore store, CancellationToken ct)
+    /// <summary>
+    /// Returns the ownership filter to apply. Admins return null (no filter);
+    /// regular users return their user id.
+    /// </summary>
+    private static string? OwnerFilter(HttpContext ctx) =>
+        ctx.IsAdmin() ? null : ctx.GetUserId();
+
+    private static async Task<IResult> ListSessions(
+        HttpContext ctx,
+        ISessionStore store,
+        CancellationToken ct)
     {
-        var ids = await store.ListAsync(ct).ConfigureAwait(false);
+        var ids = await store.ListAsync(OwnerFilter(ctx), ct).ConfigureAwait(false);
         var items = ids.Select(id => new SessionSummaryDto { Id = id }).ToList();
         return Results.Ok(new { sessions = items });
     }
 
     private static async Task<IResult> GetSession(
         string id,
+        HttpContext ctx,
         ISessionStore store,
         IRuntimeSessionPool pool,
         CancellationToken ct)
@@ -37,7 +55,7 @@ internal static class SessionRoutes
         if (!InputValidation.IsValidSessionId(id))
             return Results.BadRequest(new { error = "Invalid session ID format." });
 
-        var entries = await store.LoadAsync(id, ct).ConfigureAwait(false);
+        var entries = await store.LoadAsync(id, OwnerFilter(ctx), ct).ConfigureAwait(false);
         if (entries.Count == 0)
             return Results.NotFound(new { error = $"Session '{id}' not found." });
 
@@ -54,7 +72,7 @@ internal static class SessionRoutes
             .ToList();
 
         // Enrich with live session config if the session is active in memory.
-        var sessionConfig = pool.TryGetConfig(id);
+        var sessionConfig = pool.TryGetConfig(id, ctx.GetUserId());
         var totalInput = sessionConfig?.TotalInputTokens ?? entries.Sum(e => (long)e.InputTokens);
         var totalOutput = sessionConfig?.TotalOutputTokens ?? entries.Sum(e => (long)e.OutputTokens);
 
@@ -67,36 +85,48 @@ internal static class SessionRoutes
         });
     }
 
-    private static IResult DeleteSession(string id, IRuntimeSessionPool pool)
+    private static async Task<IResult> DeleteSession(
+        string id,
+        HttpContext ctx,
+        ISessionStore store,
+        IRuntimeSessionPool pool,
+        CancellationToken ct)
     {
         if (!InputValidation.IsValidSessionId(id))
             return Results.BadRequest(new { error = "Invalid session ID format." });
 
-        var sessionsDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".sovrant", "sessions");
-        var path = Path.Combine(sessionsDir, $"{id}.jsonl");
-
-        if (!File.Exists(path))
+        // Route through the store so ownership is checked in one place
+        // (Phase 38). Previously this handler deleted the JSONL file
+        // directly, bypassing the ownership column entirely.
+        var deleted = await store.DeleteAsync(id, OwnerFilter(ctx), ct).ConfigureAwait(false);
+        if (!deleted)
             return Results.NotFound(new { error = $"Session '{id}' not found." });
 
-        File.Delete(path);
-
-        // Evict the in-memory runtime so stale history is not retained.
-        pool.Evict(id);
+        // Also drop the in-memory runtime so a subsequent request doesn't
+        // resurrect stale history from the pool. Admins evict across all
+        // pool partitions for this session id.
+        pool.Evict(id, OwnerFilter(ctx));
 
         return Results.Ok(new { deleted = id });
     }
 
-    private static IResult GetSessionConfig(
+    private static async Task<IResult> GetSessionConfig(
         string id,
+        HttpContext ctx,
+        ISessionStore store,
         IRuntimeSessionPool pool,
-        MutableServerConfig serverConfig)
+        MutableServerConfig serverConfig,
+        CancellationToken ct)
     {
         if (!InputValidation.IsValidSessionId(id))
             return Results.BadRequest(new { error = "Invalid session ID format." });
 
-        var sessionConfig = pool.TryGetConfig(id);
+        // Ownership pre-flight so non-owners get a consistent 404 rather than
+        // leaking whether a session id is live in the pool.
+        if (!await CallerOwnsAsync(ctx, store, id, ct).ConfigureAwait(false))
+            return Results.NotFound(new { error = $"Session '{id}' is not active in the pool." });
+
+        var sessionConfig = pool.TryGetConfig(id, ctx.GetUserId());
         if (sessionConfig is null)
             return Results.NotFound(new { error = $"Session '{id}' is not active in the pool." });
 
@@ -109,17 +139,23 @@ internal static class SessionRoutes
         });
     }
 
-    private static IResult PutSessionConfig(
+    private static async Task<IResult> PutSessionConfig(
         string id,
         SessionConfigUpdateRequest req,
-        IRuntimeSessionPool pool)
+        HttpContext ctx,
+        ISessionStore store,
+        IRuntimeSessionPool pool,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
 
         if (!InputValidation.IsValidSessionId(id))
             return Results.BadRequest(new { error = "Invalid session ID format." });
 
-        var sessionConfig = pool.TryGetConfig(id);
+        if (!await CallerOwnsAsync(ctx, store, id, ct).ConfigureAwait(false))
+            return Results.NotFound(new { error = $"Session '{id}' is not active in the pool." });
+
+        var sessionConfig = pool.TryGetConfig(id, ctx.GetUserId());
         if (sessionConfig is null)
             return Results.NotFound(new { error = $"Session '{id}' is not active in the pool." });
 
@@ -135,13 +171,14 @@ internal static class SessionRoutes
 
     private static async Task<IResult> ExportSession(
         string id,
+        HttpContext ctx,
         ISessionStore store,
         CancellationToken ct)
     {
         if (!InputValidation.IsValidSessionId(id))
             return Results.BadRequest(new { error = "Invalid session ID format." });
 
-        var entries = await store.LoadAsync(id, ct).ConfigureAwait(false);
+        var entries = await store.LoadAsync(id, OwnerFilter(ctx), ct).ConfigureAwait(false);
         if (entries.Count == 0)
             return Results.NotFound(new { error = $"Session '{id}' not found." });
 
@@ -214,6 +251,23 @@ internal static class SessionRoutes
         }
 
         return Results.Text(sb.ToString(), "text/markdown; charset=utf-8");
+    }
+
+    private static async Task<bool> CallerOwnsAsync(
+        HttpContext ctx,
+        ISessionStore store,
+        string sessionId,
+        CancellationToken ct)
+    {
+        if (ctx.IsAdmin())
+            return true;
+
+        var me = ctx.GetUserId();
+        if (me is null)
+            return false;
+
+        var owner = await store.GetOwnerAsync(sessionId, ct).ConfigureAwait(false);
+        return owner is not null && string.Equals(owner, me, StringComparison.Ordinal);
     }
 }
 

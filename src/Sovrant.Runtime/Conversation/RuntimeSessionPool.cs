@@ -31,12 +31,19 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
     public async Task<PooledSession> GetOrCreateAsync(
         string sessionId,
         ISmartRouter? scopedRouterOverride = null,
+        string? ownerUserId = null,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
 
+        // Phase 38 — include the owner in the pool key so two users cannot
+        // share an in-memory runtime by picking the same session_id. The
+        // persistence layer still stores the raw sessionId; only the pool
+        // partition is owner-scoped.
+        var pooledKey = ownerUserId is null ? sessionId : $"{sessionId}##{ownerUserId}";
+
         // Fast path — already in pool. Update last-access time.
-        if (_pool.TryGetValue(sessionId, out var existing))
+        if (_pool.TryGetValue(pooledKey, out var existing))
         {
             existing.Touch();
             return new PooledSession(existing.Runtime, existing.Lock, existing.Config);
@@ -66,10 +73,10 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
             ? sessionId[..sessionId.IndexOf("::", StringComparison.Ordinal)]
             : sessionId;
 
-        await runtime.InitializeSessionAsync(persistenceId, ct).ConfigureAwait(false);
+        await runtime.InitializeSessionAsync(persistenceId, ownerUserId, ct).ConfigureAwait(false);
 
         var entry = new SessionEntry(runtime);
-        var winner = _pool.GetOrAdd(sessionId, entry);
+        var winner = _pool.GetOrAdd(pooledKey, entry);
 
         // Fire SessionStart only for the thread that actually created the entry.
         if (ReferenceEquals(winner, entry))
@@ -93,13 +100,41 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
     }
 
     /// <inheritdoc/>
-    public void Evict(string sessionId)
+    public void Evict(string sessionId, string? ownerUserId = null)
     {
-        if (_pool.TryRemove(sessionId, out var entry))
+        if (ownerUserId is not null)
         {
-            entry.Lock.Dispose();
-            FireSessionEnd(sessionId);
+            var key = $"{sessionId}##{ownerUserId}";
+            if (_pool.TryRemove(key, out var entry))
+            {
+                entry.Lock.Dispose();
+                FireSessionEnd(sessionId);
+            }
+            return;
         }
+
+        // Admin / legacy path — evict any entry whose pooled key resolves to
+        // this session id, across all owners and provider-scoped variants.
+        foreach (var kvp in _pool)
+        {
+            if (PooledKeyMatchesSessionId(kvp.Key, sessionId) &&
+                _pool.TryRemove(kvp.Key, out var entry))
+            {
+                entry.Lock.Dispose();
+                FireSessionEnd(sessionId);
+            }
+        }
+    }
+
+    private static bool PooledKeyMatchesSessionId(string pooledKey, string sessionId)
+    {
+        // Strip owner suffix ("##userId") and provider suffix ("::provider").
+        var key = pooledKey;
+        var hashIdx = key.IndexOf("##", StringComparison.Ordinal);
+        if (hashIdx >= 0) key = key[..hashIdx];
+        var colonIdx = key.IndexOf("::", StringComparison.Ordinal);
+        if (colonIdx >= 0) key = key[..colonIdx];
+        return string.Equals(key, sessionId, StringComparison.Ordinal);
     }
 
     /// <inheritdoc/>
@@ -145,9 +180,27 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
     }
 
     /// <inheritdoc/>
-    public SessionConfig? TryGetConfig(string sessionId)
+    public SessionConfig? TryGetConfig(string sessionId, string? ownerUserId = null)
     {
-        return _pool.TryGetValue(sessionId, out var entry) ? entry.Config : null;
+        if (ownerUserId is not null)
+        {
+            var key = $"{sessionId}##{ownerUserId}";
+            return _pool.TryGetValue(key, out var owned) ? owned.Config : null;
+        }
+
+        // Admin / legacy — first match wins. Usage and session-info endpoints
+        // only need a live token-count snapshot, so any pool entry tracking
+        // this session is acceptable.
+        if (_pool.TryGetValue(sessionId, out var direct))
+            return direct.Config;
+
+        foreach (var kvp in _pool)
+        {
+            if (PooledKeyMatchesSessionId(kvp.Key, sessionId))
+                return kvp.Value.Config;
+        }
+
+        return null;
     }
 
     private void FireSessionEnd(string sessionId)

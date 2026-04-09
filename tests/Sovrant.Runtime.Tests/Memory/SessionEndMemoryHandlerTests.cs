@@ -80,7 +80,7 @@ public sealed class SessionEndMemoryHandlerTests : IDisposable
     {
         private readonly Dictionary<string, List<SessionEntry>> _sessions = new(StringComparer.Ordinal);
 
-        public Task AppendAsync(string sessionId, SessionEntry entry, CancellationToken ct = default)
+        public Task AppendAsync(string sessionId, SessionEntry entry, string? ownerUserId = null, CancellationToken ct = default)
         {
             if (!_sessions.TryGetValue(sessionId, out var list))
             {
@@ -91,18 +91,18 @@ public sealed class SessionEndMemoryHandlerTests : IDisposable
             return Task.CompletedTask;
         }
 
-        public Task<IReadOnlyList<SessionEntry>> LoadAsync(string sessionId, CancellationToken ct = default)
+        public Task<IReadOnlyList<SessionEntry>> LoadAsync(string sessionId, string? ownerUserId = null, CancellationToken ct = default)
         {
             return Task.FromResult<IReadOnlyList<SessionEntry>>(
                 _sessions.TryGetValue(sessionId, out var list) ? list : []);
         }
 
-        public Task<IReadOnlyList<string>> ListAsync(CancellationToken ct = default)
+        public Task<IReadOnlyList<string>> ListAsync(string? ownerUserId = null, CancellationToken ct = default)
         {
             return Task.FromResult<IReadOnlyList<string>>(_sessions.Keys.ToList());
         }
 
-        public Task<bool> DeleteAsync(string sessionId, CancellationToken ct = default)
+        public Task<bool> DeleteAsync(string sessionId, string? ownerUserId = null, CancellationToken ct = default)
             => Task.FromResult(_sessions.Remove(sessionId));
 
         public Task<int> DeleteAllAsync(CancellationToken ct = default)
@@ -111,5 +111,8 @@ public sealed class SessionEndMemoryHandlerTests : IDisposable
             _sessions.Clear();
             return Task.FromResult(count);
         }
+
+        public Task<string?> GetOwnerAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
     }
 }

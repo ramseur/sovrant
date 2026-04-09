@@ -84,49 +84,86 @@ public sealed class SovrantWebAppFactory : WebApplicationFactory<Program>
     }
 }
 
-/// <summary>In-memory session store for tests.</summary>
+/// <summary>
+/// In-memory session store for tests. Honors Phase 38 ownership semantics so
+/// cross-user isolation tests can use it in place of SQLite.
+/// </summary>
 public sealed class FakeSessionStore : ISessionStore
 {
     private readonly Dictionary<string, List<SessionEntry>> _sessions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string?> _owners = new(StringComparer.OrdinalIgnoreCase);
 
-    public void Seed(string sessionId, params SessionEntry[] entries)
+    public void Seed(string sessionId, string? ownerUserId, params SessionEntry[] entries)
     {
         _sessions[sessionId] = [.. entries];
+        _owners[sessionId] = ownerUserId;
     }
 
-    public Task AppendAsync(string sessionId, SessionEntry entry, CancellationToken ct = default)
+    public void Seed(string sessionId, params SessionEntry[] entries) =>
+        Seed(sessionId, ownerUserId: null, entries);
+
+    public Task AppendAsync(string sessionId, SessionEntry entry, string? ownerUserId = null, CancellationToken ct = default)
     {
         if (!_sessions.TryGetValue(sessionId, out var list))
         {
             list = [];
             _sessions[sessionId] = list;
+            _owners[sessionId] = ownerUserId;
         }
         list.Add(entry);
         return Task.CompletedTask;
     }
 
-    public Task<IReadOnlyList<SessionEntry>> LoadAsync(string sessionId, CancellationToken ct = default)
+    public Task<IReadOnlyList<SessionEntry>> LoadAsync(string sessionId, string? ownerUserId = null, CancellationToken ct = default)
     {
-        if (_sessions.TryGetValue(sessionId, out var list))
-            return Task.FromResult<IReadOnlyList<SessionEntry>>(list);
-        return Task.FromResult<IReadOnlyList<SessionEntry>>([]);
+        if (!_sessions.TryGetValue(sessionId, out var list))
+            return Task.FromResult<IReadOnlyList<SessionEntry>>([]);
+        if (ownerUserId is not null)
+        {
+            _owners.TryGetValue(sessionId, out var owner);
+            if (owner is null || !string.Equals(owner, ownerUserId, StringComparison.Ordinal))
+                return Task.FromResult<IReadOnlyList<SessionEntry>>([]);
+        }
+        return Task.FromResult<IReadOnlyList<SessionEntry>>(list);
     }
 
-    public Task<IReadOnlyList<string>> ListAsync(CancellationToken ct = default)
+    public Task<IReadOnlyList<string>> ListAsync(string? ownerUserId = null, CancellationToken ct = default)
     {
-        return Task.FromResult<IReadOnlyList<string>>(_sessions.Keys.ToList());
+        if (ownerUserId is null)
+            return Task.FromResult<IReadOnlyList<string>>(_sessions.Keys.ToList());
+        var filtered = _sessions.Keys
+            .Where(k => _owners.TryGetValue(k, out var o) && string.Equals(o, ownerUserId, StringComparison.Ordinal))
+            .ToList();
+        return Task.FromResult<IReadOnlyList<string>>(filtered);
     }
 
-    public Task<bool> DeleteAsync(string sessionId, CancellationToken ct = default)
+    public Task<bool> DeleteAsync(string sessionId, string? ownerUserId = null, CancellationToken ct = default)
     {
-        return Task.FromResult(_sessions.Remove(sessionId));
+        if (!_sessions.ContainsKey(sessionId))
+            return Task.FromResult(false);
+        if (ownerUserId is not null)
+        {
+            _owners.TryGetValue(sessionId, out var owner);
+            if (owner is null || !string.Equals(owner, ownerUserId, StringComparison.Ordinal))
+                return Task.FromResult(false);
+        }
+        _sessions.Remove(sessionId);
+        _owners.Remove(sessionId);
+        return Task.FromResult(true);
     }
 
     public Task<int> DeleteAllAsync(CancellationToken ct = default)
     {
         var count = _sessions.Count;
         _sessions.Clear();
+        _owners.Clear();
         return Task.FromResult(count);
+    }
+
+    public Task<string?> GetOwnerAsync(string sessionId, CancellationToken ct = default)
+    {
+        _owners.TryGetValue(sessionId, out var owner);
+        return Task.FromResult(owner);
     }
 }
 
@@ -188,7 +225,7 @@ public sealed class FakeConversationRuntime : IConversationRuntime
     public string SessionId => "fake-session";
     public string NextResponse { get; set; } = "Hello from fake runtime.";
 
-    public Task InitializeSessionAsync(string? sessionId, CancellationToken ct = default) =>
+    public Task InitializeSessionAsync(string? sessionId, string? ownerUserId = null, CancellationToken ct = default) =>
         Task.CompletedTask;
 
     public async IAsyncEnumerable<RuntimeEvent> RunTurnAsync(

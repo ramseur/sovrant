@@ -49,7 +49,10 @@ public sealed partial class SqliteStorageProvider : IStorageProvider, ISqliteCon
         }
 
         _connectionString = $"Data Source={_dbPath};Mode=ReadWriteCreate;Cache=Shared";
+        _readOnlyConnectionString = $"Data Source={_dbPath};Mode=ReadOnly;Cache=Shared";
     }
+
+    private readonly string _readOnlyConnectionString;
 
     /// <inheritdoc />
     public int SchemaVersion => _schemaVersion;
@@ -137,12 +140,42 @@ public sealed partial class SqliteStorageProvider : IStorageProvider, ISqliteCon
     /// <summary>Creates and opens a new connection with PRAGMAs applied.</summary>
     SqliteConnection ISqliteConnectionFactory.CreateConnection() => CreateConnection();
 
+    /// <inheritdoc cref="ISqliteConnectionFactory.CreateReadOnlyConnection" />
+    SqliteConnection ISqliteConnectionFactory.CreateReadOnlyConnection() => CreateReadOnlyConnection();
+
     internal SqliteConnection CreateConnection()
     {
         var connection = new SqliteConnection(_connectionString);
         connection.Open();
         SetPragmas(connection);
         return connection;
+    }
+
+    /// <summary>
+    /// Phase 38 — read-only connection variant. Opens with <c>Mode=ReadOnly</c>
+    /// so any accidental write attempt fails fast at the engine rather than
+    /// reaching the file. Query pragmas only; write pragmas are skipped.
+    /// </summary>
+    internal SqliteConnection CreateReadOnlyConnection()
+    {
+        var connection = new SqliteConnection(_readOnlyConnectionString);
+        connection.Open();
+        SetReadOnlyPragmas(connection);
+        return connection;
+    }
+
+    private static void SetReadOnlyPragmas(SqliteConnection connection)
+    {
+        using var cmd = connection.CreateCommand();
+        // Query-tuning pragmas only. Write-side pragmas (secure_delete,
+        // foreign_keys enforcement on INSERT/UPDATE/DELETE) are meaningless
+        // on a read-only handle and would just add latency.
+        cmd.CommandText = """
+            PRAGMA busy_timeout = 5000;
+            PRAGMA cache_size = -20000;
+            PRAGMA query_only = ON;
+            """;
+        cmd.ExecuteNonQuery();
     }
 
     private static void SetPragmas(SqliteConnection connection)
