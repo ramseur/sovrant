@@ -35,8 +35,8 @@ public sealed class SqliteStorageProviderTests : IAsyncDisposable
     {
         await _provider.InitializeAsync();
 
-        // Bumped to 10 after V010 (Phase 51 runtime_traces + mission_scratchpad).
-        Assert.Equal(10, _provider.SchemaVersion);
+        // Bumped to 11 after V011 (Phase 51 missions + mission_events).
+        Assert.Equal(11, _provider.SchemaVersion);
     }
 
     [Fact]
