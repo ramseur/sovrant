@@ -88,6 +88,10 @@ The engine is fully functional for individual and small-team use:
 
 | Gap | Phase | Priority |
 |---|---|---|
+| **Sophisticated runtime + autonomous mission loop (planner/executor split, per-step model routing, mission ledger, PM/priority guard)** | **Phase 51** | **Next** |
+| **Unified agent orchestration: collapse Team and Swarm into one DB-backed abstraction with three creation modes (one team / multiple teams / engine-decided)** | **Phase 52** | **Next** |
+| **Scoped artifact storage (user / workspace / project, disk now → cloud later)** | **Phase 53** | **Next** |
+| **Gemma 4 support (OpenRouter primary, Ollama local-only) + capability-detection registry for models with incomplete tool-use metadata** | **Phase 54** | **Next** |
 | Per-user token auth & database hardening | Phase 38 | Medium |
 | Cost tracking, token budgets & dashboard (pricing moved to Phase 55) | Phase 39 (partially superseded) | Deferred |
 | Live cost tracking via OpenRouter (pricing-as-a-service, no local registry) | Phase 55 | Low–Medium |
@@ -103,8 +107,6 @@ The engine is fully functional for individual and small-team use:
 | Intent-aware, capability-discovered model routing | Phase 48 | Medium |
 | SearXNG web search backend (self-hosted, key-free) | Phase 49 | Low–Medium |
 | OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | Medium–High |
-| Sophisticated runtime + autonomous mission loop (planner/executor split, per-step model routing, mission ledger, cost/PM/priority guard) | Phase 51 | High |
-| Unified agent orchestration: collapse Team and Swarm into one DB-backed abstraction with three creation modes (one team / multiple teams / engine-decided) | Phase 52 | High |
 
 ---
 
@@ -3965,80 +3967,98 @@ One-shot importer runs at startup if `{cwd}/artifacts/` is non-empty and `SOVRAN
 
 ---
 
-## Phase 54 — Prompted Tool-Use Fallback for Non-Function-Calling Models (Gemma, Phi, Raw Llama, Older Ollama)
+## Phase 54 — Gemma 4 Support (OpenRouter primary, Ollama local-only) & Capability Detection for Models with Incomplete Tool-Use Metadata
 
 **Depends on:** Phase 2 (OpenAI-compat provider), Phase 22 (tiered routing)
-**Relates to:** Phase 48 (capability-discovered routing — this phase adds the per-model capability it needs for `native_tools`), ongoing Ollama support claim
-**Difficulty:** Medium
+**Relates to:** Phase 48 (capability-discovered routing — this phase seeds the per-model capability layer it will later consume)
+**Difficulty:** Low–Medium
 
-**Goal:** Let Sovrant drive agent loops on models that do **not** implement OpenAI-style native function calling — Gemma (all variants), Phi, raw Llama 2, older Mistral, DeepSeek-Coder-V1, and everything in the Ollama catalog that predates its late-2024 tool-calling work. Today the framework assumes every provider speaks native `tools` + `tool_calls`; when that assumption breaks, the agent loop silently aborts with an empty reply or a 400 from the provider.
+**Goal:** First-class Sovrant support for **Gemma 4** (released 2026-04-02). The primary path is zero-config: user supplies an **OpenRouter** API key, picks `google/gemma-4-27b` (or another Gemma 4 variant), and everything — tool calls, thinking mode, cost tracking — just works. **Ollama is an optional secondary path for local / offline use only**, and carries a temporary workaround for an upstream Ollama template bug. Alongside the model itself this phase introduces a small capability-detection layer so future models that ship with incomplete provider metadata don't silently fall through the cracks the way Gemma 4 currently does on OpenRouter's `/api/v1/models` feed.
+
+### Background — what's actually broken
+
+Gemma 4 **does** support the full agentic lifecycle natively. Google shipped it with six dedicated tool-calling special tokens (`<|tool>`, `<|tool_call>`, `<|tool_result>` + closing pairs) trained into every instruction-tuned checkpoint, a native thought channel, configurable reasoning mode, 256K context, and structured JSON output. All of this is documented on `ai.google.dev/gemma/docs/core/model_card_4` and `deepmind.google/models/gemma/gemma-4/`. OpenRouter exposes `google/gemma-4-26b-a4b-it`, `google/gemma-4-27b`, and `google/gemma-4-31b-it` with `native function calling` listed on the model pages.
+
+The *real* problems Sovrant hits with Gemma 4 today are three operational gaps, none of which mean "Gemma can't do tools":
+
+1. **OpenRouter metadata gap (primary path — must fix)** — OpenRouter's `/api/v1/models` response for some Gemma 4 entries does not yet populate the `supported_parameters` array with `tools`/`tool_choice`, even though the model accepts them. Sovrant's (future) capability-discovered router will read that field and wrongly conclude "no native tools" unless we override. This is the only bug the primary OpenRouter path has to work around — once the registry overrides the metadata, Gemma 4 is a drop-in on OpenRouter.
+2. **Ollama tool-call parser bug (local-only path — optional fix)** — As of April 2026, Ollama v0.20.0's Gemma 4 chat template has a broken tool-call parser: streaming drops `tool_calls` entirely and the non-streaming path fails to emit the outer JSON envelope. This only affects users who want to run Gemma 4 locally; it's being fixed upstream. Sovrant ships a temporary adapter so local users aren't blocked until the upstream fix lands, but the adapter is **not on the default code path** — it engages only when the selected provider is Ollama.
+3. **Model-ID sprawl** — Gemma 4 ships as `gemma-4-26b-a4b-it`, `gemma-4-27b`, `gemma-4-31b-it` on OpenRouter, plus tags `gemma4:27b`, `gemma4:31b-instruct`, `gemma4:latest` on Ollama. Sovrant has no canonical mapping, so tier routing and Phase 55's cost layer both need to recognise every alias as the same model family.
 
 ### What exists today
 
-`Sovrant.Api/OpenAi/OpenAiChatRequest.cs:12-20` declares `tools` and `tool_choice` on the outgoing chat-completions request. `FormatConverter.ToOpenAi` serialises them on every request that has tool definitions. `OpenAiCompatProvider.cs:175` parses responses by reading the `"tool_calls"` field. There is no alternative code path: if a model cannot speak the native tool-calling protocol, the agent loop has no way to recover, because the engine is structurally expecting an OpenAI-shaped `ToolCall[]` on the response.
-
-**Concrete failure modes observed:**
-- **OpenRouter + `google/gemma-*`** — OpenRouter forwards the `tools` field; Gemma has no tool-use chat template and returns plain text describing what it would do. Sovrant sees zero `tool_calls`, treats the turn as complete, and hands the user a non-actionable assistant message.
-- **Ollama + Gemma / Phi / Llama 2** — Ollama silently drops the `tools` field on models that lack tool support. Same outcome: plain text, no tool calls, dead loop.
-- **OpenRouter + some free models** — Provider returns `400 tool_choice is not supported for this model`; Sovrant bubbles up a 400 error to the user.
-
-This makes Sovrant's "supports Ollama" claim narrower than it sounds: in practice it supports **Ollama models that implement native function calling** — `llama3.1`, `llama3.2`, `qwen2.5`, `mistral-nemo`, `command-r`, and a handful of others. Everything else in the Ollama catalog is effectively read-only / chat-only through Sovrant.
-
-### How peer frameworks solve this
-
-- **opencode** (the TypeScript agent Sovrant was ported from) ships a **prompted-tools fallback**: for models flagged as non-native, it strips `tools` from the outgoing request, injects a tool-description system prompt that asks the model to emit `<tool_use>{...}</tool_use>` XML blocks, and parses those blocks out of the assistant text to reconstruct tool calls. This is the classic ReAct pattern.
-- **Claude Code** is Claude-only — it never hits this problem because it speaks Anthropic's tool-use protocol end-to-end. Any Gemma support people see with Claude Code is through an external router/proxy doing the translation, not Claude Code itself.
-
-Sovrant's port adopted the native-only path because that was opencode's primary path; the fallback was skipped and never backfilled.
+- `Sovrant.Api/OpenAi/OpenAiChatRequest.cs` serialises `tools` + `tool_choice` on every request — this already works for Gemma 4 on OpenRouter once we stop treating the missing `supported_parameters` metadata as authoritative.
+- `OpenAiCompatProvider.cs` parses `tool_calls` from the response — also already compatible with Gemma 4's native output on OpenRouter.
+- No capability registry exists. Any per-model override today would have to live in `SmartRouter` ad-hoc.
+- `ModelIdNormaliser` is a Phase 55 deliverable; this phase seeds its Gemma 4 aliases if Phase 55 has already shipped, otherwise adds a minimal standalone mapper this phase owns.
 
 ### Target design
 
-A small capability layer plus a second tool-calling protocol:
+A thin **`ModelCapabilities`** layer that answers three questions per model id: *does it support native tools*, *does it need the Ollama-template workaround*, and *what canonical id does it belong to*. It is the single source of truth consulted by the router, the cost layer, and (eventually) Phase 48's capability-discovered routing.
 
-1. **Per-model capability flag `native_tools: bool`** — defaults to `true`. A hardcoded registry maps well-known non-capable model-name globs to `false`:
-   - `google/gemma-*` → `false`
-   - `*/phi-*` → `false`
-   - `meta-llama/llama-2-*` → `false` (llama-3 and later stay `true`)
-   - `ollama/gemma*`, `ollama/phi*`, `ollama/llama2*` → `false`
-   - Anything not matched stays `true`. Registry lives next to the Phase 22 tier definitions.
+1. **`ModelCapabilities` registry** — hardcoded seed map + env override parser:
+   - `google/gemma-4-*` → `{ native_tools: true, ollama_template_workaround: false, family: "gemma-4" }`
+   - `ollama/gemma4*` / `gemma4:*` → `{ native_tools: true, ollama_template_workaround: true, family: "gemma-4" }`
+   - Any future `google/gemma-5-*`, `google/gemma-4.x-*` glob slots in here without a code change to callers.
+   - Override env: `SOVRANT_MODEL_CAPABILITIES="google/gemma-4-27b:native_tools=true,ollama/gemma4:27b:ollama_template_workaround=false"` lets operators flip a model the day upstream fixes the bug.
 
-2. **`PromptedToolsProvider` decorator** (wraps any `ILlmProvider`) — activated when `native_tools == false`:
-   - **On request:** strips `tools` and `tool_choice` from the outgoing `MessagesRequest`; prepends a system message describing the available tools in plain text plus the exact output format: `<tool_use name="..."><args>{json}</args></tool_use>`.
-   - **On response:** runs a streaming parser over the assistant text that splits it into interleaved text chunks and reconstructed `ToolCall` objects. Emits the same `StreamEvent` sequence downstream (`ContentBlockDelta.TextDelta` for prose, `ContentBlockStart/Stop` + tool-use chunks for calls) so the rest of the engine is oblivious to which protocol was used.
-   - **On tool results:** formats prior `tool_result` content blocks as `<tool_result tool_use_id="..."><output>...</output></tool_result>` in the next turn's user message, since the model has no native tool-result channel.
+2. **OpenRouter metadata shim** — when Phase 48's capability discovery reads `supported_parameters` from `/api/v1/models` and sees it empty/missing for a model in the `ModelCapabilities` registry, the registry value wins. This is the "trust the registry over live metadata when live metadata is known to be incomplete" rule. A WARN log records the discrepancy so we notice when OpenRouter catches up and can delete the override.
 
-3. **Provider routing hook** — `SmartRouter.RouteAsync` consults the capability registry and wraps the selected provider in `PromptedToolsProvider` when the chosen model's `native_tools` is `false`. No caller changes; the abstraction stays at the `ILlmProvider` layer.
+3. **Ollama Gemma 4 template workaround** — a small `GemmaOllamaTemplateAdapter` that activates only when the selected provider is Ollama *and* `ollama_template_workaround == true`:
+   - Sends requests to Ollama's `/api/generate` (raw) instead of `/api/chat`, with a hand-built prompt that emits the Gemma 4 control tokens directly, bypassing Ollama's broken Gemma 4 chat template.
+   - Parses `<|tool_call|>{json}<|/tool_call|>` blocks out of the raw completion stream and reconstructs OpenAI-shaped `tool_calls` on the response so the rest of the engine is unaware.
+   - Deactivates itself the moment the registry entry is flipped off (either by env var or by a future PR that deletes the override once Ollama ships the fix).
 
-4. **Capability override env var** `SOVRANT_NATIVE_TOOLS_OVERRIDE="openai/gpt-oss-120b:free=true,google/gemma-2-9b-it:false"` — lets operators force-flip a model without a code change when a provider updates its support.
+4. **Model-ID normalisation for Gemma 4** — seeds the alias map with:
+   ```
+   gemma-4-26b-a4b-it       → google/gemma-4-26b
+   google/gemma-4-26b-a4b-it→ google/gemma-4-26b
+   gemma4:27b               → google/gemma-4-27b
+   gemma4:31b-instruct      → google/gemma-4-31b
+   gemma4:latest            → google/gemma-4-27b   (tracks the default Ollama tag)
+   ```
+   If Phase 55 has shipped, this just adds entries to `ModelIdNormaliser`'s alias map. If not, this phase ships a minimal normaliser that Phase 55 later absorbs.
 
-### Implementation plan (two PRs)
+5. **Provider routing hook** — `SmartRouter.RouteAsync` calls `ModelCapabilities.Get(modelId)` and, when `ollama_template_workaround == true` on an Ollama provider selection, wraps it with `GemmaOllamaTemplateAdapter`. For OpenRouter selections there is *no wrapping* — Gemma 4 native tools just work once the registry says they do.
 
-**PR 1 — Prompted-tools path, forced on.**
-1. Add `ModelCapabilities` registry (hardcoded map + env override parser).
-2. Add `PromptedToolsProvider` with the prompt format, XML parser, streaming bridge, and tool-result round-trip.
-3. Unit tests against a fake `ILlmProvider` that returns canned text containing `<tool_use>` blocks — verify the engine observes the same `StreamEvent` sequence it would see from a native provider.
-4. Integration test against Ollama+gemma2 (gated behind `SOVRANT_LIVE_TESTS=1` like the OpenRouter tests) — a 2-turn loop that calls `bash` and observes the output.
+### Implementation plan (two PRs — Ollama PR is optional)
 
-**PR 2 — Router wiring + capability DB + docs.**
-1. Hook `SmartRouter` to wrap providers based on capability.
-2. Seed the capability registry with the initial non-native model list.
-3. Update `docs/providers.md` (or add one) with the supported-model matrix so the Ollama claim becomes an honest "Ollama models A/B/C speak native tools; everything else goes through the prompted fallback."
-4. Live smoke test against OpenRouter `google/gemma-2-9b-it:free` end-to-end through the server.
+**PR 1 — Capability registry + OpenRouter happy path. (Primary deliverable.)**
+1. Add `Sovrant.Runtime/Capabilities/ModelCapabilities.cs` (record struct + hardcoded seed map + env override parser + glob matcher).
+2. Seed the Gemma 4 family entries (OpenRouter ids + aliases; Ollama tag entries are included but inert without PR 2).
+3. Hook `SmartRouter` to consult it; for OpenRouter Gemma 4 selections, confirm native tool calls round-trip through `OpenAiCompatProvider` unchanged.
+4. Unit tests over registry matching (glob, override precedence, unknown model defaults).
+5. **Acceptance smoke test — the only thing that *has* to work for this phase to ship:** with just `OPENROUTER_API_KEY` set and `SOVRANT_MODEL=google/gemma-4-27b`, run `sovrant prompt "list files in ./src"` and observe a real `tool_calls` round-trip + a correct directory listing.
+6. Docs: `docs/providers.md` gains a "Gemma 4" section with the one-line setup (`export OPENROUTER_API_KEY=... ; sovrant --model google/gemma-4-27b`).
+
+**PR 2 — Ollama local-only workaround. (Optional, only ships if the upstream Ollama fix is still not out.)**
+1. Add `GemmaOllamaTemplateAdapter` that speaks `/api/generate` with hand-built Gemma 4 control-token prompts, bypassing Ollama's broken chat template.
+2. Parse `<|tool_call|>` blocks and reconstruct `tool_calls` on the way out.
+3. Router wires the adapter only when the selected provider is Ollama *and* `ollama_template_workaround == true`. OpenRouter path is untouched.
+4. Unit tests against canned Ollama responses containing Gemma 4 control tokens.
+5. Live smoke test: `ollama pull gemma4:27b` then `sovrant prompt "…"` — verify the same 2-turn tool-calling loop that already works through OpenRouter.
+6. Docs note that this workaround is temporary and can be disabled via env override the day upstream Ollama ships the fix. **If upstream Ollama fixes the bug before this PR is scheduled, skip PR 2 entirely** and just delete the Ollama entries from the registry.
 
 ### Acceptance
 
+**Primary (PR 1 — must pass):**
 - `dotnet test` full suite green.
-- `sovrant prompt "run ls in /tmp"` against `google/gemma-2-9b-it:free` completes a tool call and returns the directory listing — the same shape as the equivalent run against `gpt-oss-120b:free`.
-- `sovrant prompt "…"` against `ollama/gemma2:9b` does the same.
-- Env override flips a model from `true` to `false` without a rebuild.
-- Existing native-tool models (`openai/*`, `anthropic/*`, `llama3.1`, `qwen2.5`, `gpt-oss-120b:free`) are unchanged — the decorator is off by default and the fast path stays fast.
+- With only `OPENROUTER_API_KEY` set, `sovrant prompt "run ls in ./"` against `google/gemma-4-27b` completes a real tool call and returns the directory listing, same shape as `openai/gpt-4.1`.
+- Phase 55's cost layer resolves all Gemma 4 aliases to a single pricing row.
+- Existing models (`openai/*`, `anthropic/*`, `llama3.1`, `qwen2.5`) are unchanged — the registry hit is O(1).
+
+**Secondary (PR 2 — only if Ollama upstream hasn't shipped the fix):**
+- `sovrant prompt "…"` against `ollama/gemma4:27b` with the workaround enabled completes the same 2-turn loop.
+- Env override `SOVRANT_MODEL_CAPABILITIES="ollama/gemma4:27b:ollama_template_workaround=false"` disables the adapter without a rebuild.
+- OpenRouter path is byte-for-byte identical to PR 1 — the adapter never touches it.
 
 ### Non-goals
 
-- Fine-tuning a chat template. If a model ships with a usable tool-use template (e.g., `qwen2.5`, `llama3.1`), we keep using the native path; we don't re-implement what the provider already exposes.
-- Multi-turn constrained decoding / logit biasing against local models. The prompted path is text-in, text-out; constrained decoding is a separate (much larger) concern.
-- Rewriting `OpenAiCompatProvider`. The decorator wraps it; the provider itself is untouched.
-- Claude / Anthropic protocol support. Anthropic already has native tool use; this phase only targets the OpenAI-compat lane.
+- A generic "prompted ReAct fallback" for models that truly lack tool support. Sovrant's target model set (OpenAI, Anthropic, Gemma 4+, Llama 3+, Qwen 2.5+, Mistral Nemo+) all speak native tool use; investing in a prompted XML protocol for pre-2024 models is not worth the maintenance.
+- Fine-tuning or retraining Gemma 4 chat templates. The Ollama workaround is a bridge until upstream Ollama ships the template fix.
+- Phase 48's full capability-discovered routing. This phase only defines the registry schema and the "registry wins over empty metadata" rule; Phase 48 does the live discovery.
+- Gemma 4 multimodal (vision) support. Tool use first; image inputs are a separate phase.
+- Claude / Anthropic-native Gemma 4 support. Anthropic's API does not host Gemma — this phase is scoped to OpenRouter and Ollama.
 
 ---
 

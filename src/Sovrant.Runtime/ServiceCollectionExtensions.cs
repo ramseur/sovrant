@@ -139,6 +139,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISwarmEventStore>(sp =>
             new SqliteSwarmEventStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
+        // Runtime trace store (Phase 51) — append-only structured reasoning trace
+        // for the engine's planner/executor split. Crash-safe: every executor
+        // state transition writes here before the side effect runs.
+        services.AddSingleton<IRuntimeTraceStore>(sp =>
+            new SqliteRuntimeTraceStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+
         // Eval framework (Phase 27)
         services.AddSingleton<IEvalResultStore, EvalResultStore>();
         services.AddSingleton<IEvalRunner, EvalRunner>();
