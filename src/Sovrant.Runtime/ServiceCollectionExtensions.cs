@@ -162,6 +162,16 @@ public static class ServiceCollectionExtensions
         // consistent after a crash.
         services.AddSingleton<Engine.IEngineRecovery, Engine.EngineRecovery>();
 
+        // Production step runner (Phase 51 step I) — bridges the executor
+        // to the existing agentic loop via IRuntimeSessionPool. Tests
+        // substitute a fake IStepRunner; the default composition uses
+        // this one.
+        services.AddSingleton<Engine.IStepRunner, Engine.LlmStepRunner>();
+
+        // Default LlmExecutor wired to the production step runner. Tests
+        // that need a bespoke step runner build their own executor.
+        services.AddSingleton<Engine.IExecutor, Engine.LlmExecutor>();
+
         // Eval framework (Phase 27)
         services.AddSingleton<IEvalResultStore, EvalResultStore>();
         services.AddSingleton<IEvalRunner, EvalRunner>();
