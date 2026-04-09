@@ -23,10 +23,12 @@ public interface IExecutor
     /// ran, across all plan versions.
     /// </summary>
     /// <param name="plan">The plan to execute. May be replaced mid-run by a re-plan.</param>
+    /// <param name="runContext">Ambient run metadata — the runtime run id used for trace attribution, plus the owning session/workspace/project.</param>
     /// <param name="replanner">Callback invoked when the executor decides a re-plan is required. Typically delegates to <see cref="IPlanner.ReplanAsync"/>.</param>
     /// <param name="ct">Cancellation token.</param>
     Task<ExecutionResult> ExecuteAsync(
         RuntimePlan plan,
+        EngineRunContext runContext,
         Replanner replanner,
         CancellationToken ct = default);
 }
