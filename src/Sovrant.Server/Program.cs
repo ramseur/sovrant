@@ -184,6 +184,7 @@ McpAuthRoutes.Map(app);
 EvalRoutes.Map(app);
 SwarmRoutes.Map(app);
 EngineRoutes.Map(app);
+MissionRoutes.Map(app);
 ToolRegistryRoutes.Map(app);
 SkillRegistryRoutes.Map(app);
 AgentTemplateRoutes.Map(app);

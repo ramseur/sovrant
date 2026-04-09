@@ -9,6 +9,7 @@ using Sovrant.Runtime.Hooks;
 using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Evals;
 using Sovrant.Runtime.Memory;
+using Sovrant.Runtime.Missions;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Storage;
@@ -171,6 +172,17 @@ public static class ServiceCollectionExtensions
         // Default LlmExecutor wired to the production step runner. Tests
         // that need a bespoke step runner build their own executor.
         services.AddSingleton<Engine.IExecutor, Engine.LlmExecutor>();
+
+        // Mission layer (Phase 51) — long-lived goals sitting on top of the
+        // engine layer with acceptance gates and an append-only event
+        // journal. The store owns V011 tables; the planner/executor/gate
+        // are deliberately swap-in seams so production can later plug in
+        // an LLM-backed planner without touching routes or storage.
+        services.AddSingleton<IMissionStore>(sp =>
+            new SqliteMissionStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+        services.AddSingleton<IMissionPlanner, SimpleMissionPlanner>();
+        services.AddSingleton<IAcceptanceGate, AllStepsSucceededGate>();
+        services.AddSingleton<IMissionExecutor, LlmMissionExecutor>();
 
         // Eval framework (Phase 27)
         services.AddSingleton<IEvalResultStore, EvalResultStore>();
