@@ -44,6 +44,29 @@ The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HT
 ### Provider-Agnostic LLM Routing
 Connect to **any OpenAI-compatible API** — OpenAI, Anthropic (via proxy), Google Gemini, Ollama (local), or any provider that speaks the OpenAI chat completions format. The `SmartRouter` pings all configured providers on startup, scores them by latency, cost, and error rate, and routes each request to the optimal one. Switch providers by changing an environment variable — no code changes.
 
+### Intent-Aware Model Routing
+Automatically selects the best model for each turn based on what you're asking. A rule-based `IntentClassifier` categorizes every input into one of 10 intent classes (`SimpleQa`, `CodeGeneration`, `Refactor`, `Planning`, `Debugging`, etc.) with a complexity score (0.0-1.0), then routes to the appropriate model tier (`fast` / `standard` / `high`). The `ModelTierResolver` auto-assigns your discovered models into tiers from OpenRouter pricing data — no manual configuration needed. Simple questions go to cheap/fast models; complex reasoning goes to your strongest model.
+
+**Free models only mode** — set `SOVRANT_FREE_MODELS_ONLY=true` to restrict routing to zero-cost models. On OpenRouter this means only `:free` variants are eligible; local/self-hosted models (Ollama) are always included. This prevents accidental charges when using OpenRouter's free tier.
+
+**Tool-aware routing** — when the request includes tools, the resolver automatically filters to models that support native tool use, preventing 404 errors from providers that don't support `tool_calls`.
+
+Configure via `.sovrant/routing.json` or environment variables:
+```bash
+# Use OpenRouter as the provider
+export LLM_BASE_URL="https://openrouter.ai/api/v1"
+export LLM_API_KEY="sk-or-v1-..."
+export OPENROUTER_API_KEY="sk-or-v1-..."  # enables live model discovery
+export SOVRANT_MODEL="google/gemma-4-31b-it:free"
+
+# Restrict to free models only (no charges)
+export SOVRANT_FREE_MODELS_ONLY=true
+
+# Inspect tier assignments
+sovrant router models
+sovrant router status
+```
+
 ### Swarm Orchestrator (Auto-Decomposition + Parallel DAG Execution)
 Submit a single complex prompt and the swarm auto-decomposes it into a task DAG, executes tasks in parallel waves via specialized agents, enforces file-level locking and token budgets, and runs an optional quality gate review. OFF by default — enable in `.sovrant/swarm.json`. Different orchestrations can reference different multi-agent teams, so the same swarm engine can leverage purpose-built agent rosters per use case. Available via CLI (`sovrant swarm "task"`), the `Swarm` tool, `/swarm` slash command, and `POST /v1/swarm` (SSE streaming).
 
@@ -732,6 +755,9 @@ Place a markdown file at `.sovrant/commands/{name}.md`. Invoking `/{name}` in th
 | `SOVRANT_USER_ID` | No | User identity for session ownership and audit (default: OS username) |
 | `SOVRANT_SESSION_JSONL` | No | Set to `true` to also write sessions to legacy JSONL files (dual-write) |
 | `SOVRANT_AUDIT_JSONL` | No | Set to `true` to also write audit events to legacy JSONL files (dual-write) |
+| `OPENROUTER_API_KEY` | No | OpenRouter API key — enables live model metadata discovery (pricing, capabilities, context length) from `/api/v1/models` at startup |
+| `SOVRANT_INTENT_ROUTING` | No | `true` (default) or `false` — enables/disables intent-aware model routing |
+| `SOVRANT_FREE_MODELS_ONLY` | No | `true` to restrict intent routing to free/zero-cost models only (OpenRouter `:free` variants + local models) |
 | `SOVRANT_MCP_TOKEN` | No | Required bearer token for MCP server mode. Unset = no auth. |
 | `SOVRANT_MCP_TOOLS` | No | Comma-separated allow-list of tools to expose in MCP server mode. Unset = all tools. |
 

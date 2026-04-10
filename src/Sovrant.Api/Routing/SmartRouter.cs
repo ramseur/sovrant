@@ -162,8 +162,9 @@ public sealed class SmartRouter : ISmartRouter, IDisposable
                 tier = classification.RecommendedTier;
             }
 
-            // Resolve tier to a concrete model
-            resolvedModel = _tierResolver.Resolve(tier, classification.Intent);
+            // Resolve tier to a concrete model (require tool support when request includes tools)
+            var needsTools = req.Tools is { Count: > 0 };
+            resolvedModel = _tierResolver.Resolve(tier, classification.Intent, requireTools: needsTools);
             if (resolvedModel is not null)
             {
                 _logIntentRouting(_logger, classification.Intent.ToString(), tier, resolvedModel, null);

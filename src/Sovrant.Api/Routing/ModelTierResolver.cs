@@ -36,7 +36,7 @@ public sealed partial class ModelTierResolver : IModelTierResolver
     }
 
     /// <inheritdoc/>
-    public string? Resolve(string tier, IntentClass? intent = null)
+    public string? Resolve(string tier, IntentClass? intent = null, bool requireTools = false)
     {
         // Check for pinned model first
         if (_pinnedTierModels is not null
@@ -49,17 +49,25 @@ public sealed partial class ModelTierResolver : IModelTierResolver
         if (!_assignments.TryGetValue(tier, out var candidates) || candidates.Count == 0)
         {
             // Collapse to next-best tier
-            return CollapseTier(tier, intent);
+            return CollapseTier(tier, intent, requireTools);
         }
 
-        if (intent is not null && candidates.Count > 1)
+        // Filter to tool-capable models when the request includes tools
+        var eligible = requireTools
+            ? candidates.Where(c => _registry.GetCapabilities(c.ModelId).NativeTools).ToList()
+            : candidates;
+
+        if (eligible.Count == 0)
+            return CollapseTier(tier, intent, requireTools);
+
+        if (intent is not null && eligible.Count > 1)
         {
             // Check for intent affinity boosts
             var intentName = intent.Value.ToString();
-            var best = candidates[0]; // default: cheapest
+            var best = eligible[0]; // default: cheapest
             var bestScore = float.MaxValue;
 
-            foreach (var c in candidates)
+            foreach (var c in eligible)
             {
                 var caps = _registry.GetCapabilities(c.ModelId);
                 var affinityBoost = 0f;
@@ -80,7 +88,7 @@ public sealed partial class ModelTierResolver : IModelTierResolver
             return best.ModelId;
         }
 
-        return candidates[0].ModelId;
+        return eligible[0].ModelId;
     }
 
     /// <inheritdoc/>
@@ -255,7 +263,7 @@ public sealed partial class ModelTierResolver : IModelTierResolver
     /// When the requested tier has no candidates, collapse to the next-best
     /// available tier rather than failing.
     /// </summary>
-    private string? CollapseTier(string tier, IntentClass? intent)
+    private string? CollapseTier(string tier, IntentClass? intent, bool requireTools = false)
     {
         // fast → standard → high (try cheaper first)
         // high → standard → fast (try more capable first)
@@ -268,10 +276,17 @@ public sealed partial class ModelTierResolver : IModelTierResolver
 
         foreach (var fallback in fallbackOrder)
         {
-            if (_assignments.TryGetValue(fallback, out var candidates) && candidates.Count > 0)
+            if (!_assignments.TryGetValue(fallback, out var candidates) || candidates.Count == 0)
+                continue;
+
+            var first = requireTools
+                ? candidates.FirstOrDefault(c => _registry.GetCapabilities(c.ModelId).NativeTools)
+                : candidates[0];
+
+            if (first is not null)
             {
                 LogTierCollapse(tier, fallback);
-                return candidates[0].ModelId;
+                return first.ModelId;
             }
         }
 

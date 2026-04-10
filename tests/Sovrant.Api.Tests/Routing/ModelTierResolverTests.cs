@@ -209,6 +209,59 @@ public sealed class ModelTierResolverTests
         Assert.Equal("new-fast-model", resolver.Resolve(ModelTier.Fast));
     }
 
+    // ── Tool capability filtering ────────────────────────────────────────
+
+    [Fact]
+    public void Resolve_RequireTools_SkipsNonToolModels()
+    {
+        _registry.Register("no-tools-model", new ModelCapabilities
+        {
+            TierHint = ModelTier.Fast,
+            CostPerMillionInput = 0.05m,
+            NativeTools = false,
+            Source = CapabilitySource.Live,
+        });
+        _registry.Register("tools-model", new ModelCapabilities
+        {
+            TierHint = ModelTier.Fast,
+            CostPerMillionInput = 0.1m,
+            NativeTools = true,
+            Source = CapabilitySource.Live,
+        });
+
+        var resolver = CreateResolver();
+
+        // Without requireTools: cheapest wins
+        Assert.Equal("no-tools-model", resolver.Resolve(ModelTier.Fast));
+
+        // With requireTools: only tool-capable model is eligible
+        Assert.Equal("tools-model", resolver.Resolve(ModelTier.Fast, requireTools: true));
+    }
+
+    [Fact]
+    public void Resolve_RequireTools_CollapsesToNextTier_WhenNoToolModelsInTier()
+    {
+        _registry.Register("fast-no-tools", new ModelCapabilities
+        {
+            TierHint = ModelTier.Fast,
+            CostPerMillionInput = 0.05m,
+            NativeTools = false,
+            Source = CapabilitySource.Live,
+        });
+        _registry.Register("standard-with-tools", new ModelCapabilities
+        {
+            TierHint = ModelTier.Standard,
+            CostPerMillionInput = 5m,
+            NativeTools = true,
+            Source = CapabilitySource.Live,
+        });
+
+        var resolver = CreateResolver();
+
+        // Fast tier has no tool-capable models → should collapse to standard
+        Assert.Equal("standard-with-tools", resolver.Resolve(ModelTier.Fast, requireTools: true));
+    }
+
     // ── Free models only ───────────────────────────────────────────────
 
     [Fact]

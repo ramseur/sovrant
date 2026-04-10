@@ -9,9 +9,11 @@ public interface IModelTierResolver
     /// <summary>
     /// Resolves the given tier to a concrete model ID, optionally boosted
     /// by an intent class for models with <see cref="Capabilities.ModelCapabilities.IntentAffinity"/>.
+    /// When <paramref name="requireTools"/> is <c>true</c>, only models with
+    /// <see cref="Capabilities.ModelCapabilities.NativeTools"/> support are eligible.
     /// Returns <see langword="null"/> if no model is available for the requested tier.
     /// </summary>
-    string? Resolve(string tier, IntentClass? intent = null);
+    string? Resolve(string tier, IntentClass? intent = null, bool requireTools = false);
 
     /// <summary>
     /// Returns the current tier assignments: tier name → list of (modelId, score) entries,
