@@ -1,0 +1,32 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sovrant.Desktop.ViewModels"
+        xmlns:views="using:Sovrant.Desktop.Views"
+        x:Class="Sovrant.Desktop.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="Sovrant"
+        Width="1280" Height="800"
+        MinWidth="900" MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource SurfaceBackground}">
+
+    <Window.DataTemplates>
+        <DataTemplate DataType="vm:ChatViewModel">
+            <views:ChatView />
+        </DataTemplate>
+        <DataTemplate DataType="vm:SettingsViewModel">
+            <views:SettingsView />
+        </DataTemplate>
+    </Window.DataTemplates>
+
+    <DockPanel>
+        <!-- Sidebar -->
+        <views:SidebarView DockPanel.Dock="Left"
+                           DataContext="{Binding Sidebar}"
+                           Width="240" />
+
+        <!-- Main content -->
+        <ContentControl Content="{Binding CurrentPage}"
+                        Margin="0" />
+    </DockPanel>
+</Window>

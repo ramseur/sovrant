@@ -1,0 +1,52 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sovrant.Desktop.Views.Dialogs.ConfirmToolDialog"
+        Title="Confirm Tool Execution"
+        Width="480" Height="320"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel Margin="24">
+        <!-- Buttons -->
+        <StackPanel DockPanel.Dock="Bottom"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="10"
+                    Margin="0,16,0,0">
+            <Button Content="Deny" Click="OnDeny"
+                    Padding="20,8" CornerRadius="8" />
+            <Button Content="Allow" Click="OnAllow"
+                    Padding="20,8" CornerRadius="8"
+                    Background="{DynamicResource BrandPrimary}"
+                    Foreground="White"
+                    FontWeight="SemiBold" />
+        </StackPanel>
+
+        <!-- Content -->
+        <StackPanel Spacing="12">
+            <TextBlock Text="A tool is requesting permission to run:"
+                       FontSize="14"
+                       Foreground="{DynamicResource TextPrimary}" />
+
+            <Border Padding="12" CornerRadius="8"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}"
+                    BorderThickness="1">
+                <StackPanel Spacing="6">
+                    <TextBlock x:Name="ToolNameText"
+                               FontSize="16" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock Text="Input:" FontSize="12" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <TextBlock x:Name="InputText"
+                               TextWrapping="Wrap"
+                               FontSize="12"
+                               FontFamily="Consolas,Menlo,monospace"
+                               Foreground="{DynamicResource TextSecondary}"
+                               MaxLines="8" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </DockPanel>
+</Window>

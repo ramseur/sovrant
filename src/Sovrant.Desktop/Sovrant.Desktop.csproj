@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- Tmds.DBus.Protocol is a transitive Avalonia dependency (Linux D-Bus); suppress known vuln. -->
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
+    <!-- CA1515: Avalonia XAML codegen requires public partial classes for views/app.
+         CA2007: ConfigureAwait(false) is wrong on UI code that must resume on UI thread.
+         CA1031: Top-level error handlers in UI apps intentionally catch Exception.
+         CA1848: LoggerMessage delegates are overkill for a desktop app's handful of log sites. -->
+    <NoWarn>$(NoWarn);CA1515;CA2007;CA1031;CA1848;CA1003</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.0" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.0" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sovrant.Api\Sovrant.Api.csproj" />
+    <ProjectReference Include="..\Sovrant.Runtime\Sovrant.Runtime.csproj" />
+    <ProjectReference Include="..\Sovrant.Tools\Sovrant.Tools.csproj" />
+    <ProjectReference Include="..\Sovrant.Commands\Sovrant.Commands.csproj" />
+    <ProjectReference Include="..\Sovrant.Agents\Sovrant.Agents.csproj" />
+  </ItemGroup>
+
+</Project>

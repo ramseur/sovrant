@@ -1,0 +1,94 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <ScrollViewer Padding="32,24">
+        <StackPanel MaxWidth="640" Spacing="20">
+            <!-- Header -->
+            <TextBlock Text="Settings" FontSize="24" FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimary}" />
+
+            <!-- Provider selection -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="Provider" FontSize="13" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondary}" />
+                <ComboBox ItemsSource="{Binding Providers}"
+                          SelectedItem="{Binding SelectedProvider}"
+                          HorizontalAlignment="Stretch"
+                          CornerRadius="8"
+                          Padding="12,8" />
+            </StackPanel>
+
+            <!-- Model name -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="Model" FontSize="13" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondary}" />
+                <TextBox Text="{Binding ModelName}"
+                         Watermark="e.g. gpt-4o, claude-sonnet-4-20250514"
+                         CornerRadius="8"
+                         Padding="12,8" />
+            </StackPanel>
+
+            <!-- API Key -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="API Key" FontSize="13" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondary}" />
+                <TextBox Text="{Binding ApiKey}"
+                         PasswordChar="*"
+                         Watermark="sk-..."
+                         CornerRadius="8"
+                         Padding="12,8" />
+            </StackPanel>
+
+            <!-- Base URL -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="Base URL (optional)" FontSize="13" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondary}" />
+                <TextBox Text="{Binding BaseUrl}"
+                         Watermark="https://api.openai.com/v1"
+                         CornerRadius="8"
+                         Padding="12,8" />
+            </StackPanel>
+
+            <!-- Max output tokens -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="Max Output Tokens" FontSize="13" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondary}" />
+                <NumericUpDown Value="{Binding MaxOutputTokens}"
+                               Minimum="256" Maximum="128000"
+                               Increment="1000"
+                               CornerRadius="8"
+                               Padding="12,8"
+                               HorizontalAlignment="Stretch" />
+            </StackPanel>
+
+            <!-- Streaming toggle -->
+            <Border Padding="12" CornerRadius="8"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}"
+                    BorderThickness="1">
+                <DockPanel>
+                    <ToggleSwitch DockPanel.Dock="Right"
+                                  IsChecked="{Binding Streaming}"
+                                  OnContent="" OffContent="" />
+                    <StackPanel>
+                        <TextBlock Text="Streaming" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock Text="Stream response tokens as they arrive"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextSecondary}" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- Info note -->
+            <TextBlock Text="Settings are read-only in this phase. Configuration is loaded from ~/.sovrant/settings.json"
+                       FontSize="11" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextMuted}"
+                       Margin="0,8,0,0" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

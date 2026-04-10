@@ -1,0 +1,159 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.SidebarView"
+             x:DataType="vm:SidebarViewModel"
+             Background="{DynamicResource SidebarBackground}">
+
+    <DockPanel>
+        <!-- Bottom: User profile -->
+        <Border DockPanel.Dock="Bottom"
+                Padding="16,12"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource SurfaceBorder}">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <Border Width="32" Height="32" CornerRadius="16"
+                        Background="{DynamicResource BrandPrimary}">
+                    <TextBlock Text="J" FontSize="14" FontWeight="SemiBold"
+                               Foreground="White"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="john@dev.io" FontSize="12"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock Text="Personal workspace" FontSize="10"
+                               Foreground="{DynamicResource TextSecondary}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Main sidebar content -->
+        <ScrollViewer>
+            <StackPanel Margin="12">
+                <!-- Logo -->
+                <StackPanel Orientation="Horizontal" Spacing="10" Margin="4,0,0,16">
+                    <Border Width="28" Height="28" CornerRadius="6"
+                            Background="{DynamicResource BrandPrimary}">
+                        <TextBlock Text="⚡" FontSize="14"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="Sovrant" FontSize="18" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
+                <!-- New Chat button -->
+                <Button Content="＋ New Chat"
+                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).NewChatCommand}"
+                        HorizontalAlignment="Stretch"
+                        Padding="12,8"
+                        Margin="0,0,0,12"
+                        Background="{DynamicResource BrandPrimary}"
+                        Foreground="White"
+                        CornerRadius="8"
+                        FontWeight="SemiBold" />
+
+                <!-- Search -->
+                <TextBox Watermark="Search conversations..."
+                         Margin="0,0,0,12"
+                         CornerRadius="8"
+                         Padding="10,8" />
+
+                <!-- Model/Provider -->
+                <Border Padding="10,8" Margin="0,0,0,12"
+                        CornerRadius="8"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Ellipse Width="8" Height="8"
+                                 Fill="{DynamicResource StatusPass}" />
+                        <TextBlock Text="{Binding CurrentModel}" FontWeight="SemiBold"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock Text="{Binding CurrentProvider}" FontSize="12"
+                                   Foreground="{DynamicResource TextSecondary}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Connection status -->
+                <StackPanel Orientation="Horizontal" Spacing="6" Margin="4,0,0,16">
+                    <Ellipse Width="6" Height="6"
+                             Fill="{DynamicResource StatusWarn}" />
+                    <TextBlock Text="{Binding ConnectionStatus}" FontSize="11"
+                               Foreground="{DynamicResource TextSecondary}" />
+                </StackPanel>
+
+                <!-- Navigation -->
+                <TextBlock Text="" FontSize="1" Margin="0,0,0,4" />
+
+                <Button Content="💬  Chat"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="Chat"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Padding="12,8"
+                        Margin="0,2"
+                        CornerRadius="8" />
+
+                <Button Content="⚙  Settings"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="Settings"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Padding="12,8"
+                        Margin="0,2"
+                        CornerRadius="8" />
+
+                <Button Content="🔧  Diagnostics"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="Diagnostics"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Padding="12,8"
+                        Margin="0,2"
+                        CornerRadius="8"
+                        IsEnabled="False" />
+
+                <!-- Future Features section -->
+                <TextBlock Text="FUTURE FEATURES" FontSize="10" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondary}"
+                           Margin="4,20,0,8" />
+
+                <Button Content="📁  Projects" IsEnabled="False"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
+                <Button Content="🏢  Workspaces" IsEnabled="False"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
+                <Button Content="📄  Artifacts" IsEnabled="False"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
+                <Button Content="🤖  Agents" IsEnabled="False"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
+                <Button Content="⚡  Automations" IsEnabled="False"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
+                <Button Content="👥  Multi-Agent" IsEnabled="False"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
+                <Button Content="🔌  Integrations" IsEnabled="False"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
+
+                <!-- Recent conversations -->
+                <TextBlock Text="RECENT" FontSize="10" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondary}"
+                           Margin="4,20,0,8" />
+
+                <TextBlock Text="No recent conversations"
+                           FontSize="11"
+                           Foreground="{DynamicResource TextSecondary}"
+                           Margin="4,0" />
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

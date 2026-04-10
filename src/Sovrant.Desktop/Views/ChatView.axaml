@@ -1,0 +1,107 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:conv="using:Sovrant.Desktop.Converters"
+             x:Class="Sovrant.Desktop.Views.ChatView"
+             x:DataType="vm:ChatViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <UserControl.Resources>
+        <conv:BoolToAlignmentConverter x:Key="AlignConv" />
+        <conv:BoolToBrushConverter x:Key="MsgBgConv" />
+    </UserControl.Resources>
+
+    <DockPanel>
+        <!-- Bottom: Input bar -->
+        <Border DockPanel.Dock="Bottom"
+                Padding="24,12"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource SurfaceBorder}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right"
+                        Content="Send"
+                        Command="{Binding SendCommand}"
+                        Padding="16,10"
+                        Margin="8,0,0,0"
+                        Background="{DynamicResource BrandPrimary}"
+                        Foreground="White"
+                        CornerRadius="8"
+                        FontWeight="SemiBold"
+                        VerticalAlignment="Bottom" />
+                <TextBox Text="{Binding InputText}"
+                         Watermark="Type a message..."
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         MinHeight="40"
+                         MaxHeight="120"
+                         Padding="12,10"
+                         CornerRadius="8"
+                         Background="{DynamicResource InputBackground}"
+                         BorderBrush="{DynamicResource InputBorder}" />
+            </DockPanel>
+        </Border>
+
+        <!-- Messages area -->
+        <ScrollViewer x:Name="MessageScroller"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Messages}"
+                          Margin="24,16">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:MessageViewModel">
+                        <Border Margin="0,4"
+                                Padding="14,10"
+                                CornerRadius="12"
+                                MaxWidth="720"
+                                HorizontalAlignment="{Binding IsUser, Converter={StaticResource AlignConv}}"
+                                Background="{Binding IsUser, Converter={StaticResource MsgBgConv}}">
+                            <StackPanel>
+                                <!-- Message text -->
+                                <TextBlock Text="{Binding Text}"
+                                           TextWrapping="Wrap"
+                                           FontSize="14"
+                                           Foreground="{DynamicResource TextPrimary}" />
+
+                                <!-- Tool uses -->
+                                <ItemsControl ItemsSource="{Binding ToolUses}"
+                                              Margin="0,6,0,0"
+                                              IsVisible="{Binding ToolUses.Count}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="vm:ToolUseViewModel">
+                                            <Border Margin="0,4"
+                                                    Padding="10,8"
+                                                    CornerRadius="8"
+                                                    Background="{DynamicResource ToolUseBackground}"
+                                                    BorderBrush="{DynamicResource ToolUseBorder}"
+                                                    BorderThickness="1">
+                                                <StackPanel Spacing="4">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <TextBlock Text="🔧" FontSize="12" />
+                                                        <TextBlock Text="{Binding ToolName}"
+                                                                   FontWeight="SemiBold"
+                                                                   FontSize="12"
+                                                                   Foreground="{DynamicResource TextPrimary}" />
+                                                        <TextBlock Text="{Binding Status}"
+                                                                   FontSize="11"
+                                                                   Foreground="{DynamicResource TextSecondary}" />
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding Result}"
+                                                               TextWrapping="Wrap"
+                                                               FontSize="11"
+                                                               FontFamily="Consolas,Menlo,monospace"
+                                                               Foreground="{DynamicResource TextSecondary}"
+                                                               IsVisible="{Binding Result, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                               MaxLines="10" />
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>
