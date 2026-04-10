@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
+using Sovrant.Runtime.Artifacts;
 
 namespace Sovrant.Agents.Shared;
 
@@ -19,21 +20,97 @@ public sealed partial class WorkspaceContext
     /// </summary>
     public string WorkingDirectory { get; init; } = Directory.GetCurrentDirectory();
 
+    // ── Scoped artifact support (Phase 53) ─────────────────────────────
+
+    /// <summary>
+    /// The artifact store used for writing run-scoped artifacts.
+    /// When set, <see cref="GetOrCreateArtifactsDirectory"/> routes through
+    /// the store instead of the legacy flat layout.
+    /// </summary>
+    public IArtifactStore? ArtifactStore { get; init; }
+
+    /// <summary>
+    /// The artifact scope for the current run. Used together with
+    /// <see cref="ArtifactStore"/> to resolve the scoped artifact directory.
+    /// </summary>
+    public ArtifactScope? ArtifactScope { get; init; }
+
+    /// <summary>
+    /// The current run's artifact handle, set after
+    /// <see cref="IArtifactStore.CreateRunScopeAsync"/> is called.
+    /// </summary>
+    public ArtifactHandle? ArtifactHandle { get; set; }
+
+    // ── Legacy artifact support (deprecated) ───────────────────────────
+
     /// <summary>
     /// Root directory for agent-generated artifacts. Defaults to <c>artifacts/</c>
     /// under the <see cref="WorkingDirectory"/>.
     /// </summary>
+    /// <remarks>
+    /// <b>Deprecated.</b> Use <see cref="ArtifactStore"/> and <see cref="ArtifactScope"/>
+    /// instead. This property is retained for backward compatibility during the
+    /// transition period.
+    /// </remarks>
+    [Obsolete("Use ArtifactStore + ArtifactScope instead. Will be removed in a future release.")]
     public string ArtifactsRoot => Path.Combine(WorkingDirectory, "artifacts");
 
     /// <summary>
     /// Creates (if needed) and returns an artifacts subdirectory for the given prompt,
     /// using a filesystem-safe slug derived from the first ~60 chars of the prompt.
     /// </summary>
+    /// <remarks>
+    /// <b>Deprecated.</b> When <see cref="ArtifactStore"/> and <see cref="ArtifactScope"/>
+    /// are set, this method delegates to the scoped store. Otherwise it falls back to
+    /// the legacy flat layout under <c>{cwd}/artifacts/</c>.
+    /// </remarks>
+    [Obsolete("Use ArtifactStore + ArtifactScope instead. Will be removed in a future release.")]
     public string GetOrCreateArtifactsDirectory(string prompt)
     {
         ArgumentNullException.ThrowIfNull(prompt);
+
+        // If scoped store is available, use it
+        if (ArtifactStore is not null && ArtifactScope is not null)
+        {
+            // Ensure we have a handle
+            if (ArtifactHandle is null)
+            {
+                ArtifactHandle = ArtifactStore
+                    .CreateRunScopeAsync(ArtifactScope)
+                    .GetAwaiter().GetResult();
+            }
+
+            return ArtifactHandle.ResolvedRoot;
+        }
+
+        // Legacy fallback
+#pragma warning disable CS0618 // Obsolete member — intentional fallback
         var slug = Slugify(prompt);
         var dir = Path.Combine(ArtifactsRoot, slug);
+#pragma warning restore CS0618
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    /// <summary>
+    /// Returns the resolved artifact directory for the current run scope.
+    /// If no scoped store is configured, falls back to the legacy artifacts root.
+    /// </summary>
+    public string GetArtifactsDirectory()
+    {
+        if (ArtifactHandle is not null)
+            return ArtifactHandle.ResolvedRoot;
+
+        if (ArtifactStore is not null && ArtifactScope is not null)
+        {
+            ArtifactHandle = ArtifactStore
+                .CreateRunScopeAsync(ArtifactScope)
+                .GetAwaiter().GetResult();
+            return ArtifactHandle.ResolvedRoot;
+        }
+
+        // Legacy fallback — return the flat artifacts root
+        var dir = Path.Combine(WorkingDirectory, "artifacts");
         Directory.CreateDirectory(dir);
         return dir;
     }

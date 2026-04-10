@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sovrant.Api;
+using Sovrant.Runtime.Artifacts;
 using Sovrant.Runtime.Caching;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Conversation;
@@ -190,6 +191,18 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAgentRunStore>(sp =>
             new SqliteAgentRunStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
+        // Artifact store (Phase 53) — tenant-scoped artifact storage.
+        // Backend is selected via SOVRANT_ARTIFACTS_BACKEND (default: local).
+        services.AddSingleton<IArtifactStore>(sp =>
+        {
+            var backend = Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_BACKEND") ?? "local";
+            return string.Equals(backend, "local", StringComparison.OrdinalIgnoreCase)
+                ? new LocalArtifactStore(sp.GetRequiredService<ILogger<LocalArtifactStore>>())
+                : throw new InvalidOperationException(
+                    $"Unknown artifact backend: '{backend}'. Supported: local");
+        });
+        services.AddSingleton<LegacyArtifactImporter>();
+
         // Eval framework (Phase 27)
         services.AddSingleton<IEvalResultStore, EvalResultStore>();
         services.AddSingleton<IEvalRunner, EvalRunner>();
@@ -224,6 +237,10 @@ public static class ServiceCollectionExtensions
         // Initialize SQLite storage (runs migrations).
         var storage = services.GetRequiredService<IStorageProvider>();
         await storage.InitializeAsync(ct).ConfigureAwait(false);
+
+        // Run one-shot legacy artifact migration (Phase 53).
+        var importer = services.GetRequiredService<LegacyArtifactImporter>();
+        await importer.ImportIfNeededAsync(ct).ConfigureAwait(false);
 
         var config = services.GetRequiredService<SovrantConfig>();
         if (config.McpServers.Count == 0)

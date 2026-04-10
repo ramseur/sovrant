@@ -186,6 +186,7 @@ SwarmRoutes.Map(app);
 EngineRoutes.Map(app);
 MissionRoutes.Map(app);
 TeamRoutes.Map(app);
+ArtifactRoutes.Map(app);
 ToolRegistryRoutes.Map(app);
 SkillRegistryRoutes.Map(app);
 AgentTemplateRoutes.Map(app);

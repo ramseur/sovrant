@@ -109,8 +109,9 @@ public sealed partial class SwarmOrchestrator
         var tokenCounter = new TokenCounter();
         var swarmContext = executionContext ?? SwarmExecutionContext.Empty;
 
-        // Create an artifacts subdirectory for this swarm's outputs.
-        var artifactsDir = _workspace.GetOrCreateArtifactsDirectory(plan.OriginalPrompt);
+        // Resolve the artifact directory for this swarm's outputs.
+        // Phase 53: uses scoped store when available, falls back to legacy layout.
+        var artifactsDir = _workspace.GetArtifactsDirectory();
 
         var result = new SwarmResult
         {

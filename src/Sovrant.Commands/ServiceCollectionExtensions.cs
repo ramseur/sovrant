@@ -43,6 +43,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISlashCommand, McpCommand>();
         services.AddSingleton<ISlashCommand, TasksCommand>();
         services.AddSingleton<ISlashCommand, MissionCommand>();
+        services.AddSingleton<ISlashCommand, ArtifactsCommand>();
 
         // HelpCommand injects IEnumerable<ISlashCommand> directly — must come after all other commands
         services.AddSingleton<ISlashCommand, HelpCommand>();

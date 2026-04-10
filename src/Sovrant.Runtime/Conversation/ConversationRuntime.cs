@@ -610,11 +610,15 @@ public sealed partial class ConversationRuntime : IConversationRuntime
               .Append("You MAY call ExitPlanMode to leave plan mode when instructed by the user.");
         }
 
-        // Artifacts directory guidance
-        var artifactsDir = Path.Combine(Directory.GetCurrentDirectory(), "artifacts");
+        // Artifacts directory guidance — use scoped root when available (Phase 53),
+        // otherwise fall back to the flat {cwd}/artifacts/ layout.
+        var artifactsRoot = Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT")
+            ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".sovrant", "artifacts");
         sb.Append("\n\nWhen creating files or documents that are not modifications to existing source code, ")
-          .Append("place them in the artifacts directory: ").Append(artifactsDir)
-          .Append(". Create a descriptive subfolder for each distinct task or project. ")
+          .Append("place them in the artifacts directory: ").Append(artifactsRoot)
+          .Append(". Artifacts are organized by user, workspace, project, and run ID. ")
           .Append("This keeps generated outputs organized and separate from the source code.");
 
         // Global memory: ~/.sovrant/memory.md

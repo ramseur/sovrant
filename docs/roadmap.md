@@ -84,13 +84,13 @@ The engine is fully functional for individual and small-team use:
 
 ### Still pending
 
-> **Last audited:** 2026-04-10. Phases 1–37.5 and Phase 51 are complete (see ✅ markers in the section headers below). Everything in this table is *not yet shipped*; verified by checking the codebase for the key markers of each phase.
+> **Last audited:** 2026-04-10. Phases 1–37.5, 51, 52, and 53 are complete (see ✅ markers in the section headers below). Everything in this table is *not yet shipped*; verified by checking the codebase for the key markers of each phase.
 
 | Gap | Phase | Priority |
 |---|---|---|
 | ~~Sophisticated runtime + autonomous mission loop~~ — **complete** (engine layer steps A–I, mission layer with store/planner/executor/gate/journal/routes/CLI/tool/export/parallel fan-out; only MissionGuard blocked on Phase 55 and outbox on Phase 50) | Phase 51 ✅ | Complete |
-| **Unified agent orchestration: collapse Team and Swarm into one DB-backed abstraction with three creation modes (one team / multiple teams / engine-decided)** | **Phase 52** | **Next** |
-| **Scoped artifact storage (user / workspace / project, disk now → cloud later)** | **Phase 53** | **Next** |
+| ~~Unified agent orchestration~~ — **complete** (V012 migration: teams/team_members/agent_runs tables + swarm_events extended; SqliteTeamRegistry replaces InMemoryTeamRegistry; AgentOrchestrator unifies SwarmOrchestrator + TeamDelegateTool with three modes and opt-in flags; EnsembleSelector, TeamRunTool, TeamPublishTool; /v1/teams CRUD + /v1/runs routes; /team CLI with full CRUD; system prompt orchestration strategy: solo→sub-agent→team→swarm→mission; 549 runtime + 146 server + 185 agent tests) | Phase 52 ✅ | Complete |
+| ~~Scoped artifact storage~~ — **complete** (IArtifactStore abstraction with ArtifactScope/ArtifactHandle/ArtifactEntry; LocalArtifactStore with path-traversal guards and workspace-first layout {workspace}/{project}/{run}/ — all workspace members share artifacts, user tracked in manifest only; WorkspaceContext refactored with deprecated shim; ConversationRuntime + SwarmOrchestrator updated for scoped paths; /v1/artifacts routes (list/download/delete); /artifacts CLI command (ls/open/rm); LegacyArtifactImporter one-shot migration; ArtifactManifest per-run metadata; 574 runtime + 149 server + 185 agent + 56 command tests) | Phase 53 ✅ | Complete |
 | **Gemma 4 support (OpenRouter primary, Ollama local-only) + capability-detection registry for models with incomplete tool-use metadata** | **Phase 54** | **Next** |
 | Per-user token auth & database hardening | Phase 38 | Medium |
 | Cost tracking, token budgets & dashboard (pricing moved to Phase 55) | Phase 39 (partially superseded) | Deferred |
@@ -3725,7 +3725,7 @@ I. Wire `LlmExecutor` into `SmartRouter` so per-step model tier actually changes
 
 ---
 
-## Phase 52 — Unified Agent Orchestration: One Team-or-Swarm Abstraction in the Database
+## Phase 52 ✅ — Unified Agent Orchestration: One Team-or-Swarm Abstraction in the Database
 
 **Depends on:** Phase 19+20 (multi-agent teams), Phase 22 (agent templates), Phase 29 (Swarm orchestrator), Phase 32 (persistence), Phase 35 (workspaces), Phase 36 (projects), Phase 37 (users), **Phase 37.5 (swarm sessions in the DB — the prerequisite that makes this phase possible)**
 
@@ -3914,7 +3914,7 @@ CREATE INDEX idx_swarm_events_run_id ON swarm_events(run_id);
 
 ---
 
-## Phase 53 — Scoped Artifact Storage (User / Workspace / Project, Disk Now → Cloud Later)
+## Phase 53 — Scoped Artifact Storage (User / Workspace / Project, Disk Now → Cloud Later) ✅
 
 **Depends on:** Phase 35 (workspaces), Phase 36 (projects), Phase 37 (users)
 **Relates to:** Phase 41 (team agent artifact system — this phase is the storage substrate it will sit on), Phase 44 (desktop app — needs per-user scoping), Phase 47 (workspace export — needs a tenant-scoped artifact tree to export)
@@ -3934,18 +3934,18 @@ CREATE INDEX idx_swarm_events_run_id ON swarm_events(run_id);
 
 ```
 {ArtifactsRoot}/
-  {user_id}/
-    {workspace_id}/
-      {project_id}/
-        {run_id}/
-          <files written by the agent for this run>
-          _manifest.json      ← run metadata (prompt, agent, timestamps, file list)
+  {workspace_id}/
+    {project_id}/
+      {run_id}/
+        <files written by the agent for this run>
+        _manifest.json      ← run metadata (user, prompt, agent, timestamps, file list)
 ```
 
 - `ArtifactsRoot` defaults to `~/.sovrant/artifacts/` (not `{cwd}/artifacts/`) so outputs are not mixed into the user's source tree. Overridable via `SOVRANT_ARTIFACTS_ROOT`.
+- **Workspace-first scoping**: the workspace is the top-level partition. All users in the same workspace share the same artifact tree. The initiating user is recorded in `_manifest.json` for attribution, not in the directory path. This means artifacts belong to workspaces/projects — a user only has "personal" artifacts through their personal workspace.
 - `run_id` is the session/run id (already tracked in `agent_runs` / sessions), **not** a prompt slug. Reruns get fresh directories; a prompt-derived slug is kept as a human-readable symlink/alias inside `_manifest.json`.
-- Unknown scopes fall back to sentinel segments: `default-user`, `personal` (the seeded personal workspace from Phase 35), `default-project`. Nothing breaks on a fresh install with no users configured.
-- Single-user CLI mode still works — it just resolves to `default-user/personal/default-project/{run_id}/`.
+- Unknown scopes fall back to sentinel segments: `personal` (the seeded personal workspace from Phase 35), `default-project`. Nothing breaks on a fresh install with no workspaces configured.
+- Single-user CLI mode still works — it just resolves to `personal/default-project/{run_id}/`.
 
 ### `IArtifactStore` abstraction
 
