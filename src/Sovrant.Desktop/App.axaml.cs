@@ -54,6 +54,9 @@ public partial class App : Application
         services.AddSingleton<SidebarViewModel>();
         services.AddTransient<ChatViewModel>();
         services.AddTransient<SettingsViewModel>();
+        services.AddTransient<DiagnosticsViewModel>();
+        services.AddTransient<IntegrationsViewModel>();
+        services.AddTransient<ArtifactsViewModel>();
 
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;

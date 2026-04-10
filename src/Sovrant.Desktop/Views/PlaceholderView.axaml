@@ -1,0 +1,37 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.PlaceholderView"
+             x:DataType="vm:PlaceholderViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <StackPanel HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="16">
+        <TextBlock Text="{Binding Icon}"
+                   FontSize="48"
+                   HorizontalAlignment="Center" />
+
+        <TextBlock Text="{Binding Title}"
+                   FontSize="28" FontWeight="Bold"
+                   Foreground="{DynamicResource TextPrimary}"
+                   HorizontalAlignment="Center" />
+
+        <Border Padding="12,5"
+                CornerRadius="12"
+                Background="{DynamicResource BrandPrimary}"
+                HorizontalAlignment="Center">
+            <TextBlock Text="COMING SOON"
+                       FontSize="12" FontWeight="Bold"
+                       Foreground="White" />
+        </Border>
+
+        <TextBlock Text="{Binding Description}"
+                   FontSize="14"
+                   Foreground="{DynamicResource TextSecondary}"
+                   TextWrapping="Wrap"
+                   MaxWidth="400"
+                   TextAlignment="Center"
+                   HorizontalAlignment="Center" />
+    </StackPanel>
+</UserControl>

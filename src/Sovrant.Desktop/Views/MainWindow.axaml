@@ -17,6 +17,18 @@
         <DataTemplate DataType="vm:SettingsViewModel">
             <views:SettingsView />
         </DataTemplate>
+        <DataTemplate DataType="vm:DiagnosticsViewModel">
+            <views:DiagnosticsView />
+        </DataTemplate>
+        <DataTemplate DataType="vm:IntegrationsViewModel">
+            <views:IntegrationsView />
+        </DataTemplate>
+        <DataTemplate DataType="vm:ArtifactsViewModel">
+            <views:ArtifactsView />
+        </DataTemplate>
+        <DataTemplate DataType="vm:PlaceholderViewModel">
+            <views:PlaceholderView />
+        </DataTemplate>
     </Window.DataTemplates>
 
     <DockPanel>

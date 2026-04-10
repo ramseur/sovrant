@@ -114,33 +114,54 @@
                         HorizontalContentAlignment="Left"
                         Padding="12,8"
                         Margin="0,2"
-                        CornerRadius="8"
-                        IsEnabled="False" />
+                        CornerRadius="8" />
+
+                <Button Content="🔌  Integrations"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="Integrations"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Padding="12,8"
+                        Margin="0,2"
+                        CornerRadius="8" />
+
+                <Button Content="📄  Artifacts"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="Artifacts"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Padding="12,8"
+                        Margin="0,2"
+                        CornerRadius="8" />
 
                 <!-- Future Features section -->
                 <TextBlock Text="FUTURE FEATURES" FontSize="10" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextSecondary}"
                            Margin="4,20,0,8" />
 
-                <Button Content="📁  Projects" IsEnabled="False"
+                <Button Content="📁  Projects"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="Projects"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
-                <Button Content="🏢  Workspaces" IsEnabled="False"
+                <Button Content="🏢  Workspaces"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="Workspaces"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
-                <Button Content="📄  Artifacts" IsEnabled="False"
+                <Button Content="🤖  Agents"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="Agents"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
-                <Button Content="🤖  Agents" IsEnabled="False"
+                <Button Content="⚡  Automations"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="Automations"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
-                <Button Content="⚡  Automations" IsEnabled="False"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
-                <Button Content="👥  Multi-Agent" IsEnabled="False"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
-                <Button Content="🔌  Integrations" IsEnabled="False"
+                <Button Content="👥  Multi-Agent"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="MultiAgent"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
 

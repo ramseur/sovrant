@@ -1,0 +1,79 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.IntegrationsView"
+             x:DataType="vm:IntegrationsViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <ScrollViewer Padding="32,24">
+        <StackPanel MaxWidth="800" Spacing="16">
+            <!-- Header -->
+            <TextBlock Text="Integrations" FontSize="24" FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimary}" />
+            <TextBlock Text="Connected MCP servers and their tools"
+                       FontSize="13"
+                       Foreground="{DynamicResource TextSecondary}"
+                       Margin="0,0,0,8" />
+
+            <!-- MCP server list -->
+            <ItemsControl ItemsSource="{Binding Servers}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:McpServerItem">
+                        <Border Margin="0,4"
+                                Padding="16,14"
+                                CornerRadius="10"
+                                Background="{DynamicResource SurfaceCard}"
+                                BorderBrush="{DynamicResource SurfaceBorder}"
+                                BorderThickness="1">
+                            <StackPanel Spacing="6">
+                                <DockPanel>
+                                    <!-- OAuth badge -->
+                                    <Border DockPanel.Dock="Right"
+                                            IsVisible="{Binding HasOAuth}"
+                                            Padding="8,3"
+                                            CornerRadius="10"
+                                            Background="{DynamicResource BrandPrimary}">
+                                        <TextBlock Text="OAuth" FontSize="10" FontWeight="SemiBold"
+                                                   Foreground="White" />
+                                    </Border>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="🔌" FontSize="16"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontSize="15" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </DockPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="16">
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <TextBlock Text="Command:" FontSize="11"
+                                                   Foreground="{DynamicResource TextMuted}" />
+                                        <TextBlock Text="{Binding Command}" FontSize="11"
+                                                   FontFamily="Consolas,Menlo,monospace"
+                                                   Foreground="{DynamicResource TextSecondary}" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <TextBlock Text="Args:" FontSize="11"
+                                                   Foreground="{DynamicResource TextMuted}" />
+                                        <TextBlock Text="{Binding ArgsSummary}" FontSize="11"
+                                                   FontFamily="Consolas,Menlo,monospace"
+                                                   Foreground="{DynamicResource TextSecondary}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Empty state -->
+            <TextBlock Text="No MCP servers configured. Add servers in ~/.sovrant/settings.json"
+                       FontSize="13"
+                       Foreground="{DynamicResource TextSecondary}"
+                       IsVisible="{Binding !Servers.Count}"
+                       Margin="0,20"
+                       HorizontalAlignment="Center" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
