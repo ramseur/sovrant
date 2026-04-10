@@ -182,7 +182,17 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             string? routingError = null;
             try
             {
-                provider = await _router.RouteAsync(request, ct).ConfigureAwait(false);
+                if (_router.IntentRoutingEnabled)
+                {
+                    var decision = await _router.RouteWithIntentAsync(request, ct).ConfigureAwait(false);
+                    provider = decision.Provider;
+                    if (decision.ResolvedModel is not null)
+                        request = request with { Model = decision.ResolvedModel };
+                }
+                else
+                {
+                    provider = await _router.RouteAsync(request, ct).ConfigureAwait(false);
+                }
             }
             catch (OperationCanceledException) { throw; }
             catch (InvalidOperationException ex) { routingError = ex.Message; }

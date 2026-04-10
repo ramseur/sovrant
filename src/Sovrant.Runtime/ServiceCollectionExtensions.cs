@@ -251,6 +251,10 @@ public static class ServiceCollectionExtensions
         var metadataFetcher = services.GetRequiredService<Sovrant.Api.Capabilities.LiveModelMetadataFetcher>();
         await metadataFetcher.FetchAsync(ct).ConfigureAwait(false);
 
+        // Rebuild tier assignments now that live metadata is available (Phase 48).
+        var tierResolver = services.GetService<Sovrant.Api.Routing.IModelTierResolver>();
+        tierResolver?.Rebuild();
+
         // Run one-shot legacy artifact migration (Phase 53).
         var importer = services.GetRequiredService<LegacyArtifactImporter>();
         await importer.ImportIfNeededAsync(ct).ConfigureAwait(false);
