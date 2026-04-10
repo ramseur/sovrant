@@ -30,8 +30,9 @@
                         VerticalAlignment="Bottom" />
                 <TextBox Text="{Binding InputText}"
                          Watermark="Type a message..."
-                         AcceptsReturn="True"
+                         AcceptsReturn="False"
                          TextWrapping="Wrap"
+                         KeyDown="OnInputKeyDown"
                          MinHeight="40"
                          MaxHeight="120"
                          Padding="12,10"
