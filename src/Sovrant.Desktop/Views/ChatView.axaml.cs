@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Sovrant.Desktop.ViewModels;
@@ -9,6 +10,34 @@ public partial class ChatView : UserControl
     public ChatView()
     {
         InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    private void OnDataContextChanged(object? sender, EventArgs e)
+    {
+        if (DataContext is ChatViewModel vm)
+        {
+            vm.Messages.CollectionChanged += OnMessagesChanged;
+            // Also scroll when text is appended to the last message.
+            vm.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(ChatViewModel.IsSending))
+                    ScrollToBottom();
+            };
+        }
+    }
+
+    private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        ScrollToBottom();
+    }
+
+    private void ScrollToBottom()
+    {
+        if (MessageScroller is not null)
+        {
+            MessageScroller.ScrollToEnd();
+        }
     }
 
     private void OnInputKeyDown(object? sender, KeyEventArgs e)

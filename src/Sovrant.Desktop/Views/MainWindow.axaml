@@ -31,14 +31,19 @@
         </DataTemplate>
     </Window.DataTemplates>
 
-    <DockPanel>
-        <!-- Sidebar -->
-        <views:SidebarView DockPanel.Dock="Left"
-                           DataContext="{Binding Sidebar}"
-                           Width="240" />
+    <Panel>
+        <DockPanel>
+            <!-- Sidebar -->
+            <views:SidebarView DockPanel.Dock="Left"
+                               DataContext="{Binding Sidebar}"
+                               Width="240" />
 
-        <!-- Main content -->
-        <ContentControl Content="{Binding CurrentPage}"
-                        Margin="0" />
-    </DockPanel>
+            <!-- Main content -->
+            <ContentControl Content="{Binding CurrentPage}"
+                            Margin="0" />
+        </DockPanel>
+
+        <!-- Command palette overlay -->
+        <views:CommandPaletteOverlay DataContext="{Binding CommandPalette}" />
+    </Panel>
 </Window>

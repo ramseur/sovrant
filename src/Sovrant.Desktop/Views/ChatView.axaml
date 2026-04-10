@@ -1,15 +1,9 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
-             xmlns:conv="using:Sovrant.Desktop.Converters"
              x:Class="Sovrant.Desktop.Views.ChatView"
              x:DataType="vm:ChatViewModel"
              Background="{DynamicResource SurfaceBackground}">
-
-    <UserControl.Resources>
-        <conv:BoolToAlignmentConverter x:Key="AlignConv" />
-        <conv:BoolToBrushConverter x:Key="MsgBgConv" />
-    </UserControl.Resources>
 
     <DockPanel>
         <!-- Bottom: Input bar -->
@@ -42,67 +36,208 @@
             </DockPanel>
         </Border>
 
-        <!-- Messages area -->
-        <ScrollViewer x:Name="MessageScroller"
-                      VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled">
-            <ItemsControl ItemsSource="{Binding Messages}"
-                          Margin="24,16">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="vm:MessageViewModel">
-                        <Border Margin="0,4"
-                                Padding="14,10"
-                                CornerRadius="12"
-                                MaxWidth="720"
-                                HorizontalAlignment="{Binding IsUser, Converter={StaticResource AlignConv}}"
-                                Background="{Binding IsUser, Converter={StaticResource MsgBgConv}}">
-                            <StackPanel>
-                                <!-- Message text -->
-                                <TextBlock Text="{Binding Text}"
-                                           TextWrapping="Wrap"
-                                           FontSize="14"
-                                           Foreground="{DynamicResource TextPrimary}" />
+        <!-- Content area: Grid allows hero to truly center while ScrollViewer fills -->
+        <Grid>
+            <!-- Empty hero state — centered in the full remaining space -->
+            <StackPanel IsVisible="{Binding !HasMessages}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="16"
+                        MaxWidth="600">
+                <!-- Logo icon -->
+                <Border Width="56" Height="56" CornerRadius="14"
+                        Background="{DynamicResource BrandPrimary}"
+                        HorizontalAlignment="Center">
+                    <TextBlock Text="⚡" FontSize="24"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
 
-                                <!-- Tool uses -->
-                                <ItemsControl ItemsSource="{Binding ToolUses}"
-                                              Margin="0,6,0,0"
-                                              IsVisible="{Binding ToolUses.Count}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="vm:ToolUseViewModel">
-                                            <Border Margin="0,4"
-                                                    Padding="10,8"
-                                                    CornerRadius="8"
-                                                    Background="{DynamicResource ToolUseBackground}"
-                                                    BorderBrush="{DynamicResource ToolUseBorder}"
-                                                    BorderThickness="1">
-                                                <StackPanel Spacing="4">
-                                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                                        <TextBlock Text="🔧" FontSize="12" />
-                                                        <TextBlock Text="{Binding ToolName}"
-                                                                   FontWeight="SemiBold"
-                                                                   FontSize="12"
-                                                                   Foreground="{DynamicResource TextPrimary}" />
-                                                        <TextBlock Text="{Binding Status}"
-                                                                   FontSize="11"
-                                                                   Foreground="{DynamicResource TextSecondary}" />
-                                                    </StackPanel>
-                                                    <TextBlock Text="{Binding Result}"
-                                                               TextWrapping="Wrap"
-                                                               FontSize="11"
-                                                               FontFamily="Consolas,Menlo,monospace"
-                                                               Foreground="{DynamicResource TextSecondary}"
-                                                               IsVisible="{Binding Result, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                                               MaxLines="10" />
-                                                </StackPanel>
+                <TextBlock Text="What are you working on?"
+                           FontSize="24" FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimary}"
+                           HorizontalAlignment="Center" />
+                <TextBlock Text="Sovrant can read your files, run shell commands, and write code."
+                           FontSize="14"
+                           Foreground="{DynamicResource TextSecondary}"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,8" />
+
+                <!-- Suggestion cards — 2 columns -->
+                <UniformGrid Columns="2" HorizontalAlignment="Center">
+                    <Button Margin="4" Padding="14,10" CornerRadius="10"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                            Command="{Binding SuggestionCommand}" CommandParameter="Debug a failing test">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="🐛" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Debug a failing test" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Margin="4" Padding="14,10" CornerRadius="10"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                            Command="{Binding SuggestionCommand}" CommandParameter="Refactor for readability">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="✨" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Refactor for readability" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Margin="4" Padding="14,10" CornerRadius="10"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                            Command="{Binding SuggestionCommand}" CommandParameter="Write unit tests">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="✏️" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Write unit tests" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Margin="4" Padding="14,10" CornerRadius="10"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                            Command="{Binding SuggestionCommand}" CommandParameter="Review my diff">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="🔍" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Review my diff" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Margin="4" Padding="14,10" CornerRadius="10"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                            Command="{Binding SuggestionCommand}" CommandParameter="Set up an Express route">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="⚙️" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Set up an Express route" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Margin="4" Padding="14,10" CornerRadius="10"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                            Command="{Binding SuggestionCommand}" CommandParameter="Explain this code">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="💡" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Explain this code" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
+                    </Button>
+                </UniformGrid>
+            </StackPanel>
+
+            <!-- Messages area -->
+            <ScrollViewer x:Name="MessageScroller"
+                          IsVisible="{Binding HasMessages}"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding Messages}"
+                              Margin="32,16"
+                              MaxWidth="800"
+                              HorizontalAlignment="Left">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:MessageViewModel">
+                            <Border Margin="0,8" Padding="0">
+                                <StackPanel>
+                                    <!-- === User message layout === -->
+                                    <StackPanel IsVisible="{Binding IsUser}" Spacing="6">
+                                        <!-- Avatar + "You" label row -->
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Border Width="32" Height="32" CornerRadius="16"
+                                                    Background="{DynamicResource BrandPrimary}">
+                                                <TextBlock Text="J" FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="White"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center" />
                                             </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+                                            <TextBlock Text="You" FontSize="14" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextPrimary}"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <!-- Message text (no card background) -->
+                                        <TextBlock Text="{Binding Text}"
+                                                   TextWrapping="Wrap"
+                                                   FontSize="14"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   Margin="42,0,0,0" />
+                                    </StackPanel>
+
+                                    <!-- === Sovrant (assistant) message layout === -->
+                                    <Border IsVisible="{Binding !IsUser}"
+                                            Padding="14,12"
+                                            CornerRadius="12"
+                                            Background="{DynamicResource AssistantMessageBackground}">
+                                        <StackPanel Spacing="6">
+                                            <!-- Icon + "Sovrant" label row -->
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Border Width="32" Height="32" CornerRadius="8"
+                                                        Background="{DynamicResource BrandPrimary}">
+                                                    <TextBlock Text="⚡" FontSize="14"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center" />
+                                                </Border>
+                                                <TextBlock Text="Sovrant" FontSize="14" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextPrimary}"
+                                                           VerticalAlignment="Center" />
+                                            </StackPanel>
+                                            <!-- Message text -->
+                                            <TextBlock Text="{Binding Text}"
+                                                       TextWrapping="Wrap"
+                                                       FontSize="14"
+                                                       Foreground="{DynamicResource TextPrimary}"
+                                                       Margin="42,0,0,0" />
+
+                                            <!-- Tool uses -->
+                                            <ItemsControl ItemsSource="{Binding ToolUses}"
+                                                          Margin="42,2,0,0"
+                                                          IsVisible="{Binding ToolUses.Count}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="vm:ToolUseViewModel">
+                                                        <Border Margin="0,4"
+                                                                Padding="10,8"
+                                                                CornerRadius="8"
+                                                                Background="{DynamicResource ToolUseBackground}"
+                                                                BorderBrush="{DynamicResource ToolUseBorder}"
+                                                                BorderThickness="1">
+                                                            <StackPanel Spacing="4">
+                                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                    <TextBlock Text="🔧" FontSize="12" />
+                                                                    <TextBlock Text="{Binding ToolName}"
+                                                                               FontWeight="SemiBold"
+                                                                               FontSize="12"
+                                                                               Foreground="{DynamicResource TextPrimary}" />
+                                                                    <TextBlock Text="{Binding Status}"
+                                                                               FontSize="11"
+                                                                               Foreground="{DynamicResource TextSecondary}" />
+                                                                </StackPanel>
+                                                                <TextBlock Text="{Binding Result}"
+                                                                           TextWrapping="Wrap"
+                                                                           FontSize="11"
+                                                                           FontFamily="Consolas,Menlo,monospace"
+                                                                           Foreground="{DynamicResource TextSecondary}"
+                                                                           IsVisible="{Binding Result, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                                           MaxLines="10" />
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
     </DockPanel>
 </UserControl>

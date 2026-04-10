@@ -31,14 +31,15 @@
         <!-- Main sidebar content -->
         <ScrollViewer>
             <StackPanel Margin="12">
-                <!-- Logo + theme toggle -->
+                <!-- Logo + codebase toggle -->
                 <DockPanel Margin="4,0,0,16">
                     <ToggleSwitch DockPanel.Dock="Right"
-                                  IsChecked="{Binding IsDarkMode}"
-                                  OnContent="🌙" OffContent="☀️"
+                                  IsChecked="{Binding IsCodebaseMode}"
+                                  OnContent="📂" OffContent="📂"
                                   VerticalAlignment="Center"
                                   Margin="0"
-                                  Padding="0" />
+                                  Padding="0"
+                                  ToolTip.Tip="Toggle codebase context" />
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Border Width="28" Height="28" CornerRadius="6"
                                 Background="{DynamicResource BrandPrimary}">
@@ -178,9 +179,34 @@
                            Foreground="{DynamicResource TextSecondary}"
                            Margin="4,20,0,8" />
 
+                <ItemsControl ItemsSource="{Binding RecentSessions}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:SessionListItem">
+                            <Button Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).ResumeSessionCommand}"
+                                    CommandParameter="{Binding SessionId}"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Left"
+                                    Padding="10,6"
+                                    Margin="0,1"
+                                    CornerRadius="6">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="{Binding Label}"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:MMM d, HH:mm}'}"
+                                               FontSize="10"
+                                               Foreground="{DynamicResource TextMuted}" />
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
                 <TextBlock Text="No recent conversations"
                            FontSize="11"
                            Foreground="{DynamicResource TextSecondary}"
+                           IsVisible="{Binding !RecentSessions.Count}"
                            Margin="4,0" />
             </StackPanel>
         </ScrollViewer>

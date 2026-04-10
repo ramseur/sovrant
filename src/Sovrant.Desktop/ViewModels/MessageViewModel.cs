@@ -12,7 +12,7 @@ public partial class MessageViewModel : ViewModelBase
     private string _text = string.Empty;
 
     [ObservableProperty]
-    private bool _isUser;
+    private bool _isUser = true;
 
     public ObservableCollection<ToolUseViewModel> ToolUses { get; } = [];
 

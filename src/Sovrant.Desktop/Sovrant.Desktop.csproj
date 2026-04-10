@@ -11,7 +11,7 @@
          CA2007: ConfigureAwait(false) is wrong on UI code that must resume on UI thread.
          CA1031: Top-level error handlers in UI apps intentionally catch Exception.
          CA1848: LoggerMessage delegates are overkill for a desktop app's handful of log sites. -->
-    <NoWarn>$(NoWarn);CA1515;CA2007;CA1031;CA1848;CA1003</NoWarn>
+    <NoWarn>$(NoWarn);CA1515;CA2007;CA1031;CA1848;CA1003;CA1062</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

@@ -12,16 +12,33 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private SidebarViewModel _sidebar;
 
+    [ObservableProperty]
+    private CommandPaletteViewModel _commandPalette;
+
     private readonly IServiceProvider _services;
 
-    public MainViewModel(SidebarViewModel sidebar, IServiceProvider services)
+    public MainViewModel(SidebarViewModel sidebar, CommandPaletteViewModel commandPalette, IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(sidebar);
         _sidebar = sidebar;
+        _commandPalette = commandPalette;
         _services = services;
         _currentPage = CreateChatViewModel();
 
         sidebar.NavigationRequested += OnNavigationRequested;
+        sidebar.SessionResumeRequested += OnSessionResumeRequested;
+        commandPalette.CommandExecuted += OnCommandExecuted;
+    }
+
+    private void OnCommandExecuted(object? sender, string command)
+    {
+        // Feed the slash command into the current chat as if the user typed it.
+        if (CurrentPage is ChatViewModel chat)
+        {
+            chat.InputText = command;
+            if (chat.SendCommand.CanExecute(null))
+                chat.SendCommand.Execute(null);
+        }
     }
 
     private void OnNavigationRequested(object? sender, string pageName)
@@ -40,6 +57,13 @@ public partial class MainViewModel : ViewModelBase
             "MultiAgent" => new PlaceholderViewModel("Multi-Agent", "👥", "Orchestrate multiple agents working together on complex tasks."),
             _ => CurrentPage,
         };
+    }
+
+    private async void OnSessionResumeRequested(object? sender, string sessionId)
+    {
+        var chat = CreateChatViewModel();
+        CurrentPage = chat;
+        await chat.LoadSessionAsync(sessionId);
     }
 
     private ChatViewModel CreateChatViewModel() =>

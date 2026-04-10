@@ -84,6 +84,30 @@
                 </DockPanel>
             </Border>
 
+            <!-- Appearance section -->
+            <TextBlock Text="Appearance" FontSize="16" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimary}"
+                       Margin="0,12,0,0" />
+
+            <!-- Dark mode toggle -->
+            <Border Padding="12" CornerRadius="8"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}"
+                    BorderThickness="1">
+                <DockPanel>
+                    <ToggleSwitch DockPanel.Dock="Right"
+                                  IsChecked="{Binding IsDarkMode}"
+                                  OnContent="🌙" OffContent="☀️" />
+                    <StackPanel>
+                        <TextBlock Text="Dark Mode" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock Text="Switch between dark and light theme"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextSecondary}" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
             <!-- Info note -->
             <TextBlock Text="Settings are read-only in this phase. Configuration is loaded from ~/.sovrant/settings.json"
                        FontSize="11" TextWrapping="Wrap"

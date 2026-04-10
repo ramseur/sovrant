@@ -3,13 +3,17 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.Conversation;
+using Sovrant.Runtime.Session;
 
 namespace Sovrant.Desktop.ViewModels;
 
 public partial class ChatViewModel : ViewModelBase
 {
     private readonly IRuntimeSessionPool _sessionPool;
-    private readonly string _sessionId = $"desktop-{Guid.NewGuid():N}";
+    private readonly ISessionStore _sessionStore;
+
+    [ObservableProperty]
+    private string _sessionId;
 
     [ObservableProperty]
     private string _inputText = string.Empty;
@@ -25,9 +29,28 @@ public partial class ChatViewModel : ViewModelBase
 
     public ObservableCollection<MessageViewModel> Messages { get; } = [];
 
-    public ChatViewModel(IRuntimeSessionPool sessionPool)
+    public ChatViewModel(IRuntimeSessionPool sessionPool, ISessionStore sessionStore)
     {
         _sessionPool = sessionPool;
+        _sessionStore = sessionStore;
+        _sessionId = $"desktop-{Guid.NewGuid():N}";
+    }
+
+    public async Task LoadSessionAsync(string sessionId, CancellationToken ct = default)
+    {
+        SessionId = sessionId;
+        Messages.Clear();
+
+        var entries = await _sessionStore.LoadAsync(sessionId, ct: ct);
+        foreach (var entry in entries)
+        {
+            if (entry.Role is "user" or "assistant")
+            {
+                Messages.Add(new MessageViewModel { Role = entry.Role, Text = entry.Content });
+            }
+        }
+
+        HasMessages = Messages.Count > 0;
     }
 
     [RelayCommand(CanExecute = nameof(CanSend))]
@@ -49,7 +72,7 @@ public partial class ChatViewModel : ViewModelBase
 
         try
         {
-            var pooled = await _sessionPool.GetOrCreateAsync(_sessionId, ct: ct).ConfigureAwait(false);
+            var pooled = await _sessionPool.GetOrCreateAsync(SessionId, ct: ct).ConfigureAwait(false);
             await foreach (var ev in pooled.Runtime.RunTurnAsync(text, ct))
             {
                 await Dispatcher.UIThread.InvokeAsync(() => HandleEvent(ev, assistantMsg));
@@ -65,6 +88,14 @@ public partial class ChatViewModel : ViewModelBase
         {
             IsSending = false;
         }
+    }
+
+    [RelayCommand]
+    private void Suggestion(string text)
+    {
+        InputText = text;
+        if (SendCommand.CanExecute(null))
+            SendCommand.Execute(null);
     }
 
     private bool CanSend() => !IsSending && !string.IsNullOrWhiteSpace(InputText);
