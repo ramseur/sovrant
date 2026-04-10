@@ -16,6 +16,13 @@ public sealed class TeamMemberInfo
     public string? Model { get; init; }
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
 
+    // Phase 52 — team/workspace scoping for persistence
+    public string? TeamId { get; init; }
+    public string? WorkspaceId { get; init; }
+    public string? ProjectId { get; init; }
+    public string? Template { get; init; }
+    public string? CreatedBy { get; init; }
+
     // Mutable lifecycle state
     public TeamMemberStatus Status { get; set; } = TeamMemberStatus.Idle;
     public string? LastOutput { get; set; }

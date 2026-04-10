@@ -123,6 +123,10 @@ public static class ServiceCollectionExtensions
             return new TeamDelegateTool(registry, agentSystem, member => factory.Create(member));
         });
 
+        // Team run + publish tools (Phase 52)
+        services.AddSingleton<ITool, TeamRunTool>();
+        services.AddSingleton<ITool, TeamPublishTool>();
+
         // Mission tool — lets running agents spawn and drive sub-missions
         services.AddSingleton<ITool, MissionTool>();
 

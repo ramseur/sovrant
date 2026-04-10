@@ -185,6 +185,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMissionExecutor, LlmMissionExecutor>();
         services.AddSingleton<MissionExportService>();
 
+        // Agent run store (Phase 52) — unified ledger tracking delegations,
+        // swarm tasks, and mission steps in one table.
+        services.AddSingleton<IAgentRunStore>(sp =>
+            new SqliteAgentRunStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+
         // Eval framework (Phase 27)
         services.AddSingleton<IEvalResultStore, EvalResultStore>();
         services.AddSingleton<IEvalRunner, EvalRunner>();

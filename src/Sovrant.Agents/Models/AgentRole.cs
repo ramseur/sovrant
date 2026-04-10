@@ -20,4 +20,10 @@ public enum AgentRole
 
     /// <summary>Coordinates and monitors other agents; synthesises their results.</summary>
     Supervisor,
+
+    /// <summary>Writes and runs tests to validate changes.</summary>
+    Tester,
+
+    /// <summary>Researches information, reads documentation, and gathers context.</summary>
+    Researcher,
 }

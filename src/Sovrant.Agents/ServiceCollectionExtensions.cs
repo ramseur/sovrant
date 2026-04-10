@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Config;
+using Sovrant.Agents.Orchestration;
 using Sovrant.Agents.Shared;
 using Sovrant.Agents.Swarm;
 using Sovrant.Agents.Teams;
@@ -41,7 +42,8 @@ public static class ServiceCollectionExtensions
 
         // Template registry and agent factory
         services.AddSingleton<AgentTemplateRegistry>();
-        services.AddSingleton<ITeamRegistry, InMemoryTeamRegistry>();
+        services.AddSingleton<ITeamRegistry>(sp =>
+            new SqliteTeamRegistry(sp.GetRequiredService<Sovrant.Runtime.Storage.ISqliteConnectionFactory>()));
         services.AddSingleton<SovrantAgentFactory>();
 
         // Swarm orchestrator infrastructure
@@ -52,6 +54,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISwarmDecomposer, LlmSwarmDecomposer>();
         services.AddSingleton<SwarmOrchestrator>();
         services.AddSingleton<SwarmQualityGate>();
+
+        // Unified agent orchestrator (Phase 52)
+        services.AddSingleton<IAgentOrchestrator, AgentOrchestrator>();
 
         return services;
     }
