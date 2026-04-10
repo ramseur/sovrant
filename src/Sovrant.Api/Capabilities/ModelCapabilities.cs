@@ -41,6 +41,33 @@ public sealed record ModelCapabilities
     [JsonPropertyName("max_context")]
     public int? MaxContext { get; init; }
 
+    /// <summary>Maximum output/completion tokens, if known.</summary>
+    [JsonPropertyName("max_output_tokens")]
+    public int? MaxOutputTokens { get; init; }
+
+    /// <summary>Cost per million input tokens in USD, if known (e.g. from OpenRouter pricing).</summary>
+    [JsonPropertyName("cost_per_million_input")]
+    public decimal? CostPerMillionInput { get; init; }
+
+    /// <summary>Cost per million output tokens in USD, if known.</summary>
+    [JsonPropertyName("cost_per_million_output")]
+    public decimal? CostPerMillionOutput { get; init; }
+
+    /// <summary>
+    /// Model tier hint for intent-aware routing: <c>fast</c>, <c>standard</c>, or <c>high</c>.
+    /// When <see langword="null"/>, auto-assigned from pricing data at startup.
+    /// </summary>
+    [JsonPropertyName("tier_hint")]
+    public string? TierHint { get; init; }
+
+    /// <summary>
+    /// Optional per-intent affinity scores. Positive values boost this model's
+    /// score for the given intent class (e.g. a coding-tuned model gets
+    /// <c>{ "code_generation": 0.4, "refactor": 0.3 }</c>).
+    /// </summary>
+    [JsonPropertyName("intent_affinity")]
+    public IReadOnlyDictionary<string, float>? IntentAffinity { get; init; }
+
     /// <summary>
     /// Where this capability record came from.
     /// Higher-priority sources override lower.

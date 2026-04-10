@@ -192,6 +192,131 @@ public sealed class SmartRouterTests
         Assert.Equal("p1", selected.Name);
     }
 
+    // ── Intent routing integration tests ─────────────────────────────────
+
+    [Fact]
+    public async Task RouteWithIntentAsync_ClassifiesIntent_WhenEnabled()
+    {
+        var registry = new ModelCapabilityRegistry(NullLogger<ModelCapabilityRegistry>.Instance);
+        registry.Register("cheap-model", new ModelCapabilities
+        {
+            TierHint = ModelTier.Fast,
+            CostPerMillionInput = 0.1m,
+            Source = CapabilitySource.Live,
+        });
+        registry.Register("expensive-model", new ModelCapabilities
+        {
+            TierHint = ModelTier.High,
+            CostPerMillionInput = 30m,
+            Source = CapabilitySource.Live,
+        });
+
+        var tierResolver = new ModelTierResolver(registry, NullLogger<ModelTierResolver>.Instance);
+        var provider = CreateProvider("p1", "https://p1.example.com");
+        var info = new ProviderInfo(provider, "/v1/models", 0.001);
+        var pingHttp = new HttpClient(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonOk("{}")));
+        var router = new SmartRouter([info], RouterMode.Smart, RouterStrategy.Balanced,
+            pingHttp, NullLogger<SmartRouter>.Instance, registry, tierResolver);
+
+        // Simple question → should classify as SimpleQa → fast tier
+        var req = new MessagesRequest("gpt-4o", 100, [InputMessage.UserText("what is 2+2?")]);
+        var decision = await router.RouteWithIntentAsync(req);
+
+        Assert.NotNull(decision.Classification);
+        Assert.Equal(IntentClass.SimpleQa, decision.Classification.Intent);
+        Assert.Equal(ModelTier.Fast, decision.Tier);
+        Assert.Equal("cheap-model", decision.ResolvedModel);
+    }
+
+    [Fact]
+    public async Task RouteWithIntentAsync_RoutesRefactorToHighTier()
+    {
+        var registry = new ModelCapabilityRegistry(NullLogger<ModelCapabilityRegistry>.Instance);
+        registry.Register("fast-model", new ModelCapabilities
+        {
+            TierHint = ModelTier.Fast,
+            CostPerMillionInput = 0.1m,
+            Source = CapabilitySource.Live,
+        });
+        registry.Register("high-model", new ModelCapabilities
+        {
+            TierHint = ModelTier.High,
+            CostPerMillionInput = 30m,
+            Source = CapabilitySource.Live,
+        });
+
+        var tierResolver = new ModelTierResolver(registry, NullLogger<ModelTierResolver>.Instance);
+        var provider = CreateProvider("p1", "https://p1.example.com");
+        var info = new ProviderInfo(provider, "/v1/models", 0.001);
+        var pingHttp = new HttpClient(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonOk("{}")));
+        var router = new SmartRouter([info], RouterMode.Smart, RouterStrategy.Balanced,
+            pingHttp, NullLogger<SmartRouter>.Instance, registry, tierResolver);
+
+        var req = new MessagesRequest("gpt-4o", 100,
+            [InputMessage.UserText("refactor this module into smaller classes")]);
+        var decision = await router.RouteWithIntentAsync(req);
+
+        Assert.Equal(IntentClass.Refactor, decision.Classification!.Intent);
+        Assert.Equal(ModelTier.High, decision.Tier);
+        Assert.Equal("high-model", decision.ResolvedModel);
+    }
+
+    [Fact]
+    public async Task RouteWithIntentAsync_ReturnsNullClassification_WhenDisabled()
+    {
+        var provider = CreateProvider("p1", "https://p1.example.com");
+        var info = new ProviderInfo(provider, "/v1/models", 0.001);
+        var pingHttp = new HttpClient(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonOk("{}")));
+        var config = new RoutingConfig { IntentRouting = false };
+        var router = new SmartRouter([info], RouterMode.Smart, RouterStrategy.Balanced,
+            pingHttp, NullLogger<SmartRouter>.Instance, routingConfig: config);
+
+        var req = new MessagesRequest("gpt-4o", 100, [InputMessage.UserText("refactor everything")]);
+        var decision = await router.RouteWithIntentAsync(req);
+
+        Assert.Null(decision.Classification);
+        Assert.Null(decision.ResolvedModel);
+        Assert.Equal("p1", decision.Provider.Name);
+    }
+
+    [Fact]
+    public async Task RouteWithIntentAsync_AppliesCustomRules()
+    {
+        var registry = new ModelCapabilityRegistry(NullLogger<ModelCapabilityRegistry>.Instance);
+        registry.Register("fast-model", new ModelCapabilities
+        {
+            TierHint = ModelTier.Fast,
+            CostPerMillionInput = 0.1m,
+            Source = CapabilitySource.Live,
+        });
+        registry.Register("high-model", new ModelCapabilities
+        {
+            TierHint = ModelTier.High,
+            CostPerMillionInput = 30m,
+            Source = CapabilitySource.Live,
+        });
+
+        var tierResolver = new ModelTierResolver(registry, NullLogger<ModelTierResolver>.Instance);
+        var config = new RoutingConfig
+        {
+            CustomRules = [new CustomRoutingRule { Pattern = "security|CVE", Tier = ModelTier.High }],
+        };
+
+        var provider = CreateProvider("p1", "https://p1.example.com");
+        var info = new ProviderInfo(provider, "/v1/models", 0.001);
+        var pingHttp = new HttpClient(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonOk("{}")));
+        var router = new SmartRouter([info], RouterMode.Smart, RouterStrategy.Balanced,
+            pingHttp, NullLogger<SmartRouter>.Instance, registry, tierResolver, config);
+
+        // "hello" would normally be Conversation/fast, but the CVE rule overrides
+        var req = new MessagesRequest("gpt-4o", 100,
+            [InputMessage.UserText("check this CVE-2024-1234 vulnerability")]);
+        var decision = await router.RouteWithIntentAsync(req);
+
+        Assert.Equal(ModelTier.High, decision.Tier);
+        Assert.Equal("high-model", decision.ResolvedModel);
+    }
+
     /// <summary>Helper subclass that overrides Name for testing.</summary>
     private sealed class NamedOpenAiCompatProvider : OpenAiCompatProvider
     {

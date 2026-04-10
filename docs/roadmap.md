@@ -104,7 +104,7 @@ The engine is fully functional for individual and small-team use:
 | Embedded terminal panel inside the desktop app | Phase 45 (deferred) | Deferred |
 | n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |
 | Workspace backup, import & export | Phase 47 | Medium |
-| Intent-aware, capability-discovered model routing | Phase 48 | Medium |
+| Intent-aware, capability-discovered model routing | Phase 48 | ✅ Complete |
 | SearXNG web search backend (self-hosted, key-free) | Phase 49 | Low–Medium |
 | OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | Medium–High |
 
@@ -3246,6 +3246,25 @@ This is what makes the routing "user-aware" rather than Anthropic-flavoured: a d
 - Custom routing rules override default tier mapping
 - Cost budget reduces tier preference when budget is low
 - `sovrant router models` lists discovered models grouped by assigned tier
+
+#### ✅ Completed
+
+Implemented in full. Delivered:
+
+- **IntentClassifier** — rule-based classifier with 10 `GeneratedRegex` patterns covering `SimpleQa`, `Conversation`, `CodeReview`, `CodeGeneration`, `Refactor`, `Planning`, `Creative`, `Analysis`, `Debugging`, `ToolHeavy`. Complexity estimator (0.0–1.0) scores word count, code blocks, multi-step indicators, file references, and conversation depth.
+- **ModelTierResolver** — auto-assigns tiers from pricing percentiles (bottom 33% → fast, mid → standard, top 33% → high). Supports explicit `TierHint`, name-based inference for local models (e.g. `:3b` → fast, `:72b` → high), pinned tier overrides, intent affinity scoring, and tier collapse when buckets are empty.
+- **RoutingConfig** — loads from `.sovrant/routing.json` (cwd then home) and `SOVRANT_INTENT_ROUTING` env var. Supports custom routing rules (regex pattern → tier override), tier model pinning, escalation toggles.
+- **SmartRouter integration** — `RouteWithIntentAsync()` classifies intent, checks custom rules, resolves tier to model, sets model on request, selects provider. `RouteAsync()` refactored to share `SelectProvider()`.
+- **LiveModelMetadataFetcher** — enhanced to extract pricing (`CostPerMillionInput`/`Output`), `MaxOutputTokens`, and `ThinkingMode` from OpenRouter `/api/v1/models` responses.
+- **CLI commands** — `sovrant router models` (Spectre.Console table of tier assignments), `sovrant router status` (routing config display).
+- **Tests** — 30+ new tests: IntentClassifierTests (16), ModelTierResolverTests (9), LiveMetadataPricingTests (5), SmartRouter intent integration tests (4).
+
+Items deferred to future phases:
+- Response-quality escalation (retry with higher tier on low-confidence response) → Phase 49+
+- `X-Model-Tier` / `X-Intent-Class` response headers → Phase 49+
+- Cost budget awareness (reduce tier when budget low) → depends on Phase 39
+- Per-session re-discovery for credential overrides → Phase 49+
+- `/model auto` CLI command → Phase 49+
 
 ---
 

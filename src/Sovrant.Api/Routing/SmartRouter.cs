@@ -19,6 +19,8 @@ public sealed class SmartRouter : ISmartRouter, IDisposable
     private readonly HttpClient _httpClient;
     private readonly ILogger<SmartRouter> _logger;
     private readonly IModelCapabilityRegistry? _capabilityRegistry;
+    private readonly IModelTierResolver? _tierResolver;
+    private readonly RoutingConfig _routingConfig;
     private readonly CancellationTokenSource _shutdownCts = new();
     private readonly List<Task> _recheckTasks = [];
     private bool _initialized;
@@ -42,6 +44,9 @@ public sealed class SmartRouter : ISmartRouter, IDisposable
     private static readonly Action<ILogger, Exception?> _logAllUnhealthyFallback =
         LoggerMessage.Define(LogLevel.Warning, new EventId(6, "AllUnhealthyFallback"),
             "SmartRouter: all providers failed health check — routing to configured providers anyway. Check DNS/network if this persists.");
+    private static readonly Action<ILogger, string, string, string, Exception?> _logIntentRouting =
+        LoggerMessage.Define<string, string, string>(LogLevel.Debug, new EventId(7, "IntentRouting"),
+            "SmartRouter: intent={Intent}, tier={Tier}, model={Model}");
 
     /// <summary>Initializes a new instance of <see cref="SmartRouter"/>.</summary>
     /// <param name="providers">The list of providers to manage.</param>
@@ -61,7 +66,9 @@ public sealed class SmartRouter : ISmartRouter, IDisposable
         RouterStrategy strategy,
         HttpClient httpClient,
         ILogger<SmartRouter> logger,
-        IModelCapabilityRegistry? capabilityRegistry = null)
+        IModelCapabilityRegistry? capabilityRegistry = null,
+        IModelTierResolver? tierResolver = null,
+        RoutingConfig? routingConfig = null)
     {
         ArgumentNullException.ThrowIfNull(providers);
         ArgumentNullException.ThrowIfNull(httpClient);
@@ -73,6 +80,9 @@ public sealed class SmartRouter : ISmartRouter, IDisposable
         _httpClient = httpClient;
         _logger = logger;
         _capabilityRegistry = capabilityRegistry;
+        _tierResolver = tierResolver;
+        _routingConfig = routingConfig ?? new RoutingConfig();
+        IntentRoutingEnabled = _routingConfig.IntentRouting;
     }
 
     /// <inheritdoc/>
@@ -89,46 +99,14 @@ public sealed class SmartRouter : ISmartRouter, IDisposable
         ArgumentNullException.ThrowIfNull(req);
 
         // Normalize the model ID via the capability registry (Phase 54).
-        // This maps aliases like "gemma4:27b" → "google/gemma-4-27b".
         if (_capabilityRegistry is not null && !string.IsNullOrEmpty(req.Model))
         {
             var normalized = _capabilityRegistry.Normalize(req.Model);
             if (!string.Equals(normalized, req.Model, StringComparison.Ordinal))
-            {
                 req = req with { Model = normalized };
-            }
         }
 
-        // If a provider is pinned, prefer it when healthy.
-        var pinned = _pinnedProviderName;
-        if (pinned is not null)
-        {
-            var pinnedInfo = _providers.FirstOrDefault(p =>
-                string.Equals(p.Provider.Name, pinned, StringComparison.OrdinalIgnoreCase) && p.Healthy);
-            if (pinnedInfo is not null)
-            {
-                _logRouting(_logger, pinnedInfo.Provider.Name, "pinned", null);
-                return Task.FromResult(pinnedInfo.Provider);
-            }
-            // Pinned provider is unhealthy — fall through to normal routing.
-        }
-
-        var available = _providers.Where(p => p.Healthy).ToList();
-        if (available.Count == 0)
-        {
-            // All providers failed the startup health check (e.g. transient DNS failure in WSL/CI).
-            // Fall back to all configured providers and let the actual request surface the real error.
-            if (_providers.Count == 0)
-                throw new InvalidOperationException("SmartRouter: no providers configured.");
-            _logAllUnhealthyFallback(_logger, null);
-            available = _providers.ToList();
-        }
-        var selected = _mode == RouterMode.Fixed
-            ? available[0]
-            : available.MinBy(p => p.Score(_strategy))!;
-
-        _logRouting(_logger, selected.Provider.Name, _strategy.ToString(), null);
-        return Task.FromResult(selected.Provider);
+        return Task.FromResult(SelectProvider(req));
     }
 
     /// <inheritdoc/>
@@ -143,6 +121,133 @@ public sealed class SmartRouter : ISmartRouter, IDisposable
         }
         _pinnedProviderName = providerName;
         return Task.CompletedTask;
+    }
+
+    /// <inheritdoc/>
+    public bool IntentRoutingEnabled { get; set; }
+
+    /// <inheritdoc/>
+    public Task<RoutingDecision> RouteWithIntentAsync(MessagesRequest req, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(req);
+
+        // Normalize model ID
+        if (_capabilityRegistry is not null && !string.IsNullOrEmpty(req.Model))
+        {
+            var normalized = _capabilityRegistry.Normalize(req.Model);
+            if (!string.Equals(normalized, req.Model, StringComparison.Ordinal))
+                req = req with { Model = normalized };
+        }
+
+        IntentClassification? classification = null;
+        string? resolvedModel = null;
+        string? tier = null;
+
+        // Intent classification + tier resolution (only when enabled and tier resolver is available)
+        if (IntentRoutingEnabled && _tierResolver is not null)
+        {
+            // Extract last user message text for classification
+            var lastUserText = ExtractLastUserText(req);
+
+            // Check custom rules first
+            var customTier = MatchCustomRule(lastUserText);
+            if (customTier is not null)
+            {
+                classification = new IntentClassification(IntentClass.ToolHeavy, 0.5f, customTier);
+                tier = customTier;
+            }
+            else
+            {
+                classification = IntentClassifier.Classify(lastUserText);
+                tier = classification.RecommendedTier;
+            }
+
+            // Resolve tier to a concrete model
+            resolvedModel = _tierResolver.Resolve(tier, classification.Intent);
+            if (resolvedModel is not null)
+            {
+                _logIntentRouting(_logger, classification.Intent.ToString(), tier, resolvedModel, null);
+                req = req with { Model = resolvedModel };
+            }
+        }
+
+        // Select provider using existing logic
+        var provider = SelectProvider(req);
+
+        return Task.FromResult(new RoutingDecision(provider, classification, resolvedModel, tier));
+    }
+
+    /// <summary>Extracts the text content of the last user message.</summary>
+    private static string? ExtractLastUserText(MessagesRequest req)
+    {
+        for (var i = req.Messages.Count - 1; i >= 0; i--)
+        {
+            if (!string.Equals(req.Messages[i].Role, "user", StringComparison.OrdinalIgnoreCase))
+                continue;
+            foreach (var block in req.Messages[i].Content)
+            {
+                if (block is Types.InputContentBlock.TextBlock tb)
+                    return tb.Text;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Checks user message against custom routing rules.</summary>
+    private string? MatchCustomRule(string? text)
+    {
+        if (text is null || _routingConfig.CustomRules.Count == 0)
+            return null;
+
+        foreach (var rule in _routingConfig.CustomRules)
+        {
+            if (string.IsNullOrEmpty(rule.Pattern))
+                continue;
+            try
+            {
+                if (System.Text.RegularExpressions.Regex.IsMatch(text, rule.Pattern,
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase,
+                        TimeSpan.FromMilliseconds(100)))
+                {
+                    return rule.Tier;
+                }
+            }
+            catch (System.Text.RegularExpressions.RegexMatchTimeoutException) { }
+            catch (ArgumentException) { } // invalid regex in user config
+        }
+        return null;
+    }
+
+    /// <summary>Core provider selection logic shared by RouteAsync and RouteWithIntentAsync.</summary>
+    private ILlmProvider SelectProvider(MessagesRequest req)
+    {
+        // If a provider is pinned, prefer it when healthy.
+        var pinned = _pinnedProviderName;
+        if (pinned is not null)
+        {
+            var pinnedInfo = _providers.FirstOrDefault(p =>
+                string.Equals(p.Provider.Name, pinned, StringComparison.OrdinalIgnoreCase) && p.Healthy);
+            if (pinnedInfo is not null)
+            {
+                _logRouting(_logger, pinnedInfo.Provider.Name, "pinned", null);
+                return pinnedInfo.Provider;
+            }
+        }
+
+        var available = _providers.Where(p => p.Healthy).ToList();
+        if (available.Count == 0)
+        {
+            if (_providers.Count == 0)
+                throw new InvalidOperationException("SmartRouter: no providers configured.");
+            _logAllUnhealthyFallback(_logger, null);
+            available = _providers.ToList();
+        }
+        var selected = _mode == RouterMode.Fixed
+            ? available[0]
+            : available.MinBy(p => p.Score(_strategy))!;
+
+        _logRouting(_logger, selected.Provider.Name, _strategy.ToString(), null);
+        return selected.Provider;
     }
 
     /// <inheritdoc/>

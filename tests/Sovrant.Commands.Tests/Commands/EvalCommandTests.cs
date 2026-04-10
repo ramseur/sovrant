@@ -79,5 +79,8 @@ public sealed class EvalCommandTests : IDisposable
             Task.CompletedTask;
         public IReadOnlyList<ProviderStatus> GetStatus() => [];
         public Task PinProviderAsync(string? providerName, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<RoutingDecision> RouteWithIntentAsync(MessagesRequest req, CancellationToken ct = default) =>
+            throw new InvalidOperationException("StubRouter");
+        public bool IntentRoutingEnabled { get; set; }
     }
 }

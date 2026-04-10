@@ -38,4 +38,11 @@ public sealed class ScopedSingleProviderRouter : ISmartRouter
     /// <inheritdoc/>
     public Task PinProviderAsync(string? providerName, CancellationToken ct = default) =>
         Task.CompletedTask;
+
+    /// <inheritdoc/>
+    public Task<RoutingDecision> RouteWithIntentAsync(MessagesRequest req, CancellationToken ct = default) =>
+        Task.FromResult(new RoutingDecision(_provider, null, null, null));
+
+    /// <inheritdoc/>
+    public bool IntentRoutingEnabled { get; set; }
 }

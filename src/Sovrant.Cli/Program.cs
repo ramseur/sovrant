@@ -55,6 +55,91 @@ statusCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
 });
 root.Add(statusCmd);
 
+// ── 'router' subcommand group ────────────────────────────────────────────────
+var routerCmd = new Command("router", "Intent-aware routing inspection and management.");
+
+var routerModelsCmd = new Command("models", "Show discovered models and their tier assignments.");
+routerModelsCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    await using var sp = BuildServices(pr);
+    await sp.InitializeRuntimeAsync(ct).ConfigureAwait(false);
+    var router = sp.GetRequiredService<ISmartRouter>();
+    await router.InitializeAsync(ct).ConfigureAwait(false);
+
+    var tierResolver = sp.GetService<Sovrant.Api.Routing.IModelTierResolver>();
+    if (tierResolver is null)
+    {
+        AnsiConsole.MarkupLine("[yellow]No tier resolver configured.[/]");
+        return;
+    }
+
+    tierResolver.Rebuild();
+    var assignments = tierResolver.GetTierAssignments();
+    var routingConfig = sp.GetService<Sovrant.Api.Routing.RoutingConfig>();
+
+    AnsiConsole.MarkupLine($"[bold]Intent routing:[/] {(router.IntentRoutingEnabled ? "[green]enabled[/]" : "[grey]disabled[/]")}");
+    if (routingConfig is not null)
+        AnsiConsole.MarkupLine($"[bold]Default tier:[/]   {Markup.Escape(routingConfig.DefaultTier)}");
+    AnsiConsole.WriteLine();
+
+    string[] tierOrder = [Sovrant.Api.Routing.ModelTier.Fast, Sovrant.Api.Routing.ModelTier.Standard, Sovrant.Api.Routing.ModelTier.High];
+    foreach (var tier in tierOrder)
+    {
+        if (!assignments.TryGetValue(tier, out var candidates) || candidates.Count == 0)
+        {
+            AnsiConsole.MarkupLine($"[bold]{Markup.Escape(tier)}:[/] [grey](empty — will collapse to next available tier)[/]");
+            continue;
+        }
+
+        AnsiConsole.MarkupLine($"[bold]{Markup.Escape(tier)}:[/] {candidates.Count} model(s)");
+        var table = new Table().AddColumns("Model", "Score", "Default");
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var c = candidates[i];
+            table.AddRow(
+                Markup.Escape(c.ModelId),
+                c.Score.ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+                i == 0 ? "[green]\u2713[/]" : "");
+        }
+        AnsiConsole.Write(table);
+    }
+});
+routerCmd.Add(routerModelsCmd);
+
+var routerStatusCmd = new Command("status", "Show intent routing configuration and tier defaults.");
+routerStatusCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    await using var sp = BuildServices(pr);
+    var routingConfig = sp.GetService<Sovrant.Api.Routing.RoutingConfig>()
+        ?? new Sovrant.Api.Routing.RoutingConfig();
+
+    AnsiConsole.MarkupLine($"[bold]Intent routing:[/]      {(routingConfig.IntentRouting ? "[green]enabled[/]" : "[grey]disabled[/]")}");
+    AnsiConsole.MarkupLine($"[bold]Default tier:[/]        {Markup.Escape(routingConfig.DefaultTier)}");
+    AnsiConsole.MarkupLine($"[bold]Auto-tier assignment:[/] {(routingConfig.AutoTierAssignment ? "[green]yes[/]" : "[grey]no[/]")}");
+    AnsiConsole.MarkupLine($"[bold]Escalation:[/]          {(routingConfig.Escalation ? "[green]enabled[/]" : "[grey]disabled[/]")}");
+    AnsiConsole.MarkupLine($"[bold]Max escalations:[/]     {routingConfig.MaxEscalationsPerTurn}");
+
+    if (routingConfig.TierModels.Count > 0)
+    {
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[bold]Tier → Model mappings:[/]");
+        foreach (var (tier, model) in routingConfig.TierModels)
+            AnsiConsole.MarkupLine($"  {Markup.Escape(tier)} → {Markup.Escape(model)}");
+    }
+
+    if (routingConfig.CustomRules.Count > 0)
+    {
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine($"[bold]Custom rules:[/] {routingConfig.CustomRules.Count}");
+        foreach (var rule in routingConfig.CustomRules)
+            AnsiConsole.MarkupLine($"  /{Markup.Escape(rule.Pattern)}/ → {Markup.Escape(rule.Tier)}");
+    }
+
+    await Task.CompletedTask.ConfigureAwait(false);
+});
+routerCmd.Add(routerStatusCmd);
+root.Add(routerCmd);
+
 // ── 'prompt' subcommand ───────────────────────────────────────────────────────
 var messageArg = new Argument<string>("message") { Description = "The message to send to the assistant." };
 var promptCmd = new Command("prompt", "Send a single message and exit.");

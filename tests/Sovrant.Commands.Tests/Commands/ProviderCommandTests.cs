@@ -35,6 +35,10 @@ public sealed class ProviderCommandTests
             PinnedName = providerName;
             return Task.CompletedTask;
         }
+
+        public Task<RoutingDecision> RouteWithIntentAsync(MessagesRequest req, CancellationToken ct = default) =>
+            RouteAsync(req, ct).ContinueWith(t => new RoutingDecision(t.Result, null, null, null), ct);
+        public bool IntentRoutingEnabled { get; set; }
     }
 
     // ── Tests ──────────────────────────────────────────────────────────────────

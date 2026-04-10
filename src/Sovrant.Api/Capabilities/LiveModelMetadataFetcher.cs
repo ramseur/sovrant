@@ -89,13 +89,17 @@ public sealed partial class LiveModelMetadataFetcher
     }
 
     /// <summary>Extracts capabilities from a single OpenRouter model JSON entry.</summary>
-    private static ModelCapabilities ParseModelEntry(JsonElement model)
+    internal static ModelCapabilities ParseModelEntry(JsonElement model)
     {
         var nativeTools = false;
         var structuredOutput = false;
+        var thinkingMode = false;
         int? maxContext = null;
+        int? maxOutputTokens = null;
+        decimal? costInput = null;
+        decimal? costOutput = null;
 
-        // Check supported_parameters for tool support
+        // Check supported_parameters for tool support, structured output, reasoning
         if (model.TryGetProperty("supported_parameters", out var supported)
             && supported.ValueKind == JsonValueKind.Array)
         {
@@ -111,6 +115,10 @@ public sealed partial class LiveModelMetadataFetcher
                 {
                     structuredOutput = true;
                 }
+                else if (string.Equals(paramStr, "reasoning", StringComparison.OrdinalIgnoreCase))
+                {
+                    thinkingMode = true;
+                }
             }
         }
 
@@ -119,6 +127,21 @@ public sealed partial class LiveModelMetadataFetcher
             && ctxProp.ValueKind == JsonValueKind.Number)
         {
             maxContext = ctxProp.GetInt32();
+        }
+
+        // Max completion tokens from top_provider
+        if (model.TryGetProperty("top_provider", out var topProvider)
+            && topProvider.TryGetProperty("max_completion_tokens", out var maxCompProp)
+            && maxCompProp.ValueKind == JsonValueKind.Number)
+        {
+            maxOutputTokens = maxCompProp.GetInt32();
+        }
+
+        // Pricing — OpenRouter returns cost per token as a string (e.g. "0.000003")
+        if (model.TryGetProperty("pricing", out var pricing))
+        {
+            costInput = ParsePricingField(pricing, "prompt");
+            costOutput = ParsePricingField(pricing, "completion");
         }
 
         // Architecture / family
@@ -133,14 +156,9 @@ public sealed partial class LiveModelMetadataFetcher
                 if (slash > 0)
                 {
                     var modelPart = id[(slash + 1)..];
-                    var dash = modelPart.IndexOf('-', StringComparison.Ordinal);
-                    if (dash > 0)
-                    {
-                        // e.g. "gemma-4-27b" → try to find "gemma-4" as family
-                        var parts = modelPart.Split('-');
-                        if (parts.Length >= 2 && int.TryParse(parts[1], out _))
-                            family = $"{parts[0]}-{parts[1]}";
-                    }
+                    var parts = modelPart.Split('-');
+                    if (parts.Length >= 2 && int.TryParse(parts[1], out _))
+                        family = $"{parts[0]}-{parts[1]}";
                 }
             }
         }
@@ -149,10 +167,40 @@ public sealed partial class LiveModelMetadataFetcher
         {
             NativeTools = nativeTools,
             StructuredOutput = structuredOutput,
+            ThinkingMode = thinkingMode,
             Family = family,
             MaxContext = maxContext,
+            MaxOutputTokens = maxOutputTokens,
+            CostPerMillionInput = costInput,
+            CostPerMillionOutput = costOutput,
             Source = CapabilitySource.Live,
         };
+    }
+
+    /// <summary>
+    /// Parses an OpenRouter pricing field. OpenRouter returns cost per token
+    /// as a string (e.g. "0.000003"). We convert to cost per million tokens.
+    /// </summary>
+    private static decimal? ParsePricingField(JsonElement pricing, string fieldName)
+    {
+        if (!pricing.TryGetProperty(fieldName, out var field))
+            return null;
+
+        var raw = field.ValueKind == JsonValueKind.String
+            ? field.GetString()
+            : field.ValueKind == JsonValueKind.Number
+                ? field.GetDecimal().ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : null;
+
+        if (string.IsNullOrEmpty(raw))
+            return null;
+
+        if (decimal.TryParse(raw, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var perToken) && perToken > 0)
+        {
+            return perToken * 1_000_000m; // Convert per-token → per-million-tokens
+        }
+        return null;
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Live model metadata fetched: {Count} models registered")]

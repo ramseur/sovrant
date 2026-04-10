@@ -138,7 +138,20 @@ public static class ServiceCollectionExtensions
             }
 
             var capRegistry = sp.GetService<IModelCapabilityRegistry>();
-            return new SmartRouter(providers, routerMode, routerStrategy, pingClient, logger, capRegistry);
+            var tierResolver = sp.GetService<IModelTierResolver>();
+            var routingConfig = sp.GetService<RoutingConfig>();
+            return new SmartRouter(providers, routerMode, routerStrategy, pingClient, logger,
+                capRegistry, tierResolver, routingConfig);
+        });
+
+        // Phase 48 — intent-aware routing support.
+        services.AddSingleton<RoutingConfig>(_ => RoutingConfigLoader.Load());
+        services.AddSingleton<IModelTierResolver>(sp =>
+        {
+            var registry = sp.GetRequiredService<IModelCapabilityRegistry>();
+            var tierLogger = sp.GetRequiredService<ILogger<ModelTierResolver>>();
+            var config = sp.GetRequiredService<RoutingConfig>();
+            return new ModelTierResolver(registry, tierLogger, config.TierModels);
         });
 
         return services;

@@ -23,8 +23,15 @@ public sealed class LegacyArtifactImporterTests : IDisposable
     public void Dispose()
     {
         Directory.SetCurrentDirectory(_originalDir);
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        try
+        {
+            if (Directory.Exists(_tempDir))
+                Directory.Delete(_tempDir, recursive: true);
+        }
+        catch (IOException)
+        {
+            // Windows may still hold file locks briefly after test completes; safe to ignore in test cleanup.
+        }
     }
 
     [Fact]

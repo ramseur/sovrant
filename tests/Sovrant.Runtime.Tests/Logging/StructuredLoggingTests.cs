@@ -140,6 +140,9 @@ public sealed class StructuredLoggingTests
         public IReadOnlyList<ProviderStatus> GetStatus() => [];
 
         public Task PinProviderAsync(string? providerName, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<RoutingDecision> RouteWithIntentAsync(MessagesRequest req, CancellationToken ct = default) =>
+            Task.FromResult(new RoutingDecision(new FakeProvider(), null, null, null));
+        public bool IntentRoutingEnabled { get; set; }
     }
 
     /// <summary>

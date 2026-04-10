@@ -192,6 +192,10 @@ public sealed class FakeSmartRouter : ISmartRouter
             throw new InvalidOperationException($"Provider '{providerName}' is not configured.");
         return Task.CompletedTask;
     }
+
+    public Task<RoutingDecision> RouteWithIntentAsync(MessagesRequest req, CancellationToken ct = default) =>
+        Task.FromResult(new RoutingDecision(new FakeLlmProvider(), null, null, null));
+    public bool IntentRoutingEnabled { get; set; }
 }
 
 /// <summary>Fake LLM provider — never called in route-level tests.</summary>

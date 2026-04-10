@@ -272,5 +272,8 @@ public sealed class EvalRunnerTests : IDisposable
             Task.CompletedTask;
         public IReadOnlyList<ProviderStatus> GetStatus() => [];
         public Task PinProviderAsync(string? providerName, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<RoutingDecision> RouteWithIntentAsync(MessagesRequest req, CancellationToken ct = default) =>
+            throw new InvalidOperationException("StubRouter: no provider configured");
+        public bool IntentRoutingEnabled { get; set; }
     }
 }

@@ -33,7 +33,30 @@ public interface ISmartRouter
     /// <param name="providerName">The provider name to pin, or <see langword="null"/> to unpin.</param>
     /// <param name="ct">A cancellation token.</param>
     Task PinProviderAsync(string? providerName, CancellationToken ct = default);
+
+    /// <summary>
+    /// Routes the request and returns extended routing metadata including
+    /// the selected provider, intent classification, resolved model, and tier.
+    /// </summary>
+    Task<RoutingDecision> RouteWithIntentAsync(MessagesRequest req, CancellationToken ct = default);
+
+    /// <summary>
+    /// Enables or disables intent-aware routing. When <see langword="false"/>,
+    /// <see cref="RouteWithIntentAsync"/> behaves like <see cref="RouteAsync"/>.
+    /// </summary>
+    bool IntentRoutingEnabled { get; set; }
 }
+
+/// <summary>The result of intent-aware routing, including the selected provider and metadata.</summary>
+/// <param name="Provider">The selected LLM provider.</param>
+/// <param name="Classification">The intent classification, or <see langword="null"/> if intent routing is disabled.</param>
+/// <param name="ResolvedModel">The model ID selected by the tier resolver, or <see langword="null"/> if the request's original model was used.</param>
+/// <param name="Tier">The model tier used, or <see langword="null"/> if not applicable.</param>
+public sealed record RoutingDecision(
+    ILlmProvider Provider,
+    IntentClassification? Classification,
+    string? ResolvedModel,
+    string? Tier);
 
 /// <summary>A point-in-time snapshot of a provider's health and scoring metrics.</summary>
 /// <param name="Name">The provider's name.</param>
