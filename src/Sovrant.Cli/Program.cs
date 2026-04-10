@@ -116,6 +116,7 @@ routerStatusCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
     AnsiConsole.MarkupLine($"[bold]Intent routing:[/]      {(routingConfig.IntentRouting ? "[green]enabled[/]" : "[grey]disabled[/]")}");
     AnsiConsole.MarkupLine($"[bold]Default tier:[/]        {Markup.Escape(routingConfig.DefaultTier)}");
     AnsiConsole.MarkupLine($"[bold]Auto-tier assignment:[/] {(routingConfig.AutoTierAssignment ? "[green]yes[/]" : "[grey]no[/]")}");
+    AnsiConsole.MarkupLine($"[bold]Free models only:[/]    {(routingConfig.FreeModelsOnly ? "[green]yes[/]" : "[grey]no[/]")}");
     AnsiConsole.MarkupLine($"[bold]Escalation:[/]          {(routingConfig.Escalation ? "[green]enabled[/]" : "[grey]disabled[/]")}");
     AnsiConsole.MarkupLine($"[bold]Max escalations:[/]     {routingConfig.MaxEscalationsPerTurn}");
 

@@ -9,8 +9,8 @@ public sealed class ModelTierResolverTests
 {
     private readonly ModelCapabilityRegistry _registry = new(NullLogger<ModelCapabilityRegistry>.Instance);
 
-    private ModelTierResolver CreateResolver(IReadOnlyDictionary<string, string>? pinnedTiers = null) =>
-        new(_registry, NullLogger<ModelTierResolver>.Instance, pinnedTiers);
+    private ModelTierResolver CreateResolver(IReadOnlyDictionary<string, string>? pinnedTiers = null, bool freeModelsOnly = false) =>
+        new(_registry, NullLogger<ModelTierResolver>.Instance, pinnedTiers, freeModelsOnly);
 
     // ── Explicit TierHint ───────────────────────────────────────────────
 
@@ -207,5 +207,74 @@ public sealed class ModelTierResolverTests
 
         resolver.Rebuild();
         Assert.Equal("new-fast-model", resolver.Resolve(ModelTier.Fast));
+    }
+
+    // ── Free models only ───────────────────────────────────────────────
+
+    [Fact]
+    public void Resolve_FreeModelsOnly_ExcludesPaidModels()
+    {
+        _registry.Register("paid-model", new ModelCapabilities
+        {
+            TierHint = ModelTier.Fast,
+            CostPerMillionInput = 0.5m,
+            Source = CapabilitySource.Live,
+        });
+        _registry.Register("free-model:free", new ModelCapabilities
+        {
+            TierHint = ModelTier.Fast,
+            Source = CapabilitySource.Live,
+            // No pricing — treated as free
+        });
+
+        var resolver = CreateResolver(freeModelsOnly: true);
+        Assert.Equal("free-model:free", resolver.Resolve(ModelTier.Fast));
+    }
+
+    [Fact]
+    public void Resolve_FreeModelsOnly_IncludesLocalModelsWithoutPricing()
+    {
+        _registry.Register("ollama/llama3:8b", new ModelCapabilities
+        {
+            Source = CapabilitySource.Live,
+            // No pricing data → local/self-hosted → considered free
+        });
+        _registry.Register("paid-cloud", new ModelCapabilities
+        {
+            TierHint = ModelTier.Standard,
+            CostPerMillionInput = 10m,
+            Source = CapabilitySource.Live,
+        });
+
+        var resolver = CreateResolver(freeModelsOnly: true);
+        var assignments = resolver.GetTierAssignments();
+
+        // Local model should be included
+        var allModels = assignments.Values.SelectMany(c => c).Select(c => c.ModelId).ToList();
+        Assert.Contains("ollama/llama3:8b", allModels);
+        Assert.DoesNotContain("paid-cloud", allModels);
+    }
+
+    [Fact]
+    public void Resolve_FreeModelsOnly_IncludesOpenRouterFreeSuffix()
+    {
+        _registry.Register("google/gemma-4-31b-it", new ModelCapabilities
+        {
+            CostPerMillionInput = 0.3m,
+            CostPerMillionOutput = 0.3m,
+            Source = CapabilitySource.Live,
+        });
+        _registry.Register("google/gemma-4-31b-it:free", new ModelCapabilities
+        {
+            // Free variants on OpenRouter have no cost
+            Source = CapabilitySource.Live,
+        });
+
+        var resolver = CreateResolver(freeModelsOnly: true);
+        var allModels = resolver.GetTierAssignments()
+            .Values.SelectMany(c => c).Select(c => c.ModelId).ToList();
+
+        Assert.Contains("google/gemma-4-31b-it:free", allModels);
+        Assert.DoesNotContain("google/gemma-4-31b-it", allModels);
     }
 }

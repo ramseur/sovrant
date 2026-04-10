@@ -16,6 +16,7 @@ public sealed partial class ModelTierResolver : IModelTierResolver
     private readonly IModelCapabilityRegistry _registry;
     private readonly ILogger<ModelTierResolver> _logger;
     private readonly Dictionary<string, string>? _pinnedTierModels;
+    private readonly bool _freeModelsOnly;
 
     // tier → candidates sorted by score ascending (cheapest/best first)
     private Dictionary<string, List<TierCandidate>> _assignments = new(StringComparer.OrdinalIgnoreCase);
@@ -23,10 +24,12 @@ public sealed partial class ModelTierResolver : IModelTierResolver
     public ModelTierResolver(
         IModelCapabilityRegistry registry,
         ILogger<ModelTierResolver> logger,
-        IReadOnlyDictionary<string, string>? pinnedTierModels = null)
+        IReadOnlyDictionary<string, string>? pinnedTierModels = null,
+        bool freeModelsOnly = false)
     {
         _registry = registry;
         _logger = logger;
+        _freeModelsOnly = freeModelsOnly;
         _pinnedTierModels = pinnedTierModels?.ToDictionary(
             kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
         Rebuild();
@@ -99,6 +102,10 @@ public sealed partial class ModelTierResolver : IModelTierResolver
         {
             // Skip glob patterns
             if (modelId.Contains('*', StringComparison.Ordinal))
+                continue;
+
+            // Free-models-only: include only models with zero cost or ":free" suffix
+            if (_freeModelsOnly && !IsFreeModel(modelId, caps))
                 continue;
 
             var score = ComputeScore(modelId, caps);
@@ -208,6 +215,23 @@ public sealed partial class ModelTierResolver : IModelTierResolver
         }
 
         return ModelTier.Standard; // safe default
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> if the model is free — either its ID ends with <c>:free</c>
+    /// (OpenRouter convention) or it has no pricing data (local / self-hosted).
+    /// </summary>
+    private static bool IsFreeModel(string modelId, ModelCapabilities caps)
+    {
+        if (modelId.EndsWith(":free", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // No pricing info at all → assume local/self-hosted (free)
+        if (!caps.CostPerMillionInput.HasValue && !caps.CostPerMillionOutput.HasValue)
+            return true;
+
+        // Explicitly zero cost
+        return caps.CostPerMillionInput is 0m && caps.CostPerMillionOutput is 0m;
     }
 
     /// <summary>

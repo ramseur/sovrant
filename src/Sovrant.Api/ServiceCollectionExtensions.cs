@@ -151,7 +151,7 @@ public static class ServiceCollectionExtensions
             var registry = sp.GetRequiredService<IModelCapabilityRegistry>();
             var tierLogger = sp.GetRequiredService<ILogger<ModelTierResolver>>();
             var config = sp.GetRequiredService<RoutingConfig>();
-            return new ModelTierResolver(registry, tierLogger, config.TierModels);
+            return new ModelTierResolver(registry, tierLogger, config.TierModels, config.FreeModelsOnly);
         });
 
         return services;

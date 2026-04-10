@@ -23,6 +23,15 @@ public sealed class RoutingConfig
     public bool AutoTierAssignment { get; init; } = true;
 
     /// <summary>
+    /// When <c>true</c>, only models with zero cost (e.g. OpenRouter <c>:free</c> variants)
+    /// are eligible for tier assignment. Paid models are excluded from auto-routing.
+    /// Useful for users on OpenRouter's free tier who want to avoid accidental charges.
+    /// Override via <c>SOVRANT_FREE_MODELS_ONLY=true</c>.
+    /// </summary>
+    [JsonPropertyName("free_models_only")]
+    public bool FreeModelsOnly { get; init; }
+
+    /// <summary>
     /// Explicit tier → model ID mappings. Use <c>"auto"</c> for auto-assignment.
     /// Example: <c>{ "fast": "gpt-4o-mini", "standard": "auto", "high": "claude-opus-4-6" }</c>
     /// </summary>
@@ -98,8 +107,8 @@ public static class RoutingConfigLoader
             try
             {
                 var json = File.ReadAllText(path);
-                var config = JsonSerializer.Deserialize<RoutingConfig>(json, JsonOptions);
-                return config ?? new RoutingConfig();
+                var parsed = JsonSerializer.Deserialize<RoutingConfig>(json, JsonOptions);
+                return parsed ?? new RoutingConfig();
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -108,15 +117,24 @@ public static class RoutingConfigLoader
             }
         }
 
-        // Check env var override for intent routing toggle
+        var intentRouting = true;
+        var freeModelsOnly = false;
+
+        // Check env var overrides
         var envToggle = Environment.GetEnvironmentVariable("SOVRANT_INTENT_ROUTING");
         if (envToggle is not null)
         {
-            var enabled = envToggle.Equals("true", StringComparison.OrdinalIgnoreCase)
+            intentRouting = envToggle.Equals("true", StringComparison.OrdinalIgnoreCase)
                 || envToggle.Equals("1", StringComparison.Ordinal);
-            return new RoutingConfig { IntentRouting = enabled };
         }
 
-        return new RoutingConfig();
+        var freeOnly = Environment.GetEnvironmentVariable("SOVRANT_FREE_MODELS_ONLY");
+        if (freeOnly is not null)
+        {
+            freeModelsOnly = freeOnly.Equals("true", StringComparison.OrdinalIgnoreCase)
+                || freeOnly.Equals("1", StringComparison.Ordinal);
+        }
+
+        return new RoutingConfig { IntentRouting = intentRouting, FreeModelsOnly = freeModelsOnly };
     }
 }
