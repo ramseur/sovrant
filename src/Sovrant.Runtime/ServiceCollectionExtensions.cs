@@ -68,19 +68,7 @@ public static class ServiceCollectionExtensions
 
         // Audit store — SQLite primary, optional JSONL dual-write.
         services.AddSingleton<IAuditStore>(sp =>
-        {
-            var factory = sp.GetRequiredService<ISqliteConnectionFactory>();
-            IAuditStore primary = new SqliteAuditStore(factory);
-
-            if (string.Equals(
-                    Environment.GetEnvironmentVariable("SOVRANT_AUDIT_JSONL"),
-                    "true", StringComparison.OrdinalIgnoreCase))
-            {
-                return new DualWriteAuditStore(primary, new AuditLogger());
-            }
-
-            return primary;
-        });
+            new SqliteAuditStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
         // Governance monitor — loads governance.json from disk.
         services.AddSingleton<GovernanceConfig>(_ => GovernanceConfig.Load());
@@ -93,20 +81,7 @@ public static class ServiceCollectionExtensions
 
         // Session store — SQLite primary, optional JSONL dual-write.
         services.AddSingleton<ISessionStore>(sp =>
-        {
-            var factory = sp.GetRequiredService<ISqliteConnectionFactory>();
-            ISessionStore primary = new SqliteSessionStore(factory);
-
-            if (string.Equals(
-                    Environment.GetEnvironmentVariable("SOVRANT_SESSION_JSONL"),
-                    "true", StringComparison.OrdinalIgnoreCase))
-            {
-                var jsonlLogger = sp.GetRequiredService<ILogger<JsonlSessionStore>>();
-                return new DualWriteSessionStore(primary, new JsonlSessionStore(jsonlLogger));
-            }
-
-            return primary;
-        });
+            new SqliteSessionStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
         // Token usage tracking
         services.AddSingleton<ITokenUsageStore>(sp =>
@@ -206,8 +181,9 @@ public static class ServiceCollectionExtensions
         });
         services.AddSingleton<LegacyArtifactImporter>();
 
-        // Eval framework (Phase 27)
-        services.AddSingleton<IEvalResultStore, EvalResultStore>();
+        // Eval framework (Phase 27) — SQLite-backed since Phase 49
+        services.AddSingleton<IEvalResultStore>(sp =>
+            new SqliteEvalResultStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
         services.AddSingleton<IEvalRunner, EvalRunner>();
 
         // MCP

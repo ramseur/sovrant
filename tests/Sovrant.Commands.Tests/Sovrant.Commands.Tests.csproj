@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Sovrant.Api\Sovrant.Api.csproj" />
     <ProjectReference Include="..\..\src\Sovrant.Commands\Sovrant.Commands.csproj" />
+    <ProjectReference Include="..\..\src\Sovrant.Runtime\Sovrant.Runtime.csproj" />
   </ItemGroup>
 
 </Project>

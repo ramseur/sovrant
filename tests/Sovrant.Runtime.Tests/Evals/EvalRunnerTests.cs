@@ -4,25 +4,32 @@ using Sovrant.Api.Providers;
 using Sovrant.Api.Routing;
 using Sovrant.Api.Types;
 using Sovrant.Runtime.Evals;
+using Sovrant.Runtime.Storage;
 
 namespace Sovrant.Runtime.Tests.Evals;
 
-public sealed class EvalRunnerTests : IDisposable
+public sealed class EvalRunnerTests : IAsyncDisposable
 {
-    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), $"sovrant-eval-runner-{Guid.NewGuid():N}");
+    private readonly string _dbPath;
+    private readonly SqliteStorageProvider _provider;
+    private readonly SqliteEvalResultStore _resultStore;
     private readonly EvalRunner _runner;
 
     public EvalRunnerTests()
     {
-        var resultStore = new EvalResultStore(_tempDir);
+        _dbPath = Path.Combine(Path.GetTempPath(), $"sovrant_eval_runner_test_{Guid.NewGuid():N}.db");
+        _provider = new SqliteStorageProvider(NullLogger<SqliteStorageProvider>.Instance, _dbPath);
+        _provider.InitializeAsync().GetAwaiter().GetResult();
+        _resultStore = new SqliteEvalResultStore((ISqliteConnectionFactory)_provider);
         var router = new StubRouter();
-        _runner = new EvalRunner(router, resultStore, NullLogger<EvalRunner>.Instance);
+        _runner = new EvalRunner(router, _resultStore, NullLogger<EvalRunner>.Instance);
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        await _provider.DisposeAsync();
+        if (File.Exists(_dbPath))
+            File.Delete(_dbPath);
     }
 
     [Fact]
@@ -206,9 +213,10 @@ public sealed class EvalRunnerTests : IDisposable
 
         await _runner.RunAsync(suite, new FixedOutputProvider("ok"));
 
-        Assert.True(Directory.Exists(_tempDir));
-        var files = Directory.GetFiles(_tempDir, "*.json");
-        Assert.Single(files);
+        // Verify persisted to SQLite
+        var history = _resultStore.LoadHistory("persist-test");
+        Assert.Single(history);
+        Assert.Equal("persist-test", history[0].SuiteName);
     }
 
     [Fact]

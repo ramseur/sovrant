@@ -1,34 +1,31 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Commands.Commands;
 using Sovrant.Runtime.Memory;
+using Sovrant.Runtime.Storage;
 
 namespace Sovrant.Commands.Tests.Commands;
 
-public sealed class RememberCommandTests : IDisposable
+public sealed class RememberCommandTests : IAsyncDisposable
 {
-    private readonly string _tempDir;
-    private readonly FileMemoryStore _store;
+    private readonly string _dbPath;
+    private readonly SqliteStorageProvider _provider;
+    private readonly SqliteMemoryStore _store;
     private readonly RememberCommand _command;
 
     public RememberCommandTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), $"sovrant-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_tempDir);
-
-        _store = new FileMemoryStore(
-            Path.Combine(_tempDir, "summaries"),
-            Path.Combine(_tempDir, "learned"),
-            Path.Combine(_tempDir, "instincts"),
-            NullLogger<FileMemoryStore>.Instance);
-
+        _dbPath = Path.Combine(Path.GetTempPath(), $"sovrant_test_{Guid.NewGuid():N}.db");
+        _provider = new SqliteStorageProvider(NullLogger<SqliteStorageProvider>.Instance, _dbPath);
+        _provider.InitializeAsync().GetAwaiter().GetResult();
+        _store = new SqliteMemoryStore((ISqliteConnectionFactory)_provider);
         _command = new RememberCommand(_store);
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        _store.Dispose();
-        try { Directory.Delete(_tempDir, recursive: true); }
-        catch (IOException) { }
+        await _provider.DisposeAsync();
+        if (File.Exists(_dbPath))
+            File.Delete(_dbPath);
     }
 
     [Fact]

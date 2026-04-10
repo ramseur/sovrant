@@ -1,36 +1,33 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Runtime.Memory;
 using Sovrant.Runtime.Session;
+using Sovrant.Runtime.Storage;
 
 namespace Sovrant.Runtime.Tests.Memory;
 
-public sealed class SessionEndMemoryHandlerTests : IDisposable
+public sealed class SessionEndMemoryHandlerTests : IAsyncDisposable
 {
-    private readonly string _tempDir;
-    private readonly FileMemoryStore _memoryStore;
+    private readonly string _dbPath;
+    private readonly SqliteStorageProvider _provider;
+    private readonly SqliteMemoryStore _memoryStore;
     private readonly InMemorySessionStore _sessionStore;
     private readonly SessionEndMemoryHandler _handler;
 
     public SessionEndMemoryHandlerTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), $"sovrant-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_tempDir);
-
-        _memoryStore = new FileMemoryStore(
-            Path.Combine(_tempDir, "summaries"),
-            Path.Combine(_tempDir, "learned"),
-            Path.Combine(_tempDir, "instincts"),
-            NullLogger<FileMemoryStore>.Instance);
-
+        _dbPath = Path.Combine(Path.GetTempPath(), $"sovrant_test_{Guid.NewGuid():N}.db");
+        _provider = new SqliteStorageProvider(NullLogger<SqliteStorageProvider>.Instance, _dbPath);
+        _provider.InitializeAsync().GetAwaiter().GetResult();
+        _memoryStore = new SqliteMemoryStore((ISqliteConnectionFactory)_provider);
         _sessionStore = new InMemorySessionStore();
         _handler = new SessionEndMemoryHandler(_sessionStore, _memoryStore, NullLogger<SessionEndMemoryHandler>.Instance);
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        _memoryStore.Dispose();
-        try { Directory.Delete(_tempDir, recursive: true); }
-        catch (IOException) { }
+        await _provider.DisposeAsync();
+        if (File.Exists(_dbPath))
+            File.Delete(_dbPath);
     }
 
     [Fact]
