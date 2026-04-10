@@ -99,6 +99,29 @@ internal static class MissionRoutes
             var events = await store.GetEventsAsync(id, ct);
             return Results.Json(new { events }, s_jsonOptions);
         });
+
+        app.MapGet("/v1/missions/{id}/export", async (
+            string id,
+            string? format,
+            MissionExportService exporter,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                if (string.Equals(format, "json", StringComparison.OrdinalIgnoreCase))
+                {
+                    var json = await exporter.ExportJsonAsync(id, ct);
+                    return Results.Content(json, "application/json");
+                }
+
+                var md = await exporter.ExportMarkdownAsync(id, ct);
+                return Results.Content(md, "text/markdown");
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.Ordinal))
+            {
+                return Results.NotFound(new { error = ex.Message });
+            }
+        });
     }
 
     public sealed record CreateMissionRequest(

@@ -183,6 +183,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMissionPlanner, SimpleMissionPlanner>();
         services.AddSingleton<IAcceptanceGate, AllStepsSucceededGate>();
         services.AddSingleton<IMissionExecutor, LlmMissionExecutor>();
+        services.AddSingleton<MissionExportService>();
 
         // Eval framework (Phase 27)
         services.AddSingleton<IEvalResultStore, EvalResultStore>();

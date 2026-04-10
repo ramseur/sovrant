@@ -13,6 +13,7 @@ using Sovrant.Tools.Tasks;
 using Sovrant.Tools.Todo;
 using Sovrant.Tools.Quality;
 using Sovrant.Tools.Shell;
+using Sovrant.Tools.Missions;
 using Sovrant.Tools.Swarm;
 using Sovrant.Tools.Team;
 using Sovrant.Tools.Worktree;
@@ -121,6 +122,9 @@ public static class ServiceCollectionExtensions
 
             return new TeamDelegateTool(registry, agentSystem, member => factory.Create(member));
         });
+
+        // Mission tool — lets running agents spawn and drive sub-missions
+        services.AddSingleton<ITool, MissionTool>();
 
         // Quality / verification tools
         services.AddSingleton<ITool, VerifyTool>();
