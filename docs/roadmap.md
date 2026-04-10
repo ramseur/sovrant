@@ -3476,17 +3476,21 @@ This box is the post-delivery summary. Everything below the horizontal rule that
 
 **Tests.** 532 runtime tests + 5 mission-routes integration tests all passing (`MigrationRunnerTests`, `SqliteStorageProviderTests`, `OldDbUpgradeTests`, `LlmExecutorTests`, `SqliteRuntimeTraceStoreTests`, `SqliteMissionScratchpadStoreTests`, `NaiveContextCompactorTests`, `MacroExpanderTests`, `EngineRecoveryTests`, `LlmStepRunnerTests`, `SqliteMissionStoreTests`, `LlmMissionExecutorTests`, `EngineRoutesTests`, `MissionRoutesTests`). Schema version bumped to **V011** across migration tests and old-db upgrade tests.
 
-**What is deferred (not shipped this pass, tracked as follow-ups).** The spec below calls out ~16 items for the mission layer; the core primitive is the above. Explicitly deferred:
+**What shipped in the follow-up pass (2026-04-10).** Six items that had zero external blockers were shipped immediately after the core primitive:
 
-- **`MissionGuard` + cost/time envelopes.** Requires Phase 55's `ICostModel`, which has not shipped. Until then the acceptance gate is pure pass/fail on step status. The `MissionGuard` interface can slot into `LlmMissionExecutor` at the same point `_gate` runs today.
-- **`MissionTool` for sub-mission spawning.** The executor can already run a mission; wrapping it as a tool so a running agent can spawn a sub-mission is a small addition on top of `IMissionExecutor`.
-- **`pm_export`** (mission → Markdown/JSON report). One-shot read-path over `GetEventsAsync` + `GetAsync`.
-- **`sovrant mission` CLI verbs** (`create` / `show` / `run` / `events` / `cancel`). Thin wrappers over the existing HTTP surface.
-- **Phase 50 outbox hookup.** Publishing mission events to an OpenClaw route is a consumer of the existing journal; no changes required in the mission layer itself.
-- **LLM-backed `IMissionPlanner`** and **LLM-backed `IContextCompactor`**. Both seams exist; production can plug in implementations without touching callers.
-- **Parallel sub-agent fan-out during a single `RunAsync`.** `IMissionScratchpadStore` is ready to receive entries from concurrent sub-agents, but `LlmMissionExecutor` runs one engine cycle per call today. Fan-out is additive on the executor side.
+| Item | What it adds | Value |
+|---|---|---|
+| `MissionTool` | `ITool` wrapping `IMissionStore`/`IMissionExecutor` with create/run/get/events/list actions | Running agents can spawn sub-missions as tool calls instead of the parent loop managing everything synchronously |
+| `MissionExportService` (pm_export) | `ExportMarkdownAsync` and `ExportJsonAsync` — Markdown timeline report + structured JSON export from mission state + event journal | `GET /v1/missions/{id}/export?format=json` endpoint and `/mission export` CLI subcommand give humans and external tooling a readable view of what a mission did |
+| `/mission` CLI command | create, list, show, run, events, export, cancel subcommands registered as `ISlashCommand` | Users can drive missions from the REPL without hitting the HTTP API directly |
+| `LlmContextCompactor` | `IContextCompactor` that asks an LLM to summarise folded step outcomes; falls back to `NaiveContextCompactor` on failure | Higher-quality compaction — the LLM identifies *salient* outcomes rather than listing statuses chronologically |
+| `LlmMissionPlanner` | `IMissionPlanner` that asks an LLM to decompose a goal into 2-8 steps with intent, expected outcome, and model tier; falls back to `SimpleMissionPlanner` | Multi-step plans instead of one-step stubs — the mission layer can now produce real structured work breakdowns |
+| `ParallelMissionExecutor` | `IMissionExecutor` that fans out independent plan steps across concurrent engine runs (bounded by `MaxConcurrency=4`), writes outcomes to scratchpad | Missions with independent steps complete faster; the scratchpad ensures the next plan wave sees all results |
 
-**Why we landed a minimal-but-complete mission loop instead of all 16 items at once.** The spec below treats the mission layer as a single unit of work. In practice the *orchestration primitive* (plan → execute → gate → journal → terminal state) is the hard part; the deferred items are either (a) gated on Phase 55, (b) surface polish (CLI, exports, outbox), or (c) additive scaling (parallel fan-out, LLM planner). Shipping the primitive now means the engine layer has a real consumer today, the V011 schema is locked in before downstream phases depend on it, and every deferred item can land independently without re-opening the engine/mission seam.
+**What remains deferred (blocked on other phases):**
+
+- **`MissionGuard` + cost/time envelopes.** Requires Phase 55's `ICostModel`, which has not shipped. Until then the acceptance gate is pure pass/fail on step status.
+- **Phase 50 outbox hookup.** Publishing mission events to an OpenClaw route requires Phase 50 (federated bus). No changes needed in the mission layer itself — it's a consumer of the existing journal.
 
 ---
 
