@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sovrant.Api.Auth;
+using Sovrant.Api.Capabilities;
 using Sovrant.Api.Providers;
 using Sovrant.Api.Routing;
 
@@ -76,6 +77,18 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IAuthProvider>(new ApiKeyAuthProvider(apiKey));
 
+        // Model capability registry (Phase 54) — layered resolution:
+        // user overrides > bundled overrides > live metadata > defaults.
+        services.AddSingleton<IModelCapabilityRegistry>(sp =>
+            new ModelCapabilityRegistry(sp.GetRequiredService<ILogger<ModelCapabilityRegistry>>()));
+        services.AddSingleton<ModelOverrideLoader>();
+        services.AddHttpClient("ModelMetadataFetcher");
+        services.AddSingleton<LiveModelMetadataFetcher>(sp =>
+            new LiveModelMetadataFetcher(
+                sp.GetRequiredService<IModelCapabilityRegistry>(),
+                sp.GetRequiredService<IHttpClientFactory>().CreateClient("ModelMetadataFetcher"),
+                sp.GetRequiredService<ILogger<LiveModelMetadataFetcher>>()));
+
         // Providers inject ILogger (non-generic base interface). Register a factory-backed instance
         // so the DI container can resolve it for typed HTTP clients.
         services.AddSingleton<ILogger>(sp =>
@@ -124,7 +137,8 @@ public static class ServiceCollectionExtensions
                 providers.Add(new(provApiProv, "models", 0.003));
             }
 
-            return new SmartRouter(providers, routerMode, routerStrategy, pingClient, logger);
+            var capRegistry = sp.GetService<IModelCapabilityRegistry>();
+            return new SmartRouter(providers, routerMode, routerStrategy, pingClient, logger, capRegistry);
         });
 
         return services;

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Api.Auth;
+using Sovrant.Api.Capabilities;
 using Sovrant.Api.Providers;
 using Sovrant.Api.Routing;
 using Sovrant.Api.Types;
@@ -170,6 +171,25 @@ public sealed class SmartRouterTests
         var router = BuildRouter([info]);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => router.PinProviderAsync("unknown"));
+    }
+
+    [Fact]
+    public async Task RouteAsync_NormalizesModelId_WhenCapabilityRegistryProvided()
+    {
+        var registry = new ModelCapabilityRegistry(NullLogger<ModelCapabilityRegistry>.Instance);
+        registry.RegisterAlias("gemma4:27b", "google/gemma-4-27b");
+
+        var provider = CreateProvider("p1", "https://p1.example.com");
+        var info = new ProviderInfo(provider, "/v1/models", 0.001);
+        var pingHttp = new HttpClient(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonOk("{}")));
+        var router = new SmartRouter([info], RouterMode.Smart, RouterStrategy.Balanced,
+            pingHttp, NullLogger<SmartRouter>.Instance, registry);
+
+        var req = new MessagesRequest("gemma4:27b", 100, [InputMessage.UserText("Hi")]);
+        var selected = await router.RouteAsync(req);
+
+        // Router should resolve — the key thing is it doesn't throw
+        Assert.Equal("p1", selected.Name);
     }
 
     /// <summary>Helper subclass that overrides Name for testing.</summary>

@@ -91,7 +91,7 @@ The engine is fully functional for individual and small-team use:
 | ~~Sophisticated runtime + autonomous mission loop~~ — **complete** (engine layer steps A–I, mission layer with store/planner/executor/gate/journal/routes/CLI/tool/export/parallel fan-out; only MissionGuard blocked on Phase 55 and outbox on Phase 50) | Phase 51 ✅ | Complete |
 | ~~Unified agent orchestration~~ — **complete** (V012 migration: teams/team_members/agent_runs tables + swarm_events extended; SqliteTeamRegistry replaces InMemoryTeamRegistry; AgentOrchestrator unifies SwarmOrchestrator + TeamDelegateTool with three modes and opt-in flags; EnsembleSelector, TeamRunTool, TeamPublishTool; /v1/teams CRUD + /v1/runs routes; /team CLI with full CRUD; system prompt orchestration strategy: solo→sub-agent→team→swarm→mission; 549 runtime + 146 server + 185 agent tests) | Phase 52 ✅ | Complete |
 | ~~Scoped artifact storage~~ — **complete** (IArtifactStore abstraction with ArtifactScope/ArtifactHandle/ArtifactEntry; LocalArtifactStore with path-traversal guards and workspace-first layout {workspace}/{project}/{run}/ — all workspace members share artifacts, user tracked in manifest only; WorkspaceContext refactored with deprecated shim; ConversationRuntime + SwarmOrchestrator updated for scoped paths; /v1/artifacts routes (list/download/delete); /artifacts CLI command (ls/open/rm); LegacyArtifactImporter one-shot migration; ArtifactManifest per-run metadata; 574 runtime + 149 server + 185 agent + 56 command tests) | Phase 53 ✅ | Complete |
-| **Gemma 4 support (OpenRouter primary, Ollama local-only) + capability-detection registry for models with incomplete tool-use metadata** | **Phase 54** | **Next** |
+| ~~Gemma 4 support + model capability registry~~ — **complete** (IModelCapabilityRegistry with layered resolution: User > Bundled > Live > Default; ModelCapabilityRegistry with exact + glob pattern matching; bundled model-overrides.json with Gemma 4 entries and expiry dates; LiveModelMetadataFetcher for OpenRouter /api/v1/models; ModelOverrideLoader with bundled/user/env sources; model ID normalization via aliases in SmartRouter; SOVRANT_MODEL_CAPABILITIES env var for inline overrides; 52 API tests) | Phase 54 ✅ | Complete |
 | Per-user token auth & database hardening | Phase 38 | Medium |
 | Cost tracking, token budgets & dashboard (pricing moved to Phase 55) | Phase 39 (partially superseded) | Deferred |
 | Live cost tracking via OpenRouter (pricing-as-a-service, no local registry) | Phase 55 | Low–Medium |
@@ -4027,7 +4027,7 @@ One-shot importer runs at startup if `{cwd}/artifacts/` is non-empty and `SOVRAN
 
 ---
 
-## Phase 54 — Gemma 4 Support (OpenRouter primary, Ollama local-only) & Capability Detection for Models with Incomplete Tool-Use Metadata
+## Phase 54 — Gemma 4 Support (OpenRouter primary, Ollama local-only) & Capability Detection for Models with Incomplete Tool-Use Metadata ✅
 
 **Depends on:** Phase 2 (OpenAI-compat provider), Phase 22 (tiered routing)
 **Relates to:** Phase 48 (capability-discovered routing — this phase seeds the per-model capability layer it will later consume)

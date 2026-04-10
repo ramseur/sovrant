@@ -1,0 +1,53 @@
+{
+  "_comment": "Bundled model capability overrides. These patch known gaps in provider metadata. Entries with an 'expires' date are temporary workarounds that should be reviewed and removed after that date.",
+
+  "overrides": [
+    {
+      "pattern": "google/gemma-4-*",
+      "capabilities": {
+        "native_tools": true,
+        "structured_output": true,
+        "thinking_mode": true,
+        "ollama_template_workaround": false,
+        "family": "gemma-4",
+        "max_context": 262144
+      },
+      "reason": "OpenRouter /api/v1/models does not yet populate supported_parameters with tools/tool_choice for Gemma 4 entries, even though the model supports them natively.",
+      "expires": "2026-07-01"
+    },
+    {
+      "pattern": "gemma4:*",
+      "capabilities": {
+        "native_tools": true,
+        "structured_output": true,
+        "thinking_mode": true,
+        "ollama_template_workaround": true,
+        "family": "gemma-4",
+        "max_context": 262144
+      },
+      "reason": "Ollama v0.20.0 has a broken Gemma 4 chat template for tool calls. The workaround uses /api/generate with raw control tokens.",
+      "expires": "2026-07-01"
+    },
+    {
+      "pattern": "ollama/gemma4*",
+      "capabilities": {
+        "native_tools": true,
+        "structured_output": true,
+        "thinking_mode": true,
+        "ollama_template_workaround": true,
+        "family": "gemma-4",
+        "max_context": 262144
+      },
+      "reason": "Same Ollama workaround as gemma4:* but with explicit ollama/ prefix.",
+      "expires": "2026-07-01"
+    }
+  ],
+
+  "aliases": {
+    "gemma-4-26b-a4b-it": "google/gemma-4-26b",
+    "google/gemma-4-26b-a4b-it": "google/gemma-4-26b",
+    "gemma4:27b": "google/gemma-4-27b",
+    "gemma4:31b-instruct": "google/gemma-4-31b",
+    "gemma4:latest": "google/gemma-4-27b"
+  }
+}

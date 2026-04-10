@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Sovrant.Api.Capabilities;
 using Sovrant.Api.Providers;
 using Sovrant.Api.Types;
 
@@ -17,6 +18,7 @@ public sealed class SmartRouter : ISmartRouter, IDisposable
     private readonly RouterStrategy _strategy;
     private readonly HttpClient _httpClient;
     private readonly ILogger<SmartRouter> _logger;
+    private readonly IModelCapabilityRegistry? _capabilityRegistry;
     private readonly CancellationTokenSource _shutdownCts = new();
     private readonly List<Task> _recheckTasks = [];
     private bool _initialized;
@@ -47,12 +49,19 @@ public sealed class SmartRouter : ISmartRouter, IDisposable
     /// <param name="strategy">The scoring strategy.</param>
     /// <param name="httpClient">HTTP client used for health-check pings.</param>
     /// <param name="logger">The logger.</param>
+    /// <param name="capabilityRegistry">
+    /// Optional model capability registry for normalizing model IDs on
+    /// inbound requests. When provided, the router calls
+    /// <see cref="IModelCapabilityRegistry.Normalize"/> on each request's
+    /// model before routing.
+    /// </param>
     public SmartRouter(
         IReadOnlyList<ProviderInfo> providers,
         RouterMode mode,
         RouterStrategy strategy,
         HttpClient httpClient,
-        ILogger<SmartRouter> logger)
+        ILogger<SmartRouter> logger,
+        IModelCapabilityRegistry? capabilityRegistry = null)
     {
         ArgumentNullException.ThrowIfNull(providers);
         ArgumentNullException.ThrowIfNull(httpClient);
@@ -63,6 +72,7 @@ public sealed class SmartRouter : ISmartRouter, IDisposable
         _strategy = strategy;
         _httpClient = httpClient;
         _logger = logger;
+        _capabilityRegistry = capabilityRegistry;
     }
 
     /// <inheritdoc/>
@@ -77,6 +87,17 @@ public sealed class SmartRouter : ISmartRouter, IDisposable
     public Task<ILlmProvider> RouteAsync(MessagesRequest req, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(req);
+
+        // Normalize the model ID via the capability registry (Phase 54).
+        // This maps aliases like "gemma4:27b" → "google/gemma-4-27b".
+        if (_capabilityRegistry is not null && !string.IsNullOrEmpty(req.Model))
+        {
+            var normalized = _capabilityRegistry.Normalize(req.Model);
+            if (!string.Equals(normalized, req.Model, StringComparison.Ordinal))
+            {
+                req = req with { Model = normalized };
+            }
+        }
 
         // If a provider is pinned, prefer it when healthy.
         var pinned = _pinnedProviderName;

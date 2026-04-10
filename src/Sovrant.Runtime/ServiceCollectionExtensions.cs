@@ -238,6 +238,16 @@ public static class ServiceCollectionExtensions
         var storage = services.GetRequiredService<IStorageProvider>();
         await storage.InitializeAsync(ct).ConfigureAwait(false);
 
+        // Load model capability overrides (Phase 54) — bundled + user + env.
+        // Must run before live fetch so overrides take priority.
+        var overrideLoader = services.GetRequiredService<Sovrant.Api.Capabilities.ModelOverrideLoader>();
+        overrideLoader.LoadAll();
+
+        // Fetch live model metadata from OpenRouter (Phase 54) — best effort,
+        // registered as Live source (lowest priority after bundled/user overrides).
+        var metadataFetcher = services.GetRequiredService<Sovrant.Api.Capabilities.LiveModelMetadataFetcher>();
+        await metadataFetcher.FetchAsync(ct).ConfigureAwait(false);
+
         // Run one-shot legacy artifact migration (Phase 53).
         var importer = services.GetRequiredService<LegacyArtifactImporter>();
         await importer.ImportIfNeededAsync(ct).ConfigureAwait(false);
