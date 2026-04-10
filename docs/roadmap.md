@@ -84,11 +84,11 @@ The engine is fully functional for individual and small-team use:
 
 ### Still pending
 
-> **Last audited:** 2026-04-08. Phases 1–37.5 are complete (see ✅ markers in the section headers below). Everything in this table is *not yet shipped*; verified by checking the codebase for the key markers of each phase.
+> **Last audited:** 2026-04-10. Phases 1–37.5 and Phase 51 are complete (see ✅ markers in the section headers below). Everything in this table is *not yet shipped*; verified by checking the codebase for the key markers of each phase.
 
 | Gap | Phase | Priority |
 |---|---|---|
-| ~~Sophisticated runtime + autonomous mission loop~~ — **engine + mission layer shipped 2026-04-09** (see Phase 51 section below for what landed vs. what is deferred) | Phase 51 ✅ | Shipped |
+| ~~Sophisticated runtime + autonomous mission loop~~ — **complete** (engine layer steps A–I, mission layer with store/planner/executor/gate/journal/routes/CLI/tool/export/parallel fan-out; only MissionGuard blocked on Phase 55 and outbox on Phase 50) | Phase 51 ✅ | Complete |
 | **Unified agent orchestration: collapse Team and Swarm into one DB-backed abstraction with three creation modes (one team / multiple teams / engine-decided)** | **Phase 52** | **Next** |
 | **Scoped artifact storage (user / workspace / project, disk now → cloud later)** | **Phase 53** | **Next** |
 | **Gemma 4 support (OpenRouter primary, Ollama local-only) + capability-detection registry for models with incomplete tool-use metadata** | **Phase 54** | **Next** |
@@ -3442,9 +3442,19 @@ OpenClaw solves all four with a single routing primitive: **the route**. A route
 
 ---
 
-## Phase 51 — Sophisticated Runtime + Autonomous Mission Loop (End-to-End Tasks With PM & Priority Awareness)
+## Phase 51 — Sophisticated Runtime + Autonomous Mission Loop (End-to-End Tasks With PM & Priority Awareness) ✅
 
-### ✅ Shipped 2026-04-09 — what actually landed and why it matters
+### ✅ Complete — shipped 2026-04-09 (core) + 2026-04-10 (follow-up)
+
+#### Value — what Phase 51 gives Sovrant
+
+Phase 51 is the phase that makes Sovrant stop being a fancy chatbot wrapper and start being an **autonomous engineering system**.
+
+- **Before Phase 51:** The runtime ran one LLM turn at a time. If a tool call failed, the model guessed what to do next inside the same context window. No structured plan, no crash recovery, no way to inspect what happened. Every task was single-shot — "ship the OAuth refactor" meant the user had to babysit each step, re-prompt after failures, and manually track what was done.
+- **After Phase 51:** The engine commits to a plan of concrete steps, notices when reality contradicts expectations, and re-plans cheaply instead of silently drifting. Every state transition is crash-safe in SQLite. If the process dies mid-step, `EngineRecovery` closes out orphaned runs on restart. A mission takes a high-level goal and owns it across multiple engine runs — the event journal is append-only so you can reconstruct exactly what happened, the acceptance gate decides when a mission is done, and the parallel executor fans out independent steps so multi-step missions complete faster. Agents can spawn sub-missions as tool calls. The LLM planner decomposes goals into real multi-step work breakdowns. The LLM compactor keeps long-running missions within the planner's context budget without losing salient information.
+- **Net result:** Sovrant can take an ambiguous goal like "investigate the latency regression" and autonomously plan the investigation steps, execute them in parallel where possible, notice when a step contradicts the plan, re-plan, run the next wave, and produce a traceable journal of everything it did — with the user only needing to approve if the acceptance gate says so.
+
+#### What actually landed
 
 This box is the post-delivery summary. Everything below the horizontal rule that follows is the original specification; it is kept verbatim so the design intent stays on record. If the two disagree, this box is the source of truth for **what exists in the repo today**; the spec is the source of truth for **what the phase ultimately wants to become**.
 
@@ -3474,7 +3484,7 @@ This box is the post-delivery summary. Everything below the horizontal rule that
 | `LlmMissionExecutor` | Drives one mission forward one engine cycle: plan → `IExecutor.ExecuteAsync` → acceptance gate → journal → terminal state. Idempotent on already-terminal missions so a double `RunAsync` is a cheap no-op. Catches engine exceptions and journals them as `Failed` with an error payload so crashes are visible in the timeline | Missions are now first-class — the user can POST a goal and repeatedly POST `/run` to drive it forward, with every transition recorded in the journal. |
 | `MissionRoutes` at `/v1/missions/*` | `POST /v1/missions` (create), `GET /v1/missions` (list with owner/status filters), `GET /v1/missions/{id}`, `POST /v1/missions/{id}/run`, `GET /v1/missions/{id}/events` | HTTP surface for the CLI and UI. Same integration-test pattern as `EngineRoutes` so the routes are exercised against the real `SqliteMissionStore` via `SovrantWebAppFactory`. |
 
-**Tests.** 532 runtime tests + 5 mission-routes integration tests all passing (`MigrationRunnerTests`, `SqliteStorageProviderTests`, `OldDbUpgradeTests`, `LlmExecutorTests`, `SqliteRuntimeTraceStoreTests`, `SqliteMissionScratchpadStoreTests`, `NaiveContextCompactorTests`, `MacroExpanderTests`, `EngineRecoveryTests`, `LlmStepRunnerTests`, `SqliteMissionStoreTests`, `LlmMissionExecutorTests`, `EngineRoutesTests`, `MissionRoutesTests`). Schema version bumped to **V011** across migration tests and old-db upgrade tests.
+**Tests.** 541 runtime tests + 139 server tests all passing. Schema version bumped to **V011** across migration tests and old-db upgrade tests.
 
 **What shipped in the follow-up pass (2026-04-10).** Six items that had zero external blockers were shipped immediately after the core primitive:
 
