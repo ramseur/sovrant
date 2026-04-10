@@ -31,18 +31,26 @@
         <!-- Main sidebar content -->
         <ScrollViewer>
             <StackPanel Margin="12">
-                <!-- Logo -->
-                <StackPanel Orientation="Horizontal" Spacing="10" Margin="4,0,0,16">
-                    <Border Width="28" Height="28" CornerRadius="6"
-                            Background="{DynamicResource BrandPrimary}">
-                        <TextBlock Text="⚡" FontSize="14"
-                                   HorizontalAlignment="Center"
+                <!-- Logo + theme toggle -->
+                <DockPanel Margin="4,0,0,16">
+                    <ToggleSwitch DockPanel.Dock="Right"
+                                  IsChecked="{Binding IsDarkMode}"
+                                  OnContent="🌙" OffContent="☀️"
+                                  VerticalAlignment="Center"
+                                  Margin="0"
+                                  Padding="0" />
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Border Width="28" Height="28" CornerRadius="6"
+                                Background="{DynamicResource BrandPrimary}">
+                            <TextBlock Text="⚡" FontSize="14"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Text="Sovrant" FontSize="18" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextPrimary}"
                                    VerticalAlignment="Center" />
-                    </Border>
-                    <TextBlock Text="Sovrant" FontSize="18" FontWeight="Bold"
-                               Foreground="{DynamicResource TextPrimary}"
-                               VerticalAlignment="Center" />
-                </StackPanel>
+                    </StackPanel>
+                </DockPanel>
 
                 <!-- New Chat button -->
                 <Button Content="＋ New Chat"
