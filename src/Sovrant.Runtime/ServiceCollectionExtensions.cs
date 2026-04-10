@@ -41,7 +41,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(config);
 
         // Storage provider (Phase 32) — SQLite by default.
-        services.AddSingleton<SqliteStorageProvider>();
+        // Phase 42.5 — SovrantConfig.DbPath (from --db-path CLI flag) takes priority
+        // over the SOVRANT_DB_PATH env var and the default ~/.sovrant/data/sovrant.db.
+        services.AddSingleton(sp => new SqliteStorageProvider(
+            sp.GetRequiredService<ILogger<SqliteStorageProvider>>(), config.DbPath));
         services.AddSingleton<IStorageProvider>(sp => sp.GetRequiredService<SqliteStorageProvider>());
         services.AddSingleton<ISqliteConnectionFactory>(sp => sp.GetRequiredService<SqliteStorageProvider>());
 

@@ -31,6 +31,8 @@ var noStreamOpt = new Option<bool>("--no-stream")
     { Description = "Buffer the full response before printing." };
 var ciOpt = new Option<bool>("--ci")
     { Description = "CI mode: machine-readable JSON output, CI permission policy, non-zero exit on error." };
+var dbPathOpt = new Option<string?>("--db-path")
+    { Description = "Override the SQLite database path (also settable via SOVRANT_DB_PATH env var)." };
 
 // ── Root command ──────────────────────────────────────────────────────────────
 var root = new RootCommand("Sovrant — multi-provider agentic AI assistant.");
@@ -40,6 +42,7 @@ root.Add(permModeOpt);
 root.Add(sessionOpt);
 root.Add(noStreamOpt);
 root.Add(ciOpt);
+root.Add(dbPathOpt);
 
 // ── 'status' subcommand ───────────────────────────────────────────────────────
 var statusCmd = new Command("status", "Show provider health and routing statistics.");
@@ -595,6 +598,65 @@ dbInspectCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
 });
 dbCmd.Add(dbInspectCmd);
 
+// ── 'db init' — explicit first-boot initialisation ────────────────────────────
+var dbInitCmd = new Command("init", "Initialise the database (run migrations and seed default data). Safe to re-run.");
+dbInitCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    await using var sp = BuildServices(pr);
+    var storage = sp.GetRequiredService<IStorageProvider>();
+    await storage.InitializeAsync(ct).ConfigureAwait(false);
+    AnsiConsole.MarkupLine($"[green]\u2713[/] Database initialised at schema version {storage.SchemaVersion}.");
+    AnsiConsole.MarkupLine($"   Path: {Markup.Escape(storage.DatabasePath ?? "(unknown)")}");
+});
+dbCmd.Add(dbInitCmd);
+
+// ── 'db reset' — drop and re-create from scratch ──────────────────────────────
+var resetConfirmOpt = new Option<bool>("--yes")
+    { Description = "Skip the confirmation prompt (for scripting)." };
+var dbResetCmd = new Command("reset", "Delete the database and re-initialise from scratch. All data will be lost.");
+dbResetCmd.Add(resetConfirmOpt);
+dbResetCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    await using var sp = BuildServices(pr);
+    var storage = sp.GetRequiredService<IStorageProvider>();
+
+    var dbPath = storage.DatabasePath;
+    if (string.IsNullOrEmpty(dbPath))
+    {
+        AnsiConsole.MarkupLine("[red]Cannot determine database path.[/]");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    if (!pr.GetValue(resetConfirmOpt))
+    {
+        AnsiConsole.MarkupLine($"[yellow bold]WARNING:[/] This will permanently delete [bold]{Markup.Escape(dbPath)}[/] and all data in it.");
+        if (!await AnsiConsole.ConfirmAsync("Are you sure you want to reset the database?", defaultValue: false, ct).ConfigureAwait(false))
+        {
+            AnsiConsole.MarkupLine("[grey]Cancelled.[/]");
+            return;
+        }
+    }
+
+    // Delete DB + WAL/SHM sidecars.
+    string[] dbSuffixes = ["", "-wal", "-shm"];
+    foreach (var suffix in dbSuffixes)
+    {
+        var path = dbPath + suffix;
+        if (File.Exists(path))
+            File.Delete(path);
+    }
+
+    // Re-initialise from scratch.
+    var freshStorage = new SqliteStorageProvider(
+        sp.GetRequiredService<ILogger<SqliteStorageProvider>>(), dbPath);
+    await freshStorage.InitializeAsync(ct).ConfigureAwait(false);
+
+    AnsiConsole.MarkupLine($"[green]\u2713[/] Database reset to schema version {freshStorage.SchemaVersion}.");
+    AnsiConsole.MarkupLine($"   Path: {Markup.Escape(dbPath)}");
+});
+dbCmd.Add(dbResetCmd);
+
 root.Add(dbCmd);
 
 // ── REPL (default handler) ────────────────────────────────────────────────────
@@ -635,8 +697,9 @@ ServiceProvider BuildServices(ParseResult pr)
     // Apply CLI overrides on top of file/env config.
     var model = pr.GetValue(modelOpt);
     var permModeRaw = pr.GetValue(permModeOpt);
+    var dbPath = pr.GetValue(dbPathOpt);
 
-    if (model is not null || permModeRaw is not null)
+    if (model is not null || permModeRaw is not null || dbPath is not null)
     {
         var pm = config.PermissionMode;
         if (permModeRaw is not null)
@@ -651,6 +714,7 @@ ServiceProvider BuildServices(ParseResult pr)
             RouterStrategy = config.RouterStrategy,
             BaseUrl = config.BaseUrl,
             ApiKey = config.ApiKey,
+            DbPath = dbPath ?? config.DbPath,
             McpServers = config.McpServers,
         };
     }

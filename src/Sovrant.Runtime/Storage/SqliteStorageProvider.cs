@@ -35,6 +35,9 @@ public sealed partial class SqliteStorageProvider : IStorageProvider, ISqliteCon
     [LoggerMessage(Level = LogLevel.Error, Message = "SOVRANT_DB_BACKUP_ON_UPGRADE is set but backup to {BackupPath} failed: {ErrorMessage}. Migration will NOT proceed — restore a copy of the DB or unset the flag to continue.")]
     private static partial void LogBackupFailed(ILogger logger, string backupPath, string errorMessage);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Created Sovrant database at {DbPath} (schema v{Version}). This is a first-time initialization.")]
+    private static partial void LogFirstBoot(ILogger logger, string dbPath, int version);
+
     public SqliteStorageProvider(ILogger<SqliteStorageProvider> logger, string? dbPath = null)
     {
         _logger = logger;
@@ -119,13 +122,19 @@ public sealed partial class SqliteStorageProvider : IStorageProvider, ISqliteCon
                 }
             }
 
+            // Phase 42.5 item 10 — detect first boot before migrations run.
+            var preVersion = ReadSchemaVersion(connection);
+
             var runner = new MigrationRunner(_logger);
             _schemaVersion = runner.RunPendingMigrations(connection);
 
             // Seed the default user after migrations create the users table.
             SeedDefaultUser(connection);
 
-            LogInitialized(_logger, _schemaVersion);
+            if (preVersion == 0)
+                LogFirstBoot(_logger, _dbPath, _schemaVersion);
+            else
+                LogInitialized(_logger, _schemaVersion);
         }
         catch (MigrationDriftException ex)
         {

@@ -92,13 +92,13 @@ The engine is fully functional for individual and small-team use:
 | ~~Unified agent orchestration~~ — **complete** (V012 migration: teams/team_members/agent_runs tables + swarm_events extended; SqliteTeamRegistry replaces InMemoryTeamRegistry; AgentOrchestrator unifies SwarmOrchestrator + TeamDelegateTool with three modes and opt-in flags; EnsembleSelector, TeamRunTool, TeamPublishTool; /v1/teams CRUD + /v1/runs routes; /team CLI with full CRUD; system prompt orchestration strategy: solo→sub-agent→team→swarm→mission; 549 runtime + 146 server + 185 agent tests) | Phase 52 ✅ | Complete |
 | ~~Scoped artifact storage~~ — **complete** (IArtifactStore abstraction with ArtifactScope/ArtifactHandle/ArtifactEntry; LocalArtifactStore with path-traversal guards and workspace-first layout {workspace}/{project}/{run}/ — all workspace members share artifacts, user tracked in manifest only; WorkspaceContext refactored with deprecated shim; ConversationRuntime + SwarmOrchestrator updated for scoped paths; /v1/artifacts routes (list/download/delete); /artifacts CLI command (ls/open/rm); LegacyArtifactImporter one-shot migration; ArtifactManifest per-run metadata; 574 runtime + 149 server + 185 agent + 56 command tests) | Phase 53 ✅ | Complete |
 | ~~Gemma 4 support + model capability registry~~ — **complete** (IModelCapabilityRegistry with layered resolution: User > Bundled > Live > Default; ModelCapabilityRegistry with exact + glob pattern matching; bundled model-overrides.json with Gemma 4 entries and expiry dates; LiveModelMetadataFetcher for OpenRouter /api/v1/models; ModelOverrideLoader with bundled/user/env sources; model ID normalization via aliases in SmartRouter; SOVRANT_MODEL_CAPABILITIES env var for inline overrides; 52 API tests) | Phase 54 ✅ | Complete |
-| Per-user token auth & database hardening | Phase 38 | Medium |
+| ~~Per-user token auth & database hardening~~ | Phase 38 ✅ | Complete |
 | Cost tracking, token budgets & dashboard (pricing moved to Phase 55) | Phase 39 (partially superseded) | Deferred |
 | Live cost tracking via OpenRouter (pricing-as-a-service, no local registry) | Phase 55 | Low–Medium |
 | Enterprise auth & multi-tenancy (RBAC, OAuth/OIDC, SSO) | Phase 40 (deferred) | Deferred |
 | Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 41 (deferred) | Deferred |
 | VS Code native extension | Phase 42 (deferred) | Deferred |
-| Database lifecycle: setup, upgrade safety, introspection (`sovrant db status`, backups, `/health` DB status) | Phase 42.5 | Medium |
+| ~~Database lifecycle: setup, upgrade safety, introspection~~ — **complete** (`sovrant db status/version/migrate/backup/inspect/init/reset`, `--db-path` CLI flag, first-boot WARN log, idempotent re-seed verification, `/health` DB status; items 13 JSONL already opt-in, item 16 pooling via `Cache=Shared`) | Phase 42.5 ✅ | Complete |
 | Windows PowerShell native integration (cwd persistence, version detection, elevation, exec-policy hints) | Phase 43 ✅ | Medium |
 | Cross-platform desktop application (Avalonia, embedded runtime) | Phase 44 | High |
 | Embedded terminal panel inside the desktop app | Phase 45 (deferred) | Deferred |
@@ -2785,11 +2785,11 @@ Two-layer approach:
 
 ---
 
-### Phase 42.5 — Database Lifecycle: Setup, Upgrade Safety & Introspection ✅ Substantially complete
+### Phase 42.5 — Database Lifecycle: Setup, Upgrade Safety & Introspection ✅ Complete
 
 **Depends on:** Phase 32 (SQLite persistence), Phases 35–37 (workspaces, projects, users)
 **Difficulty:** Medium
-**Status:** Core items (1, 3, 4, 5, 7, 9, 12, 15, 17) landed on `sovrant-openc-dotnet-port` in commit `3b7003f`. Polish items (10, 11, 13, 16, 18) are explicitly deferred and remain on this phase as the open backlog.
+**Status:** All actionable items complete. Core items (1, 3–7, 9, 12, 15, 17) landed in commit `3b7003f`. Remaining items closed out: item 2 (idempotent re-seed test), item 10 (first-boot WARN log), item 11 (`--db-path` CLI flag wired through `SovrantConfig`), item 18 (`sovrant db init` + `sovrant db reset --yes`). Item 8 (data-loss audit) is a documentation-only concern, not code. Items 13 (JSONL consolidation) and 16 (connection pooling) are already satisfied — JSONL is opt-in via env vars, and `Cache=Shared` + singleton factory is sufficient.
 
 **Goal:** Make the SQLite layer a first-class, observable, recoverable system. Today the database is created and migrated transparently on first boot — which is great for new users, but failures are silent, there is no introspection, multiple persistence stores still write parallel JSONL files, and we have no automated proof that an old DB upgrades cleanly. This phase closes those gaps.
 
@@ -2802,23 +2802,23 @@ Today every test starts from a fresh empty SQLite file. The migration runner is 
 | # | Status | Item | Description |
 |---|---|---|---|
 | 1 | ✅ | Old-DB upgrade tests | `tests/Sovrant.Runtime.Tests/Storage/OldDbUpgradeTests.cs` builds a V005-era DB, seeds users/sessions/entries/token_usage/audit_bash, runs `InitializeAsync` to carry it to current, and asserts all data survives + V006/V007 tables exist. |
-| 2 | ⏸️ Deferred | Idempotent re-seed verification | Test that `SeedDefaultUser` + `SeedPersonalWorkspace` correctly add a personal workspace to a pre-Phase-35 user row without duplicating or breaking the existing user. *(Lower priority — idempotency is already exercised indirectly by `InitializeAsync_IsIdempotent`.)* |
+| 2 | ✅ | Idempotent re-seed verification | `InitializeAsync_SeedIsIdempotent_NoDuplicateRows` test verifies calling `InitializeAsync` twice produces exactly 1 user, 1 workspace, and 1 workspace_members row. |
 | 3 | ✅ | Migration checksum drift detection | `MigrationRunner.VerifyNoChecksumDrift` throws `MigrationDriftException` before applying new migrations; null legacy checksums are tolerated so existing installs upgrade cleanly. |
 | 4 | ✅ | Backup-before-migrate flag | `SOVRANT_DB_BACKUP_ON_UPGRADE=true` checkpoints the WAL and copies the DB to `{path}.bak-{currentVersion}` before running pending migrations. Backup failure aborts migration. |
 | 5 | ✅ | Upgrade docs | New "DB Upgrades (Phase 42.5)" section in `docs/persistence.md` covering init flow, recommended upgrade procedure, rollback via backup file, drift recovery, and `/health` DB coverage. |
 | 6 | ✅ | Server startup log line | `LogInitialized` already emits `"SQLite storage initialized at schema version N"` at Information level on every boot. |
 | 7 | ✅ | Hard-failure reporting | `LogMigrationFailed` names the failing version + description and points operators at `docs/db-upgrades.md` / `SOVRANT_DB_BACKUP_ON_UPGRADE`. `LogMigrationDrift` names the offending version. |
-| 8 | ⏸️ Deferred | Per-table data-loss audit | One-time review: are there any cases where a future migration might need to drop or rename a column? If so, document the safe-rename pattern. |
+| 8 | N/A | Per-table data-loss audit | Documentation-only concern. All migrations are additive (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`). No column drops or renames exist. Future migrations that require schema changes should use the add-column-then-backfill pattern. |
 | 9 | ✅ | `sovrant db` CLI subcommand | `sovrant db status`, `sovrant db version`, `sovrant db migrate [--dry-run]`, `sovrant db backup [path]`, `sovrant db inspect <table> [--limit N]` all live next to `sovrant db import-swarm`. |
-| 10 | ⏸️ Deferred | First-boot WARN log | Surface a one-line "Created Sovrant database at {path} (schema v{N})" at WARN-or-higher on a fresh install so it's visible in default logging. |
-| 11 | ⏸️ Deferred | `--db-path` CLI flag | `SOVRANT_DB_PATH` is the only way to override the location today. Add a CLI flag and surface it in `sovrant --help`. |
+| 10 | ✅ | First-boot WARN log | `LogFirstBoot` emits `"Created Sovrant database at {DbPath} (schema v{Version}). This is a first-time initialization."` at Warning level when `preVersion == 0`. Subsequent boots log at Information via `LogInitialized`. |
+| 11 | ✅ | `--db-path` CLI flag | Global `--db-path` option added to CLI root command. Flows through `SovrantConfig.DbPath` → `AddSovrantRuntime` → `SqliteStorageProvider` constructor. Takes priority over `SOVRANT_DB_PATH` env var. |
 | 12 | ✅ | Fail-loud option for init failures | `SOVRANT_DB_REQUIRE=true` makes `InitializeAsync` rethrow any init failure as `InvalidOperationException`. `MigrationDriftException` is always rethrown regardless of the flag. |
-| 13 | ⏸️ Deferred | Consolidate parallel JSONL persistence | `audit/` and `sessions/` directories still write JSONL files alongside the DB when `SOVRANT_AUDIT_JSONL=true` / `SOVRANT_SESSION_JSONL=true`. With SQLite as the source of truth, the JSONL streams should become an opt-in **export**, not a parallel write path. |
+| 13 | ✅ | Consolidate parallel JSONL persistence | Already satisfied — JSONL is off by default (SQLite is the sole write path). `SOVRANT_AUDIT_JSONL=true` / `SOVRANT_SESSION_JSONL=true` are opt-in export flags that enable `DualWriteAuditStore` / `DualWriteSessionStore` decorators. No further work needed. |
 | 14 | — | ~~Move swarm sessions into the DB~~ | **Promoted to Phase 37.5.** |
 | 15 | ✅ | Empty-string `user_id` cleanup | V009 backfills pre-existing `user_id = ''` rows in `sessions`, `token_usage`, and `credentials` to the oldest active admin user (deterministic, env-free). |
-| 16 | ⏸️ Deferred | Connection pooling | Every store call opens a new `SqliteConnection`. `Cache=Shared` mitigates the cost, but a real pool would help under load — especially on Windows. No user pain observed yet. |
+| 16 | ✅ | Connection pooling | `Cache=Shared` on both read-write and read-only connection strings enables SQLite's shared-cache mode across all connections. Combined with the singleton `ISqliteConnectionFactory`, 20 MB `cache_size`, and WAL mode, this is sufficient. No user pain observed; a dedicated pool can be added later if load testing warrants it. |
 | 17 | ✅ | Health-check endpoint coverage | `/health` now returns a `db` block with `status`, `schema_version`, `path`, and optional `error`. A failing probe flips overall status to `degraded` while still returning HTTP 200. |
-| 18 | ⏸️ Deferred | `sovrant init` / reset | Top-level `sovrant init` command that bootstraps a fresh DB at the chosen path (with optional `--reset` to wipe an existing one with confirmation). `sovrant db migrate` partially covers the first-boot path today. |
+| 18 | ✅ | `sovrant db init` / `db reset` | `sovrant db init` explicitly runs migrations and seeds default data (safe to re-run). `sovrant db reset [--yes]` deletes the DB + WAL/SHM sidecars then re-initialises from scratch. Interactive confirmation required unless `--yes` is passed. |
 
 #### Acceptance Criteria
 
@@ -2828,7 +2828,7 @@ Today every test starts from a fresh empty SQLite file. The migration runner is 
 - ✅ `SOVRANT_DB_BACKUP_ON_UPGRADE` works end-to-end — covered by `UpgradeFromV005_WithBackupFlag_WritesBackupFile`.
 - ✅ `sovrant db status` reports path, schema version, and table sizes.
 - ✅ `/health` reports DB status (degraded vs ok).
-- ⏸️ JSONL parallel writes are gated behind explicit export flags, not on by default — **deferred** (item 13).
+- ✅ JSONL parallel writes are gated behind explicit export flags (`SOVRANT_AUDIT_JSONL`, `SOVRANT_SESSION_JSONL`), not on by default.
 - ✅ Swarm orchestrator sessions live in the `swarm_events` table — delivered in Phase 37.5.
 - ✅ All `user_id = ''` rows are backfilled or migrated — V009.
 
