@@ -144,6 +144,39 @@
                         Background="Transparent"
                         Foreground="{DynamicResource TextPrimary}" />
 
+                <Button Content="🛠  Tools"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="Tools"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Padding="12,8"
+                        Margin="0,2"
+                        CornerRadius="8"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
+
+                <Button Content="🧠  Memory"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="Memory"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Padding="12,8"
+                        Margin="0,2"
+                        CornerRadius="8"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
+
+                <Button Content="🛡  Governance"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="Governance"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Padding="12,8"
+                        Margin="0,2"
+                        CornerRadius="8"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
+
                 <!-- Future Features section -->
                 <TextBlock Text="FUTURE FEATURES" FontSize="10" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextSecondary}"

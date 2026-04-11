@@ -60,6 +60,9 @@ public partial class App : Application
         services.AddTransient<DiagnosticsViewModel>();
         services.AddTransient<IntegrationsViewModel>();
         services.AddTransient<ArtifactsViewModel>();
+        services.AddTransient<ToolsViewModel>();
+        services.AddTransient<MemoryViewModel>();
+        services.AddTransient<GovernanceViewModel>();
         services.AddSingleton<CommandPaletteViewModel>();
 
         _serviceProvider = services.BuildServiceProvider();

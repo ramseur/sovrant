@@ -1,0 +1,144 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.MemoryView"
+             x:DataType="vm:MemoryViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel>
+        <!-- Header -->
+        <DockPanel DockPanel.Dock="Top" Margin="32,24,32,0">
+            <Button DockPanel.Dock="Right"
+                    Content="Refresh"
+                    Command="{Binding RefreshCommand}"
+                    Padding="12,6"
+                    CornerRadius="6"
+                    Background="Transparent"
+                    Foreground="{DynamicResource TextPrimary}" />
+            <TextBlock Text="Memory" FontSize="24" FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimary}" />
+        </DockPanel>
+
+        <!-- Tabs -->
+        <TabControl Margin="32,12,32,24"
+                    SelectedIndex="0">
+
+            <!-- Learned Patterns -->
+            <TabItem Header="Learned Patterns">
+                <ScrollViewer Margin="0,8">
+                    <ItemsControl ItemsSource="{Binding Patterns}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:PatternItemViewModel">
+                                <Border Margin="0,4" Padding="14,10" CornerRadius="8"
+                                        Background="{DynamicResource SurfaceCard}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                        BorderThickness="1">
+                                    <StackPanel Spacing="4">
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Right"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TextMuted}">
+                                                <Run Text="Confidence: " />
+                                                <Run Text="{Binding Confidence, StringFormat='{}{0:P0}'}" />
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding Id}"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       FontFamily="Consolas,Menlo,monospace"
+                                                       Foreground="{DynamicResource BrandPrimary}" />
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding Pattern}"
+                                                   FontSize="13" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource TextPrimary}" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Instincts -->
+            <TabItem Header="Instincts">
+                <ScrollViewer Margin="0,8">
+                    <ItemsControl ItemsSource="{Binding Instincts}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:InstinctItemViewModel">
+                                <Border Margin="0,4" Padding="14,10" CornerRadius="8"
+                                        Background="{DynamicResource SurfaceCard}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                        BorderThickness="1">
+                                    <StackPanel Spacing="4">
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Right"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TextMuted}">
+                                                <Run Text="Confidence: " />
+                                                <Run Text="{Binding Confidence, StringFormat='{}{0:P0}'}" />
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding Id}"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       FontFamily="Consolas,Menlo,monospace"
+                                                       Foreground="{DynamicResource BrandPrimary}" />
+                                        </DockPanel>
+                                        <TextBlock FontSize="13" Foreground="{DynamicResource TextPrimary}" TextWrapping="Wrap">
+                                            <Run Text="When: " FontWeight="SemiBold" />
+                                            <Run Text="{Binding Trigger}" />
+                                        </TextBlock>
+                                        <TextBlock FontSize="13" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap">
+                                            <Run Text="Do: " FontWeight="SemiBold" />
+                                            <Run Text="{Binding Action}" />
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Session Summaries -->
+            <TabItem Header="Session Summaries">
+                <ScrollViewer Margin="0,8">
+                    <ItemsControl ItemsSource="{Binding Summaries}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:SummaryItemViewModel">
+                                <Border Margin="0,4" Padding="14,10" CornerRadius="8"
+                                        Background="{DynamicResource SurfaceCard}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                        BorderThickness="1">
+                                    <StackPanel Spacing="4">
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Right"
+                                                       Text="{Binding StartedAt, StringFormat='{}{0:MMM d, HH:mm}'}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                            <TextBlock Text="{Binding SessionId}"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       FontFamily="Consolas,Menlo,monospace"
+                                                       Foreground="{DynamicResource BrandPrimary}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DockPanel>
+                                        <StackPanel Orientation="Horizontal" Spacing="16">
+                                            <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
+                                                <Run Text="Outcome: " />
+                                                <Run Text="{Binding Outcome}" FontWeight="SemiBold" />
+                                            </TextBlock>
+                                            <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
+                                                <Run Text="Turns: " />
+                                                <Run Text="{Binding TurnCount}" />
+                                            </TextBlock>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding ToolsUsed}"
+                                                   FontSize="11" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   IsVisible="{Binding ToolsUsed, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</UserControl>

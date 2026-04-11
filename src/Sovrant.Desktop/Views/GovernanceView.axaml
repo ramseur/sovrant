@@ -1,0 +1,119 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.GovernanceView"
+             x:DataType="vm:GovernanceViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <ScrollViewer Padding="32,24">
+        <StackPanel MaxWidth="640" Spacing="20">
+            <!-- Header -->
+            <DockPanel>
+                <Button DockPanel.Dock="Right"
+                        Content="Refresh"
+                        Command="{Binding RefreshCommand}"
+                        Padding="12,6"
+                        CornerRadius="6"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="Governance" FontSize="24" FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimary}" />
+            </DockPanel>
+
+            <!-- Level + Audit -->
+            <Border Padding="14,10" CornerRadius="8"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}"
+                    BorderThickness="1">
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock Text="Governance Level:" FontWeight="SemiBold" FontSize="14"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock Text="{Binding GovernanceLevel}" FontSize="14"
+                                   Foreground="{DynamicResource BrandPrimary}" FontWeight="Bold" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock Text="Audit Logging:" FontWeight="SemiBold" FontSize="14"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock Text="Enabled" FontSize="14"
+                                   Foreground="{DynamicResource StatusPass}"
+                                   IsVisible="{Binding AuditLogEnabled}" />
+                        <TextBlock Text="Disabled" FontSize="14"
+                                   Foreground="{DynamicResource StatusFail}"
+                                   IsVisible="{Binding !AuditLogEnabled}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Blocked Commands -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="Blocked Commands" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <ItemsControl ItemsSource="{Binding BlockedCommands}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,2" Padding="10,6" CornerRadius="6"
+                                    Background="{DynamicResource SurfaceCard}"
+                                    BorderBrush="{DynamicResource StatusFail}"
+                                    BorderThickness="1">
+                                <TextBlock Text="{Binding}" FontFamily="Consolas,Menlo,monospace"
+                                           FontSize="13" Foreground="{DynamicResource StatusFail}" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="No blocked commands configured"
+                           FontSize="12" Foreground="{DynamicResource TextMuted}"
+                           IsVisible="{Binding !BlockedCommands.Count}" />
+            </StackPanel>
+
+            <!-- Protected Files -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="Protected Files" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <ItemsControl ItemsSource="{Binding ProtectedFiles}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,2" Padding="10,6" CornerRadius="6"
+                                    Background="{DynamicResource SurfaceCard}"
+                                    BorderBrush="{DynamicResource StatusWarn}"
+                                    BorderThickness="1">
+                                <TextBlock Text="{Binding}" FontFamily="Consolas,Menlo,monospace"
+                                           FontSize="13" Foreground="{DynamicResource StatusWarn}" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="No protected files configured"
+                           FontSize="12" Foreground="{DynamicResource TextMuted}"
+                           IsVisible="{Binding !ProtectedFiles.Count}" />
+            </StackPanel>
+
+            <!-- Secret Patterns -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="Secret Detection Patterns" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <ItemsControl ItemsSource="{Binding SecretPatterns}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,2" Padding="10,6" CornerRadius="6"
+                                    Background="{DynamicResource SurfaceCard}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1">
+                                <TextBlock Text="{Binding}" FontFamily="Consolas,Menlo,monospace"
+                                           FontSize="13" Foreground="{DynamicResource TextPrimary}" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="No custom secret patterns (built-in patterns active)"
+                           FontSize="12" Foreground="{DynamicResource TextMuted}"
+                           IsVisible="{Binding !SecretPatterns.Count}" />
+            </StackPanel>
+
+            <TextBlock Text="Configuration loaded from ~/.sovrant/governance.json and .sovrant/governance.json"
+                       FontSize="11" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextMuted}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

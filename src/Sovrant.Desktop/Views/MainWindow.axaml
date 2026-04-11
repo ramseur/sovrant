@@ -26,6 +26,15 @@
         <DataTemplate DataType="vm:ArtifactsViewModel">
             <views:ArtifactsView />
         </DataTemplate>
+        <DataTemplate DataType="vm:ToolsViewModel">
+            <views:ToolsView />
+        </DataTemplate>
+        <DataTemplate DataType="vm:MemoryViewModel">
+            <views:MemoryView />
+        </DataTemplate>
+        <DataTemplate DataType="vm:GovernanceViewModel">
+            <views:GovernanceView />
+        </DataTemplate>
         <DataTemplate DataType="vm:PlaceholderViewModel">
             <views:PlaceholderView />
         </DataTemplate>
