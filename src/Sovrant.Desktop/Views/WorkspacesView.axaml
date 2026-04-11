@@ -21,6 +21,12 @@
                            Foreground="{DynamicResource TextSecondary}"
                            IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
+                <TextBlock Text="No workspaces found. Workspaces are created automatically when you start using Sovrant."
+                           FontSize="13"
+                           Foreground="{DynamicResource TextSecondary}"
+                           IsVisible="{Binding !Workspaces.Count}"
+                           Margin="0,12" />
+
                 <ItemsControl ItemsSource="{Binding Workspaces}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:WorkspaceItemViewModel">

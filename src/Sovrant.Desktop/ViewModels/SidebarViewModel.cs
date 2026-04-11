@@ -14,6 +14,9 @@ public partial class SidebarViewModel : ViewModelBase
     private string _selectedNavItem = "Chat";
 
     [ObservableProperty]
+    private bool _isCollapsed;
+
+    [ObservableProperty]
     private string _connectionStatus = "Connecting...";
 
     [ObservableProperty]
@@ -35,6 +38,9 @@ public partial class SidebarViewModel : ViewModelBase
         _sessionStore = sessionStore;
         _ = LoadSessionsAsync();
     }
+
+    [RelayCommand]
+    private void ToggleCollapse() => IsCollapsed = !IsCollapsed;
 
     [RelayCommand]
     private void Navigate(string pageName)

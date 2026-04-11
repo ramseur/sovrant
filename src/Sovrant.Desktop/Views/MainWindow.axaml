@@ -57,10 +57,28 @@
 
     <Panel>
         <DockPanel>
-            <!-- Sidebar -->
+            <!-- Collapsed sidebar strip -->
+            <Border DockPanel.Dock="Left"
+                    Width="44"
+                    Background="{DynamicResource SidebarBackground}"
+                    IsVisible="{Binding Sidebar.IsCollapsed}">
+                <StackPanel Margin="0,10,0,0" HorizontalAlignment="Center">
+                    <Button Content="◫"
+                            Command="{Binding Sidebar.ToggleCollapseCommand}"
+                            Padding="6,4" FontSize="16"
+                            Background="Transparent"
+                            Foreground="{DynamicResource TextSecondary}"
+                            CornerRadius="4"
+                            HorizontalAlignment="Center"
+                            ToolTip.Tip="Expand sidebar" />
+                </StackPanel>
+            </Border>
+
+            <!-- Sidebar (full) -->
             <views:SidebarView DockPanel.Dock="Left"
                                DataContext="{Binding Sidebar}"
-                               Width="240" />
+                               Width="240"
+                               IsVisible="{Binding !IsCollapsed}" />
 
             <!-- Main content -->
             <ContentControl Content="{Binding CurrentPage}"

@@ -24,12 +24,20 @@ public partial class WorkspacesViewModel : ViewModelBase
     [RelayCommand]
     private async Task RefreshAsync() => await LoadAsync();
 
+    private const string DesktopUserId = "desktop-user";
+
     private async Task LoadAsync()
     {
         try
         {
-            // Desktop uses a default user context.
-            var workspaces = await _workspaceService.ListForUserAsync("desktop-user");
+            // Ensure a personal workspace exists for the desktop user.
+            var personal = await _workspaceService.GetPersonalAsync(DesktopUserId);
+            if (personal is null)
+            {
+                await _workspaceService.CreatePersonalWorkspaceAsync(DesktopUserId);
+            }
+
+            var workspaces = await _workspaceService.ListForUserAsync(DesktopUserId);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 Workspaces.Clear();
