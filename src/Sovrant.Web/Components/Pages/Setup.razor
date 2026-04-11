@@ -10,6 +10,7 @@
         <h1>Welcome to Sovrant</h1>
         <p class="text-secondary">Configure your AI provider to get started.</p>
 
+        <form autocomplete="off" @onsubmit:preventDefault>
         <div class="form-field">
             <label>Provider</label>
             <select @bind="_provider" @bind:after="OnProviderChanged">
@@ -22,7 +23,7 @@
 
         <div class="form-field">
             <label>API Key</label>
-            <input type="password" @bind="_apiKey" placeholder="sk-..." />
+            <input type="password" @bind="_apiKey" placeholder="sk-..." autocomplete="off" data-lpignore="true" data-1p-ignore />
         </div>
 
         <div class="form-field">
@@ -47,6 +48,7 @@
         <button class="btn-primary" @onclick="SaveAsync" disabled="@_saving">
             @(_saving ? "Saving..." : "Get Started")
         </button>
+        </form>
 
         @if (!string.IsNullOrEmpty(_status))
         {

@@ -182,7 +182,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 : FilterToolsForModel(allTools);
             var request = new MessagesRequest(
                 _config.Model,
-                _config.MaxTokens,
+                CapMaxTokens(_config.Model, _config.MaxTokens),
                 _history)
             {
                 System = _systemPrompt,
@@ -728,6 +728,36 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     /// Short greetings, questions, and conversational messages return false.
     /// Messages that mention files, code, commands, etc. return true.
     /// </summary>
+    /// <summary>
+    /// Caps max_tokens to a value the model is known to support.
+    /// Older gpt-4 variants (gpt-4, gpt-4-turbo, gpt-3.5) only support 4096 output tokens.
+    /// Modern models (gpt-4o, gpt-4.1, gpt-4.5, gpt-5) support 16K+.
+    /// </summary>
+    private static int CapMaxTokens(string model, int configured)
+    {
+        var name = model;
+        var slash = model.LastIndexOf('/');
+        if (slash >= 0) name = model[(slash + 1)..];
+
+        // Modern gpt-4 variants that support high output — pass through
+        if (name.StartsWith("gpt-4o", StringComparison.OrdinalIgnoreCase)      // gpt-4o, gpt-4o-mini
+            || name.StartsWith("gpt-4.1", StringComparison.OrdinalIgnoreCase)  // gpt-4.1, gpt-4.1-mini
+            || name.StartsWith("gpt-4.5", StringComparison.OrdinalIgnoreCase)  // gpt-4.5
+            || name.StartsWith("gpt-5", StringComparison.OrdinalIgnoreCase))   // gpt-5
+        {
+            return configured;
+        }
+
+        // Legacy gpt-4 and gpt-3.5 — cap at 4096
+        if (name.StartsWith("gpt-4", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("gpt-3", StringComparison.OrdinalIgnoreCase))
+        {
+            return Math.Min(configured, 4096);
+        }
+
+        return configured;
+    }
+
     private static bool LooksLikeToolRequest(string message)
     {
         ArgumentNullException.ThrowIfNull(message);

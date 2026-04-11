@@ -1,5 +1,6 @@
 @page "/workspaces"
 @using Sovrant.Runtime.Workspaces
+@using Sovrant.Web.Services
 
 <div class="settings-page">
     <div class="diag-header">
@@ -51,6 +52,7 @@
 
 @code {
     [Inject] private IWorkspaceService WorkspaceService { get; set; } = default!;
+    [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
 
     private const string UserId = "web-user";
     private string _newName = string.Empty;
@@ -78,13 +80,21 @@
     private async Task CreateAsync()
     {
         if (string.IsNullOrWhiteSpace(_newName)) { _status = "Enter a name."; return; }
+        var name = _newName.Trim();
+        var slug = name.ToLowerInvariant().Replace(' ', '-');
+        if (_workspaces.Any(w => w.Name.Equals(name, StringComparison.OrdinalIgnoreCase)
+                              || w.Slug.Equals(slug, StringComparison.OrdinalIgnoreCase)))
+        {
+            _status = $"A workspace named '{name}' already exists.";
+            return;
+        }
         try
         {
-            var slug = _newName.Trim().ToLowerInvariant().Replace(' ', '-');
-            await WorkspaceService.CreateTeamWorkspaceAsync(_newName.Trim(), slug, UserId);
+            await WorkspaceService.CreateTeamWorkspaceAsync(name, slug, UserId);
             _newName = string.Empty;
             _status = "Workspace created.";
             await LoadAsync();
+            ActiveContext.NotifyDataChanged();
         }
         catch (Exception ex) { _status = $"Failed: {ex.Message}"; }
     }
@@ -96,6 +106,7 @@
             await WorkspaceService.DeleteAsync(w.Id);
             _status = $"'{w.Name}' deleted.";
             await LoadAsync();
+            ActiveContext.NotifyDataChanged();
         }
         catch (Exception ex) { _status = $"Cannot delete: {ex.Message}"; }
     }

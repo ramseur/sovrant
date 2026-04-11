@@ -4,85 +4,113 @@
 @using System.Text.Json
 
 <div class="settings-page">
-    <h1>Multi-Agent</h1>
+    <div class="diag-header">
+        <div>
+            <h1>Multi-Agent</h1>
+            <p class="text-secondary" style="margin:0;">Manage teams, swarms, claws, and autonomous agent systems</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="status-message">@_status</div>
+    }
 
     <div class="tab-bar">
         <button class="tab-btn @(_tab == 0 ? "active" : "")" @onclick="() => _tab = 0">
-            Teams <span class="tab-badge">@_teams.Count</span>
+            Teams &amp; Members <span class="tab-badge">@_teams.Count</span>
         </button>
         <button class="tab-btn @(_tab == 1 ? "active" : "")" @onclick="() => _tab = 1">
-            Swarm
+            Swarm Config
+        </button>
+        <button class="tab-btn @(_tab == 2 ? "active" : "")" @onclick="() => _tab = 2">
+            Claws
         </button>
     </div>
 
     @if (_tab == 0)
     {
-        <div class="memory-list">
-            @if (_teams.Count == 0 && _unassigned.Count == 0)
-            {
-                <p class="text-secondary">No teams or members registered. Use the TeamCreate tool in chat to create teams.</p>
-            }
-            @foreach (var team in _teams)
-            {
-                <div class="card" style="margin-bottom:12px;">
-                    <div class="diag-header" style="margin-bottom:8px;">
-                        <h2 style="margin:0;">@team.Name</h2>
-                        <button class="btn-sm btn-danger" @onclick="() => RemoveTeam(team.Id)">Remove</button>
-                    </div>
-                    @if (!string.IsNullOrEmpty(team.Description))
-                    {
-                        <p class="text-secondary text-sm">@team.Description</p>
-                    }
-                    @foreach (var m in GetTeamMembers(team.Id))
-                    {
-                        <div class="memory-card">
-                            <div class="memory-content">
-                                <div class="memory-text"><strong>@m.Name</strong> <span class="tag">@m.Role</span></div>
-                                <div class="memory-meta">
-                                    @if (!string.IsNullOrEmpty(m.Model))
-                                    {
-                                        <span>@m.Model</span>
-                                    }
-                                    <span>@m.ToolsSummary</span>
-                                </div>
-                            </div>
-                            <button class="btn-sm btn-danger" @onclick="() => RemoveMember(m.Id)">X</button>
-                        </div>
-                    }
-                    @if (!GetTeamMembers(team.Id).Any())
-                    {
-                        <p class="text-muted text-sm">No members in this team.</p>
-                    }
-                </div>
-            }
-            @if (_unassigned.Count > 0)
-            {
-                <div class="card">
-                    <h2 style="margin:0 0 8px;">Unassigned Members</h2>
-                    @foreach (var m in _unassigned)
-                    {
-                        <div class="memory-card">
-                            <div class="memory-content">
-                                <div class="memory-text"><strong>@m.Name</strong> <span class="tag">@m.Role</span></div>
-                                <div class="memory-meta">
-                                    @if (!string.IsNullOrEmpty(m.Model))
-                                    {
-                                        <span>@m.Model</span>
-                                    }
-                                    <span>@m.ToolsSummary</span>
-                                </div>
-                            </div>
-                            <button class="btn-sm btn-danger" @onclick="() => RemoveMember(m.Id)">X</button>
-                        </div>
-                    }
-                </div>
-            }
+        <!-- Teams & Members -->
+        <div class="ma-counts">
+            <span class="text-secondary">@_teams.Count teams</span>
+            <span class="text-secondary">@_allMembers.Count members</span>
         </div>
+
+        @if (_teams.Count == 0 && _unassigned.Count == 0)
+        {
+            <p class="text-secondary">No teams or members registered. Use /team create in chat to set up a team.</p>
+        }
+
+        @foreach (var team in _teams)
+        {
+            <div class="ma-team-card">
+                <div class="ma-team-header">
+                    <h2 style="margin:0;">@team.Name</h2>
+                    <button class="btn-sm btn-danger" @onclick="() => RemoveTeam(team.Id)">Delete</button>
+                </div>
+                @if (!string.IsNullOrEmpty(team.Description))
+                {
+                    <p class="text-secondary text-sm" style="margin:4px 0 8px;">@team.Description</p>
+                }
+                @foreach (var m in GetTeamMembers(team.Id))
+                {
+                    <div class="ma-member-card">
+                        <div class="ma-member-info">
+                            <div>
+                                <span class="ma-member-name">@m.Name</span>
+                                <span class="ma-role-badge">@m.Role</span>
+                            </div>
+                            <div class="ma-member-meta">
+                                @if (!string.IsNullOrEmpty(m.Model))
+                                {
+                                    <span>@m.Model</span>
+                                }
+                                <span>@m.ToolsSummary</span>
+                            </div>
+                        </div>
+                        <button class="btn-sm btn-danger" @onclick="() => RemoveMember(m.Id)">X</button>
+                    </div>
+                }
+                @if (!GetTeamMembers(team.Id).Any())
+                {
+                    <p class="text-muted text-sm" style="padding:4px 0;">No members in this team.</p>
+                }
+            </div>
+        }
+
+        @if (_unassigned.Count > 0)
+        {
+            <div class="ma-team-card">
+                <h2 style="margin:0 0 8px;">Unassigned Members</h2>
+                @foreach (var m in _unassigned)
+                {
+                    <div class="ma-member-card">
+                        <div class="ma-member-info">
+                            <div>
+                                <span class="ma-member-name">@m.Name</span>
+                                <span class="ma-role-badge">@m.Role</span>
+                            </div>
+                            <div class="ma-member-meta">
+                                @if (!string.IsNullOrEmpty(m.Model))
+                                {
+                                    <span>@m.Model</span>
+                                }
+                                <span>@m.ToolsSummary</span>
+                            </div>
+                        </div>
+                        <button class="btn-sm btn-danger" @onclick="() => RemoveMember(m.Id)">X</button>
+                    </div>
+                }
+            </div>
+        }
     }
-    else
+    else if (_tab == 1)
     {
-        <div class="settings-section">
-            <div class="toggle-card">
+        <!-- Swarm Configuration -->
+        <p class="text-secondary">Configure how swarm orchestration handles multi-agent task decomposition and execution.</p>
+
+        <div class="gov-card">
+            <div class="toggle-card" style="border:none;padding:0;">
                 <div>
                     <div class="toggle-title">Swarm Enabled</div>
                     <div class="toggle-desc">Enable swarm orchestrator for parallel agent execution</div>
@@ -93,7 +121,7 @@
                 </label>
             </div>
 
-            <div class="toggle-card">
+            <div class="toggle-card" style="border:none;padding:0;">
                 <div>
                     <div class="toggle-title">Quality Gate</div>
                     <div class="toggle-desc">Run quality review after execution</div>
@@ -104,36 +132,48 @@
                 </label>
             </div>
 
-            <div class="form-field">
-                <label>Max Concurrent Agents</label>
-                <input type="number" @bind="_swarmMaxConcurrent" min="1" max="16" />
+            <div class="gov-field-row">
+                <span>Max Concurrent Agents</span>
+                <input type="number" class="gov-field-input" @bind="_swarmMaxConcurrent" min="1" max="16" />
             </div>
 
-            <div class="form-field">
-                <label>Max Token Budget</label>
-                <input type="number" @bind="_swarmMaxTokenBudget" min="10000" step="50000" />
+            <div class="gov-field-row">
+                <span>Token Budget</span>
+                <input type="number" class="gov-field-input" @bind="_swarmMaxTokenBudget" min="10000" step="50000" />
             </div>
 
-            <div class="form-field">
-                <label>Task Timeout (seconds)</label>
-                <input type="number" @bind="_swarmTimeout" min="30" max="3600" />
+            <div class="gov-field-row">
+                <span>Task Timeout (seconds)</span>
+                <input type="number" class="gov-field-input" @bind="_swarmTimeout" min="30" max="3600" />
             </div>
 
-            <div class="form-field">
-                <label>Permissions</label>
-                <select @bind="_swarmPermissions">
+            <div class="gov-field-row">
+                <span>Permissions</span>
+                <select class="gov-field-input" @bind="_swarmPermissions">
                     <option value="ask">Ask</option>
                     <option value="accept-edits">Accept Edits</option>
                     <option value="yolo">Auto-Accept All</option>
                 </select>
             </div>
+        </div>
 
-            <button class="btn-primary" style="max-width:200px;" @onclick="SaveSwarmConfig">Save Swarm Config</button>
+        <button class="btn-primary" style="max-width:200px;" @onclick="SaveSwarmConfig">Save Configuration</button>
+        <p class="text-muted text-sm">Configuration saved to .sovrant/swarm.json</p>
+    }
+    else
+    {
+        <!-- Claws -->
+        <p class="text-secondary">Autonomous agent systems like Open Claw and Hermes that connect via MCP integrations.</p>
 
-            @if (!string.IsNullOrEmpty(_status))
-            {
-                <div class="status-message">@_status</div>
-            }
+        <div class="claws-placeholder">
+            <div class="claws-icon">&#x1F99E;</div>
+            <h2>Claws</h2>
+            <p class="text-secondary">
+                Connect and manage autonomous agent frameworks. Claws integrate through MCP servers
+                configured on the Integrations page. Once connected, their teams and activity appear
+                here for monitoring and control.
+            </p>
+            <span class="claws-coming-soon">COMING SOON</span>
         </div>
     }
 </div>

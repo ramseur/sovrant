@@ -2,6 +2,8 @@
 @using Sovrant.Runtime.Session
 @using Sovrant.Runtime.Workspaces
 @using Sovrant.Runtime.Projects
+@using Sovrant.Web.Services
+@implements IDisposable
 
 <aside class="sidebar">
     <div class="sidebar-scroll">
@@ -119,6 +121,7 @@
     [Inject] private ISessionStore SessionStore { get; set; } = default!;
     [Inject] private IWorkspaceService WorkspaceService { get; set; } = default!;
     [Inject] private IProjectService ProjectService { get; set; } = default!;
+    [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
 
     private string _searchText = string.Empty;
     private string _currentModel = string.Empty;
@@ -147,6 +150,40 @@
         _isConnected = !string.IsNullOrWhiteSpace(Config.ApiKey);
         _connectionStatus = _isConnected ? "Connected" : "No API key";
         InferProvider();
+
+        // Seed the shared context with initial model/provider
+        ActiveContext.SetModel(_currentModel, _currentProvider);
+        ActiveContext.OnChanged += OnActiveContextChanged;
+        ActiveContext.OnDataChanged += OnDataChanged;
+    }
+
+    private void OnDataChanged()
+    {
+        InvokeAsync(async () =>
+        {
+            await LoadWorkspacesAsync();
+            await LoadProjectsAsync();
+            StateHasChanged();
+        });
+    }
+
+    private void OnActiveContextChanged()
+    {
+        InvokeAsync(() =>
+        {
+            // Refresh model card from config (Settings may have changed it)
+            _currentModel = ShortenModelName(Config.Model);
+            _isConnected = !string.IsNullOrWhiteSpace(Config.ApiKey);
+            _connectionStatus = _isConnected ? "Connected" : "No API key";
+            InferProvider();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        ActiveContext.OnChanged -= OnActiveContextChanged;
+        ActiveContext.OnDataChanged -= OnDataChanged;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -214,10 +251,11 @@
         {
             var list = await WorkspaceService.ListForUserAsync("web-user");
             _workspaces = list.Select(w => new WorkspaceItem(w.WorkspaceId, w.Name, w.Type.ToString())).ToList();
-            var personal = _workspaces.FirstOrDefault(w => w.Type == "personal");
+            var personal = _workspaces.FirstOrDefault(w => w.Type.Equals("Personal", StringComparison.OrdinalIgnoreCase));
             if (personal is not null)
             {
                 _selectedWorkspaceId = personal.Id;
+                ActiveContext.SetWorkspace(personal.Id, personal.Name);
                 await LoadProjectsAsync();
             }
         }
@@ -239,9 +277,15 @@
     {
         _selectedProjectId = string.Empty;
         await LoadProjectsAsync();
+        var ws = _workspaces.FirstOrDefault(w => w.Id == _selectedWorkspaceId);
+        ActiveContext.SetWorkspace(_selectedWorkspaceId, ws?.Name ?? "Personal");
     }
 
-    private void OnProjectChanged() { /* context is tracked by selected ID */ }
+    private void OnProjectChanged()
+    {
+        var proj = _projects.FirstOrDefault(p => p.Id == _selectedProjectId);
+        ActiveContext.SetProject(_selectedProjectId, proj?.Name ?? string.Empty);
+    }
 
     private async Task LoadSessionsAsync()
     {

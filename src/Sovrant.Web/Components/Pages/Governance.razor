@@ -5,71 +5,92 @@
 <div class="settings-page">
     <h1>Governance</h1>
 
-    <div class="form-field">
-        <label>Governance Level</label>
-        <select @bind="_level">
-            <option value="permissive">Permissive</option>
-            <option value="standard">Standard</option>
-            <option value="strict">Strict</option>
-        </select>
-    </div>
-
-    <div class="toggle-card">
-        <div>
-            <div class="toggle-title">Audit Log</div>
-            <div class="toggle-desc">Log all agent actions for audit trail</div>
-        </div>
-        <label class="switch">
-            <input type="checkbox" @bind="_auditLog" />
-            <span class="slider"></span>
-        </label>
-    </div>
-
-    <!-- Blocked Commands -->
-    <h2>Blocked Commands</h2>
-    <div class="input-group" style="margin-bottom:8px;">
-        <input type="text" @bind="_newBlockedCmd" placeholder="e.g. rm -rf /" />
-        <button class="input-addon" @onclick="AddBlockedCommand">+</button>
-    </div>
-    <div class="tag-list">
-        @foreach (var cmd in _blockedCommands)
-        {
-            <span class="tag">@cmd <button class="tag-remove" @onclick="() => _blockedCommands.Remove(cmd)">x</button></span>
-        }
-    </div>
-
-    <!-- Protected Files -->
-    <h2>Protected Files</h2>
-    <div class="input-group" style="margin-bottom:8px;">
-        <input type="text" @bind="_newProtectedFile" placeholder="e.g. .env" />
-        <button class="input-addon" @onclick="AddProtectedFile">+</button>
-    </div>
-    <div class="tag-list">
-        @foreach (var f in _protectedFiles)
-        {
-            <span class="tag">@f <button class="tag-remove" @onclick="() => _protectedFiles.Remove(f)">x</button></span>
-        }
-    </div>
-
-    <!-- Secret Patterns -->
-    <h2>Secret Patterns</h2>
-    <div class="input-group" style="margin-bottom:8px;">
-        <input type="text" @bind="_newSecretPattern" placeholder="e.g. sk-[a-zA-Z0-9]+" />
-        <button class="input-addon" @onclick="AddSecretPattern">+</button>
-    </div>
-    <div class="tag-list">
-        @foreach (var p in _secretPatterns)
-        {
-            <span class="tag">@p <button class="tag-remove" @onclick="() => _secretPatterns.Remove(p)">x</button></span>
-        }
-    </div>
-
-    <button class="btn-primary" style="max-width:200px;margin-top:16px;" @onclick="SaveConfig">Save</button>
-
     @if (!string.IsNullOrEmpty(_status))
     {
         <div class="status-message">@_status</div>
     }
+
+    <!-- Level + Audit card -->
+    <div class="gov-card">
+        <div class="gov-field-row">
+            <div>
+                <span class="gov-field-label">Governance Level</span>
+            </div>
+            <select class="gov-field-input" @bind="_level">
+                <option value="permissive">Permissive</option>
+                <option value="standard">Standard</option>
+                <option value="strict">Strict</option>
+            </select>
+        </div>
+
+        <div class="toggle-card" style="border:none;padding:0;">
+            <div>
+                <div class="toggle-title">Audit Logging</div>
+                <div class="toggle-desc">Log all agent actions for audit trail</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" @bind="_auditLog" />
+                <span class="slider"></span>
+            </label>
+        </div>
+    </div>
+
+    <!-- Blocked Commands -->
+    <h2>Blocked Commands</h2>
+    <div class="input-group" style="margin-bottom:10px;">
+        <input type="text" @bind="_newBlockedCmd" placeholder="e.g. rm -rf /" />
+        <button class="btn-primary" style="width:auto;padding:8px 16px;" @onclick="AddBlockedCommand">Add</button>
+    </div>
+    @if (_blockedCommands.Count == 0)
+    {
+        <p class="text-muted text-sm">No blocked commands configured</p>
+    }
+    @foreach (var cmd in _blockedCommands)
+    {
+        <div class="gov-item gov-item-danger">
+            <code class="gov-item-text gov-text-danger">@cmd</code>
+            <button class="btn-sm btn-danger" @onclick="() => _blockedCommands.Remove(cmd)">Remove</button>
+        </div>
+    }
+
+    <!-- Protected Files -->
+    <h2 class="mt-16">Protected Files</h2>
+    <div class="input-group" style="margin-bottom:10px;">
+        <input type="text" @bind="_newProtectedFile" placeholder="e.g. .env, credentials.json" />
+        <button class="btn-primary" style="width:auto;padding:8px 16px;" @onclick="AddProtectedFile">Add</button>
+    </div>
+    @if (_protectedFiles.Count == 0)
+    {
+        <p class="text-muted text-sm">No protected files configured</p>
+    }
+    @foreach (var f in _protectedFiles)
+    {
+        <div class="gov-item gov-item-warn">
+            <code class="gov-item-text gov-text-warn">@f</code>
+            <button class="btn-sm btn-danger" @onclick="() => _protectedFiles.Remove(f)">Remove</button>
+        </div>
+    }
+
+    <!-- Secret Patterns -->
+    <h2 class="mt-16">Secret Detection Patterns</h2>
+    <div class="input-group" style="margin-bottom:10px;">
+        <input type="text" @bind="_newSecretPattern" placeholder="e.g. sk-[a-zA-Z0-9]+" />
+        <button class="btn-primary" style="width:auto;padding:8px 16px;" @onclick="AddSecretPattern">Add</button>
+    </div>
+    @if (_secretPatterns.Count == 0)
+    {
+        <p class="text-muted text-sm">No custom secret patterns (built-in patterns active)</p>
+    }
+    @foreach (var p in _secretPatterns)
+    {
+        <div class="gov-item gov-item-default">
+            <code class="gov-item-text">@p</code>
+            <button class="btn-sm btn-danger" @onclick="() => _secretPatterns.Remove(p)">Remove</button>
+        </div>
+    }
+
+    <button class="btn-primary" style="max-width:200px;margin-top:20px;" @onclick="SaveConfig">Save Configuration</button>
+    <p class="text-muted text-sm">Configuration saved to ~/.sovrant/governance.json</p>
 </div>
 
 @code {

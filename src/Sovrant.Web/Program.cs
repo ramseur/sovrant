@@ -9,6 +9,7 @@ using Sovrant.Runtime.Permissions;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
 using Sovrant.Web.Adapters;
+using Sovrant.Web.Services;
 
 namespace Sovrant.Web;
 
@@ -57,6 +58,7 @@ public static class Program
         builder.Services.AddSingleton<IUserInputProvider, BlazorUserInputProvider>();
         builder.Services.AddSingleton<IAuthProvider>(mutableAuth);
         builder.Services.AddSingleton(mutableAuth);
+        builder.Services.AddSingleton<ActiveContextService>();
 
         builder.Services.AddRazorComponents()
             .AddInteractiveServerComponents();
@@ -81,6 +83,12 @@ public static class Program
                 var user = await userService.GetAsync("web-user").ConfigureAwait(false);
                 if (user is null)
                     await userService.CreateAsync("web-user", userId: "web-user").ConfigureAwait(false);
+
+                // Ensure personal workspace exists (same as desktop's WorkspacesViewModel)
+                var workspaceService = app.Services.GetRequiredService<Sovrant.Runtime.Workspaces.IWorkspaceService>();
+                var personal = await workspaceService.GetPersonalAsync("web-user").ConfigureAwait(false);
+                if (personal is null)
+                    await workspaceService.CreatePersonalWorkspaceAsync("web-user").ConfigureAwait(false);
             }
             catch (Exception ex)
             {

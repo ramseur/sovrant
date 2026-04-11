@@ -1,18 +1,29 @@
 @using Markdig
 
-<div class="message @(Message.IsUser ? "message-user" : "message-assistant")">
+<div class="message">
     @if (Message.IsUser)
     {
-        <div class="message-bubble user-bubble">
+        <!-- User message: avatar + name row, then text -->
+        <div class="msg-row">
+            <div class="msg-avatar user-avatar-chat">@_userInitial</div>
+            <span class="msg-sender">You</span>
+        </div>
+        <div class="msg-body">
             <div class="message-text">@Message.Text</div>
         </div>
     }
     else
     {
-        <div class="message-bubble assistant-bubble">
+        <!-- Assistant message: avatar + name row, then content in card -->
+        <div class="msg-card">
+            <div class="msg-row">
+                <div class="msg-avatar sovrant-avatar">&#9889;</div>
+                <span class="msg-sender">Sovrant</span>
+            </div>
+
             @if (Message.IsThinking)
             {
-                <div class="thinking-indicator">
+                <div class="thinking-indicator msg-indent">
                     <span class="thinking-dot"></span>
                     <span class="thinking-text">@Message.ThinkingText</span>
                 </div>
@@ -20,51 +31,58 @@
 
             @if (Message.ToolUses.Count > 0)
             {
-                @foreach (var tool in Message.ToolUses)
-                {
-                    <div class="tool-use-block @(tool.IsError ? "tool-error" : "")">
-                        <div class="tool-header">
-                            <span class="tool-icon">&#x1F527;</span>
-                            <span class="tool-name">@tool.ToolName</span>
-                            <span class="tool-status @(tool.Status == "Done" ? "status-done" : tool.IsError ? "status-error" : "status-running")">@tool.Status</span>
-                        </div>
-                        @if (tool.IsPendingConfirmation)
-                        {
-                            <div class="tool-confirmation">
-                                <div class="tool-input-preview">@tool.Result</div>
-                                <div class="tool-actions">
-                                    <button class="btn-approve" @onclick="() => OnApprove.InvokeAsync(tool)">Approve</button>
-                                    <button class="btn-deny" @onclick="() => OnDeny.InvokeAsync(tool)">Deny</button>
-                                </div>
+                <div class="msg-indent">
+                    @foreach (var tool in Message.ToolUses)
+                    {
+                        <div class="tool-use-block @(tool.IsError ? "tool-error" : "")">
+                            <div class="tool-header">
+                                <span class="tool-icon">&#x1F527;</span>
+                                <span class="tool-name">@tool.ToolName</span>
+                                <span class="tool-status @(tool.Status == "Done" ? "status-done" : tool.IsError ? "status-error" : "status-running")">@tool.Status</span>
                             </div>
-                        }
-                        else if (!string.IsNullOrEmpty(tool.Result))
-                        {
-                            <details class="tool-result">
-                                <summary>Result</summary>
-                                <pre>@tool.Result</pre>
-                            </details>
-                        }
-                    </div>
-                }
+                            @if (tool.IsPendingConfirmation)
+                            {
+                                <div class="tool-confirmation">
+                                    <div class="tool-input-preview">@tool.Result</div>
+                                    <div class="tool-actions">
+                                        <button class="btn-approve" @onclick="() => OnApprove.InvokeAsync(tool)">&#x2713; Allow</button>
+                                        <button class="btn-deny" @onclick="() => OnDeny.InvokeAsync(tool)">&#x2715; Deny</button>
+                                    </div>
+                                </div>
+                            }
+                            else if (!string.IsNullOrEmpty(tool.Result))
+                            {
+                                <details class="tool-result">
+                                    <summary>Result</summary>
+                                    <pre>@tool.Result</pre>
+                                </details>
+                            }
+                        </div>
+                    }
+                </div>
             }
 
             @if (!string.IsNullOrEmpty(Message.Text))
             {
-                @if (Message.IsComplete)
-                {
-                    <div class="message-markdown">@((MarkupString)RenderMarkdown(Message.Text))</div>
-                }
-                else
-                {
-                    <div class="message-text streaming">@Message.Text</div>
-                }
+                <div class="msg-indent">
+                    @if (Message.IsComplete)
+                    {
+                        <div class="message-markdown">@((MarkupString)RenderMarkdown(Message.Text))</div>
+                    }
+                    else
+                    {
+                        <div class="message-text streaming">@Message.Text</div>
+                    }
+                </div>
             }
 
             @if (Message.HasError)
             {
-                <div class="message-error">
-                    <span>@Message.ErrorMessage</span>
+                <div class="message-error msg-indent">
+                    <div class="error-content">
+                        <div class="error-title">Request failed</div>
+                        <div class="error-detail">@Message.ErrorMessage</div>
+                    </div>
                     <button class="btn-retry" @onclick="() => OnRetry.InvokeAsync()">Retry</button>
                 </div>
             }
@@ -77,6 +95,9 @@
     [Parameter] public EventCallback OnRetry { get; set; }
     [Parameter] public EventCallback<ToolUseModel> OnApprove { get; set; }
     [Parameter] public EventCallback<ToolUseModel> OnDeny { get; set; }
+
+    private static readonly string _userInitial = Environment.UserName.Length > 0
+        ? Environment.UserName[..1].ToUpperInvariant() : "U";
 
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions()
