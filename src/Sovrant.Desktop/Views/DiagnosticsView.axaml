@@ -8,97 +8,106 @@
 
     <UserControl.Resources>
         <conv:BoolToStatusBrushConverter x:Key="StatusBgConv" />
+        <conv:StatusTextToBrushConverter x:Key="StatusTextConv" />
     </UserControl.Resources>
 
     <ScrollViewer Padding="32,24">
-        <StackPanel MaxWidth="800" Spacing="16">
+        <StackPanel MaxWidth="800" Spacing="20">
             <!-- Header -->
             <DockPanel>
                 <Button DockPanel.Dock="Right"
-                        Content="Refresh"
-                        Command="{Binding RefreshCommand}"
+                        Content="Run Checks"
+                        Command="{Binding RunAllChecksCommand}"
                         Padding="16,8"
                         CornerRadius="8"
                         Background="{DynamicResource BrandPrimary}"
                         Foreground="White"
-                        FontWeight="SemiBold" />
-                <TextBlock Text="Diagnostics" FontSize="24" FontWeight="Bold"
-                           Foreground="{DynamicResource TextPrimary}"
-                           VerticalAlignment="Center" />
+                        FontWeight="SemiBold"
+                        IsEnabled="{Binding !IsRunning}" />
+                <StackPanel>
+                    <TextBlock Text="Diagnostics" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock Text="System health, connectivity, and runtime information"
+                               FontSize="13"
+                               Foreground="{DynamicResource TextSecondary}" />
+                </StackPanel>
             </DockPanel>
 
-            <TextBlock Text="Provider health and routing statistics"
-                       FontSize="13"
-                       Foreground="{DynamicResource TextSecondary}"
-                       Margin="0,0,0,8" />
+            <!-- Connection status banner -->
+            <Border Padding="14,10" CornerRadius="10"
+                    Background="{Binding IsConnected, Converter={StaticResource StatusBgConv}}"
+                    IsVisible="{Binding !IsRunning}">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Text="●" FontSize="14" Foreground="White" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding ConnectionStatus}" FontSize="14" FontWeight="SemiBold"
+                               Foreground="White" VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
 
-            <!-- Provider health table -->
-            <ItemsControl ItemsSource="{Binding Providers}">
+            <!-- Model / Provider info card -->
+            <TextBlock Text="Current Configuration" FontSize="16" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimary}" />
+            <Border Padding="16" CornerRadius="10"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}"
+                    BorderThickness="1">
+                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" >
+                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,12">
+                        <TextBlock Text="Model" FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                        <TextBlock Text="{Binding CurrentModel}" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,12">
+                        <TextBlock Text="Provider" FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                        <TextBlock Text="{Binding CurrentProvider}" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="0">
+                        <TextBlock Text="Base URL" FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                        <TextBlock Text="{Binding BaseUrl}" FontSize="12"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="1">
+                        <TextBlock Text="Max Tokens" FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                        <TextBlock Text="{Binding MaxTokens}" FontSize="12"
+                                   Foreground="{DynamicResource TextSecondary}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Health checks -->
+            <TextBlock Text="Health Checks" FontSize="16" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimary}" />
+            <ItemsControl ItemsSource="{Binding HealthChecks}">
                 <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="vm:ProviderHealthItem">
-                        <Border Margin="0,4"
-                                Padding="16,12"
-                                CornerRadius="10"
+                    <DataTemplate DataType="vm:HealthCheckItem">
+                        <Border Margin="0,3" Padding="14,10" CornerRadius="8"
                                 Background="{DynamicResource SurfaceCard}"
                                 BorderBrush="{DynamicResource SurfaceBorder}"
                                 BorderThickness="1">
                             <DockPanel>
-                                <!-- Status badge -->
                                 <Border DockPanel.Dock="Left"
-                                        Width="56" Height="24"
-                                        CornerRadius="12"
+                                        Width="50" Height="22"
+                                        CornerRadius="11"
                                         VerticalAlignment="Center"
-                                        Margin="0,0,16,0"
-                                        Background="{Binding IsHealthy, Converter={StaticResource StatusBgConv}}">
+                                        Margin="0,0,14,0"
+                                        Background="{Binding Status, Converter={StaticResource StatusTextConv}}">
                                     <TextBlock Text="{Binding Status}"
-                                               FontSize="11" FontWeight="Bold"
+                                               FontSize="10" FontWeight="Bold"
                                                Foreground="White"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center" />
                                 </Border>
-
-                                <!-- Stats on the right -->
-                                <StackPanel DockPanel.Dock="Right"
-                                            Orientation="Horizontal"
-                                            Spacing="20"
-                                            VerticalAlignment="Center">
-                                    <StackPanel HorizontalAlignment="Center">
-                                        <TextBlock Text="Latency" FontSize="10"
-                                                   Foreground="{DynamicResource TextMuted}"
-                                                   HorizontalAlignment="Center" />
-                                        <TextBlock Text="{Binding LatencyMs}" FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextPrimary}"
-                                                   HorizontalAlignment="Center" />
-                                    </StackPanel>
-                                    <StackPanel HorizontalAlignment="Center">
-                                        <TextBlock Text="Requests" FontSize="10"
-                                                   Foreground="{DynamicResource TextMuted}"
-                                                   HorizontalAlignment="Center" />
-                                        <TextBlock Text="{Binding RequestCount}" FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextPrimary}"
-                                                   HorizontalAlignment="Center" />
-                                    </StackPanel>
-                                    <StackPanel HorizontalAlignment="Center">
-                                        <TextBlock Text="Errors" FontSize="10"
-                                                   Foreground="{DynamicResource TextMuted}"
-                                                   HorizontalAlignment="Center" />
-                                        <TextBlock Text="{Binding ErrorCount}" FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextPrimary}"
-                                                   HorizontalAlignment="Center" />
-                                    </StackPanel>
-                                    <StackPanel HorizontalAlignment="Center">
-                                        <TextBlock Text="Score" FontSize="10"
-                                                   Foreground="{DynamicResource TextMuted}"
-                                                   HorizontalAlignment="Center" />
-                                        <TextBlock Text="{Binding Score}" FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextPrimary}"
-                                                   HorizontalAlignment="Center" />
-                                    </StackPanel>
-                                </StackPanel>
-
-                                <!-- Provider name -->
+                                <TextBlock DockPanel.Dock="Right"
+                                           Text="{Binding Detail}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           MaxWidth="350" />
                                 <TextBlock Text="{Binding Name}"
-                                           FontSize="15" FontWeight="SemiBold"
+                                           FontSize="13" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextPrimary}"
                                            VerticalAlignment="Center" />
                             </DockPanel>
@@ -107,13 +116,115 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <!-- Empty state -->
-            <TextBlock Text="No providers configured. Add a provider in Settings."
-                       FontSize="13"
-                       Foreground="{DynamicResource TextSecondary}"
-                       IsVisible="{Binding !Providers.Count}"
-                       Margin="0,20"
-                       HorizontalAlignment="Center" />
+            <!-- Provider routing stats -->
+            <TextBlock Text="Provider Routing" FontSize="16" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimary}"
+                       IsVisible="{Binding Providers.Count}" />
+            <ItemsControl ItemsSource="{Binding Providers}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:ProviderHealthItem">
+                        <Border Margin="0,3" Padding="14,10" CornerRadius="8"
+                                Background="{DynamicResource SurfaceCard}"
+                                BorderBrush="{DynamicResource SurfaceBorder}"
+                                BorderThickness="1">
+                            <DockPanel>
+                                <Border DockPanel.Dock="Left"
+                                        MinWidth="90" Height="22"
+                                        Padding="8,0"
+                                        CornerRadius="11"
+                                        VerticalAlignment="Center"
+                                        Margin="0,0,14,0"
+                                        Background="{Binding Status, Converter={StaticResource StatusTextConv}}">
+                                    <TextBlock Text="{Binding Status}"
+                                               FontSize="10" FontWeight="Bold"
+                                               Foreground="White"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel DockPanel.Dock="Right"
+                                            Orientation="Horizontal"
+                                            Spacing="16"
+                                            VerticalAlignment="Center">
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock Text="Latency" FontSize="9"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   HorizontalAlignment="Center" />
+                                        <TextBlock Text="{Binding LatencyMs}" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   HorizontalAlignment="Center" />
+                                    </StackPanel>
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock Text="Requests" FontSize="9"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   HorizontalAlignment="Center" />
+                                        <TextBlock Text="{Binding RequestCount}" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   HorizontalAlignment="Center" />
+                                    </StackPanel>
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock Text="Errors" FontSize="9"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   HorizontalAlignment="Center" />
+                                        <TextBlock Text="{Binding ErrorCount}" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   HorizontalAlignment="Center" />
+                                    </StackPanel>
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock Text="Score" FontSize="9"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   HorizontalAlignment="Center" />
+                                        <TextBlock Text="{Binding Score}" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   HorizontalAlignment="Center" />
+                                    </StackPanel>
+                                </StackPanel>
+                                <TextBlock Text="{Binding Name}"
+                                           FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}"
+                                           VerticalAlignment="Center" />
+                            </DockPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- System info -->
+            <TextBlock Text="System Information" FontSize="16" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimary}" />
+            <Border Padding="16" CornerRadius="10"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}"
+                    BorderThickness="1">
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" >
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Runtime" FontSize="11"
+                               Foreground="{DynamicResource TextMuted}" Margin="0,0,20,6" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding RuntimeVersion}" FontSize="12"
+                               Foreground="{DynamicResource TextSecondary}" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text=".NET" FontSize="11"
+                               Foreground="{DynamicResource TextMuted}" Margin="0,0,20,6" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DotNetVersion}" FontSize="12"
+                               Foreground="{DynamicResource TextSecondary}" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="OS" FontSize="11"
+                               Foreground="{DynamicResource TextMuted}" Margin="0,0,20,6" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding OsInfo}" FontSize="12"
+                               Foreground="{DynamicResource TextSecondary}"
+                               TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Database" FontSize="11"
+                               Foreground="{DynamicResource TextMuted}" Margin="0,0,20,6" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding DbPath}" FontSize="12"
+                               Foreground="{DynamicResource TextSecondary}"
+                               TextTrimming="CharacterEllipsis" />
+
+                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Settings" FontSize="11"
+                               Foreground="{DynamicResource TextMuted}" Margin="0,0,20,0" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ConfigPath}" FontSize="12"
+                               Foreground="{DynamicResource TextSecondary}"
+                               TextTrimming="CharacterEllipsis" />
+                </Grid>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

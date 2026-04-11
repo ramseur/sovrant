@@ -47,6 +47,14 @@ public partial class MessageViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isComplete;
 
+    /// <summary>True when the response ended in an error (shows error UI with retry).</summary>
+    [ObservableProperty]
+    private bool _hasError;
+
+    /// <summary>User-friendly error message.</summary>
+    [ObservableProperty]
+    private string _errorMessage = string.Empty;
+
     /// <summary>Text with HTML escaped outside code blocks, safe for markdown rendering.</summary>
     public string SafeMarkdown => EscapeHtmlOutsideCodeBlocks(Text);
 
@@ -86,6 +94,39 @@ public partial class MessageViewModel : ViewModelBase
         IsStreaming = false;
         IsComplete = true;
         OnPropertyChanged(nameof(SafeMarkdown));
+    }
+
+    public void SetError(string rawError)
+    {
+        StopThinking();
+        IsStreaming = false;
+        HasError = true;
+        ErrorMessage = FriendlyError(rawError);
+        // If there was partial text, still mark complete so it renders.
+        if (!string.IsNullOrEmpty(Text))
+        {
+            IsComplete = true;
+            OnPropertyChanged(nameof(SafeMarkdown));
+        }
+    }
+
+    private static string FriendlyError(string raw)
+    {
+        if (raw.Contains("Provider returned error", StringComparison.OrdinalIgnoreCase))
+            return "The model provider returned an error. This can happen with free-tier models under load. Try again or switch to a different model.";
+        if (raw.Contains("400", StringComparison.Ordinal) && raw.Contains("API error", StringComparison.OrdinalIgnoreCase))
+            return "The model rejected this request (400). The conversation may be too long or the model doesn't support this format. Try starting a new chat.";
+        if (raw.Contains("429", StringComparison.Ordinal) || raw.Contains("rate limit", StringComparison.OrdinalIgnoreCase))
+            return "Rate limited — too many requests. Wait a moment and try again.";
+        if (raw.Contains("401", StringComparison.Ordinal) || raw.Contains("Authentication", StringComparison.OrdinalIgnoreCase))
+            return "Authentication failed. Check your API key in Settings.";
+        if (raw.Contains("connection", StringComparison.OrdinalIgnoreCase) && raw.Contains("refused", StringComparison.OrdinalIgnoreCase))
+            return "Could not connect to the model provider. Check your internet connection and base URL.";
+        if (raw.Contains("No such host", StringComparison.OrdinalIgnoreCase))
+            return "Could not reach the provider — DNS lookup failed. Check your internet connection.";
+        if (raw.Contains("timeout", StringComparison.OrdinalIgnoreCase) || raw.Contains("timed out", StringComparison.OrdinalIgnoreCase))
+            return "The request timed out. The provider may be overloaded — try again.";
+        return $"Something went wrong: {raw}";
     }
 
     public void AppendText(string chunk)

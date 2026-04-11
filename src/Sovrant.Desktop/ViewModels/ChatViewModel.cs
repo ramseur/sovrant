@@ -103,13 +103,41 @@ public partial class ChatViewModel : ViewModelBase
         catch (Exception ex)
         {
             await Dispatcher.UIThread.InvokeAsync(() =>
-                assistantMsg.AppendText($"\n\n**Error:** {ex.Message}"));
+                assistantMsg.SetError(ex.Message));
         }
         finally
         {
             IsSending = false;
             await Dispatcher.UIThread.InvokeAsync(() => assistantMsg.CompleteStreaming());
         }
+    }
+
+    [RelayCommand]
+    private async Task RetryLastAsync(CancellationToken ct)
+    {
+        // Find the last user message and remove the failed assistant response.
+        string? lastUserText = null;
+        for (var i = Messages.Count - 1; i >= 0; i--)
+        {
+            if (Messages[i].Role == "assistant")
+            {
+                Messages.RemoveAt(i);
+                continue;
+            }
+            if (Messages[i].Role == "user")
+            {
+                lastUserText = Messages[i].Text;
+                Messages.RemoveAt(i);
+                break;
+            }
+        }
+
+        if (lastUserText is null) return;
+
+        // Re-send by setting InputText and invoking Send.
+        InputText = lastUserText;
+        if (SendCommand.CanExecute(null))
+            await SendAsync(ct);
     }
 
     [RelayCommand]
@@ -157,7 +185,7 @@ public partial class ChatViewModel : ViewModelBase
                 break;
 
             case RuntimeEvent.RuntimeError { Message: var errMsg }:
-                msg.AppendText($"\n\n**Error:** {errMsg}");
+                msg.SetError(errMsg);
                 break;
 
             case RuntimeEvent.PermissionDenied { ToolName: var tool, Reason: var reason }:

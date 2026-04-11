@@ -421,11 +421,13 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     }
 
     private static bool IsRetryableError(string message) =>
+        message.Contains("400", StringComparison.Ordinal) ||
         message.Contains("429", StringComparison.Ordinal) ||
         message.Contains("500", StringComparison.Ordinal) ||
         message.Contains("502", StringComparison.Ordinal) ||
         message.Contains("503", StringComparison.Ordinal) ||
         message.Contains("504", StringComparison.Ordinal) ||
+        message.Contains("Provider returned error", StringComparison.OrdinalIgnoreCase) ||
         message.Contains("rate limit", StringComparison.OrdinalIgnoreCase) ||
         message.Contains("too many requests", StringComparison.OrdinalIgnoreCase);
 
