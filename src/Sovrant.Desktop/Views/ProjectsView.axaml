@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
              x:Class="Sovrant.Desktop.Views.ProjectsView"
              x:DataType="vm:ProjectsViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -12,61 +13,130 @@
                         Command="{Binding RefreshCommand}"
                         Padding="12,6" CornerRadius="6"
                         Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <TextBlock Text="Projects" FontSize="24" FontWeight="Bold"
-                           Foreground="{DynamicResource TextPrimary}" />
+                <StackPanel>
+                    <TextBlock Text="Projects" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
+                        <Run Text="{Binding TotalCount}" />
+                        <Run Text=" projects" />
+                    </TextBlock>
+                </StackPanel>
             </DockPanel>
 
-            <!-- Create new -->
-            <DockPanel>
-                <Button DockPanel.Dock="Right" Content="Create"
-                        Command="{Binding CreateProjectCommand}"
-                        Padding="12,8" Margin="8,0,0,0"
-                        Background="{DynamicResource BrandPrimary}" Foreground="White"
-                        CornerRadius="8" FontWeight="SemiBold" />
-                <TextBox Text="{Binding NewProjectName}"
-                         Watermark="New project name..."
-                         CornerRadius="8" Padding="12,8" />
-            </DockPanel>
+            <TextBox Text="{Binding SearchText}"
+                     Watermark="Search projects..."
+                     CornerRadius="8" Padding="12,8" />
 
-            <TextBlock Text="{Binding StatusMessage}" FontSize="12"
-                       Foreground="{DynamicResource TextSecondary}"
+            <TextBlock Text="{Binding StatusMessage}" FontSize="11"
+                       Foreground="{DynamicResource TextMuted}"
                        IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         </StackPanel>
 
-        <ScrollViewer Margin="32,12,32,24">
-            <ItemsControl ItemsSource="{Binding Projects}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="vm:ProjectItemViewModel">
-                        <Border Margin="0,4" Padding="14,10" CornerRadius="8"
-                                Background="{DynamicResource SurfaceCard}"
-                                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
-                            <DockPanel>
-                                <Button DockPanel.Dock="Right" Content="Delete" FontSize="11"
-                                        Command="{Binding $parent[UserControl].((vm:ProjectsViewModel)DataContext).DeleteProjectCommand}"
-                                        CommandParameter="{Binding Id}"
-                                        Padding="8,4" CornerRadius="4"
-                                        Background="Transparent" Foreground="{DynamicResource StatusFail}" />
-                                <StackPanel Spacing="4">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextPrimary}" />
-                                        <TextBlock Text="{Binding Slug}" FontSize="12"
-                                                   FontFamily="Consolas,Menlo,monospace"
-                                                   Foreground="{DynamicResource TextMuted}" />
-                                    </StackPanel>
-                                    <TextBlock Text="{Binding Description}" FontSize="12"
-                                               Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap"
-                                               IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                    <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}">
-                                        <Run Text="Created: " />
-                                        <Run Text="{Binding CreatedAt, StringFormat='{}{0:MMM d, yyyy}'}" />
-                                    </TextBlock>
-                                </StackPanel>
-                            </DockPanel>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+        <Grid Margin="32,12,32,24" ColumnDefinitions="320,12,*">
+            <!-- Left: list + create -->
+            <DockPanel Grid.Column="0">
+                <!-- Create form -->
+                <Border DockPanel.Dock="Bottom" Margin="0,8,0,0" Padding="12" CornerRadius="8"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="New Project" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBox Text="{Binding NewProjectName}"
+                                 Watermark="Project name"
+                                 FontSize="12" Padding="8,6" CornerRadius="6" />
+                        <Button Content="Create"
+                                Command="{Binding CreateProjectCommand}"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                Padding="8,6" CornerRadius="6"
+                                Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Project list -->
+                <ScrollViewer>
+                    <ItemsControl ItemsSource="{Binding FilteredProjects}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:ProjectItemViewModel">
+                                <Button Command="{Binding $parent[ItemsControl].((vm:ProjectsViewModel)DataContext).SelectProjectCommand}"
+                                        CommandParameter="{Binding}"
+                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                        Padding="0" Margin="0,2"
+                                        Background="Transparent" BorderThickness="0" Cursor="Hand">
+                                    <Border Padding="12,10" CornerRadius="8"
+                                            Background="{DynamicResource SurfaceCard}"
+                                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                        <StackPanel Spacing="4">
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Right"
+                                                           Text="{Binding Slug}"
+                                                           FontSize="10"
+                                                           FontFamily="Consolas,Menlo,monospace"
+                                                           Foreground="{DynamicResource TextMuted}" />
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource BrandPrimary}" />
+                                            </DockPanel>
+                                            <TextBlock Text="{Binding Description}"
+                                                       FontSize="11" TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextSecondary}"
+                                                       IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <TextBlock FontSize="10" Foreground="{DynamicResource TextMuted}"
+                                                           Text="{Binding CreatedAt, StringFormat='{}{0:MMM d, yyyy}'}" />
+                                                <TextBlock Text="Archived" FontSize="10"
+                                                           Foreground="{DynamicResource StatusWarn}"
+                                                           IsVisible="{Binding IsArchived}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+
+            <!-- Detail pane -->
+            <Grid Grid.Column="2">
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding !SelectedProject}">
+                    <TextBlock Text="Select a project to view details"
+                               FontSize="14" Foreground="{DynamicResource TextMuted}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding !!SelectedProject}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8"
+                                    HorizontalAlignment="Right" Margin="0,0,0,8">
+                            <Button Content="{Binding SelectedProject.IsArchived, FallbackValue=Archive}"
+                                    Command="{Binding ArchiveProjectCommand}"
+                                    CommandParameter="{Binding SelectedProject}"
+                                    Padding="10,5" CornerRadius="4" FontSize="11"
+                                    Background="Transparent" Foreground="{DynamicResource StatusWarn}" />
+                            <Button Content="Delete"
+                                    Command="{Binding DeleteProjectCommand}"
+                                    CommandParameter="{Binding SelectedProject}"
+                                    Padding="10,5" CornerRadius="4" FontSize="11"
+                                    Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
+                        </StackPanel>
+                        <ContentControl Content="{Binding SelectedProject}">
+                            <ContentControl.ContentTemplate>
+                                <DataTemplate DataType="vm:ProjectItemViewModel">
+                                    <md:MarkdownScrollViewer Markdown="{Binding Markdown}" />
+                                </DataTemplate>
+                            </ContentControl.ContentTemplate>
+                        </ContentControl>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
     </DockPanel>
 </UserControl>

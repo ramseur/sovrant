@@ -1,62 +1,125 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
              x:Class="Sovrant.Desktop.Views.WorkspacesView"
              x:DataType="vm:WorkspacesViewModel"
              Background="{DynamicResource SurfaceBackground}">
 
     <DockPanel>
-        <DockPanel DockPanel.Dock="Top" Margin="32,24,32,0">
-            <Button DockPanel.Dock="Right" Content="Refresh"
-                    Command="{Binding RefreshCommand}"
-                    Padding="12,6" CornerRadius="6"
-                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-            <TextBlock Text="Workspaces" FontSize="24" FontWeight="Bold"
-                       Foreground="{DynamicResource TextPrimary}" />
-        </DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="12">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Refresh"
+                        Command="{Binding RefreshCommand}"
+                        Padding="12,6" CornerRadius="6"
+                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                <StackPanel>
+                    <TextBlock Text="Workspaces" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
+                        <Run Text="{Binding TotalCount}" />
+                        <Run Text=" workspaces" />
+                    </TextBlock>
+                </StackPanel>
+            </DockPanel>
+            <TextBlock Text="{Binding StatusMessage}" FontSize="11"
+                       Foreground="{DynamicResource TextMuted}"
+                       IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
 
-        <ScrollViewer Margin="32,12,32,24">
-            <StackPanel Spacing="8">
-                <TextBlock Text="{Binding StatusMessage}" FontSize="12"
-                           Foreground="{DynamicResource TextSecondary}"
-                           IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <Grid Margin="32,12,32,24" ColumnDefinitions="320,12,*">
+            <DockPanel Grid.Column="0">
+                <!-- Create form -->
+                <Border DockPanel.Dock="Bottom" Margin="0,8,0,0" Padding="12" CornerRadius="8"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="New Team Workspace" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBox Text="{Binding NewWorkspaceName}"
+                                 Watermark="Workspace name"
+                                 FontSize="12" Padding="8,6" CornerRadius="6" />
+                        <Button Content="Create"
+                                Command="{Binding CreateWorkspaceCommand}"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                Padding="8,6" CornerRadius="6"
+                                Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
+                    </StackPanel>
+                </Border>
 
-                <TextBlock Text="No workspaces found. Workspaces are created automatically when you start using Sovrant."
-                           FontSize="13"
-                           Foreground="{DynamicResource TextSecondary}"
-                           IsVisible="{Binding !Workspaces.Count}"
-                           Margin="0,12" />
+                <!-- Workspace list -->
+                <ScrollViewer>
+                    <ItemsControl ItemsSource="{Binding Workspaces}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:WorkspaceItemViewModel">
+                                <Button Command="{Binding $parent[ItemsControl].((vm:WorkspacesViewModel)DataContext).SelectWorkspaceCommand}"
+                                        CommandParameter="{Binding}"
+                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                        Padding="0" Margin="0,2"
+                                        Background="Transparent" BorderThickness="0" Cursor="Hand">
+                                    <Border Padding="12,10" CornerRadius="8"
+                                            Background="{DynamicResource SurfaceCard}"
+                                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                        <StackPanel Spacing="4">
+                                            <DockPanel>
+                                                <Border DockPanel.Dock="Right"
+                                                        Padding="6,2" CornerRadius="4"
+                                                        Background="{DynamicResource BrandPrimary}"
+                                                        IsVisible="{Binding IsPersonal}">
+                                                    <TextBlock Text="Personal" FontSize="10" Foreground="White" />
+                                                </Border>
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource BrandPrimary}" />
+                                            </DockPanel>
+                                            <TextBlock Text="{Binding Slug}" FontSize="10"
+                                                       FontFamily="Consolas,Menlo,monospace"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                            <TextBlock FontSize="10" Foreground="{DynamicResource TextMuted}"
+                                                       Text="{Binding CreatedAt, StringFormat='{}{0:MMM d, yyyy}'}" />
+                                        </StackPanel>
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
 
-                <ItemsControl ItemsSource="{Binding Workspaces}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="vm:WorkspaceItemViewModel">
-                            <Border Margin="0,4" Padding="14,12" CornerRadius="8"
-                                    Background="{DynamicResource SurfaceCard}"
-                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
-                                <StackPanel Spacing="4">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextPrimary}" />
-                                        <Border Padding="6,2" CornerRadius="4"
-                                                Background="{DynamicResource BrandPrimary}"
-                                                IsVisible="{Binding IsPersonal}">
-                                            <TextBlock Text="Personal" FontSize="10" Foreground="White" />
-                                        </Border>
-                                    </StackPanel>
-                                    <TextBlock FontSize="12" Foreground="{DynamicResource TextMuted}"
-                                               FontFamily="Consolas,Menlo,monospace">
-                                        <Run Text="{Binding Slug}" />
-                                    </TextBlock>
-                                    <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}">
-                                        <Run Text="Created: " />
-                                        <Run Text="{Binding CreatedAt, StringFormat='{}{0:MMM d, yyyy}'}" />
-                                    </TextBlock>
-                                </StackPanel>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </StackPanel>
-        </ScrollViewer>
+            <!-- Detail pane -->
+            <Grid Grid.Column="2">
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding !SelectedWorkspace}">
+                    <TextBlock Text="Select a workspace to view details"
+                               FontSize="14" Foreground="{DynamicResource TextMuted}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding !!SelectedWorkspace}">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Top"
+                                Content="Delete" HorizontalAlignment="Right"
+                                Command="{Binding DeleteWorkspaceCommand}"
+                                CommandParameter="{Binding SelectedWorkspace}"
+                                Padding="10,5" CornerRadius="4" FontSize="11"
+                                Background="#44F44336" Foreground="{DynamicResource StatusFail}"
+                                IsVisible="{Binding SelectedWorkspace.IsPersonal, Converter={x:Static BoolConverters.Not}, FallbackValue=False}" />
+                        <ContentControl Content="{Binding SelectedWorkspace}">
+                            <ContentControl.ContentTemplate>
+                                <DataTemplate DataType="vm:WorkspaceItemViewModel">
+                                    <md:MarkdownScrollViewer Markdown="{Binding Markdown}" />
+                                </DataTemplate>
+                            </ContentControl.ContentTemplate>
+                        </ContentControl>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
     </DockPanel>
 </UserControl>

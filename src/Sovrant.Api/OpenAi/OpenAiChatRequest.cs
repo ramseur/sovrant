@@ -6,9 +6,18 @@ namespace Sovrant.Api.OpenAi;
 /// <summary>OpenAI-format chat completions request (internal conversion use only).</summary>
 internal sealed record OpenAiChatRequest(
     [property: JsonPropertyName("model")] string Model,
-    [property: JsonPropertyName("max_tokens")] int MaxTokens,
     [property: JsonPropertyName("messages")] IReadOnlyList<OpenAiMessage> Messages)
 {
+    /// <summary>Legacy max_tokens parameter — used by most OpenAI-compat providers.</summary>
+    [JsonPropertyName("max_tokens")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MaxTokens { get; init; }
+
+    /// <summary>Newer max_completion_tokens parameter — required by OpenAI reasoning models (o1, o3, o4).</summary>
+    [JsonPropertyName("max_completion_tokens")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MaxCompletionTokens { get; init; }
+
     [JsonPropertyName("tools")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<OpenAiTool>? Tools { get; init; }

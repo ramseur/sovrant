@@ -31,22 +31,22 @@ public sealed class TasksCommand : ISlashCommand
             return new SlashCommandResult("No background tasks.");
 
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture,
-            $"{"ID",-10} {"Status",-12} {"Started",-20} {"Description"}");
-        sb.AppendLine(new string('-', 65));
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# Background Tasks ({all.Count})");
+        sb.AppendLine();
+        sb.AppendLine("| ID | Status | Started | Description |");
+        sb.AppendLine("|----|--------|---------|-------------|");
 
         foreach (var t in all)
         {
             var desc = t.Description;
-            if (desc.Length > 30)
-                desc = string.Concat(desc.AsSpan(0, 27), "...");
+            if (desc.Length > 40)
+                desc = string.Concat(desc.AsSpan(0, 37), "...");
             sb.AppendLine(CultureInfo.InvariantCulture,
-                $"{t.Id,-10} {t.Status,-12} {t.StartedAt:HH:mm:ss,-20} {desc}");
+                $"| {t.Id} | {t.Status} | {t.StartedAt:HH:mm:ss} | {desc} |");
         }
 
         sb.AppendLine();
-        sb.Append(CultureInfo.InvariantCulture,
-            $"{all.Count} tasks. Use /tasks <id> for details.");
+        sb.Append("Use /tasks (id) for details.");
 
         return new SlashCommandResult(sb.ToString());
     }
@@ -57,21 +57,25 @@ public sealed class TasksCommand : ISlashCommand
             return new SlashCommandResult($"Task '{id}' not found. Use /tasks to list all.");
 
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"ID:          {t.Id}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Status:      {t.Status}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Command:     {t.Command}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Description: {t.Description}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Started:     {t.StartedAt:u}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# Task: {t.Id}");
+        sb.AppendLine();
+        sb.AppendLine("| Property | Value |");
+        sb.AppendLine("|----------|-------|");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Status | {t.Status} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Command | {t.Command} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Description | {t.Description} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Started | {t.StartedAt:u} |");
         if (t.CompletedAt.HasValue)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"Completed:   {t.CompletedAt:u}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| Completed | {t.CompletedAt:u} |");
         if (t.ExitCode.HasValue)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"Exit Code:   {t.ExitCode}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| Exit Code | {t.ExitCode} |");
 
         var output = t.OutputBuffer.ToString();
         if (!string.IsNullOrEmpty(output))
         {
             sb.AppendLine();
-            sb.AppendLine("Output:");
+            sb.AppendLine("**Output:**");
+            sb.AppendLine();
             if (output.Length > 500)
                 output = string.Concat(output.AsSpan(0, 497), "...");
             sb.Append(output);

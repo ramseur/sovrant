@@ -30,6 +30,8 @@ public sealed class McpCommand : ISlashCommand
                 new SlashCommandResult("No MCP servers connected. Configure in sovrant.json."));
 
         var sb = new StringBuilder();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# MCP Servers ({clients.Count})");
+        sb.AppendLine();
 
         // Get all tool definitions to identify MCP-proxied tools
         var allTools = _tools.GetDefinitions();
@@ -38,7 +40,8 @@ public sealed class McpCommand : ISlashCommand
             c => c.Key, StringComparer.OrdinalIgnoreCase))
         {
             var serverName = entry.Key;
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  {serverName}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"## {serverName}");
+            sb.AppendLine();
 
             // MCP-proxied tools are registered with a "mcp_{serverName}_" prefix
             var prefix = $"mcp_{serverName}_";
@@ -49,26 +52,25 @@ public sealed class McpCommand : ISlashCommand
 
             if (serverTools.Count > 0)
             {
+                sb.AppendLine("| Tool | Description |");
+                sb.AppendLine("|------|-------------|");
                 foreach (var t in serverTools)
                 {
-                    // Strip the mcp_ prefix for display
                     var shortName = t.Name[prefix.Length..];
                     var desc = t.Description ?? "";
-                    if (desc.Length > 45)
-                        desc = string.Concat(desc.AsSpan(0, 42), "...");
-                    sb.AppendLine(CultureInfo.InvariantCulture, $"    {shortName,-22} {desc}");
+                    if (desc.Length > 50)
+                        desc = string.Concat(desc.AsSpan(0, 47), "...");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"| {shortName} | {desc} |");
                 }
             }
             else
             {
-                sb.AppendLine("    (no tools registered)");
+                sb.AppendLine("*(no tools registered)*");
             }
 
             sb.AppendLine();
         }
 
-        sb.Append(CultureInfo.InvariantCulture, $"{clients.Count} MCP server(s) connected.");
-
-        return Task.FromResult(new SlashCommandResult(sb.ToString()));
+        return Task.FromResult(new SlashCommandResult(sb.ToString().TrimEnd()));
     }
 }

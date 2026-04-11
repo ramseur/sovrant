@@ -22,9 +22,15 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly MutableAuthProvider _authProvider;
     private CancellationTokenSource? _autoSaveCts;
     private bool _initialized;
+    private bool _suppressAutoSave;
+
     private static readonly string SettingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         ".sovrant", "settings.json");
+
+    private static readonly string ProfilesPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".sovrant", "providers.json");
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -32,9 +38,11 @@ public partial class SettingsViewModel : ViewModelBase
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    // Known base URLs per provider (shared with wizard).
-    private static readonly Dictionary<string, string> ProviderBaseUrls = new(StringComparer.Ordinal)
+    // Known base URLs per provider. These match the endpoints each provider
+    // expects for OpenAI-compatible chat completions.
+    internal static readonly Dictionary<string, string> ProviderBaseUrls = new(StringComparer.Ordinal)
     {
+        ["OpenAI"] = "https://api.openai.com/v1",
         ["OpenRouter"] = "https://openrouter.ai/api/v1",
         ["DeepSeek"] = "https://api.deepseek.com/v1",
         ["Groq"] = "https://api.groq.com/openai/v1",
@@ -42,19 +50,25 @@ public partial class SettingsViewModel : ViewModelBase
         ["Together AI"] = "https://api.together.xyz/v1",
         ["Ollama"] = "http://localhost:11434/v1",
         ["LM Studio"] = "http://localhost:1234/v1",
+        ["Google"] = "https://generativelanguage.googleapis.com/v1beta/openai",
+        ["Azure OpenAI"] = "", // user must fill in their own endpoint
+        ["Custom"] = "",       // user must fill in their own endpoint
     };
 
-    // Static model lists for providers without a public models API.
+    // Static model lists — used as fallback when live /models fetch is unavailable.
     private static readonly Dictionary<string, string[]> StaticProviderModels = new(StringComparer.Ordinal)
     {
-        ["OpenAI"] = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o1", "o1-mini", "o3-mini"],
+        ["OpenAI"] = ["gpt-5", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini", "o4-mini", "o3", "o3-mini", "o1", "o1-mini"],
         ["DeepSeek"] = ["deepseek-chat", "deepseek-reasoner"],
         ["Groq"] = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"],
         ["Mistral"] = ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest", "open-mixtral-8x22b"],
         ["Together AI"] = ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", "mistralai/Mixtral-8x7B-Instruct-v0.1", "Qwen/Qwen2.5-72B-Instruct-Turbo"],
-        ["Google"] = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-1.5-flash"],
-        ["Azure OpenAI"] = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+        ["Google"] = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"],
+        ["Azure OpenAI"] = ["gpt-4o", "gpt-4o-mini", "gpt-4.1"],
     };
+
+    [ObservableProperty]
+    private int _selectedTab;
 
     [ObservableProperty]
     private bool _isDarkMode = Application.Current?.RequestedThemeVariant == ThemeVariant.Dark;
@@ -86,7 +100,14 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isLoadingModels;
 
+    [ObservableProperty]
+    private string _newProfileName = string.Empty;
+
+    [ObservableProperty]
+    private ProviderProfile? _selectedProfile;
+
     public ObservableCollection<string> AvailableModels { get; } = [];
+    public ObservableCollection<ProviderProfile> SavedProfiles { get; } = [];
 
     public SettingsViewModel(SovrantConfig config, IPermissionModeAccessor permissionModeAccessor,
         SidebarViewModel sidebar, MutableAuthProvider authProvider)
@@ -104,19 +125,30 @@ public partial class SettingsViewModel : ViewModelBase
         _permissionMode = permissionModeAccessor.Mode;
         _selectedProvider = InferProvider(config);
 
-        // Load models for the current provider.
+        LoadProfiles();
         _ = LoadModelsForProviderAsync(_selectedProvider);
 
         _initialized = true;
     }
 
+    public bool IsProvidersTab => SelectedTab == 0;
+    public bool IsGeneralTab => SelectedTab == 1;
+
+    partial void OnSelectedTabChanged(int value)
+    {
+        OnPropertyChanged(nameof(IsProvidersTab));
+        OnPropertyChanged(nameof(IsGeneralTab));
+    }
+
+    [RelayCommand]
+    private void SelectTab(string tab) => SelectedTab = int.Parse(tab, System.Globalization.CultureInfo.InvariantCulture);
+
     /// <summary>
     /// Debounced auto-save: waits 600ms after the last change, then saves.
-    /// Called by OnXxxChanged handlers for all settings properties.
     /// </summary>
     private void ScheduleAutoSave()
     {
-        if (!_initialized) return;
+        if (!_initialized || _suppressAutoSave) return;
 
         _autoSaveCts?.Cancel();
         _autoSaveCts = new CancellationTokenSource();
@@ -129,12 +161,15 @@ public partial class SettingsViewModel : ViewModelBase
                 await Task.Delay(600, token);
                 await Dispatcher.UIThread.InvokeAsync(() => SaveCommand.Execute(null));
             }
-            catch (OperationCanceledException) { /* debounced — newer change arrived */ }
+            catch (OperationCanceledException) { /* debounced */ }
         }, token);
     }
 
     [RelayCommand]
     private void ClearModel() => ModelName = string.Empty;
+
+    [RelayCommand]
+    private async Task RefreshModelsAsync() => await LoadModelsForProviderAsync(SelectedProvider);
 
     partial void OnSelectedProviderChanged(string value)
     {
@@ -142,14 +177,15 @@ public partial class SettingsViewModel : ViewModelBase
         if (ProviderBaseUrls.TryGetValue(value, out var url))
             BaseUrl = url;
 
-        // Load models for the new provider.
         _ = LoadModelsForProviderAsync(value);
         ScheduleAutoSave();
     }
 
-    partial void OnApiKeyChanged(string value) => ScheduleAutoSave();
+    // Note: ApiKey and BaseUrl do NOT auto-save on every keystroke to avoid
+    // saving partial values. They are saved when the provider dropdown changes
+    // (which sets these programmatically) or when the user clicks Save Profile.
+    // The debounced save from OnSelectedProviderChanged covers the switch case.
     partial void OnModelNameChanged(string value) => ScheduleAutoSave();
-    partial void OnBaseUrlChanged(string value) => ScheduleAutoSave();
     partial void OnMaxOutputTokensChanged(int value) => ScheduleAutoSave();
     partial void OnStreamingChanged(bool value) => ScheduleAutoSave();
 
@@ -160,11 +196,7 @@ public partial class SettingsViewModel : ViewModelBase
         {
             List<string> models;
 
-            if (StaticProviderModels.TryGetValue(provider, out var staticList))
-            {
-                models = [.. staticList];
-            }
-            else if (provider == "OpenRouter")
+            if (provider == "OpenRouter")
             {
                 models = await SetupWizardViewModel.FetchOpenRouterModelIdsAsync();
             }
@@ -178,7 +210,15 @@ public partial class SettingsViewModel : ViewModelBase
             }
             else
             {
-                models = [];
+                // Try fetching from the provider's /models endpoint (OpenAI, DeepSeek, Groq, etc.)
+                var baseUrl = ProviderBaseUrls.GetValueOrDefault(provider, string.Empty);
+                models = !string.IsNullOrEmpty(baseUrl) && !string.IsNullOrWhiteSpace(ApiKey)
+                    ? await FetchAuthenticatedModelIdsAsync(baseUrl, ApiKey)
+                    : [];
+
+                // Fall back to static list if API fetch returned nothing.
+                if (models.Count == 0 && StaticProviderModels.TryGetValue(provider, out var staticList))
+                    models = [.. staticList];
             }
 
             await Dispatcher.UIThread.InvokeAsync(() =>
@@ -195,6 +235,46 @@ public partial class SettingsViewModel : ViewModelBase
         finally
         {
             IsLoadingModels = false;
+        }
+    }
+
+    /// <summary>
+    /// Fetches model IDs from any OpenAI-compatible /models endpoint using an API key.
+    /// Works with OpenAI, DeepSeek, Groq, Mistral, Together AI, Google, etc.
+    /// </summary>
+    private static async Task<List<string>> FetchAuthenticatedModelIdsAsync(string baseUrl, string apiKey)
+    {
+        try
+        {
+            using var http = new HttpClient();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+
+            var modelsUrl = baseUrl.TrimEnd('/') + "/models";
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(modelsUrl));
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey.Trim());
+
+            var response = await http.SendAsync(request, cts.Token);
+            response.EnsureSuccessStatusCode();
+
+            using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
+
+            var models = new List<string>();
+            if (doc.RootElement.TryGetProperty("data", out var data))
+            {
+                foreach (var item in data.EnumerateArray())
+                {
+                    if (item.TryGetProperty("id", out var id) && id.GetString() is { } modelId)
+                        models.Add(modelId);
+                }
+            }
+
+            models.Sort(StringComparer.OrdinalIgnoreCase);
+            return models;
+        }
+        catch
+        {
+            return [];
         }
     }
 
@@ -243,6 +323,125 @@ public partial class SettingsViewModel : ViewModelBase
         ScheduleAutoSave();
     }
 
+    // ─── Provider Profiles ─────────────────────────────
+
+    [RelayCommand]
+    private void AddProvider()
+    {
+        if (string.IsNullOrWhiteSpace(ApiKey))
+        {
+            StatusMessage = "Please enter an API key.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(ModelName))
+        {
+            StatusMessage = "Please select a model.";
+            return;
+        }
+
+        var name = string.IsNullOrWhiteSpace(NewProfileName)
+            ? $"{SelectedProvider} - {SidebarViewModel.ShortenModelName(ModelName)}"
+            : NewProfileName.Trim();
+
+        // Update existing or add new.
+        var existing = SavedProfiles.FirstOrDefault(p =>
+            p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is not null)
+        {
+            existing.Provider = SelectedProvider;
+            existing.Model = ModelName;
+            existing.ApiKey = ApiKey;
+            existing.BaseUrl = BaseUrl;
+            existing.MaxTokens = MaxOutputTokens;
+        }
+        else
+        {
+            SavedProfiles.Add(new ProviderProfile
+            {
+                Name = name,
+                Provider = SelectedProvider,
+                Model = ModelName,
+                ApiKey = ApiKey,
+                BaseUrl = BaseUrl,
+                MaxTokens = MaxOutputTokens,
+            });
+        }
+
+        PersistProfiles();
+
+        // Auto-switch to the newly added provider.
+        LoadProfile(SavedProfiles.Last(p => p.Name == name));
+
+        NewProfileName = string.Empty;
+        StatusMessage = $"Provider '{name}' added and activated.";
+    }
+
+    [RelayCommand]
+    private void LoadProfile(ProviderProfile profile)
+    {
+        _suppressAutoSave = true;
+        try
+        {
+            SelectedProvider = profile.Provider;
+            ApiKey = profile.ApiKey;
+            BaseUrl = profile.BaseUrl;
+            ModelName = profile.Model;
+            MaxOutputTokens = profile.MaxTokens;
+            SelectedProfile = profile;
+        }
+        finally
+        {
+            _suppressAutoSave = false;
+        }
+
+        // Single save with all values set.
+        ScheduleAutoSave();
+        StatusMessage = $"Switched to '{profile.Name}'.";
+    }
+
+    [RelayCommand]
+    private void DeleteProfile(ProviderProfile profile)
+    {
+        SavedProfiles.Remove(profile);
+        PersistProfiles();
+        if (SelectedProfile == profile) SelectedProfile = null;
+        StatusMessage = $"Profile '{profile.Name}' deleted.";
+    }
+
+    private void LoadProfiles()
+    {
+        SavedProfiles.Clear();
+        if (!File.Exists(ProfilesPath)) return;
+
+        try
+        {
+            var json = File.ReadAllText(ProfilesPath);
+            var profiles = JsonSerializer.Deserialize<List<ProviderProfile>>(json, SerializerOptions);
+            if (profiles is not null)
+            {
+                foreach (var p in profiles)
+                    SavedProfiles.Add(p);
+            }
+        }
+        catch { /* ignore corrupt file */ }
+    }
+
+    private void PersistProfiles()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(ProfilesPath)!;
+            Directory.CreateDirectory(dir);
+            var json = JsonSerializer.Serialize(SavedProfiles.ToList(), SerializerOptions);
+            File.WriteAllText(ProfilesPath, json);
+        }
+        catch { /* best effort */ }
+    }
+
+    // ─── Save ──────────────────────────────────────────
+
     [RelayCommand]
     private async Task SaveAsync()
     {
@@ -269,12 +468,13 @@ public partial class SettingsViewModel : ViewModelBase
 
             if (!string.IsNullOrWhiteSpace(BaseUrl))
                 existing["BaseUrl"] = BaseUrl;
+            else
+                existing.Remove("BaseUrl");
 
             var output = JsonSerializer.Serialize(existing, SerializerOptions);
             await File.WriteAllTextAsync(SettingsPath, output);
 
-            // Hot-swap runtime: update the config singleton, env vars, and auth
-            // provider so new chat sessions use the updated settings without restarting.
+            // Hot-swap runtime config, env vars, and auth provider.
             _config.Model = ModelName.Trim();
             _config.MaxTokens = MaxOutputTokens;
             _config.PermissionMode = PermissionMode;
@@ -287,15 +487,25 @@ public partial class SettingsViewModel : ViewModelBase
                 if (BaseUrl.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
                     Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", ApiKey.Trim());
             }
+
             if (!string.IsNullOrWhiteSpace(BaseUrl))
             {
-                _config.BaseUrl = new Uri(BaseUrl.Trim());
+                var parsedUrl = new Uri(BaseUrl.Trim());
+                _config.BaseUrl = parsedUrl;
+                _authProvider.BaseUrl = parsedUrl;
                 Environment.SetEnvironmentVariable("LLM_BASE_URL", BaseUrl.Trim());
             }
+            else
+            {
+                _config.BaseUrl = null;
+                _authProvider.BaseUrl = null;
+                Environment.SetEnvironmentVariable("LLM_BASE_URL", null);
+            }
+
             if (!string.IsNullOrWhiteSpace(ModelName))
                 Environment.SetEnvironmentVariable("LLM_MODEL", ModelName.Trim());
 
-            // Update sidebar model/provider display immediately.
+            // Update sidebar display immediately.
             _sidebar.CurrentModel = SidebarViewModel.ShortenModelName(ModelName);
             _sidebar.CurrentProvider = SelectedProvider;
             _sidebar.IsConnected = !string.IsNullOrWhiteSpace(ApiKey);
@@ -309,13 +519,8 @@ public partial class SettingsViewModel : ViewModelBase
         }
     }
 
-    /// <summary>
-    /// Infers the provider from the saved settings.json "Provider" field,
-    /// falling back to BaseUrl heuristics if not present.
-    /// </summary>
     private static string InferProvider(SovrantConfig config)
     {
-        // Try reading the Provider field from settings.json directly.
         try
         {
             var path = Path.Combine(
@@ -330,9 +535,8 @@ public partial class SettingsViewModel : ViewModelBase
                     return saved;
             }
         }
-        catch { /* fall through to heuristic */ }
+        catch { /* fall through */ }
 
-        // Heuristic from BaseUrl.
         var url = config.BaseUrl?.ToString() ?? string.Empty;
         if (url.Contains("openrouter", StringComparison.OrdinalIgnoreCase)) return "OpenRouter";
         if (url.Contains("deepseek", StringComparison.OrdinalIgnoreCase)) return "DeepSeek";
@@ -356,4 +560,14 @@ public partial class SettingsViewModel : ViewModelBase
         PermissionMode.AcceptEdits,
         PermissionMode.BypassPermissions,
     ];
+}
+
+public partial class ProviderProfile : ViewModelBase
+{
+    [ObservableProperty] private string _name = string.Empty;
+    [ObservableProperty] private string _provider = string.Empty;
+    [ObservableProperty] private string _model = string.Empty;
+    [ObservableProperty] private string _apiKey = string.Empty;
+    [ObservableProperty] private string _baseUrl = string.Empty;
+    [ObservableProperty] private int _maxTokens = 32000;
 }

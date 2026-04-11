@@ -32,31 +32,33 @@ public sealed class ToolsCommand : ISlashCommand
                     new SlashCommandResult($"Tool '{name}' not found. Use /tools to list all."));
 
             var detail = new StringBuilder();
-            detail.AppendLine(CultureInfo.InvariantCulture, $"Name:        {match.Name}");
-            detail.AppendLine(CultureInfo.InvariantCulture,
-                $"Description: {match.Description ?? "(none)"}");
+            detail.AppendLine(CultureInfo.InvariantCulture, $"# {match.Name}");
             detail.AppendLine();
-            detail.AppendLine("Input Schema:");
+            detail.AppendLine(CultureInfo.InvariantCulture,
+                $"{match.Description ?? "(no description)"}");
+            detail.AppendLine();
+            detail.AppendLine("**Input Schema:**");
+            detail.AppendLine();
             detail.Append(match.InputSchema.ToString());
             return Task.FromResult(new SlashCommandResult(detail.ToString()));
         }
 
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture,
-            $"{"Name",-25} {"Description"}");
-        sb.AppendLine(new string('-', 70));
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# Tools ({definitions.Count})");
+        sb.AppendLine();
+        sb.AppendLine("| Name | Description |");
+        sb.AppendLine("|------|-------------|");
 
         foreach (var d in definitions.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
         {
             var desc = d.Description ?? "";
-            if (desc.Length > 50)
-                desc = string.Concat(desc.AsSpan(0, 47), "...");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"{d.Name,-25} {desc}");
+            if (desc.Length > 60)
+                desc = string.Concat(desc.AsSpan(0, 57), "...");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| {d.Name} | {desc} |");
         }
 
         sb.AppendLine();
-        sb.Append(CultureInfo.InvariantCulture,
-            $"{definitions.Count} tools. Use /tools <name> for details.");
+        sb.Append("Use /tools (name) for details.");
 
         return Task.FromResult(new SlashCommandResult(sb.ToString()));
     }

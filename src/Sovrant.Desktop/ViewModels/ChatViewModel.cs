@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Commands;
 using Sovrant.Desktop.Adapters;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Session;
@@ -12,7 +14,9 @@ public partial class ChatViewModel : ViewModelBase
 {
     private readonly IRuntimeSessionPool _sessionPool;
     private readonly ISessionStore _sessionStore;
+    private readonly SlashCommandDispatcher _commandDispatcher;
     private readonly DesktopConfirmationHandler? _confirmationHandler;
+    private readonly ActiveContextViewModel _activeContext;
 
     [ObservableProperty]
     private string _sessionId;
@@ -29,14 +33,25 @@ public partial class ChatViewModel : ViewModelBase
     [ObservableProperty]
     private bool _hasMessages;
 
+    [ObservableProperty]
+    private bool _showCommandSuggestions;
+
+    public ActiveContextViewModel ActiveContext => _activeContext;
     public ObservableCollection<MessageViewModel> Messages { get; } = [];
+    public ObservableCollection<CommandSuggestion> CommandSuggestions { get; } = [];
+
+    /// <summary>Raised after a turn completes (message sent and response received).</summary>
+    public event Action? TurnCompleted;
 
     public ChatViewModel(IRuntimeSessionPool sessionPool, ISessionStore sessionStore,
+        SlashCommandDispatcher commandDispatcher, ActiveContextViewModel activeContext,
         DesktopConfirmationHandler? confirmationHandler = null)
     {
         _sessionPool = sessionPool;
         _sessionStore = sessionStore;
+        _commandDispatcher = commandDispatcher;
         _confirmationHandler = confirmationHandler;
+        _activeContext = activeContext;
         _sessionId = $"desktop-{Guid.NewGuid():N}";
 
         if (_confirmationHandler is not null)
@@ -77,11 +92,85 @@ public partial class ChatViewModel : ViewModelBase
         if (string.IsNullOrEmpty(text)) return;
 
         InputText = string.Empty;
+
+        // Try slash command dispatch first.
+        if (text.StartsWith('/'))
+        {
+            await HandleSlashCommandAsync(text, ct);
+            return;
+        }
+
+        await SendToRuntimeAsync(text, ct);
+    }
+
+    private async Task HandleSlashCommandAsync(string text, CancellationToken ct)
+    {
+        HasMessages = true;
+        Messages.Add(new MessageViewModel { Role = "user", Text = text });
+
+        try
+        {
+            await App.RuntimeReady.Task.WaitAsync(ct).ConfigureAwait(false);
+
+            var result = await _commandDispatcher.TryDispatchAsync(text, ct).ConfigureAwait(false);
+
+            if (result is null)
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                    Messages.Add(new MessageViewModel { Role = "assistant", Text = "Unknown command. Type /help for a list.", IsComplete = true }));
+                return;
+            }
+
+            // Handle special actions
+            if (result.ShouldClearHistory)
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    Messages.Clear();
+                    HasMessages = false;
+                    TokenCount = 0;
+                    SessionId = $"desktop-{Guid.NewGuid():N}";
+                });
+                return;
+            }
+
+            // If the command wants to inject as a user message, send it to the LLM
+            if (result.InjectAsUserMessage is not null)
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                    Messages.Add(new MessageViewModel { Role = "assistant", Text = "Running command...", IsComplete = true }));
+                await SendToRuntimeAsync(result.InjectAsUserMessage, ct);
+                return;
+            }
+
+            // Show command output
+            if (!string.IsNullOrEmpty(result.Output))
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                    Messages.Add(new MessageViewModel { Role = "assistant", Text = result.Output, IsComplete = true }));
+            }
+
+            if (result.ShouldExit)
+            {
+                // Desktop: close the app
+                await Dispatcher.UIThread.InvokeAsync(() => App.MainWindow?.Close());
+            }
+        }
+        catch (Exception ex)
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+                Messages.Add(new MessageViewModel { Role = "assistant", Text = $"Command error: {ex.Message}", IsComplete = true }));
+        }
+    }
+
+    private async Task SendToRuntimeAsync(string text, CancellationToken ct)
+    {
         IsSending = true;
         HasMessages = true;
 
-        // Add user message.
-        Messages.Add(new MessageViewModel { Role = "user", Text = text });
+        // Add user message only if not already added (slash command inject path).
+        if (Messages.Count == 0 || Messages[^1].Role != "user" || Messages[^1].Text != text)
+            Messages.Add(new MessageViewModel { Role = "user", Text = text });
 
         // Add assistant placeholder with thinking indicator.
         var assistantMsg = new MessageViewModel { Role = "assistant" };
@@ -108,7 +197,11 @@ public partial class ChatViewModel : ViewModelBase
         finally
         {
             IsSending = false;
-            await Dispatcher.UIThread.InvokeAsync(() => assistantMsg.CompleteStreaming());
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                assistantMsg.CompleteStreaming();
+                TurnCompleted?.Invoke();
+            });
         }
     }
 
@@ -159,8 +252,41 @@ public partial class ChatViewModel : ViewModelBase
 
     private bool CanSend() => !IsSending && !string.IsNullOrWhiteSpace(InputText);
 
-    partial void OnInputTextChanged(string value) => SendCommand.NotifyCanExecuteChanged();
+    partial void OnInputTextChanged(string value)
+    {
+        SendCommand.NotifyCanExecuteChanged();
+        UpdateCommandSuggestions(value);
+    }
+
     partial void OnIsSendingChanged(bool value) => SendCommand.NotifyCanExecuteChanged();
+
+    [RelayCommand]
+    private void AcceptSuggestion(CommandSuggestion suggestion)
+    {
+        InputText = $"/{suggestion.Name} ";
+        ShowCommandSuggestions = false;
+    }
+
+    private void UpdateCommandSuggestions(string input)
+    {
+        CommandSuggestions.Clear();
+
+        if (!input.StartsWith('/') || input.Contains(' ', StringComparison.Ordinal))
+        {
+            ShowCommandSuggestions = false;
+            return;
+        }
+
+        var query = input[1..];
+        var matches = _commandDispatcher.Commands
+            .Where(c => c.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .Take(8);
+
+        foreach (var cmd in matches)
+            CommandSuggestions.Add(new CommandSuggestion(cmd.Name, cmd.Description));
+
+        ShowCommandSuggestions = CommandSuggestions.Count > 0;
+    }
 
     private void HandleEvent(RuntimeEvent ev, MessageViewModel msg)
     {
@@ -193,4 +319,9 @@ public partial class ChatViewModel : ViewModelBase
                 break;
         }
     }
+}
+
+public sealed record CommandSuggestion(string Name, string Description)
+{
+    public string Display => $"/{Name}";
 }

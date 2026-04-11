@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.ChatView"
              x:DataType="vm:ChatViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -23,18 +24,93 @@
                         CornerRadius="8"
                         FontWeight="SemiBold"
                         VerticalAlignment="Bottom" />
-                <TextBox Text="{Binding InputText}"
-                         Watermark="Type a message..."
-                         AcceptsReturn="False"
-                         TextWrapping="Wrap"
-                         KeyDown="OnInputKeyDown"
-                         MinHeight="40"
-                         MaxHeight="120"
-                         Padding="12,10"
-                         CornerRadius="8"
-                         Background="{DynamicResource InputBackground}"
-                         BorderBrush="{DynamicResource InputBorder}" />
+                <Grid>
+                    <TextBox Text="{Binding InputText}"
+                             Watermark="Type a message or / for commands..."
+                             AcceptsReturn="False"
+                             TextWrapping="Wrap"
+                             KeyDown="OnInputKeyDown"
+                             MinHeight="40"
+                             MaxHeight="120"
+                             Padding="12,10"
+                             CornerRadius="8"
+                             Background="{DynamicResource InputBackground}"
+                             BorderBrush="{DynamicResource InputBorder}" />
+                    <!-- Command suggestions popup above input (rendered after TextBox for z-order) -->
+                    <Border VerticalAlignment="Bottom"
+                            Margin="0,0,0,44"
+                            CornerRadius="8"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}"
+                            BorderThickness="1"
+                            Padding="4"
+                            IsVisible="{Binding ShowCommandSuggestions}"
+                            MaxHeight="260"
+                            ZIndex="10">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding CommandSuggestions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vm:CommandSuggestion">
+                                        <Button Command="{Binding $parent[ItemsControl].((vm:ChatViewModel)DataContext).AcceptSuggestionCommand}"
+                                                CommandParameter="{Binding}"
+                                                HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Stretch"
+                                                Padding="10,6"
+                                                Margin="0,1"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                CornerRadius="4"
+                                                Cursor="Hand">
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Left"
+                                                           Text="{Binding Display}"
+                                                           FontSize="13"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource BrandPrimary}"
+                                                           MinWidth="120" />
+                                                <TextBlock Text="{Binding Description}"
+                                                           FontSize="12"
+                                                           Foreground="{DynamicResource TextSecondary}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </DockPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
             </DockPanel>
+        </Border>
+
+        <!-- Context breadcrumb -->
+        <Border DockPanel.Dock="Top"
+                Padding="24,8"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource SurfaceBorder}"
+                Background="{DynamicResource SurfaceBackground}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="🏢" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding ActiveContext.ActiveWorkspaceName}"
+                           FontSize="12" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondary}"
+                           VerticalAlignment="Center" />
+                <TextBlock Text=">"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextMuted}"
+                           VerticalAlignment="Center"
+                           IsVisible="{Binding ActiveContext.HasActiveProject}" />
+                <TextBlock Text="{Binding ActiveContext.ActiveProjectName}"
+                           FontSize="12" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}"
+                           VerticalAlignment="Center"
+                           IsVisible="{Binding ActiveContext.HasActiveProject}" />
+                <TextBlock Text="(no project)"
+                           FontSize="11" FontStyle="Italic"
+                           Foreground="{DynamicResource TextMuted}"
+                           VerticalAlignment="Center"
+                           IsVisible="{Binding !ActiveContext.HasActiveProject}" />
+            </StackPanel>
         </Border>
 
         <!-- Content area: Grid allows hero to truly center while ScrollViewer fills -->
@@ -235,9 +311,9 @@
                                                                  IsVisible="{Binding IsStreaming}" />
 
                                             <!-- Markdown rendered after response completes -->
-                                            <md:MarkdownScrollViewer Markdown="{Binding SafeMarkdown}"
-                                                                     Margin="42,0,0,0"
-                                                                     IsVisible="{Binding IsComplete}" />
+                                            <ctrl:SafeMarkdownPresenter Markdown="{Binding SafeMarkdown}"
+                                                                        Margin="42,0,0,0"
+                                                                        IsVisible="{Binding IsComplete}" />
 
                                             <!-- Error banner with retry -->
                                             <Border Margin="42,6,0,0"

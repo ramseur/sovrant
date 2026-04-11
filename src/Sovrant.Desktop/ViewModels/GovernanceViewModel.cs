@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.Governance;
@@ -13,9 +15,31 @@ public partial class GovernanceViewModel : ViewModelBase
     [ObservableProperty]
     private bool _auditLogEnabled;
 
+    [ObservableProperty]
+    private string _newBlockedCommand = string.Empty;
+
+    [ObservableProperty]
+    private string _newProtectedFile = string.Empty;
+
+    [ObservableProperty]
+    private string _newSecretPattern = string.Empty;
+
+    [ObservableProperty]
+    private string _statusMessage = string.Empty;
+
     public ObservableCollection<string> BlockedCommands { get; } = [];
     public ObservableCollection<string> ProtectedFiles { get; } = [];
     public ObservableCollection<string> SecretPatterns { get; } = [];
+
+    private static readonly string GlobalConfigPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".sovrant", "governance.json");
+
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
 
     public GovernanceViewModel()
     {
@@ -24,6 +48,64 @@ public partial class GovernanceViewModel : ViewModelBase
 
     [RelayCommand]
     private void Refresh() => LoadConfig();
+
+    [RelayCommand]
+    private void AddBlockedCommand()
+    {
+        var cmd = NewBlockedCommand.Trim();
+        if (string.IsNullOrEmpty(cmd) || BlockedCommands.Contains(cmd)) return;
+        BlockedCommands.Add(cmd);
+        NewBlockedCommand = string.Empty;
+        SaveConfig();
+    }
+
+    [RelayCommand]
+    private void RemoveBlockedCommand(string command)
+    {
+        BlockedCommands.Remove(command);
+        SaveConfig();
+    }
+
+    [RelayCommand]
+    private void AddProtectedFile()
+    {
+        var file = NewProtectedFile.Trim();
+        if (string.IsNullOrEmpty(file) || ProtectedFiles.Contains(file)) return;
+        ProtectedFiles.Add(file);
+        NewProtectedFile = string.Empty;
+        SaveConfig();
+    }
+
+    [RelayCommand]
+    private void RemoveProtectedFile(string file)
+    {
+        ProtectedFiles.Remove(file);
+        SaveConfig();
+    }
+
+    [RelayCommand]
+    private void AddSecretPattern()
+    {
+        var pattern = NewSecretPattern.Trim();
+        if (string.IsNullOrEmpty(pattern) || SecretPatterns.Contains(pattern)) return;
+        SecretPatterns.Add(pattern);
+        NewSecretPattern = string.Empty;
+        SaveConfig();
+    }
+
+    [RelayCommand]
+    private void RemoveSecretPattern(string pattern)
+    {
+        SecretPatterns.Remove(pattern);
+        SaveConfig();
+    }
+
+    [RelayCommand]
+    private void ToggleAuditLog()
+    {
+        AuditLogEnabled = !AuditLogEnabled;
+        SaveConfig();
+    }
 
     private void LoadConfig()
     {
@@ -43,5 +125,38 @@ public partial class GovernanceViewModel : ViewModelBase
         SecretPatterns.Clear();
         foreach (var p in config.SecretPatterns)
             SecretPatterns.Add(p);
+    }
+
+    private void SaveConfig()
+    {
+        try
+        {
+            var config = new GovernanceConfig
+            {
+                GovernanceLevelName = GovernanceLevel.Equals("STANDARD", StringComparison.OrdinalIgnoreCase) ? "standard"
+                    : GovernanceLevel.Equals("STRICT", StringComparison.OrdinalIgnoreCase) ? "strict"
+                    : GovernanceLevel.Equals("PERMISSIVE", StringComparison.OrdinalIgnoreCase) ? "permissive"
+                    : "standard",
+                AuditLog = AuditLogEnabled,
+            };
+
+            foreach (var cmd in BlockedCommands)
+                config.BlockedCommands.Add(cmd);
+            foreach (var f in ProtectedFiles)
+                config.ProtectedFiles.Add(f);
+            foreach (var p in SecretPatterns)
+                config.SecretPatterns.Add(p);
+
+            var dir = Path.GetDirectoryName(GlobalConfigPath)!;
+            Directory.CreateDirectory(dir);
+            var json = JsonSerializer.Serialize(config, SerializerOptions);
+            File.WriteAllText(GlobalConfigPath, json);
+
+            StatusMessage = "Saved.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Save failed: {ex.Message}";
+        }
     }
 }

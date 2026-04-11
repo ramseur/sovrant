@@ -31,7 +31,10 @@ public sealed class HelpCommand : ISlashCommand
             .GroupBy(c => c.Category, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
-        var sb = new StringBuilder();
+        var spectreBuilder = new StringBuilder();
+        var mdBuilder = new StringBuilder();
+        mdBuilder.AppendLine("# Available Commands");
+        mdBuilder.AppendLine();
         var first = true;
 
         foreach (var category in s_categoryOrder)
@@ -39,23 +42,34 @@ public sealed class HelpCommand : ISlashCommand
             if (!grouped.TryGetValue(category, out var cmds))
                 continue;
 
-            if (!first) sb.AppendLine();
+            if (!first) spectreBuilder.AppendLine();
             first = false;
 
-            sb.AppendLine(CultureInfo.InvariantCulture, $"[bold]{category}[/]");
+            spectreBuilder.AppendLine(CultureInfo.InvariantCulture, $"[bold]{category}[/]");
+
+            mdBuilder.AppendLine(CultureInfo.InvariantCulture, $"## {category}");
+            mdBuilder.AppendLine();
+            mdBuilder.AppendLine("| Command | Description |");
+            mdBuilder.AppendLine("|---------|-------------|");
 
             foreach (var cmd in cmds)
             {
                 var aliases = cmd.Aliases.Count > 0
-                    ? $" [grey]({string.Join(", ", cmd.Aliases.Select(a => "/" + a))})[/]"
+                    ? $" ({string.Join(", ", cmd.Aliases.Select(a => "/" + a))})"
                     : string.Empty;
-                sb.AppendLine(CultureInfo.InvariantCulture,
-                    $"  [teal]/{cmd.Name,-14}[/] {Markup.Escape(cmd.Description)}{aliases}");
+                spectreBuilder.AppendLine(CultureInfo.InvariantCulture,
+                    $"  [teal]/{cmd.Name,-14}[/] {Markup.Escape(cmd.Description)}{Markup.Escape(aliases)}");
+                mdBuilder.AppendLine(CultureInfo.InvariantCulture,
+                    $"| /{cmd.Name} | {cmd.Description}{aliases} |");
             }
+
+            mdBuilder.AppendLine();
         }
 
-        // Render via Spectre markup so colors work.
-        AnsiConsole.Markup(sb.ToString());
-        return Task.FromResult(new SlashCommandResult());
+        // Render via Spectre markup to console for CLI.
+        AnsiConsole.Markup(spectreBuilder.ToString());
+
+        // Return markdown output for non-console consumers (desktop, web).
+        return Task.FromResult(new SlashCommandResult(Output: mdBuilder.ToString()));
     }
 }

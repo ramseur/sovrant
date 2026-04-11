@@ -421,7 +421,6 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     }
 
     private static bool IsRetryableError(string message) =>
-        message.Contains("400", StringComparison.Ordinal) ||
         message.Contains("429", StringComparison.Ordinal) ||
         message.Contains("500", StringComparison.Ordinal) ||
         message.Contains("502", StringComparison.Ordinal) ||

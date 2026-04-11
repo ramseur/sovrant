@@ -107,6 +107,7 @@ The engine is fully functional for individual and small-team use:
 | Intent-aware, capability-discovered model routing | Phase 48 | ✅ Complete |
 | SearXNG web search backend (self-hosted, key-free) | Phase 49 | Low–Medium |
 | OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | Medium–High |
+| ASP.NET Core web frontend (Blazor Server, dual-mode: embedded runtime or remote via Sovrant.Server) | Phase 56 | High |
 
 ---
 
@@ -4301,6 +4302,150 @@ src/Sovrant.Runtime/Metrics/
 - The full Phase 39 dashboard. `sovrant cost status` is a one-line CLI view, not a charting dashboard. The Phase 39 dashboard can still ship later — it just reads from the JSONL this phase produces rather than computing prices itself.
 - Budget enforcement. That stays with Phase 39 (`SOVRANT_SESSION_BUDGET_USD`, `SOVRANT_PROJECT_BUDGET_USD`) and with Phase 51's mission guard. This phase is *measurement*, not enforcement.
 - Pricing for exotic / self-hosted / fine-tuned models outside OpenRouter's catalogue. Users set `SOVRANT_COST_PROVIDER=none` or provide an alias override that points at the closest public model.
+
+---
+
+## Phase 56 — ASP.NET Core Web Frontend (Blazor Server, Dual-Mode Runtime Access)
+
+**Goal:** Browser-based UI matching the Avalonia desktop interface, securely consuming the Sovrant runtime. Leverages .NET's unique ability to run the runtime either in-process (embedded) or remotely via the existing `Sovrant.Server` API — same components, different DI registration.
+
+**Depends on:** Phase 44 (desktop app — establishes the UI patterns and screens to match), Phase 38 (auth)
+
+**Priority:** High
+
+### Architecture: Dual-Mode Runtime Access
+
+| Mode | Topology | DI Registration | Best For |
+|---|---|---|---|
+| **Embedded** | Blazor Server + `Sovrant.Runtime` in-process | `services.AddSovrantRuntime()` | Self-hosted, single machine, zero latency |
+| **Remote** | Blazor Server or WASM + `Sovrant.Server` via HTTP/SignalR | `services.AddSovrantClient(serverUrl)` | Distributed deployment, shared server |
+
+The key insight: because `Sovrant.Runtime` is abstracted behind interfaces (`IConversationRuntime`, `IToolRegistry`, `ISmartRouter`, etc.), the same Blazor components work in both modes. Swap the service registration at startup — no frontend rewrite needed. This is a capability unique to .NET's DI system with a shared runtime library.
+
+### Screens (matching Phase 44 desktop)
+
+All screens from the desktop app are replicated with equivalent functionality:
+
+| Screen | Key Features |
+|---|---|
+| Chat | Streaming responses via SignalR, tool use blocks, error retry, markdown rendering |
+| Settings | Provider config, model selection, auto-save with debounce |
+| Diagnostics | Health checks, provider pings, config display, system info |
+| Tools | Master-detail: tool list with search, JSON schema rendered as markdown |
+| Skills | Master-detail: skill list with trigger badges, full workflow body |
+| Agents | Master-detail: agent templates with role/level, system prompt |
+| Integrations | MCP server list with tool tags |
+| Artifacts | Artifact grid with code preview |
+| Projects | Project management (when backend ready) |
+| Workspaces | Workspace management (when backend ready) |
+| Automations | Automation workflows (when backend ready) |
+| Multi-Agent | Team orchestration UI (when backend ready) |
+
+### Theming
+
+Same theme tokens as the desktop app, translated to CSS custom properties:
+
+```css
+:root[data-theme="dark"] {
+  --brand-primary: #6D52C6;
+  --surface-background: #1A1A1A;
+  --surface-card: #2A2A2A;
+  --surface-border: #3A3A3A;
+  --text-primary: #FFFFFF;
+  --text-secondary: #999999;
+  --status-pass: #4CAF50;
+  --status-warn: #FF9800;
+  --status-fail: #F44336;
+}
+:root[data-theme="light"] {
+  --brand-primary: #6D52C6;
+  --surface-background: #F5F5F5;
+  --surface-card: #FFFFFF;
+  --surface-border: #D0D0D0;
+  --text-primary: #1A1A1A;
+  --text-secondary: #666666;
+}
+```
+
+Dark/light toggle via `data-theme` attribute on `<html>`, persisted to user preferences.
+
+### Project Structure
+
+```
+src/Sovrant.Web/
+├── Sovrant.Web.csproj
+├── Program.cs                     # DI bootstrap — AddSovrantRuntime() or AddSovrantClient()
+├── Components/
+│   ├── Layout/
+│   │   ├── MainLayout.razor       # Sidebar + content area shell
+│   │   └── SidebarNav.razor       # Navigation matching desktop sidebar
+│   ├── Pages/
+│   │   ├── Chat.razor
+│   │   ├── Settings.razor
+│   │   ├── Diagnostics.razor
+│   │   ├── Tools.razor
+│   │   ├── Skills.razor
+│   │   ├── Agents.razor
+│   │   ├── Integrations.razor
+│   │   ├── Artifacts.razor
+│   │   └── ... (placeholder pages)
+│   └── Shared/
+│       ├── ChatMessage.razor       # Message bubble with markdown, tool blocks, error state
+│       ├── ChatInputBar.razor      # Input with send button
+│       ├── StatusBadge.razor       # Connected/Not Connected/PASS/WARN/FAIL
+│       ├── MasterDetailLayout.razor # Reusable list + detail pane
+│       └── MarkdownRenderer.razor  # Markdown-to-HTML rendering
+├── Services/
+│   ├── WebPermissionPolicy.cs     # IPermissionPolicy for web context
+│   ├── WebConfirmationHandler.cs  # IToolConfirmationHandler — modal dialog via JS interop
+│   ├── WebUserInputProvider.cs    # IUserInputProvider — modal input via JS interop
+│   └── SovrantClientServices.cs   # Remote-mode service registrations (HttpClient wrappers for IConversationRuntime etc.)
+├── wwwroot/
+│   ├── css/
+│   │   ├── sovrant-theme.css      # CSS custom properties for theming
+│   │   └── app.css
+│   └── js/
+│       └── interop.js             # Theme toggle, clipboard, modal helpers
+└── appsettings.json               # RuntimeMode: "embedded" | "remote", ServerUrl, auth config
+```
+
+### Security
+
+- **Embedded mode:** API keys and config stay server-side. No secrets in the browser.
+- **Remote mode:** Web frontend authenticates to `Sovrant.Server` via the Phase 38 token auth. API keys configured on the server only.
+- **Authentication:** ASP.NET Identity or external OIDC provider (configurable). Session cookies with anti-forgery tokens.
+- **Authorization:** Per-user permission policies. Admin users can configure providers; regular users can chat and view.
+- **Transport:** HTTPS enforced. SignalR WebSocket connections authenticated via the same session cookie.
+- CSRF protection via Blazor's built-in anti-forgery. CORS restricted to configured origins.
+
+### Streaming
+
+Chat responses stream via SignalR (Blazor Server) or Server-Sent Events (WASM remote mode):
+
+- `RuntimeEvent.TextDelta` → append to message bubble in real-time
+- `RuntimeEvent.ToolCallStart` → show tool use block with spinner
+- `RuntimeEvent.ToolCallResult` → update tool block with result
+- `RuntimeEvent.Error` → show error banner with retry button
+
+Same event processing as the desktop app's `ChatViewModel`, adapted for Blazor component lifecycle.
+
+### Build Order
+
+1. **Scaffold:** Project, `Program.cs` with embedded-mode DI, `MainLayout` with sidebar
+2. **Chat page:** Streaming responses, markdown rendering, tool blocks
+3. **Settings page:** Provider config with auto-save
+4. **Diagnostics page:** Health checks, provider pings
+5. **Registry pages:** Tools, Skills, Agents with master-detail
+6. **Remote mode:** `AddSovrantClient()` service registrations, `appsettings.json` toggle
+7. **Auth:** ASP.NET Identity integration, per-user permissions
+8. **Remaining screens:** Integrations, Artifacts, placeholders
+
+### What this phase does NOT include
+
+- Blazor WASM standalone deployment (requires remote mode + API layer optimization — future phase)
+- Mobile-responsive layout (desktop-first, responsive later)
+- Real-time multi-user collaboration (single-user sessions, same as desktop)
+- Deployment automation (Docker, Azure, AWS — separate ops concern)
 
 ---
 

@@ -50,16 +50,18 @@ public sealed class MemoryCommand : ISlashCommand
 
     private static void AppendFileSection(StringBuilder sb, string label, string path)
     {
-        sb.AppendLine(CultureInfo.InvariantCulture, $"── {label} ──────────────────────────────────");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Path: {path}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"## {label}");
+        sb.AppendLine();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"**Path:** {path}");
+        sb.AppendLine();
         if (!File.Exists(path))
         {
-            sb.AppendLine("(not found — run /memory edit to create)");
+            sb.AppendLine("*(not found -- run /memory edit to create)*");
         }
         else
         {
             var content = File.ReadAllText(path).Trim();
-            sb.AppendLine(string.IsNullOrEmpty(content) ? "(empty)" : content);
+            sb.AppendLine(string.IsNullOrEmpty(content) ? "*(empty)*" : content);
         }
         sb.AppendLine();
     }

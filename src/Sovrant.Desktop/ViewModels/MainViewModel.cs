@@ -86,8 +86,12 @@ public partial class MainViewModel : ViewModelBase
         await chat.LoadSessionAsync(sessionId);
     }
 
-    private ChatViewModel CreateChatViewModel() =>
-        _services.GetRequiredService<ChatViewModel>();
+    private ChatViewModel CreateChatViewModel()
+    {
+        var chat = _services.GetRequiredService<ChatViewModel>();
+        chat.TurnCompleted += () => _ = Sidebar.RefreshSessionsCommand.ExecuteAsync(null);
+        return chat;
+    }
 
     [RelayCommand]
     private void NewChat()

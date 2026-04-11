@@ -95,6 +95,7 @@ public partial class App : Application
         services.AddSingleton(mutableAuth);
 
         // ViewModels.
+        services.AddSingleton<ActiveContextViewModel>();
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<SidebarViewModel>();
         services.AddTransient<ChatViewModel>();
@@ -121,6 +122,8 @@ public partial class App : Application
         var mainVm = _serviceProvider.GetRequiredService<MainViewModel>();
         var window = new MainWindow { DataContext = mainVm };
         desktop.MainWindow = window;
+        desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
+        desktop.ShutdownRequested += (_, _) => Environment.Exit(0);
         MainWindow = window;
 
         // Initialize runtime in background — DB migrations, model metadata, MCP servers.

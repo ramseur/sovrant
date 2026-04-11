@@ -50,19 +50,20 @@ public sealed class TeamCommand : ISlashCommand
         }
 
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture,
-            $"{"ID",-38} {"Name",-20} {"Origin",-16} {"Members"}");
-        sb.AppendLine(new string('-', 80));
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# Teams ({teams.Count})");
+        sb.AppendLine();
+        sb.AppendLine("| Name | Origin | Members | ID |");
+        sb.AppendLine("|------|--------|---------|----|");
 
         foreach (var t in teams)
         {
             var memberCount = _registry.GetTeamMembers(t.Id).Count;
             sb.AppendLine(CultureInfo.InvariantCulture,
-                $"{t.Id,-38} {t.Name,-20} {t.Origin,-16} {memberCount}");
+                $"| {t.Name} | {t.Origin} | {memberCount} | {t.Id} |");
         }
 
         sb.AppendLine();
-        sb.Append(CultureInfo.InvariantCulture, $"{teams.Count} team(s). Use /team show <id> for details.");
+        sb.Append("Use /team show (id) for details.");
         return new SlashCommandResult(sb.ToString());
     }
 
@@ -74,32 +75,36 @@ public sealed class TeamCommand : ISlashCommand
 
         var members = _registry.GetTeamMembers(id);
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Team:        {team.Name}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"ID:          {team.Id}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Origin:      {team.Origin}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Workspace:   {team.WorkspaceId}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# {team.Name}");
+        sb.AppendLine();
+        sb.AppendLine("| Property | Value |");
+        sb.AppendLine("|----------|-------|");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| ID | {team.Id} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Origin | {team.Origin} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Workspace | {team.WorkspaceId} |");
         if (team.ProjectId is not null)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"Project:     {team.ProjectId}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| Project | {team.ProjectId} |");
         if (team.Description is not null)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"Description: {team.Description}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Created:     {team.CreatedAt:u}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Created by:  {team.CreatedBy}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| Description | {team.Description} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Created | {team.CreatedAt:u} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Created by | {team.CreatedBy} |");
         sb.AppendLine();
 
         if (members.Count > 0)
         {
-            sb.AppendLine(CultureInfo.InvariantCulture,
-                $"{"Member ID",-38} {"Name",-20} {"Role",-10} {"Template"}");
-            sb.AppendLine(new string('-', 80));
+            sb.AppendLine("## Members");
+            sb.AppendLine();
+            sb.AppendLine("| Name | Role | Template | ID |");
+            sb.AppendLine("|------|------|----------|----|");
             foreach (var m in members)
             {
                 sb.AppendLine(CultureInfo.InvariantCulture,
-                    $"{m.Id,-38} {m.Name,-20} {m.Role,-10} {m.Template ?? "-"}");
+                    $"| {m.Name} | {m.Role} | {m.Template ?? "-"} | {m.Id} |");
             }
         }
         else
         {
-            sb.AppendLine("No members.");
+            sb.AppendLine("*No members.*");
         }
 
         return new SlashCommandResult(sb.ToString());
@@ -138,13 +143,12 @@ public sealed class TeamCommand : ISlashCommand
             return new SlashCommandResult($"No members in team '{teamId}'.");
 
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture,
-            $"{"ID",-38} {"Name",-20} {"Role",-10} {"Status"}");
-        sb.AppendLine(new string('-', 75));
+        sb.AppendLine("| Name | Role | Status | ID |");
+        sb.AppendLine("|------|------|--------|----|");
         foreach (var m in members)
         {
             sb.AppendLine(CultureInfo.InvariantCulture,
-                $"{m.Id,-38} {m.Name,-20} {m.Role,-10} {m.Status}");
+                $"| {m.Name} | {m.Role} | {m.Status} | {m.Id} |");
         }
         return new SlashCommandResult(sb.ToString());
     }
@@ -153,21 +157,20 @@ public sealed class TeamCommand : ISlashCommand
     {
         var members = _registry.GetAllMembers();
         if (members.Count == 0)
-            return new SlashCommandResult("No team members active. Use /team create <name> to create a team.");
+            return new SlashCommandResult("No team members active. Use /team create (name) to create a team.");
 
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture,
-            $"{"ID",-10} {"Name",-20} {"Role",-12} {"Status",-10} {"Model"}");
-        sb.AppendLine(new string('-', 65));
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# Team Members ({members.Count})");
+        sb.AppendLine();
+        sb.AppendLine("| Name | Role | Status | Model | ID |");
+        sb.AppendLine("|------|------|--------|-------|----|");
 
         foreach (var m in members)
         {
             sb.AppendLine(CultureInfo.InvariantCulture,
-                $"{m.Id,-10} {m.Name,-20} {m.Role,-12} {m.Status,-10} {m.Model ?? "default"}");
+                $"| {m.Name} | {m.Role} | {m.Status} | {m.Model ?? "default"} | {m.Id} |");
         }
 
-        sb.AppendLine();
-        sb.Append(CultureInfo.InvariantCulture, $"{members.Count} members.");
         return new SlashCommandResult(sb.ToString());
     }
 
@@ -185,23 +188,26 @@ public sealed class TeamCommand : ISlashCommand
             return Err($"'{id}' is not a team or member ID. Use /team list.");
 
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"ID:      {m.Id}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Name:    {m.Name}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Role:    {m.Role}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Status:  {m.Status}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Model:   {m.Model ?? "default"}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Created: {m.CreatedAt:u}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# {m.Name}");
+        sb.AppendLine();
+        sb.AppendLine("| Property | Value |");
+        sb.AppendLine("|----------|-------|");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| ID | {m.Id} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Role | {m.Role} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Status | {m.Status} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Model | {m.Model ?? "default"} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Created | {m.CreatedAt:u} |");
         if (m.TeamId is not null)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"Team:    {m.TeamId}");
-
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| Team | {m.TeamId} |");
         if (m.AllowedTools is { Count: > 0 })
             sb.AppendLine(CultureInfo.InvariantCulture,
-                $"Tools:   {string.Join(", ", m.AllowedTools)}");
+                $"| Tools | {string.Join(", ", m.AllowedTools)} |");
 
         if (m.LastOutput is not null)
         {
             sb.AppendLine();
-            sb.AppendLine("Last Output:");
+            sb.AppendLine("**Last Output:**");
+            sb.AppendLine();
             var output = m.LastOutput;
             if (output.Length > 300)
                 output = string.Concat(output.AsSpan(0, 297), "...");
@@ -211,7 +217,7 @@ public sealed class TeamCommand : ISlashCommand
         if (m.LastError is not null)
         {
             sb.AppendLine();
-            sb.AppendLine(CultureInfo.InvariantCulture, $"Last Error: {m.LastError}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Last Error:** {m.LastError}");
         }
 
         return new SlashCommandResult(sb.ToString());

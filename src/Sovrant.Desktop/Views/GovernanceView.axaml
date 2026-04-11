@@ -12,12 +12,16 @@
                 <Button DockPanel.Dock="Right"
                         Content="Refresh"
                         Command="{Binding RefreshCommand}"
-                        Padding="12,6"
-                        CornerRadius="6"
+                        Padding="12,6" CornerRadius="6"
                         Background="Transparent"
                         Foreground="{DynamicResource TextPrimary}" />
-                <TextBlock Text="Governance" FontSize="24" FontWeight="Bold"
-                           Foreground="{DynamicResource TextPrimary}" />
+                <StackPanel>
+                    <TextBlock Text="Governance" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock Text="{Binding StatusMessage}"
+                               FontSize="11" Foreground="{DynamicResource TextMuted}"
+                               IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                </StackPanel>
             </DockPanel>
 
             <!-- Level + Audit -->
@@ -32,16 +36,23 @@
                         <TextBlock Text="{Binding GovernanceLevel}" FontSize="14"
                                    Foreground="{DynamicResource BrandPrimary}" FontWeight="Bold" />
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="12">
-                        <TextBlock Text="Audit Logging:" FontWeight="SemiBold" FontSize="14"
-                                   Foreground="{DynamicResource TextPrimary}" />
-                        <TextBlock Text="Enabled" FontSize="14"
-                                   Foreground="{DynamicResource StatusPass}"
-                                   IsVisible="{Binding AuditLogEnabled}" />
-                        <TextBlock Text="Disabled" FontSize="14"
-                                   Foreground="{DynamicResource StatusFail}"
-                                   IsVisible="{Binding !AuditLogEnabled}" />
-                    </StackPanel>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right"
+                                Content="Toggle"
+                                Command="{Binding ToggleAuditLogCommand}"
+                                Padding="8,4" CornerRadius="4" FontSize="11"
+                                Background="Transparent" Foreground="{DynamicResource TextSecondary}" />
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock Text="Audit Logging:" FontWeight="SemiBold" FontSize="14"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="Enabled" FontSize="14"
+                                       Foreground="{DynamicResource StatusPass}"
+                                       IsVisible="{Binding AuditLogEnabled}" />
+                            <TextBlock Text="Disabled" FontSize="14"
+                                       Foreground="{DynamicResource StatusFail}"
+                                       IsVisible="{Binding !AuditLogEnabled}" />
+                        </StackPanel>
+                    </DockPanel>
                 </StackPanel>
             </Border>
 
@@ -49,6 +60,16 @@
             <StackPanel Spacing="8">
                 <TextBlock Text="Blocked Commands" FontSize="16" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimary}" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right"
+                            Content="Add"
+                            Command="{Binding AddBlockedCommandCommand}"
+                            Padding="10,6" CornerRadius="6" Margin="8,0,0,0"
+                            Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
+                    <TextBox Text="{Binding NewBlockedCommand}"
+                             Watermark="e.g. rm -rf /"
+                             FontSize="12" Padding="8,6" CornerRadius="6" />
+                </DockPanel>
                 <ItemsControl ItemsSource="{Binding BlockedCommands}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
@@ -56,8 +77,17 @@
                                     Background="{DynamicResource SurfaceCard}"
                                     BorderBrush="{DynamicResource StatusFail}"
                                     BorderThickness="1">
-                                <TextBlock Text="{Binding}" FontFamily="Consolas,Menlo,monospace"
-                                           FontSize="13" Foreground="{DynamicResource StatusFail}" />
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right"
+                                            Content="Remove"
+                                            Command="{Binding $parent[ItemsControl].((vm:GovernanceViewModel)DataContext).RemoveBlockedCommandCommand}"
+                                            CommandParameter="{Binding}"
+                                            Padding="6,2" CornerRadius="4" FontSize="10"
+                                            Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
+                                    <TextBlock Text="{Binding}" FontFamily="Consolas,Menlo,monospace"
+                                               FontSize="13" Foreground="{DynamicResource StatusFail}"
+                                               VerticalAlignment="Center" />
+                                </DockPanel>
                             </Border>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -71,6 +101,16 @@
             <StackPanel Spacing="8">
                 <TextBlock Text="Protected Files" FontSize="16" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimary}" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right"
+                            Content="Add"
+                            Command="{Binding AddProtectedFileCommand}"
+                            Padding="10,6" CornerRadius="6" Margin="8,0,0,0"
+                            Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
+                    <TextBox Text="{Binding NewProtectedFile}"
+                             Watermark="e.g. .env, credentials.json"
+                             FontSize="12" Padding="8,6" CornerRadius="6" />
+                </DockPanel>
                 <ItemsControl ItemsSource="{Binding ProtectedFiles}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
@@ -78,8 +118,17 @@
                                     Background="{DynamicResource SurfaceCard}"
                                     BorderBrush="{DynamicResource StatusWarn}"
                                     BorderThickness="1">
-                                <TextBlock Text="{Binding}" FontFamily="Consolas,Menlo,monospace"
-                                           FontSize="13" Foreground="{DynamicResource StatusWarn}" />
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right"
+                                            Content="Remove"
+                                            Command="{Binding $parent[ItemsControl].((vm:GovernanceViewModel)DataContext).RemoveProtectedFileCommand}"
+                                            CommandParameter="{Binding}"
+                                            Padding="6,2" CornerRadius="4" FontSize="10"
+                                            Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
+                                    <TextBlock Text="{Binding}" FontFamily="Consolas,Menlo,monospace"
+                                               FontSize="13" Foreground="{DynamicResource StatusWarn}"
+                                               VerticalAlignment="Center" />
+                                </DockPanel>
                             </Border>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -93,6 +142,16 @@
             <StackPanel Spacing="8">
                 <TextBlock Text="Secret Detection Patterns" FontSize="16" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimary}" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right"
+                            Content="Add"
+                            Command="{Binding AddSecretPatternCommand}"
+                            Padding="10,6" CornerRadius="6" Margin="8,0,0,0"
+                            Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
+                    <TextBox Text="{Binding NewSecretPattern}"
+                             Watermark="e.g. sk-[a-zA-Z0-9]{32}"
+                             FontSize="12" Padding="8,6" CornerRadius="6" />
+                </DockPanel>
                 <ItemsControl ItemsSource="{Binding SecretPatterns}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
@@ -100,8 +159,17 @@
                                     Background="{DynamicResource SurfaceCard}"
                                     BorderBrush="{DynamicResource SurfaceBorder}"
                                     BorderThickness="1">
-                                <TextBlock Text="{Binding}" FontFamily="Consolas,Menlo,monospace"
-                                           FontSize="13" Foreground="{DynamicResource TextPrimary}" />
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right"
+                                            Content="Remove"
+                                            Command="{Binding $parent[ItemsControl].((vm:GovernanceViewModel)DataContext).RemoveSecretPatternCommand}"
+                                            CommandParameter="{Binding}"
+                                            Padding="6,2" CornerRadius="4" FontSize="10"
+                                            Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
+                                    <TextBlock Text="{Binding}" FontFamily="Consolas,Menlo,monospace"
+                                               FontSize="13" Foreground="{DynamicResource TextPrimary}"
+                                               VerticalAlignment="Center" />
+                                </DockPanel>
                             </Border>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -111,7 +179,7 @@
                            IsVisible="{Binding !SecretPatterns.Count}" />
             </StackPanel>
 
-            <TextBlock Text="Configuration loaded from ~/.sovrant/governance.json and .sovrant/governance.json"
+            <TextBlock Text="Configuration saved to ~/.sovrant/governance.json"
                        FontSize="11" TextWrapping="Wrap"
                        Foreground="{DynamicResource TextMuted}" />
         </StackPanel>

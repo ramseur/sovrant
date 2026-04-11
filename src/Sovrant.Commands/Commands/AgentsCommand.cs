@@ -31,9 +31,10 @@ public sealed class AgentsCommand : ISlashCommand
             return new SlashCommandResult("No agent templates loaded.");
 
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture,
-            $"{"Name",-25} {"Role",-12} {"Level",-10} {"Tools"}");
-        sb.AppendLine(new string('-', 65));
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# Agent Templates ({all.Count})");
+        sb.AppendLine();
+        sb.AppendLine("| Name | Role | Level | Tools |");
+        sb.AppendLine("|------|------|-------|-------|");
 
         foreach (var t in all.OrderBy(t => t.Role.ToString(), StringComparer.OrdinalIgnoreCase)
                              .ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase))
@@ -42,11 +43,11 @@ public sealed class AgentsCommand : ISlashCommand
             if (tools.Length > 30)
                 tools = string.Concat(tools.AsSpan(0, 27), "...");
             sb.AppendLine(CultureInfo.InvariantCulture,
-                $"{t.Name,-25} {t.Role,-12} {t.RecommendedLevel,-10} {tools}");
+                $"| {t.Name} | {t.Role} | {t.RecommendedLevel} | {tools} |");
         }
 
         sb.AppendLine();
-        sb.Append(CultureInfo.InvariantCulture, $"{all.Count} templates. Use /agents <name> for details.");
+        sb.Append("Use /agents (name) for details.");
 
         return new SlashCommandResult(sb.ToString());
     }
@@ -58,18 +59,20 @@ public sealed class AgentsCommand : ISlashCommand
             return new SlashCommandResult($"Agent template '{name}' not found. Use /agents to list all.");
 
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Name:   {t.Name}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Role:   {t.Role}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Level:  {t.RecommendedLevel}");
-        sb.AppendLine(CultureInfo.InvariantCulture,
-            $"Tools:  {(t.AllowedTools.Count == 0 ? "all (unrestricted)" : string.Join(", ", t.AllowedTools))}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# {t.Name}");
         sb.AppendLine();
-        sb.AppendLine("System Prompt:");
-
-        var prompt = t.SystemPrompt;
-        if (prompt.Length > 500)
-            prompt = string.Concat(prompt.AsSpan(0, 497), "...");
-        sb.Append(prompt);
+        sb.AppendLine("| Property | Value |");
+        sb.AppendLine("|----------|-------|");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Role | {t.Role} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Level | {t.RecommendedLevel} |");
+        sb.AppendLine(CultureInfo.InvariantCulture,
+            $"| Tools | {(t.AllowedTools.Count == 0 ? "all (unrestricted)" : string.Join(", ", t.AllowedTools))} |");
+        sb.AppendLine();
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.AppendLine("## System Prompt");
+        sb.AppendLine();
+        sb.Append(t.SystemPrompt);
 
         return new SlashCommandResult(sb.ToString());
     }

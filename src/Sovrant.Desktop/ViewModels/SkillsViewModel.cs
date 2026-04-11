@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Tools.Skills;
@@ -16,6 +18,12 @@ public partial class SkillsViewModel : ViewModelBase
     [ObservableProperty]
     private int _totalCount;
 
+    [ObservableProperty]
+    private SkillItemViewModel? _selectedSkill;
+
+    [ObservableProperty]
+    private string _detailMarkdown = string.Empty;
+
     public ObservableCollection<SkillItemViewModel> FilteredSkills { get; } = [];
 
     public SkillsViewModel(SkillRegistry registry)
@@ -27,19 +35,27 @@ public partial class SkillsViewModel : ViewModelBase
     [RelayCommand]
     private void Refresh() => LoadSkills();
 
+    [RelayCommand]
+    private void SelectSkill(SkillItemViewModel skill) => SelectedSkill = skill;
+
     private void LoadSkills()
     {
         _allSkills.Clear();
         foreach (var s in _registry.All.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase))
         {
-            _allSkills.Add(new SkillItemViewModel
+            var item = new SkillItemViewModel
             {
                 Name = s.Name,
                 Description = s.Description,
                 Trigger = string.IsNullOrEmpty(s.Trigger) ? "(none)" : s.Trigger,
                 AgentCount = s.Agents.Count,
                 ToolCount = s.Tools.Count,
-            });
+                Agents = s.Agents,
+                Tools = s.Tools,
+                Body = s.Body,
+            };
+            item.Markdown = BuildSkillMarkdown(item);
+            _allSkills.Add(item);
         }
 
         TotalCount = _allSkills.Count;
@@ -47,6 +63,11 @@ public partial class SkillsViewModel : ViewModelBase
     }
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
+
+    partial void OnSelectedSkillChanged(SkillItemViewModel? value)
+    {
+        DetailMarkdown = value is null ? string.Empty : BuildSkillMarkdown(value);
+    }
 
     private void ApplyFilter()
     {
@@ -64,6 +85,44 @@ public partial class SkillsViewModel : ViewModelBase
 
             FilteredSkills.Add(skill);
         }
+    }
+
+    private static string BuildSkillMarkdown(SkillItemViewModel skill)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# {skill.Name}");
+        sb.AppendLine();
+        sb.AppendLine(skill.Description);
+        sb.AppendLine();
+
+        if (skill.Trigger != "(none)")
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Trigger:** {skill.Trigger}");
+            sb.AppendLine();
+        }
+
+        if (skill.Agents.Count > 0)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Agents:** {string.Join(", ", skill.Agents)}");
+            sb.AppendLine();
+        }
+
+        if (skill.Tools.Count > 0)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Tools:** {string.Join(", ", skill.Tools)}");
+            sb.AppendLine();
+        }
+
+        if (!string.IsNullOrWhiteSpace(skill.Body))
+        {
+            sb.AppendLine("---");
+            sb.AppendLine();
+            sb.AppendLine("## Workflow");
+            sb.AppendLine();
+            sb.Append(AgentsViewModel.SanitizeForMarkdown(skill.Body));
+        }
+
+        return sb.ToString();
     }
 }
 
@@ -83,4 +142,9 @@ public partial class SkillItemViewModel : ViewModelBase
 
     [ObservableProperty]
     private int _toolCount;
+
+    public IReadOnlyList<string> Agents { get; init; } = [];
+    public IReadOnlyList<string> Tools { get; init; } = [];
+    public string Body { get; init; } = string.Empty;
+    public string Markdown { get; set; } = string.Empty;
 }

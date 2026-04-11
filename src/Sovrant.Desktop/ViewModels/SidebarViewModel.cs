@@ -11,6 +11,8 @@ public partial class SidebarViewModel : ViewModelBase
 {
     private readonly ISessionStore _sessionStore;
 
+    public ActiveContextViewModel ActiveContext { get; }
+
     [ObservableProperty]
     private string _selectedNavItem = "Chat";
 
@@ -42,9 +44,10 @@ public partial class SidebarViewModel : ViewModelBase
     public event EventHandler<string>? NavigationRequested;
     public event EventHandler<string>? SessionResumeRequested;
 
-    public SidebarViewModel(ISessionStore sessionStore, SovrantConfig config)
+    public SidebarViewModel(ISessionStore sessionStore, SovrantConfig config, ActiveContextViewModel activeContext)
     {
         _sessionStore = sessionStore;
+        ActiveContext = activeContext;
         LoadFromConfig(config);
         _ = LoadSessionsAsync();
     }

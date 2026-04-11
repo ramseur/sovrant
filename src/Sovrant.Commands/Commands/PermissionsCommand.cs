@@ -20,14 +20,16 @@ public sealed class PermissionsCommand : ISlashCommand
     public Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Active permission mode: {_config.PermissionMode}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# Permissions");
         sb.AppendLine();
-        sb.AppendLine("Available modes (restart with --permission-mode=<mode> to change):");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"**Active mode:** {_config.PermissionMode}");
         sb.AppendLine();
+        sb.AppendLine("| Mode | Description | |");
+        sb.AppendLine("|------|-------------|-|");
 
         foreach (var mode in Enum.GetValues<PermissionMode>())
         {
-            var marker = mode == _config.PermissionMode ? " ◀ active" : string.Empty;
+            var active = mode == _config.PermissionMode ? "**Active**" : "";
             var desc = mode switch
             {
                 PermissionMode.Default => "Prompt before destructive operations",
@@ -37,7 +39,7 @@ public sealed class PermissionsCommand : ISlashCommand
                 PermissionMode.Plan => "Read-only planning mode; all writes are blocked",
                 _ => string.Empty,
             };
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  {mode,-20} {desc}{marker}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| {mode} | {desc} | {active} |");
         }
 
         return Task.FromResult(new SlashCommandResult(sb.ToString().TrimEnd()));

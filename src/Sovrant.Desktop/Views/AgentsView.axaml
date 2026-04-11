@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
              x:Class="Sovrant.Desktop.Views.AgentsView"
              x:DataType="vm:AgentsViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -17,7 +18,7 @@
                                Foreground="{DynamicResource TextPrimary}" />
                     <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
                         <Run Text="{Binding TotalCount}" />
-                        <Run Text=" templates available" />
+                        <Run Text=" templates available — select one to view details" />
                     </TextBlock>
                 </StackPanel>
             </DockPanel>
@@ -27,40 +28,81 @@
                      CornerRadius="8" Padding="12,8" />
         </StackPanel>
 
-        <ScrollViewer Margin="32,12,32,24">
-            <ItemsControl ItemsSource="{Binding FilteredTemplates}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="vm:AgentTemplateItemViewModel">
-                        <Border Margin="0,4" Padding="14,10" CornerRadius="8"
-                                Background="{DynamicResource SurfaceCard}"
-                                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
-                            <StackPanel Spacing="6">
-                                <DockPanel>
-                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
-                                        <Border Padding="6,2" CornerRadius="4"
-                                                Background="{DynamicResource BrandPrimary}">
-                                            <TextBlock Text="{Binding RecommendedLevel}"
-                                                       FontSize="10" Foreground="White" />
-                                        </Border>
+        <!-- Master-detail -->
+        <Grid Margin="32,12,32,24" ColumnDefinitions="300,12,*">
+            <!-- List -->
+            <ScrollViewer Grid.Column="0">
+                <ItemsControl ItemsSource="{Binding FilteredTemplates}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:AgentTemplateItemViewModel">
+                            <Button Command="{Binding $parent[ItemsControl].((vm:AgentsViewModel)DataContext).SelectTemplateCommand}"
+                                    CommandParameter="{Binding}"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Padding="0" Margin="0,2"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Cursor="Hand">
+                                <Border Padding="12,8" CornerRadius="8"
+                                        Background="{DynamicResource SurfaceCard}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="4">
+                                        <DockPanel>
+                                            <Border DockPanel.Dock="Right"
+                                                    Padding="5,2" CornerRadius="4"
+                                                    Background="{DynamicResource BrandPrimary}">
+                                                <TextBlock Text="{Binding RecommendedLevel}"
+                                                           FontSize="10" Foreground="White" />
+                                            </Border>
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontSize="13" FontWeight="SemiBold"
+                                                       FontFamily="Consolas,Menlo,monospace"
+                                                       Foreground="{DynamicResource BrandPrimary}" />
+                                        </DockPanel>
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}">
+                                            <Run Text="Role: " />
+                                            <Run Text="{Binding Role}" />
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding ToolsSummary}"
+                                                   FontSize="10" Foreground="{DynamicResource TextMuted}"
+                                                   TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
-                                    <TextBlock Text="{Binding Name}"
-                                               FontSize="14" FontWeight="SemiBold"
-                                               FontFamily="Consolas,Menlo,monospace"
-                                               Foreground="{DynamicResource BrandPrimary}" />
-                                </DockPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="12">
-                                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
-                                        <Run Text="Role: " FontWeight="SemiBold" />
-                                        <Run Text="{Binding Role}" />
-                                    </TextBlock>
-                                </StackPanel>
-                                <TextBlock Text="{Binding ToolsSummary}"
-                                           FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
-                            </StackPanel>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+                                </Border>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Detail pane -->
+            <Grid Grid.Column="2">
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding !SelectedTemplate}">
+                    <TextBlock Text="Select an agent to view its details"
+                               FontSize="14"
+                               Foreground="{DynamicResource TextMuted}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding !!SelectedTemplate}">
+                    <ContentControl Content="{Binding SelectedTemplate}">
+                        <ContentControl.ContentTemplate>
+                            <DataTemplate DataType="vm:AgentTemplateItemViewModel">
+                                <md:MarkdownScrollViewer Markdown="{Binding Markdown}" />
+                            </DataTemplate>
+                        </ContentControl.ContentTemplate>
+                    </ContentControl>
+                </Border>
+            </Grid>
+        </Grid>
     </DockPanel>
 </UserControl>

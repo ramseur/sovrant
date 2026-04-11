@@ -29,8 +29,14 @@ internal static class FormatConverter
                 .ToList();
         }
 
-        return new OpenAiChatRequest(req.Model, req.MaxTokens, messages)
+        // OpenAI reasoning models (o1, o3, o4) require max_completion_tokens and reject max_tokens.
+        // All other providers use max_tokens for backward compatibility.
+        bool useMaxCompletionTokens = IsReasoningModel(req.Model);
+
+        return new OpenAiChatRequest(req.Model, messages)
         {
+            MaxTokens = useMaxCompletionTokens ? null : req.MaxTokens,
+            MaxCompletionTokens = useMaxCompletionTokens ? req.MaxTokens : null,
             Tools = tools,
             ToolChoice = tools is { Count: > 0 } ? "auto" : null,
             Stream = req.Stream,
@@ -129,5 +135,23 @@ internal static class FormatConverter
                 ToolCalls = toolCalls.Count > 0 ? toolCalls : null
             });
         }
+    }
+
+    /// <summary>
+    /// Returns true for OpenAI reasoning models that require <c>max_completion_tokens</c>
+    /// instead of <c>max_tokens</c>. Only matches o-series models (o1, o3, o4) which
+    /// reject max_tokens entirely. GPT models (gpt-4o, gpt-5, etc.) accept max_tokens
+    /// and are compatible with all OpenAI-compat providers (OpenRouter, Groq, etc.).
+    /// </summary>
+    private static bool IsReasoningModel(string model)
+    {
+        // Normalize: strip provider prefix (e.g. "openai/o3-mini" → "o3-mini")
+        var name = model;
+        var slash = model.LastIndexOf('/');
+        if (slash >= 0) name = model[(slash + 1)..];
+
+        return name.StartsWith("o1", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("o3", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("o4", StringComparison.OrdinalIgnoreCase);
     }
 }

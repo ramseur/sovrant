@@ -37,19 +37,23 @@ public sealed class SessionCommand : ISlashCommand
 
         var entries = await _store.LoadAsync(_runtime.SessionId, ownerUserId: null, ct).ConfigureAwait(false);
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Session ID:  {_runtime.SessionId}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Entries:     {entries.Count}");
+        sb.AppendLine("# Current Session");
+        sb.AppendLine();
+        sb.AppendLine("| Property | Value |");
+        sb.AppendLine("|----------|-------|");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Session ID | {_runtime.SessionId} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Entries | {entries.Count} |");
 
         if (entries.Count > 0)
         {
             var first = entries[0];
             var last = entries[^1];
-            sb.AppendLine(CultureInfo.InvariantCulture, $"Started:     {first.Timestamp:yyyy-MM-dd HH:mm:ss} UTC");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"Last entry:  {last.Timestamp:yyyy-MM-dd HH:mm:ss} UTC");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| Started | {first.Timestamp:yyyy-MM-dd HH:mm:ss} UTC |");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| Last entry | {last.Timestamp:yyyy-MM-dd HH:mm:ss} UTC |");
         }
 
         sb.AppendLine();
-        sb.Append("Use '/session list' to see all saved sessions.");
+        sb.Append("Use /session list to see all saved sessions.");
 
         return new SlashCommandResult(sb.ToString());
     }
@@ -61,15 +65,17 @@ public sealed class SessionCommand : ISlashCommand
             return new SlashCommandResult("No saved sessions.");
 
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"{ids.Count} session(s):");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# Sessions ({ids.Count})");
+        sb.AppendLine();
+        sb.AppendLine("| Session ID | |");
+        sb.AppendLine("|------------|-|");
         foreach (var id in ids)
         {
-            var marker = id == _runtime.SessionId ? " (current)" : string.Empty;
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  {id}{marker}");
+            var marker = id == _runtime.SessionId ? "**current**" : "";
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| {id} | {marker} |");
         }
-
-        sb.AppendLine("Use '/resume <session-id>' to resume a session.");
-        sb.Append("Use '/session delete <id>' to delete, '/session purge' to delete all.");
+        sb.AppendLine();
+        sb.Append("Use /resume (session-id) to resume, /session delete (id) to delete, /session purge to delete all.");
         return new SlashCommandResult(sb.ToString());
     }
 

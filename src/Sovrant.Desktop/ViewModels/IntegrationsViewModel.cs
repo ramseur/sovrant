@@ -1,26 +1,327 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.Config;
+using Sovrant.Runtime.Mcp;
 
 namespace Sovrant.Desktop.ViewModels;
 
 public partial class IntegrationsViewModel : ViewModelBase
 {
-    public ObservableCollection<McpServerItem> Servers { get; } = [];
+    private readonly SovrantConfig _config;
+    private readonly McpClientRegistry _clientRegistry;
 
-    public IntegrationsViewModel(SovrantConfig config)
+    [ObservableProperty]
+    private string _searchText = string.Empty;
+
+    [ObservableProperty]
+    private McpServerItem? _selectedServer;
+
+    [ObservableProperty]
+    private string _detailMarkdown = string.Empty;
+
+    [ObservableProperty]
+    private int _totalCount;
+
+    // Add-server form fields
+    [ObservableProperty]
+    private string _newServerName = string.Empty;
+
+    [ObservableProperty]
+    private string _newServerCommand = string.Empty;
+
+    [ObservableProperty]
+    private string _newServerArgs = string.Empty;
+
+    [ObservableProperty]
+    private string _statusMessage = string.Empty;
+
+    private readonly List<McpServerItem> _allServers = [];
+
+    public ObservableCollection<McpServerItem> FilteredServers { get; } = [];
+
+    private static readonly string SettingsPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".sovrant", "settings.json");
+
+    private static readonly JsonSerializerOptions SerializerOptions = new()
     {
-        ArgumentNullException.ThrowIfNull(config);
-        foreach (var (name, server) in config.McpServers)
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    public IntegrationsViewModel(SovrantConfig config, McpClientRegistry clientRegistry)
+    {
+        _config = config;
+        _clientRegistry = clientRegistry;
+        LoadServers();
+    }
+
+    [RelayCommand]
+    private void Refresh() => LoadServers();
+
+    [RelayCommand]
+    private void SelectServer(McpServerItem server) => SelectedServer = server;
+
+    [RelayCommand]
+    private async Task AddServerAsync()
+    {
+        var name = NewServerName.Trim();
+        var command = NewServerCommand.Trim();
+
+        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(command))
         {
-            Servers.Add(new McpServerItem
+            StatusMessage = "Name and command are required.";
+            return;
+        }
+
+        if (_config.McpServers.ContainsKey(name))
+        {
+            StatusMessage = $"Server '{name}' already exists.";
+            return;
+        }
+
+        try
+        {
+            // Read existing settings
+            Dictionary<string, object?> existing = [];
+            if (File.Exists(SettingsPath))
+            {
+                var json = await File.ReadAllTextAsync(SettingsPath);
+                existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(json) ?? [];
+            }
+
+            // Build new server entry
+            var args = string.IsNullOrWhiteSpace(NewServerArgs)
+                ? []
+                : NewServerArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            var serverEntry = new Dictionary<string, object?>
+            {
+                ["command"] = command,
+                ["args"] = args,
+            };
+
+            // Get or create McpServers section
+            Dictionary<string, object?> mcpServers;
+            if (existing.TryGetValue("McpServers", out var existingServers) && existingServers is JsonElement je)
+            {
+                mcpServers = JsonSerializer.Deserialize<Dictionary<string, object?>>(je.GetRawText()) ?? [];
+            }
+            else
+            {
+                mcpServers = [];
+            }
+
+            mcpServers[name] = serverEntry;
+            existing["McpServers"] = mcpServers;
+
+            var dir = Path.GetDirectoryName(SettingsPath)!;
+            Directory.CreateDirectory(dir);
+            var output = JsonSerializer.Serialize(existing, SerializerOptions);
+            await File.WriteAllTextAsync(SettingsPath, output);
+
+            StatusMessage = $"Server '{name}' added. Restart to connect.";
+            NewServerName = string.Empty;
+            NewServerCommand = string.Empty;
+            NewServerArgs = string.Empty;
+
+            // Add to local list immediately
+            _allServers.Add(new McpServerItem
+            {
+                Name = name,
+                Command = command,
+                ArgsSummary = args.Length > 0 ? string.Join(" ", args) : "",
+                IsConnected = false,
+                ToolCount = 0,
+            });
+            TotalCount = _allServers.Count;
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Failed to add server: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task RemoveServerAsync(McpServerItem server)
+    {
+        try
+        {
+            // Read existing settings
+            if (!File.Exists(SettingsPath)) return;
+
+            var json = await File.ReadAllTextAsync(SettingsPath);
+            var existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(json) ?? [];
+
+            if (existing.TryGetValue("McpServers", out var existingServers) && existingServers is JsonElement je)
+            {
+                var mcpServers = JsonSerializer.Deserialize<Dictionary<string, object?>>(je.GetRawText()) ?? [];
+                mcpServers.Remove(server.Name);
+                existing["McpServers"] = mcpServers;
+
+                var output = JsonSerializer.Serialize(existing, SerializerOptions);
+                await File.WriteAllTextAsync(SettingsPath, output);
+            }
+
+            _allServers.RemoveAll(s => s.Name == server.Name);
+            TotalCount = _allServers.Count;
+
+            if (SelectedServer == server)
+                SelectedServer = null;
+
+            ApplyFilter();
+            StatusMessage = $"Server '{server.Name}' removed. Restart to disconnect.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Failed to remove server: {ex.Message}";
+        }
+    }
+
+    private void LoadServers()
+    {
+        _allServers.Clear();
+
+        foreach (var (name, server) in _config.McpServers.OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            var isConnected = _clientRegistry.Clients.ContainsKey(name);
+
+            if (isConnected && _clientRegistry.Clients.TryGetValue(name, out var client))
+            {
+                // List tools asynchronously
+                _ = Dispatcher.UIThread.InvokeAsync(async () =>
+                {
+                    try
+                    {
+                        var tools = await client.ListToolsAsync();
+                        var item = _allServers.FirstOrDefault(s => s.Name == name);
+                        if (item is not null)
+                        {
+                            item.ToolCount = tools.Count;
+                            item.ToolNames.Clear();
+                            foreach (var t in tools.Select(t => t.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
+                                item.ToolNames.Add(t);
+                            item.Markdown = BuildServerMarkdown(item);
+                            // Refresh detail if this server is selected
+                            if (SelectedServer == item)
+                                DetailMarkdown = BuildServerMarkdown(item);
+                        }
+                    }
+                    catch
+                    {
+                        // Tool listing failed — leave count at 0
+                    }
+                });
+            }
+
+            var serverItem = new McpServerItem
             {
                 Name = name,
                 Command = server.Command,
-                ArgsSummary = server.Args.Count > 0 ? string.Join(" ", server.Args) : "—",
+                ArgsSummary = server.Args.Count > 0 ? string.Join(" ", server.Args) : "",
                 HasOAuth = server.OAuthConfig is not null,
-            });
+                IsConnected = isConnected,
+                ToolCount = 0,
+                EnvVars = server.Env.ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.Ordinal),
+            };
+            serverItem.Markdown = BuildServerMarkdown(serverItem);
+            _allServers.Add(serverItem);
         }
+
+        TotalCount = _allServers.Count;
+        ApplyFilter();
+    }
+
+    partial void OnSearchTextChanged(string value) => ApplyFilter();
+
+    partial void OnSelectedServerChanged(McpServerItem? value)
+    {
+        DetailMarkdown = value is null ? string.Empty : BuildServerMarkdown(value);
+    }
+
+    private void ApplyFilter()
+    {
+        FilteredServers.Clear();
+        var query = SearchText.Trim();
+
+        foreach (var server in _allServers)
+        {
+            if (query.Length > 0
+                && !server.Name.Contains(query, StringComparison.OrdinalIgnoreCase)
+                && !server.Command.Contains(query, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            FilteredServers.Add(server);
+        }
+    }
+
+    private static string BuildServerMarkdown(McpServerItem server)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# {server.Name}");
+        sb.AppendLine();
+
+        sb.AppendLine(CultureInfo.InvariantCulture, $"**Status:** {(server.IsConnected ? "Connected" : "Not Connected")}");
+        sb.AppendLine();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"**Command:** {server.Command}");
+        sb.AppendLine();
+
+        if (!string.IsNullOrEmpty(server.ArgsSummary))
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Args:** {server.ArgsSummary}");
+            sb.AppendLine();
+        }
+
+        if (server.HasOAuth)
+        {
+            sb.AppendLine("**Authentication:** OAuth 2.0 configured");
+            sb.AppendLine();
+        }
+
+        if (server.EnvVars.Count > 0)
+        {
+            sb.AppendLine("## Environment Variables");
+            sb.AppendLine();
+            sb.AppendLine("| Variable | Value |");
+            sb.AppendLine("|----------|-------|");
+            foreach (var (key, value) in server.EnvVars.OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                var display = key.Contains("KEY", StringComparison.OrdinalIgnoreCase)
+                    || key.Contains("SECRET", StringComparison.OrdinalIgnoreCase)
+                    || key.Contains("TOKEN", StringComparison.OrdinalIgnoreCase)
+                    ? "--------"
+                    : value;
+                sb.AppendLine(CultureInfo.InvariantCulture, $"| {key} | {display} |");
+            }
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("---");
+        sb.AppendLine();
+
+        if (server.ToolNames.Count > 0)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Tools ({server.ToolCount}):** {string.Join(", ", server.ToolNames)}");
+        }
+        else if (server.IsConnected)
+        {
+            sb.AppendLine("**Tools:** Loading...");
+        }
+        else
+        {
+            sb.AppendLine("**Tools:** Server not connected");
+        }
+
+        return sb.ToString();
     }
 }
 
@@ -37,4 +338,14 @@ public partial class McpServerItem : ViewModelBase
 
     [ObservableProperty]
     private bool _hasOAuth;
+
+    [ObservableProperty]
+    private bool _isConnected;
+
+    [ObservableProperty]
+    private int _toolCount;
+
+    public ObservableCollection<string> ToolNames { get; } = [];
+    public Dictionary<string, string> EnvVars { get; init; } = new(StringComparer.Ordinal);
+    public string Markdown { get; set; } = string.Empty;
 }

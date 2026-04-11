@@ -31,22 +31,23 @@ public sealed class SkillsCommand : ISlashCommand
             return new SlashCommandResult("No skills loaded.");
 
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture,
-            $"{"Name",-25} {"Trigger",-12} {"Description"}");
-        sb.AppendLine(new string('-', 70));
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# Skills ({all.Count})");
+        sb.AppendLine();
+        sb.AppendLine("| Name | Trigger | Description |");
+        sb.AppendLine("|------|---------|-------------|");
 
         foreach (var s in all.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase))
         {
-            var trigger = string.IsNullOrEmpty(s.Trigger) ? "—" : s.Trigger;
-            var desc = s.Description.Length > 35
-                ? string.Concat(s.Description.AsSpan(0, 32), "...")
+            var trigger = string.IsNullOrEmpty(s.Trigger) ? "--" : s.Trigger;
+            var desc = s.Description.Length > 45
+                ? string.Concat(s.Description.AsSpan(0, 42), "...")
                 : s.Description;
             sb.AppendLine(CultureInfo.InvariantCulture,
-                $"{s.Name,-25} {trigger,-12} {desc}");
+                $"| {s.Name} | {trigger} | {desc} |");
         }
 
         sb.AppendLine();
-        sb.Append(CultureInfo.InvariantCulture, $"{all.Count} skills. Use /skills <name> for details.");
+        sb.Append("Use /skills (name) for details.");
 
         return new SlashCommandResult(sb.ToString());
     }
@@ -58,21 +59,24 @@ public sealed class SkillsCommand : ISlashCommand
             return new SlashCommandResult($"Skill '{name}' not found. Use /skills to list all.");
 
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Name:        {s.Name}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Description: {s.Description}");
-        sb.AppendLine(CultureInfo.InvariantCulture,
-            $"Trigger:     {(string.IsNullOrEmpty(s.Trigger) ? "(none)" : s.Trigger)}");
-        sb.AppendLine(CultureInfo.InvariantCulture,
-            $"Agents:      {(s.Agents.Count == 0 ? "(none)" : string.Join(", ", s.Agents))}");
-        sb.AppendLine(CultureInfo.InvariantCulture,
-            $"Tools:       {(s.Tools.Count == 0 ? "all (unrestricted)" : string.Join(", ", s.Tools))}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# {s.Name}");
         sb.AppendLine();
-        sb.AppendLine("Workflow:");
-
-        var body = s.Body;
-        if (body.Length > 500)
-            body = string.Concat(body.AsSpan(0, 497), "...");
-        sb.Append(body);
+        sb.AppendLine(CultureInfo.InvariantCulture, $"*{s.Description}*");
+        sb.AppendLine();
+        sb.AppendLine("| Property | Value |");
+        sb.AppendLine("|----------|-------|");
+        sb.AppendLine(CultureInfo.InvariantCulture,
+            $"| Trigger | {(string.IsNullOrEmpty(s.Trigger) ? "(none)" : s.Trigger)} |");
+        sb.AppendLine(CultureInfo.InvariantCulture,
+            $"| Agents | {(s.Agents.Count == 0 ? "(none)" : string.Join(", ", s.Agents))} |");
+        sb.AppendLine(CultureInfo.InvariantCulture,
+            $"| Tools | {(s.Tools.Count == 0 ? "all (unrestricted)" : string.Join(", ", s.Tools))} |");
+        sb.AppendLine();
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.AppendLine("## Workflow");
+        sb.AppendLine();
+        sb.Append(s.Body);
 
         return new SlashCommandResult(sb.ToString());
     }

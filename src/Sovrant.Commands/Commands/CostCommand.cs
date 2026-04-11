@@ -30,14 +30,16 @@ public sealed class CostCommand : ISlashCommand
                           + (output / 1_000_000.0 * OutputPricePerMToken);
 
         var sb = new StringBuilder();
-        sb.AppendLine("Token usage this session:");
+        sb.AppendLine("# Token Usage");
         sb.AppendLine();
-        sb.AppendLine(string.Create(CultureInfo.InvariantCulture, $"  Input tokens:   {input,12:N0}"));
-        sb.AppendLine(string.Create(CultureInfo.InvariantCulture, $"  Output tokens:  {output,12:N0}"));
-        sb.AppendLine(string.Create(CultureInfo.InvariantCulture, $"  Total:          {total,12:N0}"));
+        sb.AppendLine("| Metric | Count |");
+        sb.AppendLine("|--------|-------|");
+        sb.AppendLine(string.Create(CultureInfo.InvariantCulture, $"| Input tokens | {input:N0} |"));
+        sb.AppendLine(string.Create(CultureInfo.InvariantCulture, $"| Output tokens | {output:N0} |"));
+        sb.AppendLine(string.Create(CultureInfo.InvariantCulture, $"| Total | {total:N0} |"));
         sb.AppendLine();
         sb.Append(string.Create(CultureInfo.InvariantCulture,
-            $"  Estimated cost: ~${estimatedCost:F4} USD  (indicative only — actual billing depends on your provider)"));
+            $"*Estimated cost: ~${estimatedCost:F4} USD (indicative only -- actual billing depends on your provider)*"));
 
         return Task.FromResult(new SlashCommandResult(sb.ToString()));
     }

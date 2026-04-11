@@ -5,62 +5,41 @@
              x:DataType="vm:AutomationsViewModel"
              Background="{DynamicResource SurfaceBackground}">
 
-    <ScrollViewer Padding="32,24">
-        <StackPanel MaxWidth="640" Spacing="20">
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="8">
             <TextBlock Text="Automations" FontSize="24" FontWeight="Bold"
                        Foreground="{DynamicResource TextPrimary}" />
+            <TextBlock Text="Scheduled tasks, triggers, and automated workflows"
+                       FontSize="12" Foreground="{DynamicResource TextSecondary}" />
+        </StackPanel>
 
-            <TextBlock Text="Swarm Orchestration" FontSize="16" FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextPrimary}" />
-
-            <!-- Swarm config display -->
-            <Border Padding="14,10" CornerRadius="8"
-                    Background="{DynamicResource SurfaceCard}"
-                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
-                <StackPanel Spacing="10">
-                    <DockPanel>
-                        <TextBlock Text="Enabled" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextPrimary}" />
-                        <TextBlock Text="Yes" Foreground="{DynamicResource StatusPass}"
-                                   HorizontalAlignment="Right" IsVisible="{Binding SwarmEnabled}" />
-                        <TextBlock Text="No" Foreground="{DynamicResource StatusFail}"
-                                   HorizontalAlignment="Right" IsVisible="{Binding !SwarmEnabled}" />
-                    </DockPanel>
-                    <DockPanel>
-                        <TextBlock Text="Max Concurrent Agents"
-                                   Foreground="{DynamicResource TextPrimary}" />
-                        <TextBlock Text="{Binding MaxConcurrent}"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   HorizontalAlignment="Right" />
-                    </DockPanel>
-                    <DockPanel>
-                        <TextBlock Text="Token Budget"
-                                   Foreground="{DynamicResource TextPrimary}" />
-                        <TextBlock Text="{Binding MaxTokenBudget, StringFormat='{}{0:N0}'}"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   HorizontalAlignment="Right" />
-                    </DockPanel>
-                    <DockPanel>
-                        <TextBlock Text="Max Retries"
-                                   Foreground="{DynamicResource TextPrimary}" />
-                        <TextBlock Text="{Binding MaxRetries}"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   HorizontalAlignment="Right" />
-                    </DockPanel>
-                    <DockPanel>
-                        <TextBlock Text="Quality Gate" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextPrimary}" />
-                        <TextBlock Text="Enabled" Foreground="{DynamicResource StatusPass}"
-                                   HorizontalAlignment="Right" IsVisible="{Binding QualityGateEnabled}" />
-                        <TextBlock Text="Disabled" Foreground="{DynamicResource StatusFail}"
-                                   HorizontalAlignment="Right" IsVisible="{Binding !QualityGateEnabled}" />
-                    </DockPanel>
-                </StackPanel>
+        <StackPanel Margin="32,40" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Spacing="16" MaxWidth="480">
+            <Border Width="64" Height="64" CornerRadius="16"
+                    Background="{DynamicResource BrandPrimary}"
+                    HorizontalAlignment="Center">
+                <TextBlock Text="⚡" FontSize="28"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
             </Border>
 
-            <TextBlock Text="Configuration loaded from .sovrant/swarm.json"
-                       FontSize="11" TextWrapping="Wrap"
-                       Foreground="{DynamicResource TextMuted}" />
+            <TextBlock Text="Automations" FontSize="22" FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimary}"
+                       HorizontalAlignment="Center" />
+
+            <TextBlock Text="Create scheduled tasks, event-driven triggers, and automated workflows that run agents on your behalf. Set up recurring code reviews, automated deployments, and more."
+                       FontSize="14" Foreground="{DynamicResource TextSecondary}"
+                       TextWrapping="Wrap" TextAlignment="Center" />
+
+            <Border Padding="10,4" CornerRadius="6"
+                    Background="{DynamicResource StatusWarn}"
+                    HorizontalAlignment="Center" Margin="0,8,0,0">
+                <TextBlock Text="COMING SOON" FontSize="11" FontWeight="Bold" Foreground="White" />
+            </Border>
+
+            <TextBlock Text="This feature is under active development. Check back soon!"
+                       FontSize="12" Foreground="{DynamicResource TextMuted}"
+                       HorizontalAlignment="Center" />
         </StackPanel>
-    </ScrollViewer>
+    </DockPanel>
 </UserControl>

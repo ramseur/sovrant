@@ -24,28 +24,20 @@ public partial class SetupWizardViewModel : ViewModelBase
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    // Known base URLs per provider.
-    private static readonly Dictionary<string, string> ProviderBaseUrls = new(StringComparer.Ordinal)
-    {
-        ["OpenRouter"] = "https://openrouter.ai/api/v1",
-        ["DeepSeek"] = "https://api.deepseek.com/v1",
-        ["Groq"] = "https://api.groq.com/openai/v1",
-        ["Mistral"] = "https://api.mistral.ai/v1",
-        ["Together AI"] = "https://api.together.xyz/v1",
-        ["Ollama"] = "http://localhost:11434/v1",
-        ["LM Studio"] = "http://localhost:1234/v1",
-    };
+    // Known base URLs per provider — shared with SettingsViewModel.
+    private static readonly Dictionary<string, string> ProviderBaseUrls =
+        SettingsViewModel.ProviderBaseUrls;
 
     // Static model lists for providers without a public models API.
     private static readonly Dictionary<string, string[]> StaticProviderModels = new(StringComparer.Ordinal)
     {
-        ["OpenAI"] = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o1", "o1-mini", "o3-mini"],
+        ["OpenAI"] = ["gpt-5", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini", "o4-mini", "o3", "o3-mini", "o1", "o1-mini"],
         ["DeepSeek"] = ["deepseek-chat", "deepseek-reasoner"],
         ["Groq"] = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"],
         ["Mistral"] = ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest", "open-mixtral-8x22b"],
         ["Together AI"] = ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", "mistralai/Mixtral-8x7B-Instruct-v0.1", "Qwen/Qwen2.5-72B-Instruct-Turbo"],
-        ["Google"] = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-1.5-flash"],
-        ["Azure OpenAI"] = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+        ["Google"] = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"],
+        ["Azure OpenAI"] = ["gpt-4o", "gpt-4o-mini", "gpt-4.1"],
     };
 
     [ObservableProperty]
@@ -103,11 +95,7 @@ public partial class SetupWizardViewModel : ViewModelBase
         {
             List<string> models;
 
-            if (StaticProviderModels.TryGetValue(provider, out var staticList))
-            {
-                models = [.. staticList];
-            }
-            else if (provider == "OpenRouter")
+            if (provider == "OpenRouter")
             {
                 models = await FetchOpenRouterModelIdsAsync();
             }
@@ -121,7 +109,15 @@ public partial class SetupWizardViewModel : ViewModelBase
             }
             else
             {
-                models = [];
+                // Try fetching from the provider's /models endpoint if API key is set.
+                var baseUrl = ProviderBaseUrls.GetValueOrDefault(provider, string.Empty);
+                models = !string.IsNullOrEmpty(baseUrl) && !string.IsNullOrWhiteSpace(ApiKey)
+                    ? await FetchAuthenticatedModelIdsAsync(baseUrl, ApiKey)
+                    : [];
+
+                // Fall back to static list if API fetch returned nothing.
+                if (models.Count == 0 && StaticProviderModels.TryGetValue(provider, out var staticList))
+                    models = [.. staticList];
             }
 
             await Dispatcher.UIThread.InvokeAsync(() =>
@@ -138,6 +134,43 @@ public partial class SetupWizardViewModel : ViewModelBase
         finally
         {
             IsLoadingModels = false;
+        }
+    }
+
+    /// <summary>
+    /// Fetches model IDs from any OpenAI-compatible /models endpoint using an API key.
+    /// </summary>
+    private static async Task<List<string>> FetchAuthenticatedModelIdsAsync(string baseUrl, string apiKey)
+    {
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            var modelsUrl = baseUrl.TrimEnd('/') + "/models";
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(modelsUrl));
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey.Trim());
+
+            var response = await Http.SendAsync(request, cts.Token);
+            response.EnsureSuccessStatusCode();
+
+            using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
+
+            var models = new List<string>();
+            if (doc.RootElement.TryGetProperty("data", out var data))
+            {
+                foreach (var item in data.EnumerateArray())
+                {
+                    if (item.TryGetProperty("id", out var id) && id.GetString() is { } modelId)
+                        models.Add(modelId);
+                }
+            }
+
+            models.Sort(StringComparer.OrdinalIgnoreCase);
+            return models;
+        }
+        catch
+        {
+            return [];
         }
     }
 

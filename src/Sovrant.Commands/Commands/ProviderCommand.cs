@@ -41,18 +41,19 @@ public sealed class ProviderCommand : ISlashCommand
             return new SlashCommandResult("No providers configured.");
 
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture,
-            $"{"Provider",-20} {"Healthy",-8} {"Latency",-10} {"Reqs",-6} {"Errors",-7} {"Score"}");
-        sb.AppendLine(new string('-', 62));
+        sb.AppendLine("# Provider Health");
+        sb.AppendLine();
+        sb.AppendLine("| Provider | Healthy | Latency | Requests | Errors | Score |");
+        sb.AppendLine("|----------|---------|---------|----------|--------|-------|");
 
         foreach (var s in statuses)
         {
-            var healthy = s.Healthy ? "yes" : "NO";
+            var healthy = s.Healthy ? "Yes" : "**NO**";
             var latency = s.RequestCount > 0
                 ? string.Create(CultureInfo.InvariantCulture, $"{s.LatencyMs:F0}ms")
-                : "—";
+                : "--";
             sb.AppendLine(CultureInfo.InvariantCulture,
-                $"{s.Name,-20} {healthy,-8} {latency,-10} {s.RequestCount,-6} {s.ErrorCount,-7} {s.Score}");
+                $"| {s.Name} | {healthy} | {latency} | {s.RequestCount} | {s.ErrorCount} | {s.Score} |");
         }
 
         return new SlashCommandResult(sb.ToString().TrimEnd());

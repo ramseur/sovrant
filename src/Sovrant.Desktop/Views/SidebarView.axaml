@@ -117,12 +117,46 @@
                 </Button>
 
                 <!-- Connection status -->
-                <StackPanel Orientation="Horizontal" Spacing="5" Margin="4,2,0,8">
+                <StackPanel Orientation="Horizontal" Spacing="5" Margin="4,2,0,4">
                     <Ellipse Width="5" Height="5"
                              Fill="{DynamicResource StatusWarn}" />
                     <TextBlock Text="{Binding ConnectionStatus}" FontSize="10"
                                Foreground="{DynamicResource TextSecondary}" />
                 </StackPanel>
+
+                <!-- Active workspace/project context -->
+                <Border Padding="8,6" Margin="0,0,0,8"
+                        CornerRadius="6"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <StackPanel Spacing="5">
+                        <!-- Workspace selector -->
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="🏢  Workspace" FontSize="9" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextMuted}" />
+                            <ComboBox ItemsSource="{Binding ActiveContext.Workspaces}"
+                                      SelectedItem="{Binding ActiveContext.SelectedWorkspace}"
+                                      DisplayMemberBinding="{Binding Name}"
+                                      HorizontalAlignment="Stretch"
+                                      CornerRadius="4"
+                                      Padding="6,3"
+                                      FontSize="11" />
+                        </StackPanel>
+                        <!-- Project selector -->
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="📁  Project" FontSize="9" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextMuted}" />
+                            <ComboBox ItemsSource="{Binding ActiveContext.ProjectChoices}"
+                                      SelectedItem="{Binding ActiveContext.SelectedProjectChoice}"
+                                      DisplayMemberBinding="{Binding Name}"
+                                      HorizontalAlignment="Stretch"
+                                      CornerRadius="4"
+                                      Padding="6,3"
+                                      FontSize="11" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
 
                 <!-- Primary nav -->
                 <Button Content="💬  Chat"
@@ -141,21 +175,11 @@
                         Padding="10,5" Margin="0,1" CornerRadius="6" FontSize="13"
                         Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
 
-                <!-- Features section -->
-                <TextBlock Text="FEATURES" FontSize="9" FontWeight="SemiBold"
+                <!-- Knowledge section -->
+                <TextBlock Text="KNOWLEDGE" FontSize="9" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextSecondary}"
                            Margin="4,10,0,4" />
 
-                <Button Content="📁  Projects"
-                        Command="{Binding NavigateCommand}" CommandParameter="Projects"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="🏢  Workspaces"
-                        Command="{Binding NavigateCommand}" CommandParameter="Workspaces"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
                 <Button Content="📄  Artifacts"
                         Command="{Binding NavigateCommand}" CommandParameter="Artifacts"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
@@ -176,13 +200,29 @@
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
                         Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="👥  Multi-Agent"
-                        Command="{Binding NavigateCommand}" CommandParameter="MultiAgent"
+                <Button Content="🧠  Memory"
+                        Command="{Binding NavigateCommand}" CommandParameter="Memory"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
                         Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="🧠  Memory"
-                        Command="{Binding NavigateCommand}" CommandParameter="Memory"
+
+                <!-- Orchestration section -->
+                <TextBlock Text="ORCHESTRATION" FontSize="9" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondary}"
+                           Margin="4,10,0,4" />
+
+                <Button Content="📁  Projects"
+                        Command="{Binding NavigateCommand}" CommandParameter="Projects"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
+                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                <Button Content="🏢  Workspaces"
+                        Command="{Binding NavigateCommand}" CommandParameter="Workspaces"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
+                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                <Button Content="👥  Multi-Agent"
+                        Command="{Binding NavigateCommand}" CommandParameter="MultiAgent"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
                         Background="Transparent" Foreground="{DynamicResource TextPrimary}" />

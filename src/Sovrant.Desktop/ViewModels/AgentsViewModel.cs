@@ -1,4 +1,7 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Agents.Templates;
@@ -16,6 +19,12 @@ public partial class AgentsViewModel : ViewModelBase
     [ObservableProperty]
     private int _totalCount;
 
+    [ObservableProperty]
+    private AgentTemplateItemViewModel? _selectedTemplate;
+
+    [ObservableProperty]
+    private string _detailMarkdown = string.Empty;
+
     public ObservableCollection<AgentTemplateItemViewModel> FilteredTemplates { get; } = [];
 
     public AgentsViewModel(AgentTemplateRegistry registry)
@@ -27,12 +36,15 @@ public partial class AgentsViewModel : ViewModelBase
     [RelayCommand]
     private void Refresh() => LoadTemplates();
 
+    [RelayCommand]
+    private void SelectTemplate(AgentTemplateItemViewModel template) => SelectedTemplate = template;
+
     private void LoadTemplates()
     {
         _allTemplates.Clear();
         foreach (var t in _registry.All.OrderBy(t => t.Name))
         {
-            _allTemplates.Add(new AgentTemplateItemViewModel
+            var item = new AgentTemplateItemViewModel
             {
                 Name = t.Name,
                 Role = t.Role.ToString(),
@@ -41,7 +53,11 @@ public partial class AgentsViewModel : ViewModelBase
                 ToolsSummary = t.AllowedTools.Count > 0
                     ? string.Join(", ", t.AllowedTools.Take(5)) + (t.AllowedTools.Count > 5 ? $" (+{t.AllowedTools.Count - 5} more)" : "")
                     : "All tools",
-            });
+                AllowedTools = t.AllowedTools,
+                SystemPrompt = t.SystemPrompt,
+            };
+            item.Markdown = BuildAgentMarkdown(item);
+            _allTemplates.Add(item);
         }
 
         TotalCount = _allTemplates.Count;
@@ -49,6 +65,11 @@ public partial class AgentsViewModel : ViewModelBase
     }
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
+
+    partial void OnSelectedTemplateChanged(AgentTemplateItemViewModel? value)
+    {
+        DetailMarkdown = value is null ? string.Empty : BuildAgentMarkdown(value);
+    }
 
     private void ApplyFilter()
     {
@@ -67,6 +88,53 @@ public partial class AgentsViewModel : ViewModelBase
             FilteredTemplates.Add(t);
         }
     }
+
+    private static string BuildAgentMarkdown(AgentTemplateItemViewModel agent)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# {agent.Name}");
+        sb.AppendLine();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"**Role:** {agent.Role}");
+        sb.AppendLine();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"**Recommended Level:** {agent.RecommendedLevel}");
+        sb.AppendLine();
+
+        if (agent.AllowedTools.Count > 0)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Tools ({agent.AllowedTools.Count}):** {string.Join(", ", agent.AllowedTools)}");
+            sb.AppendLine();
+        }
+        else
+        {
+            sb.AppendLine("**Tools:** All registered tools");
+            sb.AppendLine();
+        }
+
+        if (!string.IsNullOrWhiteSpace(agent.SystemPrompt))
+        {
+            sb.AppendLine("---");
+            sb.AppendLine();
+            sb.AppendLine("## System Prompt");
+            sb.AppendLine();
+            // Strip code fences which crash MarkdownScrollViewer
+            sb.Append(SanitizeForMarkdown(agent.SystemPrompt));
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Strips code fences and inline backticks that crash MarkdownScrollViewer,
+    /// while preserving headings, bold, bullets, and other safe markdown.
+    /// </summary>
+    internal static string SanitizeForMarkdown(string text)
+    {
+        // Remove code fence lines (```lang or ```)
+        var result = Regex.Replace(text, @"^```\w*\s*$", "", RegexOptions.Multiline);
+        // Remove inline backticks
+        result = result.Replace("`", "", StringComparison.Ordinal);
+        return result;
+    }
 }
 
 public partial class AgentTemplateItemViewModel : ViewModelBase
@@ -76,4 +144,8 @@ public partial class AgentTemplateItemViewModel : ViewModelBase
     [ObservableProperty] private string _recommendedLevel = string.Empty;
     [ObservableProperty] private int _toolCount;
     [ObservableProperty] private string _toolsSummary = string.Empty;
+
+    public IReadOnlyList<string> AllowedTools { get; init; } = [];
+    public string SystemPrompt { get; init; } = string.Empty;
+    public string Markdown { get; set; } = string.Empty;
 }

@@ -1,79 +1,178 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
+             xmlns:conv="using:Sovrant.Desktop.Converters"
              x:Class="Sovrant.Desktop.Views.IntegrationsView"
              x:DataType="vm:IntegrationsViewModel"
              Background="{DynamicResource SurfaceBackground}">
 
-    <ScrollViewer Padding="32,24">
-        <StackPanel MaxWidth="800" Spacing="16">
-            <!-- Header -->
-            <TextBlock Text="Integrations" FontSize="24" FontWeight="Bold"
-                       Foreground="{DynamicResource TextPrimary}" />
-            <TextBlock Text="Connected MCP servers and their tools"
-                       FontSize="13"
-                       Foreground="{DynamicResource TextSecondary}"
-                       Margin="0,0,0,8" />
+    <UserControl.Resources>
+        <conv:BoolToStatusBrushConverter x:Key="StatusBgConv" />
+    </UserControl.Resources>
 
-            <!-- MCP server list -->
-            <ItemsControl ItemsSource="{Binding Servers}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="vm:McpServerItem">
-                        <Border Margin="0,4"
-                                Padding="16,14"
-                                CornerRadius="10"
-                                Background="{DynamicResource SurfaceCard}"
-                                BorderBrush="{DynamicResource SurfaceBorder}"
-                                BorderThickness="1">
-                            <StackPanel Spacing="6">
-                                <DockPanel>
-                                    <!-- OAuth badge -->
-                                    <Border DockPanel.Dock="Right"
-                                            IsVisible="{Binding HasOAuth}"
-                                            Padding="8,3"
-                                            CornerRadius="10"
-                                            Background="{DynamicResource BrandPrimary}">
-                                        <TextBlock Text="OAuth" FontSize="10" FontWeight="SemiBold"
-                                                   Foreground="White" />
-                                    </Border>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="🔌" FontSize="16"
-                                                   VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding Name}"
-                                                   FontSize="15" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextPrimary}"
-                                                   VerticalAlignment="Center" />
-                                    </StackPanel>
-                                </DockPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="16">
-                                    <StackPanel Orientation="Horizontal" Spacing="4">
-                                        <TextBlock Text="Command:" FontSize="11"
-                                                   Foreground="{DynamicResource TextMuted}" />
-                                        <TextBlock Text="{Binding Command}" FontSize="11"
-                                                   FontFamily="Consolas,Menlo,monospace"
-                                                   Foreground="{DynamicResource TextSecondary}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Spacing="4">
-                                        <TextBlock Text="Args:" FontSize="11"
-                                                   Foreground="{DynamicResource TextMuted}" />
-                                        <TextBlock Text="{Binding ArgsSummary}" FontSize="11"
-                                                   FontFamily="Consolas,Menlo,monospace"
-                                                   Foreground="{DynamicResource TextSecondary}" />
-                                    </StackPanel>
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+    <DockPanel>
+        <!-- Header -->
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="12">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Refresh"
+                        Command="{Binding RefreshCommand}"
+                        Padding="12,6" CornerRadius="6"
+                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                <StackPanel>
+                    <TextBlock Text="Integrations" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
+                        <Run Text="{Binding TotalCount}" />
+                        <Run Text=" MCP servers configured — select one to view details" />
+                    </TextBlock>
+                </StackPanel>
+            </DockPanel>
 
-            <!-- Empty state -->
-            <TextBlock Text="No MCP servers configured. Add servers in ~/.sovrant/settings.json"
-                       FontSize="13"
-                       Foreground="{DynamicResource TextSecondary}"
-                       IsVisible="{Binding !Servers.Count}"
-                       Margin="0,20"
-                       HorizontalAlignment="Center" />
+            <TextBox Text="{Binding SearchText}"
+                     Watermark="Search servers..."
+                     CornerRadius="8" Padding="12,8" />
         </StackPanel>
-    </ScrollViewer>
+
+        <!-- Master-detail -->
+        <Grid Margin="32,12,32,24" ColumnDefinitions="320,12,*">
+            <!-- Left panel: list + add form -->
+            <DockPanel Grid.Column="0">
+                <!-- Add server form -->
+                <Border DockPanel.Dock="Bottom"
+                        Margin="0,8,0,0" Padding="12" CornerRadius="8"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Add MCP Server" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBox Text="{Binding NewServerName}"
+                                 Watermark="Server name"
+                                 FontSize="12" Padding="8,6" CornerRadius="6" />
+                        <TextBox Text="{Binding NewServerCommand}"
+                                 Watermark="Command (e.g. npx, uvx)"
+                                 FontSize="12" Padding="8,6" CornerRadius="6" />
+                        <TextBox Text="{Binding NewServerArgs}"
+                                 Watermark="Args (space-separated)"
+                                 FontSize="12" Padding="8,6" CornerRadius="6" />
+                        <Button Content="Add Server"
+                                Command="{Binding AddServerCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                Padding="8,6" CornerRadius="6"
+                                Background="{DynamicResource BrandPrimary}"
+                                Foreground="White" FontSize="12" />
+                        <TextBlock Text="{Binding StatusMessage}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextMuted}"
+                                   IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Server list -->
+                <ScrollViewer>
+                    <ItemsControl ItemsSource="{Binding FilteredServers}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:McpServerItem">
+                                <Button Command="{Binding $parent[ItemsControl].((vm:IntegrationsViewModel)DataContext).SelectServerCommand}"
+                                        CommandParameter="{Binding}"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Stretch"
+                                        Padding="0" Margin="0,2"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Cursor="Hand">
+                                    <Border Padding="12,10" CornerRadius="8"
+                                            Background="{DynamicResource SurfaceCard}"
+                                            BorderBrush="{DynamicResource SurfaceBorder}"
+                                            BorderThickness="1">
+                                        <StackPanel Spacing="4">
+                                            <DockPanel>
+                                                <!-- Connection status -->
+                                                <Border DockPanel.Dock="Right"
+                                                        Padding="6,2" CornerRadius="4"
+                                                        MinWidth="80"
+                                                        HorizontalAlignment="Right"
+                                                        Background="{Binding IsConnected, Converter={StaticResource StatusBgConv}}">
+                                                    <Panel>
+                                                        <TextBlock Text="Connected" FontSize="10" FontWeight="SemiBold"
+                                                                   Foreground="White" HorizontalAlignment="Center"
+                                                                   IsVisible="{Binding IsConnected}" />
+                                                        <TextBlock Text="Not Connected" FontSize="10" FontWeight="SemiBold"
+                                                                   Foreground="White" HorizontalAlignment="Center"
+                                                                   IsVisible="{Binding !IsConnected}" />
+                                                    </Panel>
+                                                </Border>
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           FontFamily="Consolas,Menlo,monospace"
+                                                           Foreground="{DynamicResource BrandPrimary}" />
+                                            </DockPanel>
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}"
+                                                       FontFamily="Consolas,Menlo,monospace">
+                                                <Run Text="{Binding Command}" />
+                                                <Run Text=" " />
+                                                <Run Text="{Binding ArgsSummary}" />
+                                            </TextBlock>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <TextBlock FontSize="10" Foreground="{DynamicResource TextMuted}">
+                                                    <Run Text="{Binding ToolCount}" />
+                                                    <Run Text=" tools" />
+                                                </TextBlock>
+                                                <TextBlock Text="OAuth" FontSize="10"
+                                                           Foreground="{DynamicResource BrandPrimary}"
+                                                           FontWeight="SemiBold"
+                                                           IsVisible="{Binding HasOAuth}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+
+            <!-- Detail pane -->
+            <Grid Grid.Column="2">
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding !SelectedServer}">
+                    <TextBlock Text="Select a server to view its details"
+                               FontSize="14"
+                               Foreground="{DynamicResource TextMuted}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding !!SelectedServer}">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Top"
+                                Content="Remove Server"
+                                Command="{Binding RemoveServerCommand}"
+                                CommandParameter="{Binding SelectedServer}"
+                                HorizontalAlignment="Right"
+                                Padding="12,6" CornerRadius="6"
+                                Background="#44F44336" Foreground="{DynamicResource StatusFail}"
+                                FontSize="12" />
+                        <ContentControl Content="{Binding SelectedServer}">
+                            <ContentControl.ContentTemplate>
+                                <DataTemplate DataType="vm:McpServerItem">
+                                    <md:MarkdownScrollViewer Markdown="{Binding Markdown}" />
+                                </DataTemplate>
+                            </ContentControl.ContentTemplate>
+                        </ContentControl>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
 </UserControl>

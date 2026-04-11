@@ -19,26 +19,28 @@ public sealed class ConfigCommand : ISlashCommand
     public Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("Active configuration:");
+        sb.AppendLine("# Active Configuration");
         sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"  Model:            {_config.Model}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"  Max tokens:       {_config.MaxTokens}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"  Permission mode:  {_config.PermissionMode}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"  Router mode:      {_config.RouterMode}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"  Router strategy:  {_config.RouterStrategy}");
+        sb.AppendLine("| Setting | Value |");
+        sb.AppendLine("|---------|-------|");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Model | {_config.Model} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Max tokens | {_config.MaxTokens} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Permission mode | {_config.PermissionMode} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Router mode | {_config.RouterMode} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Router strategy | {_config.RouterStrategy} |");
 
         if (_config.BaseUrl is not null)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  Base URL:         {_config.BaseUrl}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| Base URL | {_config.BaseUrl} |");
 
         if (_config.McpServers.Count > 0)
         {
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  MCP servers ({_config.McpServers.Count}):");
+            sb.AppendLine();
+            sb.AppendLine(CultureInfo.InvariantCulture, $"## MCP Servers ({_config.McpServers.Count})");
+            sb.AppendLine();
+            sb.AppendLine("| Name | Command |");
+            sb.AppendLine("|------|---------|");
             foreach (var (name, srv) in _config.McpServers)
-                sb.AppendLine(CultureInfo.InvariantCulture, $"    {name}: {srv.Command} {string.Join(" ", srv.Args)}");
-        }
-        else
-        {
-            sb.AppendLine("  MCP servers:      (none)");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"| {name} | {srv.Command} {string.Join(" ", srv.Args)} |");
         }
 
         return Task.FromResult(new SlashCommandResult(sb.ToString().TrimEnd()));

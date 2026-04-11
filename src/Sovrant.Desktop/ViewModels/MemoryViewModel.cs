@@ -13,6 +13,18 @@ public partial class MemoryViewModel : ViewModelBase
     [ObservableProperty]
     private string _selectedTab = "Patterns";
 
+    [ObservableProperty]
+    private int _patternCount;
+
+    [ObservableProperty]
+    private int _instinctCount;
+
+    [ObservableProperty]
+    private int _summaryCount;
+
+    [ObservableProperty]
+    private string _statusMessage = string.Empty;
+
     public ObservableCollection<PatternItemViewModel> Patterns { get; } = [];
     public ObservableCollection<InstinctItemViewModel> Instincts { get; } = [];
     public ObservableCollection<SummaryItemViewModel> Summaries { get; } = [];
@@ -25,6 +37,38 @@ public partial class MemoryViewModel : ViewModelBase
 
     [RelayCommand]
     private async Task RefreshAsync() => await LoadAllAsync();
+
+    [RelayCommand]
+    private async Task DeletePatternAsync(PatternItemViewModel pattern)
+    {
+        try
+        {
+            await _memoryStore.RemovePatternAsync(pattern.Id, pattern.Project);
+            Patterns.Remove(pattern);
+            PatternCount = Patterns.Count;
+            StatusMessage = $"Pattern '{pattern.Id}' deleted.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Failed to delete: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task DeleteInstinctAsync(InstinctItemViewModel instinct)
+    {
+        try
+        {
+            await _memoryStore.RemoveInstinctAsync(instinct.Id);
+            Instincts.Remove(instinct);
+            InstinctCount = Instincts.Count;
+            StatusMessage = $"Instinct '{instinct.Id}' deleted.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Failed to delete: {ex.Message}";
+        }
+    }
 
     private async Task LoadAllAsync()
     {
@@ -47,6 +91,7 @@ public partial class MemoryViewModel : ViewModelBase
                     Project = p.Project,
                 });
             }
+            PatternCount = Patterns.Count;
 
             Instincts.Clear();
             foreach (var i in instincts)
@@ -59,6 +104,7 @@ public partial class MemoryViewModel : ViewModelBase
                     Confidence = i.Confidence,
                 });
             }
+            InstinctCount = Instincts.Count;
 
             Summaries.Clear();
             foreach (var s in summaries)
@@ -72,6 +118,7 @@ public partial class MemoryViewModel : ViewModelBase
                     StartedAt = s.StartedAt,
                 });
             }
+            SummaryCount = Summaries.Count;
         });
     }
 }

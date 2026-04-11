@@ -197,8 +197,31 @@ public class OpenAiCompatProvider : ILlmProvider
     private protected virtual async Task<HttpRequestMessage> BuildRequestAsync(OpenAiChatRequest openAiReq, CancellationToken ct)
     {
         var apiKey = await _auth.GetAuthHeaderAsync(ct).ConfigureAwait(false);
+
+        // Detect direct OpenAI API — it requires max_completion_tokens for all models
+        // and rejects the deprecated max_tokens parameter.
+        var effectiveBase = (_auth is Auth.IBaseUrlOverride { BaseUrl: { } ov } ? ov : _http.BaseAddress)?.ToString() ?? string.Empty;
+        if (IsDirectOpenAi(effectiveBase) && openAiReq.MaxTokens is { } maxTok)
+        {
+            openAiReq = openAiReq with { MaxTokens = null, MaxCompletionTokens = maxTok };
+        }
+
         var json = JsonSerializer.Serialize(openAiReq, SovrantJsonContext.Default.OpenAiChatRequest);
-        var httpReq = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
+
+        // Use override base URL if available (desktop hot-swap), otherwise fall back to HttpClient.BaseAddress.
+        Uri requestUri;
+        if (_auth is Auth.IBaseUrlOverride { BaseUrl: { } overrideBase })
+        {
+            var baseStr = overrideBase.ToString();
+            if (!baseStr.EndsWith('/')) baseStr += "/";
+            requestUri = new Uri(new Uri(baseStr), "chat/completions");
+        }
+        else
+        {
+            requestUri = new Uri("chat/completions", UriKind.Relative);
+        }
+
+        var httpReq = new HttpRequestMessage(HttpMethod.Post, requestUri)
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
@@ -208,6 +231,10 @@ public class OpenAiCompatProvider : ILlmProvider
         }
         return httpReq;
     }
+
+    /// <summary>Returns true when the base URL points to OpenAI's official API (not OpenRouter, etc.).</summary>
+    private static bool IsDirectOpenAi(string baseUrl) =>
+        baseUrl.Contains("api.openai.com", StringComparison.OrdinalIgnoreCase);
 
     private static async Task<ApiError> ParseErrorAsync(HttpResponseMessage response, CancellationToken ct)
     {
