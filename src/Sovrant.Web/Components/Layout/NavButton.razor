@@ -1,0 +1,19 @@
+@{
+    var isActive = Nav.Uri.EndsWith(Href, StringComparison.OrdinalIgnoreCase)
+        || (Href == "/" && Nav.Uri.EndsWith("/", StringComparison.Ordinal));
+}
+
+<button class="nav-btn @(isActive ? "active" : "")"
+        @onclick="() => OnClick.InvokeAsync(Href)">
+    <span class="nav-icon">@((MarkupString)Icon)</span>
+    <span class="nav-label">@Label</span>
+</button>
+
+@code {
+    [Parameter] public string Href { get; set; } = "/";
+    [Parameter] public string Icon { get; set; } = "";
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public EventCallback<string> OnClick { get; set; }
+
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+}

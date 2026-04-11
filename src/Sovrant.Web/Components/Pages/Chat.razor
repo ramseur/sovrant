@@ -1,0 +1,344 @@
+@page "/"
+@using Sovrant.Runtime.Conversation
+@using Sovrant.Runtime.Session
+@using Sovrant.Commands
+@using Sovrant.Web.Adapters
+@using System.Security.Cryptography
+
+<div class="chat-page">
+    <!-- Context breadcrumb -->
+    <div class="chat-breadcrumb">
+        <span>&#x1F3E2;</span>
+        <span class="breadcrumb-workspace">@_workspaceName</span>
+        @if (!string.IsNullOrEmpty(_projectName))
+        {
+            <span class="breadcrumb-sep">&gt;</span>
+            <span class="breadcrumb-project">@_projectName</span>
+        }
+    </div>
+
+    <!-- Messages area -->
+    <div class="chat-messages" id="chat-messages">
+        @if (_messages.Count == 0 && !_isSending)
+        {
+            <!-- Hero state -->
+            <div class="hero-state">
+                <div class="hero-icon">&#9889;</div>
+                <h1 class="hero-title">Sovrant</h1>
+                <p class="hero-subtitle">Your AI-powered development assistant</p>
+                <div class="hero-suggestions">
+                    @foreach (var s in _suggestions)
+                    {
+                        <button class="suggestion-card" @onclick="() => SendSuggestion(s)">@s</button>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            @foreach (var msg in _messages)
+            {
+                <ChatMessage Message="msg"
+                             OnRetry="RetryLast"
+                             OnApprove="ApproveTool"
+                             OnDeny="DenyTool" />
+            }
+        }
+    </div>
+
+    <!-- Input bar -->
+    <div class="chat-input-bar">
+        <div class="input-wrapper">
+            <textarea @ref="_inputRef"
+                      @bind="_inputText"
+                      @bind:event="oninput"
+                      @onkeydown="HandleKeyDown"
+                      placeholder="Type a message or / for commands..."
+                      rows="1"
+                      disabled="@_isSending"></textarea>
+        </div>
+        <button class="btn-primary send-btn" @onclick="SendAsync" disabled="@(!CanSend)">Send</button>
+    </div>
+
+    <!-- Token count -->
+    @if (_tokenCount > 0)
+    {
+        <div class="token-counter">@_tokenCount.ToString("N0") tokens</div>
+    }
+</div>
+
+@code {
+    [Inject] private IRuntimeSessionPool SessionPool { get; set; } = default!;
+    [Inject] private ISessionStore SessionStore { get; set; } = default!;
+    [Inject] private SlashCommandDispatcher CommandDispatcher { get; set; } = default!;
+    [Inject] private BlazorConfirmationHandler ConfirmationHandler { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    private ElementReference _inputRef;
+    private string _inputText = string.Empty;
+    private bool _isSending;
+    private int _tokenCount;
+    private string _sessionId = $"web-{Guid.NewGuid():N}";
+    private string _workspaceName = "Personal";
+    private string _projectName = string.Empty;
+
+    private readonly List<ChatMessageModel> _messages = [];
+
+    private static readonly string[] ThinkingPhrases =
+    [
+        "Thinking really hard...", "Consulting the oracle...", "Pondering the possibilities...",
+        "Gathering thoughts...", "Connecting the dots...", "Reasoning through it...",
+        "Weighing the options...", "Mulling it over...",
+    ];
+
+    private static readonly string[] _suggestions =
+    [
+        "Explain this codebase", "List files in current directory",
+        "Help me write a function", "What can you do?",
+        "Run diagnostics", "Show available tools",
+    ];
+
+    private bool CanSend => !_isSending && !string.IsNullOrWhiteSpace(_inputText);
+
+    protected override void OnInitialized()
+    {
+        ConfirmationHandler.ConfirmationRequested += OnConfirmationRequested;
+
+        // Check for session resume via query string
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        if (System.Web.HttpUtility.ParseQueryString(uri.Query)["session"] is { Length: > 0 } sid)
+        {
+            _sessionId = sid;
+            _ = LoadSessionAsync(sid);
+        }
+    }
+
+    private async Task LoadSessionAsync(string sessionId)
+    {
+        await Sovrant.Web.Program.RuntimeReady.Task;
+        var entries = await SessionStore.LoadAsync(sessionId);
+        foreach (var entry in entries)
+        {
+            if (entry.Role is "user" or "assistant")
+            {
+                _messages.Add(new ChatMessageModel
+                {
+                    Role = entry.Role,
+                    Text = entry.Content,
+                    IsComplete = true,
+                });
+            }
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnConfirmationRequested(ConfirmationRequest request)
+    {
+        InvokeAsync(() =>
+        {
+            var lastAssistant = _messages.FindLast(m => m.Role == "assistant");
+            lastAssistant?.ToolUses.Add(new ToolUseModel
+            {
+                ToolName = request.ToolName,
+                Status = "Awaiting approval...",
+                IsPendingConfirmation = true,
+                PendingRequest = request,
+                Result = request.Input.ToString(),
+            });
+            StateHasChanged();
+        });
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendAsync();
+        }
+    }
+
+    private async Task SendSuggestion(string text)
+    {
+        _inputText = text;
+        await SendAsync();
+    }
+
+    private async Task SendAsync()
+    {
+        var text = _inputText.Trim();
+        if (string.IsNullOrEmpty(text) || _isSending) return;
+
+        _inputText = string.Empty;
+
+        if (text.StartsWith('/'))
+        {
+            await HandleSlashCommandAsync(text);
+            return;
+        }
+
+        await SendToRuntimeAsync(text);
+    }
+
+    private async Task HandleSlashCommandAsync(string text)
+    {
+        _messages.Add(new ChatMessageModel { Role = "user", Text = text, IsComplete = true });
+
+        try
+        {
+            await Sovrant.Web.Program.RuntimeReady.Task;
+            var result = await CommandDispatcher.TryDispatchAsync(text);
+
+            if (result is null)
+            {
+                _messages.Add(new ChatMessageModel { Role = "assistant", Text = "Unknown command. Type /help for a list.", IsComplete = true });
+                return;
+            }
+
+            if (result.ShouldClearHistory)
+            {
+                _messages.Clear();
+                _tokenCount = 0;
+                _sessionId = $"web-{Guid.NewGuid():N}";
+                return;
+            }
+
+            if (result.InjectAsUserMessage is not null)
+            {
+                _messages.Add(new ChatMessageModel { Role = "assistant", Text = "Running command...", IsComplete = true });
+                await SendToRuntimeAsync(result.InjectAsUserMessage);
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(result.Output))
+            {
+                _messages.Add(new ChatMessageModel { Role = "assistant", Text = result.Output, IsComplete = true });
+            }
+        }
+        catch (Exception ex)
+        {
+            _messages.Add(new ChatMessageModel { Role = "assistant", Text = $"Command error: {ex.Message}", IsComplete = true });
+        }
+
+        await ScrollToBottom();
+    }
+
+    private async Task SendToRuntimeAsync(string text)
+    {
+        _isSending = true;
+
+        // Add user message
+        if (_messages.Count == 0 || _messages[^1].Role != "user" || _messages[^1].Text != text)
+            _messages.Add(new ChatMessageModel { Role = "user", Text = text, IsComplete = true });
+
+        // Add assistant placeholder with thinking
+        var assistantMsg = new ChatMessageModel { Role = "assistant" };
+        assistantMsg.StartThinking();
+        _messages.Add(assistantMsg);
+        StateHasChanged();
+        await ScrollToBottom();
+
+        try
+        {
+            await Sovrant.Web.Program.RuntimeReady.Task;
+            var pooled = await SessionPool.GetOrCreateAsync(_sessionId);
+
+            await foreach (var ev in pooled.Runtime.RunTurnAsync(text))
+            {
+                HandleEvent(ev, assistantMsg);
+                StateHasChanged();
+
+                if (ev is RuntimeEvent.TextChunk)
+                    await ScrollToBottom();
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            assistantMsg.SetError(ex.Message);
+        }
+        finally
+        {
+            _isSending = false;
+            assistantMsg.CompleteStreaming();
+            StateHasChanged();
+            await ScrollToBottom();
+        }
+    }
+
+    private void HandleEvent(RuntimeEvent ev, ChatMessageModel msg)
+    {
+        switch (ev)
+        {
+            case RuntimeEvent.TextChunk { Text: var chunk }:
+                msg.AppendText(chunk);
+                break;
+            case RuntimeEvent.ToolUseRequested t:
+                if (msg.IsThinking) msg.StopThinking();
+                msg.ToolUses.Add(new ToolUseModel { ToolName = t.ToolName, ToolUseId = t.ToolUseId, Status = "Running..." });
+                break;
+            case RuntimeEvent.ToolResult t:
+                var tu = msg.ToolUses.FirstOrDefault(u => u.ToolUseId == t.ToolUseId);
+                if (tu is not null)
+                {
+                    tu.Result = t.Content;
+                    tu.IsError = t.IsError;
+                    tu.Status = t.IsError ? "Error" : "Done";
+                }
+                break;
+            case RuntimeEvent.TurnComplete t:
+                _tokenCount += t.InputTokens + t.OutputTokens;
+                msg.CompleteStreaming();
+                break;
+            case RuntimeEvent.RuntimeError { Message: var errMsg }:
+                msg.SetError(errMsg);
+                break;
+            case RuntimeEvent.PermissionDenied { ToolName: var tool, Reason: var reason }:
+                msg.Text += $"\n\n*Permission denied for {tool}: {reason}*";
+                break;
+        }
+    }
+
+    private async Task RetryLast()
+    {
+        string? lastUserText = null;
+        for (var i = _messages.Count - 1; i >= 0; i--)
+        {
+            if (_messages[i].Role == "assistant") { _messages.RemoveAt(i); continue; }
+            if (_messages[i].Role == "user") { lastUserText = _messages[i].Text; _messages.RemoveAt(i); break; }
+        }
+        if (lastUserText is not null)
+        {
+            _inputText = lastUserText;
+            await SendAsync();
+        }
+    }
+
+    private void ApproveTool(ToolUseModel tool)
+    {
+        tool.PendingRequest?.Approve();
+        tool.IsPendingConfirmation = false;
+        tool.Status = "Approved";
+        StateHasChanged();
+    }
+
+    private void DenyTool(ToolUseModel tool)
+    {
+        tool.PendingRequest?.Deny();
+        tool.IsPendingConfirmation = false;
+        tool.Status = "Denied";
+        tool.IsError = true;
+        StateHasChanged();
+    }
+
+    private async Task ScrollToBottom()
+    {
+        try { await JS.InvokeVoidAsync("sovrantInterop.scrollToBottom", "chat-messages"); }
+        catch { /* circuit may not be ready */ }
+    }
+
+    public void Dispose()
+    {
+        ConfirmationHandler.ConfirmationRequested -= OnConfirmationRequested;
+    }
+}

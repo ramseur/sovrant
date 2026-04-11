@@ -1,0 +1,96 @@
+@using Markdig
+
+<div class="message @(Message.IsUser ? "message-user" : "message-assistant")">
+    @if (Message.IsUser)
+    {
+        <div class="message-bubble user-bubble">
+            <div class="message-text">@Message.Text</div>
+        </div>
+    }
+    else
+    {
+        <div class="message-bubble assistant-bubble">
+            @if (Message.IsThinking)
+            {
+                <div class="thinking-indicator">
+                    <span class="thinking-dot"></span>
+                    <span class="thinking-text">@Message.ThinkingText</span>
+                </div>
+            }
+
+            @if (Message.ToolUses.Count > 0)
+            {
+                @foreach (var tool in Message.ToolUses)
+                {
+                    <div class="tool-use-block @(tool.IsError ? "tool-error" : "")">
+                        <div class="tool-header">
+                            <span class="tool-icon">&#x1F527;</span>
+                            <span class="tool-name">@tool.ToolName</span>
+                            <span class="tool-status @(tool.Status == "Done" ? "status-done" : tool.IsError ? "status-error" : "status-running")">@tool.Status</span>
+                        </div>
+                        @if (tool.IsPendingConfirmation)
+                        {
+                            <div class="tool-confirmation">
+                                <div class="tool-input-preview">@tool.Result</div>
+                                <div class="tool-actions">
+                                    <button class="btn-approve" @onclick="() => OnApprove.InvokeAsync(tool)">Approve</button>
+                                    <button class="btn-deny" @onclick="() => OnDeny.InvokeAsync(tool)">Deny</button>
+                                </div>
+                            </div>
+                        }
+                        else if (!string.IsNullOrEmpty(tool.Result))
+                        {
+                            <details class="tool-result">
+                                <summary>Result</summary>
+                                <pre>@tool.Result</pre>
+                            </details>
+                        }
+                    </div>
+                }
+            }
+
+            @if (!string.IsNullOrEmpty(Message.Text))
+            {
+                @if (Message.IsComplete)
+                {
+                    <div class="message-markdown">@((MarkupString)RenderMarkdown(Message.Text))</div>
+                }
+                else
+                {
+                    <div class="message-text streaming">@Message.Text</div>
+                }
+            }
+
+            @if (Message.HasError)
+            {
+                <div class="message-error">
+                    <span>@Message.ErrorMessage</span>
+                    <button class="btn-retry" @onclick="() => OnRetry.InvokeAsync()">Retry</button>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ChatMessageModel Message { get; set; } = default!;
+    [Parameter] public EventCallback OnRetry { get; set; }
+    [Parameter] public EventCallback<ToolUseModel> OnApprove { get; set; }
+    [Parameter] public EventCallback<ToolUseModel> OnDeny { get; set; }
+
+    private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
+        .UseAdvancedExtensions()
+        .Build();
+
+    private static string RenderMarkdown(string markdown)
+    {
+        try
+        {
+            return Markdown.ToHtml(markdown, Pipeline);
+        }
+        catch
+        {
+            return $"<pre>{System.Net.WebUtility.HtmlEncode(markdown)}</pre>";
+        }
+    }
+}
