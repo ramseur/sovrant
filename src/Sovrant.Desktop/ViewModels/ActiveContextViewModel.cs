@@ -17,8 +17,7 @@ public partial class ActiveContextViewModel : ViewModelBase
     private readonly IWorkspaceService _workspaceService;
     private readonly IProjectService _projectService;
 
-    private static readonly string UserId =
-        Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
+    private const string UserId = "desktop-user";
 
     [ObservableProperty]
     private string _activeWorkspaceId = string.Empty;
@@ -61,13 +60,22 @@ public partial class ActiveContextViewModel : ViewModelBase
 
     private async Task InitializeAsync()
     {
-        await LoadWorkspacesAsync();
-
-        // Default to personal workspace.
-        var personal = Workspaces.FirstOrDefault(w => w.Type == "personal");
-        if (personal is not null)
+        try
         {
-            await Dispatcher.UIThread.InvokeAsync(() => SelectedWorkspace = personal);
+            // Wait for runtime (DB migrations) before querying workspaces.
+            await App.RuntimeReady.Task.ConfigureAwait(false);
+            await LoadWorkspacesAsync();
+
+            // Default to personal workspace.
+            var personal = Workspaces.FirstOrDefault(w => w.Type == "personal");
+            if (personal is not null)
+            {
+                await Dispatcher.UIThread.InvokeAsync(() => SelectedWorkspace = personal);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"ActiveContext init failed: {ex.Message}");
         }
     }
 

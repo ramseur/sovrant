@@ -65,7 +65,15 @@ public partial class App : Application
             Environment.SetEnvironmentVariable("LLM_BASE_URL", config.BaseUrl.ToString());
 
         // Now build the full app with the correct config.
-        BuildApp(config, desktop);
+        try
+        {
+            BuildApp(config, desktop);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"BuildApp FATAL: {ex}");
+            throw;
+        }
 
         base.OnFrameworkInitializationCompleted();
     }
