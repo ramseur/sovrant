@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.WorkspacesView"
+             x:DataType="vm:WorkspacesViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel>
+        <DockPanel DockPanel.Dock="Top" Margin="32,24,32,0">
+            <Button DockPanel.Dock="Right" Content="Refresh"
+                    Command="{Binding RefreshCommand}"
+                    Padding="12,6" CornerRadius="6"
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+            <TextBlock Text="Workspaces" FontSize="24" FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimary}" />
+        </DockPanel>
+
+        <ScrollViewer Margin="32,12,32,24">
+            <StackPanel Spacing="8">
+                <TextBlock Text="{Binding StatusMessage}" FontSize="12"
+                           Foreground="{DynamicResource TextSecondary}"
+                           IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                <ItemsControl ItemsSource="{Binding Workspaces}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:WorkspaceItemViewModel">
+                            <Border Margin="0,4" Padding="14,12" CornerRadius="8"
+                                    Background="{DynamicResource SurfaceCard}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                <StackPanel Spacing="4">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}" />
+                                        <Border Padding="6,2" CornerRadius="4"
+                                                Background="{DynamicResource BrandPrimary}"
+                                                IsVisible="{Binding IsPersonal}">
+                                            <TextBlock Text="Personal" FontSize="10" Foreground="White" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock FontSize="12" Foreground="{DynamicResource TextMuted}"
+                                               FontFamily="Consolas,Menlo,monospace">
+                                        <Run Text="{Binding Slug}" />
+                                    </TextBlock>
+                                    <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}">
+                                        <Run Text="Created: " />
+                                        <Run Text="{Binding CreatedAt, StringFormat='{}{0:MMM d, yyyy}'}" />
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

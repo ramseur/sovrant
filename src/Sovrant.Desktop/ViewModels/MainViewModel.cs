@@ -69,11 +69,11 @@ public partial class MainViewModel : ViewModelBase
             "Tools" => _services.GetRequiredService<ToolsViewModel>(),
             "Memory" => _services.GetRequiredService<MemoryViewModel>(),
             "Governance" => _services.GetRequiredService<GovernanceViewModel>(),
-            "Projects" => new PlaceholderViewModel("Projects", "📁", "Organize your work into projects with shared context, files, and conversation history."),
-            "Workspaces" => new PlaceholderViewModel("Workspaces", "🏢", "Collaborate with your team in shared workspaces with role-based access."),
-            "Agents" => new PlaceholderViewModel("Agents", "🤖", "Configure and deploy specialized AI agents for specific tasks and workflows."),
-            "Automations" => new PlaceholderViewModel("Automations", "⚡", "Create automated workflows that trigger agents based on events and schedules."),
-            "MultiAgent" => new PlaceholderViewModel("Multi-Agent", "👥", "Orchestrate multiple agents working together on complex tasks."),
+            "Projects" => _services.GetRequiredService<ProjectsViewModel>(),
+            "Workspaces" => _services.GetRequiredService<WorkspacesViewModel>(),
+            "Agents" => _services.GetRequiredService<AgentsViewModel>(),
+            "Automations" => _services.GetRequiredService<AutomationsViewModel>(),
+            "MultiAgent" => _services.GetRequiredService<MultiAgentViewModel>(),
             _ => CurrentPage,
         };
     }

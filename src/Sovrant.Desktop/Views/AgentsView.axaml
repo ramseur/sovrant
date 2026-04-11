@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.AgentsView"
+             x:DataType="vm:AgentsViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="12">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Refresh"
+                        Command="{Binding RefreshCommand}"
+                        Padding="12,6" CornerRadius="6"
+                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                <StackPanel>
+                    <TextBlock Text="Agent Templates" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
+                        <Run Text="{Binding TotalCount}" />
+                        <Run Text=" templates available" />
+                    </TextBlock>
+                </StackPanel>
+            </DockPanel>
+
+            <TextBox Text="{Binding SearchText}"
+                     Watermark="Search agents..."
+                     CornerRadius="8" Padding="12,8" />
+        </StackPanel>
+
+        <ScrollViewer Margin="32,12,32,24">
+            <ItemsControl ItemsSource="{Binding FilteredTemplates}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:AgentTemplateItemViewModel">
+                        <Border Margin="0,4" Padding="14,10" CornerRadius="8"
+                                Background="{DynamicResource SurfaceCard}"
+                                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                            <StackPanel Spacing="6">
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+                                        <Border Padding="6,2" CornerRadius="4"
+                                                Background="{DynamicResource BrandPrimary}">
+                                            <TextBlock Text="{Binding RecommendedLevel}"
+                                                       FontSize="10" Foreground="White" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Name}"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               FontFamily="Consolas,Menlo,monospace"
+                                               Foreground="{DynamicResource BrandPrimary}" />
+                                </DockPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
+                                        <Run Text="Role: " FontWeight="SemiBold" />
+                                        <Run Text="{Binding Role}" />
+                                    </TextBlock>
+                                </StackPanel>
+                                <TextBlock Text="{Binding ToolsSummary}"
+                                           FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

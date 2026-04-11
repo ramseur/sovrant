@@ -1,0 +1,72 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.ProjectsView"
+             x:DataType="vm:ProjectsViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="12">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Refresh"
+                        Command="{Binding RefreshCommand}"
+                        Padding="12,6" CornerRadius="6"
+                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="Projects" FontSize="24" FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimary}" />
+            </DockPanel>
+
+            <!-- Create new -->
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Create"
+                        Command="{Binding CreateProjectCommand}"
+                        Padding="12,8" Margin="8,0,0,0"
+                        Background="{DynamicResource BrandPrimary}" Foreground="White"
+                        CornerRadius="8" FontWeight="SemiBold" />
+                <TextBox Text="{Binding NewProjectName}"
+                         Watermark="New project name..."
+                         CornerRadius="8" Padding="12,8" />
+            </DockPanel>
+
+            <TextBlock Text="{Binding StatusMessage}" FontSize="12"
+                       Foreground="{DynamicResource TextSecondary}"
+                       IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+
+        <ScrollViewer Margin="32,12,32,24">
+            <ItemsControl ItemsSource="{Binding Projects}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:ProjectItemViewModel">
+                        <Border Margin="0,4" Padding="14,10" CornerRadius="8"
+                                Background="{DynamicResource SurfaceCard}"
+                                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="Delete" FontSize="11"
+                                        Command="{Binding $parent[UserControl].((vm:ProjectsViewModel)DataContext).DeleteProjectCommand}"
+                                        CommandParameter="{Binding Id}"
+                                        Padding="8,4" CornerRadius="4"
+                                        Background="Transparent" Foreground="{DynamicResource StatusFail}" />
+                                <StackPanel Spacing="4">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}" />
+                                        <TextBlock Text="{Binding Slug}" FontSize="12"
+                                                   FontFamily="Consolas,Menlo,monospace"
+                                                   Foreground="{DynamicResource TextMuted}" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Description}" FontSize="12"
+                                               Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap"
+                                               IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                    <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}">
+                                        <Run Text="Created: " />
+                                        <Run Text="{Binding CreatedAt, StringFormat='{}{0:MMM d, yyyy}'}" />
+                                    </TextBlock>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

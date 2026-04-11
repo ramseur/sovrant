@@ -177,44 +177,58 @@
                         Background="Transparent"
                         Foreground="{DynamicResource TextPrimary}" />
 
-                <!-- Future Features section -->
-                <TextBlock Text="FUTURE FEATURES" FontSize="10" FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextSecondary}"
-                           Margin="4,20,0,8" />
-
                 <Button Content="📁  Projects"
                         Command="{Binding NavigateCommand}"
                         CommandParameter="Projects"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Padding="12,8"
+                        Margin="0,2"
+                        CornerRadius="8"
                         Background="Transparent"
                         Foreground="{DynamicResource TextPrimary}" />
+
                 <Button Content="🏢  Workspaces"
                         Command="{Binding NavigateCommand}"
                         CommandParameter="Workspaces"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Padding="12,8"
+                        Margin="0,2"
+                        CornerRadius="8"
                         Background="Transparent"
                         Foreground="{DynamicResource TextPrimary}" />
+
                 <Button Content="🤖  Agents"
                         Command="{Binding NavigateCommand}"
                         CommandParameter="Agents"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Padding="12,8"
+                        Margin="0,2"
+                        CornerRadius="8"
                         Background="Transparent"
                         Foreground="{DynamicResource TextPrimary}" />
+
                 <Button Content="⚡  Automations"
                         Command="{Binding NavigateCommand}"
                         CommandParameter="Automations"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Padding="12,8"
+                        Margin="0,2"
+                        CornerRadius="8"
                         Background="Transparent"
                         Foreground="{DynamicResource TextPrimary}" />
+
                 <Button Content="👥  Multi-Agent"
                         Command="{Binding NavigateCommand}"
                         CommandParameter="MultiAgent"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Padding="12,8"
+                        Margin="0,2"
+                        CornerRadius="8"
                         Background="Transparent"
                         Foreground="{DynamicResource TextPrimary}" />
 

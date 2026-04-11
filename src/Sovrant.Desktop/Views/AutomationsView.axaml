@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.AutomationsView"
+             x:DataType="vm:AutomationsViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <ScrollViewer Padding="32,24">
+        <StackPanel MaxWidth="640" Spacing="20">
+            <TextBlock Text="Automations" FontSize="24" FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimary}" />
+
+            <TextBlock Text="Swarm Orchestration" FontSize="16" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimary}" />
+
+            <!-- Swarm config display -->
+            <Border Padding="14,10" CornerRadius="8"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                <StackPanel Spacing="10">
+                    <DockPanel>
+                        <TextBlock Text="Enabled" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock Text="Yes" Foreground="{DynamicResource StatusPass}"
+                                   HorizontalAlignment="Right" IsVisible="{Binding SwarmEnabled}" />
+                        <TextBlock Text="No" Foreground="{DynamicResource StatusFail}"
+                                   HorizontalAlignment="Right" IsVisible="{Binding !SwarmEnabled}" />
+                    </DockPanel>
+                    <DockPanel>
+                        <TextBlock Text="Max Concurrent Agents"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock Text="{Binding MaxConcurrent}"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   HorizontalAlignment="Right" />
+                    </DockPanel>
+                    <DockPanel>
+                        <TextBlock Text="Token Budget"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock Text="{Binding MaxTokenBudget, StringFormat='{}{0:N0}'}"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   HorizontalAlignment="Right" />
+                    </DockPanel>
+                    <DockPanel>
+                        <TextBlock Text="Max Retries"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock Text="{Binding MaxRetries}"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   HorizontalAlignment="Right" />
+                    </DockPanel>
+                    <DockPanel>
+                        <TextBlock Text="Quality Gate" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock Text="Enabled" Foreground="{DynamicResource StatusPass}"
+                                   HorizontalAlignment="Right" IsVisible="{Binding QualityGateEnabled}" />
+                        <TextBlock Text="Disabled" Foreground="{DynamicResource StatusFail}"
+                                   HorizontalAlignment="Right" IsVisible="{Binding !QualityGateEnabled}" />
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Text="Configuration loaded from .sovrant/swarm.json"
+                       FontSize="11" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextMuted}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

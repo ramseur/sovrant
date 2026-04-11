@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.MultiAgentView"
+             x:DataType="vm:MultiAgentViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel>
+        <DockPanel DockPanel.Dock="Top" Margin="32,24,32,0">
+            <Button DockPanel.Dock="Right" Content="Refresh"
+                    Command="{Binding RefreshCommand}"
+                    Padding="12,6" CornerRadius="6"
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+            <TextBlock Text="Multi-Agent Teams" FontSize="24" FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimary}" />
+        </DockPanel>
+
+        <ScrollViewer Margin="32,12,32,24">
+            <StackPanel Spacing="8">
+                <TextBlock Text="No team members registered. Use /team create in chat to set up a team."
+                           FontSize="13" Foreground="{DynamicResource TextSecondary}"
+                           IsVisible="{Binding !Members.Count}" />
+
+                <ItemsControl ItemsSource="{Binding Members}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:TeamMemberItemViewModel">
+                            <Border Margin="0,4" Padding="14,10" CornerRadius="8"
+                                    Background="{DynamicResource SurfaceCard}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                <StackPanel Spacing="4">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}" />
+                                        <Border Padding="6,2" CornerRadius="4"
+                                                Background="{DynamicResource BrandPrimary}">
+                                            <TextBlock Text="{Binding Role}" FontSize="10" Foreground="White" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
+                                        <Run Text="Template: " />
+                                        <Run Text="{Binding TemplateName}" FontFamily="Consolas,Menlo,monospace" />
+                                    </TextBlock>
+                                    <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}"
+                                               FontFamily="Consolas,Menlo,monospace">
+                                        <Run Text="ID: " />
+                                        <Run Text="{Binding Id}" />
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

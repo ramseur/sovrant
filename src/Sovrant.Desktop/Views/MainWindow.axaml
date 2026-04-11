@@ -35,6 +35,21 @@
         <DataTemplate DataType="vm:GovernanceViewModel">
             <views:GovernanceView />
         </DataTemplate>
+        <DataTemplate DataType="vm:ProjectsViewModel">
+            <views:ProjectsView />
+        </DataTemplate>
+        <DataTemplate DataType="vm:WorkspacesViewModel">
+            <views:WorkspacesView />
+        </DataTemplate>
+        <DataTemplate DataType="vm:AgentsViewModel">
+            <views:AgentsView />
+        </DataTemplate>
+        <DataTemplate DataType="vm:AutomationsViewModel">
+            <views:AutomationsView />
+        </DataTemplate>
+        <DataTemplate DataType="vm:MultiAgentViewModel">
+            <views:MultiAgentView />
+        </DataTemplate>
         <DataTemplate DataType="vm:PlaceholderViewModel">
             <views:PlaceholderView />
         </DataTemplate>
