@@ -91,6 +91,15 @@ public partial class ChatViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void ClearChat()
+    {
+        Messages.Clear();
+        HasMessages = false;
+        TokenCount = 0;
+        SessionId = $"desktop-{Guid.NewGuid():N}";
+    }
+
+    [RelayCommand]
     private void Suggestion(string text)
     {
         InputText = text;

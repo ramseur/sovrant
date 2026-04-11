@@ -31,27 +31,18 @@
         <!-- Main sidebar content -->
         <ScrollViewer>
             <StackPanel Margin="12">
-                <!-- Logo + codebase toggle -->
-                <DockPanel Margin="4,0,0,16">
-                    <ToggleSwitch DockPanel.Dock="Right"
-                                  IsChecked="{Binding IsCodebaseMode}"
-                                  OnContent="📂" OffContent="📂"
-                                  VerticalAlignment="Center"
-                                  Margin="0"
-                                  Padding="0"
-                                  ToolTip.Tip="Toggle codebase context" />
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <Border Width="28" Height="28" CornerRadius="6"
-                                Background="{DynamicResource BrandPrimary}">
-                            <TextBlock Text="⚡" FontSize="14"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center" />
-                        </Border>
-                        <TextBlock Text="Sovrant" FontSize="18" FontWeight="Bold"
-                                   Foreground="{DynamicResource TextPrimary}"
+                <!-- Logo -->
+                <StackPanel Orientation="Horizontal" Spacing="10" Margin="4,0,0,16">
+                    <Border Width="28" Height="28" CornerRadius="6"
+                            Background="{DynamicResource BrandPrimary}">
+                        <TextBlock Text="⚡" FontSize="14"
+                                   HorizontalAlignment="Center"
                                    VerticalAlignment="Center" />
-                    </StackPanel>
-                </DockPanel>
+                    </Border>
+                    <TextBlock Text="Sovrant" FontSize="18" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}"
+                               VerticalAlignment="Center" />
+                </StackPanel>
 
                 <!-- New Chat button -->
                 <Button Content="＋ New Chat"
@@ -105,7 +96,9 @@
                         HorizontalContentAlignment="Left"
                         Padding="12,8"
                         Margin="0,2"
-                        CornerRadius="8" />
+                        CornerRadius="8"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
 
                 <Button Content="⚙  Settings"
                         Command="{Binding NavigateCommand}"
@@ -114,7 +107,9 @@
                         HorizontalContentAlignment="Left"
                         Padding="12,8"
                         Margin="0,2"
-                        CornerRadius="8" />
+                        CornerRadius="8"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
 
                 <Button Content="🔧  Diagnostics"
                         Command="{Binding NavigateCommand}"
@@ -123,7 +118,9 @@
                         HorizontalContentAlignment="Left"
                         Padding="12,8"
                         Margin="0,2"
-                        CornerRadius="8" />
+                        CornerRadius="8"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
 
                 <Button Content="🔌  Integrations"
                         Command="{Binding NavigateCommand}"
@@ -132,7 +129,9 @@
                         HorizontalContentAlignment="Left"
                         Padding="12,8"
                         Margin="0,2"
-                        CornerRadius="8" />
+                        CornerRadius="8"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
 
                 <Button Content="📄  Artifacts"
                         Command="{Binding NavigateCommand}"
@@ -141,7 +140,9 @@
                         HorizontalContentAlignment="Left"
                         Padding="12,8"
                         Margin="0,2"
-                        CornerRadius="8" />
+                        CornerRadius="8"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
 
                 <!-- Future Features section -->
                 <TextBlock Text="FUTURE FEATURES" FontSize="10" FontWeight="SemiBold"
@@ -152,27 +153,37 @@
                         Command="{Binding NavigateCommand}"
                         CommandParameter="Projects"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
+                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
                 <Button Content="🏢  Workspaces"
                         Command="{Binding NavigateCommand}"
                         CommandParameter="Workspaces"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
+                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
                 <Button Content="🤖  Agents"
                         Command="{Binding NavigateCommand}"
                         CommandParameter="Agents"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
+                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
                 <Button Content="⚡  Automations"
                         Command="{Binding NavigateCommand}"
                         CommandParameter="Automations"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
+                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
                 <Button Content="👥  Multi-Agent"
                         Command="{Binding NavigateCommand}"
                         CommandParameter="MultiAgent"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5" />
+                        Padding="12,6" Margin="0,1" CornerRadius="8" Opacity="0.5"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
 
                 <!-- Recent conversations -->
                 <TextBlock Text="RECENT" FontSize="10" FontWeight="SemiBold"
@@ -182,23 +193,37 @@
                 <ItemsControl ItemsSource="{Binding RecentSessions}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:SessionListItem">
-                            <Button Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).ResumeSessionCommand}"
-                                    CommandParameter="{Binding SessionId}"
-                                    HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Left"
-                                    Padding="10,6"
-                                    Margin="0,1"
-                                    CornerRadius="6">
-                                <StackPanel Spacing="2">
-                                    <TextBlock Text="{Binding Label}"
-                                               FontSize="12"
-                                               Foreground="{DynamicResource TextPrimary}"
-                                               TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:MMM d, HH:mm}'}"
-                                               FontSize="10"
-                                               Foreground="{DynamicResource TextMuted}" />
-                                </StackPanel>
-                            </Button>
+                            <DockPanel Margin="0,1">
+                                <Button DockPanel.Dock="Right"
+                                        Content="✕"
+                                        Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).DeleteSessionCommand}"
+                                        CommandParameter="{Binding SessionId}"
+                                        FontSize="10"
+                                        Padding="4,2"
+                                        Margin="2,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Background="Transparent"
+                                        Foreground="{DynamicResource TextMuted}"
+                                        CornerRadius="4"
+                                        ToolTip.Tip="Delete session" />
+                                <Button Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).ResumeSessionCommand}"
+                                        CommandParameter="{Binding SessionId}"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Left"
+                                        Padding="10,6"
+                                        CornerRadius="6"
+                                        Background="Transparent">
+                                    <StackPanel Spacing="2">
+                                        <TextBlock Text="{Binding Label}"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:MMM d, HH:mm}'}"
+                                                   FontSize="10"
+                                                   Foreground="{DynamicResource TextMuted}" />
+                                    </StackPanel>
+                                </Button>
+                            </DockPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

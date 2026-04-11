@@ -25,9 +25,6 @@ public partial class SidebarViewModel : ViewModelBase
     [ObservableProperty]
     private string _currentProvider = "OpenAI";
 
-    [ObservableProperty]
-    private bool _isCodebaseMode;
-
     public ObservableCollection<SessionListItem> RecentSessions { get; } = [];
 
     public event EventHandler<string>? NavigationRequested;
@@ -51,6 +48,18 @@ public partial class SidebarViewModel : ViewModelBase
     {
         SelectedNavItem = "Chat";
         SessionResumeRequested?.Invoke(this, sessionId);
+    }
+
+    [RelayCommand]
+    private async Task DeleteSessionAsync(string sessionId)
+    {
+        await _sessionStore.DeleteAsync(sessionId);
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            var item = RecentSessions.FirstOrDefault(s => s.SessionId == sessionId);
+            if (item is not null)
+                RecentSessions.Remove(item);
+        });
     }
 
     [RelayCommand]
@@ -89,10 +98,6 @@ public partial class SidebarViewModel : ViewModelBase
         });
     }
 
-    partial void OnIsCodebaseModeChanged(bool value)
-    {
-        // TODO: Wire up codebase context toggle (e.g. enable/disable file indexing).
-    }
 }
 
 public partial class SessionListItem : ViewModelBase

@@ -20,7 +20,7 @@ public partial class CommandPaletteViewModel : ViewModelBase
 
     public ObservableCollection<CommandItem> FilteredCommands { get; } = [];
 
-    public event EventHandler<string>? CommandExecuted;
+    public event EventHandler<SlashCommandResult>? CommandExecuted;
 
     public CommandPaletteViewModel(IEnumerable<ISlashCommand> commands)
     {
@@ -41,11 +41,17 @@ public partial class CommandPaletteViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Execute(CommandItem? item)
+    private async Task ExecuteAsync(CommandItem? item)
     {
         if (item is null) return;
         IsOpen = false;
-        CommandExecuted?.Invoke(this, $"/{item.Name}");
+
+        var cmd = _allCommands.FirstOrDefault(c =>
+            c.Name.Equals(item.Name, StringComparison.OrdinalIgnoreCase));
+        if (cmd is null) return;
+
+        var result = await cmd.ExecuteAsync(string.Empty);
+        CommandExecuted?.Invoke(this, result);
     }
 
     private void ApplyFilter()

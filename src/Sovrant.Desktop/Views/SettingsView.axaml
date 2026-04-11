@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:perm="using:Sovrant.Runtime.Permissions"
              x:Class="Sovrant.Desktop.Views.SettingsView"
              x:DataType="vm:SettingsViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -84,6 +85,27 @@
                 </DockPanel>
             </Border>
 
+            <!-- Permissions section -->
+            <TextBlock Text="Permissions" FontSize="16" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimary}"
+                       Margin="0,12,0,0" />
+
+            <StackPanel Spacing="6">
+                <TextBlock Text="Permission Mode" FontSize="13" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondary}" />
+                <ComboBox ItemsSource="{Binding PermissionModes}"
+                          SelectedItem="{Binding PermissionMode}"
+                          HorizontalAlignment="Stretch"
+                          CornerRadius="8"
+                          Padding="12,8" />
+                <TextBlock FontSize="11" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextMuted}">
+                    <Run Text="Default" FontWeight="SemiBold" /> — ask before destructive ops.
+                    <Run Text="AcceptEdits" FontWeight="SemiBold" /> — auto-approve edits, ask for bash.
+                    <Run Text="BypassPermissions" FontWeight="SemiBold" /> — allow all.
+                </TextBlock>
+            </StackPanel>
+
             <!-- Appearance section -->
             <TextBlock Text="Appearance" FontSize="16" FontWeight="SemiBold"
                        Foreground="{DynamicResource TextPrimary}"
@@ -108,11 +130,26 @@
                 </DockPanel>
             </Border>
 
+            <!-- Save button + status -->
+            <DockPanel Margin="0,8,0,0">
+                <TextBlock DockPanel.Dock="Right"
+                           Text="{Binding StatusMessage}"
+                           FontSize="12"
+                           Foreground="{DynamicResource StatusPass}"
+                           VerticalAlignment="Center" />
+                <Button Content="Save Settings"
+                        Command="{Binding SaveCommand}"
+                        Padding="20,10"
+                        Background="{DynamicResource BrandPrimary}"
+                        Foreground="White"
+                        CornerRadius="8"
+                        FontWeight="SemiBold" />
+            </DockPanel>
+
             <!-- Info note -->
-            <TextBlock Text="Settings are read-only in this phase. Configuration is loaded from ~/.sovrant/settings.json"
+            <TextBlock Text="Settings are saved to ~/.sovrant/settings.json and apply on next restart."
                        FontSize="11" TextWrapping="Wrap"
-                       Foreground="{DynamicResource TextMuted}"
-                       Margin="0,8,0,0" />
+                       Foreground="{DynamicResource TextMuted}" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using Sovrant.Commands;
 
 namespace Sovrant.Desktop.ViewModels;
 
@@ -30,14 +31,29 @@ public partial class MainViewModel : ViewModelBase
         commandPalette.CommandExecuted += OnCommandExecuted;
     }
 
-    private void OnCommandExecuted(object? sender, string command)
+    private void OnCommandExecuted(object? sender, SlashCommandResult result)
     {
-        // Feed the slash command into the current chat as if the user typed it.
-        if (CurrentPage is ChatViewModel chat)
+        if (CurrentPage is not ChatViewModel chat) return;
+
+        if (result.ShouldClearHistory)
         {
-            chat.InputText = command;
+            chat.ClearChatCommand.Execute(null);
+            return;
+        }
+
+        if (result.InjectAsUserMessage is { } inject)
+        {
+            chat.InputText = inject;
             if (chat.SendCommand.CanExecute(null))
                 chat.SendCommand.Execute(null);
+            return;
+        }
+
+        if (result.Output is { } output)
+        {
+            // Show command output as a system message in chat.
+            chat.Messages.Add(new MessageViewModel { Role = "assistant", Text = output });
+            chat.HasMessages = true;
         }
     }
 

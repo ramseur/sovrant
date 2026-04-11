@@ -45,7 +45,10 @@ public partial class App : Application
         services.AddSovrantCommands();
 
         // Desktop-specific overrides.
-        services.AddSingleton<IPermissionPolicy>(new MutableCliPermissionPolicy(config.PermissionMode));
+        var permissionPolicy = new MutableCliPermissionPolicy(config.PermissionMode);
+        services.AddSingleton<IPermissionPolicy>(permissionPolicy);
+        services.AddSingleton<IPermissionModeAccessor>(permissionPolicy);
+        services.AddSingleton(config);
         services.AddSingleton<IToolConfirmationHandler, DesktopConfirmationHandler>();
         services.AddSingleton<IUserInputProvider, DesktopUserInputProvider>();
 
