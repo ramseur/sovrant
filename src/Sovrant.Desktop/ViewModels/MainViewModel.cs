@@ -17,16 +17,15 @@ public partial class MainViewModel : ViewModelBase
     private CommandPaletteViewModel _commandPalette;
 
     [ObservableProperty]
-    private SetupWizardViewModel _setupWizard;
+    private SetupWizardViewModel? _setupWizard;
 
     private readonly IServiceProvider _services;
 
-    public MainViewModel(SidebarViewModel sidebar, CommandPaletteViewModel commandPalette, SetupWizardViewModel setupWizard, IServiceProvider services)
+    public MainViewModel(SidebarViewModel sidebar, CommandPaletteViewModel commandPalette, IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(sidebar);
         _sidebar = sidebar;
         _commandPalette = commandPalette;
-        _setupWizard = setupWizard;
         _services = services;
         _currentPage = CreateChatViewModel();
 

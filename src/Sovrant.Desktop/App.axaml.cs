@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -32,13 +33,15 @@ public partial class App : Application
 
     public override async void OnFrameworkInitializationCompleted()
     {
+        var config = ConfigLoader.Load();
+        var needsSetup = string.IsNullOrWhiteSpace(config.ApiKey);
+
         var services = new ServiceCollection();
 
         // Logging — suppress console noise, file logging only.
         services.AddLogging(b => b.AddSovrantLogging(consoleMinOverride: LogLevel.Warning));
 
         // Core runtime + tools + agents + commands.
-        var config = ConfigLoader.Load();
         services.AddSovrantRuntime(config);
         services.AddSovrantTools();
         services.AddMultiAgentSystem();
@@ -69,7 +72,6 @@ public partial class App : Application
         services.AddTransient<AutomationsViewModel>();
         services.AddTransient<MultiAgentViewModel>();
         services.AddSingleton<CommandPaletteViewModel>();
-        services.AddSingleton<SetupWizardViewModel>();
 
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;
@@ -80,6 +82,23 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var mainVm = _serviceProvider.GetRequiredService<MainViewModel>();
+
+            // Show setup wizard overlay if no API key is configured.
+            if (needsSetup)
+            {
+                var setupVm = new SetupWizardViewModel(config);
+                mainVm.SetupWizard = setupVm;
+
+                setupVm.PropertyChanged += (_, e) =>
+                {
+                    if (e.PropertyName == nameof(SetupWizardViewModel.IsVisible) && !setupVm.IsVisible)
+                    {
+                        // Restart the app so the runtime picks up the new config.
+                        RestartApp();
+                    }
+                };
+            }
+
             var window = new MainWindow { DataContext = mainVm };
             desktop.MainWindow = window;
             MainWindow = window;
@@ -100,5 +119,23 @@ public partial class App : Application
         });
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static void RestartApp()
+    {
+        var exePath = Environment.ProcessPath;
+        if (exePath is not null)
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = exePath,
+                UseShellExecute = true,
+            });
+        }
+
+        if (Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            desktop.Shutdown();
+        }
     }
 }
