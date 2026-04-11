@@ -1,8 +1,111 @@
 @page "/workspaces"
+@using Sovrant.Runtime.Workspaces
 
-<div class="placeholder-page">
-    <div class="placeholder-icon">&#x2699;</div>
-    <h2>Workspaces</h2>
-    <span class="badge-soon">COMING SOON</span>
-    <p>Workspaces management and configuration.</p>
+<div class="settings-page">
+    <div class="diag-header">
+        <h1>Workspaces</h1>
+        <span class="item-count">@_workspaces.Count</span>
+    </div>
+
+    <div class="card">
+        <div class="form-field">
+            <label>New Team Workspace</label>
+            <div class="input-group">
+                <input type="text" @bind="_newName" placeholder="Workspace name..." />
+                <button class="btn-primary btn-sm" style="width:auto;padding:8px 16px;" @onclick="CreateAsync">Create</button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="status-message">@_status</div>
+    }
+
+    <div class="memory-list">
+        @if (_workspaces.Count == 0)
+        {
+            <p class="text-secondary">No workspaces found.</p>
+        }
+        @foreach (var w in _workspaces)
+        {
+            <div class="memory-card">
+                <div class="memory-content">
+                    <div class="memory-text">
+                        <strong>@w.Name</strong>
+                        <span class="outcome-badge @(w.Type == "Personal" ? "success" : "unknown")">@w.Type</span>
+                    </div>
+                    <div class="memory-meta">
+                        <span class="text-muted text-sm">@w.Slug</span>
+                        <span class="text-muted text-sm">@w.CreatedAt.LocalDateTime.ToString("d")</span>
+                    </div>
+                </div>
+                @if (w.Type != "Personal")
+                {
+                    <button class="btn-sm btn-danger" @onclick="() => DeleteAsync(w)">X</button>
+                }
+            </div>
+        }
+    </div>
 </div>
+
+@code {
+    [Inject] private IWorkspaceService WorkspaceService { get; set; } = default!;
+
+    private const string UserId = "web-user";
+    private string _newName = string.Empty;
+    private string _status = string.Empty;
+    private List<WorkspaceItem> _workspaces = [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Sovrant.Web.Program.RuntimeReady.Task;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        var list = await WorkspaceService.ListForUserAsync(UserId);
+        _workspaces = list.Select(w => new WorkspaceItem
+        {
+            Id = w.WorkspaceId, Name = w.Name, Slug = w.Slug,
+            Type = w.Type.ToString(), CreatedAt = w.CreatedAt,
+        }).ToList();
+    }
+
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newName)) { _status = "Enter a name."; return; }
+        try
+        {
+            var slug = _newName.Trim().ToLowerInvariant().Replace(' ', '-');
+            await WorkspaceService.CreateTeamWorkspaceAsync(_newName.Trim(), slug, UserId);
+            _newName = string.Empty;
+            _status = "Workspace created.";
+            await LoadAsync();
+        }
+        catch (Exception ex) { _status = $"Failed: {ex.Message}"; }
+    }
+
+    private async Task DeleteAsync(WorkspaceItem w)
+    {
+        try
+        {
+            await WorkspaceService.DeleteAsync(w.Id);
+            _status = $"'{w.Name}' deleted.";
+            await LoadAsync();
+        }
+        catch (Exception ex) { _status = $"Cannot delete: {ex.Message}"; }
+    }
+
+    private sealed class WorkspaceItem
+    {
+        public string Id { get; init; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
+        public string Slug { get; init; } = string.Empty;
+        public string Type { get; init; } = string.Empty;
+        public DateTimeOffset CreatedAt { get; init; }
+    }
+}

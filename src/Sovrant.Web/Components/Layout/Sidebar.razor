@@ -21,7 +21,7 @@
 
         <!-- Search -->
         <div class="sidebar-search">
-            <input type="text" placeholder="Search conversations..." @bind="_searchText" @bind:event="oninput" />
+            <input type="text" placeholder="Search conversations..." @bind="_searchText" @bind:event="oninput" @bind:after="FilterSessions" />
         </div>
 
         <!-- Model/Provider card -->
@@ -84,11 +84,11 @@
 
         <!-- Recent conversations -->
         <div class="nav-section-header">RECENT</div>
-        @if (_recentSessions.Count == 0)
+        @if (_filteredSessions.Count == 0)
         {
             <div class="no-sessions">No recent conversations</div>
         }
-        @foreach (var session in _recentSessions)
+        @foreach (var session in _filteredSessions)
         {
             <div class="session-item">
                 <button class="session-btn" @onclick="() => ResumeSession(session.Id)">
@@ -139,6 +139,7 @@
     private List<WorkspaceItem> _workspaces = [];
     private List<ProjectItem> _projects = [];
     private List<SessionItem> _recentSessions = [];
+    private List<SessionItem> _filteredSessions = [];
 
     protected override void OnInitialized()
     {
@@ -258,8 +259,18 @@
                     entries.Count > 0 ? entries[^1].Timestamp : DateTimeOffset.MinValue));
             }
             _recentSessions = items.OrderByDescending(s => s.Timestamp).ToList();
+            _filteredSessions = _recentSessions;
         }
         catch { /* best effort */ }
+    }
+
+    private void FilterSessions()
+    {
+        _filteredSessions = string.IsNullOrWhiteSpace(_searchText)
+            ? _recentSessions
+            : _recentSessions.Where(s =>
+                s.Label.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
     }
 
     private void ResumeSession(string sessionId)

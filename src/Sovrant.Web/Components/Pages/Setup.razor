@@ -1,0 +1,194 @@
+@page "/setup"
+@using Sovrant.Runtime.Config
+@using Sovrant.Web.Adapters
+@using System.Text.Json
+@using System.Text.Json.Serialization
+
+<div class="setup-backdrop">
+    <div class="setup-card">
+        <div class="setup-icon">&#9889;</div>
+        <h1>Welcome to Sovrant</h1>
+        <p class="text-secondary">Configure your AI provider to get started.</p>
+
+        <div class="form-field">
+            <label>Provider</label>
+            <select @bind="_provider" @bind:after="OnProviderChanged">
+                @foreach (var p in Providers)
+                {
+                    <option value="@p">@p</option>
+                }
+            </select>
+        </div>
+
+        <div class="form-field">
+            <label>API Key</label>
+            <input type="password" @bind="_apiKey" placeholder="sk-..." />
+        </div>
+
+        <div class="form-field">
+            <label>Model</label>
+            <div class="input-group">
+                <input type="text" list="setup-models" @bind="_model" placeholder="Select or type a model..." />
+                <button class="input-addon" @onclick="RefreshModels" title="Refresh">&#8635;</button>
+            </div>
+            <datalist id="setup-models">
+                @foreach (var m in _availableModels)
+                {
+                    <option value="@m" />
+                }
+            </datalist>
+        </div>
+
+        <div class="form-field">
+            <label>Base URL</label>
+            <input type="text" @bind="_baseUrl" placeholder="Auto-filled from provider" />
+        </div>
+
+        <button class="btn-primary" @onclick="SaveAsync" disabled="@_saving">
+            @(_saving ? "Saving..." : "Get Started")
+        </button>
+
+        @if (!string.IsNullOrEmpty(_status))
+        {
+            <div class="status-message" style="margin-top:12px;">@_status</div>
+        }
+    </div>
+</div>
+
+@code {
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+    [Inject] private SovrantConfig Config { get; set; } = default!;
+    [Inject] private MutableAuthProvider AuthProvider { get; set; } = default!;
+
+    private string _provider = "OpenAI";
+    private string _apiKey = string.Empty;
+    private string _model = "gpt-4o";
+    private string _baseUrl = "https://api.openai.com/v1";
+    private string _status = string.Empty;
+    private bool _saving;
+    private List<string> _availableModels = [];
+
+    private static readonly string SettingsPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".sovrant", "settings.json");
+
+    private static readonly JsonSerializerOptions JsonOpts = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    private static readonly string[] Providers =
+        ["OpenAI", "OpenRouter", "DeepSeek", "Groq", "Mistral", "Together AI", "Google", "Azure OpenAI", "Ollama", "LM Studio", "Custom"];
+
+    private static readonly Dictionary<string, string> ProviderBaseUrls = new(StringComparer.Ordinal)
+    {
+        ["OpenAI"] = "https://api.openai.com/v1",
+        ["OpenRouter"] = "https://openrouter.ai/api/v1",
+        ["DeepSeek"] = "https://api.deepseek.com/v1",
+        ["Groq"] = "https://api.groq.com/openai/v1",
+        ["Mistral"] = "https://api.mistral.ai/v1",
+        ["Together AI"] = "https://api.together.xyz/v1",
+        ["Ollama"] = "http://localhost:11434/v1",
+        ["LM Studio"] = "http://localhost:1234/v1",
+        ["Google"] = "https://generativelanguage.googleapis.com/v1beta/openai",
+        ["Azure OpenAI"] = "",
+        ["Custom"] = "",
+    };
+
+    private static readonly Dictionary<string, string[]> StaticModels = new(StringComparer.Ordinal)
+    {
+        ["OpenAI"] = ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o4-mini", "o3", "o3-mini"],
+        ["DeepSeek"] = ["deepseek-chat", "deepseek-reasoner"],
+        ["Groq"] = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
+        ["Google"] = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"],
+    };
+
+    protected override void OnInitialized()
+    {
+        if (!string.IsNullOrWhiteSpace(Config.ApiKey))
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+        LoadModels();
+    }
+
+    private void OnProviderChanged()
+    {
+        if (ProviderBaseUrls.TryGetValue(_provider, out var url))
+            _baseUrl = url;
+        LoadModels();
+    }
+
+    private void LoadModels()
+    {
+        _availableModels = StaticModels.TryGetValue(_provider, out var models)
+            ? [.. models] : [];
+    }
+
+    private async Task RefreshModels()
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey) || string.IsNullOrWhiteSpace(_baseUrl)) return;
+        try
+        {
+            using var http = new HttpClient();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            var modelsUrl = _baseUrl.TrimEnd('/') + "/models";
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(modelsUrl));
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey.Trim());
+            var response = await http.SendAsync(request, cts.Token);
+            if (response.IsSuccessStatusCode)
+            {
+                using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
+                using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
+                var fetched = new List<string>();
+                if (doc.RootElement.TryGetProperty("data", out var data))
+                    foreach (var item in data.EnumerateArray())
+                        if (item.TryGetProperty("id", out var id) && id.GetString() is { } modelId)
+                            fetched.Add(modelId);
+                fetched.Sort(StringComparer.OrdinalIgnoreCase);
+                if (fetched.Count > 0) _availableModels = fetched;
+            }
+        }
+        catch { /* keep static list */ }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey)) { _status = "API key is required."; return; }
+        if (string.IsNullOrWhiteSpace(_model)) { _status = "Model is required."; return; }
+        _saving = true;
+        _status = string.Empty;
+        try
+        {
+            Dictionary<string, object?> existing = [];
+            if (File.Exists(SettingsPath))
+                existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(await File.ReadAllTextAsync(SettingsPath)) ?? [];
+
+            existing["Provider"] = _provider;
+            existing["Model"] = _model.Trim();
+            existing["ApiKey"] = _apiKey.Trim();
+            if (!string.IsNullOrWhiteSpace(_baseUrl)) existing["BaseUrl"] = _baseUrl.Trim();
+
+            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+            await File.WriteAllTextAsync(SettingsPath, JsonSerializer.Serialize(existing, JsonOpts));
+
+            // Hot-swap runtime config
+            Config.Model = _model.Trim();
+            Config.ApiKey = _apiKey.Trim();
+            Environment.SetEnvironmentVariable("LLM_API_KEY", _apiKey.Trim());
+            AuthProvider.ApiKey = _apiKey.Trim();
+            if (!string.IsNullOrWhiteSpace(_baseUrl))
+            {
+                var parsed = new Uri(_baseUrl.Trim());
+                Config.BaseUrl = parsed;
+                AuthProvider.BaseUrl = parsed;
+                Environment.SetEnvironmentVariable("LLM_BASE_URL", _baseUrl.Trim());
+            }
+
+            Nav.NavigateTo("/");
+        }
+        catch (Exception ex) { _status = $"Failed to save: {ex.Message}"; }
+        finally { _saving = false; }
+    }
+}

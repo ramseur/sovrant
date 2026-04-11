@@ -1,8 +1,202 @@
 @page "/integrations"
+@using Sovrant.Runtime.Config
+@using Sovrant.Runtime.Mcp
+@using System.Text.Json
 
-<div class="placeholder-page">
-    <div class="placeholder-icon">&#x2699;</div>
-    <h2>Integrations</h2>
-    <span class="badge-soon">COMING SOON</span>
-    <p>Integrations management and configuration.</p>
+<div class="settings-page">
+    <div class="diag-header">
+        <h1>Integrations (MCP)</h1>
+        <span class="item-count">@_servers.Count</span>
+    </div>
+
+    <!-- Add server form -->
+    <div class="card">
+        <div class="form-field">
+            <label>Server Name</label>
+            <input type="text" @bind="_newName" placeholder="e.g. filesystem" />
+        </div>
+        <div class="form-field">
+            <label>Command</label>
+            <input type="text" @bind="_newCommand" placeholder="e.g. npx" />
+        </div>
+        <div class="form-field">
+            <label>Arguments (space-separated)</label>
+            <input type="text" @bind="_newArgs" placeholder="e.g. -y @@modelcontextprotocol/server-filesystem /tmp" />
+        </div>
+        <button class="btn-primary" style="max-width:200px;" @onclick="AddServerAsync">Add Server</button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="status-message">@_status</div>
+    }
+
+    <div class="memory-list">
+        @if (_servers.Count == 0)
+        {
+            <p class="text-secondary">No MCP servers configured. Add one above or edit ~/.sovrant/settings.json.</p>
+        }
+        @foreach (var s in _servers)
+        {
+            <div class="memory-card">
+                <div class="memory-content">
+                    <div class="memory-text">
+                        <strong>@s.Name</strong>
+                        <span class="outcome-badge @(s.IsConnected ? "success" : "unknown")">
+                            @(s.IsConnected ? "Connected" : "Not Connected")
+                        </span>
+                    </div>
+                    <div class="memory-meta">
+                        <span class="text-sm">@s.Command @string.Join(" ", s.Args)</span>
+                    </div>
+                    @if (s.ToolCount > 0)
+                    {
+                        <div class="memory-meta">
+                            <span class="text-muted text-sm">@s.ToolCount tools: @s.ToolNames</span>
+                        </div>
+                    }
+                    @if (s.EnvVars.Count > 0)
+                    {
+                        <div class="memory-meta">
+                            @foreach (var kv in s.EnvVars)
+                            {
+                                <span class="text-muted text-sm">@kv.Key=@MaskSecret(kv.Key, kv.Value)</span>
+                            }
+                        </div>
+                    }
+                </div>
+                <button class="btn-sm btn-danger" @onclick="() => RemoveServerAsync(s.Name)">X</button>
+            </div>
+        }
+    </div>
+
+    <p class="text-muted text-sm" style="margin-top:12px;">Changes to MCP servers require an app restart to take effect.</p>
 </div>
+
+@code {
+    [Inject] private SovrantConfig Config { get; set; } = default!;
+    [Inject] private McpClientRegistry McpRegistry { get; set; } = default!;
+
+    private string _newName = string.Empty;
+    private string _newCommand = string.Empty;
+    private string _newArgs = string.Empty;
+    private string _status = string.Empty;
+    private List<ServerView> _servers = [];
+
+    private static readonly string SettingsPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".sovrant", "settings.json");
+
+    private static readonly JsonSerializerOptions JsonOpts = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    protected override void OnInitialized() => LoadServers();
+
+    private void LoadServers()
+    {
+        _servers = Config.McpServers.Select(kv =>
+        {
+            var isConnected = McpRegistry.Clients.ContainsKey(kv.Key);
+            var toolCount = 0;
+            var toolNames = "";
+            if (isConnected)
+            {
+                try
+                {
+                    var client = McpRegistry.Clients[kv.Key];
+                    var tools = client.ListToolsAsync().GetAwaiter().GetResult();
+                    toolCount = tools.Count;
+                    toolNames = string.Join(", ", tools.Select(t => t.Name).Take(10));
+                    if (tools.Count > 10) toolNames += $" +{tools.Count - 10} more";
+                }
+                catch { /* best effort */ }
+            }
+            return new ServerView
+            {
+                Name = kv.Key, Command = kv.Value.Command,
+                Args = kv.Value.Args.ToList(), IsConnected = isConnected,
+                ToolCount = toolCount, ToolNames = toolNames,
+                EnvVars = kv.Value.Env.ToDictionary(e => e.Key, e => e.Value),
+            };
+        }).ToList();
+    }
+
+    private async Task AddServerAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newName) || string.IsNullOrWhiteSpace(_newCommand))
+        {
+            _status = "Name and command are required."; return;
+        }
+        try
+        {
+            var args = string.IsNullOrWhiteSpace(_newArgs)
+                ? Array.Empty<string>()
+                : _newArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            Dictionary<string, object?> existing = [];
+            if (File.Exists(SettingsPath))
+                existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(await File.ReadAllTextAsync(SettingsPath)) ?? [];
+
+            var mcpServers = new Dictionary<string, object>(StringComparer.Ordinal);
+            if (existing.TryGetValue("McpServers", out var val) && val is JsonElement el)
+            {
+                foreach (var prop in el.EnumerateObject())
+                    mcpServers[prop.Name] = prop.Value;
+            }
+
+            mcpServers[_newName.Trim()] = new { command = _newCommand.Trim(), args };
+            existing["McpServers"] = mcpServers;
+
+            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+            await File.WriteAllTextAsync(SettingsPath, JsonSerializer.Serialize(existing, JsonOpts));
+
+            _status = $"Server '{_newName}' added. Restart to connect.";
+            _newName = _newCommand = _newArgs = string.Empty;
+        }
+        catch (Exception ex) { _status = $"Failed: {ex.Message}"; }
+    }
+
+    private async Task RemoveServerAsync(string name)
+    {
+        try
+        {
+            if (!File.Exists(SettingsPath)) return;
+            var existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(await File.ReadAllTextAsync(SettingsPath)) ?? [];
+            if (existing.TryGetValue("McpServers", out var val) && val is JsonElement el)
+            {
+                var mcpServers = new Dictionary<string, object>(StringComparer.Ordinal);
+                foreach (var prop in el.EnumerateObject())
+                {
+                    if (!prop.Name.Equals(name, StringComparison.Ordinal))
+                        mcpServers[prop.Name] = prop.Value;
+                }
+                existing["McpServers"] = mcpServers;
+                await File.WriteAllTextAsync(SettingsPath, JsonSerializer.Serialize(existing, JsonOpts));
+            }
+            _servers.RemoveAll(s => s.Name == name);
+            _status = $"Server '{name}' removed. Restart to apply.";
+        }
+        catch (Exception ex) { _status = $"Failed: {ex.Message}"; }
+    }
+
+    private static string MaskSecret(string key, string value)
+    {
+        var upper = key.ToUpperInvariant();
+        if (upper.Contains("KEY") || upper.Contains("SECRET") || upper.Contains("TOKEN"))
+            return value.Length > 6 ? string.Concat(value.AsSpan(0, 4), "****") : "****";
+        return value;
+    }
+
+    private sealed class ServerView
+    {
+        public string Name { get; init; } = string.Empty;
+        public string Command { get; init; } = string.Empty;
+        public List<string> Args { get; init; } = [];
+        public bool IsConnected { get; init; }
+        public int ToolCount { get; init; }
+        public string ToolNames { get; init; } = string.Empty;
+        public Dictionary<string, string> EnvVars { get; init; } = [];
+    }
+}

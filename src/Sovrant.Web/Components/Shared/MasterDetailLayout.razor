@@ -1,0 +1,82 @@
+@typeparam TItem
+
+<div class="master-detail">
+    <div class="master-panel">
+        <div class="master-header">
+            <h1>@Title</h1>
+            <div class="master-header-right">
+                @if (ItemCount.HasValue)
+                {
+                    <span class="item-count">@ItemCount</span>
+                }
+                @if (OnRefresh.HasDelegate)
+                {
+                    <button class="btn-outline btn-sm" @onclick="OnRefresh">Refresh</button>
+                }
+            </div>
+        </div>
+        @if (ShowSearch)
+        {
+            <div class="master-search">
+                <input type="text" placeholder="Search..." @bind="SearchText" @bind:event="oninput" @bind:after="OnSearchChanged" />
+            </div>
+        }
+        <div class="master-list">
+            @if (Items is null || !Items.Any())
+            {
+                <p class="text-secondary" style="padding:12px;">@EmptyMessage</p>
+            }
+            else
+            {
+                @foreach (var item in Items)
+                {
+                    <button class="master-item @(ReferenceEquals(item, SelectedItem) ? "active" : "")"
+                            @onclick="() => Select(item)">
+                        @ItemTemplate!(item)
+                    </button>
+                }
+            }
+        </div>
+    </div>
+    <div class="detail-panel">
+        @if (SelectedItem is not null && DetailTemplate is not null)
+        {
+            @DetailTemplate(SelectedItem)
+        }
+        else
+        {
+            <div class="detail-empty">
+                <span class="text-muted">Select an item to view details</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public int? ItemCount { get; set; }
+    [Parameter] public bool ShowSearch { get; set; } = true;
+    [Parameter] public string EmptyMessage { get; set; } = "No items found.";
+    [Parameter] public IEnumerable<TItem>? Items { get; set; }
+    [Parameter] public TItem? SelectedItem { get; set; }
+    [Parameter] public RenderFragment<TItem>? ItemTemplate { get; set; }
+    [Parameter] public RenderFragment<TItem>? DetailTemplate { get; set; }
+    [Parameter] public EventCallback OnRefresh { get; set; }
+    [Parameter] public EventCallback<TItem> OnItemSelected { get; set; }
+    [Parameter] public EventCallback<string> OnSearch { get; set; }
+
+    private string SearchText { get; set; } = string.Empty;
+
+    private async Task Select(TItem item)
+    {
+        SelectedItem = item;
+        if (OnItemSelected.HasDelegate)
+            await OnItemSelected.InvokeAsync(item);
+    }
+
+    private async Task OnSearchChanged()
+    {
+        if (OnSearch.HasDelegate)
+            await OnSearch.InvokeAsync(SearchText);
+    }
+}

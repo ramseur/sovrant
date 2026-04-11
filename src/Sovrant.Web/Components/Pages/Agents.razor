@@ -1,8 +1,95 @@
 @page "/agents"
+@using Sovrant.Agents.Templates
+@using Markdig
 
-<div class="placeholder-page">
-    <div class="placeholder-icon">&#x2699;</div>
-    <h2>Agents</h2>
-    <span class="badge-soon">COMING SOON</span>
-    <p>Agents management and configuration.</p>
-</div>
+<MasterDetailLayout TItem="AgentItem"
+                    Title="Agent Templates"
+                    ItemCount="@_filtered.Count"
+                    Items="@_filtered"
+                    SelectedItem="@_selected"
+                    EmptyMessage="No agent templates registered."
+                    OnItemSelected="@(a => { _selected = a; return Task.CompletedTask; })"
+                    OnSearch="Search">
+    <ItemTemplate>
+        <div class="item-title">@context.Name</div>
+        <div class="item-subtitle">@context.Role &middot; @context.RecommendedLevel &middot; @context.ToolsSummary</div>
+    </ItemTemplate>
+    <DetailTemplate>
+        <div class="detail-content">
+            <h2>@context.Name</h2>
+            <div class="detail-meta">
+                <span>Role: @context.Role</span>
+                <span>Level: @context.RecommendedLevel</span>
+                <span>Tools: @context.ToolsSummary</span>
+            </div>
+            @if (context.AllowedTools.Count > 0)
+            {
+                <h3>Allowed Tools</h3>
+                <div class="tag-list">
+                    @foreach (var tool in context.AllowedTools)
+                    {
+                        <span class="tag">@tool</span>
+                    }
+                </div>
+            }
+            <h3>System Prompt</h3>
+            <div class="message-markdown">
+                @((MarkupString)Markdown.ToHtml(context.SystemPrompt, _pipeline))
+            </div>
+        </div>
+    </DetailTemplate>
+</MasterDetailLayout>
+
+@code {
+    [Inject] private AgentTemplateRegistry TemplateRegistry { get; set; } = default!;
+
+    private List<AgentItem> _all = [];
+    private List<AgentItem> _filtered = [];
+    private AgentItem? _selected;
+
+    private static readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
+        .UseAdvancedExtensions().Build();
+
+    protected override void OnInitialized()
+    {
+        _all = TemplateRegistry.All
+            .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(t => new AgentItem
+            {
+                Name = t.Name,
+                Role = t.Role.ToString(),
+                RecommendedLevel = t.RecommendedLevel.ToString(),
+                AllowedTools = t.AllowedTools,
+                ToolsSummary = BuildToolsSummary(t.AllowedTools),
+                SystemPrompt = t.SystemPrompt,
+            }).ToList();
+        _filtered = _all;
+    }
+
+    private void Search(string text)
+    {
+        _filtered = string.IsNullOrWhiteSpace(text)
+            ? _all
+            : _all.Where(a =>
+                a.Name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                a.Role.Contains(text, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+    }
+
+    private static string BuildToolsSummary(IReadOnlyList<string> tools) => tools.Count switch
+    {
+        0 => "All tools",
+        <= 5 => string.Join(", ", tools),
+        _ => $"{string.Join(", ", tools.Take(5))} +{tools.Count - 5} more",
+    };
+
+    private sealed class AgentItem
+    {
+        public string Name { get; init; } = string.Empty;
+        public string Role { get; init; } = string.Empty;
+        public string RecommendedLevel { get; init; } = string.Empty;
+        public IReadOnlyList<string> AllowedTools { get; init; } = [];
+        public string ToolsSummary { get; init; } = string.Empty;
+        public string SystemPrompt { get; init; } = string.Empty;
+    }
+}

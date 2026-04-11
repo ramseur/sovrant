@@ -1,8 +1,96 @@
 @page "/skills"
+@using Sovrant.Tools.Skills
+@using Markdig
 
-<div class="placeholder-page">
-    <div class="placeholder-icon">&#x2699;</div>
-    <h2>Skills</h2>
-    <span class="badge-soon">COMING SOON</span>
-    <p>Skills management and configuration.</p>
-</div>
+<MasterDetailLayout TItem="SkillItem"
+                    Title="Skills"
+                    ItemCount="@_filtered.Count"
+                    Items="@_filtered"
+                    SelectedItem="@_selected"
+                    EmptyMessage="No skills registered."
+                    OnItemSelected="@(s => { _selected = s; return Task.CompletedTask; })"
+                    OnSearch="Search">
+    <ItemTemplate>
+        <div class="item-title">@context.Name</div>
+        <div class="item-subtitle">
+            @if (!string.IsNullOrEmpty(context.Trigger))
+            {
+                <code>@context.Trigger</code>
+                <span> &middot; </span>
+            }
+            @context.AgentCount agents &middot; @context.ToolCount tools
+        </div>
+    </ItemTemplate>
+    <DetailTemplate>
+        <div class="detail-content">
+            <h2>@context.Name</h2>
+            <p class="text-secondary">@context.Description</p>
+            <div class="detail-meta">
+                @if (!string.IsNullOrEmpty(context.Trigger))
+                {
+                    <span>Trigger: <code>@context.Trigger</code></span>
+                }
+                <span>Agents: @(context.AgentCount > 0 ? string.Join(", ", context.Agents) : "None")</span>
+                <span>Tools: @(context.ToolCount > 0 ? string.Join(", ", context.Tools) : "None")</span>
+            </div>
+            @if (!string.IsNullOrEmpty(context.Body))
+            {
+                <h3>Workflow</h3>
+                <div class="message-markdown">
+                    @((MarkupString)Markdown.ToHtml(context.Body, _pipeline))
+                </div>
+            }
+        </div>
+    </DetailTemplate>
+</MasterDetailLayout>
+
+@code {
+    [Inject] private SkillRegistry SkillRegistry { get; set; } = default!;
+
+    private List<SkillItem> _all = [];
+    private List<SkillItem> _filtered = [];
+    private SkillItem? _selected;
+
+    private static readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
+        .UseAdvancedExtensions().Build();
+
+    protected override void OnInitialized()
+    {
+        _all = SkillRegistry.All
+            .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(s => new SkillItem
+            {
+                Name = s.Name,
+                Description = s.Description,
+                Trigger = s.Trigger,
+                Agents = s.Agents,
+                Tools = s.Tools,
+                AgentCount = s.Agents.Count,
+                ToolCount = s.Tools.Count,
+                Body = s.Body,
+            }).ToList();
+        _filtered = _all;
+    }
+
+    private void Search(string text)
+    {
+        _filtered = string.IsNullOrWhiteSpace(text)
+            ? _all
+            : _all.Where(s =>
+                s.Name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                s.Description.Contains(text, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+    }
+
+    private sealed class SkillItem
+    {
+        public string Name { get; init; } = string.Empty;
+        public string Description { get; init; } = string.Empty;
+        public string Trigger { get; init; } = string.Empty;
+        public IReadOnlyList<string> Agents { get; init; } = [];
+        public IReadOnlyList<string> Tools { get; init; } = [];
+        public int AgentCount { get; init; }
+        public int ToolCount { get; init; }
+        public string Body { get; init; } = string.Empty;
+    }
+}

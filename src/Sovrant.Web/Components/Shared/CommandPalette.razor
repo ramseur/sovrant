@@ -1,0 +1,115 @@
+@using Sovrant.Commands
+
+@if (_isOpen)
+{
+    <div class="palette-backdrop" @onclick="Close"></div>
+    <div class="palette-modal">
+        <input type="text" class="palette-input" placeholder="Type a command..."
+               @bind="_search" @bind:event="oninput" @bind:after="Filter"
+               @ref="_inputRef" @onkeydown="OnKeyDown" />
+        <div class="palette-list">
+            @if (_filtered.Count == 0)
+            {
+                <div class="palette-empty">No matching commands</div>
+            }
+            @{ var lastCategory = ""; }
+            @foreach (var cmd in _filtered)
+            {
+                @if (cmd.Category != lastCategory)
+                {
+                    lastCategory = cmd.Category;
+                    <div class="palette-category">@cmd.Category</div>
+                }
+                <button class="palette-item @(cmd == _selected ? "active" : "")"
+                        @onclick="() => Execute(cmd)">
+                    <span class="palette-cmd">/@cmd.Name</span>
+                    <span class="palette-desc">@cmd.Description</span>
+                </button>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Inject] private IEnumerable<ISlashCommand> Commands { get; set; } = default!;
+    [Parameter] public EventCallback<string> OnCommandOutput { get; set; }
+    [Parameter] public EventCallback<string> OnInjectMessage { get; set; }
+
+    private bool _isOpen;
+    private string _search = string.Empty;
+    private List<CommandItem> _all = [];
+    private List<CommandItem> _filtered = [];
+    private CommandItem? _selected;
+    private ElementReference _inputRef;
+
+    protected override void OnInitialized()
+    {
+        _all = Commands
+            .OrderBy(c => c.Category, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(c => new CommandItem(c.Name, c.Description, c.Category, c))
+            .ToList();
+        _filtered = _all;
+    }
+
+    public async Task ToggleAsync()
+    {
+        _isOpen = !_isOpen;
+        _search = string.Empty;
+        _filtered = _all;
+        _selected = _filtered.FirstOrDefault();
+        StateHasChanged();
+        if (_isOpen)
+        {
+            await Task.Yield();
+            await _inputRef.FocusAsync();
+        }
+    }
+
+    private void Close() => _isOpen = false;
+
+    private void Filter()
+    {
+        _filtered = string.IsNullOrWhiteSpace(_search)
+            ? _all
+            : _all.Where(c =>
+                c.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                c.Description.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                c.Category.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+        _selected = _filtered.FirstOrDefault();
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") { Close(); return; }
+        if (e.Key == "ArrowDown") { MoveSelection(1); return; }
+        if (e.Key == "ArrowUp") { MoveSelection(-1); return; }
+        if (e.Key == "Enter" && _selected is not null) { Execute(_selected); }
+    }
+
+    private void MoveSelection(int delta)
+    {
+        if (_filtered.Count == 0) return;
+        var idx = _selected is not null ? _filtered.IndexOf(_selected) : -1;
+        idx = Math.Clamp(idx + delta, 0, _filtered.Count - 1);
+        _selected = _filtered[idx];
+    }
+
+    private async void Execute(CommandItem cmd)
+    {
+        _isOpen = false;
+        StateHasChanged();
+        try
+        {
+            var result = await cmd.Command.ExecuteAsync(string.Empty);
+            if (result.InjectAsUserMessage is not null && OnInjectMessage.HasDelegate)
+                await OnInjectMessage.InvokeAsync(result.InjectAsUserMessage);
+            else if (result.Output is not null && OnCommandOutput.HasDelegate)
+                await OnCommandOutput.InvokeAsync(result.Output);
+        }
+        catch { /* best effort */ }
+    }
+
+    private sealed record CommandItem(string Name, string Description, string Category, ISlashCommand Command);
+}

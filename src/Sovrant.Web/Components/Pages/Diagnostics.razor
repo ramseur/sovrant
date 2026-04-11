@@ -1,8 +1,333 @@
 @page "/diagnostics"
+@using Sovrant.Api.Routing
+@using Sovrant.Runtime.Config
+@using System.Reflection
+@using System.Runtime.InteropServices
 
-<div class="placeholder-page">
-    <div class="placeholder-icon">&#x2699;</div>
-    <h2>Diagnostics</h2>
-    <span class="badge-soon">COMING SOON</span>
-    <p>Diagnostics management and configuration.</p>
+<div class="diagnostics-page">
+    <div class="diag-header">
+        <h1>Diagnostics</h1>
+        <button class="btn-outline" @onclick="RunAllChecksAsync" disabled="@_isRunning">
+            @(_isRunning ? "Running..." : "Re-run checks")
+        </button>
+    </div>
+
+    <h2>System Info</h2>
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="info-label">Runtime Version</div>
+            <div class="info-value">@_runtimeVersion</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">.NET</div>
+            <div class="info-value">@_dotNetVersion</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">OS</div>
+            <div class="info-value">@_osInfo</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Model</div>
+            <div class="info-value">@_currentModel</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Provider</div>
+            <div class="info-value">@_currentProvider</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Max Tokens</div>
+            <div class="info-value">@_maxTokens</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Database</div>
+            <div class="info-value">@_dbStatus</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Base URL</div>
+            <div class="info-value">@_baseUrl</div>
+        </div>
+    </div>
+
+    <h2>Health Checks</h2>
+    <div class="health-list">
+        @foreach (var check in _healthChecks)
+        {
+            <div class="health-item">
+                <span class="health-badge @BadgeClass(check.Status)">@check.Status</span>
+                <span class="health-name">@check.Name</span>
+                <span class="health-detail">@check.Detail</span>
+            </div>
+        }
+        @if (_healthChecks.Count == 0 && !_isRunning)
+        {
+            <p class="text-secondary">Click "Re-run checks" to start diagnostics.</p>
+        }
+    </div>
+
+    <h2>Provider Health</h2>
+    @if (_providers.Count > 0)
+    {
+        <table class="provider-table">
+            <thead>
+                <tr>
+                    <th>Provider</th>
+                    <th>Status</th>
+                    <th>Latency</th>
+                    <th>Requests</th>
+                    <th>Errors</th>
+                    <th>Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _providers)
+                {
+                    <tr>
+                        <td>@p.Name</td>
+                        <td>
+                            <span class="status-dot @(p.IsHealthy ? "connected" : "error")"></span>
+                            @p.Status
+                        </td>
+                        <td>@p.LatencyMs</td>
+                        <td>@p.RequestCount</td>
+                        <td>@p.ErrorCount</td>
+                        <td>@p.Score</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else if (!_isRunning)
+    {
+        <p class="text-secondary">No providers configured.</p>
+    }
+
+    <h2>Paths</h2>
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="info-label">Database</div>
+            <div class="info-value">@_dbPath</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Artifacts</div>
+            <div class="info-value">@_artifactsPath</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Settings</div>
+            <div class="info-value">@_configPath</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Logs</div>
+            <div class="info-value">@_logDir</div>
+        </div>
+    </div>
 </div>
+
+@code {
+    [Inject] private SovrantConfig Config { get; set; } = default!;
+    [Inject] private ISmartRouter Router { get; set; } = default!;
+
+    private bool _isRunning;
+
+    private string _runtimeVersion = string.Empty;
+    private string _dotNetVersion = string.Empty;
+    private string _osInfo = string.Empty;
+    private string _currentModel = string.Empty;
+    private string _currentProvider = string.Empty;
+    private string _baseUrl = string.Empty;
+    private int _maxTokens;
+
+    private string _dbPath = string.Empty;
+    private string _dbStatus = "Checking...";
+    private string _artifactsPath = string.Empty;
+    private string _configPath = string.Empty;
+    private string _logDir = string.Empty;
+
+    private readonly List<HealthCheck> _healthChecks = [];
+    private readonly List<ProviderHealth> _providers = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        LoadSystemInfo();
+        await RunAllChecksAsync();
+    }
+
+    private void LoadSystemInfo()
+    {
+        _currentModel = Config.Model;
+        _maxTokens = Config.MaxTokens;
+        _baseUrl = Config.BaseUrl?.ToString() ?? "(default)";
+
+        var url = Config.BaseUrl?.ToString() ?? string.Empty;
+        _currentProvider = url switch
+        {
+            _ when url.Contains("openrouter", StringComparison.OrdinalIgnoreCase) => "OpenRouter",
+            _ when url.Contains("deepseek", StringComparison.OrdinalIgnoreCase) => "DeepSeek",
+            _ when url.Contains("groq", StringComparison.OrdinalIgnoreCase) => "Groq",
+            _ when url.Contains("mistral", StringComparison.OrdinalIgnoreCase) => "Mistral",
+            _ when url.Contains("together", StringComparison.OrdinalIgnoreCase) => "Together AI",
+            _ when url.Contains("localhost:11434", StringComparison.Ordinal) => "Ollama",
+            _ when url.Contains("localhost:1234", StringComparison.Ordinal) => "LM Studio",
+            _ when string.IsNullOrEmpty(url) => "OpenAI",
+            _ => "Custom",
+        };
+
+        var asm = typeof(SovrantConfig).Assembly;
+        _runtimeVersion = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? asm.GetName().Version?.ToString() ?? "unknown";
+        _dotNetVersion = RuntimeInformation.FrameworkDescription;
+        _osInfo = $"{RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})";
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        _dbPath = Config.DbPath ?? Path.Combine(home, ".sovrant", "data", "sovrant.db");
+        _artifactsPath = Path.Combine(home, ".sovrant", "artifacts");
+        _configPath = Path.Combine(home, ".sovrant", "settings.json");
+        _logDir = Path.Combine(home, ".sovrant", "logs");
+    }
+
+    private async Task RunAllChecksAsync()
+    {
+        _isRunning = true;
+        _healthChecks.Clear();
+        _providers.Clear();
+        StateHasChanged();
+
+        var settingsExists = File.Exists(_configPath);
+        _healthChecks.Add(new HealthCheck("Settings file",
+            settingsExists ? "PASS" : "WARN",
+            settingsExists ? _configPath : "No settings.json found — using defaults"));
+
+        var hasKey = !string.IsNullOrWhiteSpace(Config.ApiKey);
+        _healthChecks.Add(new HealthCheck("API key",
+            hasKey ? "PASS" : "FAIL",
+            hasKey ? "Configured" : "No API key set — chat will not work"));
+
+        var dbExists = File.Exists(_dbPath);
+        _dbStatus = dbExists ? "OK" : "Missing";
+        _healthChecks.Add(new HealthCheck("Database",
+            dbExists ? "PASS" : "WARN",
+            dbExists ? $"{new FileInfo(_dbPath).Length / 1024} KB" : "Database file not found"));
+
+        var artifactsExists = Directory.Exists(_artifactsPath);
+        _healthChecks.Add(new HealthCheck("Artifacts directory",
+            artifactsExists ? "PASS" : "WARN",
+            artifactsExists ? _artifactsPath : "Will be created on first artifact"));
+
+        StateHasChanged();
+
+        if (hasKey && Config.BaseUrl is not null)
+        {
+            try
+            {
+                using var http = new HttpClient();
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                http.DefaultRequestHeaders.Add("Authorization", $"Bearer {Config.ApiKey}");
+                var modelsUrl = Config.BaseUrl.ToString().TrimEnd('/') + "/models";
+                var response = await http.GetAsync(new Uri(modelsUrl), cts.Token);
+                var connected = response.IsSuccessStatusCode;
+                _healthChecks.Add(new HealthCheck("API connectivity",
+                    connected ? "PASS" : "FAIL",
+                    connected ? $"Reached {Config.BaseUrl.Host}" : $"HTTP {(int)response.StatusCode} from {Config.BaseUrl.Host}"));
+            }
+            catch (Exception ex)
+            {
+                _healthChecks.Add(new HealthCheck("API connectivity", "FAIL", ex.Message));
+            }
+        }
+        else
+        {
+            _healthChecks.Add(new HealthCheck("API connectivity", "SKIP",
+                hasKey ? "No base URL configured" : "No API key configured — skipped"));
+        }
+
+        var todayLog = Path.Combine(_logDir, $"sovrant-{DateTime.Now:yyyyMMdd}.log");
+        var errorCount = 0;
+        if (File.Exists(todayLog))
+        {
+            try
+            {
+                var lines = await File.ReadAllLinesAsync(todayLog);
+                errorCount = lines.Count(l => l.Contains("[Error", StringComparison.Ordinal));
+            }
+            catch { /* best effort */ }
+        }
+        _healthChecks.Add(new HealthCheck("Today's errors",
+            errorCount == 0 ? "PASS" : "WARN",
+            errorCount == 0 ? "No errors in today's log" : $"{errorCount} error(s) in {Path.GetFileName(todayLog)}"));
+
+        var statuses = Router.GetStatus();
+        foreach (var s in statuses)
+        {
+            var providerUrl = s.Name.Equals("ollama", StringComparison.OrdinalIgnoreCase)
+                ? Environment.GetEnvironmentVariable("OLLAMA_BASE_URL") ?? "http://localhost:11434/v1"
+                : Config.BaseUrl?.ToString();
+
+            var item = new ProviderHealth
+            {
+                Name = s.Name,
+                LatencyMs = s.RequestCount > 0 ? $"{s.LatencyMs:F0}ms" : "-",
+                RequestCount = s.RequestCount,
+                ErrorCount = s.ErrorCount,
+                Score = s.Score,
+            };
+
+            if (!string.IsNullOrEmpty(providerUrl))
+            {
+                try
+                {
+                    using var http = new HttpClient();
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(4));
+                    if (!providerUrl.Contains("localhost", StringComparison.OrdinalIgnoreCase)
+                        && !string.IsNullOrWhiteSpace(Config.ApiKey))
+                        http.DefaultRequestHeaders.Add("Authorization", $"Bearer {Config.ApiKey}");
+
+                    var pingPath = s.Name.Equals("ollama", StringComparison.OrdinalIgnoreCase)
+                        ? "/api/tags" : "/models";
+                    var pingUrl = new Uri(new Uri(providerUrl.TrimEnd('/') + "/"), pingPath.TrimStart('/'));
+
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    var resp = await http.GetAsync(pingUrl, cts.Token);
+                    sw.Stop();
+                    item.IsHealthy = resp.IsSuccessStatusCode;
+                    item.Status = resp.IsSuccessStatusCode ? "Connected" : "Not Connected";
+                    item.LatencyMs = $"{sw.ElapsedMilliseconds}ms";
+                }
+                catch
+                {
+                    item.IsHealthy = false;
+                    item.Status = "Not Connected";
+                }
+            }
+            else
+            {
+                item.IsHealthy = false;
+                item.Status = "Not Connected";
+            }
+
+            _providers.Add(item);
+        }
+
+        _isRunning = false;
+        StateHasChanged();
+    }
+
+    private static string BadgeClass(string status) => status switch
+    {
+        "PASS" => "pass",
+        "WARN" => "warn",
+        "FAIL" => "fail",
+        _ => "skip",
+    };
+
+    private sealed record HealthCheck(string Name, string Status, string Detail);
+
+    private sealed class ProviderHealth
+    {
+        public string Name { get; set; } = string.Empty;
+        public bool IsHealthy { get; set; }
+        public string Status { get; set; } = "Not Connected";
+        public string LatencyMs { get; set; } = "-";
+        public int RequestCount { get; set; }
+        public int ErrorCount { get; set; }
+        public string Score { get; set; } = "N/A";
+    }
+}

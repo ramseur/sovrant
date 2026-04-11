@@ -1,6 +1,8 @@
 @{
-    var isActive = Nav.Uri.EndsWith(Href, StringComparison.OrdinalIgnoreCase)
-        || (Href == "/" && Nav.Uri.EndsWith("/", StringComparison.Ordinal));
+    var relativePath = Nav.ToBaseRelativePath(Nav.Uri);
+    var isActive = Href == "/"
+        ? string.IsNullOrEmpty(relativePath) || relativePath == "/" || relativePath.StartsWith("?", StringComparison.Ordinal)
+        : ("/" + relativePath).Equals(Href, StringComparison.OrdinalIgnoreCase);
 }
 
 <button class="nav-btn @(isActive ? "active" : "")"

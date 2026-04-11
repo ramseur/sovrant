@@ -1,8 +1,142 @@
 @page "/governance"
+@using Sovrant.Runtime.Governance
+@using System.Text.Json
 
-<div class="placeholder-page">
-    <div class="placeholder-icon">&#x2699;</div>
-    <h2>Governance</h2>
-    <span class="badge-soon">COMING SOON</span>
-    <p>Governance management and configuration.</p>
+<div class="settings-page">
+    <h1>Governance</h1>
+
+    <div class="form-field">
+        <label>Governance Level</label>
+        <select @bind="_level">
+            <option value="permissive">Permissive</option>
+            <option value="standard">Standard</option>
+            <option value="strict">Strict</option>
+        </select>
+    </div>
+
+    <div class="toggle-card">
+        <div>
+            <div class="toggle-title">Audit Log</div>
+            <div class="toggle-desc">Log all agent actions for audit trail</div>
+        </div>
+        <label class="switch">
+            <input type="checkbox" @bind="_auditLog" />
+            <span class="slider"></span>
+        </label>
+    </div>
+
+    <!-- Blocked Commands -->
+    <h2>Blocked Commands</h2>
+    <div class="input-group" style="margin-bottom:8px;">
+        <input type="text" @bind="_newBlockedCmd" placeholder="e.g. rm -rf /" />
+        <button class="input-addon" @onclick="AddBlockedCommand">+</button>
+    </div>
+    <div class="tag-list">
+        @foreach (var cmd in _blockedCommands)
+        {
+            <span class="tag">@cmd <button class="tag-remove" @onclick="() => _blockedCommands.Remove(cmd)">x</button></span>
+        }
+    </div>
+
+    <!-- Protected Files -->
+    <h2>Protected Files</h2>
+    <div class="input-group" style="margin-bottom:8px;">
+        <input type="text" @bind="_newProtectedFile" placeholder="e.g. .env" />
+        <button class="input-addon" @onclick="AddProtectedFile">+</button>
+    </div>
+    <div class="tag-list">
+        @foreach (var f in _protectedFiles)
+        {
+            <span class="tag">@f <button class="tag-remove" @onclick="() => _protectedFiles.Remove(f)">x</button></span>
+        }
+    </div>
+
+    <!-- Secret Patterns -->
+    <h2>Secret Patterns</h2>
+    <div class="input-group" style="margin-bottom:8px;">
+        <input type="text" @bind="_newSecretPattern" placeholder="e.g. sk-[a-zA-Z0-9]+" />
+        <button class="input-addon" @onclick="AddSecretPattern">+</button>
+    </div>
+    <div class="tag-list">
+        @foreach (var p in _secretPatterns)
+        {
+            <span class="tag">@p <button class="tag-remove" @onclick="() => _secretPatterns.Remove(p)">x</button></span>
+        }
+    </div>
+
+    <button class="btn-primary" style="max-width:200px;margin-top:16px;" @onclick="SaveConfig">Save</button>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="status-message">@_status</div>
+    }
 </div>
+
+@code {
+    private string _level = "standard";
+    private bool _auditLog = true;
+    private List<string> _blockedCommands = [];
+    private List<string> _protectedFiles = [];
+    private List<string> _secretPatterns = [];
+    private string _newBlockedCmd = string.Empty;
+    private string _newProtectedFile = string.Empty;
+    private string _newSecretPattern = string.Empty;
+    private string _status = string.Empty;
+
+    private static readonly string ConfigPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".sovrant", "governance.json");
+
+    protected override void OnInitialized()
+    {
+        var config = GovernanceConfig.Load();
+        _level = config.GovernanceLevelName;
+        _auditLog = config.AuditLog;
+        _blockedCommands = [.. config.BlockedCommands];
+        _protectedFiles = [.. config.ProtectedFiles];
+        _secretPatterns = [.. config.SecretPatterns];
+    }
+
+    private void AddBlockedCommand()
+    {
+        if (!string.IsNullOrWhiteSpace(_newBlockedCmd) && !_blockedCommands.Contains(_newBlockedCmd.Trim()))
+        {
+            _blockedCommands.Add(_newBlockedCmd.Trim());
+            _newBlockedCmd = string.Empty;
+        }
+    }
+
+    private void AddProtectedFile()
+    {
+        if (!string.IsNullOrWhiteSpace(_newProtectedFile) && !_protectedFiles.Contains(_newProtectedFile.Trim()))
+        {
+            _protectedFiles.Add(_newProtectedFile.Trim());
+            _newProtectedFile = string.Empty;
+        }
+    }
+
+    private void AddSecretPattern()
+    {
+        if (!string.IsNullOrWhiteSpace(_newSecretPattern) && !_secretPatterns.Contains(_newSecretPattern.Trim()))
+        {
+            _secretPatterns.Add(_newSecretPattern.Trim());
+            _newSecretPattern = string.Empty;
+        }
+    }
+
+    private void SaveConfig()
+    {
+        try
+        {
+            var config = new GovernanceConfig { GovernanceLevelName = _level, AuditLog = _auditLog };
+            foreach (var c in _blockedCommands) config.BlockedCommands.Add(c);
+            foreach (var f in _protectedFiles) config.ProtectedFiles.Add(f);
+            foreach (var p in _secretPatterns) config.SecretPatterns.Add(p);
+
+            Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+            var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(ConfigPath, json);
+            _status = "Governance config saved.";
+        }
+        catch (Exception ex) { _status = $"Save failed: {ex.Message}"; }
+    }
+}

@@ -1,8 +1,261 @@
 @page "/multi-agent"
+@using Sovrant.Agents.Teams
+@using Sovrant.Agents.Swarm
+@using System.Text.Json
 
-<div class="placeholder-page">
-    <div class="placeholder-icon">&#x2699;</div>
-    <h2>Multi-Agent</h2>
-    <span class="badge-soon">COMING SOON</span>
-    <p>Multi-Agent management and configuration.</p>
+<div class="settings-page">
+    <h1>Multi-Agent</h1>
+
+    <div class="tab-bar">
+        <button class="tab-btn @(_tab == 0 ? "active" : "")" @onclick="() => _tab = 0">
+            Teams <span class="tab-badge">@_teams.Count</span>
+        </button>
+        <button class="tab-btn @(_tab == 1 ? "active" : "")" @onclick="() => _tab = 1">
+            Swarm
+        </button>
+    </div>
+
+    @if (_tab == 0)
+    {
+        <div class="memory-list">
+            @if (_teams.Count == 0 && _unassigned.Count == 0)
+            {
+                <p class="text-secondary">No teams or members registered. Use the TeamCreate tool in chat to create teams.</p>
+            }
+            @foreach (var team in _teams)
+            {
+                <div class="card" style="margin-bottom:12px;">
+                    <div class="diag-header" style="margin-bottom:8px;">
+                        <h2 style="margin:0;">@team.Name</h2>
+                        <button class="btn-sm btn-danger" @onclick="() => RemoveTeam(team.Id)">Remove</button>
+                    </div>
+                    @if (!string.IsNullOrEmpty(team.Description))
+                    {
+                        <p class="text-secondary text-sm">@team.Description</p>
+                    }
+                    @foreach (var m in GetTeamMembers(team.Id))
+                    {
+                        <div class="memory-card">
+                            <div class="memory-content">
+                                <div class="memory-text"><strong>@m.Name</strong> <span class="tag">@m.Role</span></div>
+                                <div class="memory-meta">
+                                    @if (!string.IsNullOrEmpty(m.Model))
+                                    {
+                                        <span>@m.Model</span>
+                                    }
+                                    <span>@m.ToolsSummary</span>
+                                </div>
+                            </div>
+                            <button class="btn-sm btn-danger" @onclick="() => RemoveMember(m.Id)">X</button>
+                        </div>
+                    }
+                    @if (!GetTeamMembers(team.Id).Any())
+                    {
+                        <p class="text-muted text-sm">No members in this team.</p>
+                    }
+                </div>
+            }
+            @if (_unassigned.Count > 0)
+            {
+                <div class="card">
+                    <h2 style="margin:0 0 8px;">Unassigned Members</h2>
+                    @foreach (var m in _unassigned)
+                    {
+                        <div class="memory-card">
+                            <div class="memory-content">
+                                <div class="memory-text"><strong>@m.Name</strong> <span class="tag">@m.Role</span></div>
+                                <div class="memory-meta">
+                                    @if (!string.IsNullOrEmpty(m.Model))
+                                    {
+                                        <span>@m.Model</span>
+                                    }
+                                    <span>@m.ToolsSummary</span>
+                                </div>
+                            </div>
+                            <button class="btn-sm btn-danger" @onclick="() => RemoveMember(m.Id)">X</button>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="settings-section">
+            <div class="toggle-card">
+                <div>
+                    <div class="toggle-title">Swarm Enabled</div>
+                    <div class="toggle-desc">Enable swarm orchestrator for parallel agent execution</div>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" @bind="_swarmEnabled" />
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="toggle-card">
+                <div>
+                    <div class="toggle-title">Quality Gate</div>
+                    <div class="toggle-desc">Run quality review after execution</div>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" @bind="_swarmQualityGate" />
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="form-field">
+                <label>Max Concurrent Agents</label>
+                <input type="number" @bind="_swarmMaxConcurrent" min="1" max="16" />
+            </div>
+
+            <div class="form-field">
+                <label>Max Token Budget</label>
+                <input type="number" @bind="_swarmMaxTokenBudget" min="10000" step="50000" />
+            </div>
+
+            <div class="form-field">
+                <label>Task Timeout (seconds)</label>
+                <input type="number" @bind="_swarmTimeout" min="30" max="3600" />
+            </div>
+
+            <div class="form-field">
+                <label>Permissions</label>
+                <select @bind="_swarmPermissions">
+                    <option value="ask">Ask</option>
+                    <option value="accept-edits">Accept Edits</option>
+                    <option value="yolo">Auto-Accept All</option>
+                </select>
+            </div>
+
+            <button class="btn-primary" style="max-width:200px;" @onclick="SaveSwarmConfig">Save Swarm Config</button>
+
+            @if (!string.IsNullOrEmpty(_status))
+            {
+                <div class="status-message">@_status</div>
+            }
+        </div>
+    }
 </div>
+
+@code {
+    [Inject] private ITeamRegistry TeamRegistry { get; set; } = default!;
+
+    private int _tab;
+    private string _status = string.Empty;
+
+    private List<TeamView> _teams = [];
+    private List<MemberView> _unassigned = [];
+    private List<TeamMemberInfo> _allMembers = [];
+
+    // Swarm config
+    private bool _swarmEnabled;
+    private bool _swarmQualityGate = true;
+    private int _swarmMaxConcurrent = 4;
+    private int _swarmMaxTokenBudget = 500_000;
+    private int _swarmTimeout = 300;
+    private string _swarmPermissions = "ask";
+
+    protected override void OnInitialized()
+    {
+        LoadTeams();
+        LoadSwarmConfig();
+    }
+
+    private void LoadTeams()
+    {
+        var teams = TeamRegistry.ListTeams();
+        _allMembers = TeamRegistry.GetAllMembers().ToList();
+        var assignedIds = new HashSet<string>(StringComparer.Ordinal);
+
+        _teams = teams.Select(t =>
+        {
+            var members = TeamRegistry.GetTeamMembers(t.Id);
+            foreach (var m in members) assignedIds.Add(m.Id);
+            return new TeamView { Id = t.Id, Name = t.Name, Description = t.Description };
+        }).ToList();
+
+        _unassigned = _allMembers
+            .Where(m => !assignedIds.Contains(m.Id))
+            .Select(ToView)
+            .ToList();
+    }
+
+    private IEnumerable<MemberView> GetTeamMembers(string teamId)
+        => TeamRegistry.GetTeamMembers(teamId).Select(ToView);
+
+    private static MemberView ToView(TeamMemberInfo m) => new()
+    {
+        Id = m.Id, Name = m.Name, Role = m.Role.ToString(),
+        Model = m.Model ?? "", ToolsSummary = BuildToolsSummary(m.AllowedTools),
+    };
+
+    private void RemoveMember(string id)
+    {
+        TeamRegistry.RemoveMember(id);
+        LoadTeams();
+        _status = "Member removed.";
+    }
+
+    private void RemoveTeam(string id)
+    {
+        TeamRegistry.RemoveTeam(id);
+        LoadTeams();
+        _status = "Team removed.";
+    }
+
+    private void LoadSwarmConfig()
+    {
+        var config = SwarmConfigLoader.Load();
+        _swarmEnabled = config.Enabled;
+        _swarmQualityGate = config.QualityGateEnabled;
+        _swarmMaxConcurrent = config.MaxConcurrent;
+        _swarmMaxTokenBudget = config.MaxTokenBudget;
+        _swarmTimeout = config.TaskTimeoutSeconds;
+        _swarmPermissions = config.Permissions;
+    }
+
+    private void SaveSwarmConfig()
+    {
+        try
+        {
+            var path = Path.Combine(Directory.GetCurrentDirectory(), ".sovrant", "swarm.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var config = new SwarmConfig
+            {
+                Enabled = _swarmEnabled,
+                MaxConcurrent = _swarmMaxConcurrent,
+                MaxTokenBudget = _swarmMaxTokenBudget,
+                TaskTimeoutSeconds = _swarmTimeout,
+                Permissions = _swarmPermissions,
+            };
+            var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(path, json);
+            _status = "Swarm config saved.";
+        }
+        catch (Exception ex) { _status = $"Save failed: {ex.Message}"; }
+    }
+
+    private static string BuildToolsSummary(IReadOnlyList<string>? tools)
+    {
+        if (tools is null || tools.Count == 0) return "All tools";
+        if (tools.Count <= 3) return string.Join(", ", tools);
+        return $"{string.Join(", ", tools.Take(3))} +{tools.Count - 3} more";
+    }
+
+    private sealed class TeamView
+    {
+        public string Id { get; init; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
+        public string? Description { get; init; }
+    }
+
+    private sealed class MemberView
+    {
+        public string Id { get; init; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
+        public string Role { get; init; } = string.Empty;
+        public string Model { get; init; } = string.Empty;
+        public string ToolsSummary { get; init; } = string.Empty;
+    }
+}

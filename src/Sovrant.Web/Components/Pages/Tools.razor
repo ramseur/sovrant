@@ -1,8 +1,124 @@
 @page "/tools"
+@using Sovrant.Runtime.Tools
+@using Markdig
+@using System.Text.Json
 
-<div class="placeholder-page">
-    <div class="placeholder-icon">&#x2699;</div>
-    <h2>Tools</h2>
-    <span class="badge-soon">COMING SOON</span>
-    <p>Tools management and configuration.</p>
-</div>
+<MasterDetailLayout TItem="ToolItem"
+                    Title="Tools"
+                    ItemCount="@_filtered.Count"
+                    Items="@_filtered"
+                    SelectedItem="@_selected"
+                    EmptyMessage="No tools registered."
+                    OnRefresh="Load"
+                    OnItemSelected="@(t => { _selected = t; return Task.CompletedTask; })"
+                    OnSearch="Search">
+    <ItemTemplate>
+        <div class="item-title">@context.Name</div>
+        <div class="item-subtitle">@Truncate(context.Description, 60)</div>
+    </ItemTemplate>
+    <DetailTemplate>
+        <div class="detail-content">
+            <h2>@context.Name</h2>
+            @if (!string.IsNullOrEmpty(context.Description))
+            {
+                <p class="text-secondary">@context.Description</p>
+            }
+            <h3>Parameters</h3>
+            @if (context.Parameters.Count > 0)
+            {
+                <table class="provider-table">
+                    <thead>
+                        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in context.Parameters)
+                        {
+                            <tr>
+                                <td><code>@p.Name</code></td>
+                                <td>@p.Type</td>
+                                <td>@(p.Required ? "Yes" : "")</td>
+                                <td>@p.Description</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <p class="text-muted">No parameters.</p>
+            }
+            <h3>Raw Schema</h3>
+            <pre class="schema-block">@context.SchemaJson</pre>
+        </div>
+    </DetailTemplate>
+</MasterDetailLayout>
+
+@code {
+    [Inject] private IToolRegistry ToolRegistry { get; set; } = default!;
+
+    private List<ToolItem> _all = [];
+    private List<ToolItem> _filtered = [];
+    private ToolItem? _selected;
+
+    protected override void OnInitialized() => Load();
+
+    private void Load()
+    {
+        _all = ToolRegistry.GetDefinitions()
+            .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(t => new ToolItem
+            {
+                Name = t.Name,
+                Description = t.Description ?? string.Empty,
+                SchemaJson = t.InputSchema.ValueKind != JsonValueKind.Undefined
+                    ? JsonSerializer.Serialize(t.InputSchema, new JsonSerializerOptions { WriteIndented = true })
+                    : "{}",
+                Parameters = ParseParameters(t.InputSchema),
+            }).ToList();
+        _filtered = _all;
+        _selected = null;
+    }
+
+    private void Search(string text)
+    {
+        _filtered = string.IsNullOrWhiteSpace(text)
+            ? _all
+            : _all.Where(t =>
+                t.Name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                t.Description.Contains(text, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+    }
+
+    private static List<ParamInfo> ParseParameters(JsonElement schema)
+    {
+        var list = new List<ParamInfo>();
+        if (schema.ValueKind != JsonValueKind.Object) return list;
+        if (!schema.TryGetProperty("properties", out var props)) return list;
+
+        var required = new HashSet<string>(StringComparer.Ordinal);
+        if (schema.TryGetProperty("required", out var req) && req.ValueKind == JsonValueKind.Array)
+            foreach (var r in req.EnumerateArray())
+                if (r.GetString() is { } s) required.Add(s);
+
+        foreach (var prop in props.EnumerateObject())
+        {
+            var type = prop.Value.TryGetProperty("type", out var t) ? t.GetString() ?? "any" : "any";
+            var desc = prop.Value.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
+            list.Add(new ParamInfo(prop.Name, type, required.Contains(prop.Name), desc));
+        }
+        return list;
+    }
+
+    private static string Truncate(string s, int max)
+        => s.Length <= max ? s : string.Concat(s.AsSpan(0, max), "...");
+
+    private sealed class ToolItem
+    {
+        public string Name { get; init; } = string.Empty;
+        public string Description { get; init; } = string.Empty;
+        public string SchemaJson { get; init; } = "{}";
+        public List<ParamInfo> Parameters { get; init; } = [];
+    }
+
+    private sealed record ParamInfo(string Name, string Type, bool Required, string Description);
+}

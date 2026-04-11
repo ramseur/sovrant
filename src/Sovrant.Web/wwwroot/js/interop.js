@@ -13,6 +13,15 @@ window.sovrantInterop = {
 
     getTheme: function () {
         return localStorage.getItem('sovrant-theme') || 'dark';
+    },
+
+    registerCtrlK: function (dotNetRef) {
+        document.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                dotNetRef.invokeMethodAsync('OnCtrlK');
+            }
+        });
     }
 };
 

@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@implements IDisposable
 
 <div class="app-shell">
     @if (_isCollapsed)
@@ -34,15 +35,20 @@
     <main class="content-area">
         @Body
     </main>
+
+    <CommandPalette @ref="_palette" OnCommandOutput="OnCommandOutput" OnInjectMessage="OnInjectMessage" />
 </div>
 
 @code {
     [Inject] private NavigationManager Nav { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private bool _isCollapsed;
     private string _userName = Environment.UserName;
     private string _userInitial = Environment.UserName.Length > 0
         ? Environment.UserName[..1].ToUpperInvariant() : "U";
+    private CommandPalette? _palette;
+    private DotNetObjectReference<MainLayout>? _dotNetRef;
 
     private void ToggleSidebar() => _isCollapsed = !_isCollapsed;
 
@@ -50,4 +56,25 @@
     {
         Nav.NavigateTo(url);
     }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("sovrantInterop.registerCtrlK", _dotNetRef);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnCtrlK()
+    {
+        if (_palette is not null)
+            await _palette.ToggleAsync();
+    }
+
+    private void OnCommandOutput(string output) { /* could show toast */ }
+    private void OnInjectMessage(string msg) => Nav.NavigateTo($"/?inject={Uri.EscapeDataString(msg)}");
+
+    public void Dispose() => _dotNetRef?.Dispose();
 }

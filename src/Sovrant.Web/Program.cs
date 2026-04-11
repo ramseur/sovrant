@@ -35,6 +35,7 @@ public static class Program
 
         var builder = WebApplication.CreateBuilder(args);
         builder.WebHost.UseUrls("http://localhost:5100");
+        builder.WebHost.UseStaticWebAssets();
 
         builder.Services.AddLogging(b => b.AddSovrantLogging(consoleMinOverride: LogLevel.Warning));
 
@@ -62,7 +63,7 @@ public static class Program
 
         var app = builder.Build();
 
-        app.UseStaticFiles();
+        app.MapStaticAssets();
         app.UseAntiforgery();
 
         app.MapRazorComponents<Sovrant.Web.Components.App>()
