@@ -37,6 +37,15 @@ public sealed record ModelCapabilities
     [JsonPropertyName("family")]
     public string? Family { get; init; }
 
+    /// <summary>
+    /// Maximum number of tool definitions to send in a single request.
+    /// When set, only the first N tools from the registry are included.
+    /// Models that degrade with many tools (e.g. Gemma 4) should set this
+    /// to a lower value. <see langword="null"/> means no limit.
+    /// </summary>
+    [JsonPropertyName("max_tools")]
+    public int? MaxTools { get; init; }
+
     /// <summary>Maximum context window in tokens, if known.</summary>
     [JsonPropertyName("max_context")]
     public int? MaxContext { get; init; }

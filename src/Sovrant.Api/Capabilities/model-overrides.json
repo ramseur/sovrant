@@ -10,9 +10,10 @@
         "thinking_mode": true,
         "ollama_template_workaround": false,
         "family": "gemma-4",
-        "max_context": 262144
+        "max_context": 262144,
+        "max_tools": 15
       },
-      "reason": "OpenRouter /api/v1/models does not yet populate supported_parameters with tools/tool_choice for Gemma 4 entries, even though the model supports them natively.",
+      "reason": "OpenRouter /api/v1/models does not yet populate supported_parameters with tools/tool_choice for Gemma 4 entries. Max tools capped at 15 — Gemma 4 is prone to tool-call hallucination loops with large tool sets.",
       "expires": "2026-07-01"
     },
     {

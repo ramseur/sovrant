@@ -25,12 +25,41 @@
 
             <!-- Model name -->
             <StackPanel Spacing="6">
-                <TextBlock Text="Model" FontSize="13" FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextSecondary}" />
-                <TextBox Text="{Binding ModelName}"
-                         Watermark="e.g. gpt-4o, claude-sonnet-4-20250514"
-                         CornerRadius="8"
-                         Padding="12,8" />
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right"
+                               Text="Loading models..."
+                               FontSize="11"
+                               Foreground="{DynamicResource TextMuted}"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding IsLoadingModels}" />
+                    <TextBlock Text="Model" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                </DockPanel>
+                <Grid ColumnDefinitions="*,Auto">
+                    <AutoCompleteBox Grid.Column="0"
+                                     ItemsSource="{Binding AvailableModels}"
+                                     Text="{Binding ModelName, Mode=TwoWay}"
+                                     Watermark="Click to browse or type to search..."
+                                     FilterMode="ContainsOrdinal"
+                                     IsTextCompletionEnabled="False"
+                                     MinimumPrefixLength="0"
+                                     MinimumPopulateDelay="0"
+                                     CornerRadius="8,0,0,8"
+                                     Padding="12,8"
+                                     FontSize="13"
+                                     MaxDropDownHeight="300" />
+                    <Button Grid.Column="1"
+                            Content="✕"
+                            Command="{Binding ClearModelCommand}"
+                            Padding="10,8"
+                            CornerRadius="0,8,8,0"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}"
+                            BorderThickness="0,1,1,1"
+                            Foreground="{DynamicResource TextSecondary}"
+                            FontSize="12"
+                            ToolTip.Tip="Clear to browse all models" />
+                </Grid>
             </StackPanel>
 
             <!-- API Key -->
@@ -130,24 +159,14 @@
                 </DockPanel>
             </Border>
 
-            <!-- Save button + status -->
-            <DockPanel Margin="0,8,0,0">
-                <TextBlock DockPanel.Dock="Right"
-                           Text="{Binding StatusMessage}"
-                           FontSize="12"
-                           Foreground="{DynamicResource StatusPass}"
-                           VerticalAlignment="Center" />
-                <Button Content="Save Settings"
-                        Command="{Binding SaveCommand}"
-                        Padding="20,10"
-                        Background="{DynamicResource BrandPrimary}"
-                        Foreground="White"
-                        CornerRadius="8"
-                        FontWeight="SemiBold" />
-            </DockPanel>
+            <!-- Status message (auto-save feedback) -->
+            <TextBlock Text="{Binding StatusMessage}"
+                       FontSize="12"
+                       Foreground="{DynamicResource StatusPass}"
+                       Margin="0,8,0,0" />
 
             <!-- Info note -->
-            <TextBlock Text="Settings are saved to ~/.sovrant/settings.json and apply on next restart."
+            <TextBlock Text="Settings auto-save and apply immediately. Stored in ~/.sovrant/settings.json."
                        FontSize="11" TextWrapping="Wrap"
                        Foreground="{DynamicResource TextMuted}" />
         </StackPanel>

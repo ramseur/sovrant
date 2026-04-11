@@ -9,6 +9,7 @@ using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Hooks;
 using Sovrant.Runtime.Memory;
 using Sovrant.Runtime.Session;
+using Sovrant.Api.Capabilities;
 using Sovrant.Runtime.Tools;
 
 namespace Sovrant.Runtime.Conversation;
@@ -20,6 +21,7 @@ namespace Sovrant.Runtime.Conversation;
 public sealed partial class ConversationRuntime : IConversationRuntime
 {
     private const int MaxToolRounds = 20;
+    private const int MaxRepeatedToolCalls = 3;
 
     private readonly ISmartRouter _router;
     private readonly IToolExecutor _toolExecutor;
@@ -29,6 +31,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly ILogger<ConversationRuntime> _logger;
     private readonly IHookRunner _hookRunner;
     private readonly MemoryInjector? _memoryInjector;
+    private readonly IModelCapabilityRegistry? _capabilityRegistry;
     private readonly List<InputMessage> _history = [];
     private string _systemPrompt;
 
@@ -43,6 +46,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Maximum tool rounds ({Max}) reached for session '{SessionId}'")]
     private static partial void LogMaxRoundsReached(ILogger logger, int max, string sessionId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Tool call loop detected: '{ToolName}' called {Count} times consecutively for session '{SessionId}' — breaking loop")]
+    private static partial void LogToolCallLoop(ILogger logger, string toolName, int count, string sessionId);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Tool dispatched: tool={ToolName}")]
     private static partial void LogToolDispatched(ILogger logger, string toolName);
@@ -80,7 +86,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         ILogger<ConversationRuntime> logger,
         IHookRunner? hookRunner = null,
         MemoryInjector? memoryInjector = null,
-        string? systemPromptOverride = null)
+        string? systemPromptOverride = null,
+        IModelCapabilityRegistry? capabilityRegistry = null)
     {
         _router = router;
         _toolExecutor = toolExecutor;
@@ -90,6 +97,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         _logger = logger;
         _hookRunner = hookRunner ?? NullHookRunner.Instance;
         _memoryInjector = memoryInjector;
+        _capabilityRegistry = capabilityRegistry;
         _systemPrompt = systemPromptOverride ?? BuildSystemPrompt();
     }
 
@@ -157,6 +165,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         await AppendSessionEntryAsync("user", userMessage, ct).ConfigureAwait(false);
 
         var round = 0;
+        var consecutiveToolCalls = new Dictionary<string, int>(StringComparer.Ordinal);
         while (round < MaxToolRounds)
         {
             using var turnScope = _logger.BeginScope(
@@ -165,7 +174,12 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             if (round > 0)
                 LogToolRound(_logger, round, MaxToolRounds, SessionId);
 
-            var tools = _toolRegistry.GetDefinitions();
+            var allTools = _toolRegistry.GetDefinitions();
+            // On the first round, skip tools entirely for simple conversational messages
+            // to prevent models from hallucinating unnecessary tool calls.
+            var tools = round == 0 && !LooksLikeToolRequest(userMessage)
+                ? []
+                : FilterToolsForModel(allTools);
             var request = new MessagesRequest(
                 _config.Model,
                 _config.MaxTokens,
@@ -249,6 +263,42 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
             // Process tool use blocks
             var toolUseBlocks = accumulated.Blocks.OfType<OutputContentBlock.ToolUseBlock>().ToList();
+
+            // Detect tool-call hallucination loops: if the model keeps calling the same tool
+            // repeatedly (common with some models like Gemma 4), break the loop.
+            if (toolUseBlocks.Count > 0 && accumulated.StopReason == "tool_use")
+            {
+                var currentTools = new HashSet<string>(toolUseBlocks.Select(t => t.Name), StringComparer.Ordinal);
+                bool loopDetected = false;
+                foreach (var name in currentTools)
+                {
+                    consecutiveToolCalls.TryGetValue(name, out var count);
+                    consecutiveToolCalls[name] = count + 1;
+                    if (count + 1 >= MaxRepeatedToolCalls)
+                    {
+                        LogToolCallLoop(_logger, name, count + 1, SessionId);
+                        loopDetected = true;
+                    }
+                }
+                // Clear counters for tools NOT called this round.
+                foreach (var key in consecutiveToolCalls.Keys.Except(currentTools).ToList())
+                    consecutiveToolCalls.Remove(key);
+
+                if (loopDetected)
+                {
+                    // Break the loop — treat as end_turn with accumulated text.
+                    turnSw.Stop();
+                    LogTurnComplete(_logger, turnSw.ElapsedMilliseconds, accumulated.InputTokens, accumulated.OutputTokens);
+                    yield return new RuntimeEvent.TurnComplete(
+                        "end_turn", accumulated.InputTokens, accumulated.OutputTokens);
+                    yield break;
+                }
+            }
+            else
+            {
+                consecutiveToolCalls.Clear();
+            }
+
             if (toolUseBlocks.Count == 0 || accumulated.StopReason != "tool_use")
             {
                 turnSw.Stop();
@@ -609,7 +659,15 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
     private string BuildSystemPrompt()
     {
-        var sb = new StringBuilder("You are a highly capable agentic AI assistant.");
+        var sb = new StringBuilder(
+            "You are a highly capable AI assistant with access to tools. " +
+            $"You are powered by the {_config.Model} model, served through the Sovrant runtime. " +
+            "When asked what model or provider you are, state your actual model name. " +
+            "IMPORTANT: Only use tools when the user explicitly asks you to perform a specific action " +
+            "like reading a file, writing code, running a command, or searching. " +
+            "If the user sends a short message, greeting, question, or anything conversational, " +
+            "you MUST respond with plain text only. Never assume the user wants a tool action — " +
+            "for example, if the user says \"test\", respond conversationally; do NOT try to read or create a file called \"test\".");
 
         if (_config.PermissionMode == Permissions.PermissionMode.Plan)
         {
@@ -620,16 +678,21 @@ public sealed partial class ConversationRuntime : IConversationRuntime
               .Append("You MAY call ExitPlanMode to leave plan mode when instructed by the user.");
         }
 
-        // Artifacts directory guidance — use scoped root when available (Phase 53),
-        // otherwise fall back to the flat {cwd}/artifacts/ layout.
+        // Artifacts directory guidance — use the workspace/project/session scoped path.
         var artifactsRoot = Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT")
             ?? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                 ".sovrant", "artifacts");
+        // Build the scoped path: {root}/{workspace}/{project}/{sessionId}/
+        var workspaceId = Environment.GetEnvironmentVariable("SOVRANT_WORKSPACE_ID")
+            ?? Artifacts.ArtifactScope.DefaultWorkspaceId;
+        var projectId = Environment.GetEnvironmentVariable("SOVRANT_PROJECT_ID")
+            ?? Artifacts.ArtifactScope.DefaultProjectId;
+        var scopedArtifactsDir = Path.Combine(artifactsRoot, workspaceId, projectId, _sessionId);
         sb.Append("\n\nWhen creating files or documents that are not modifications to existing source code, ")
-          .Append("place them in the artifacts directory: ").Append(artifactsRoot)
-          .Append(". Artifacts are organized by user, workspace, project, and run ID. ")
-          .Append("This keeps generated outputs organized and separate from the source code.");
+          .Append("place them in the artifacts directory: ").Append(scopedArtifactsDir)
+          .Append(". Create this directory if it does not exist. ")
+          .Append("This keeps generated outputs organized per workspace, project, and session.");
 
         // Global memory: ~/.sovrant/memory.md
         var globalMemory = Path.Combine(
@@ -657,6 +720,86 @@ public sealed partial class ConversationRuntime : IConversationRuntime
               .Append(content);
         }
         catch (IOException) { /* silently skip unreadable files */ }
+    }
+
+    /// <summary>
+    /// Simple heuristic to detect if the user's message likely requires tool use.
+    /// Short greetings, questions, and conversational messages return false.
+    /// Messages that mention files, code, commands, etc. return true.
+    /// </summary>
+    private static bool LooksLikeToolRequest(string message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+
+        // Very short messages (under 20 chars) are almost never tool requests.
+        if (message.Length < 20)
+        {
+            // Unless they contain obvious tool-trigger words.
+#pragma warning disable CA1308 // UseToUpperInvariant — keyword matching is lowercase by convention
+            var lower = message.ToLowerInvariant();
+            return lower.Contains("read", StringComparison.Ordinal)
+                || lower.Contains("write", StringComparison.Ordinal)
+                || lower.Contains("run", StringComparison.Ordinal)
+                || lower.Contains("list", StringComparison.Ordinal)
+                || lower.Contains("find", StringComparison.Ordinal)
+                || lower.Contains("search", StringComparison.Ordinal)
+                || lower.Contains("edit", StringComparison.Ordinal)
+                || lower.Contains("create", StringComparison.Ordinal)
+                || lower.Contains("delete", StringComparison.Ordinal)
+                || lower.Contains("fix", StringComparison.Ordinal)
+                || lower.Contains("debug", StringComparison.Ordinal);
+        }
+
+        // Longer messages — check for keywords that suggest tool use.
+        var keywords = new[]
+        {
+            "file", "directory", "folder", "code", "function", "class", "method",
+            "read", "write", "edit", "create", "delete", "remove", "rename",
+            "run", "execute", "command", "shell", "bash", "powershell",
+            "search", "find", "grep", "glob", "list",
+            "fix", "debug", "refactor", "test", "build", "compile",
+            "install", "deploy", "commit", "push", "pull",
+            "api", "endpoint", "database", "migration",
+            "implement", "add", "update", "modify", "change",
+            "research", "look up", "fetch", "download", "web", "url", "http",
+            "explain", "analyze", "review", "check", "show", "open",
+        };
+
+        var msgLower = message.ToLowerInvariant();
+#pragma warning restore CA1308
+        foreach (var kw in keywords)
+        {
+            if (msgLower.Contains(kw, StringComparison.Ordinal))
+                return true;
+        }
+
+        // Check for file paths (contains / or \ with an extension).
+        if (message.Contains('/', StringComparison.Ordinal) || message.Contains('\\', StringComparison.Ordinal))
+            return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Filters the tool list based on model capabilities. If the model doesn't
+    /// support native tools, returns empty. If it has a MaxTools limit, truncates.
+    /// </summary>
+    private IReadOnlyList<ToolDefinition> FilterToolsForModel(IReadOnlyList<ToolDefinition> tools)
+    {
+        if (tools.Count == 0 || _capabilityRegistry is null)
+            return tools;
+
+        var caps = _capabilityRegistry.GetCapabilities(_config.Model);
+
+        // Model doesn't support native tool calling — don't send tools.
+        if (!caps.NativeTools)
+            return [];
+
+        // Respect max_tools limit if set.
+        if (caps.MaxTools is > 0 and var max && tools.Count > max)
+            return tools.Take(max).ToList();
+
+        return tools;
     }
 
     private static string? TryExtractFilePath(JsonElement input)

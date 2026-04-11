@@ -1,11 +1,12 @@
-using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sovrant.Agents;
+using Sovrant.Api.Auth;
 using Sovrant.Commands;
 using Sovrant.Desktop.Adapters;
 using Sovrant.Desktop.ViewModels;
@@ -26,6 +27,9 @@ public partial class App : Application
     public static IServiceProvider Services { get; private set; } = null!;
     public static Window? MainWindow { get; private set; }
 
+    /// <summary>Signals when runtime initialization (DB, model metadata) is complete.</summary>
+    public static TaskCompletionSource RuntimeReady { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -33,27 +37,62 @@ public partial class App : Application
 
     public override async void OnFrameworkInitializationCompleted()
     {
-        var config = ConfigLoader.Load();
-        var needsSetup = string.IsNullOrWhiteSpace(config.ApiKey);
+        if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            base.OnFrameworkInitializationCompleted();
+            return;
+        }
 
+        // Check if first-run setup is needed BEFORE building the DI container.
+        // Desktop uses Fixed routing — the configured provider is used directly.
+        Environment.SetEnvironmentVariable("ROUTER_MODE", "Fixed");
+        var config = ConfigLoader.Load();
+        if (string.IsNullOrWhiteSpace(config.ApiKey))
+        {
+            await RunSetupWizardAsync(desktop);
+            // Reload config now that the wizard has saved settings.json.
+            config = ConfigLoader.Load();
+        }
+
+        // Bridge config into env vars so the API layer picks them up.
+        if (!string.IsNullOrWhiteSpace(config.ApiKey))
+        {
+            Environment.SetEnvironmentVariable("LLM_API_KEY", config.ApiKey);
+            if (config.BaseUrl?.ToString().Contains("openrouter", StringComparison.OrdinalIgnoreCase) == true)
+                Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", config.ApiKey);
+        }
+        if (config.BaseUrl is not null)
+            Environment.SetEnvironmentVariable("LLM_BASE_URL", config.BaseUrl.ToString());
+
+        // Now build the full app with the correct config.
+        BuildApp(config, desktop);
+
+        base.OnFrameworkInitializationCompleted();
+    }
+
+    private void BuildApp(SovrantConfig config, IClassicDesktopStyleApplicationLifetime desktop)
+    {
         var services = new ServiceCollection();
 
-        // Logging — suppress console noise, file logging only.
         services.AddLogging(b => b.AddSovrantLogging(consoleMinOverride: LogLevel.Warning));
 
-        // Core runtime + tools + agents + commands.
         services.AddSovrantRuntime(config);
         services.AddSovrantTools();
         services.AddMultiAgentSystem();
         services.AddSovrantCommands();
 
         // Desktop-specific overrides.
+        var mutableAuth = new MutableAuthProvider(config.ApiKey ?? string.Empty);
         var permissionPolicy = new MutableCliPermissionPolicy(config.PermissionMode);
         services.AddSingleton<IPermissionPolicy>(permissionPolicy);
         services.AddSingleton<IPermissionModeAccessor>(permissionPolicy);
         services.AddSingleton(config);
-        services.AddSingleton<IToolConfirmationHandler, DesktopConfirmationHandler>();
+        var confirmationHandler = new DesktopConfirmationHandler();
+        services.AddSingleton<IToolConfirmationHandler>(confirmationHandler);
+        services.AddSingleton(confirmationHandler);
         services.AddSingleton<IUserInputProvider, DesktopUserInputProvider>();
+        services.AddSingleton<IAuthProvider>(mutableAuth);
+        services.AddSingleton(mutableAuth);
 
         // ViewModels.
         services.AddSingleton<MainViewModel>();
@@ -64,6 +103,7 @@ public partial class App : Application
         services.AddTransient<IntegrationsViewModel>();
         services.AddTransient<ArtifactsViewModel>();
         services.AddTransient<ToolsViewModel>();
+        services.AddTransient<SkillsViewModel>();
         services.AddTransient<MemoryViewModel>();
         services.AddTransient<GovernanceViewModel>();
         services.AddTransient<ProjectsViewModel>();
@@ -76,66 +116,75 @@ public partial class App : Application
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;
 
-        // Seed tool registry.
         _serviceProvider.GetRequiredService<ToolRegistrar>().RegisterAll();
 
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-        {
-            var mainVm = _serviceProvider.GetRequiredService<MainViewModel>();
+        var mainVm = _serviceProvider.GetRequiredService<MainViewModel>();
+        var window = new MainWindow { DataContext = mainVm };
+        desktop.MainWindow = window;
+        MainWindow = window;
 
-            // Show setup wizard overlay if no API key is configured.
-            if (needsSetup)
-            {
-                var setupVm = new SetupWizardViewModel(config);
-                mainVm.SetupWizard = setupVm;
-
-                setupVm.PropertyChanged += (_, e) =>
-                {
-                    if (e.PropertyName == nameof(SetupWizardViewModel.IsVisible) && !setupVm.IsVisible)
-                    {
-                        // Restart the app so the runtime picks up the new config.
-                        RestartApp();
-                    }
-                };
-            }
-
-            var window = new MainWindow { DataContext = mainVm };
-            desktop.MainWindow = window;
-            MainWindow = window;
-        }
-
-        // Initialize runtime in background (provider pings, MCP connect, live model fetch).
+        // Initialize runtime in background — DB migrations, model metadata, MCP servers.
         _ = Task.Run(async () =>
         {
             try
             {
                 await _serviceProvider.InitializeRuntimeAsync().ConfigureAwait(false);
+
+                // Ensure the desktop user exists (required by workspace FK constraints).
+                var userService = _serviceProvider.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
+                var user = await userService.GetAsync("desktop-user").ConfigureAwait(false);
+                if (user is null)
+                    await userService.CreateAsync("desktop-user", userId: "desktop-user").ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 var logger = _serviceProvider.GetRequiredService<ILogger<App>>();
                 logger.LogError(ex, "Runtime initialization failed");
             }
+            finally
+            {
+                RuntimeReady.TrySetResult();
+            }
         });
-
-        base.OnFrameworkInitializationCompleted();
     }
 
-    private static void RestartApp()
+    /// <summary>
+    /// Shows the setup wizard as a modal dialog before the main app loads.
+    /// Returns after the user completes setup (settings.json is saved).
+    /// </summary>
+    private static async Task RunSetupWizardAsync(IClassicDesktopStyleApplicationLifetime desktop)
     {
-        var exePath = Environment.ProcessPath;
-        if (exePath is not null)
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = exePath,
-                UseShellExecute = true,
-            });
-        }
+        var setupVm = new SetupWizardViewModel(new SovrantConfig());
 
-        if (Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        var wizardWindow = new Window
         {
-            desktop.Shutdown();
-        }
+            Title = "Sovrant — Setup",
+            Width = 540,
+            Height = 620,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen,
+            CanResize = false,
+            Content = new SetupWizardOverlay { DataContext = setupVm },
+        };
+
+        // Close the window when the wizard finishes.
+        setupVm.SetupCompleted += () =>
+            Dispatcher.UIThread.Post(() => wizardWindow.Close());
+
+        // Prevent user from closing without completing setup.
+        wizardWindow.Closing += (_, e) =>
+        {
+            if (setupVm.IsVisible)
+            {
+                // Wizard not completed — exit the app instead.
+                desktop.Shutdown();
+            }
+        };
+
+        wizardWindow.Show();
+
+        // Wait for the window to close (either wizard completed or user closed it).
+        var tcs = new TaskCompletionSource();
+        wizardWindow.Closed += (_, _) => tcs.TrySetResult();
+        await tcs.Task;
     }
 }

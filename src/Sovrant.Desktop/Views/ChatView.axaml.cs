@@ -1,6 +1,8 @@
 using System.Collections.Specialized;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Sovrant.Desktop.ViewModels;
 
 namespace Sovrant.Desktop.Views;
@@ -66,5 +68,14 @@ public partial class ChatView : UserControl
         }
 
         e.Handled = true;
+    }
+
+    private async void OnCopyMessageClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { DataContext: MessageViewModel msg } &&
+            TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(msg.Text);
+        }
     }
 }

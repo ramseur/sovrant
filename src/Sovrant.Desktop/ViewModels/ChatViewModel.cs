@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Desktop.Adapters;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Session;
 
@@ -11,6 +12,7 @@ public partial class ChatViewModel : ViewModelBase
 {
     private readonly IRuntimeSessionPool _sessionPool;
     private readonly ISessionStore _sessionStore;
+    private readonly DesktopConfirmationHandler? _confirmationHandler;
 
     [ObservableProperty]
     private string _sessionId;
@@ -29,11 +31,26 @@ public partial class ChatViewModel : ViewModelBase
 
     public ObservableCollection<MessageViewModel> Messages { get; } = [];
 
-    public ChatViewModel(IRuntimeSessionPool sessionPool, ISessionStore sessionStore)
+    public ChatViewModel(IRuntimeSessionPool sessionPool, ISessionStore sessionStore,
+        DesktopConfirmationHandler? confirmationHandler = null)
     {
         _sessionPool = sessionPool;
         _sessionStore = sessionStore;
+        _confirmationHandler = confirmationHandler;
         _sessionId = $"desktop-{Guid.NewGuid():N}";
+
+        if (_confirmationHandler is not null)
+            _confirmationHandler.ConfirmationRequested += OnConfirmationRequested;
+    }
+
+    private void OnConfirmationRequested(ConfirmationRequest request)
+    {
+        Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            // Find the current assistant message and add the confirmation inline.
+            var lastAssistant = Messages.LastOrDefault(m => m.Role == "assistant");
+            lastAssistant?.AddConfirmation(request);
+        });
     }
 
     public async Task LoadSessionAsync(string sessionId, CancellationToken ct = default)
@@ -46,7 +63,7 @@ public partial class ChatViewModel : ViewModelBase
         {
             if (entry.Role is "user" or "assistant")
             {
-                Messages.Add(new MessageViewModel { Role = entry.Role, Text = entry.Content });
+                Messages.Add(new MessageViewModel { Role = entry.Role, Text = entry.Content, IsComplete = true });
             }
         }
 
@@ -66,12 +83,16 @@ public partial class ChatViewModel : ViewModelBase
         // Add user message.
         Messages.Add(new MessageViewModel { Role = "user", Text = text });
 
-        // Add assistant placeholder.
+        // Add assistant placeholder with thinking indicator.
         var assistantMsg = new MessageViewModel { Role = "assistant" };
+        assistantMsg.StartThinking();
         Messages.Add(assistantMsg);
 
         try
         {
+            // Wait for runtime initialization (DB migrations, model metadata) before first send.
+            await App.RuntimeReady.Task.WaitAsync(ct).ConfigureAwait(false);
+
             var pooled = await _sessionPool.GetOrCreateAsync(SessionId, ct: ct).ConfigureAwait(false);
             await foreach (var ev in pooled.Runtime.RunTurnAsync(text, ct))
             {
@@ -87,6 +108,7 @@ public partial class ChatViewModel : ViewModelBase
         finally
         {
             IsSending = false;
+            await Dispatcher.UIThread.InvokeAsync(() => assistantMsg.CompleteStreaming());
         }
     }
 
@@ -121,6 +143,7 @@ public partial class ChatViewModel : ViewModelBase
                 break;
 
             case RuntimeEvent.ToolUseRequested t:
+                if (msg.IsThinking) msg.StopThinking();
                 msg.AddToolUse(t.ToolName, t.ToolUseId);
                 break;
 
@@ -130,6 +153,7 @@ public partial class ChatViewModel : ViewModelBase
 
             case RuntimeEvent.TurnComplete t:
                 TokenCount += t.InputTokens + t.OutputTokens;
+                msg.CompleteStreaming();
                 break;
 
             case RuntimeEvent.RuntimeError { Message: var errMsg }:

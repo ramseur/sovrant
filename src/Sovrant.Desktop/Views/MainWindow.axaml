@@ -29,6 +29,9 @@
         <DataTemplate DataType="vm:ToolsViewModel">
             <views:ToolsView />
         </DataTemplate>
+        <DataTemplate DataType="vm:SkillsViewModel">
+            <views:SkillsView />
+        </DataTemplate>
         <DataTemplate DataType="vm:MemoryViewModel">
             <views:MemoryView />
         </DataTemplate>
@@ -57,21 +60,80 @@
 
     <Panel>
         <DockPanel>
-            <!-- Collapsed sidebar strip -->
+            <!-- Collapsed sidebar strip with icon nav -->
             <Border DockPanel.Dock="Left"
-                    Width="44"
+                    Width="48"
                     Background="{DynamicResource SidebarBackground}"
                     IsVisible="{Binding Sidebar.IsCollapsed}">
-                <StackPanel Margin="0,10,0,0" HorizontalAlignment="Center">
-                    <Button Content="◫"
-                            Command="{Binding Sidebar.ToggleCollapseCommand}"
-                            Padding="6,4" FontSize="16"
-                            Background="Transparent"
-                            Foreground="{DynamicResource TextSecondary}"
-                            CornerRadius="4"
-                            HorizontalAlignment="Center"
-                            ToolTip.Tip="Expand sidebar" />
-                </StackPanel>
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Bottom" HorizontalAlignment="Center" Margin="0,0,0,8">
+                        <Border Width="28" Height="28" CornerRadius="14"
+                                Background="{DynamicResource BrandPrimary}"
+                                HorizontalAlignment="Center" Margin="0,4"
+                                ToolTip.Tip="{Binding Sidebar.CurrentUserName}">
+                            <TextBlock Text="{Binding Sidebar.UserInitial}" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </StackPanel>
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Hidden">
+                        <StackPanel Margin="0,8,0,0" HorizontalAlignment="Center" Spacing="2">
+                            <Button Content="◫"
+                                    Command="{Binding Sidebar.ToggleCollapseCommand}"
+                                    Padding="8,6" FontSize="14"
+                                    Background="Transparent"
+                                    Foreground="{DynamicResource TextSecondary}"
+                                    CornerRadius="6"
+                                    HorizontalAlignment="Center"
+                                    ToolTip.Tip="Expand sidebar" />
+                            <Button Content="💬" ToolTip.Tip="Chat"
+                                    Command="{Binding Sidebar.NavigateCommand}" CommandParameter="Chat"
+                                    Padding="8,6" FontSize="14" Background="Transparent"
+                                    CornerRadius="6" HorizontalAlignment="Center" />
+                            <Button Content="⚙" ToolTip.Tip="Settings"
+                                    Command="{Binding Sidebar.NavigateCommand}" CommandParameter="Settings"
+                                    Padding="8,6" FontSize="14" Background="Transparent"
+                                    CornerRadius="6" HorizontalAlignment="Center" />
+                            <Button Content="🔧" ToolTip.Tip="Diagnostics"
+                                    Command="{Binding Sidebar.NavigateCommand}" CommandParameter="Diagnostics"
+                                    Padding="8,6" FontSize="14" Background="Transparent"
+                                    CornerRadius="6" HorizontalAlignment="Center" />
+                            <Border Height="1" Margin="6,4" Background="{DynamicResource SurfaceBorder}" />
+                            <Button Content="📁" ToolTip.Tip="Projects"
+                                    Command="{Binding Sidebar.NavigateCommand}" CommandParameter="Projects"
+                                    Padding="8,5" FontSize="13" Background="Transparent"
+                                    CornerRadius="6" HorizontalAlignment="Center" />
+                            <Button Content="🏢" ToolTip.Tip="Workspaces"
+                                    Command="{Binding Sidebar.NavigateCommand}" CommandParameter="Workspaces"
+                                    Padding="8,5" FontSize="13" Background="Transparent"
+                                    CornerRadius="6" HorizontalAlignment="Center" />
+                            <Button Content="📄" ToolTip.Tip="Artifacts"
+                                    Command="{Binding Sidebar.NavigateCommand}" CommandParameter="Artifacts"
+                                    Padding="8,5" FontSize="13" Background="Transparent"
+                                    CornerRadius="6" HorizontalAlignment="Center" />
+                            <Button Content="🛠" ToolTip.Tip="Tools"
+                                    Command="{Binding Sidebar.NavigateCommand}" CommandParameter="Tools"
+                                    Padding="8,5" FontSize="13" Background="Transparent"
+                                    CornerRadius="6" HorizontalAlignment="Center" />
+                            <Button Content="📜" ToolTip.Tip="Skills"
+                                    Command="{Binding Sidebar.NavigateCommand}" CommandParameter="Skills"
+                                    Padding="8,5" FontSize="13" Background="Transparent"
+                                    CornerRadius="6" HorizontalAlignment="Center" />
+                            <Button Content="🤖" ToolTip.Tip="Agents"
+                                    Command="{Binding Sidebar.NavigateCommand}" CommandParameter="Agents"
+                                    Padding="8,5" FontSize="13" Background="Transparent"
+                                    CornerRadius="6" HorizontalAlignment="Center" />
+                            <Button Content="👥" ToolTip.Tip="Multi-Agent"
+                                    Command="{Binding Sidebar.NavigateCommand}" CommandParameter="MultiAgent"
+                                    Padding="8,5" FontSize="13" Background="Transparent"
+                                    CornerRadius="6" HorizontalAlignment="Center" />
+                            <Button Content="🧠" ToolTip.Tip="Memory"
+                                    Command="{Binding Sidebar.NavigateCommand}" CommandParameter="Memory"
+                                    Padding="8,5" FontSize="13" Background="Transparent"
+                                    CornerRadius="6" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
             </Border>
 
             <!-- Sidebar (full) -->
@@ -87,8 +149,5 @@
 
         <!-- Command palette overlay -->
         <views:CommandPaletteOverlay DataContext="{Binding CommandPalette}" />
-
-        <!-- Setup wizard overlay (first-run) -->
-        <views:SetupWizardOverlay DataContext="{Binding SetupWizard}" />
     </Panel>
 </Window>

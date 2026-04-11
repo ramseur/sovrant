@@ -16,9 +16,6 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private CommandPaletteViewModel _commandPalette;
 
-    [ObservableProperty]
-    private SetupWizardViewModel? _setupWizard;
-
     private readonly IServiceProvider _services;
 
     public MainViewModel(SidebarViewModel sidebar, CommandPaletteViewModel commandPalette, IServiceProvider services)
@@ -70,6 +67,7 @@ public partial class MainViewModel : ViewModelBase
             "Integrations" => _services.GetRequiredService<IntegrationsViewModel>(),
             "Artifacts" => _services.GetRequiredService<ArtifactsViewModel>(),
             "Tools" => _services.GetRequiredService<ToolsViewModel>(),
+            "Skills" => _services.GetRequiredService<SkillsViewModel>(),
             "Memory" => _services.GetRequiredService<MemoryViewModel>(),
             "Governance" => _services.GetRequiredService<GovernanceViewModel>(),
             "Projects" => _services.GetRequiredService<ProjectsViewModel>(),

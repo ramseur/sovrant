@@ -74,6 +74,9 @@ public partial class SetupWizardViewModel : ViewModelBase
 
     public ObservableCollection<string> AvailableModels { get; } = [];
 
+    /// <summary>Raised after settings are saved successfully.</summary>
+    public event Action? SetupCompleted;
+
     public SetupWizardViewModel(SovrantConfig config)
     {
         _config = config;
@@ -225,6 +228,7 @@ public partial class SetupWizardViewModel : ViewModelBase
                 existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(json) ?? [];
             }
 
+            existing["Provider"] = SelectedProvider;
             existing["Model"] = SelectedModel.Trim();
             existing["ApiKey"] = ApiKey.Trim();
 
@@ -235,6 +239,7 @@ public partial class SetupWizardViewModel : ViewModelBase
             await File.WriteAllTextAsync(SettingsPath, output);
 
             IsVisible = false;
+            SetupCompleted?.Invoke();
         }
         catch (Exception ex)
         {

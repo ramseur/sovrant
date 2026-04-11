@@ -14,13 +14,13 @@
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <Border Width="28" Height="28" CornerRadius="14"
                         Background="{DynamicResource BrandPrimary}">
-                    <TextBlock Text="J" FontSize="12" FontWeight="SemiBold"
+                    <TextBlock Text="{Binding UserInitial}" FontSize="12" FontWeight="SemiBold"
                                Foreground="White"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center" />
                 </Border>
                 <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="john@dev.io" FontSize="11"
+                    <TextBlock Text="{Binding CurrentUserName}" FontSize="11"
                                Foreground="{DynamicResource TextPrimary}" />
                     <TextBlock Text="Personal workspace" FontSize="9"
                                Foreground="{DynamicResource TextSecondary}" />
@@ -85,22 +85,36 @@
                              FontSize="11" />
                 </DockPanel>
 
-                <!-- Model/Provider -->
-                <Border Padding="8,5" Margin="0,0,0,4"
-                        CornerRadius="6"
-                        Background="{DynamicResource SurfaceCard}"
-                        BorderBrush="{DynamicResource SurfaceBorder}"
-                        BorderThickness="1">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <Ellipse Width="7" Height="7"
-                                 Fill="{DynamicResource StatusPass}" />
-                        <TextBlock Text="{Binding CurrentModel}" FontWeight="SemiBold"
-                                   FontSize="11"
-                                   Foreground="{DynamicResource TextPrimary}" />
-                        <TextBlock Text="{Binding CurrentProvider}" FontSize="11"
-                                   Foreground="{DynamicResource TextSecondary}" />
-                    </StackPanel>
-                </Border>
+                <!-- Model/Provider — click to open Settings -->
+                <Button Padding="0" Margin="0,0,0,4"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="Settings"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch"
+                        Cursor="Hand"
+                        ToolTip.Tip="Click to change model">
+                    <Border Padding="8,5"
+                            CornerRadius="6"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}"
+                            BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Ellipse Width="7" Height="7"
+                                     Fill="{DynamicResource StatusPass}"
+                                     VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding CurrentModel}" FontWeight="SemiBold"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="130" />
+                            <TextBlock Text="{Binding CurrentProvider}" FontSize="11"
+                                       Foreground="{DynamicResource TextSecondary}"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+                </Button>
 
                 <!-- Connection status -->
                 <StackPanel Orientation="Horizontal" Spacing="5" Margin="4,2,0,8">
@@ -147,13 +161,18 @@
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
                         Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="🤖  Agents"
-                        Command="{Binding NavigateCommand}" CommandParameter="Agents"
+                <Button Content="🛠  Tools"
+                        Command="{Binding NavigateCommand}" CommandParameter="Tools"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
                         Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="⚡  Automations"
-                        Command="{Binding NavigateCommand}" CommandParameter="Automations"
+                <Button Content="📜  Skills"
+                        Command="{Binding NavigateCommand}" CommandParameter="Skills"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
+                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                <Button Content="🤖  Agents"
+                        Command="{Binding NavigateCommand}" CommandParameter="Agents"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
                         Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
@@ -162,18 +181,18 @@
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
                         Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                <Button Content="🧠  Memory"
+                        Command="{Binding NavigateCommand}" CommandParameter="Memory"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
+                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
                 <Button Content="🔌  Integrations"
                         Command="{Binding NavigateCommand}" CommandParameter="Integrations"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
                         Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="🛠  Tools"
-                        Command="{Binding NavigateCommand}" CommandParameter="Tools"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="🧠  Memory"
-                        Command="{Binding NavigateCommand}" CommandParameter="Memory"
+                <Button Content="⚡  Automations"
+                        Command="{Binding NavigateCommand}" CommandParameter="Automations"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
                         Background="Transparent" Foreground="{DynamicResource TextPrimary}" />

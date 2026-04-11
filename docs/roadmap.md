@@ -2953,6 +2953,7 @@ A later phase adds an integrated terminal panel within the desktop app (similar 
 | 9 | Slash command palette | Searchable command palette (Ctrl+K / Cmd+K) surfacing all `ISlashCommand` implementations with their categories and descriptions. Equivalent to `/help` but as a filterable overlay. |
 | 10 | Auto-update mechanism | Check for new versions on startup, download and apply updates. Windows: MSIX or Squirrel.Windows. macOS: Sparkle. Linux: AppImage with built-in update check. |
 | 11 | Packaging & distribution | Platform-specific installers: MSIX/WinGet (Windows), DMG (macOS), AppImage/Flatpak (Linux). Self-contained single-file publish (no .NET runtime install). CI pipeline for all three. Code signing for Windows and macOS. |
+| 12 | Provider-native web search | Enable web search without requiring Brave/FireCrawl API keys by leveraging provider-native capabilities. OpenRouter: add `plugins: [{id: "web"}]` or `:online` model suffix to chat completions requests. OpenAI: already supported via `OpenAiResponsesProvider` with `web_search_preview`. Per-model: check `IModelCapabilityRegistry` for web search support (e.g. Gemma 4 does not support native web search but OpenRouter can add it). Add a "Web Search" toggle in Settings that persists to `settings.json` and bridges to `LLM_WEB_SEARCH` env var. |
 
 #### Acceptance Criteria
 

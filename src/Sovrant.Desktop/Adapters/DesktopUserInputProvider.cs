@@ -1,23 +1,20 @@
 using System.Threading;
 using System.Threading.Tasks;
-using Avalonia.Threading;
-using Sovrant.Desktop.Views.Dialogs;
 using Sovrant.Tools.Extended;
 
 namespace Sovrant.Desktop.Adapters;
 
+/// <summary>
+/// Desktop input provider that returns the question as inline text rather than
+/// showing a modal popup. The LLM will surface the question in the chat stream
+/// and the user can reply with their next message.
+/// </summary>
 public sealed class DesktopUserInputProvider : IUserInputProvider
 {
-    public async Task<string> AskAsync(string question, CancellationToken ct = default)
+    public Task<string> AskAsync(string question, CancellationToken ct = default)
     {
-        return await Dispatcher.UIThread.InvokeAsync(async () =>
-        {
-            var dialog = new UserInputDialog(question);
-            var mainWindow = App.MainWindow;
-            if (mainWindow is null)
-                return $"[User input requested: {question}]";
-
-            return await dialog.ShowDialog<string>(mainWindow) ?? string.Empty;
-        });
+        // Return a marker so the LLM knows the user hasn't answered yet.
+        // The question text will already appear in the chat via the tool use block.
+        return Task.FromResult($"[Please reply in the chat to answer: {question}]");
     }
 }

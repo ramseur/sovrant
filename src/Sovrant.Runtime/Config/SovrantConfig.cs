@@ -7,13 +7,13 @@ namespace Sovrant.Runtime.Config;
 public sealed class SovrantConfig
 {
     /// <summary>The model identifier to use for LLM requests.</summary>
-    public string Model { get; init; } = "gpt-4o-mini";
+    public string Model { get; set; } = "gpt-4o-mini";
 
     /// <summary>The maximum number of output tokens per request.</summary>
-    public int MaxTokens { get; init; } = 8192;
+    public int MaxTokens { get; set; } = 8192;
 
     /// <summary>Controls how the runtime handles potentially destructive tool invocations.</summary>
-    public PermissionMode PermissionMode { get; init; } = PermissionMode.Default;
+    public PermissionMode PermissionMode { get; set; } = PermissionMode.Default;
 
     /// <summary>Controls whether the router uses smart multi-provider routing or a fixed provider.</summary>
     public RouterMode RouterMode { get; init; } = RouterMode.Smart;
@@ -22,10 +22,10 @@ public sealed class SovrantConfig
     public RouterStrategy RouterStrategy { get; init; } = RouterStrategy.Balanced;
 
     /// <summary>Optional base URL override for the LLM API.</summary>
-    public Uri? BaseUrl { get; init; }
+    public Uri? BaseUrl { get; set; }
 
     /// <summary>Optional API key override. Defaults to the <c>LLM_API_KEY</c> environment variable.</summary>
-    public string? ApiKey { get; init; }
+    public string? ApiKey { get; set; }
 
     /// <summary>
     /// Optional override for the SQLite database path. Takes priority over
