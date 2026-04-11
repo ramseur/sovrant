@@ -25,7 +25,8 @@
                         FontWeight="SemiBold"
                         VerticalAlignment="Bottom" />
                 <Grid>
-                    <TextBox Text="{Binding InputText}"
+                    <TextBox x:Name="InputBox"
+                             Text="{Binding InputText}"
                              Watermark="Type a message or / for commands..."
                              AcceptsReturn="False"
                              TextWrapping="Wrap"
@@ -220,7 +221,7 @@
                 <ItemsControl ItemsSource="{Binding Messages}"
                               Margin="32,16"
                               MaxWidth="800"
-                              HorizontalAlignment="Left">
+                              HorizontalAlignment="Center">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:MessageViewModel">
                             <Border Margin="0,8" Padding="0">
@@ -256,7 +257,7 @@
 
                                     <!-- === Sovrant (assistant) message layout === -->
                                     <Border IsVisible="{Binding !IsUser}"
-                                            Padding="14,12"
+                                            Padding="0,12"
                                             CornerRadius="12"
                                             Background="{DynamicResource AssistantMessageBackground}">
                                         <StackPanel Spacing="6">

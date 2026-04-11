@@ -26,6 +26,7 @@ public partial class ChatView : UserControl
                 if (args.PropertyName == nameof(ChatViewModel.IsSending))
                     ScrollToBottom();
             };
+            vm.TurnCompleted += () => InputBox?.Focus();
         }
     }
 
