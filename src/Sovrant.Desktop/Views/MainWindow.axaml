@@ -87,5 +87,8 @@
 
         <!-- Command palette overlay -->
         <views:CommandPaletteOverlay DataContext="{Binding CommandPalette}" />
+
+        <!-- Setup wizard overlay (first-run) -->
+        <views:SetupWizardOverlay DataContext="{Binding SetupWizard}" />
     </Panel>
 </Window>
