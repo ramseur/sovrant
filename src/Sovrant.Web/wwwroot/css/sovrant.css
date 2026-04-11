@@ -562,6 +562,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
 .message-markdown pre {
     background: #111;
+    color: #E0E0E0;
     padding: 12px;
     border-radius: 8px;
     overflow-x: auto;
@@ -572,10 +573,12 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .message-markdown code {
     font-family: 'Consolas', 'Menlo', monospace;
     font-size: 0.9em;
+    color: #E0E0E0;
 }
 
 .message-markdown :not(pre) > code {
     background: var(--surface-hover);
+    color: var(--text-primary);
     padding: 2px 6px;
     border-radius: 4px;
 }

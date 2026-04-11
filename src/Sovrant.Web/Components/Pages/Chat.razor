@@ -234,6 +234,7 @@
         }
 
         await ScrollToBottom();
+        await FocusInput();
     }
 
     private async Task SendToRuntimeAsync(string text)
@@ -276,6 +277,7 @@
             assistantMsg.CompleteStreaming();
             StateHasChanged();
             await ScrollToBottom();
+            await FocusInput();
         }
     }
 
@@ -348,6 +350,12 @@
     {
         try { await JS.InvokeVoidAsync("sovrantInterop.scrollToBottom", "chat-messages"); }
         catch { /* circuit may not be ready */ }
+    }
+
+    private async Task FocusInput()
+    {
+        try { await _inputRef.FocusAsync(); }
+        catch { /* element may not be rendered yet */ }
     }
 
     private void OnContextChanged() => InvokeAsync(StateHasChanged);
