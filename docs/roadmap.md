@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-12 (Phase 41 complete — 39 phases shipped, 12 pending)
+**Last updated:** 2026-04-12 (Phase 41 complete — 39 phases shipped, 13 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -102,11 +102,11 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | 52 | Unified agent orchestration — SqliteTeamRegistry, AgentOrchestrator, agent_runs ledger, TeamRun/TeamPublish, /v1/teams + /v1/runs API |
 | 53 | Scoped artifact storage — IArtifactStore, workspace-first layout, /v1/artifacts API, /artifacts CLI |
 | 54 | Model capability registry — layered resolution (user > bundled > live > default), Gemma 4 support |
-| 56 | Web application — Blazor Server, 15 pages, streaming chat, embedded runtime, port 5100 |
+| 56 | Web application — Blazor Server, 15 pages, streaming chat, embedded runtime, port 5100 (remote mode split to Phase 61) |
 
 ### Still pending
 
-> **Last audited:** 2026-04-12. 39 phases complete, 12 pending. Phase 39 consolidated into Phase 55. Everything below is *not yet shipped*.
+> **Last audited:** 2026-04-12. 39 phases complete, 13 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61. Everything below is *not yet shipped*.
 
 | Gap | Phase | Priority |
 |---|---|---|
@@ -122,6 +122,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | LLM provider sanitizer — strip PII and corporate data from prompts before they leave the runtime | Phase 58 | High |
 | Agentic loop hardening — intent classification, plan approval, execution governance, progress visibility | Phase 59 | **Critical** |
 | Hermes Agent integration via MCP — alternative claw/federation bus provider with self-improving skills | Phase 60 | Medium |
+| Remote server mode for web frontend — SignalR streaming, auth, `AddSovrantClient()` abstraction | Phase 61 | High |
 
 ---
 
@@ -4257,22 +4258,24 @@ src/Sovrant.Runtime/Metrics/
 
 ---
 
-## Phase 56 — ASP.NET Core Web Frontend (Blazor Server, Dual-Mode Runtime Access) ✅
+## Phase 56 — ASP.NET Core Web Frontend (Blazor Server, Embedded Mode) ⚠️ Partially Complete
 
-**Goal:** Browser-based UI matching the Avalonia desktop interface, securely consuming the Sovrant runtime. Leverages .NET's unique ability to run the runtime either in-process (embedded) or remotely via the existing `Sovrant.Server` API — same components, different DI registration.
+**Goal:** Browser-based UI matching the Avalonia desktop interface, securely consuming the Sovrant runtime in embedded (in-process) mode.
 
 **Depends on:** Phase 44 (desktop app — establishes the UI patterns and screens to match), Phase 38 (auth)
 
 **Priority:** High
 
-### Architecture: Dual-Mode Runtime Access
+**Status:** Embedded mode is fully functional — all 12+ screens implemented, streaming via direct `RunTurnAsync()`, tool confirmation modals, theming, master-detail layouts. The **remote server mode** (HTTP client wrappers, SignalR streaming, `AddSovrantClient()`, auth against `Sovrant.Server`) was originally scoped here but has been split out to **Phase 61** as it is a distinct infrastructure concern.
 
-| Mode | Topology | DI Registration | Best For |
+### Architecture: Embedded Mode (shipped) + Remote Mode (Phase 61)
+
+| Mode | Topology | DI Registration | Status |
 |---|---|---|---|
-| **Embedded** | Blazor Server + `Sovrant.Runtime` in-process | `services.AddSovrantRuntime()` | Self-hosted, single machine, zero latency |
-| **Remote** | Blazor Server or WASM + `Sovrant.Server` via HTTP/SignalR | `services.AddSovrantClient(serverUrl)` | Distributed deployment, shared server |
+| **Embedded** | Blazor Server + `Sovrant.Runtime` in-process | `services.AddSovrantRuntime()` | ✅ Shipped |
+| **Remote** | Blazor Server or WASM + `Sovrant.Server` via HTTP/SignalR | `services.AddSovrantClient(serverUrl)` | → Phase 61 |
 
-The key insight: because `Sovrant.Runtime` is abstracted behind interfaces (`IConversationRuntime`, `IToolRegistry`, `ISmartRouter`, etc.), the same Blazor components work in both modes. Swap the service registration at startup — no frontend rewrite needed. This is a capability unique to .NET's DI system with a shared runtime library.
+The key insight: because `Sovrant.Runtime` is abstracted behind interfaces (`IConversationRuntime`, `IToolRegistry`, `ISmartRouter`, etc.), the same Blazor components will work in both modes. Swap the service registration at startup — no frontend rewrite needed. This is a capability unique to .NET's DI system with a shared runtime library. The remote mode implementation is tracked in **Phase 61**.
 
 ### Screens (matching Phase 44 desktop)
 
@@ -4392,8 +4395,10 @@ Same event processing as the desktop app's `ChatViewModel`, adapted for Blazor c
 7. **Auth:** ASP.NET Identity integration, per-user permissions
 8. **Remaining screens:** Integrations, Artifacts, placeholders
 
-### What this phase does NOT include
+### What this phase does NOT include (moved to Phase 61)
 
+- **Remote server mode** — `AddSovrantClient(serverUrl)`, HTTP client wrappers for `IConversationRuntime` etc., SignalR streaming, auth against `Sovrant.Server` → **Phase 61**
+- **ASP.NET Identity / OIDC** — per-user authentication, session cookies, anti-forgery → **Phase 61**
 - Blazor WASM standalone deployment (requires remote mode + API layer optimization — future phase)
 - Mobile-responsive layout (desktop-first, responsive later)
 - Real-time multi-user collaboration (single-user sessions, same as desktop)
@@ -4934,6 +4939,150 @@ Sovrant can talk to Hermes in two ways:
 - Replacing OpenClaw. Hermes and OpenClaw serve different purposes. OpenClaw remains the primary choice for human-reachable routing.
 - Managing Hermes's internal skill library. Sovrant reads Hermes's skills for routing decisions but does not write, edit, or delete them.
 - A2A (Agent-to-Agent Protocol) support. Google's A2A is a promising standard but not yet mature enough to build on. MCP is the integration protocol for this phase; A2A can be evaluated as a future addition.
+
+---
+
+## Phase 61 — Remote Server Mode for Web Frontend (SignalR Streaming, Auth & Client Abstraction)
+
+**Depends on:** Phase 56 (web frontend — embedded mode, already shipped), Phase 38 (per-user token auth)
+**Difficulty:** Medium–High
+
+**Goal:** Complete the "dual-mode runtime access" promise from Phase 56. Today the Blazor web frontend only works in embedded mode — `Sovrant.Runtime` runs in-process via `AddSovrantRuntime()`. This phase adds remote mode: the same Blazor components connect to a running `Sovrant.Server` instance over HTTP + SignalR, with proper authentication. The frontend code stays identical; only the DI registration changes.
+
+**Why this is its own phase:** Remote mode is a distinct infrastructure concern — HTTP client wrappers, SignalR hub wiring, auth token management, reconnection logic, and streaming protocol translation. Bundling it with the UI screens (Phase 56) created a "partially complete" phase. Splitting it out gives a clean boundary: Phase 56 = UI, Phase 61 = remote connectivity.
+
+### What exists today
+
+- **Embedded mode works:** All 15 screens functional, streaming via direct `RunTurnAsync()` async enumeration
+- **`Sovrant.Server` exists:** Full REST API with 95 endpoints, bearer token auth, rate limiting, SSE streaming
+- **No bridge between them:** No HTTP client wrappers implementing `IConversationRuntime`, no SignalR hub for real-time streaming, no `AddSovrantClient()` extension method
+
+### Components
+
+| Component | What it does |
+|---|---|
+| **`AddSovrantClient(serverUrl)`** | DI extension method that registers HTTP-backed implementations of `IConversationRuntime`, `IToolRegistry`, `ISmartRouter`, `IArtifactStore`, etc. — replacing the in-process registrations from `AddSovrantRuntime()` |
+| **`RemoteConversationRuntime`** | `IConversationRuntime` implementation that wraps `POST /v1/chat/completions` + SignalR streaming. Translates HTTP/SignalR events into the same `RuntimeEvent` stream the Blazor components already consume |
+| **`RemoteToolRegistry`** | `IToolRegistry` implementation backed by `GET /v1/tools` |
+| **`RemoteArtifactStore`** | `IArtifactStore` implementation backed by the `/v1/artifacts` endpoints |
+| **`SovrantSignalRHub`** | Server-side SignalR hub on `Sovrant.Server` that streams `RuntimeEvent` objects during a turn. Replaces SSE for WebSocket-capable clients |
+| **`SignalRStreamingClient`** | Client-side SignalR connection in the Blazor app that receives `RuntimeEvent` and feeds the existing `Chat.razor` event loop |
+| **`RemoteAuthService`** | Manages bearer token lifecycle — login with API token (Phase 38), token refresh, auto-reconnect on 401 |
+| **`appsettings.json` toggle** | `RuntimeMode: "embedded" | "remote"` + `ServerUrl` config. Program.cs reads this and calls either `AddSovrantRuntime()` or `AddSovrantClient(serverUrl)` |
+
+### Architecture
+
+```
+Embedded mode (Phase 56, shipped):
+  Blazor Server ──→ IConversationRuntime ──→ Sovrant.Runtime (in-process)
+
+Remote mode (this phase):
+  Blazor Server ──→ IConversationRuntime ──→ RemoteConversationRuntime
+                                                    │
+                                              HTTP + SignalR
+                                                    │
+                                              Sovrant.Server ──→ Sovrant.Runtime
+```
+
+```
+src/Sovrant.Web/
+  Services/
+    SovrantClientServices.cs              ← AddSovrantClient() extension method
+    RemoteConversationRuntime.cs          ← IConversationRuntime over HTTP + SignalR
+    RemoteToolRegistry.cs                 ← IToolRegistry over HTTP
+    RemoteSmartRouter.cs                  ← ISmartRouter over HTTP
+    RemoteArtifactStore.cs                ← IArtifactStore over HTTP
+    RemoteAuthService.cs                  ← Bearer token management
+    SignalRStreamingClient.cs             ← SignalR connection for RuntimeEvent stream
+  appsettings.json                        ← RuntimeMode toggle
+
+src/Sovrant.Server/
+  Hubs/
+    ChatHub.cs                            ← SignalR hub streaming RuntimeEvent during turns
+  Streaming/
+    SignalRStreamAdapter.cs               ← Adapts RuntimeEvent async enumerable to SignalR stream
+```
+
+### Configuration
+
+```jsonc
+// src/Sovrant.Web/appsettings.json
+{
+  "Sovrant": {
+    "RuntimeMode": "remote",                        // "embedded" | "remote"
+    "Server": {
+      "Url": "https://sovrant.internal:5200",
+      "ApiToken": "${SOVRANT_API_TOKEN}",           // Phase 38 token
+      "SignalR": {
+        "Enabled": true,
+        "ReconnectIntervalMs": 5000,
+        "MaxReconnectAttempts": 10
+      }
+    }
+  }
+}
+```
+
+Env var overrides:
+- `SOVRANT_RUNTIME_MODE` — `embedded` (default) or `remote`
+- `SOVRANT_SERVER_URL` — remote server URL
+- `SOVRANT_API_TOKEN` — bearer token for remote auth
+
+### Authentication flow
+
+1. Web frontend starts in remote mode, reads API token from config/env
+2. `RemoteAuthService` sends `POST /v1/auth/validate` to verify token
+3. On success, all HTTP clients include `Authorization: Bearer {token}` header
+4. SignalR connection authenticates via query string token (standard SignalR pattern)
+5. On 401, `RemoteAuthService` emits an event → UI shows "Reconnecting..." banner
+6. Per-user permissions enforced server-side (Phase 38) — the web frontend never sees elevated access it shouldn't have
+
+### Streaming protocol
+
+| Event | Embedded (current) | Remote (this phase) |
+|---|---|---|
+| `TextDelta` | Direct async yield | SignalR `StreamAsync("StreamTurn", ...)` |
+| `ToolCallStart` | Direct async yield | SignalR stream event |
+| `ToolCallResult` | Direct async yield | SignalR stream event |
+| `Error` | Direct async yield | SignalR stream event |
+| **Fallback** | N/A | SSE via `GET /v1/chat/completions?stream=true` (for non-WebSocket environments) |
+
+Chat.razor doesn't change — it already consumes `IAsyncEnumerable<RuntimeEvent>`. The remote implementation just produces that stream from SignalR instead of from the in-process runtime.
+
+### Implementation plan
+
+1. Define `appsettings.json` schema with `RuntimeMode` toggle. Update `Program.cs` to branch: `if (mode == "embedded") AddSovrantRuntime() else AddSovrantClient(serverUrl)`.
+2. Implement `SovrantClientServices.AddSovrantClient(serverUrl)` — registers all `Remote*` implementations against the same interfaces the embedded registrations use.
+3. Implement `RemoteConversationRuntime : IConversationRuntime` — `RunTurnAsync` calls `POST /v1/chat/completions` with `stream=true`, parses SSE events into `RuntimeEvent` objects, yields them as `IAsyncEnumerable<RuntimeEvent>`.
+4. Implement `RemoteToolRegistry`, `RemoteSmartRouter`, `RemoteArtifactStore` — straightforward HTTP GET/POST wrappers against existing `Sovrant.Server` endpoints.
+5. Implement `RemoteAuthService` — token validation, header injection via `DelegatingHandler`, 401 detection with reconnect.
+6. Add `SovrantSignalRHub` to `Sovrant.Server` — maps to `/hubs/chat`, method `StreamTurn(string sessionId, string message)` → `IAsyncEnumerable<RuntimeEvent>`. Uses the same `ConversationRuntime.RunTurnAsync()` the REST endpoint uses.
+7. Implement `SignalRStreamingClient` — connects to the hub, translates SignalR stream into `IAsyncEnumerable<RuntimeEvent>`. `RemoteConversationRuntime` prefers SignalR when available, falls back to SSE.
+8. Add reconnection logic: exponential backoff, "Reconnecting..." UI banner, auto-resume on reconnect.
+9. Wire tool confirmation over SignalR: when a tool needs approval, the server pushes a `ToolConfirmationRequest` event → Blazor shows the existing approval modal → user responds → `ConfirmToolAsync` call sent back over SignalR.
+10. Tests:
+    - `RemoteConversationRuntime` against a WireMock stub of `/v1/chat/completions?stream=true` — parses SSE events correctly
+    - `SignalRStreamingClient` against an in-memory SignalR hub — receives streamed `RuntimeEvent` objects
+    - `RemoteAuthService` — valid token passes, expired token triggers reconnect, missing token shows error
+    - Mode toggle: `RuntimeMode=embedded` resolves in-process `IConversationRuntime`; `RuntimeMode=remote` resolves `RemoteConversationRuntime`
+    - End-to-end (behind `REMOTE_E2E=1`): Blazor web + Sovrant.Server running → chat turn streams via SignalR → tool confirmation round-trips
+    - All existing Chat.razor unit tests pass in both modes (same component, different DI)
+
+### Acceptance criteria
+
+- `dotnet build` exits 0
+- `SOVRANT_RUNTIME_MODE=embedded` behaves identically to today (no regressions)
+- `SOVRANT_RUNTIME_MODE=remote SOVRANT_SERVER_URL=https://localhost:5200` → Chat page streams responses from the remote server
+- SignalR connection auto-reconnects after a transient disconnect
+- Tool confirmation dialogs work over SignalR (remote server pushes request, web frontend responds)
+- `sovrant` Server shows the web client connection in its session list
+- Killing the remote server → web frontend shows "Disconnected" banner, not a crash
+
+### Non-goals
+
+- Blazor WASM deployment. This phase keeps Blazor Server (which has direct server access to SignalR). WASM would require a separate API abstraction layer and is a future concern.
+- Multi-user real-time collaboration. Each web session is a single-user session against the runtime, same as embedded mode.
+- Load balancing / horizontal scaling of `Sovrant.Server`. Single-server topology in this phase.
 
 ---
 
