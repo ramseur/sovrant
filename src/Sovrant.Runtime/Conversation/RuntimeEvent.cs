@@ -40,4 +40,37 @@ public abstract partial record RuntimeEvent
     /// The authorization URL should be surfaced to the user so they can complete the flow.
     /// </summary>
     public sealed record AuthRequired(string ServerName, Uri AuthorizationUrl) : RuntimeEvent;
+
+    // ── Phase 59 events ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Phase 59a — the intent gate determined the user's message is ambiguous
+    /// and needs clarification before tools can be exposed.
+    /// </summary>
+    public sealed record ClarificationNeeded(string Question) : RuntimeEvent;
+
+    /// <summary>
+    /// Phase 59b — a plan has been produced and is being presented to the user
+    /// for review and optional approval before execution begins.
+    /// </summary>
+    public sealed record PlanPresented(
+        string PlanId,
+        string FormattedPlan,
+        bool RequiresApproval) : RuntimeEvent;
+
+    /// <summary>Phase 59b — the user approved the presented plan.</summary>
+    public sealed record PlanApproved(string PlanId) : RuntimeEvent;
+
+    /// <summary>Phase 59b — the user rejected the presented plan.</summary>
+    public sealed record PlanRejected(string PlanId, string? Reason) : RuntimeEvent;
+
+    /// <summary>
+    /// Phase 59e — progress update for a step within a plan execution,
+    /// streamed to UIs so the user can track what the system is doing.
+    /// </summary>
+    public sealed record StepProgress(
+        int Current,
+        int Total,
+        string Intent,
+        string Status) : RuntimeEvent;
 }

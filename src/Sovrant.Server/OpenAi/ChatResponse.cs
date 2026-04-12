@@ -77,6 +77,40 @@ public sealed class SovrantEvent
     [JsonPropertyName("is_error")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsError { get; init; }
+
+    // ── Phase 59 fields ─────────────────────────────────────────────
+
+    [JsonPropertyName("clarification")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Clarification { get; init; }
+
+    [JsonPropertyName("plan_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PlanId { get; init; }
+
+    [JsonPropertyName("formatted_plan")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? FormattedPlan { get; init; }
+
+    [JsonPropertyName("requires_approval")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool RequiresApproval { get; init; }
+
+    [JsonPropertyName("step_current")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int StepCurrent { get; init; }
+
+    [JsonPropertyName("step_total")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int StepTotal { get; init; }
+
+    [JsonPropertyName("step_intent")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? StepIntent { get; init; }
+
+    [JsonPropertyName("step_status")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? StepStatus { get; init; }
 }
 
 /// <summary>Token usage summary on the final chunk.</summary>
@@ -112,6 +146,11 @@ public sealed class ChatCompletionResponse
 
     [JsonPropertyName("usage")]
     public UsageInfo Usage { get; init; } = new();
+
+    /// <summary>Phase 59 extension: Sovrant-specific event metadata (clarification, plan).</summary>
+    [JsonPropertyName("sovrant")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public SovrantEvent? Sovrant { get; init; }
 }
 
 /// <summary>A single choice in a non-streaming response.</summary>

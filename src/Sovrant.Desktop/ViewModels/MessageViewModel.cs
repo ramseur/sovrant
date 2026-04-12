@@ -55,6 +55,36 @@ public partial class MessageViewModel : ViewModelBase
     [ObservableProperty]
     private string _errorMessage = string.Empty;
 
+    // ── Phase 59 properties ─────────────────────────────────────────────
+
+    /// <summary>Phase 59a — clarification question from the intent gate.</summary>
+    [ObservableProperty]
+    private string? _clarificationQuestion;
+
+    /// <summary>Phase 59b — formatted plan text awaiting approval.</summary>
+    [ObservableProperty]
+    private string? _planContent;
+
+    /// <summary>Phase 59b — whether the presented plan requires user approval.</summary>
+    [ObservableProperty]
+    private bool _planRequiresApproval;
+
+    /// <summary>Phase 59b — ID of the presented plan.</summary>
+    [ObservableProperty]
+    private string? _planId;
+
+    /// <summary>Phase 59e — current step index (1-based).</summary>
+    [ObservableProperty]
+    private int _currentStep;
+
+    /// <summary>Phase 59e — total number of steps in the plan.</summary>
+    [ObservableProperty]
+    private int _totalSteps;
+
+    /// <summary>Phase 59e — human-readable step progress summary.</summary>
+    [ObservableProperty]
+    private string? _stepProgressText;
+
     /// <summary>Raw text passed to the Markdig-based markdown presenter.</summary>
     public string SafeMarkdown => Text;
 

@@ -5,13 +5,30 @@ namespace Sovrant.Runtime.Tests.Permissions;
 /// <summary>Tests for <see cref="ModeAwarePermissionPolicy"/>.</summary>
 public sealed class ModeAwarePermissionPolicyTests
 {
-    [Theory]
-    [InlineData(PermissionMode.BypassPermissions)]
-    [InlineData(PermissionMode.DontAsk)]
-    public void Evaluate_BypassModes_AllowDestructiveTools(PermissionMode mode)
+    [Fact]
+    public void Evaluate_BypassPermissions_AllowsDestructiveTools()
     {
-        var policy = new ModeAwarePermissionPolicy(mode);
+        var policy = new ModeAwarePermissionPolicy(PermissionMode.BypassPermissions);
         Assert.Equal(PolicyDecision.Allow, policy.Evaluate("bash", isDestructive: true));
+    }
+
+    /// <summary>
+    /// Phase 59 hardened DontAsk: Dangerous-tier tools now require confirmation
+    /// unless SOVRANT_UNSAFE_DONTASK=true is set (for CI pipelines only).
+    /// </summary>
+    [Fact]
+    public void Evaluate_DontAsk_RequiresConfirmationForDangerousTools()
+    {
+        var policy = new ModeAwarePermissionPolicy(PermissionMode.DontAsk);
+        Assert.Equal(PolicyDecision.RequireConfirmation, policy.Evaluate("bash", isDestructive: true));
+    }
+
+    [Fact]
+    public void Evaluate_DontAsk_AllowsSafeAndModerateTools()
+    {
+        var policy = new ModeAwarePermissionPolicy(PermissionMode.DontAsk);
+        Assert.Equal(PolicyDecision.Allow, policy.Evaluate("read", isDestructive: false));
+        Assert.Equal(PolicyDecision.Allow, policy.Evaluate("write", isDestructive: true));
     }
 
     [Fact]

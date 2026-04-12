@@ -309,6 +309,22 @@ internal static class ChatRoutes
                         }],
                     }, ct).ConfigureAwait(false);
                     break;
+
+                // ── Phase 59 events ─────────────────────────────────────
+                case RuntimeEvent.ClarificationNeeded { Question: var question }:
+                    await SseWriter.WriteChunkAsync(ctx.Response,
+                        SseWriter.ClarificationChunk(completionId, model, question), ct).ConfigureAwait(false);
+                    break;
+
+                case RuntimeEvent.PlanPresented { PlanId: var planId, FormattedPlan: var plan, RequiresApproval: var needsApproval }:
+                    await SseWriter.WriteChunkAsync(ctx.Response,
+                        SseWriter.PlanPresentedChunk(completionId, model, planId, plan, needsApproval), ct).ConfigureAwait(false);
+                    break;
+
+                case RuntimeEvent.StepProgress { Current: var current, Total: var total, Intent: var intent, Status: var status }:
+                    await SseWriter.WriteChunkAsync(ctx.Response,
+                        SseWriter.StepProgressChunk(completionId, model, current, total, intent, status), ct).ConfigureAwait(false);
+                    break;
             }
         }
 
@@ -327,6 +343,8 @@ internal static class ChatRoutes
         var sb = new StringBuilder();
         var inputTokens = 0;
         var outputTokens = 0;
+        string? clarification = null;
+        SovrantEvent? presentedPlan = null;
 
         await foreach (var ev in runtime.RunTurnAsync(userMessage, ct).ConfigureAwait(false))
         {
@@ -340,8 +358,27 @@ internal static class ChatRoutes
                     outputTokens = outp;
                     sessionConfig?.AddTokens(inp, outp);
                     break;
+                case RuntimeEvent.ClarificationNeeded { Question: var question }:
+                    clarification = question;
+                    break;
+                case RuntimeEvent.PlanPresented { PlanId: var planId, FormattedPlan: var plan, RequiresApproval: var needsApproval }:
+                    presentedPlan = new SovrantEvent
+                    {
+                        Event = "plan_presented",
+                        PlanId = planId,
+                        FormattedPlan = plan,
+                        RequiresApproval = needsApproval,
+                    };
+                    break;
             }
         }
+
+        // Build the Sovrant extension if any Phase 59 events were captured.
+        SovrantEvent? sovrantExt = null;
+        if (clarification is not null)
+            sovrantExt = new SovrantEvent { Event = "clarification_needed", Clarification = clarification };
+        else if (presentedPlan is not null)
+            sovrantExt = presentedPlan;
 
         var response = new ChatCompletionResponse
         {
@@ -357,6 +394,7 @@ internal static class ChatRoutes
                 CompletionTokens = outputTokens,
                 TotalTokens = inputTokens + outputTokens,
             },
+            Sovrant = sovrantExt,
         };
 
         await ctx.Response.WriteAsJsonAsync(response, ct).ConfigureAwait(false);

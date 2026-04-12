@@ -32,6 +32,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly IHookRunner _hookRunner;
     private readonly MemoryInjector? _memoryInjector;
     private readonly IModelCapabilityRegistry? _capabilityRegistry;
+    private readonly Governance.IIntentGate? _intentGate;
     private readonly List<InputMessage> _history = [];
     private string _systemPrompt;
 
@@ -87,7 +88,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         IHookRunner? hookRunner = null,
         MemoryInjector? memoryInjector = null,
         string? systemPromptOverride = null,
-        IModelCapabilityRegistry? capabilityRegistry = null)
+        IModelCapabilityRegistry? capabilityRegistry = null,
+        Governance.IIntentGate? intentGate = null)
     {
         _router = router;
         _toolExecutor = toolExecutor;
@@ -98,6 +100,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         _hookRunner = hookRunner ?? NullHookRunner.Instance;
         _memoryInjector = memoryInjector;
         _capabilityRegistry = capabilityRegistry;
+        _intentGate = intentGate;
         _systemPrompt = systemPromptOverride ?? BuildSystemPrompt();
     }
 
@@ -175,11 +178,37 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 LogToolRound(_logger, round, MaxToolRounds, SessionId);
 
             var allTools = _toolRegistry.GetDefinitions();
-            // On the first round, skip tools entirely for simple conversational messages
-            // to prevent models from hallucinating unnecessary tool calls.
-            var tools = round == 0 && !LooksLikeToolRequest(userMessage)
-                ? []
-                : FilterToolsForModel(allTools);
+            // Phase 59a — On the first round, use the semantic intent gate (if
+            // available) to decide whether tools should be exposed. Falls back
+            // to the legacy keyword matcher when no gate is registered.
+            IReadOnlyList<ToolDefinition> tools;
+            if (round == 0)
+            {
+                if (_intentGate is not null)
+                {
+                    var gateResult = await _intentGate.ClassifyAsync(
+                        userMessage, _history.Count / 2, ct).ConfigureAwait(false);
+
+                    if (gateResult.NeedsClarification)
+                        yield return new RuntimeEvent.ClarificationNeeded(
+                            gateResult.SuggestedClarification ?? "Could you clarify what you'd like me to do?");
+
+                    tools = gateResult.RequiresTools
+                        ? FilterToolsForModel(allTools)
+                        : [];
+                }
+                else
+                {
+                    // Legacy fallback — will be removed once IIntentGate is fully validated.
+                    tools = LooksLikeToolRequest(userMessage)
+                        ? FilterToolsForModel(allTools)
+                        : [];
+                }
+            }
+            else
+            {
+                tools = FilterToolsForModel(allTools);
+            }
             var request = new MessagesRequest(
                 _config.Model,
                 CapMaxTokens(_config.Model, _config.MaxTokens),

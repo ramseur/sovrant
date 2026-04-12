@@ -23,6 +23,29 @@ public sealed class ChatMessageModel
     public string ErrorMessage { get; set; } = string.Empty;
     public List<ToolUseModel> ToolUses { get; } = [];
 
+    // ── Phase 59 properties ─────────────────────────────────────────────
+
+    /// <summary>Phase 59a — clarification question from the intent gate.</summary>
+    public string? ClarificationQuestion { get; set; }
+
+    /// <summary>Phase 59b — formatted plan text awaiting approval.</summary>
+    public string? PlanContent { get; set; }
+
+    /// <summary>Phase 59b — ID of the presented plan.</summary>
+    public string? PlanId { get; set; }
+
+    /// <summary>Phase 59b — whether the presented plan requires user approval.</summary>
+    public bool PlanRequiresApproval { get; set; }
+
+    /// <summary>Phase 59e — current step index (1-based).</summary>
+    public int CurrentStep { get; set; }
+
+    /// <summary>Phase 59e — total number of steps in the plan.</summary>
+    public int TotalSteps { get; set; }
+
+    /// <summary>Phase 59e — human-readable step progress summary.</summary>
+    public string? StepProgressText { get; set; }
+
     public void StartThinking()
     {
         IsThinking = true;

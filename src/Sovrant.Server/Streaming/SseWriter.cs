@@ -75,6 +75,51 @@ internal static class SseWriter
             },
         };
 
+    /// <summary>Builds a clarification-needed extension chunk.</summary>
+    public static ChatCompletionChunk ClarificationChunk(string id, string model, string question) =>
+        new()
+        {
+            Id = id,
+            Model = model,
+            Choices = [new ChunkChoice { Delta = new DeltaContent { Content = string.Empty } }],
+            Sovrant = new SovrantEvent { Event = "clarification_needed", Clarification = question },
+        };
+
+    /// <summary>Builds a plan-presented extension chunk.</summary>
+    public static ChatCompletionChunk PlanPresentedChunk(
+        string id, string model, string planId, string formattedPlan, bool requiresApproval) =>
+        new()
+        {
+            Id = id,
+            Model = model,
+            Choices = [new ChunkChoice { Delta = new DeltaContent { Content = string.Empty } }],
+            Sovrant = new SovrantEvent
+            {
+                Event = "plan_presented",
+                PlanId = planId,
+                FormattedPlan = formattedPlan,
+                RequiresApproval = requiresApproval,
+            },
+        };
+
+    /// <summary>Builds a step-progress extension chunk.</summary>
+    public static ChatCompletionChunk StepProgressChunk(
+        string id, string model, int current, int total, string intent, string status) =>
+        new()
+        {
+            Id = id,
+            Model = model,
+            Choices = [new ChunkChoice { Delta = new DeltaContent { Content = string.Empty } }],
+            Sovrant = new SovrantEvent
+            {
+                Event = "step_progress",
+                StepCurrent = current,
+                StepTotal = total,
+                StepIntent = intent,
+                StepStatus = status,
+            },
+        };
+
     /// <summary>Builds the final stop chunk with token usage.</summary>
     public static ChatCompletionChunk StopChunk(
         string id, string model, int inputTokens, int outputTokens) =>

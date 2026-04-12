@@ -1008,6 +1008,36 @@ async Task RunTurnWithCancelAsync(IConversationRuntime runtime, string message, 
                     }
                     AnsiConsole.MarkupLine($"[red bold]Error:[/] [red]{Markup.Escape(msg)}[/]");
                     break;
+
+                // ── Phase 59 events ─────────────────────────────────────
+                case RuntimeEvent.ClarificationNeeded { Question: var question }:
+                    if (firstToken)
+                    {
+                        SovrantInputReader.ClearProcessingBox();
+                        await spinner.StopAsync().ConfigureAwait(false);
+                        firstToken = false;
+                    }
+                    AnsiConsole.MarkupLine($"\n[yellow bold]\u2753 Clarification needed:[/] [yellow]{Markup.Escape(question)}[/]");
+                    break;
+
+                case RuntimeEvent.PlanPresented { FormattedPlan: var plan, RequiresApproval: var needsApproval }:
+                    if (firstToken)
+                    {
+                        SovrantInputReader.ClearProcessingBox();
+                        await spinner.StopAsync().ConfigureAwait(false);
+                        firstToken = false;
+                    }
+                    AnsiConsole.MarkupLine("\n[bold teal]\U0001F4CB Plan:[/]");
+                    AnsiConsole.Write(new Panel(Markup.Escape(plan)).BorderColor(Color.Teal).Padding(1, 0));
+                    if (needsApproval)
+                        AnsiConsole.MarkupLine("[yellow]This plan requires approval before execution.[/]");
+                    break;
+
+                case RuntimeEvent.StepProgress { Current: var current, Total: var total, Intent: var intent, Status: var status }:
+                    var icon = status == "completed" ? "\u2713" : status == "failed" ? "\u2717" : "\u25B6";
+                    var color = status == "completed" ? "green" : status == "failed" ? "red" : "blue";
+                    AnsiConsole.MarkupLine($"  [{color}]{icon} Step {current}/{total}: {Markup.Escape(intent)} [{status}][/{color}]");
+                    break;
             }
         }
     }
@@ -1082,6 +1112,26 @@ async Task RunTurnAsync(IConversationRuntime runtime, string message, Cancellati
                 }
                 AnsiConsole.MarkupLine($"[red bold]Error:[/] [red]{Markup.Escape(msg)}[/]");
                 break;
+
+            // ── Phase 59 events ─────────────────────────────────────────
+            case RuntimeEvent.ClarificationNeeded { Question: var question }:
+                if (firstToken) { await spinner.StopAsync().ConfigureAwait(false); firstToken = false; }
+                AnsiConsole.MarkupLine($"\n[yellow bold]\u2753 Clarification needed:[/] [yellow]{Markup.Escape(question)}[/]");
+                break;
+
+            case RuntimeEvent.PlanPresented { FormattedPlan: var plan, RequiresApproval: var needsApproval }:
+                if (firstToken) { await spinner.StopAsync().ConfigureAwait(false); firstToken = false; }
+                AnsiConsole.MarkupLine("\n[bold teal]\U0001F4CB Plan:[/]");
+                AnsiConsole.Write(new Panel(Markup.Escape(plan)).BorderColor(Color.Teal).Padding(1, 0));
+                if (needsApproval)
+                    AnsiConsole.MarkupLine("[yellow]This plan requires approval before execution.[/]");
+                break;
+
+            case RuntimeEvent.StepProgress { Current: var current, Total: var total, Intent: var intent, Status: var status }:
+                var progressIcon = status == "completed" ? "\u2713" : status == "failed" ? "\u2717" : "\u25B6";
+                var progressColor = status == "completed" ? "green" : status == "failed" ? "red" : "blue";
+                AnsiConsole.MarkupLine($"  [{progressColor}]{progressIcon} Step {current}/{total}: {Markup.Escape(intent)} [{status}][/{progressColor}]");
+                break;
         }
     }
 }
@@ -1096,6 +1146,9 @@ async Task<int> RunCiTurnAsync(IConversationRuntime runtime, string message, Can
     var errors = new List<string>();
     int inputTokens = 0;
     int outputTokens = 0;
+    string? clarification = null;
+    CiPlanInfo? presentedPlan = null;
+    var stepProgress = new List<CiStepProgress>();
 
     await foreach (var ev in runtime.RunTurnAsync(message, ct).ConfigureAwait(false))
     {
@@ -1127,6 +1180,19 @@ async Task<int> RunCiTurnAsync(IConversationRuntime runtime, string message, Can
             case RuntimeEvent.RuntimeError { Message: var msg }:
                 errors.Add(msg);
                 break;
+
+            // Phase 59 events — captured in CI output metadata.
+            case RuntimeEvent.ClarificationNeeded { Question: var question }:
+                clarification = question;
+                break;
+
+            case RuntimeEvent.PlanPresented { PlanId: var planId, FormattedPlan: var plan, RequiresApproval: var needsApproval }:
+                presentedPlan = new CiPlanInfo(planId, plan, needsApproval);
+                break;
+
+            case RuntimeEvent.StepProgress { Current: var current, Total: var total, Intent: var intent, Status: var status }:
+                stepProgress.Add(new CiStepProgress(current, total, intent, status));
+                break;
         }
     }
 
@@ -1136,7 +1202,10 @@ async Task<int> RunCiTurnAsync(IConversationRuntime runtime, string message, Can
         tool_calls: toolCalls,
         errors: errors,
         input_tokens: inputTokens,
-        output_tokens: outputTokens);
+        output_tokens: outputTokens,
+        clarification: clarification,
+        plan: presentedPlan,
+        step_progress: stepProgress.Count > 0 ? stepProgress : null);
 
     var json = JsonSerializer.Serialize(result, CiJsonOptions.Instance);
     Console.WriteLine(json);
@@ -1186,13 +1255,27 @@ sealed record CiOutput(
     List<CiToolCallResult> tool_calls,
     List<string> errors,
     int input_tokens,
-    int output_tokens);
+    int output_tokens,
+    string? clarification = null,
+    CiPlanInfo? plan = null,
+    List<CiStepProgress>? step_progress = null);
 
 sealed record CiToolCallResult(
     string id,
     string tool_name,
     string? content,
     bool is_error);
+
+sealed record CiPlanInfo(
+    string plan_id,
+    string formatted_plan,
+    bool requires_approval);
+
+sealed record CiStepProgress(
+    int current,
+    int total,
+    string intent,
+    string status);
 
 static class CiJsonOptions
 {

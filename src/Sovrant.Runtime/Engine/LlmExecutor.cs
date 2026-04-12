@@ -37,24 +37,39 @@ public sealed partial class LlmExecutor : IExecutor
     [LoggerMessage(Level = LogLevel.Information, Message = "Engine run {RunId}: step {Step} failed on attempt {Attempt}/{Max}, retrying")]
     private static partial void LogStepRetry(ILogger logger, string runId, int step, int attempt, int max);
 
+    [LoggerMessage(Level = LogLevel.Information, Message = "Engine run {RunId}: plan presented to user (requires_approval={RequiresApproval})")]
+    private static partial void LogPlanPresented(ILogger logger, string runId, bool requiresApproval);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Engine run {RunId}: step {Step}/{Total} progress — {Intent}")]
+    private static partial void LogStepProgress(ILogger logger, string runId, int step, int total, string intent);
+
     private readonly IStepRunner _stepRunner;
     private readonly IRuntimeTraceStore _traceStore;
     private readonly ExecutorOptions _options;
     private readonly ILogger<LlmExecutor> _logger;
     private readonly TimeProvider _clock;
+    private readonly Governance.IPlanPresenter? _planPresenter;
+    private readonly Governance.PlanApprovalGate? _approvalGate;
+    private readonly Governance.PlanProgressTracker? _progressTracker;
 
     public LlmExecutor(
         IStepRunner stepRunner,
         IRuntimeTraceStore traceStore,
         ExecutorOptions? options = null,
         ILogger<LlmExecutor>? logger = null,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null,
+        Governance.IPlanPresenter? planPresenter = null,
+        Governance.PlanApprovalGate? approvalGate = null,
+        Governance.PlanProgressTracker? progressTracker = null)
     {
         _stepRunner = stepRunner ?? throw new ArgumentNullException(nameof(stepRunner));
         _traceStore = traceStore ?? throw new ArgumentNullException(nameof(traceStore));
         _options = options ?? ExecutorOptions.Default;
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<LlmExecutor>.Instance;
         _clock = clock ?? TimeProvider.System;
+        _planPresenter = planPresenter;
+        _approvalGate = approvalGate;
+        _progressTracker = progressTracker;
     }
 
     public async Task<ExecutionResult> ExecuteAsync(
@@ -72,6 +87,9 @@ public sealed partial class LlmExecutor : IExecutor
         var replanCount = 0;
 
         await AppendPlanCreatedAsync(currentPlan, runContext, ct).ConfigureAwait(false);
+
+        // Phase 59b — present plan to user and check if approval is needed.
+        EmitPlanPresented(currentPlan, runContext);
 
         try
         {
@@ -160,6 +178,9 @@ public sealed partial class LlmExecutor : IExecutor
 
                 await AppendStepStartedAsync(plan, step, runContext, attempt, ct).ConfigureAwait(false);
 
+                // Phase 59e — emit step progress (started).
+                EmitStepProgress(plan, step, runContext, "started");
+
                 var stepCtx = new StepExecutionContext(
                     RuntimeRunId: runContext.RuntimeRunId,
                     PlanId: plan.Id,
@@ -197,6 +218,10 @@ public sealed partial class LlmExecutor : IExecutor
 
                 outcomes.Add(outcome);
                 await AppendStepCompletedAsync(plan, step, runContext, outcome, ct).ConfigureAwait(false);
+
+                // Phase 59e — emit step progress (completed/failed).
+                EmitStepProgress(plan, step, runContext,
+                    outcome.Status == StepStatus.Failed ? "failed" : "completed");
 
                 switch (outcome.Status)
                 {
@@ -349,6 +374,40 @@ public sealed partial class LlmExecutor : IExecutor
             SessionId: runContext.SessionId,
             WorkspaceId: runContext.WorkspaceId,
             ProjectId: runContext.ProjectId), ct);
+    }
+
+    // ── Phase 59 event emission ─────────────────────────────────────────
+
+    /// <summary>Phase 59b — formats and emits a PlanPresented event via the run context's event sink.</summary>
+    private void EmitPlanPresented(RuntimePlan plan, EngineRunContext runContext)
+    {
+        if (runContext.EventSink is null)
+            return;
+
+        var formatted = _planPresenter?.FormatPlan(plan) ?? $"Plan: {plan.Goal} ({plan.Steps.Count} steps)";
+        var requiresApproval = _approvalGate is not null &&
+            Governance.PlanApprovalGate.RequiresApproval(
+                plan, Governance.PlanApprovalMode.ApproveDestructive);
+
+        LogPlanPresented(_logger, runContext.RuntimeRunId, requiresApproval);
+        runContext.EventSink(new Conversation.RuntimeEvent.PlanPresented(
+            plan.Id, formatted, requiresApproval));
+    }
+
+    /// <summary>Phase 59e — emits a StepProgress event via the run context's event sink.</summary>
+    private void EmitStepProgress(RuntimePlan plan, RuntimeStep step, EngineRunContext runContext, string status)
+    {
+        if (runContext.EventSink is null)
+            return;
+
+        LogStepProgress(_logger, runContext.RuntimeRunId, step.Index + 1, plan.Steps.Count, step.Intent);
+
+        var progressEvent = _progressTracker is not null
+            ? Governance.PlanProgressTracker.CreateEvent(plan, step, status)
+            : new Conversation.RuntimeEvent.StepProgress(
+                step.Index + 1, plan.Steps.Count, step.Intent, status);
+
+        runContext.EventSink(progressEvent);
     }
 
     // ── Inner terminal ───────────────────────────────────────────────────

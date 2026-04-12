@@ -317,6 +317,29 @@ public partial class ChatViewModel : ViewModelBase
             case RuntimeEvent.PermissionDenied { ToolName: var tool, Reason: var reason }:
                 msg.AppendText($"\n\n*Permission denied for {tool}: {reason}*");
                 break;
+
+            // ── Phase 59 events ─────────────────────────────────────────
+            case RuntimeEvent.ClarificationNeeded { Question: var question }:
+                if (msg.IsThinking) msg.StopThinking();
+                msg.ClarificationQuestion = question;
+                msg.AppendText($"\n\n**Clarification needed:** {question}");
+                break;
+
+            case RuntimeEvent.PlanPresented { PlanId: var planId, FormattedPlan: var plan, RequiresApproval: var needsApproval }:
+                if (msg.IsThinking) msg.StopThinking();
+                msg.PlanId = planId;
+                msg.PlanContent = plan;
+                msg.PlanRequiresApproval = needsApproval;
+                msg.AppendText($"\n\n**Plan:**\n```\n{plan}\n```");
+                if (needsApproval)
+                    msg.AppendText("\n\n*This plan requires approval before execution.*");
+                break;
+
+            case RuntimeEvent.StepProgress { Current: var current, Total: var total, Intent: var intent, Status: var status }:
+                msg.CurrentStep = current;
+                msg.TotalSteps = total;
+                msg.StepProgressText = $"Step {current}/{total}: {intent} [{status}]";
+                break;
         }
     }
 }

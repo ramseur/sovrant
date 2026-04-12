@@ -25,8 +25,10 @@ public sealed record ExecutorOptions(
 /// <param name="SessionId">Owning session id.</param>
 /// <param name="WorkspaceId">Owning workspace id, if any.</param>
 /// <param name="ProjectId">Owning project id, if any.</param>
+/// <param name="EventSink">Phase 59 — optional callback that receives <see cref="Conversation.RuntimeEvent"/>s during execution (plan presented, step progress, etc.).</param>
 public sealed record EngineRunContext(
     string RuntimeRunId,
     string SessionId,
     string? WorkspaceId = null,
-    string? ProjectId = null);
+    string? ProjectId = null,
+    Action<Conversation.RuntimeEvent>? EventSink = null);

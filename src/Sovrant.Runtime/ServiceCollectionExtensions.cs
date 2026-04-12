@@ -74,6 +74,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<GovernanceConfig>(_ => GovernanceConfig.Load());
         services.AddSingleton<IGovernanceMonitor, GovernanceMonitor>();
 
+        // Phase 59 — Agentic loop hardening: intent gate, plan approval,
+        // execution governance, orchestration router, progress tracking.
+        services.AddSingleton<Governance.IIntentGate, Governance.SemanticIntentGate>();
+        services.AddSingleton<Governance.IPlanPresenter, Governance.PlanPresenter>();
+        services.AddSingleton<Governance.PlanApprovalGate>();
+        services.AddSingleton<Governance.StepToolEnforcer>();
+        services.AddSingleton<Governance.IntentInjector>();
+        services.AddSingleton<Governance.PlanProgressTracker>();
+        services.AddSingleton<Governance.IOrchestrationRouter, Governance.HeuristicOrchestrationRouter>();
+
         // Tool registry and executor
         services.AddSingleton<IToolRegistry, InMemoryToolRegistry>();
         services.AddSingleton<IToolConfirmationHandler, DenyAllConfirmationHandler>();
