@@ -70,7 +70,8 @@ public sealed class SkillCreateTool : ITool
         var filePath = Path.Combine(skillsDir, string.Create(CultureInfo.InvariantCulture, $"{name}.md"));
 
         // Defense-in-depth: verify resolved path stays within skills directory
-        if (!Path.GetFullPath(filePath).StartsWith(Path.GetFullPath(skillsDir), StringComparison.OrdinalIgnoreCase))
+        var pathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (!Path.GetFullPath(filePath).StartsWith(Path.GetFullPath(skillsDir), pathComparison))
             return "Error: name resolves outside the skills directory.";
 
         await File.WriteAllTextAsync(filePath, content, ct).ConfigureAwait(false);

@@ -47,10 +47,22 @@ public sealed class WebFetchTool : ITool
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Sovrant/1.0");
             client.Timeout = TimeSpan.FromSeconds(30);
 
-            using var response = await client.GetAsync(uri, ct).ConfigureAwait(false);
+            using var response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
-            var content = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            // Stream-based bounded read to avoid loading unbounded responses into memory.
+            var maxBytes = maxLength * 4; // generous UTF-8 allowance
+            using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            var buffer = new byte[Math.Min(maxBytes, 2 * 1024 * 1024)]; // cap at 2 MB read
+            int totalRead = 0;
+            int bytesRead;
+            while (totalRead < buffer.Length &&
+                   (bytesRead = await stream.ReadAsync(buffer.AsMemory(totalRead, buffer.Length - totalRead), ct).ConfigureAwait(false)) > 0)
+            {
+                totalRead += bytesRead;
+            }
+            var encoding = System.Text.Encoding.UTF8;
+            var content = encoding.GetString(buffer, 0, totalRead);
             var contentType = response.Content.Headers.ContentType?.MediaType ?? string.Empty;
 
             if (contentType.Contains("html", StringComparison.OrdinalIgnoreCase))

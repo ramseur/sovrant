@@ -1,7 +1,7 @@
 import type { ChatCompletionChunk } from "./types.js";
 
-/** Maximum SSE buffer size (10 MB) to prevent OOM from malicious servers. */
-const MAX_BUFFER_SIZE = 10 * 1024 * 1024;
+/** Maximum SSE buffer size (1 MB) to prevent OOM from malicious servers. */
+const MAX_BUFFER_SIZE = 1 * 1024 * 1024;
 
 /** Maximum time (ms) to wait for the next SSE chunk before aborting. */
 const READ_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes

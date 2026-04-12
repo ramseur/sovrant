@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Sovrant.Runtime.Config;
@@ -17,6 +18,18 @@ public static class McpServerSetup
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         WriteIndented = true,
     };
+
+    private static readonly Action<ILogger, string, Exception?> s_logToolCall =
+        LoggerMessage.Define<string>(LogLevel.Debug, new EventId(1, "McpToolCall"), "MCP tool call: {ToolName}");
+
+    private static readonly Action<ILogger, string, Exception?> s_logToolCompleted =
+        LoggerMessage.Define<string>(LogLevel.Debug, new EventId(2, "McpToolCompleted"), "MCP tool completed: {ToolName}");
+
+    private static readonly Action<ILogger, string, Exception?> s_logToolCancelled =
+        LoggerMessage.Define<string>(LogLevel.Debug, new EventId(3, "McpToolCancelled"), "MCP tool cancelled: {ToolName}");
+
+    private static readonly Action<ILogger, string, Exception?> s_logToolFailed =
+        LoggerMessage.Define<string>(LogLevel.Warning, new EventId(4, "McpToolFailed"), "MCP tool failed: {ToolName}");
 
     /// <summary>
     /// Registers the MCP server with stdio transport, bridging all <see cref="IToolRegistry"/>
@@ -95,10 +108,14 @@ public static class McpServerSetup
             };
         }
 
+        var logger = services.GetService<ILoggerFactory>()?.CreateLogger("Sovrant.McpServer");
+
         try
         {
+            if (logger is not null) s_logToolCall(logger, toolName, null);
             var input = ConvertArguments(arguments);
             var result = await handler(input, ct).ConfigureAwait(false);
+            if (logger is not null) s_logToolCompleted(logger, toolName, null);
             return new CallToolResult
             {
                 Content = [new TextContentBlock { Text = result }],
@@ -106,12 +123,14 @@ public static class McpServerSetup
         }
         catch (OperationCanceledException)
         {
+            if (logger is not null) s_logToolCancelled(logger, toolName, null);
             return ErrorResult(new InvalidOperationException("Tool execution was cancelled."));
         }
 #pragma warning disable CA1031 // Catch-all is intentional: MCP tools must never crash the server process
         catch (Exception ex)
 #pragma warning restore CA1031
         {
+            if (logger is not null) s_logToolFailed(logger, toolName, ex);
             return ErrorResult(ex);
         }
     }

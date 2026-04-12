@@ -183,16 +183,16 @@ export interface UsageSummary {
   total_output_tokens: number;
 }
 
-/** Callbacks for streaming events. */
+/** Callbacks for streaming events. All callbacks may be sync or async. */
 export interface StreamCallbacks {
   /** Called for each text chunk. */
-  onText?: (text: string) => void;
+  onText?: (text: string) => void | Promise<void>;
   /** Called when a tool invocation starts. */
-  onToolUse?: (event: SovrantEvent) => void;
+  onToolUse?: (event: SovrantEvent) => void | Promise<void>;
   /** Called when a tool invocation completes. */
-  onToolResult?: (event: SovrantEvent) => void;
+  onToolResult?: (event: SovrantEvent) => void | Promise<void>;
   /** Called when the turn is complete. */
-  onComplete?: (response: { text: string; usage?: UsageInfo }) => void;
+  onComplete?: (response: { text: string; usage?: UsageInfo }) => void | Promise<void>;
   /** Called on errors. */
-  onError?: (error: Error) => void;
+  onError?: (error: Error) => void | Promise<void>;
 }
