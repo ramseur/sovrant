@@ -1,21 +1,68 @@
 import { parseSSEStream } from "./sse.js";
 import type {
+  AddProjectMemberRequest,
+  AddTeamMemberRequest,
+  AddWorkspaceMemberRequest,
+  AgentRun,
+  AgentRunFilter,
+  AgentTemplateDetail,
+  AgentTemplateSummary,
+  ArtifactEntry,
+  ArtifactScope,
+  ApiToken,
   ChatCallOptions,
   ChatCompletionChunk,
   ChatCompletionRequest,
   ChatCompletionResponse,
   ChatMessage,
+  CreateInviteRequest,
+  CreateMissionRequest,
+  CreateProjectRequest,
+  CreateTeamRequest,
+  CreateUserRequest,
+  CreateWorkspaceRequest,
+  EvalRunRequest,
+  EvalRunResponse,
+  EvalSuite,
+  IssueTokenRequest,
+  IssueTokenResponse,
+  Mission,
+  MissionEvent,
   ModelsResponse,
-  ProviderStatus,
+  Project,
+  ProjectMember,
+  RuntimeTraceEntry,
+  SaveMemoryRequest,
   ServerConfig,
+  SessionConfig,
+  SessionConfigUpdate,
   SessionDetail,
   SessionListResponse,
+  SkillDetail,
+  SkillSummary,
   SovrantClientOptions,
+  StatusResponse,
   StreamCallbacks,
+  SwarmResult,
+  SwarmRunRequest,
+  Team,
+  TeamMember,
+  TeamRunRequest,
+  TeamRunResponse,
+  ToolDefinition,
+  UpdateProjectRequest,
+  UpdateUserRequest,
+  UpdateWorkspaceRequest,
   UsageInfo,
   UsageSummary,
+  UserListFilter,
+  UserProfile,
   WebhookRequest,
   WebhookResponse,
+  Workspace,
+  WorkspaceInvite,
+  WorkspaceMember,
+  WorkspaceMemoryEntry,
 } from "./types.js";
 
 const DEFAULT_MAX_RETRIES = 3;
@@ -228,10 +275,10 @@ export class SovrantClient {
 
   // ── Status ────────────────────────────────────────────────────────────
 
-  /** Get provider health and routing status. */
-  async getStatus(): Promise<ProviderStatus[]> {
+  /** Get server status including provider health, session pool, and routing info. */
+  async getStatus(): Promise<StatusResponse> {
     const res = await this.fetchWithRetry("/v1/status");
-    return (await res.json()) as ProviderStatus[];
+    return (await res.json()) as StatusResponse;
   }
 
   /** Get available models. */
@@ -259,6 +306,25 @@ export class SovrantClient {
     await this.fetchWithRetry(
       `/v1/sessions/${encodeURIComponent(sessionId)}`,
       { method: "DELETE" }
+    );
+  }
+
+  /** Get session-level config overrides (model, permission mode). */
+  async getSessionConfig(sessionId: string): Promise<SessionConfig> {
+    const res = await this.fetchWithRetry(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/config`
+    );
+    return (await res.json()) as SessionConfig;
+  }
+
+  /** Update session-level config overrides. */
+  async updateSessionConfig(
+    sessionId: string,
+    update: SessionConfigUpdate
+  ): Promise<void> {
+    await this.fetchWithRetry(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/config`,
+      { method: "PUT", body: JSON.stringify(update) }
     );
   }
 
@@ -292,6 +358,665 @@ export class SovrantClient {
   async health(): Promise<{ status: string }> {
     const res = await fetch(`${this.baseUrl}/health`);
     return (await res.json()) as { status: string };
+  }
+
+  // ── Users (Me) ────────────────────────────────────────────────────────
+
+  /** Get the authenticated user's profile. */
+  async getMe(): Promise<UserProfile> {
+    const res = await this.fetchWithRetry("/v1/users/me");
+    return (await res.json()) as UserProfile;
+  }
+
+  /** Issue a new API token for the authenticated user. */
+  async issueToken(request?: IssueTokenRequest): Promise<IssueTokenResponse> {
+    const res = await this.fetchWithRetry("/v1/users/me/tokens", {
+      method: "POST",
+      body: JSON.stringify(request ?? {}),
+    });
+    return (await res.json()) as IssueTokenResponse;
+  }
+
+  /** List all API tokens for the authenticated user. */
+  async listTokens(): Promise<{ tokens: ApiToken[]; count: number }> {
+    const res = await this.fetchWithRetry("/v1/users/me/tokens");
+    return (await res.json()) as { tokens: ApiToken[]; count: number };
+  }
+
+  /** Revoke an API token by ID. */
+  async revokeToken(tokenId: string): Promise<void> {
+    await this.fetchWithRetry(
+      `/v1/users/me/tokens/${encodeURIComponent(tokenId)}`,
+      { method: "DELETE" }
+    );
+  }
+
+  // ── Users (Admin) ─────────────────────────────────────────────────────
+
+  /** Create a new user (admin only). */
+  async createUser(request: CreateUserRequest): Promise<UserProfile> {
+    const res = await this.fetchWithRetry("/v1/users", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as UserProfile;
+  }
+
+  /** List users with optional filters (admin only). */
+  async listUsers(filter?: UserListFilter): Promise<{ users: UserProfile[]; count: number; total: number }> {
+    const params = new URLSearchParams();
+    if (filter?.status) params.set("status", filter.status);
+    if (filter?.role) params.set("role", filter.role);
+    if (filter?.team) params.set("team", filter.team);
+    if (filter?.limit !== undefined) params.set("limit", String(filter.limit));
+    if (filter?.offset !== undefined) params.set("offset", String(filter.offset));
+    const qs = params.toString();
+    const res = await this.fetchWithRetry(`/v1/users${qs ? `?${qs}` : ""}`);
+    return (await res.json()) as { users: UserProfile[]; count: number; total: number };
+  }
+
+  /** Get a user by ID (admin or self). */
+  async getUser(userId: string): Promise<UserProfile> {
+    const res = await this.fetchWithRetry(`/v1/users/${encodeURIComponent(userId)}`);
+    return (await res.json()) as UserProfile;
+  }
+
+  /** Update a user (admin only). */
+  async updateUser(userId: string, request: UpdateUserRequest): Promise<UserProfile> {
+    const res = await this.fetchWithRetry(`/v1/users/${encodeURIComponent(userId)}`, {
+      method: "PUT",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as UserProfile;
+  }
+
+  /** Deactivate a user (admin only). Soft-delete — sets status to inactive. */
+  async deactivateUser(userId: string): Promise<void> {
+    await this.fetchWithRetry(`/v1/users/${encodeURIComponent(userId)}`, {
+      method: "DELETE",
+    });
+  }
+
+  /** Reactivate a deactivated user (admin only). */
+  async reactivateUser(userId: string): Promise<void> {
+    await this.fetchWithRetry(`/v1/users/${encodeURIComponent(userId)}/reactivate`, {
+      method: "POST",
+    });
+  }
+
+  /** List sessions owned by a user (admin or self). */
+  async listUserSessions(
+    userId: string,
+    options?: { limit?: number; offset?: number }
+  ): Promise<{ sessions: unknown[]; count: number }> {
+    const params = new URLSearchParams();
+    if (options?.limit !== undefined) params.set("limit", String(options.limit));
+    if (options?.offset !== undefined) params.set("offset", String(options.offset));
+    const qs = params.toString();
+    const res = await this.fetchWithRetry(
+      `/v1/users/${encodeURIComponent(userId)}/sessions${qs ? `?${qs}` : ""}`
+    );
+    return (await res.json()) as { sessions: unknown[]; count: number };
+  }
+
+  /** Get usage stats for a user (admin or self). */
+  async getUserUsage(
+    userId: string,
+    options?: { model?: string; from?: string; to?: string }
+  ): Promise<unknown> {
+    const params = new URLSearchParams();
+    if (options?.model) params.set("model", options.model);
+    if (options?.from) params.set("from", options.from);
+    if (options?.to) params.set("to", options.to);
+    const qs = params.toString();
+    const res = await this.fetchWithRetry(
+      `/v1/users/${encodeURIComponent(userId)}/usage${qs ? `?${qs}` : ""}`
+    );
+    return res.json();
+  }
+
+  /** Get audit log for a user (admin or self). */
+  async getUserAudit(
+    userId: string,
+    options?: { limit?: number }
+  ): Promise<{ events: unknown[]; count: number }> {
+    const params = new URLSearchParams();
+    if (options?.limit !== undefined) params.set("limit", String(options.limit));
+    const qs = params.toString();
+    const res = await this.fetchWithRetry(
+      `/v1/users/${encodeURIComponent(userId)}/audit${qs ? `?${qs}` : ""}`
+    );
+    return (await res.json()) as { events: unknown[]; count: number };
+  }
+
+  // ── Workspaces ────────────────────────────────────────────────────────
+
+  /** List workspaces the authenticated user belongs to. */
+  async listWorkspaces(): Promise<{ workspaces: Workspace[] }> {
+    const res = await this.fetchWithRetry("/v1/workspaces");
+    return (await res.json()) as { workspaces: Workspace[] };
+  }
+
+  /** Create a new team workspace. */
+  async createWorkspace(request: CreateWorkspaceRequest): Promise<Workspace> {
+    const res = await this.fetchWithRetry("/v1/workspaces", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as Workspace;
+  }
+
+  /** Get a workspace by ID. */
+  async getWorkspace(workspaceId: string): Promise<Workspace> {
+    const res = await this.fetchWithRetry(`/v1/workspaces/${encodeURIComponent(workspaceId)}`);
+    return (await res.json()) as Workspace;
+  }
+
+  /** Update a workspace. */
+  async updateWorkspace(workspaceId: string, request: UpdateWorkspaceRequest): Promise<Workspace> {
+    const res = await this.fetchWithRetry(`/v1/workspaces/${encodeURIComponent(workspaceId)}`, {
+      method: "PUT",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as Workspace;
+  }
+
+  /** Delete a workspace. Personal workspaces cannot be deleted. */
+  async deleteWorkspace(workspaceId: string): Promise<void> {
+    await this.fetchWithRetry(`/v1/workspaces/${encodeURIComponent(workspaceId)}`, {
+      method: "DELETE",
+    });
+  }
+
+  /** List members of a workspace. */
+  async listWorkspaceMembers(workspaceId: string): Promise<{ members: WorkspaceMember[] }> {
+    const res = await this.fetchWithRetry(`/v1/workspaces/${encodeURIComponent(workspaceId)}/members`);
+    return (await res.json()) as { members: WorkspaceMember[] };
+  }
+
+  /** Add a member to a workspace. */
+  async addWorkspaceMember(workspaceId: string, request: AddWorkspaceMemberRequest): Promise<void> {
+    await this.fetchWithRetry(`/v1/workspaces/${encodeURIComponent(workspaceId)}/members`, {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+  }
+
+  /** Remove a member from a workspace. */
+  async removeWorkspaceMember(workspaceId: string, userId: string): Promise<void> {
+    await this.fetchWithRetry(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(userId)}`,
+      { method: "DELETE" }
+    );
+  }
+
+  /** Create a workspace invite. */
+  async createWorkspaceInvite(workspaceId: string, request: CreateInviteRequest): Promise<WorkspaceInvite> {
+    const res = await this.fetchWithRetry(`/v1/workspaces/${encodeURIComponent(workspaceId)}/invites`, {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as WorkspaceInvite;
+  }
+
+  /** Delete a workspace invite. */
+  async deleteWorkspaceInvite(workspaceId: string, inviteId: string): Promise<void> {
+    await this.fetchWithRetry(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/invites/${encodeURIComponent(inviteId)}`,
+      { method: "DELETE" }
+    );
+  }
+
+  /** Accept a workspace invite by token. */
+  async acceptWorkspaceInvite(token: string): Promise<void> {
+    await this.fetchWithRetry("/v1/workspaces/invites/accept", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    });
+  }
+
+  /** Get workspace configuration. */
+  async getWorkspaceConfig(workspaceId: string): Promise<{ config: Record<string, string> }> {
+    const res = await this.fetchWithRetry(`/v1/workspaces/${encodeURIComponent(workspaceId)}/config`);
+    return (await res.json()) as { config: Record<string, string> };
+  }
+
+  /** Update workspace configuration. */
+  async updateWorkspaceConfig(workspaceId: string, values: Record<string, string>): Promise<void> {
+    await this.fetchWithRetry(`/v1/workspaces/${encodeURIComponent(workspaceId)}/config`, {
+      method: "PUT",
+      body: JSON.stringify(values),
+    });
+  }
+
+  /** Get workspace usage stats. */
+  async getWorkspaceUsage(workspaceId: string): Promise<unknown> {
+    const res = await this.fetchWithRetry(`/v1/workspaces/${encodeURIComponent(workspaceId)}/usage`);
+    return res.json();
+  }
+
+  /** List workspace memory entries. */
+  async listWorkspaceMemory(
+    workspaceId: string,
+    layer?: string
+  ): Promise<{ memory: WorkspaceMemoryEntry[] }> {
+    const qs = layer ? `?layer=${encodeURIComponent(layer)}` : "";
+    const res = await this.fetchWithRetry(`/v1/workspaces/${encodeURIComponent(workspaceId)}/memory${qs}`);
+    return (await res.json()) as { memory: WorkspaceMemoryEntry[] };
+  }
+
+  /** Save a workspace memory entry. */
+  async saveWorkspaceMemory(workspaceId: string, request: SaveMemoryRequest): Promise<WorkspaceMemoryEntry> {
+    const res = await this.fetchWithRetry(`/v1/workspaces/${encodeURIComponent(workspaceId)}/memory`, {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as WorkspaceMemoryEntry;
+  }
+
+  /** Delete a workspace memory entry. */
+  async deleteWorkspaceMemory(workspaceId: string, memoryId: string): Promise<void> {
+    await this.fetchWithRetry(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/memory/${encodeURIComponent(memoryId)}`,
+      { method: "DELETE" }
+    );
+  }
+
+  // ── Projects ──────────────────────────────────────────────────────────
+
+  /** List projects in a workspace. */
+  async listProjects(
+    workspaceId: string,
+    options?: { includeArchived?: boolean }
+  ): Promise<{ projects: Project[] }> {
+    const qs = options?.includeArchived ? "?includeArchived=true" : "";
+    const res = await this.fetchWithRetry(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/projects${qs}`
+    );
+    return (await res.json()) as { projects: Project[] };
+  }
+
+  /** Create a project in a workspace. */
+  async createProject(workspaceId: string, request: CreateProjectRequest): Promise<Project> {
+    const res = await this.fetchWithRetry(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/projects`,
+      { method: "POST", body: JSON.stringify(request) }
+    );
+    return (await res.json()) as Project;
+  }
+
+  /** Get a project by ID. */
+  async getProject(projectId: string): Promise<Project> {
+    const res = await this.fetchWithRetry(`/v1/projects/${encodeURIComponent(projectId)}`);
+    return (await res.json()) as Project;
+  }
+
+  /** Update a project. */
+  async updateProject(projectId: string, request: UpdateProjectRequest): Promise<Project> {
+    const res = await this.fetchWithRetry(`/v1/projects/${encodeURIComponent(projectId)}`, {
+      method: "PUT",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as Project;
+  }
+
+  /** Delete a project (admin only). */
+  async deleteProject(projectId: string): Promise<void> {
+    await this.fetchWithRetry(`/v1/projects/${encodeURIComponent(projectId)}`, {
+      method: "DELETE",
+    });
+  }
+
+  /** Archive a project. */
+  async archiveProject(projectId: string): Promise<void> {
+    await this.fetchWithRetry(`/v1/projects/${encodeURIComponent(projectId)}/archive`, {
+      method: "POST",
+    });
+  }
+
+  /** Unarchive a project. */
+  async unarchiveProject(projectId: string): Promise<void> {
+    await this.fetchWithRetry(`/v1/projects/${encodeURIComponent(projectId)}/unarchive`, {
+      method: "POST",
+    });
+  }
+
+  /** List members of a project. */
+  async listProjectMembers(projectId: string): Promise<{ members: ProjectMember[] }> {
+    const res = await this.fetchWithRetry(`/v1/projects/${encodeURIComponent(projectId)}/members`);
+    return (await res.json()) as { members: ProjectMember[] };
+  }
+
+  /** Add a member to a project (admin only). */
+  async addProjectMember(projectId: string, request: AddProjectMemberRequest): Promise<void> {
+    await this.fetchWithRetry(`/v1/projects/${encodeURIComponent(projectId)}/members`, {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+  }
+
+  /** Remove a member from a project (admin only). */
+  async removeProjectMember(projectId: string, userId: string): Promise<void> {
+    await this.fetchWithRetry(
+      `/v1/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`,
+      { method: "DELETE" }
+    );
+  }
+
+  /** Get project configuration. */
+  async getProjectConfig(
+    projectId: string,
+    options?: { resolved?: boolean }
+  ): Promise<{ config: Record<string, string> }> {
+    const qs = options?.resolved ? "?resolved=true" : "";
+    const res = await this.fetchWithRetry(`/v1/projects/${encodeURIComponent(projectId)}/config${qs}`);
+    return (await res.json()) as { config: Record<string, string> };
+  }
+
+  /** Update project configuration. */
+  async updateProjectConfig(projectId: string, values: Record<string, string>): Promise<void> {
+    await this.fetchWithRetry(`/v1/projects/${encodeURIComponent(projectId)}/config`, {
+      method: "PUT",
+      body: JSON.stringify(values),
+    });
+  }
+
+  /** List sessions in a project. */
+  async listProjectSessions(projectId: string): Promise<{ sessions: unknown[] }> {
+    const res = await this.fetchWithRetry(`/v1/projects/${encodeURIComponent(projectId)}/sessions`);
+    return (await res.json()) as { sessions: unknown[] };
+  }
+
+  /** Get project usage stats. */
+  async getProjectUsage(projectId: string): Promise<unknown> {
+    const res = await this.fetchWithRetry(`/v1/projects/${encodeURIComponent(projectId)}/usage`);
+    return res.json();
+  }
+
+  /** Get project memory entries. */
+  async getProjectMemory(
+    projectId: string,
+    layer?: string
+  ): Promise<{ memory: unknown[] }> {
+    const qs = layer ? `?layer=${encodeURIComponent(layer)}` : "";
+    const res = await this.fetchWithRetry(`/v1/projects/${encodeURIComponent(projectId)}/memory${qs}`);
+    return (await res.json()) as { memory: unknown[] };
+  }
+
+  // ── Teams ─────────────────────────────────────────────────────────────
+
+  /** Create a team. */
+  async createTeam(request: CreateTeamRequest): Promise<Team> {
+    const res = await this.fetchWithRetry("/v1/teams", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as Team;
+  }
+
+  /** List teams, optionally filtered by workspace. */
+  async listTeams(workspaceId?: string): Promise<{ teams: Team[] }> {
+    const qs = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : "";
+    const res = await this.fetchWithRetry(`/v1/teams${qs}`);
+    return (await res.json()) as { teams: Team[] };
+  }
+
+  /** Get a team by ID, including its members. */
+  async getTeam(teamId: string): Promise<{ team: Team; members: TeamMember[] }> {
+    const res = await this.fetchWithRetry(`/v1/teams/${encodeURIComponent(teamId)}`);
+    return (await res.json()) as { team: Team; members: TeamMember[] };
+  }
+
+  /** Delete a team. */
+  async deleteTeam(teamId: string): Promise<void> {
+    await this.fetchWithRetry(`/v1/teams/${encodeURIComponent(teamId)}`, {
+      method: "DELETE",
+    });
+  }
+
+  /** Add a member to a team. */
+  async addTeamMember(teamId: string, request: AddTeamMemberRequest): Promise<{ member_id: string; name: string }> {
+    const res = await this.fetchWithRetry(`/v1/teams/${encodeURIComponent(teamId)}/members`, {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as { member_id: string; name: string };
+  }
+
+  /** List members of a team. */
+  async listTeamMembers(teamId: string): Promise<{ members: TeamMember[] }> {
+    const res = await this.fetchWithRetry(`/v1/teams/${encodeURIComponent(teamId)}/members`);
+    return (await res.json()) as { members: TeamMember[] };
+  }
+
+  /** Start a team run. */
+  async runTeam(teamId: string, request: TeamRunRequest): Promise<TeamRunResponse> {
+    const res = await this.fetchWithRetry(`/v1/teams/${encodeURIComponent(teamId)}/runs`, {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as TeamRunResponse;
+  }
+
+  // ── Runs ──────────────────────────────────────────────────────────────
+
+  /** Get a run by ID. */
+  async getRun(runId: string): Promise<AgentRun> {
+    const res = await this.fetchWithRetry(`/v1/runs/${encodeURIComponent(runId)}`);
+    return (await res.json()) as AgentRun;
+  }
+
+  /** List runs with optional filters. */
+  async listRuns(filter?: AgentRunFilter): Promise<{ runs: AgentRun[] }> {
+    const params = new URLSearchParams();
+    if (filter?.workspace_id) params.set("workspaceId", filter.workspace_id);
+    if (filter?.user_id) params.set("userId", filter.user_id);
+    if (filter?.team_id) params.set("teamId", filter.team_id);
+    if (filter?.kind) params.set("kind", filter.kind);
+    if (filter?.status) params.set("status", filter.status);
+    if (filter?.limit !== undefined) params.set("limit", String(filter.limit));
+    const qs = params.toString();
+    const res = await this.fetchWithRetry(`/v1/runs${qs ? `?${qs}` : ""}`);
+    return (await res.json()) as { runs: AgentRun[] };
+  }
+
+  // ── Missions ──────────────────────────────────────────────────────────
+
+  /** Create a mission. */
+  async createMission(request: CreateMissionRequest): Promise<Mission> {
+    const res = await this.fetchWithRetry("/v1/missions", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as Mission;
+  }
+
+  /** List missions with optional filters. */
+  async listMissions(options?: {
+    ownerUserId?: string;
+    status?: string;
+    limit?: number;
+  }): Promise<{ missions: Mission[] }> {
+    const params = new URLSearchParams();
+    if (options?.ownerUserId) params.set("ownerUserId", options.ownerUserId);
+    if (options?.status) params.set("status", options.status);
+    if (options?.limit !== undefined) params.set("limit", String(options.limit));
+    const qs = params.toString();
+    const res = await this.fetchWithRetry(`/v1/missions${qs ? `?${qs}` : ""}`);
+    return (await res.json()) as { missions: Mission[] };
+  }
+
+  /** Get a mission by ID. */
+  async getMission(missionId: string): Promise<Mission> {
+    const res = await this.fetchWithRetry(`/v1/missions/${encodeURIComponent(missionId)}`);
+    return (await res.json()) as Mission;
+  }
+
+  /** Drive a mission forward one engine cycle. */
+  async runMission(missionId: string): Promise<Mission> {
+    const res = await this.fetchWithRetry(`/v1/missions/${encodeURIComponent(missionId)}/run`, {
+      method: "POST",
+    });
+    return (await res.json()) as Mission;
+  }
+
+  /** Get the full event journal for a mission. */
+  async getMissionEvents(missionId: string): Promise<{ events: MissionEvent[] }> {
+    const res = await this.fetchWithRetry(`/v1/missions/${encodeURIComponent(missionId)}/events`);
+    return (await res.json()) as { events: MissionEvent[] };
+  }
+
+  /** Export a mission as markdown or JSON. */
+  async exportMission(missionId: string, format: "markdown" | "json" = "markdown"): Promise<string> {
+    const qs = format === "json" ? "?format=json" : "";
+    const res = await this.fetchWithRetry(`/v1/missions/${encodeURIComponent(missionId)}/export${qs}`);
+    return res.text();
+  }
+
+  // ── Swarm ─────────────────────────────────────────────────────────────
+
+  /** Get swarm result by ID. */
+  async getSwarm(swarmId: string): Promise<SwarmResult> {
+    const res = await this.fetchWithRetry(`/v1/swarm/${encodeURIComponent(swarmId)}`);
+    return (await res.json()) as SwarmResult;
+  }
+
+  /** Replay events for a swarm session. */
+  async getSwarmEvents(swarmId: string): Promise<unknown[]> {
+    const res = await this.fetchWithRetry(`/v1/swarm/${encodeURIComponent(swarmId)}/events`);
+    return (await res.json()) as unknown[];
+  }
+
+  /** List swarm sessions with optional filters. */
+  async listSwarmSessions(options?: {
+    workspace_id?: string;
+    project_id?: string;
+    limit?: number;
+  }): Promise<string[]> {
+    const params = new URLSearchParams();
+    if (options?.workspace_id) params.set("workspace_id", options.workspace_id);
+    if (options?.project_id) params.set("project_id", options.project_id);
+    if (options?.limit !== undefined) params.set("limit", String(options.limit));
+    const qs = params.toString();
+    const res = await this.fetchWithRetry(`/v1/swarm/sessions${qs ? `?${qs}` : ""}`);
+    return (await res.json()) as string[];
+  }
+
+  // ── Engine ────────────────────────────────────────────────────────────
+
+  /** Get the full trace for an engine run. */
+  async getEngineTrace(runtimeRunId: string): Promise<{ runtime_run_id: string; entries: RuntimeTraceEntry[] }> {
+    const res = await this.fetchWithRetry(`/v1/engine/runs/${encodeURIComponent(runtimeRunId)}/trace`);
+    return (await res.json()) as { runtime_run_id: string; entries: RuntimeTraceEntry[] };
+  }
+
+  /** List engine runs that crashed mid-step. */
+  async listInFlightRuns(): Promise<{ runtime_run_ids: string[] }> {
+    const res = await this.fetchWithRetry("/v1/engine/runs/in-flight");
+    return (await res.json()) as { runtime_run_ids: string[] };
+  }
+
+  /** Recover crashed engine runs. */
+  async recoverEngineRuns(): Promise<{ recovered: string[] }> {
+    const res = await this.fetchWithRetry("/v1/engine/runs/recover", { method: "POST" });
+    return (await res.json()) as { recovered: string[] };
+  }
+
+  /** Delete all trace rows for an engine run. */
+  async deleteEngineRun(runtimeRunId: string): Promise<{ runtime_run_id: string; deleted_rows: number }> {
+    const res = await this.fetchWithRetry(`/v1/engine/runs/${encodeURIComponent(runtimeRunId)}`, {
+      method: "DELETE",
+    });
+    return (await res.json()) as { runtime_run_id: string; deleted_rows: number };
+  }
+
+  // ── Evals ─────────────────────────────────────────────────────────────
+
+  /** List available eval suites. */
+  async listEvals(): Promise<EvalSuite[]> {
+    const res = await this.fetchWithRetry("/v1/evals");
+    return (await res.json()) as EvalSuite[];
+  }
+
+  /** Get eval history for a suite. */
+  async getEvalHistory(suiteName: string): Promise<unknown> {
+    const res = await this.fetchWithRetry(`/v1/evals/${encodeURIComponent(suiteName)}/history`);
+    return res.json();
+  }
+
+  /** Run an eval suite. */
+  async runEval(request: EvalRunRequest): Promise<EvalRunResponse> {
+    const res = await this.fetchWithRetry("/v1/evals/run", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as EvalRunResponse;
+  }
+
+  // ── Artifacts ─────────────────────────────────────────────────────────
+
+  /** List artifacts with optional scope filters. */
+  async listArtifacts(scope?: ArtifactScope): Promise<{ artifacts: ArtifactEntry[]; count: number }> {
+    const params = new URLSearchParams();
+    if (scope?.workspace_id) params.set("workspace_id", scope.workspace_id);
+    if (scope?.project_id) params.set("project_id", scope.project_id);
+    if (scope?.run_id) params.set("run_id", scope.run_id);
+    const qs = params.toString();
+    const res = await this.fetchWithRetry(`/v1/artifacts${qs ? `?${qs}` : ""}`);
+    return (await res.json()) as { artifacts: ArtifactEntry[]; count: number };
+  }
+
+  /** Delete all artifacts for a run. */
+  async deleteArtifacts(runId: string, scope?: ArtifactScope): Promise<void> {
+    const params = new URLSearchParams();
+    if (scope?.workspace_id) params.set("workspace_id", scope.workspace_id);
+    if (scope?.project_id) params.set("project_id", scope.project_id);
+    const qs = params.toString();
+    await this.fetchWithRetry(`/v1/artifacts/${encodeURIComponent(runId)}${qs ? `?${qs}` : ""}`, {
+      method: "DELETE",
+    });
+  }
+
+  // ── Tool Registry ─────────────────────────────────────────────────────
+
+  /** List all registered tools. */
+  async listTools(): Promise<{ tools: ToolDefinition[]; count: number }> {
+    const res = await this.fetchWithRetry("/v1/tools");
+    return (await res.json()) as { tools: ToolDefinition[]; count: number };
+  }
+
+  /** Get a tool by name. */
+  async getTool(name: string): Promise<ToolDefinition> {
+    const res = await this.fetchWithRetry(`/v1/tools/${encodeURIComponent(name)}`);
+    return (await res.json()) as ToolDefinition;
+  }
+
+  // ── Skill Registry ────────────────────────────────────────────────────
+
+  /** List all registered skills. */
+  async listSkills(): Promise<{ skills: SkillSummary[]; count: number }> {
+    const res = await this.fetchWithRetry("/v1/skills");
+    return (await res.json()) as { skills: SkillSummary[]; count: number };
+  }
+
+  /** Get a skill by name (includes body). */
+  async getSkill(name: string): Promise<SkillDetail> {
+    const res = await this.fetchWithRetry(`/v1/skills/${encodeURIComponent(name)}`);
+    return (await res.json()) as SkillDetail;
+  }
+
+  // ── Agent Templates ───────────────────────────────────────────────────
+
+  /** List all agent templates. */
+  async listAgentTemplates(): Promise<{ templates: AgentTemplateSummary[]; count: number }> {
+    const res = await this.fetchWithRetry("/v1/agents/templates");
+    return (await res.json()) as { templates: AgentTemplateSummary[]; count: number };
+  }
+
+  /** Get an agent template by name. */
+  async getAgentTemplate(name: string): Promise<AgentTemplateDetail> {
+    const res = await this.fetchWithRetry(`/v1/agents/templates/${encodeURIComponent(name)}`);
+    return (await res.json()) as AgentTemplateDetail;
   }
 
   // ── Internal ──────────────────────────────────────────────────────────

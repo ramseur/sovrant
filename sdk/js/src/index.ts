@@ -7,6 +7,7 @@ export {
 } from "./client.js";
 export { parseSSEStream } from "./sse.js";
 export type {
+  // Core chat
   ChatCallOptions,
   ChatCompletionChunk,
   ChatCompletionRequest,
@@ -23,10 +24,70 @@ export type {
   SessionMessage,
   SovrantClientOptions,
   SovrantEvent,
+  StatusResponse,
   StreamCallbacks,
   UsageInfo,
   UsageSummary,
   WebhookRequest,
   WebhookResponse,
   WebhookToolCall,
+  // Sessions
+  SessionConfig,
+  SessionConfigUpdate,
+  // Users
+  UserProfile,
+  CreateUserRequest,
+  UpdateUserRequest,
+  UserListFilter,
+  ApiToken,
+  IssueTokenRequest,
+  IssueTokenResponse,
+  // Workspaces
+  Workspace,
+  CreateWorkspaceRequest,
+  UpdateWorkspaceRequest,
+  WorkspaceMember,
+  AddWorkspaceMemberRequest,
+  WorkspaceInvite,
+  CreateInviteRequest,
+  WorkspaceMemoryEntry,
+  SaveMemoryRequest,
+  // Projects
+  Project,
+  CreateProjectRequest,
+  UpdateProjectRequest,
+  ProjectMember,
+  AddProjectMemberRequest,
+  // Teams
+  Team,
+  CreateTeamRequest,
+  TeamMember,
+  AddTeamMemberRequest,
+  TeamRunRequest,
+  TeamRunResponse,
+  AgentRun,
+  AgentRunFilter,
+  // Missions
+  Mission,
+  CreateMissionRequest,
+  MissionEvent,
+  // Swarm
+  SwarmRunRequest,
+  SwarmResult,
+  // Engine
+  RuntimeTraceEntry,
+  // Evals
+  EvalSuite,
+  EvalRunRequest,
+  EvalRunResponse,
+  EvalResultDetail,
+  // Artifacts
+  ArtifactEntry,
+  ArtifactScope,
+  // Registries
+  ToolDefinition,
+  SkillSummary,
+  SkillDetail,
+  AgentTemplateSummary,
+  AgentTemplateDetail,
 } from "./types.js";
