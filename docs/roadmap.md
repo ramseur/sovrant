@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-12 (Phase 54 complete — 38 of 42 phases shipped)
+**Last updated:** 2026-04-12 (Phase 41 complete — 39 of 42 phases shipped)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -11,7 +11,7 @@ This document tracks planned features, architectural decisions, and the reasonin
 
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
-- **50 tools** across 10 categories (file, shell, web, task, agent, team, mission, swarm, MCP, LSP)
+- **51 tools** across 11 categories (file, shell, web, task, agent, team, mission, swarm, artifact, MCP, LSP)
 - **1,285 tests** across 9 projects, 0 warnings
 - **95 server endpoints** (chat, sessions, config, status, models, usage, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
@@ -20,6 +20,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 - Mission engine with durable goals, re-planning, acceptance gates, and event journal (Phase 51 ✅)
 - Unified agent orchestration: SQLite-backed teams + swarm + agent run ledger (Phase 52 ✅)
 - Scoped artifact storage with workspace-first layout (Phase 53 ✅)
+- Agent artifact tools — isolated produce-and-deposit pattern for team deliverables (Phase 41 ✅)
 - Model capability registry with layered resolution (Phase 54 ✅)
 - SmartRouter with health/latency/cost scoring + intent-aware model tier routing (Phase 48 ✅)
 - Workspace/project/user hierarchy with membership, invites, config inheritance (Phases 35–37 ✅)
@@ -52,7 +53,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Unified orchestration | ✅ Complete | `AgentOrchestrator` unifies teams + swarm. `agent_runs` ledger tracks all executions. Three modes: pre-existing team, composed teams, engine decomposition. |
 | Mission engine | ✅ Complete | `IMissionStore` + `LlmMissionPlanner` + `ParallelMissionExecutor`. Durable goals with re-planning, acceptance gates, event journal. |
 
-### Completed phases (1–54)
+### Completed phases (1–56)
 
 | Phase | Summary |
 |---|---|
@@ -92,6 +93,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | 37 | User management API — server-generated IDs, soft-delete, profiles, derived stats |
 | 37.5 | Swarm sessions into SQLite (`swarm_events` table, legacy JSONL import) |
 | 38 | Per-user token auth & database hardening (V009 backfill, checksum drift enforcement) |
+| 41 | Agent artifact tools — `Artifact` tool (write/read/list), isolated produce-and-deposit pattern, 100K char read cap, 14 tests |
 | 42.5 | Database lifecycle — `sovrant db` CLI (status, version, migrate, backup, inspect), `/health` DB block |
 | 43 | Windows PowerShell native integration (cwd persistence, version detection, elevation hints) |
 | 44 | Desktop application — Avalonia, 15 pages, streaming chat, tool use, setup wizard, dark/light theme |
@@ -104,13 +106,13 @@ The engine is fully functional across five delivery modes with enterprise multi-
 
 ### Still pending
 
-> **Last audited:** 2026-04-12. 38 of 42 phases are complete. Phase 41 is superseded by Phase 53. Everything below is *not yet shipped*.
+> **Last audited:** 2026-04-12. 39 of 45 phases are complete. Everything below is *not yet shipped*.
 
 | Gap | Phase | Priority |
 |---|---|---|
 | Cost tracking, token budgets & dashboard (pricing moved to Phase 55) | Phase 39 (partially superseded) | Deferred |
 | Enterprise auth & multi-tenancy (RBAC, OAuth/OIDC, SSO) | Phase 40 | Deferred |
-| ~~Artifact system~~ — **superseded by Phase 53** (Scoped Artifact Storage) | ~~Phase 41~~ | N/A |
+| Inter-agent communication — team-to-team, swarm-to-swarm, claw-to-claw coordination through leader/PM agents | Phase 57 | Medium–High |
 | VS Code native extension | Phase 42 | Deferred (MCP server covers MCP-aware IDEs) |
 | Embedded terminal panel inside the desktop app | Phase 45 | Deferred |
 | n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |
@@ -118,6 +120,8 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | SearXNG web search backend (self-hosted, key-free) | Phase 49 | Low–Medium |
 | OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | Medium–High |
 | Live cost tracking via OpenRouter (pricing-as-a-service, no local registry) | Phase 55 | Low–Medium |
+| LLM provider sanitizer — strip PII and corporate data from prompts before they leave the runtime | Phase 58 | High |
+| Agentic loop hardening — intent classification, plan approval, execution governance, progress visibility | Phase 59 | **Critical** |
 
 ---
 
@@ -2733,41 +2737,38 @@ Phase 38 gives each user their own bearer tokens with admin/user role enforcemen
 
 ---
 
-### Phase 41 — Artifact System ~~⏸️ Deferred~~ → Superseded by Phase 53
+### Phase 41 — Agent Artifact Tools ✅
 
-**Depends on:** Phase 19+20 (multi-agent team tools)
+**Depends on:** Phase 53 (Scoped Artifact Storage — `IArtifactStore`, workspace-first layout)
 
-**Goal:** Give team agents a structured way to share work products — code files, plans, review notes, intermediate results — through a versioned artifact store rather than passing everything through prompt text.
+**Goal:** Give agents a tool to deposit deliverables into the artifact store so work products flow through structured storage instead of prompt text. Agents work in isolation, produce artifacts, and return to the orchestrator. Users and the team leader consume results.
 
-#### Motivation
+**Key design decision:** This is a **produce-and-deposit** pattern, not an inter-agent messaging channel. Agents don't talk to each other through artifacts — they deposit work for the orchestrator/user to consume. Future inter-agent coordination goes through PM agents (Phase 57).
 
-Today, team agents communicate solely through prompt/response text via `TeamDelegate`. This works for simple tasks but breaks down when agents need to iterate on shared outputs — a planner writes a plan, a coder implements it, a reviewer annotates it. Passing multi-kilobyte code blocks back and forth through prompts wastes tokens, loses formatting, and has no versioning. An artifact store gives agents a shared workspace with named, versioned content blobs that persist across delegations.
-
-#### Design
+#### What shipped
 
 | Component | Description |
 |---|---|
-| `IArtifact` | Versioned content blob — `Name`, `Version`, `ContentType` (text, code, json), `ReadAsync()`, `WriteAsync()` |
-| `ITeamWorkspace` | Per-team artifact store — `GetAsync(name)`, `PutAsync(name, content)`, `ListAsync()`, `DeleteAsync(name)` |
-| `InMemoryTeamWorkspace` | `ConcurrentDictionary<string, IArtifact>` implementation for in-process teams |
-| `FileBackedTeamWorkspace` | Persists artifacts to `~/.sovrant/workspaces/{team_id}/` for durability across sessions |
+| `ArtifactTool` | Single tool with 3 actions: `write`, `read`, `list`. Wraps `IArtifactStore` for agent-side access. |
+| Write | Agent stores a deliverable (code, report, data) scoped to workspace/project/run. |
+| Read | Agent retrieves an artifact by path. Capped at 100K chars to prevent prompt overload. |
+| List | Agent lists artifacts in a scope (run-level or project-level). Capped at 100 entries. |
+| DI registration | `ArtifactTool` registered as singleton in `ServiceCollectionExtensions`, injecting `IArtifactStore`. |
+| Tests | 14 tests — write/read/list, error cases, cross-agent sharing within same run scope. |
 
-#### How agents use it
+#### Agent workflow
 
-- `TeamCreate` with `workspace: true` creates a shared `ITeamWorkspace` for that team
-- Agents read/write artifacts via two new tools: `ArtifactRead(name)` and `ArtifactWrite(name, content)`
-- The supervisor can inspect workspace contents via `ArtifactList()` or `TeamStatus` (which would include artifact summaries)
-- Artifacts are scoped to the team — cleaned up when the team is deleted
-
-#### Implementation Plan
-
-1. Define `IArtifact` and `ITeamWorkspace` interfaces (replace the deleted V2 placeholders)
-2. Implement `InMemoryTeamWorkspace` — `ConcurrentDictionary` backed, version counter per artifact
-3. Implement `FileBackedTeamWorkspace` — file-per-artifact with `.version` metadata
-4. Add `ArtifactRead`, `ArtifactWrite`, `ArtifactList` tools to `Sovrant.Tools/Team/`
-5. Wire workspace creation into `TeamCreateTool` when `workspace` param is set
-6. Add workspace cleanup to `TeamDeleteTool`
-7. Tests: workspace CRUD, versioning, concurrent access, cleanup on team delete
+```
+Orchestrator assigns task to Agent A
+    ↓
+Agent A works in isolation
+    ↓
+Agent A calls Artifact(action: "write", path: "analysis.md", content: "...", run_id: "team-run-1")
+    ↓
+Agent A returns to orchestrator with just the artifact reference
+    ↓
+Orchestrator (or user via API) reads the artifact
+```
 
 ---
 
@@ -4456,6 +4457,383 @@ Same event processing as the desktop app's `ChatViewModel`, adapted for Blazor c
 - Mobile-responsive layout (desktop-first, responsive later)
 - Real-time multi-user collaboration (single-user sessions, same as desktop)
 - Deployment automation (Docker, Azure, AWS — separate ops concern)
+
+---
+
+---
+
+## Phase 57 — Inter-Agent Communication Through Leader / PM Agents
+
+**Depends on:** Phase 41 (agent artifact tools), Phase 52 (unified orchestration), Phase 50 (OpenClaw integration for federated swarms)
+
+**Goal:** Enable structured communication between agent groups — team-to-team, swarm-to-swarm, claw-to-claw — mediated by leader or PM (project manager) agents rather than direct agent-to-agent messaging.
+
+**Priority:** Medium–High
+
+### Motivation
+
+Today each agent group (team, swarm, claw) operates in isolation. The orchestrator dispatches work and collects results, but there's no way for one team's output to inform another team's work in real time. A frontend team and a backend team working on the same feature can't coordinate API contracts. Two swarms running in parallel can't share intermediate discoveries.
+
+Direct agent-to-agent messaging creates a coordination nightmare (n² channels, no oversight, no audit trail). Instead, communication flows through **leader/PM agents** that sit between groups, understand the broader context, and decide what information crosses boundaries.
+
+### Design
+
+| Component | Description |
+|---|---|
+| `IPMAgent` | Leader agent interface — receives updates from child group, decides what to broadcast to sibling groups |
+| `GroupMailbox` | Per-group message queue — PM agents post coordination messages, child agents poll on turn start |
+| `CoordinationEvent` | Structured message: `source_group`, `target_group`, `event_type` (blocker, update, request, handoff), `payload` |
+| `PMCoordinator` | Routes coordination events between PM agents, maintains dependency graph between groups |
+
+### Communication patterns
+
+```
+Team A (frontend)          PM Agent A          PM Coordinator          PM Agent B          Team B (backend)
+      │                        │                      │                      │                      │
+      ├── produces artifact ──→│                      │                      │                      │
+      │                        ├── "API contract     →│                      │                      │
+      │                        │    ready for review"  ├── routes to B ─────→│                      │
+      │                        │                      │                      ├── injects context ──→│
+      │                        │                      │                      │                      ├── reads artifact
+      ���                        │                      │                      │                      │   implements endpoint
+```
+
+### Scope levels
+
+| Level | Communication | Mediator |
+|---|---|---|
+| **Team-to-team** | Two teams in the same workspace share coordination through their PM agents | `PMCoordinator` (in-process) |
+| **Swarm-to-swarm** | Two parallel swarms share discoveries or blockers | `PMCoordinator` (in-process) |
+| **Claw-to-claw** | Federated swarms across instances share results over the routed bus | `PMCoordinator` (networked, depends on Phase 50) |
+
+### What this is NOT
+
+- **Not direct agent-to-agent chat** — all communication is mediated by PM agents with oversight
+- **Not artifact sharing** — that's Phase 41 (agents deposit, orchestrator/user consumes)
+- **Not replacing the orchestrator** — the orchestrator still dispatches work; PM agents handle cross-group coordination
+
+### Implementation plan
+
+1. Define `IPMAgent` interface with `OnGroupUpdate`, `DecideBroadcast`, `ReceiveCoordination` methods
+2. Implement `GroupMailbox` — per-group persistent queue backed by SQLite (new migration)
+3. Implement `CoordinationEvent` — structured message with source/target/type/payload
+4. Implement `PMCoordinator` — routes events between PM agents, enforces scoping rules
+5. Add PM agent template to `Sovrant.Agents` — system prompt focused on coordination, not execution
+6. Wire into `AgentOrchestrator` — PM agents are optional participants in team/swarm runs
+7. Add `CoordinationStatus` tool — lets any agent check if there are pending coordination messages
+8. Extend `swarm_events` / `mission_events` tables with coordination event types
+9. Claw-to-claw: extend Phase 50's routed bus to carry `CoordinationEvent` payloads
+10. Tests: message routing, PM decision logic, cross-group coordination scenarios
+
+### Out of scope (future)
+
+- Agent-to-agent direct messaging (no mediator) — intentionally excluded for auditability
+- Priority negotiation between PM agents — PM agents inform, they don't negotiate in v1
+- Cross-workspace coordination — scoped to same workspace initially
+
+---
+
+## Phase 58 — LLM Provider Sanitizer (PII & Corporate Data Stripping)
+
+**Depends on:** None (can be implemented independently)
+
+**Goal:** Intercept all outbound LLM requests and strip personally identifiable information (PII) and corporate-sensitive data before prompts leave the Sovrant runtime, ensuring only the raw task reaches the provider. Reconstruct the original context on response return so the user experience is seamless.
+
+**Priority:** High
+
+### Motivation
+
+Every prompt sent to an LLM provider (OpenRouter, OpenAI, Google, etc.) leaves the user's machine and enters third-party infrastructure. Users working in corporate environments routinely paste code containing internal hostnames, API keys, database connection strings, employee names, email addresses, customer data, and proprietary business logic. Today, all of this goes to the provider unfiltered. The sanitizer sits at the provider boundary and ensures only the task-relevant content crosses the wire.
+
+### Design
+
+| Component | Description |
+|---|---|
+| `IPromptSanitizer` | Pipeline interface — `SanitizeAsync(prompt) → (sanitized, redaction_map)` and `RestoreAsync(response, redaction_map) → restored` |
+| `RedactionMap` | Bidirectional mapping of original values ↔ placeholder tokens. Stays local, never sent to provider. |
+| `PiiDetector` | Regex + heuristic detector for common PII patterns: emails, phone numbers, SSNs, credit cards, IP addresses, UUIDs that match internal formats |
+| `CorporateDataDetector` | Configurable rules for corporate patterns: internal hostnames, domain-specific keywords, connection strings, API keys, env var values |
+| `CustomPatternRegistry` | User-defined regex/glob patterns via config — organizations add their own sensitive patterns |
+| `SanitizationPolicy` | Per-workspace/project config: what to redact, what to allow, severity levels (block vs. redact vs. warn) |
+
+### How it works
+
+```
+User prompt: "Fix the auth bug in api.acme-corp.internal connecting to postgres://admin:s3cret@db.acme.com:5432/users for user john.doe@acme.com"
+                    ↓
+            IPromptSanitizer
+                    ↓
+Sanitized:  "Fix the auth bug in [HOSTNAME_1] connecting to [CONNECTION_STRING_1] for user [EMAIL_1]"
+                    ↓
+            Sent to LLM provider
+                    ↓
+LLM response: "The issue with [HOSTNAME_1] is likely a TLS certificate mismatch. Check the connection at [CONNECTION_STRING_1]..."
+                    ↓
+            RestoreAsync (using RedactionMap)
+                    ↓
+Restored:   "The issue with api.acme-corp.internal is likely a TLS certificate mismatch. Check the connection at postgres://admin:s3cret@db.acme.com:5432/users..."
+```
+
+### Built-in detectors
+
+| Pattern | Examples | Default action |
+|---|---|---|
+| Email addresses | `user@company.com` | Redact → `[EMAIL_N]` |
+| Phone numbers | `+1-555-123-4567` | Redact → `[PHONE_N]` |
+| SSN / national IDs | `123-45-6789` | Redact → `[SSN_N]` |
+| Credit card numbers | `4111-1111-1111-1111` | Redact → `[CARD_N]` |
+| IP addresses (internal ranges) | `10.0.0.x`, `192.168.x.x` | Redact → `[IP_N]` |
+| Connection strings | `postgres://`, `mongodb://`, `Server=` | Redact → `[CONNECTION_STRING_N]` |
+| API keys / tokens | `sk-...`, `ghp_...`, Bearer tokens | Redact → `[API_KEY_N]` |
+| Internal hostnames | Configurable domain suffixes | Redact → `[HOSTNAME_N]` |
+| AWS/Azure/GCP resource ARNs | `arn:aws:`, `https://*.blob.core.windows.net` | Redact → `[CLOUD_RESOURCE_N]` |
+
+### Configuration
+
+```json
+{
+  "sanitizer": {
+    "enabled": true,
+    "mode": "redact",
+    "corporate_domains": ["acme.com", "acme-corp.internal"],
+    "custom_patterns": [
+      { "name": "project_codenames", "regex": "\\b(Project\\s+Titan|Moonshot)\\b", "action": "redact" }
+    ],
+    "allow_list": ["github.com", "stackoverflow.com"],
+    "log_redactions": true
+  }
+}
+```
+
+### Integration point
+
+The sanitizer hooks into the existing `ILlmClient` pipeline as a decorator:
+
+```
+ConversationRuntime → ILlmClient → SanitizingLlmClient (decorator) → actual provider
+```
+
+This means it works for all providers (OpenRouter, OpenAI, Gemini, Ollama) without any per-provider changes. Ollama (local) can be exempted since prompts never leave the machine.
+
+### Implementation plan
+
+1. Define `IPromptSanitizer` interface with `SanitizeAsync` / `RestoreAsync` methods
+2. Implement `RedactionMap` — bidirectional dictionary with deterministic placeholder naming
+3. Implement `PiiDetector` — regex-based detection for common PII patterns
+4. Implement `CorporateDataDetector` — configurable domain/hostname/keyword rules
+5. Implement `CustomPatternRegistry` — user-defined patterns loaded from config
+6. Implement `SanitizingLlmClient` — `ILlmClient` decorator that sanitizes on send, restores on receive
+7. Add `SanitizationPolicy` to workspace/project config
+8. Wire into DI as an optional decorator (enabled via config, disabled by default for local providers)
+9. Add `sovrant sanitizer test` CLI command — dry-run a prompt through the sanitizer to see what would be redacted
+10. Tests: PII detection accuracy, redaction/restoration round-trip, custom patterns, multi-provider scenarios
+
+### Out of scope (future)
+
+- Semantic understanding of sensitivity (requires an LLM to classify — chicken-and-egg problem)
+- DLP (Data Loss Prevention) integration with enterprise DLP tools (Microsoft Purview, etc.)
+- Response sanitization (stripping sensitive data the LLM generates, not just reflects back)
+
+---
+
+## Phase 59 — Agentic Loop Hardening (Intent Classification, Plan Approval, Execution Governance & Progress Visibility)
+
+**Depends on:** None (improves core runtime, independent of other phases)
+
+**Goal:** Make the agentic loop safe, predictable, and transparent. Users must always know what the system is about to do, why, and be able to approve or reject it before execution. The system must never take destructive action on ambiguous input.
+
+**Priority:** Critical
+
+### Motivation — The "test" Problem
+
+A user typed the single word "test" and the system attempted a `Write` action — creating a file unprompted. This happened because:
+
+1. `LooksLikeToolRequest()` in `ConversationRuntime.cs` is substring-based keyword matching. "test" is in the keyword list, so tools were exposed to the LLM.
+2. The LLM received tools and hallucinated that "test" meant "create a test file."
+3. No plan was shown to the user before execution.
+4. No intent validation checked whether the LLM's interpretation matched the user's actual intent.
+
+This class of bug affects any ambiguous short input: "run", "fix", "check", "build", "clean". The system must handle ambiguity explicitly rather than delegating all judgment to the LLM.
+
+### Current Architecture (What Exists)
+
+```
+User message
+    ↓
+LooksLikeToolRequest() — substring keyword match (crude)
+    ↓
+LLM call (tools exposed if keywords matched)
+    ↓
+LLM returns tool calls (or text)
+    ↓
+ModeAwarePermissionPolicy — Allow/Deny/RequireConfirmation per PermissionMode
+    ↓
+GovernanceMonitor — dangerous command detection, secret scanning (audit-only)
+    ↓
+Tool executes
+    ↓
+Result streamed to user
+```
+
+**Problems:** No intent classification, no plan preview, no plan approval, no intent-aware tool restriction, no progress reporting. The user sees the result, not the reasoning.
+
+### Target Architecture
+
+```
+User message
+    ↓
+┌─────────────────────────────────────────┐
+│ Phase 1: Intent Gate                     │
+│  IntentClassifier (semantic, not regex)  │
+│  → Clear intent: proceed with tools      │
+│  → Ambiguous: ask user to clarify        │
+│  → Conversational: respond without tools │
+└─────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────┐
+│ Phase 2: Plan & Present                  │
+│  Planner produces RuntimePlan            │
+│  → Show plan to user: "I'll do X, Y, Z" │
+│  → User approves / rejects / modifies    │
+│  → Rejected: replan or stop              │
+└─────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────┐
+│ Phase 3: Intent-Aware Execution          │
+│  Per-step tool allow-list enforced       │
+│  Step intent injected into system prompt │
+│  Graduated permission tiers per tool     │
+│  Progress events streamed to user        │
+└─────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────┐
+│ Phase 4: Orchestration Router            │
+│  Runtime heuristics + LLM judgment       │
+│  Task complexity → direct / agent / team │
+│  / swarm / mission (not LLM-only)        │
+└─────────────────────────────────────────┘
+    ↓
+User sees progress, results, and reasoning at every step
+```
+
+### Component Breakdown
+
+#### A. Semantic Intent Gate (replace LooksLikeToolRequest)
+
+| Component | Description |
+|---|---|
+| `IIntentGate` | Pre-LLM classifier: `ClassifyAsync(message) → IntentGateResult` |
+| `IntentGateResult` | `{ Intent, Confidence, RequiresTools, NeedsClarification, SuggestedClarification }` |
+| `SemanticIntentClassifier` | Lightweight LLM call (haiku-tier) or rule-based cascade: regex → keyword → small-model fallback |
+| Clarification flow | If confidence < threshold or intent is ambiguous, ask user: "Did you mean X or Y?" before exposing tools |
+
+**Rules:**
+- Single-word messages with no prior context → always clarify
+- Messages classified as `Conversational` → no tools exposed
+- Messages classified as `ToolHeavy` with high confidence → tools exposed
+- Unknown/ambiguous → clarify before proceeding
+
+#### B. Plan Presentation & Approval
+
+| Component | Description |
+|---|---|
+| `IPlanPresenter` | Formats `RuntimePlan` into user-readable summary before execution starts |
+| `PlanApprovalGate` | Blocks execution until user approves. Modes: `AlwaysApprove` (auto-execute), `ApproveDestructive` (approve plans with Write/Bash/Edit), `AlwaysAsk` (approve every plan) |
+| Plan summary format | "I'm going to: (1) Read config.json (2) Edit the auth section (3) Run tests. Proceed?" |
+| Plan rejection | User says "no" → planner receives rejection reason, replans or stops |
+| Plan modification | User says "skip step 3" or "also check X" → planner adjusts |
+
+**When to show plans:**
+- Single-tool calls (Read, Grep) → execute immediately, no approval needed
+- Multi-step plans with destructive tools → always show plan first
+- Any plan touching > 3 files → show plan first
+- Configurable per workspace/project
+
+#### C. Intent-Aware Execution Governance
+
+| Component | Description |
+|---|---|
+| `StepToolEnforcer` | Validates tool calls against `RuntimeStep.AllowedTools` — reject tools not in the allow-list |
+| `IntentInjector` | Injects step intent into system prompt for each step: "Your current task is: verify the config file exists. You should only use Read, Glob, or Grep." |
+| `GraduatedToolTiers` | Classify tools into tiers: **Safe** (Read, Glob, Grep, List), **Moderate** (Write, Edit), **Dangerous** (Bash, PowerShell), **Escalation** (Agent, Team, Swarm). Different permission thresholds per tier. |
+| `ExecutionBudget` | Per-plan limits: max tool calls, max files modified, max execution time. Exceeding triggers pause + user notification. |
+
+#### D. Orchestration Router (Runtime-Assisted)
+
+| Component | Description |
+|---|---|
+| `IOrchestrationRouter` | Analyzes task complexity and recommends execution mode |
+| Heuristics | File count, step count, estimated parallelism, dependency depth → direct / agent / team / swarm / mission |
+| LLM assist | Router's recommendation shown to LLM as context, not mandate. LLM can override with explanation. |
+| Escalation guard | Prevents swarm/mission for trivial tasks. Prevents direct execution for complex multi-file tasks. |
+
+**Routing heuristics:**
+- 1 file, 1–2 steps → direct execution
+- 2–5 files, sequential → sub-agent
+- 3–10 files, independent → team (parallel agents)
+- 10+ files or DAG dependencies → swarm
+- Open-ended goal with replanning → mission
+
+#### E. Progress Visibility & User Communication
+
+| Component | Description |
+|---|---|
+| `PlanProgressTracker` | Tracks step completion against total plan. Emits `RuntimeEvent.StepProgress(current, total, intent, status)` |
+| `PhaseIndicator` | Groups steps into logical phases (Analyze, Implement, Test, Verify) and reports which phase is active |
+| `StepSummaryEmitter` | After each step completes, emits a one-line summary: "Step 2/5: Verified auth config exists ✓" |
+| `LiveTraceViewer` | Surfaces `IRuntimeTraceStore` entries in real-time, not just post-hoc |
+| `EstimatedCompletion` | Rough ETA based on average step duration (optional, disabled by default) |
+
+### DontAsk Mode Fix
+
+`PermissionMode.DontAsk` currently bypasses all confirmation. This is dangerous for production use.
+
+**Fix:** Rename to `TrustModel` and add guardrails:
+- Still skips confirmation for Safe and Moderate tier tools
+- Still requires confirmation for Dangerous tier tools (Bash, PowerShell)
+- Never allows Escalation tier (Agent, Swarm) without at least showing the plan
+- Add `SOVRANT_UNSAFE_DONTASK=true` env var for truly unguarded mode (CI pipelines only)
+
+### Implementation Plan
+
+**Sub-phase 59a — Intent Gate (highest priority, fixes the "test" bug):**
+1. Define `IIntentGate` interface and `IntentGateResult` record
+2. Implement `SemanticIntentClassifier` — rule cascade: length check → regex → keyword → optional small-model call
+3. Replace `LooksLikeToolRequest()` in `ConversationRuntime` with `IIntentGate.ClassifyAsync()`
+4. Add clarification flow: if ambiguous, inject "Could you clarify?" before exposing tools
+5. Tests: single-word inputs, ambiguous commands, clear tool requests, conversational messages
+
+**Sub-phase 59b — Plan Presentation & Approval:**
+6. Define `IPlanPresenter` and `PlanApprovalGate`
+7. Implement plan formatting (numbered steps with intents)
+8. Wire approval gate into `LlmExecutor` between plan creation and step execution
+9. Add plan rejection → replan loop
+10. Configure approval thresholds per workspace/project
+
+**Sub-phase 59c — Intent-Aware Execution:**
+11. Implement `StepToolEnforcer` — check `RuntimeStep.AllowedTools` at execution time
+12. Implement `IntentInjector` — add step intent to per-step system prompt
+13. Implement `GraduatedToolTiers` — classify all 51 tools into Safe/Moderate/Dangerous/Escalation
+14. Implement `ExecutionBudget` — per-plan resource limits
+15. Fix `DontAsk` mode with tier-based guardrails
+
+**Sub-phase 59d — Orchestration Router:**
+16. Define `IOrchestrationRouter` interface
+17. Implement heuristic-based routing (file count, step count, parallelism estimate)
+18. Wire into `ConversationRuntime` as advisory context for the LLM
+19. Add escalation guards (prevent swarm for trivial tasks, prevent direct for complex tasks)
+
+**Sub-phase 59e — Progress Visibility:**
+20. Add `RuntimeEvent.StepProgress` event type
+21. Implement `PlanProgressTracker` and `StepSummaryEmitter`
+22. Wire progress events into CLI, desktop (Avalonia), and web (Blazor) UIs
+23. Surface live trace entries during execution (not just post-hoc)
+
+### Out of scope (future)
+
+- User-trained intent models (learning from corrections over time)
+- Per-user safety profiles (some users want full autonomy, others want approval on everything)
+- Undo/redo for executed plans (separate feature, possibly Phase 60)
 
 ---
 

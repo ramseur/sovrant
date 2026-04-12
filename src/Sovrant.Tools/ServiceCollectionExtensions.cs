@@ -16,6 +16,7 @@ using Sovrant.Tools.Shell;
 using Sovrant.Tools.Missions;
 using Sovrant.Tools.Swarm;
 using Sovrant.Tools.Team;
+using Sovrant.Tools.Artifacts;
 using Sovrant.Tools.Worktree;
 
 namespace Sovrant.Tools;
@@ -129,6 +130,9 @@ public static class ServiceCollectionExtensions
 
         // Mission tool — lets running agents spawn and drive sub-missions
         services.AddSingleton<ITool, MissionTool>();
+
+        // Artifact tools — agent-side producer interface (Phase 41)
+        services.AddSingleton<ITool, ArtifactTool>();
 
         // Quality / verification tools
         services.AddSingleton<ITool, VerifyTool>();
