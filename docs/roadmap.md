@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-05 (Phase 32 SQLite Persistence Layer complete)
+**Last updated:** 2026-04-12 (Phase 54 complete — 38 of 42 phases shipped)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -9,46 +9,50 @@ This document tracks planned features, architectural decisions, and the reasonin
 
 ## Current State
 
-The engine is fully functional for individual and small-team use:
+The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
-- **45 tools** across 8 categories (file, shell, web, task, agent, team, MCP, LSP)
-- **910 tests** across 9 projects, 0 warnings
-- **28 server endpoints** (OpenAI-compatible chat, sessions, config, usage, webhooks, export, registry discovery, swarm, evals)
-- CLI REPL, one-shot `prompt`, CI mode (`--ci`), MCP server mode (`mcp-server`)
+- **50 tools** across 10 categories (file, shell, web, task, agent, team, mission, swarm, MCP, LSP)
+- **1,285 tests** across 9 projects, 0 warnings
+- **95 server endpoints** (chat, sessions, config, status, models, usage, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
+- **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
-- SQLite persistence layer with 5 versioned migrations, 26+ tables (Phase 32 ✅)
-- Session, memory, audit, credential, and token usage stores backed by SQLite
-- SmartRouter with health/latency/cost scoring across multiple providers
-- Multi-provider support: OpenAI, Gemini, Ollama, native messages API, OpenAI Responses API (`LLM_WEB_SEARCH=true`)
-- Per-session config overlay, rate limiting, token usage tracking (Phase 10 ✅)
-- Session TTL eviction + LRU cap + per-session turn serialization (Phase 9 ✅)
-- Multi-tenant per-request credentials (`X-LLM-Api-Key` / `X-LLM-Base-Url` headers) (Phase 8 ✅)
-- Structured async logging with 4 env vars, source-generated delegates (Phase 7 ✅)
-- Agent memory files (`~/.sovrant/memory.md` + `.sovrant/memory.md`) injected into system prompt
+- SQLite persistence layer with 12 versioned migrations, 34 tables, 48 indexes (Phase 32 + 42.5 + 51 + 52)
+- Mission engine with durable goals, re-planning, acceptance gates, and event journal (Phase 51 ✅)
+- Unified agent orchestration: SQLite-backed teams + swarm + agent run ledger (Phase 52 ✅)
+- Scoped artifact storage with workspace-first layout (Phase 53 ✅)
+- Model capability registry with layered resolution (Phase 54 ✅)
+- SmartRouter with health/latency/cost scoring + intent-aware model tier routing (Phase 48 ✅)
+- Workspace/project/user hierarchy with membership, invites, config inheritance (Phases 35–37 ✅)
+- Per-user token auth with API token issuance/revocation (Phase 38 ✅)
+- Multi-provider support: OpenAI, Gemini, Ollama, native messages API, OpenAI Responses API
+- Multi-tenant per-request credentials (`X-LLM-Api-Key` / `X-LLM-Base-Url` headers)
+- Per-session config overlay, rate limiting, token usage tracking
+- Session TTL eviction + LRU cap + per-session turn serialization
 - Context auto-compaction at configurable token threshold
-- Security hardening: BashTool 256 KB cap + env stripping, WebFetch SSRF protection, provider retry 3×, AgentTool depth ≤ 5, ReadFile 10 MB cap, GlobTool 1000 cap, atomic writes
+- Security hardening: BashTool 256 KB cap + env stripping, WebFetch SSRF protection, provider retry 3×
 - Webhook integration (Slack, Teams, Discord, custom)
-- Frontend SDK (TypeScript/React), structured diff view, session export
-- MCP server mode (stdio JSON-RPC 2.0) + dynamic MCP tool proxy (`MCPTool`) + MCP OAuth (`McpAuthTool`)
-- LSP integration (5 tools, 18 language extensions)
-- CI/CD integration (`--ci` flag, GitHub Actions composite action, GitLab CI template)
-- Registry discovery API — tools, skills, agent templates (Phase 30 ✅)
-- **Multi-agent team orchestration** (Phase 19+20 ✅) — see below
+- Frontend SDK (TypeScript, 79 endpoint methods, SSE streaming, React hook)
+- MCP server mode (stdio JSON-RPC 2.0) + dynamic MCP tool proxy + MCP OAuth
+- LSP integration (5 tools, 18 languages)
+- CI/CD integration (`--ci` flag, GitHub Actions action, GitLab CI template)
+- Database lifecycle tools: `sovrant db status/version/migrate/backup/inspect` (Phase 42.5 ✅)
+- Windows PowerShell native integration with cwd persistence (Phase 43 ✅)
 
 ### Agent System: Current State
 
 | Layer | Status | Notes |
 |---|---|---|
-| Ad-hoc sub-agent (`AgentTool`) | ✅ Working | Spawns a fresh `ConversationRuntime`, runs one isolated turn, returns text. Recursion depth ≤ 5. LLM-driven parallelization. |
-| Multi-agent interfaces (`IAgent`, `IMultiAgentSystem`) | ✅ Complete | `Sovrant.Agents` project. Both backends implement the same interface. |
-| Shared backend (`MultiAgentCoordinator`) | ✅ Complete | Semaphore-based concurrency control (`MaxConcurrentAgents`), linked CTS with timeout, agent resolution by name or first-registered, proper shutdown drain. |
-| Isolated backend (`ProcessBasedMultiAgentSystem`) | ✅ Complete | Process spawn, stdin/stdout JSON, process tree kill on cancel, timeout handling. |
-| `SovrantAgent` + `SovrantAgentFactory` | ✅ Complete | Runtime-backed agents with role-specific system prompts (`AgentPrompts`) and optional tool filtering (`FilteredToolRegistry`). |
+| Ad-hoc sub-agent (`AgentTool`) | ✅ Working | Spawns a fresh `ConversationRuntime`, runs one isolated turn, returns text. Recursion depth ≤ 5. |
+| Multi-agent interfaces (`IAgent`, `IMultiAgentSystem`) | ✅ Complete | Both isolated and shared backends implement the same interface. |
+| Shared backend (`MultiAgentCoordinator`) | ✅ Complete | Semaphore-based concurrency control, linked CTS with timeout, proper shutdown drain. |
+| Isolated backend (`ProcessBasedMultiAgentSystem`) | ✅ Complete | Process spawn, stdin/stdout JSON, process tree kill on cancel. |
+| `SovrantAgent` + `SovrantAgentFactory` | ✅ Complete | Runtime-backed agents with role-specific system prompts and optional tool filtering. |
 | Config switch (`AGENT_MODE`) | ✅ Working | `isolated` (default, process-per-agent) or `shared` (in-process). |
-| DI wiring in CLI / Server | ✅ Complete | `services.AddMultiAgentSystem()` called in both hosts. `ITeamRegistry`, `SovrantAgentFactory`, team tools all registered. |
-| Team tools | ✅ Complete | `TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`. Named agents with roles, custom prompts, tool restrictions, lifecycle tracking. |
+| Team tools | ✅ Complete | `TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`, `TeamRun`, `TeamPublish`. SQLite-backed teams with workspace/project scoping. |
+| Unified orchestration | ✅ Complete | `AgentOrchestrator` unifies teams + swarm. `agent_runs` ledger tracks all executions. Three modes: pre-existing team, composed teams, engine decomposition. |
+| Mission engine | ✅ Complete | `IMissionStore` + `LlmMissionPlanner` + `ParallelMissionExecutor`. Durable goals with re-planning, acceptance gates, event journal. |
 
-### Completed phases (1–30)
+### Completed phases (1–54)
 
 | Phase | Summary |
 |---|---|
@@ -80,34 +84,40 @@ The engine is fully functional for individual and small-team use:
 | 29 | Swarm orchestrator (auto-decomposition, DAG execution, file locking, quality gate, 62 tests) |
 | 30 | Registry discovery API (tools, skills, agent templates — 11 tests) |
 | 31 | Server response caching & cache infrastructure (in-memory, ETag, TTL — 32 tests) |
-| 32 | SQLite persistence layer — 5 migrations, 26+ tables, 7 SQLite stores, dual-write decorators, graceful error handling (31 tests) |
+| 32 | SQLite persistence layer — 5 migrations, 26+ tables, 7 SQLite stores, dual-write decorators (31 tests) |
+| 33 | CLI quick wins |
+| 34 | CLI visual polish |
+| 35 | Workspaces — CRUD, members, invites, config, memory, usage aggregation |
+| 36 | Projects — workspace-scoped CRUD, archive, members, 3-tier config inheritance |
+| 37 | User management API — server-generated IDs, soft-delete, profiles, derived stats |
+| 37.5 | Swarm sessions into SQLite (`swarm_events` table, legacy JSONL import) |
+| 38 | Per-user token auth & database hardening (V009 backfill, checksum drift enforcement) |
+| 42.5 | Database lifecycle — `sovrant db` CLI (status, version, migrate, backup, inspect), `/health` DB block |
+| 43 | Windows PowerShell native integration (cwd persistence, version detection, elevation hints) |
+| 44 | Desktop application — Avalonia, 15 pages, streaming chat, tool use, setup wizard, dark/light theme |
+| 48 | Intent-aware model routing — IntentClassifier (10 classes), ModelTierResolver, free-models-only mode |
+| 51 | Engine layer (IPlanner/IExecutor/IStepRunner with crash-safe traces) + mission engine (store, planner, executor, journal, API) |
+| 52 | Unified agent orchestration — SqliteTeamRegistry, AgentOrchestrator, agent_runs ledger, TeamRun/TeamPublish, /v1/teams + /v1/runs API |
+| 53 | Scoped artifact storage — IArtifactStore, workspace-first layout, /v1/artifacts API, /artifacts CLI |
+| 54 | Model capability registry — layered resolution (user > bundled > live > default), Gemma 4 support |
+| 56 | Web application — Blazor Server, 15 pages, streaming chat, embedded runtime, port 5100 |
 
 ### Still pending
 
-> **Last audited:** 2026-04-10. Phases 1–37.5, 51, 52, and 53 are complete (see ✅ markers in the section headers below). Everything in this table is *not yet shipped*; verified by checking the codebase for the key markers of each phase.
+> **Last audited:** 2026-04-12. 38 of 42 phases are complete. Phase 41 is superseded by Phase 53. Everything below is *not yet shipped*.
 
 | Gap | Phase | Priority |
 |---|---|---|
-| ~~Sophisticated runtime + autonomous mission loop~~ — **complete** (engine layer steps A–I, mission layer with store/planner/executor/gate/journal/routes/CLI/tool/export/parallel fan-out; only MissionGuard blocked on Phase 55 and outbox on Phase 50) | Phase 51 ✅ | Complete |
-| ~~Unified agent orchestration~~ — **complete** (V012 migration: teams/team_members/agent_runs tables + swarm_events extended; SqliteTeamRegistry replaces InMemoryTeamRegistry; AgentOrchestrator unifies SwarmOrchestrator + TeamDelegateTool with three modes and opt-in flags; EnsembleSelector, TeamRunTool, TeamPublishTool; /v1/teams CRUD + /v1/runs routes; /team CLI with full CRUD; system prompt orchestration strategy: solo→sub-agent→team→swarm→mission; 549 runtime + 146 server + 185 agent tests) | Phase 52 ✅ | Complete |
-| ~~Scoped artifact storage~~ — **complete** (IArtifactStore abstraction with ArtifactScope/ArtifactHandle/ArtifactEntry; LocalArtifactStore with path-traversal guards and workspace-first layout {workspace}/{project}/{run}/ — all workspace members share artifacts, user tracked in manifest only; WorkspaceContext refactored with deprecated shim; ConversationRuntime + SwarmOrchestrator updated for scoped paths; /v1/artifacts routes (list/download/delete); /artifacts CLI command (ls/open/rm); LegacyArtifactImporter one-shot migration; ArtifactManifest per-run metadata; 574 runtime + 149 server + 185 agent + 56 command tests) | Phase 53 ✅ | Complete |
-| ~~Gemma 4 support + model capability registry~~ — **complete** (IModelCapabilityRegistry with layered resolution: User > Bundled > Live > Default; ModelCapabilityRegistry with exact + glob pattern matching; bundled model-overrides.json with Gemma 4 entries and expiry dates; LiveModelMetadataFetcher for OpenRouter /api/v1/models; ModelOverrideLoader with bundled/user/env sources; model ID normalization via aliases in SmartRouter; SOVRANT_MODEL_CAPABILITIES env var for inline overrides; 52 API tests) | Phase 54 ✅ | Complete |
-| ~~Per-user token auth & database hardening~~ | Phase 38 ✅ | Complete |
 | Cost tracking, token budgets & dashboard (pricing moved to Phase 55) | Phase 39 (partially superseded) | Deferred |
-| Live cost tracking via OpenRouter (pricing-as-a-service, no local registry) | Phase 55 | Low–Medium |
-| Enterprise auth & multi-tenancy (RBAC, OAuth/OIDC, SSO) | Phase 40 (deferred) | Deferred |
-| Artifact system (`ITeamWorkspace`, `IArtifact`) | Phase 41 (deferred) | Deferred |
-| VS Code native extension | Phase 42 (deferred) | Deferred |
-| ~~Database lifecycle: setup, upgrade safety, introspection~~ — **complete** (`sovrant db status/version/migrate/backup/inspect/init/reset`, `--db-path` CLI flag, first-boot WARN log, idempotent re-seed verification, `/health` DB status; items 13 JSONL already opt-in, item 16 pooling via `Cache=Shared`) | Phase 42.5 ✅ | Complete |
-| Windows PowerShell native integration (cwd persistence, version detection, elevation, exec-policy hints) | Phase 43 ✅ | Medium |
-| Cross-platform desktop application (Avalonia, embedded runtime) | Phase 44 | High |
-| Embedded terminal panel inside the desktop app | Phase 45 (deferred) | Deferred |
+| Enterprise auth & multi-tenancy (RBAC, OAuth/OIDC, SSO) | Phase 40 | Deferred |
+| ~~Artifact system~~ — **superseded by Phase 53** (Scoped Artifact Storage) | ~~Phase 41~~ | N/A |
+| VS Code native extension | Phase 42 | Deferred (MCP server covers MCP-aware IDEs) |
+| Embedded terminal panel inside the desktop app | Phase 45 | Deferred |
 | n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |
 | Workspace backup, import & export | Phase 47 | Medium |
-| Intent-aware, capability-discovered model routing | Phase 48 | ✅ Complete |
 | SearXNG web search backend (self-hosted, key-free) | Phase 49 | Low–Medium |
 | OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | Medium–High |
-| ASP.NET Core web frontend (Blazor Server, dual-mode: embedded runtime or remote via Sovrant.Server) | Phase 56 | High |
+| Live cost tracking via OpenRouter (pricing-as-a-service, no local registry) | Phase 55 | Low–Medium |
 
 ---
 
@@ -2723,7 +2733,7 @@ Phase 38 gives each user their own bearer tokens with admin/user role enforcemen
 
 ---
 
-### Phase 41 — Artifact System ⏸️ Deferred
+### Phase 41 — Artifact System ~~⏸️ Deferred~~ → Superseded by Phase 53
 
 **Depends on:** Phase 19+20 (multi-agent team tools)
 
@@ -2883,7 +2893,7 @@ Today every test starts from a fresh empty SQLite file. The migration runner is 
 
 ---
 
-### Phase 44 — Desktop Application (Cross-Platform)
+### Phase 44 — Desktop Application (Cross-Platform) ✅
 
 **Depends on:** Phase 32 (SQLite persistence), Phase 34 (CLI visual polish)
 **Difficulty:** High
@@ -4305,7 +4315,7 @@ src/Sovrant.Runtime/Metrics/
 
 ---
 
-## Phase 56 — ASP.NET Core Web Frontend (Blazor Server, Dual-Mode Runtime Access)
+## Phase 56 — ASP.NET Core Web Frontend (Blazor Server, Dual-Mode Runtime Access) ✅
 
 **Goal:** Browser-based UI matching the Avalonia desktop interface, securely consuming the Sovrant runtime. Leverages .NET's unique ability to run the runtime either in-process (embedded) or remotely via the existing `Sovrant.Server` API — same components, different DI registration.
 
