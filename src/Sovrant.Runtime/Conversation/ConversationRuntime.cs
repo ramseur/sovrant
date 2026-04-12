@@ -217,7 +217,12 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 yield break;
             }
 
-            var resolvedProvider = provider!;  // non-null — routingError guard above yields break first
+            if (provider is null)
+            {
+                yield return new RuntimeEvent.RuntimeError("No provider available after routing.");
+                yield break;
+            }
+            var resolvedProvider = provider;
             LogProviderSelected(_logger, resolvedProvider.Name);
 
             var llmSw = Stopwatch.StartNew();

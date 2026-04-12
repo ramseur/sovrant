@@ -35,7 +35,12 @@ var serverPort = int.TryParse(
 // ── Builder ───────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
 
-builder.WebHost.ConfigureKestrel(o => o.ListenLocalhost(serverPort));
+builder.WebHost.ConfigureKestrel(o =>
+{
+    o.ListenLocalhost(serverPort);
+    o.Limits.MaxRequestBodySize = 10 * 1024 * 1024; // 10 MB
+    o.Limits.MaxRequestLineSize = 16 * 1024;         // 16 KB
+});
 
 builder.Services.AddLogging(b => b.AddSovrantLogging());
 
@@ -74,7 +79,10 @@ builder.Services.AddSingleton<IUserInputProvider, HttpUserInputProvider>();
 builder.Services.AddHttpClient("ScopedProvider");
 
 // Named HttpClient for webhook callback delivery (Phase 12).
-builder.Services.AddHttpClient("WebhookCallback");
+builder.Services.AddHttpClient("WebhookCallback", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 builder.Services.AddSingleton<WebhookCallbackService>();
 
 // Session eviction background service — TTL sweep + LRU cap (Phase 9.1).

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 using Sovrant.Api.Routing;
 using Sovrant.Runtime.Caching;
 using Sovrant.Runtime.Permissions;
@@ -45,6 +46,7 @@ internal static class ConfigRoutes
         MutableServerConfig config,
         ISmartRouter router,
         CacheInvalidator cacheInvalidator,
+        ILogger<MutableServerConfig> logger,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
@@ -60,6 +62,7 @@ internal static class ConfigRoutes
         {
             if (string.IsNullOrWhiteSpace(req.ApiKey))
                 return Results.BadRequest(new { error = "api_key must not be empty." });
+            logger.LogWarning("API key changed via PUT /v1/config (key redacted).");
             config.LlmApiKey = req.ApiKey;
         }
 

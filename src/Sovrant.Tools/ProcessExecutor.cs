@@ -59,7 +59,7 @@ internal static class ProcessExecutor
 
         process.OutputDataReceived += (_, e) =>
         {
-            if (e.Data is null) return;
+            if (e.Data is null || timeoutCts.IsCancellationRequested) return;
             if (outputCapChars > 0 && stdoutSb.Length >= outputCapChars)
                 stdoutTruncated = true;
             else
@@ -67,7 +67,7 @@ internal static class ProcessExecutor
         };
         process.ErrorDataReceived += (_, e) =>
         {
-            if (e.Data is null) return;
+            if (e.Data is null || timeoutCts.IsCancellationRequested) return;
             if (outputCapChars > 0 && stderrSb.Length >= outputCapChars)
                 stderrTruncated = true;
             else
@@ -130,7 +130,7 @@ internal static class ProcessExecutor
         }
         finally
         {
-            try { File.Delete(scriptFile); } catch (IOException) { /* best-effort cleanup */ }
+            try { File.Delete(scriptFile); } catch (IOException ex) { Trace.TraceWarning("Failed to clean up temp script {0}: {1}", scriptFile, ex.Message); }
         }
     }
 

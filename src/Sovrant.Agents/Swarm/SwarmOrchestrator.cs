@@ -181,6 +181,12 @@ public sealed partial class SwarmOrchestrator
         }
         catch (OperationCanceledException)
         {
+            // Mark any still-running tasks as cancelled so status is accurate.
+            foreach (var task in plan.Tasks)
+            {
+                if (task.Status == SwarmTaskStatus.Running)
+                    task.Status = SwarmTaskStatus.Cancelled;
+            }
             result.Status = SwarmStatus.Cancelled;
             result.TotalTokensUsed = tokenCounter.Value;
             result.Duration = sw.Elapsed;

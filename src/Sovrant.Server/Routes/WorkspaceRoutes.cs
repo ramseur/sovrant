@@ -117,6 +117,8 @@ internal static class WorkspaceRoutes
     private static async Task<IResult> RemoveMember(
         string id, string userId, IWorkspaceService svc, CancellationToken ct)
     {
+        if (!InputValidation.IsValidResourceId(userId))
+            return Results.BadRequest(new { error = "Invalid user ID format." });
         var removed = await svc.RemoveMemberAsync(id, userId, ct).ConfigureAwait(false);
         if (!removed)
             return Results.BadRequest(new { error = "Cannot remove member. They may be the owner or not found." });

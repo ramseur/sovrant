@@ -44,12 +44,19 @@ public sealed class SlashCommandDispatcher
                 Directory.GetCurrentDirectory(), ".sovrant", "commands", $"{name}.md");
             if (File.Exists(projectCommandPath))
             {
-                var template = await File.ReadAllTextAsync(projectCommandPath, ct).ConfigureAwait(false);
-                // Substitute $ARGUMENTS placeholder if present
-                var injected = template.Contains("$ARGUMENTS", StringComparison.Ordinal)
-                    ? template.Replace("$ARGUMENTS", args, StringComparison.Ordinal)
-                    : string.IsNullOrEmpty(args) ? template : $"{template}\n\n{args}";
-                return new SlashCommandResult(InjectAsUserMessage: injected);
+                try
+                {
+                    var template = await File.ReadAllTextAsync(projectCommandPath, ct).ConfigureAwait(false);
+                    // Substitute $ARGUMENTS placeholder if present
+                    var injected = template.Contains("$ARGUMENTS", StringComparison.Ordinal)
+                        ? template.Replace("$ARGUMENTS", args, StringComparison.Ordinal)
+                        : string.IsNullOrEmpty(args) ? template : $"{template}\n\n{args}";
+                    return new SlashCommandResult(InjectAsUserMessage: injected);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    return new SlashCommandResult($"Error reading command file: {ex.Message}");
+                }
             }
 
             return new SlashCommandResult($"Unknown command: /{name}. Type /help for a list of commands.");

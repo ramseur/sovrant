@@ -24,6 +24,11 @@ public sealed class PowerShellTool : ITool
         if (string.IsNullOrWhiteSpace(command))
             return "Error: command is required.";
 
+        // Guard against excessively large commands that would OOM when base64-encoded.
+        const int MaxCommandLength = 512 * 1024; // 512 KB
+        if (command.Length > MaxCommandLength)
+            return $"Error: command too large ({command.Length} chars). Maximum is {MaxCommandLength}.";
+
         var timeoutMs = input.GetIntProp("timeout", DefaultTimeoutMs);
         var shell = FindPowerShell();
 

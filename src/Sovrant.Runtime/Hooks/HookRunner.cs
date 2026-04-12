@@ -196,7 +196,16 @@ public sealed partial class HookRunner : IHookRunner
 
             using var process = new Process { StartInfo = psi };
             process.Start();
-            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            try
+            {
+                await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                if (!process.HasExited)
+                    try { process.Kill(); } catch (InvalidOperationException) { }
+                throw;
+            }
             return process.ExitCode;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)

@@ -87,7 +87,8 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
                 _ = hookRunner.RunAsync(
                     HookEvent.SessionStart,
                     new HookContext(HookEvent.SessionStart, persistenceId),
-                    CancellationToken.None);
+                    CancellationToken.None)
+                    .ContinueWith(static t => { if (t.IsFaulted) _ = t.Exception; }, TaskScheduler.Default);
             }
         }
 
@@ -216,7 +217,8 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
         _ = hookRunner.RunAsync(
             HookEvent.SessionEnd,
             new HookContext(HookEvent.SessionEnd, persistenceId),
-            CancellationToken.None);
+            CancellationToken.None)
+            .ContinueWith(static t => { if (t.IsFaulted) _ = t.Exception; }, TaskScheduler.Default);
 
         // Fire-and-forget session summary extraction (Phase 25 memory system).
         var memoryHandler = _services.GetService<SessionEndMemoryHandler>();

@@ -42,6 +42,8 @@ internal static class ProjectRoutes
     private static async Task<IResult> ListProjects(
         string wid, bool? includeArchived, IProjectService svc, CancellationToken ct)
     {
+        if (!InputValidation.IsValidResourceId(wid))
+            return Results.BadRequest(new { error = "Invalid workspace ID format." });
         var projects = await svc.ListAsync(wid, includeArchived ?? false, ct).ConfigureAwait(false);
         return Results.Ok(new { projects });
     }
@@ -49,6 +51,8 @@ internal static class ProjectRoutes
     private static async Task<IResult> CreateProject(
         string wid, CreateProjectRequest req, IProjectService svc, CancellationToken ct)
     {
+        if (!InputValidation.IsValidResourceId(wid))
+            return Results.BadRequest(new { error = "Invalid workspace ID format." });
         ArgumentNullException.ThrowIfNull(req);
         if (string.IsNullOrWhiteSpace(req.Name))
             return Results.BadRequest(new { error = "Name is required." });
@@ -178,6 +182,8 @@ internal static class ProjectRoutes
     private static async Task<IResult> RemoveMember(
         HttpContext ctx, string id, string userId, IProjectService svc, CancellationToken ct)
     {
+        if (!InputValidation.IsValidResourceId(userId))
+            return Results.BadRequest(new { error = "Invalid user ID format." });
         if (!ctx.IsAdmin())
             return Results.Json(new { error = "Admin role required to manage members." }, statusCode: StatusCodes.Status403Forbidden);
 

@@ -3,6 +3,9 @@ import type { ChatCompletionChunk } from "./types.js";
 /** Maximum SSE buffer size (10 MB) to prevent OOM from malicious servers. */
 const MAX_BUFFER_SIZE = 10 * 1024 * 1024;
 
+/** Maximum time (ms) to wait for the next SSE chunk before aborting. */
+const READ_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Safely parse JSON, stripping dangerous __proto__ and constructor keys
  * to prevent prototype pollution attacks.
@@ -40,7 +43,11 @@ export async function* parseSSEStream(
 
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const readPromise = reader.read();
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("SSE read timed out")), READ_TIMEOUT_MS)
+      );
+      const { done, value } = await Promise.race([readPromise, timeout]);
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });

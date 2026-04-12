@@ -30,4 +30,15 @@ internal static partial class InputValidation
     /// </summary>
     public static bool IsValidModelName(string? model) =>
         model is not null && ModelNamePattern().IsMatch(model);
+
+    // Resource IDs (workspace, project, user): 1-256 chars, same charset as session IDs.
+    [GeneratedRegex(@"^[a-zA-Z0-9._:@\-]{1,256}$")]
+    private static partial Regex ResourceIdPattern();
+
+    /// <summary>
+    /// Returns <see langword="true"/> if <paramref name="id"/> is a safe resource identifier
+    /// (workspace ID, project ID, user ID). Rejects path traversal, whitespace, and oversized values.
+    /// </summary>
+    public static bool IsValidResourceId(string? id) =>
+        id is not null && ResourceIdPattern().IsMatch(id);
 }
