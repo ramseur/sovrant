@@ -69,7 +69,7 @@ const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_TIMEOUT_MS = 120_000;
 const BASE_RETRY_DELAYS = [1000, 2000, 4000];
 const ALLOWED_PROTOCOLS = ["http:", "https:"];
-const ALLOWED_EXPORT_FORMATS = ["markdown"];
+const ALLOWED_EXPORT_FORMATS = ["markdown", "json"];
 
 /**
  * Typed client for the Sovrant server API.
@@ -356,8 +356,25 @@ export class SovrantClient {
 
   /** Check server health (unauthenticated). */
   async health(): Promise<{ status: string }> {
-    const res = await fetch(`${this.baseUrl}/health`);
-    return (await res.json()) as { status: string };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const res = await fetch(`${this.baseUrl}/health`, {
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new SovrantApiError(res.status, body, `${this.baseUrl}/health`);
+      }
+      return (await res.json()) as { status: string };
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        throw new SovrantTimeoutError(`${this.baseUrl}/health`, this.timeoutMs);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 
   // ── Users (Me) ────────────────────────────────────────────────────────
@@ -868,7 +885,12 @@ export class SovrantClient {
 
   /** Export a mission as markdown or JSON. */
   async exportMission(missionId: string, format: "markdown" | "json" = "markdown"): Promise<string> {
-    const qs = format === "json" ? "?format=json" : "";
+    if (!ALLOWED_EXPORT_FORMATS.includes(format)) {
+      throw new Error(
+        `Invalid export format "${format}". Allowed: ${ALLOWED_EXPORT_FORMATS.join(", ")}`
+      );
+    }
+    const qs = format === "json" ? `?format=${encodeURIComponent(format)}` : "";
     const res = await this.fetchWithRetry(`/v1/missions/${encodeURIComponent(missionId)}/export${qs}`);
     return res.text();
   }
@@ -1055,9 +1077,13 @@ export class SovrantClient {
     const extraHeaders = init?.headers as Record<string, string> | undefined;
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.token}`,
-      "Content-Type": "application/json",
       ...extraHeaders,
     };
+    // Only set Content-Type when there is a request body to avoid
+    // confusing proxies/servers on GET and DELETE requests.
+    if (init?.body !== undefined) {
+      headers["Content-Type"] = "application/json";
+    }
 
     let lastError: Error | undefined;
 
@@ -1119,6 +1145,9 @@ export class SovrantClient {
 
 // ── Errors ──────────────────────────────────────────────────────────────
 
+/** Maximum length of response body included in error messages to avoid leaking server internals. */
+const MAX_ERROR_BODY_LENGTH = 256;
+
 /** Error thrown when the Sovrant API returns a non-OK response. */
 export class SovrantApiError extends Error {
   constructor(
@@ -1126,7 +1155,11 @@ export class SovrantApiError extends Error {
     public readonly body: string,
     public readonly url: string
   ) {
-    super(`Sovrant API error ${status} from ${url}: ${body}`);
+    const truncated =
+      body.length > MAX_ERROR_BODY_LENGTH
+        ? body.slice(0, MAX_ERROR_BODY_LENGTH) + "…"
+        : body;
+    super(`Sovrant API error ${status} from ${url}: ${truncated}`);
     this.name = "SovrantApiError";
   }
 }
