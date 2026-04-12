@@ -35,16 +35,16 @@ This document explains what each one is, where the value comes from, where the o
 | **Lines of code** | ~89 LOC + 4 small tools | ~1,376 LOC across 14 files |
 | **Who drives it?** | The **LLM** calls `TeamCreate`, `TeamDelegate`, `TeamStatus`, `TeamDelete` like any other tool inside its tool-use loop | The **user** runs `sovrant swarm "<task>"` from the CLI; the LLM is not in the conversation loop while a swarm runs |
 | **Lifecycle** | Persistent — members live in an in-memory `ITeamRegistry` for the whole conversation; the LLM creates one and reuses it across turns | Ephemeral — one swarm = one task, lives only until completion |
-| **State** | `InMemoryTeamRegistry` (a `ConcurrentDictionary`). Lost on process restart. | `SwarmStateTracker` + `SwarmSession` writing JSONL events to `~/.sovrant/swarm/sessions/{id}.jsonl`. Phase 37.5 will move this into the SQLite `swarm_events` table. |
+| **State** | `InMemoryTeamRegistry` (a `ConcurrentDictionary`). Lost on process restart. | `SwarmStateTracker` + `SwarmSession` writing events to the SQLite `swarm_events` table (shipped in Phase 37.5). Legacy JSONL can be imported via `sovrant db import-swarm`. |
 | **Concurrency** | Sequential by construction — `TeamDelegate` is one call → one agent → one result | Wave-based parallelism. `LlmSwarmDecomposer` builds a DAG (`SwarmTaskNode` with `Dependencies`), `SwarmOrchestrator` topologically sorts it into waves, then runs each wave's tasks in parallel with a `SemaphoreSlim` concurrency cap |
 | **Coordination primitives** | None — each delegation is independent | `SwarmFileLockManager` (pessimistic file locks declared up-front via `FilesToModify`), `SwarmQualityGate`, retry logic, token-budget enforcement, file-conflict resolution |
 | **Task decomposition** | The caller (the LLM) decides what to delegate and when | `LlmSwarmDecomposer` (218 LOC) calls an LLM to break the user's natural-language goal into a `SwarmPlan` of `SwarmTaskNode`s with explicit dependencies and predicted file-touch sets |
 | **Agent identity** | Each member has a name, role, system prompt, optional tool whitelist, optional model — created once, reused | Each task wave spawns ephemeral agents from templates (coder, reviewer, etc.); same `SovrantAgentFactory` and `AgentTemplateRegistry`, but no persistent identity |
-| **Workspace scoping** | None today — registry is process-global | `SwarmOrchestrator` takes a `WorkspaceContext` in its constructor; scoping is wired but not yet flowing into the JSONL store (Phase 37.5 item #5) |
+| **Workspace scoping** | None today — registry is process-global | `SwarmOrchestrator` takes a `WorkspaceContext` in its constructor; scoping flows into the `swarm_events` table via `WorkspaceContextMiddleware` |
 | **Trigger surface** | LLM tool calls (`TeamCreate` / `TeamDelegate` / `TeamStatus` / `TeamDelete`) | CLI `sovrant swarm` command, `Swarm` tool from inside an agent conversation, `POST /v1/swarm` HTTP endpoint |
 | **Cancellation** | Implicit via `CancellationToken` | First-class — wave-by-wave checks; can stop mid-DAG |
 | **Failure model** | Single delegation fails → caller decides | Per-task retry budgets, quality gate scoring, partial completion semantics, token-budget halts |
-| **Observability** | `TeamStatus` tool returns last output / error per member; lost on restart | JSONL event log per swarm run, replayable via `/v1/swarm/{id}/events` and `GET /v1/swarm/sessions` |
+| **Observability** | `TeamStatus` tool returns last output / error per member; lost on restart | SQLite event log per swarm run (in `swarm_events` table), replayable via `/v1/swarm/{id}/events` and `GET /v1/swarm/sessions` |
 
 ---
 
@@ -61,7 +61,7 @@ This document explains what each one is, where the value comes from, where the o
 2. **LLM-driven decomposition.** `LlmSwarmDecomposer` is a 218-LOC component whose entire job is "given a vague goal, produce a runnable DAG with predicted file touches." That is substantial engineering.
 3. **Wave scheduling.** Topological sort + concurrency cap → measurable wall-clock improvements on tasks the decomposer can split well.
 4. **Quality gate, retries, token budget.** Production-hardening that Team does not have.
-5. **Replayable.** JSONL session files (today) mean you can re-construct exactly what happened. After Phase 37.5 they will be SQL-queryable, joinable to users and workspaces, and covered by the same backup story as everything else.
+5. **Replayable.** SQLite `swarm_events` table (shipped in Phase 37.5) makes every swarm run SQL-queryable, joinable to users and workspaces, and covered by the same backup story as everything else.
 
 ---
 

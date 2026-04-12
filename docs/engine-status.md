@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-06 (Phase 32 SQLite Persistence Layer — 45 tools, 910 tests)
+**Last updated:** 2026-04-12 (45 tools, 95 server endpoints, 1,285 tests, JS SDK covering 79 endpoints)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -19,7 +19,7 @@
 | Permission system | ✅ Working | `bypassPermissions` / `dontAsk` / `default` / `plan` all functional |
 | SSE streaming | ✅ Working | Text chunks stream to console in real time |
 | Token counts | ✅ Fixed | OpenAI trailing usage chunk now captured. Input + output tokens reported correctly after each turn. |
-| HTTP server (`Sovrant.Server`) | ✅ Working | 22 endpoints: health, chat, config (GET+PUT), status, models, sessions (CRUD + config + export), usage, webhook, MCP auth, evals (list+history+run), swarm (start+status+events+sessions) |
+| HTTP server (`Sovrant.Server`) | ✅ Working | 95 endpoints: health, chat, config, status, models, sessions (CRUD + config + export), usage, webhook, MCP auth, evals, swarm, users (CRUD + sessions + usage + audit), workspaces (CRUD + members + invites + config + usage + memory), projects (CRUD + archive + members + config + sessions + usage + memory), teams (CRUD + members + runs), runs, missions (CRUD + run + events + export), engine (trace + in-flight + recover + delete), artifacts (list + download + delete), registries (tools + skills + agent templates) |
 | Server session pool (`IRuntimeSessionPool`) | ✅ Implemented | One `ConversationRuntime` per session ID with per-session `SemaphoreSlim` lock, `SessionConfig` overlay, token accumulators. TTL eviction + LRU cap via `SessionEvictionService`. |
 | Session-scoped config | ✅ Implemented | Per-session model + permission mode overlays via `SessionConfig`. `EnterPlanMode`/`ExitPlanMode` scoped to current session via `AsyncLocal`. `PUT /v1/sessions/{id}/config` for explicit overrides. |
 | Per-session rate limiting | ✅ Implemented | ASP.NET Core `RateLimiter` keyed on `X-Session-Id` header or client IP. `SOVRANT_RATE_LIMIT_RPM` env var (default 60). Returns 429 when exceeded. |
@@ -27,13 +27,13 @@
 | LSP integration (`Sovrant.Lsp`) | ✅ Implemented | `ILspClient` / `LspClient` — JSON-RPC 2.0 over stdio, Content-Length framing. `LspClientManager` maps file extensions to language servers. 5 tools: LspHover, LspDefinition, LspReferences, LspDiagnostics, LspRename. Config via `lsp_servers` in `SovrantConfig`. |
 | CI/CD integration | ✅ Implemented | `--ci` flag on CLI: JSON output, non-zero exit on error, `CiPermissionPolicy`, `CiUserInputProvider`. GitHub Actions composite action. GitLab CI template in docs. |
 | Webhook integration | ✅ Implemented | `POST /v1/webhook` — generic endpoint for Slack, Teams, Discord, custom. Sync or async (callback URL). `WebhookCallbackService` for background delivery. Slack bot at `integrations/slack/`. |
-| Frontend SDK | ✅ Implemented | `sdk/js/` — TypeScript `SovrantClient`, SSE parser, React `useChat()` hook, full type coverage |
+| Frontend SDK | ✅ Implemented | `sdk/js/` — TypeScript `SovrantClient` (79 endpoint methods), SSE parser, React `useChat()` hook, 75+ type definitions |
 | Structured diff view | ✅ Implemented | `DiffRenderer` in CLI — color unified diffs for edit/write tools in REPL |
 | Session export | ✅ Implemented | `GET /v1/sessions/{id}/export` — markdown rendering of full session history |
 | MCP server mode | ✅ Implemented | `sovrant mcp-server` — stdio transport (JSON-RPC 2.0). Bridges all `IToolRegistry` tools + synthetic `chat` tool + session/config resources to MCP protocol. Zero overlap with HTTP server. Bearer token auth via `SOVRANT_MCP_TOKEN` + `--token`. |
 | Dynamic MCP Tool Proxy (`MCPTool`) | ✅ Implemented | Calls any tool on any connected MCP server dynamically at execution time — no static registration needed. Optional `server` param; searches all clients when omitted. |
 | SQLite persistence layer | ✅ Implemented | `IStorageProvider` + `SqliteStorageProvider` + 5 versioned migrations (26+ tables). Stores: sessions, memory, audit, credentials, token usage. Schema pre-built for Phases 33-37. See [persistence.md](persistence.md). |
-| Unit test suite | ✅ 910/910 passing | Api(28) + Runtime(348) + Server(101) + Lsp(26) + Tools(174) + Commands(42) + McpServer(30) + Agents(160) + Integration(1) |
+| Unit test suite | ✅ 1,285 passing | Api(28) + Runtime(302) + Server(73) + Lsp(26) + Tools(174) + Commands(42) + McpServer(30) + Agents(160) + Integration(1) |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |
@@ -64,7 +64,7 @@
 | ~~SmartRouter crashes when all providers fail startup ping~~ | ✅ Fixed — falls back to configured providers when all fail ping; `ConversationRuntime` catches routing exception and emits `RuntimeError` instead of crashing. |
 | `AskUserQuestion` blocked in server mode | Returns a fixed "question blocked" message — by design; interactive prompts not possible in HTTP server context. |
 | `launchSettings.json` / port conflict on rapid server restart | `src/Sovrant.Server/Properties/launchSettings.json` declares port `5091` that Kestrel overrides with `5200`. Rapid restart causes `SocketException (10048)`. **Mitigation:** always `pkill -f Sovrant.Server` first. **Fix (Phase 9):** align `launchSettings.json` port with `SOVRANT_PORT` and add `--urls` override for CI. |
-| `EnterPlanMode` / `ExitPlanMode` are global in server mode | `IPermissionModeAccessor` wraps the shared `MutableServerConfig` singleton — `EnterPlanMode` in one session sets plan mode for all sessions. Fixed in Phase 9.5 (session-scoped `SessionConfig` overlay). |
+| ~~`EnterPlanMode` / `ExitPlanMode` are global in server mode~~ | ✅ Fixed — `SessionConfig` overlay makes plan mode per-session via `AsyncLocal`. `PUT /v1/sessions/{id}/config` for explicit overrides. |
 | ~~No provider retry on 429 / 5xx~~ | ✅ Fixed — 3 attempts with 1s/2s/4s backoff on retryable errors in `ConversationRuntime`. |
 | ~~`AgentTool` has no recursion depth limit~~ | ✅ Fixed — `AsyncLocal<int>` counter; rejects at depth ≥ 5. |
 | ~~`Sovrant.Agents` not wired into CLI or Server~~ | ✅ Fixed — `AddMultiAgentSystem()` called in both CLI and Server `Program.cs`. Team tools registered. `AgentTool` uses direct `ConversationRuntime` (by design — lightweight ad-hoc). |

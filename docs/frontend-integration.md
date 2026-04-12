@@ -163,14 +163,14 @@ await client.chat("hello", {
 
 | Property | Detail |
 |---|---|
-| **In transit** | Sent in the HTTPS-encrypted request body, not in URLs or headers |
+| **In transit** | Sent as `X-LLM-Api-Key` HTTP header, HTTPS-encrypted in transit. Never in URLs or request bodies. |
 | **On the server** | Used only for that LLM call. Never logged, never persisted, not in error bodies. |
 | **In the SDK** | `toJSON()` / `JSON.stringify()` redacts `llmApiKey` as `"[REDACTED]"` |
 | **Session isolation** | Server keys sessions by `{session_id}::{provider}` so team A never sees team B's history |
 
 ### What to watch for
 
-- **HTTPS is required.** The LLM key travels in the request body. HTTP exposes it in plaintext — always use `https://` in production (the SDK rejects non-HTTP(S) base URLs at construction).
+- **HTTPS is required.** The LLM key travels as an HTTP header (`X-LLM-Api-Key`). HTTP exposes it in plaintext — always use `https://` in production (the SDK rejects non-HTTP(S) base URLs at construction).
 - **Don't hardcode keys.** Even with redaction, LLM keys should come from your auth/secrets layer, not from JavaScript source files.
 - **The key leaves the browser.** If you use this in a public browser app, the user's key goes to your Sovrant server over HTTPS. That is expected and appropriate for a bring-your-own-key model, but make it clear to users in your terms of service.
 
@@ -189,7 +189,7 @@ const client = new SovrantClient({
   maxRetries: 3,                     // Optional — retry count on 429/5xx (default: 3)
 
   // Multi-tenant: supply each team's own LLM credentials.
-  // Sent in the request body (never a URL or header), HTTPS-encrypted in transit.
+  // Sent as X-LLM-Api-Key / X-LLM-Base-Url HTTP headers, HTTPS-encrypted in transit.
   // The server uses them for the LLM call and never logs or persists them.
   llmApiKey: "sk-team-a-key",        // Optional — overrides server's LLM_API_KEY
   llmBaseUrl: "https://...",         // Optional — overrides server's LLM_BASE_URL
@@ -281,9 +281,9 @@ const updated = await client.updateConfig({ model: "gpt-4o-mini" });
 ### Status and Models
 
 ```ts
-// Provider health and routing scores
-const providers = await client.getStatus();
-// [{ name, healthy, latency_ms, request_count, error_count, score }]
+// Server status — provider health, session pool, routing info
+const status = await client.getStatus();
+// { providers, active_model, permission_mode, pinned_provider, active_sessions, max_sessions, session_ttl_seconds }
 
 // Available models
 const models = await client.getModels();
@@ -303,6 +303,125 @@ await client.deleteSession("session-abc");
 
 // Export session as markdown
 const markdown = await client.exportSession("session-abc");
+
+// Session-level config overrides
+const config = await client.getSessionConfig("session-abc");
+await client.updateSessionConfig("session-abc", { model: "gpt-4o-mini" });
+```
+
+### Users
+
+```ts
+// Current user
+const me = await client.getMe();
+
+// API tokens
+const { token, plaintext } = await client.issueToken({ name: "my-app" });
+const { tokens } = await client.listTokens();
+await client.revokeToken(tokenId);
+
+// Admin: user CRUD
+const user = await client.createUser({ username: "alice" });
+const { users } = await client.listUsers({ role: "admin" });
+await client.updateUser(userId, { role: "admin" });
+await client.deactivateUser(userId);
+```
+
+### Workspaces
+
+```ts
+const { workspaces } = await client.listWorkspaces();
+const ws = await client.createWorkspace({ name: "My Team", slug: "my-team" });
+const { members } = await client.listWorkspaceMembers(wsId);
+await client.addWorkspaceMember(wsId, { user_id: userId, role: "editor" });
+
+// Invites
+const invite = await client.createWorkspaceInvite(wsId, { email: "bob@co.com" });
+await client.acceptWorkspaceInvite(inviteToken);
+
+// Config, usage, memory
+const config = await client.getWorkspaceConfig(wsId);
+const usage = await client.getWorkspaceUsage(wsId);
+const { memory } = await client.listWorkspaceMemory(wsId, "project");
+await client.saveWorkspaceMemory(wsId, { layer: "project", content: "..." });
+```
+
+### Projects
+
+```ts
+const { projects } = await client.listProjects(wsId);
+const project = await client.createProject(wsId, { name: "API", slug: "api" });
+await client.archiveProject(projectId);
+await client.unarchiveProject(projectId);
+
+// Members, config, sessions, usage, memory
+const { members } = await client.listProjectMembers(projectId);
+await client.addProjectMember(projectId, { user_id: userId });
+```
+
+### Teams and Runs
+
+```ts
+const team = await client.createTeam({ name: "reviewers" });
+await client.addTeamMember(teamId, { name: "alice", role: "reviewer" });
+const result = await client.runTeam(teamId, { goal: "Review auth module" });
+
+// Runs
+const run = await client.getRun(runId);
+const { runs } = await client.listRuns({ status: "completed" });
+```
+
+### Missions
+
+```ts
+const mission = await client.createMission({ goal: "Migrate to v2 API" });
+await client.runMission(missionId);
+const { events } = await client.getMissionEvents(missionId);
+const exported = await client.exportMission(missionId, "markdown");
+```
+
+### Swarm
+
+```ts
+const result = await client.getSwarm(swarmId);
+const events = await client.getSwarmEvents(swarmId);
+const sessions = await client.listSwarmSessions({ workspace_id: wsId });
+```
+
+### Engine
+
+```ts
+const trace = await client.getEngineTrace(runtimeRunId);
+const { runtime_run_ids } = await client.listInFlightRuns();
+const { recovered } = await client.recoverEngineRuns();
+```
+
+### Evals
+
+```ts
+const suites = await client.listEvals();
+const result = await client.runEval({ suite_name: "regression" });
+const history = await client.getEvalHistory("regression");
+```
+
+### Artifacts
+
+```ts
+const { artifacts } = await client.listArtifacts({ workspace_id: wsId });
+await client.deleteArtifacts(runId);
+```
+
+### Registries (Tools, Skills, Agent Templates)
+
+```ts
+const { tools } = await client.listTools();
+const tool = await client.getTool("Read");
+
+const { skills } = await client.listSkills();
+const skill = await client.getSkill("code-review");
+
+const { templates } = await client.listAgentTemplates();
+const template = await client.getAgentTemplate("security-auditor");
 ```
 
 ### Usage Tracking
@@ -310,6 +429,9 @@ const markdown = await client.exportSession("session-abc");
 ```ts
 // Per-session token usage summary
 const usage = await client.getUsage();
+
+// Per-user usage (admin or self)
+const userUsage = await client.getUserUsage(userId, { from: "2026-04-01" });
 ```
 
 ### Health Check
@@ -424,7 +546,7 @@ for await (const chunk of parseSSEStream(response)) {
 
 The parser includes built-in security hardening:
 
-- **Buffer size limit** — throws if the SSE buffer exceeds 10 MB (protects against malicious/misbehaving servers)
+- **Buffer size limit** — throws if the SSE buffer exceeds 1 MB (protects against malicious/misbehaving servers)
 - **Prototype pollution protection** — strips `__proto__`, `constructor`, and `prototype` keys from parsed JSON
 - **Graceful degradation** — silently skips malformed JSON chunks without crashing
 - **Proper cleanup** — always releases the reader lock, even on errors
@@ -444,11 +566,12 @@ The SDK enforces several security measures automatically. Here's what it does an
 | **Token redaction** | `JSON.stringify(client)` outputs `"[REDACTED]"` for both `token` and `llmApiKey`. Safe to log the client object. |
 | **Bearer token in headers only** | Token is sent via `Authorization: Bearer` header, never in URLs or request bodies. |
 | **Path traversal prevention** | Session IDs are `encodeURIComponent()`-encoded in all URL paths. |
-| **Query injection prevention** | Export format parameter is validated against an allow-list and URI-encoded. |
+| **Query injection prevention** | Export format parameters are validated against an allow-list (`markdown`, `json`) and URI-encoded. |
+| **Content-Type precision** | `Content-Type: application/json` is only sent when the request has a body, avoiding proxy confusion on GET/DELETE. |
 | **Prototype pollution protection** | SSE JSON parsing strips `__proto__`, `constructor`, `prototype` keys. |
-| **Buffer overflow protection** | SSE buffer is capped at 10 MB. Throws a descriptive error if exceeded. |
+| **Buffer overflow protection** | SSE buffer is capped at 1 MB. Throws a descriptive error if exceeded. |
 | **Automatic retries** | 429 (rate limited) and 5xx (server error) responses are retried with exponential backoff (1s, 2s, 4s). |
-| **Typed errors** | `SovrantApiError` includes `status`, `body`, `url` — but never the token. |
+| **Typed errors** | `SovrantApiError` includes `status`, `body` (truncated to 256 chars in messages), `url` — but never the token. |
 
 ### What you must do
 
@@ -677,25 +800,48 @@ messages
 
 ## TypeScript Types
 
-The SDK exports all types for full type safety:
+The SDK exports all types for full type safety. 75+ interfaces covering every server endpoint:
 
 ```ts
 import type {
-  SovrantClientOptions,
-  ChatMessage,
-  ChatCompletionRequest,
-  ChatCompletionResponse,
-  ChatCompletionChunk,
-  ChunkChoice,
-  ResponseChoice,
-  SovrantEvent,
-  StreamCallbacks,
-  UsageInfo,
-  ProviderStatus,
-  ServerConfig,
-  WebhookRequest,
-  WebhookResponse,
-  WebhookToolCall,
+  // Core chat
+  SovrantClientOptions, ChatMessage, ChatCompletionRequest,
+  ChatCompletionResponse, ChatCompletionChunk, ChunkChoice,
+  ResponseChoice, SovrantEvent, StreamCallbacks, ChatCallOptions,
+  UsageInfo, ProviderStatus, StatusResponse, ServerConfig,
+  ModelsResponse, ModelInfo,
+  // Webhooks
+  WebhookRequest, WebhookResponse, WebhookToolCall,
+  // Sessions
+  SessionDetail, SessionMessage, SessionListResponse,
+  SessionConfig, SessionConfigUpdate, UsageSummary,
+  // Users
+  UserProfile, CreateUserRequest, UpdateUserRequest, UserListFilter,
+  ApiToken, IssueTokenRequest, IssueTokenResponse,
+  // Workspaces
+  Workspace, CreateWorkspaceRequest, UpdateWorkspaceRequest,
+  WorkspaceMember, AddWorkspaceMemberRequest,
+  WorkspaceInvite, CreateInviteRequest,
+  WorkspaceMemoryEntry, SaveMemoryRequest,
+  // Projects
+  Project, CreateProjectRequest, UpdateProjectRequest,
+  ProjectMember, AddProjectMemberRequest,
+  // Teams
+  Team, CreateTeamRequest, TeamMember, AddTeamMemberRequest,
+  TeamRunRequest, TeamRunResponse, AgentRun, AgentRunFilter,
+  // Missions
+  Mission, CreateMissionRequest, MissionEvent,
+  // Swarm
+  SwarmRunRequest, SwarmResult,
+  // Engine
+  RuntimeTraceEntry,
+  // Evals
+  EvalSuite, EvalRunRequest, EvalRunResponse, EvalResultDetail,
+  // Artifacts
+  ArtifactEntry, ArtifactScope,
+  // Registries
+  ToolDefinition, SkillSummary, SkillDetail,
+  AgentTemplateSummary, AgentTemplateDetail,
 } from "@sovrant/sdk";
 ```
 

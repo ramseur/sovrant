@@ -1,6 +1,6 @@
 # Sovrant — Competitor Analysis
 
-**Last updated:** 2026-04-04 (Phase 7.5 Tier 1 complete — 27 tools)
+**Last updated:** 2026-04-12 (45 tools, desktop app, web app, MCP server, SDK covering 79 endpoints)
 **Products analysed:** Claude Code · OpenClaude · opencode (SST) · Sovrant
 
 ---
@@ -12,9 +12,9 @@ The agentic coding tool space has four meaningful reference points as of 2026:
 - **Claude Code** — the proprietary, Anthropic-backed gold standard. Deep Claude model integration, enterprise-grade safety tooling, and the widest IDE/CI coverage. Hard vendor lock-in and a closed codebase.
 - **OpenClaude** — a community fork derived from Claude Code source code that was accidentally leaked in March 2026. Full tool parity with Claude Code, genuine multi-provider support. Legally precarious; subject to ongoing DMCA takedowns.
 - **opencode (SST)** — a clean-room, MIT-licensed open source coding agent with 95K+ GitHub stars and 600K+ downloads. TypeScript/Bun, SQLite persistence, 75+ LLM providers, multi-interface (TUI + desktop + VS Code + web + remote server). The strongest open source competitor.
-- **Sovrant** — a .NET 10 / C# implementation of an agentic coding engine. Dual-mode (CLI REPL + OpenAI-compatible HTTP server). SmartRouter. 27 tools (Phase 7.5 Tier 1 complete). JSONL session persistence. Roadmap targeting enterprise multi-tenancy, team orchestration, and MCP server mode.
+- **Sovrant** — a .NET 10 / C# 14 agentic AI engine. Five delivery modes: CLI REPL, OpenAI-compatible HTTP server (95 endpoints), Avalonia desktop app (Windows/macOS/Linux), Blazor Server web app, and MCP server for IDE integration. SmartRouter with intent-aware model routing. 45 tools. 24 agent templates. 32 built-in skills. Multi-agent team orchestration, swarm auto-decomposition, SQLite persistence with FTS5, eval framework, LSP integration, and a TypeScript SDK covering all 79 server endpoints.
 
-**Sovrant's unique position:** the only option that is natively .NET, provides an OpenAI-compatible HTTP server out of the box, and has a clear roadmap toward cloud multi-tenant deployment with per-user credential isolation — without the legal exposure of OpenClaude or the Node.js runtime dependency of opencode.
+**Sovrant's unique position:** the only option that is natively .NET, provides five independent frontends (CLI, server, desktop, web, MCP), has built-in multi-agent orchestration with two backends, and ships enterprise multi-tenant infrastructure (per-user credentials, session TTL, rate limiting, workspace/project scoping) — without the legal exposure of OpenClaude or the Node.js runtime dependency of opencode.
 
 ---
 
@@ -46,9 +46,9 @@ opencode supports 75+ LLM providers through a unified AI SDK abstraction layer a
 
 ### Sovrant
 
-Sovrant is a .NET 10 / C# agentic coding engine with two delivery modes: a CLI REPL for interactive developer use and `Sovrant.Server`, an ASP.NET Core HTTP server that exposes OpenAI-compatible endpoints. This makes Sovrant both a developer tool and an API backend that any OpenAI-compatible client can connect to.
+Sovrant is a .NET 10 / C# 14 agentic AI engine with five delivery modes: a CLI REPL for interactive developer use, `Sovrant.Server` (ASP.NET Core HTTP server with 95 OpenAI-compatible endpoints), `Sovrant.Desktop` (Avalonia GUI for Windows/macOS/Linux), `Sovrant.Web` (Blazor Server browser UI), and `Sovrant.McpServer` (MCP server for IDE integration via stdio).
 
-The SmartRouter routes each LLM call across configured providers (OpenAI-compatible, Ollama, native messages API) based on latency, cost, and health scores. Session state persists as JSONL append-logs. The tool set covers 27 tools across file operations, shell execution, web, task management, notebook editing, sub-agents, plan mode, and git worktree isolation (Phase 7.5 Tier 1 complete). The roadmap targets multi-tenant per-user credential isolation, session TTL/eviction, per-user auth tokens, team orchestration, MCP OAuth, and a TypeScript frontend SDK.
+The SmartRouter routes each LLM call across configured providers (OpenAI-compatible, Ollama, native messages API) based on latency, cost, and health scores, with intent-aware model tier routing. 45 tools cover file operations, shell execution (Bash, PowerShell, REPL), web access, task management, notebook editing, LSP code intelligence, sub-agents, plan/worktree mode, team orchestration, swarm orchestration, skill execution, MCP resources, and quality verification. 24 agent templates and 32 built-in skills ship with the engine. Session state persists in SQLite with FTS5 full-text search. Multi-agent team orchestration (two backends: isolated process-per-agent and shared in-process) and a swarm auto-decomposition engine with DAG execution, file locking, and quality gates are fully operational. A TypeScript/JavaScript SDK covers all 79 server endpoints with SSE streaming and a React `useChat()` hook.
 
 ---
 
@@ -59,31 +59,35 @@ The SmartRouter routes each LLM call across configured providers (OpenAI-compati
 | **Licence** | Proprietary | MIT (contested) | MIT | Not yet published |
 | **Language / runtime** | TypeScript / Node.js | TypeScript / Bun | TypeScript / Bun | C# / .NET 10 |
 | **LLM providers** | Anthropic only | 200+ via OpenAI compat | 75+ providers | OpenAI-compat + Ollama + native messages API |
-| **Provider routing** | None (single) | None (single active) | Manual per-session switch | SmartRouter (auto, scored) |
+| **Provider routing** | None (single) | None (single active) | Manual per-session switch | SmartRouter (auto, scored) + intent-aware tier routing |
 | **CLI REPL** | ✅ | ✅ | ✅ (TUI) | ✅ |
-| **HTTP server** | ❌ | ❌ | ✅ (SSE backend) | ✅ OpenAI-compatible |
-| **IDE extension** | ✅ VS Code + JetBrains | ❌ | ✅ VS Code (beta) | ❌ (roadmap via MCP) |
-| **Desktop app** | ❌ | ❌ | ✅ Tauri (beta) | ❌ |
-| **Web UI** | ✅ claude.ai/code | ❌ | ✅ (beta) | ❌ (roadmap frontend SDK) |
+| **HTTP server** | ❌ | ❌ | ✅ (SSE backend) | ✅ OpenAI-compatible (95 endpoints) |
+| **IDE extension** | ✅ VS Code + JetBrains | ❌ | ✅ VS Code (beta) | ✅ MCP server mode (any MCP IDE) |
+| **Desktop app** | ❌ | ❌ | ✅ Tauri (beta) | ✅ Avalonia (Win/Mac/Linux, 15 pages) |
+| **Web UI** | ✅ claude.ai/code | ❌ | ✅ (beta) | ✅ Blazor Server (15 pages) |
 | **Remote server mode** | ❌ | ❌ | ✅ | ✅ |
-| **Session persistence** | Managed cloud | None | SQLite | SQLite (Phase 32) |
+| **Session persistence** | Managed cloud | None | SQLite | ✅ SQLite + FTS5 |
 | **Session resumption** | ✅ | ❌ | ✅ | ✅ |
-| **Tool count** | ~40 | ~40 (inherited) | 20+ | 27 |
-| **LSP integration** | ❌ | ❌ | ✅ 20+ languages | ❌ (roadmap) |
-| **MCP client** | ✅ | ✅ (inherited) | ✅ stdio + HTTP | ✅ (partial) |
-| **MCP server mode** | ❌ | ❌ | ❌ | Roadmap Phase 14 |
-| **Multi-agent / teams** | ✅ (feature flag) | ✅ (inherited) | ❌ | Roadmap Phase 18 |
-| **Local / offline models** | ❌ | ✅ Ollama / LM Studio | ✅ Ollama / LM Studio | ✅ Ollama |
+| **Tool count** | ~40 | ~40 (inherited) | 20+ | 45 |
+| **LSP integration** | ❌ | ❌ | ✅ 20+ languages | ✅ 18 languages |
+| **MCP client** | ✅ | ✅ (inherited) | ✅ stdio + HTTP | ✅ |
+| **MCP server mode** | ❌ | ❌ | ❌ | ✅ (stdio transport) |
+| **Multi-agent / teams** | ✅ (feature flag) | ✅ (inherited) | ❌ | ✅ Teams + Swarm |
+| **Local / offline models** | ❌ | ✅ Ollama / LM Studio | ✅ Ollama / LM Studio | ✅ Ollama + LM Studio |
 | **Air-gapped deployment** | ❌ | Partial | Partial | ✅ |
-| **Multi-tenant credentials** | ❌ | ❌ | ❌ | Roadmap Phase 8 |
-| **Per-user auth tokens** | Managed account | ❌ | ❌ | Roadmap Phase 19 |
-| **Session TTL / eviction** | Managed cloud | ❌ | ❌ | Roadmap Phase 9 |
-| **Rate limiting** | Subscription-based | ❌ | ❌ | Roadmap Phase 9.5 |
-| **Usage tracking** | Subscription dashboard | ❌ | ❌ | Roadmap Phase 9.5 |
-| **Git worktree isolation** | ✅ | ✅ (inherited) | ✅ (git undo/redo) | ✅ Phase 7.5 Tier 1 |
-| **CI/CD integration** | ✅ GitHub + GitLab | ❌ | ❌ | ❌ |
-| **Slack integration** | ✅ | ❌ | ❌ | ❌ |
-| **Context auto-compaction** | ✅ | ✅ (inherited) | ✅ | ❌ (roadmap) |
+| **Multi-tenant credentials** | ❌ | ❌ | ❌ | ✅ Per-request API keys |
+| **Per-user auth tokens** | Managed account | ❌ | ❌ | ✅ API token issuance |
+| **Session TTL / eviction** | Managed cloud | ❌ | ❌ | ✅ Configurable TTL + LRU |
+| **Rate limiting** | Subscription-based | ❌ | ❌ | ✅ Per-session RPM |
+| **Usage tracking** | Subscription dashboard | ❌ | ❌ | ✅ Per-session + per-user |
+| **Git worktree isolation** | ✅ | ✅ (inherited) | ✅ (git undo/redo) | ✅ |
+| **CI/CD integration** | ✅ GitHub + GitLab | ❌ | ❌ | ✅ `--ci` flag + JSON output |
+| **Slack integration** | ✅ | ❌ | ❌ | ✅ Webhook endpoint |
+| **Context auto-compaction** | ✅ | ✅ (inherited) | ✅ | ✅ Configurable threshold |
+| **Eval framework** | ❌ | ❌ | ❌ | ✅ 3 grader types, pass@k |
+| **Agent templates** | ❌ | ❌ | ❌ | ✅ 24 built-in |
+| **Built-in skills** | ❌ | ❌ | ❌ | ✅ 32 across 7 domains |
+| **Frontend SDK** | ❌ | ❌ | ❌ | ✅ TypeScript (79 endpoints) |
 | **Cross-platform** | Mac / Linux / Windows | Mac / Linux / Windows | Mac / Linux / Windows | Windows / Linux / macOS |
 | **No Node/Python/Go dep** | ❌ (Node) | ❌ (Bun) | ❌ (Bun + Go) | ✅ |
 | **Legal status** | Proprietary ✅ | Contested ⚠️ | Clean MIT ✅ | Owned codebase ✅ |
@@ -113,21 +117,21 @@ Claude Code and OpenClaude are CLI-only tools — there is no HTTP server compon
 
 ### Session Persistence
 
-Claude Code's session state is managed in Anthropic's cloud — opaque, inaccessible to the user, and non-portable. OpenClaude has no session persistence. opencode uses SQLite. Sovrant now also uses SQLite (Phase 32) with FTS5 full-text search, 5 versioned migrations, and 26+ tables covering sessions, memory, audit, credentials, and token usage. Legacy JSONL dual-write is available via environment variables for migration.
+Claude Code's session state is managed in Anthropic's cloud — opaque, inaccessible to the user, and non-portable. OpenClaude has no session persistence. opencode uses SQLite. Sovrant uses SQLite with FTS5 full-text search, versioned migrations, and 26+ tables covering sessions, memory, audit, credentials, token usage, workspaces, projects, teams, eval results, and swarm state. Legacy JSONL dual-write is available via environment variables.
 
-**Sovrant advantage:** same queryability as opencode, plus full-text search, multi-domain persistence (not just sessions), and a schema pre-built for workspace/project scoping.
+**Sovrant advantage:** same queryability as opencode, plus full-text search, multi-domain persistence (not just sessions), workspace/project scoping, and a complete user/workspace/project hierarchy pre-built into the schema.
 
 ### Tool Parity
 
-Claude Code and OpenClaude lead at ~40 tools (the leaked source). opencode has 20+ plus LSP integration (which makes file manipulation more semantically aware). Sovrant has 27 tools (Phase 7.5 Tier 1 complete) with 7 tools remaining to close the gap (ListMcpResources, ReadMcpResource, ToolSearch, SkillTool, ScheduleCron, ConfigTool, LSP). The gap is closable; the LSP integration is a meaningful differentiator for opencode that Sovrant should target in a later phase.
+Claude Code and OpenClaude lead at ~40 tools (the leaked source). opencode has 20+ plus LSP integration (which makes file manipulation more semantically aware). Sovrant now has 45 tools — surpassing all competitors — including 5 LSP tools (LspHover, LspDefinition, LspReferences, LspDiagnostics, LspRename) supporting 18 languages, MCP resource tools (ListMcpResources, ReadMcpResource), ToolSearch, Skill/SkillCreate, Swarm/SwarmStatus, team orchestration tools (TeamCreate, TeamDelete, TeamStatus, TeamDelegate), and a 6-phase Verify quality gate.
 
-**opencode advantage** on LSP; **Sovrant** closing the tool gap via Phase 7.5 (worktree done, Tier 2 in progress).
+**Sovrant advantage:** highest tool count in the field, with LSP parity and unique tools (Swarm, Verify, SkillCreate) that no competitor offers.
 
 ### Enterprise and Multi-Tenant Readiness
 
-None of the competitors have a multi-tenant, per-user-credential server deployment model. Claude Code has enterprise features (Teams/Enterprise plans, data residency options) but they are managed by Anthropic — the customer has no control. opencode and OpenClaude have no enterprise story at all. Sovrant's roadmap (Phases 8, 9, 9.5) is explicitly designed for this: per-request API keys, session-scoped config, per-user auth tokens, rate limiting, and usage tracking. This is Sovrant's strongest long-term differentiator.
+None of the competitors have a self-hosted multi-tenant server deployment model. Claude Code has enterprise features (Teams/Enterprise plans, data residency options) but they are managed by Anthropic — the customer has no control. opencode and OpenClaude have no enterprise story at all. Sovrant now ships all the enterprise primitives: per-request LLM API keys (`X-LLM-Api-Key` header), session-scoped config overrides, per-user API token issuance and revocation, configurable session TTL with LRU eviction, per-session rate limiting (RPM), per-user and per-session usage tracking, workspace/project scoping with membership and invites, and an audit log. This is no longer a roadmap item — it is shipped.
 
-**Sovrant advantage:** the only product with a documented path to enterprise multi-tenant deployment.
+**Sovrant advantage:** the only product with a complete, self-hosted enterprise multi-tenant deployment story.
 
 ### Runtime and Dependency Footprint
 
@@ -160,89 +164,67 @@ Both exploit Claude Code's trust model around project files and hooks. Sovrant's
 
 ### Where Sovrant wins today
 
-1. **OpenAI-compatible HTTP server** — no other open source product ships this for agentic coding. Any OpenAI API client can connect to Sovrant immediately.
-2. **SmartRouter** — multi-provider routing with health/latency/cost scoring is unique in the field.
-3. **Native .NET** — zero runtime dependency for .NET shops; natural fit for Windows-first or Azure-first environments.
-4. **Clean legal posture** — wholly owned, no derived code, no IP risk.
-5. **Enterprise roadmap** — per-user credentials, session TTL, rate limiting, team orchestration, MCP OAuth are not on any competitor's roadmap.
+1. **Five independent frontends** — CLI, HTTP server (95 endpoints), desktop app (Avalonia), web app (Blazor), and MCP server. No competitor ships more than three.
+2. **SmartRouter + intent-aware routing** — multi-provider routing with health/latency/cost scoring plus automatic model tier selection per intent class. Unique in the field.
+3. **45 tools with LSP** — highest tool count, with 5 LSP tools (18 languages), swarm orchestration, quality gates, and skill system.
+4. **Multi-agent orchestration** — Teams (persistent agents with two backends) + Swarm (auto-decomposition with DAG execution). Claude Code has teams behind feature flags; no other competitor has anything comparable.
+5. **Enterprise multi-tenant** — per-request LLM keys, API token issuance, session TTL/LRU, rate limiting, usage tracking, workspace/project scoping, audit log. All shipped, not roadmap.
+6. **Native .NET** — zero runtime dependency for .NET shops; natural fit for Windows-first or Azure-first environments.
+7. **Clean legal posture** — wholly owned, no derived code, no IP risk.
+8. **TypeScript SDK** — typed client covering all 79 server endpoints with SSE streaming and React hook. No competitor exposes an SDK for their API.
+9. **Eval framework** — 3 grader types, pass@k metrics, trend tracking. No competitor ships a built-in eval system.
 
 ### Where Sovrant needs to close the gap
 
-| Gap | Competitor ahead | Sovrant phase |
+| Gap | Competitor ahead | Status |
 |---|---|---|
-| Tool count (~40) | Claude Code / OpenClaude | Phase 7.5 (27/~40 done) |
-| LSP integration | opencode | Phase 7.5 Tier 3 |
-| IDE extension | Claude Code, opencode | Via MCP server mode (Phase 14) |
-| Context auto-compaction | All three | Future |
-| Git worktree isolation | Claude Code, opencode | ✅ Done (Phase 7.5 Tier 1) |
-| Multi-agent teams | Claude Code | Phase 18 |
-| Community scale | opencode | Requires public launch + OSS strategy |
-| Licensing published | opencode (MIT) | Immediate action item |
-
-### Recommended immediate actions
-
-1. **Publish a licence** — the absence of a public licence is the first thing an evaluator notices. Even a source-available licence is better than silence.
-2. **Complete Phase 7.5 Tier 2** — `EnterPlanMode`/`ExitPlanMode` and `EnterWorktree`/`ExitWorktree` are done (Tier 1 ✅). Next: /undo/redo, SkillTool, custom project slash commands, `ListMcpResources`/`ReadMcpResource`, `ToolSearch`.
-3. **Phase 8 + Phase 9** — per-request credentials and session TTL/lock are the prerequisites for anything beyond a single-user deployment. These unlock the multi-user web frontend use case immediately.
-4. **Phase 9.5** — session-scoped config (fixes `EnterPlanMode` being global), rate limiting, and usage tracking are what make the server solid for a small team. Per-user auth tokens are deferred to Phase 19 — a single shared `SOVRANT_TOKEN` is fine for a trusted team.
+| Community scale | opencode (95K stars) | Requires public launch + OSS strategy |
+| Licensing published | opencode (MIT) | Action item |
+| IDE extension (native) | Claude Code (VS Code + JetBrains) | MCP server mode covers MCP-aware IDEs; native extension is future |
+| Voice mode | Claude Code | Future |
 
 ---
 
 ## Features to Consider Adding to the Sovrant Roadmap
 
-The following features exist in one or more competitors but are not yet on Sovrant's roadmap. Each entry notes which competitor has it, what value it delivers, and a suggested roadmap phase.
+The following features exist in one or more competitors but are not yet in Sovrant. Previously identified gaps that have since been implemented are marked ✅.
 
 ---
 
-### Tier 1 — High Value, Relatively Straightforward
+### Previously Identified Gaps — Now Shipped ✅
+
+| Feature | Status |
+|---|---|
+| Context auto-compaction | ✅ `SOVRANT_COMPACT_THRESHOLD` (default 80K tokens) |
+| Session export / share | ✅ `GET /v1/sessions/{id}/export?format=markdown` |
+| Custom project slash commands | ✅ `.sovrant/commands/{name}.md` |
+| Agent memory files | ✅ `~/.sovrant/memory.md` + `.sovrant/memory.md` |
+| LSP integration | ✅ 5 tools, 18 languages |
+| MCP server mode | ✅ `Sovrant.McpServer` (stdio transport) |
+| Multi-agent teams | ✅ Teams + Swarm, two backends |
+| Desktop app | ✅ Avalonia (15 pages, setup wizard) |
+| Web UI | ✅ Blazor Server (15 pages) |
+| Frontend SDK | ✅ TypeScript SDK (79 endpoints, SSE, React hook) |
+| Multi-tenant credentials | ✅ `X-LLM-Api-Key` per-request header |
+| Per-user auth tokens | ✅ `POST /v1/users/me/tokens` |
+| Session TTL / eviction | ✅ `SOVRANT_SESSION_TTL_SECONDS` + LRU |
+| Rate limiting | ✅ `SOVRANT_RATE_LIMIT_RPM` per-session |
+| Usage tracking | ✅ `GET /v1/usage`, `GET /v1/users/{id}/usage` |
+| CI/CD integration | ✅ `--ci` flag with JSON output, non-zero exit |
+| Slack / webhook integration | ✅ `POST /v1/webhook` |
+| Non-interactive headless mode | ✅ `sovrant prompt "..."` |
+| Git worktree isolation | ✅ `EnterWorktree` / `ExitWorktree` |
+
+---
+
+### Remaining Gaps
 
 #### Context Auto-Compaction
-**Has it:** Claude Code ✅ · OpenClaude ✅ (inherited) · opencode ✅
-**What it does:** When the conversation history approaches the model's context window limit, the agent automatically summarises older turns into a compact representation and replaces the raw history with it. This allows arbitrarily long sessions without hitting context limits or paying for redundant tokens.
-**Why it matters for Sovrant:** Long agentic sessions (large refactors, multi-file tasks) will hit the 128K–1M token limit. Without compaction the session either fails or the user must manually `/compact`. The `ISessionStore` and `_history` list in `ConversationRuntime` are the right insertion points.
-**Suggested phase:** Phase 9 or a new Phase 7.6 — depends only on the runtime and session store, no external dependencies.
-
----
-
-#### Session Sharing / Export
-**Has it:** opencode ✅ (`/share` command)
-**What it does:** Generates a shareable read-only link (or exported file) of a session — useful for sharing debugging sessions with teammates, creating reproducible bug reports, or archiving completed tasks.
-**Why it matters for Sovrant:** The JSONL session format already stores everything needed. A `GET /v1/sessions/{id}/export` endpoint returning rendered markdown or HTML would be a low-effort feature with high perceived value for teams.
-**Suggested phase:** Phase 9.5 or Phase 13 (Frontend SDK).
-
----
-
 #### `/undo` / `/redo` (Git-backed)
 **Has it:** opencode ✅
 **What it does:** Every file write/edit the agent makes is committed to a git stash or a temporary branch. `/undo` reverts the last agent action; `/redo` reapplies it. This is fundamentally safer than the current model where tool writes are permanent.
-**Why it matters for Sovrant:** Trust is the biggest barrier to giving an agent write permissions. Git-backed undo dramatically lowers the risk of an agent making a mistake — the user can always roll back. `EnterWorktree`/`ExitWorktree` (Phase 7.5) is related but separate — undo/redo applies even outside a worktree.
-**Suggested phase:** Phase 7.5 Tier 2 or a standalone Phase 7.6.
-
----
-
-#### Non-Interactive / Headless Prompt Mode
-**Has it:** opencode ✅ · Claude Code ✅ (`--print` flag)
-**What it does:** Run a single prompt non-interactively from a shell script or CI pipeline and exit. No REPL, no interactive prompts. Output goes to stdout.
-**Why it matters for Sovrant:** The CLI already supports `sovrant prompt "..."` (one-shot mode) which covers this. Confirm it works fully non-interactively including tool execution and verify it exits with a non-zero code on errors — then it is CI-ready.
-**Suggested phase:** Already partially implemented — verify and document.
-
----
-
-#### Custom Slash Commands per Project
-**Has it:** opencode ✅ (`.opencode/command/` directory with named arguments)
-**What it does:** Project-specific slash commands defined in a directory. Each command is a markdown/text file whose content is injected as a prompt when invoked. Supports named arguments (e.g., `/deploy staging`).
-**Why it matters for Sovrant:** This is the lightweight version of `SkillTool` (already on the Phase 7.5 roadmap). The difference is that custom commands are per-project (checked into the repo) rather than global skills. Both should exist.
-**Suggested phase:** Part of Phase 7.5 `SkillTool` work — extend to support project-local `.sovrant/commands/` directory.
-
----
-
-### Tier 2 — Significant Value, More Complex
-
-#### LSP Integration (Language Server Protocol)
-**Has it:** opencode ✅ (20+ language servers, diagnostics, go-to-definition, symbol search)
-**What it does:** Instead of relying solely on text-based grep/glob for code understanding, the agent launches a real language server (e.g., `clangd`, `pyright`, `typescript-language-server`, `omnisharp`) and queries it for semantically accurate information: hover types, call hierarchies, find-all-references, rename symbol, diagnostics. This makes refactoring and bug-fixing significantly more accurate.
-**Why it matters for Sovrant:** Text manipulation tools (Grep, Glob, Read) are sufficient for simple tasks but miss semantic relationships — type errors, unused imports, interface mismatches. LSP gives the agent code intelligence rather than just file I/O.
-**Suggested phase:** Phase 10 — LSP Integration. Implement `ILspClient` that spawns a language server process, communicates over stdio/JSON-RPC, and exposes tool wrappers (`LspHover`, `LspDefinition`, `LspReferences`, `LspDiagnostics`, `LspRename`).
+**Why it matters for Sovrant:** Trust is the biggest barrier to giving an agent write permissions. Git-backed undo dramatically lowers the risk of an agent making a mistake — the user can always roll back. `EnterWorktree`/`ExitWorktree` handles isolated branches but undo/redo applies even outside a worktree.
+**Suggested phase:** Future.
 
 ---
 
@@ -254,35 +236,11 @@ The following features exist in one or more competitors but are not yet on Sovra
 
 ---
 
-#### Context Window Visualisation
-**Has it:** opencode ✅ (configurable via `ctx_viz` command)
-**What it does:** Shows the user how much of the context window is currently used — token count, percentage remaining, which messages are taking the most space. Helps users understand when compaction will trigger and why responses may degrade.
-**Why it matters for Sovrant:** Already tracked as a known issue (token counts always `0`). Fixing the token count capture (OpenAI final SSE chunk `usage` field) is the prerequisite. Once token counts are accurate, exposing them in the REPL and via `GET /v1/sessions/{id}` is low effort.
-**Suggested phase:** Part of Phase 9.5 (usage tracking fix is a dependency of that phase anyway).
-
----
-
-#### CI / CD Pipeline Integration
-**Has it:** Claude Code ✅ (GitHub Actions + GitLab CI — monitors PR status, fixes CI failures autonomously)
-**What it does:** The agent runs inside a GitHub Actions or GitLab CI workflow. It monitors pipeline status, reads test failure logs, makes code fixes, commits, and re-runs CI until green — without human intervention.
-**Why it matters for Sovrant:** This is a high-value enterprise use case — "fix the broken build" automation. `Sovrant.Server` already provides the HTTP API needed to trigger an agent run from a CI step. A GitHub Actions runner that calls `POST /v1/chat/completions` with the failing test log as the prompt is a thin integration.
-**Suggested phase:** Phase 11 — CI/CD Pipeline Integration. Publish a GitHub Actions action (`sovrant-agent-action`) that invokes `Sovrant.Server` with pipeline context. Lightweight — mostly documentation and a thin YAML action wrapper.
-
----
-
 #### Multi-File Diff View / Structured Edit Preview
 **Has it:** Claude Code ✅ · opencode ✅ (StructuredDiff component, colour diff)
 **What it does:** Before applying file edits, the agent shows a structured diff (unified diff or side-by-side) of the proposed changes. The user can approve, reject, or edit individual hunks.
 **Why it matters for Sovrant:** The CLI currently shows raw edit output. A proper diff view in the REPL (using Spectre.Console's markup or a colour diff) would make the permission dialog for `Edit`/`Write` far more informative and trustworthy.
 **Suggested phase:** Phase 13 (Frontend SDK) — implement in the CLI REPL using Spectre.Console colour rendering.
-
----
-
-#### Agent Memory / CLAUDE.md Equivalent
-**Has it:** Claude Code ✅ (`CLAUDE.md` project memory files, `~/.claude/CLAUDE.md` global memory)
-**What it does:** The agent reads markdown memory files from the project root and from the user's home directory at the start of each session. These files contain persistent instructions, project conventions, preferred patterns, and context that persists without the user having to re-explain on every session start.
-**Why it matters for Sovrant:** This is the most direct path to making Sovrant feel "smart" about a codebase — the agent automatically knows the project's coding style, which files to avoid, which commands to run, etc. Implementation: read `.sovrant/memory.md` and `~/.sovrant/memory.md` at session initialisation and prepend their contents to the system prompt.
-**Suggested phase:** Phase 7.6 — trivial to implement (file read + system prompt injection), very high perceived value.
 
 ---
 
@@ -294,22 +252,12 @@ The following features exist in one or more competitors but are not yet on Sovra
 
 ---
 
-#### Slack / Webhook Integration
-**Has it:** Claude Code ✅ (OAuth-based Slack app)
-**What it does:** Invoke the agent from a Slack message, receive streamed responses in a Slack thread. Useful for team-based "ask the codebase" workflows.
-**Why it matters for Sovrant:** `Sovrant.Server`'s HTTP API makes this a thin integration — a Slack bot that forwards messages to `POST /v1/chat/completions` and streams the response back. Sessions are isolated by `session_id` derived from the Slack user ID — no per-user auth tokens required.
-**Suggested phase:** Phase 12 — Slack Integration. Publish a Sovrant Slack app that connects to a self-hosted `Sovrant.Server`.
-
----
-
 ### Tier 3 — Speculative / Long-Term
 
 | Feature | Has it | Notes |
 |---|---|---|
 | Background daemon (file watching, idle memory consolidation) | Claude Code (KAIROS, unreleased) | Long-term; `IHostedService` is the right .NET pattern |
-| Swarm / parallel worker agents at scale | Claude Code (behind feature flag) | Phase 18 covers the foundation |
-| GitHub PR monitoring + autonomous fix loop | Claude Code | Phase 11 CI work is the prerequisite |
-| Tauri desktop app | opencode | After Phase 13 frontend SDK — wrap in Tauri |
+| GitHub PR monitoring + autonomous fix loop | Claude Code | CI `--ci` flag is the prerequisite |
 | Mobile client | Claude Code (partial) | Very long-term |
 | Fine-tuning pipeline for model specialisation | None yet | Research phase |
 
@@ -317,23 +265,13 @@ The following features exist in one or more competitors but are not yet on Sovra
 
 ## Updated Sovrant Feature Gap Summary
 
-| Feature | Priority | Suggested Phase |
+| Feature | Priority | Status |
 |---|---|---|
-| Context auto-compaction | High | 7.6 |
-| Agent memory files (`.sovrant/memory.md`) | High | 7.6 |
-| `/undo` / `/redo` git-backed | High | 7.5 Tier 2 |
-| Custom project slash commands | Medium | 7.5 (extend SkillTool) |
-| Context window / token visualisation | Medium | 9.5 (token fix prerequisite) |
-| Session export / share | Medium | 9.5 / 13 (Frontend SDK) |
-| Non-interactive headless mode | Low | Verify existing |
-| Structured diff view in REPL | Medium | 13 (Frontend SDK) |
-| LSP integration | High (long-term) | 10 |
-| IDE extension (VS Code) | High (long-term) | 15 (after Phase 14 MCP) |
-| CI/CD pipeline integration | Medium | 11 |
-| Slack / webhook integration | Medium | 12 |
-| Background daemon / file watching | Low | 20+ |
-| Desktop app (Tauri) | Low | After Phase 13 |
-| Voice mode | Low | 20+ |
+| `/undo` / `/redo` git-backed | Medium | Not started |
+| Native IDE extension (VS Code) | Medium | MCP server covers MCP-aware IDEs; native extension future |
+| Structured diff view in REPL/UI | Low | Not started |
+| Background daemon / file watching | Low | Future |
+| Voice mode | Low | Future |
 
 ---
 
@@ -341,10 +279,12 @@ The following features exist in one or more competitors but are not yet on Sovra
 
 | | Claude Code | OpenClaude | opencode | Sovrant |
 |---|---|---|---|---|
-| **Best for individual devs** | ✅ if Anthropic user | Risky | ✅ | ✅ (.NET shops) |
-| **Best for multi-user teams** | ✅ (managed) | ❌ | ❌ | ✅ (roadmap) |
-| **Best for enterprise deploy** | ✅ (Anthropic SaaS) | ❌ | ❌ | ✅ (self-hosted roadmap) |
-| **Best provider flexibility** | ❌ | ✅ | ✅ | ✅ + routing |
+| **Best for individual devs** | ✅ if Anthropic user | Risky | ✅ | ✅ |
+| **Best for multi-user teams** | ✅ (managed) | ❌ | ❌ | ✅ (shipped) |
+| **Best for enterprise deploy** | ✅ (Anthropic SaaS) | ❌ | ❌ | ✅ (self-hosted, shipped) |
+| **Best provider flexibility** | ❌ | ✅ | ✅ | ✅ + SmartRouter + intent routing |
+| **Best tool/agent ecosystem** | ✅ | ✅ (inherited) | ❌ | ✅ (45 tools, 24 templates, 32 skills) |
+| **Best multi-agent** | Partial (feature flag) | Partial (inherited) | ❌ | ✅ (Teams + Swarm) |
 | **Best legal posture** | ✅ | ❌ | ✅ | ✅ |
 | **Best .NET / Windows fit** | ❌ | ❌ | ❌ | ✅ |
 | **Best open source community** | ❌ | ❌ | ✅ | Early |

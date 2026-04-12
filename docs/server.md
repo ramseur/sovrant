@@ -208,15 +208,19 @@ Returns `200 {"updated": true}` on success, or `400 {"error": "..."}` if the pro
 
 ### Status — `GET /v1/status`
 
-Returns provider health and current settings.
+Returns provider health, session pool state, and current settings.
 
 ```json
 {
   "providers": [
-    { "name": "openai", "healthy": true, "latency_ms": 142, "score": 0.91 }
+    { "name": "openai", "healthy": true, "latency_ms": 142, "request_count": 50, "error_count": 1, "error_rate": "2.0%", "score": "0.91" }
   ],
-  "model": "gpt-4o",
-  "permission_mode": "DontAsk"
+  "active_model": "gpt-4o",
+  "permission_mode": "DontAsk",
+  "pinned_provider": null,
+  "active_sessions": 3,
+  "max_sessions": 500,
+  "session_ttl_seconds": 3600
 }
 ```
 
@@ -595,3 +599,295 @@ Returns the caller's tokens (metadata only — no plaintext, no hash).
 ### Revoke Token — `DELETE /v1/users/me/tokens/{tokenId}`
 
 Marks the token as revoked (`revoked_at = now()`). Callers cannot revoke tokens they do not own — the server verifies ownership by listing the caller's tokens before issuing the revoke, returning `404` otherwise.
+
+---
+
+## Workspace Endpoints
+
+Workspaces are the top-level organizational unit. Every user gets a personal workspace on creation. Team workspaces are created via the API.
+
+### List Workspaces — `GET /v1/workspaces`
+
+Returns workspaces the authenticated user belongs to.
+
+### Create Workspace — `POST /v1/workspaces`
+
+```json
+{ "name": "Engineering", "slug": "engineering" }
+```
+
+Returns `201` with the created workspace. The caller is automatically added as owner.
+
+### Get Workspace — `GET /v1/workspaces/{id}`
+
+### Update Workspace — `PUT /v1/workspaces/{id}`
+
+```json
+{ "name": "New Name", "slug": "new-slug" }
+```
+
+### Delete Workspace — `DELETE /v1/workspaces/{id}`
+
+Personal workspaces cannot be deleted (returns `400`).
+
+### List Members — `GET /v1/workspaces/{id}/members`
+
+### Add Member — `POST /v1/workspaces/{id}/members`
+
+```json
+{ "user_id": "usr_...", "role": "editor" }
+```
+
+### Remove Member — `DELETE /v1/workspaces/{id}/members/{userId}`
+
+### Create Invite — `POST /v1/workspaces/{id}/invites`
+
+```json
+{ "email": "bob@example.com", "role": "editor" }
+```
+
+Returns the invite with a one-time token.
+
+### Delete Invite — `DELETE /v1/workspaces/{id}/invites/{inviteId}`
+
+### Accept Invite — `POST /v1/workspaces/invites/accept`
+
+```json
+{ "token": "invite-token-here" }
+```
+
+### Get Config — `GET /v1/workspaces/{id}/config`
+
+### Update Config — `PUT /v1/workspaces/{id}/config`
+
+```json
+{ "key": "value" }
+```
+
+### Get Usage — `GET /v1/workspaces/{id}/usage`
+
+Returns aggregated token usage for the workspace.
+
+### List Memory — `GET /v1/workspaces/{id}/memory`
+
+Query param: `layer` (optional filter by memory layer).
+
+### Save Memory — `POST /v1/workspaces/{id}/memory`
+
+```json
+{ "layer": "project", "content": "Remember this", "confidence": 0.9 }
+```
+
+### Delete Memory — `DELETE /v1/workspaces/{id}/memory/{memoryId}`
+
+---
+
+## Project Endpoints
+
+Projects belong to a workspace and provide scoping for sessions, artifacts, memory, and config.
+
+### List Projects — `GET /v1/workspaces/{wid}/projects`
+
+Query param: `includeArchived` (optional, default false).
+
+### Create Project — `POST /v1/workspaces/{wid}/projects`
+
+```json
+{ "name": "API", "slug": "api", "description": "Backend API" }
+```
+
+### Get Project — `GET /v1/projects/{id}`
+
+### Update Project — `PUT /v1/projects/{id}`
+
+```json
+{ "name": "New Name", "slug": "new-slug", "description": "Updated" }
+```
+
+### Delete Project — `DELETE /v1/projects/{id}`
+
+Admin only.
+
+### Archive Project — `POST /v1/projects/{id}/archive`
+
+### Unarchive Project — `POST /v1/projects/{id}/unarchive`
+
+### List Members — `GET /v1/projects/{id}/members`
+
+### Add Member — `POST /v1/projects/{id}/members`
+
+```json
+{ "user_id": "usr_...", "role": "editor" }
+```
+
+### Remove Member — `DELETE /v1/projects/{id}/members/{userId}`
+
+### Get Config — `GET /v1/projects/{id}/config`
+
+Query param: `resolved` (optional, merge with workspace config).
+
+### Update Config — `PUT /v1/projects/{id}/config`
+
+### List Sessions — `GET /v1/projects/{id}/sessions`
+
+### Get Usage — `GET /v1/projects/{id}/usage`
+
+### Get Memory — `GET /v1/projects/{id}/memory`
+
+Query param: `layer` (optional filter by memory layer).
+
+---
+
+## Team Endpoints
+
+Teams are named groups of agents that can be run together. Each team member has a role, system prompt, and optional agent template.
+
+### Create Team — `POST /v1/teams`
+
+```json
+{ "name": "reviewers", "workspace_id": "ws_...", "project_id": "proj_..." }
+```
+
+### List Teams — `GET /v1/teams`
+
+Query param: `workspaceId` (optional filter).
+
+### Get Team — `GET /v1/teams/{id}`
+
+Returns the team record and its members.
+
+### Delete Team — `DELETE /v1/teams/{id}`
+
+### Add Member — `POST /v1/teams/{id}/members`
+
+```json
+{ "name": "alice", "role": "reviewer", "template": "reviewer", "system_prompt": "..." }
+```
+
+### List Members — `GET /v1/teams/{id}/members`
+
+### Run Team — `POST /v1/teams/{id}/runs`
+
+```json
+{
+  "goal": "Review auth module for security issues",
+  "decompose": true,
+  "lock_files": true,
+  "quality_gate": true,
+  "max_parallel": 4
+}
+```
+
+Returns the run result with `run_id`, `status`, `output`, and `tokens_used`.
+
+---
+
+## Run Endpoints
+
+Agent runs are recorded for teams, swarms, and missions.
+
+### Get Run — `GET /v1/runs/{id}`
+
+### List Runs — `GET /v1/runs`
+
+Query params: `workspaceId`, `userId`, `teamId`, `kind`, `status`, `limit`.
+
+---
+
+## Mission Endpoints
+
+Missions are goal-driven, multi-step agent tasks tracked through their lifecycle.
+
+### Create Mission — `POST /v1/missions`
+
+```json
+{ "goal": "Migrate to v2 API", "workspace_id": "ws_...", "project_id": "proj_..." }
+```
+
+### List Missions — `GET /v1/missions`
+
+Query params: `ownerUserId`, `status`, `limit`.
+
+### Get Mission — `GET /v1/missions/{id}`
+
+### Run Mission — `POST /v1/missions/{id}/run`
+
+Drives the mission forward one engine cycle.
+
+### Get Events — `GET /v1/missions/{id}/events`
+
+Returns the full event journal.
+
+### Export Mission — `GET /v1/missions/{id}/export`
+
+Query param: `format` (`markdown` default, or `json`).
+
+---
+
+## Engine Endpoints
+
+Internal engine inspection and recovery.
+
+### Get Trace — `GET /v1/engine/runs/{id}/trace`
+
+Returns the full trace for a runtime run.
+
+### List In-Flight — `GET /v1/engine/runs/in-flight`
+
+Returns runtime run IDs that crashed mid-step.
+
+### Recover — `POST /v1/engine/runs/recover`
+
+Attempts to recover crashed runs. Returns `{ "recovered": ["run_id_1", ...] }`.
+
+### Delete Run — `DELETE /v1/engine/runs/{id}`
+
+Deletes all trace rows for a runtime run. Returns `{ "runtime_run_id": "...", "deleted_rows": N }`.
+
+---
+
+## Artifact Endpoints
+
+Artifacts are files produced by agent runs, scoped by workspace and project.
+
+### List Artifacts — `GET /v1/artifacts`
+
+Query params: `workspace_id`, `project_id`, `run_id`.
+
+### Download Artifact — `GET /v1/artifacts/{path}`
+
+Returns the artifact file content with appropriate content type.
+
+### Delete Artifacts — `DELETE /v1/artifacts/{runId}`
+
+Query params: `workspace_id`, `project_id`. Deletes all artifacts for a run.
+
+---
+
+## Registry Endpoints
+
+Read-only registries for tools, skills, and agent templates.
+
+### List Tools — `GET /v1/tools`
+
+Returns `{ "tools": [...], "count": N }`.
+
+### Get Tool — `GET /v1/tools/{name}`
+
+Returns the tool definition including parameters schema.
+
+### List Skills — `GET /v1/skills`
+
+Returns `{ "skills": [...], "count": N }`.
+
+### Get Skill — `GET /v1/skills/{name}`
+
+Returns the skill definition including body (markdown content).
+
+### List Agent Templates — `GET /v1/agents/templates`
+
+Returns `{ "templates": [...], "count": N }`.
+
+### Get Agent Template — `GET /v1/agents/templates/{name}`
+
+Returns the template including system prompt.

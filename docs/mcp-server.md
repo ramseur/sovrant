@@ -109,7 +109,21 @@ All tools registered in `IToolRegistry` are exposed via MCP, plus a synthetic `c
 
 ### Sovrant Tools
 
-All 36 standard tools are available: `Read`, `Write`, `Edit`, `Glob`, `Grep`, `LS`, `Bash`, `PowerShell`, `REPL`, `WebFetch`, `WebSearch`, `TodoWrite`, `TaskCreate`, `TaskGet`, `TaskList`, `TaskOutput`, `TaskStop`, `TaskUpdate`, `Agent`, `AskUserQuestion`, `Sleep`, `NotebookEdit`, `EnterPlanMode`, `ExitPlanMode`, `EnterWorktree`, `ExitWorktree`, `Skill`, `ToolSearch`, `ListMcpResources`, `ReadMcpResource`, `LspHover`, `LspDefinition`, `LspReferences`, `LspDiagnostics`, `LspRename`.
+All 45 standard tools are available:
+
+**File:** `Read`, `Write`, `Edit`, `Glob`, `Grep`, `LS`
+**Shell:** `Bash`, `PowerShell`, `REPL`
+**Web:** `WebFetch`, `WebSearch`
+**Task Management:** `TodoWrite`, `TaskCreate`, `TaskGet`, `TaskList`, `TaskOutput`, `TaskStop`, `TaskUpdate`
+**Agent & Interaction:** `Agent`, `AskUserQuestion`, `Sleep`
+**Plan & Worktree:** `EnterPlanMode`, `ExitPlanMode`, `EnterWorktree`, `ExitWorktree`
+**Team Orchestration:** `TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`
+**Swarm:** `Swarm`, `SwarmStatus`
+**Discovery & Skills:** `ToolSearch`, `Skill`, `SkillCreate`
+**Quality:** `Verify`
+**MCP Resources:** `ListMcpResources`, `ReadMcpResource`
+**LSP:** `LspHover`, `LspDefinition`, `LspReferences`, `LspDiagnostics`, `LspRename`
+**Notebook:** `NotebookEdit`
 
 ### `chat` Tool
 

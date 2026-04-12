@@ -1,6 +1,6 @@
 # Sovrant — Persistence Layer
 
-**Phases 32, 35, 36, 37, 37.5, 42.5 (active)** | **Last updated:** 2026-04-09
+**Phases 32, 35, 36, 37, 37.5, 42.5, 51, 52** | **Last updated:** 2026-04-12
 
 This document describes how Sovrant stores durable operational data. All persistent state (sessions, memory, audit, credentials, token usage, workspaces, projects, users) is managed by a SQLite database. Flat-file stores (JSONL, JSON) remain available as a dual-write option during migration, but they are now considered legacy and will be consolidated as part of Phase 42.5.
 
@@ -24,9 +24,9 @@ This document describes how Sovrant stores durable operational data. All persist
                                     │
    ┌──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐
    ▼      ▼      ▼      ▼      ▼      ▼      ▼      ▼      ▼      ▼
-ISession IMemory IAudit IToken ICredl IWork-  IProject IUser  Eval   (future)
-Store    Store   Store  Usage  Store  space   Service  Service Store SwarmEvent
-                        Store         Service
+ISession IMemory IAudit IToken ICredl IWork-  IProject IUser  Eval  Swarm  Runtime Mission  Team
+Store    Store   Store  Usage  Store  space   Service  Service Store Event  Trace   Store   Store
+                        Store         Service                  Store Store
 ```
 
 Every domain store receives an `ISqliteConnectionFactory` via constructor injection, creates a new connection per operation, and uses parameterized queries exclusively (no string interpolation in SQL). The provider is registered once as a singleton and exposed under both `IStorageProvider` and `ISqliteConnectionFactory` so all stores share the same instance and connection cache.
@@ -65,6 +65,9 @@ Migrations are embedded SQL resources named `V{NNN}__{description}.sql` inside t
 | V007 | `V007__projects.sql` | `IF NOT EXISTS` indexes on `sessions(project_id)`, `token_usage(project_id)`, `workspace_memory(workspace_id, project_id)`, `project_members(user_id)` |
 | V008 | `V008__backfill_orphan_workspaces.sql` | One-time data backfill: sets `workspace_id = 'ws-personal-' \|\| user_id` on orphan rows in `sessions`, `token_usage`, `credentials`, then propagates the new value to `audit_governance`, `audit_bash`, `session_summaries` via `session_id` joins. Only fills rows where the matching `ws-personal-{user_id}` workspace already exists; rows for users without one are left alone. |
 | V009 | `V009__backfill_empty_user_ids.sql` | Phase 42.5 one-time data backfill for legacy `user_id = ''` rows in `sessions`, `token_usage`, `credentials`. Picks the oldest active admin user as the backfill target (deterministic without reading env vars); if no active admin exists, the migration is a no-op and leaves the empty strings in place. |
+| V010 | `V010__runtime_traces.sql` | Phase 51 engine layer: `runtime_traces` (append-only structured reasoning trace for `IExecutor` state transitions — crash recovery walks this table), `mission_scratchpad` (typed shared store for parallel sub-agents within one mission). Both workspace/project-scoped. |
+| V011 | `V011__missions.sql` | Phase 51 mission layer: `missions` (durable mission record with goal, status, plan JSON, workspace/project scoping), `mission_events` (append-only journal of mission state transitions — fully reconstructable history). |
+| V012 | `V012__unified_orchestration.sql` | Phase 52 unified agent orchestration: `teams` (DB-backed team registry replacing `InMemoryTeamRegistry`), `team_members` (persistent members with role, template, tools, model level), `agent_runs` (unified run ledger for delegations, swarm tasks, and mission steps). Extends `swarm_events` with `kind` and `run_id` columns. |
 
 All V006/V007 statements are **additive** (`CREATE TABLE`, `CREATE INDEX IF NOT EXISTS`), so a database created at V005 or earlier upgrades cleanly on next boot — no manual intervention. V008 then backfills any orphan rows from those upgraded databases, and V009 backfills any empty-string `user_id` rows left over from the pre-Phase-38 seeding flow.
 
@@ -83,7 +86,7 @@ The schema is designed upfront so that Phases 33–37 can ship without `ALTER TA
 
 ## DB Upgrades (Phase 42.5)
 
-This section covers the lifecycle of an in-place upgrade from any prior schema version to the current one. Every operational guarantee below is enforced by an automated test in `tests/Sovrant.Runtime.Tests/Storage/OldDbUpgradeTests.cs` — the "V005 → current" path is the one we exercise on every CI run, which transitively covers V001–V005 since the runner always applies migrations in order.
+This section covers the lifecycle of an in-place upgrade from any prior schema version to the current one. Every operational guarantee below is enforced by an automated test in `tests/Sovrant.Runtime.Tests/Storage/OldDbUpgradeTests.cs` — the "V005 → current (V012)" path is the one we exercise on every CI run, which transitively covers V001–V005 since the runner always applies migrations in order.
 
 ### When migrations run
 
@@ -176,7 +179,7 @@ If the DB probe fails (disk full, permissions change, corrupt file), `db.status`
 
 ## Database Inventory (authoritative)
 
-The list below is generated from the migration scripts in `src/Sovrant.Runtime/Storage/Migrations/V00*.sql` and was cross-checked against a live `~/.sovrant/data/sovrant.db` on 2026-04-07 after migrations V006–V008 had been applied. After all 8 migrations apply, a fresh database contains **27 application tables** + **1 metadata table** (`schema_version`) + **1 FTS5 virtual table** + **5 FTS5 internal shadow tables** = **34 objects in `sqlite_master`**, plus **26 indexes** and **3 triggers**. V008 ships no schema, only data updates, so it does not change the inventory.
+The list below is generated from the migration scripts in `src/Sovrant.Runtime/Storage/Migrations/V0*.sql` and was cross-checked against a live `~/.sovrant/data/sovrant.db` on 2026-04-12 after all migrations V001–V012 had been applied. After all 12 migrations apply, a fresh database contains **34 application tables** + **1 metadata table** (`schema_version`) + **1 FTS5 virtual table** + **5 FTS5 internal shadow tables** = **41 objects in `sqlite_master`**, plus **48 indexes** and **3 triggers**. V008 and V009 ship no schema, only data updates, so they do not change the inventory.
 
 ### Tables by purpose
 
@@ -191,6 +194,9 @@ The list below is generated from the migration scripts in `src/Sovrant.Runtime/S
 | **Credentials** | `credentials` | V004 | Encrypted blobs (nonce + tag + ciphertext columns). |
 | **Swarm & evals** | `swarm_events`, `eval_runs`, `eval_results` | V005 | `swarm_events` is the canonical store for swarm history as of **Phase 37.5** — see [Swarm Event Store](#swarm-event-store-sqliteswarmeventstore--phase-375) below. |
 | **Audit** | `audit_governance`, `audit_bash` | V001 | INTEGER PK AUTOINCREMENT, no FK to sessions. |
+| **Engine traces** | `runtime_traces`, `mission_scratchpad` | V010 | Phase 51. `runtime_traces` is the append-only IExecutor state-transition log (crash recovery). `mission_scratchpad` is the typed shared store for parallel sub-agents. Both workspace/project-scoped. |
+| **Missions** | `missions`, `mission_events` | V011 | Phase 51. Durable mission state + append-only event journal. Mission history is fully reconstructable from `mission_events` alone. |
+| **Unified orchestration** | `teams`, `team_members`, `agent_runs` | V012 | Phase 52. DB-backed team registry, persistent members, unified run ledger across delegations/swarm-tasks/mission-steps. `swarm_events` extended with `kind` + `run_id`. |
 | **Migration metadata** | `schema_version` | bootstrapped by `MigrationRunner` | Stores version, `applied_at`, and SHA-256 `checksum` of each script. |
 
 ### Foreign-key topology
@@ -214,6 +220,7 @@ projects ──┬── project_members.project_id
 
 sessions ──── session_entries.session_id          (CASCADE on delete)
 eval_runs ──── eval_results.run_id                (CASCADE on delete)
+teams ──── team_members.team_id                   (CASCADE on delete)
 ```
 
 `sessions`, `token_usage`, `audit_governance`, `audit_bash`, `credentials`, `session_summaries`, `swarm_events`, and `eval_runs` all carry `workspace_id` / `project_id` as **nullable, unconstrained TEXT** columns — no FK, by design, so legacy rows from before workspaces existed remain valid.
@@ -236,8 +243,15 @@ eval_runs ──── eval_results.run_id                (CASCADE on delete)
 | `swarm_events` | `ix_swarm_events_swarm`, `ix_swarm_events_workspace` (V006), `ix_swarm_events_project` (V007) |
 | `token_usage` | `ix_token_usage_session`, `ix_token_usage_user`, `ix_token_usage_workspace` (V006), `ix_token_usage_project` (V007) |
 | `workspace_memory` | `ix_workspace_memory_workspace` (V006), `ix_workspace_memory_layer` (V006), `ix_workspace_memory_project` (V007) |
+| `runtime_traces` | `ix_runtime_traces_run` (V010), `ix_runtime_traces_entry_type` (V010), `ix_runtime_traces_workspace` (V010), `ix_runtime_traces_project` (V010) |
+| `mission_scratchpad` | `ix_mission_scratchpad_mission` (V010), `ix_mission_scratchpad_workspace` (V010) |
+| `missions` | `ix_missions_status` (V011), `ix_missions_workspace` (V011), `ix_missions_project` (V011), `ix_missions_owner` (V011) |
+| `mission_events` | `ix_mission_events_mission` (V011), `ix_mission_events_workspace` (V011) |
+| `teams` | `ix_teams_workspace` (V012), `ix_teams_project` (V012), `ix_teams_name` (V012) |
+| `team_members` | `ix_team_members_team` (V012), `ix_team_members_workspace` (V012) |
+| `agent_runs` | `ix_agent_runs_parent` (V012), `ix_agent_runs_team` (V012), `ix_agent_runs_workspace` (V012), `ix_agent_runs_user` (V012), `ix_agent_runs_kind` (V012), `ix_agent_runs_status` (V012) |
 
-26 indexes total at V007. **Notably absent**: there is no index on `users.username` or `users.email` beyond the implicit unique constraint indexes — that is sufficient for lookups since SQLite auto-creates a B-tree for every `UNIQUE` column. There is also no covering index for the per-user audit join (`audit_governance` → `sessions(user_id)`); for now the join is small enough that it's not measurable, but it's listed under Phase 42.5.
+48 indexes total at V012. **Notably absent**: there is no index on `users.username` or `users.email` beyond the implicit unique constraint indexes — that is sufficient for lookups since SQLite auto-creates a B-tree for every `UNIQUE` column. There is also no covering index for the per-user audit join (`audit_governance` → `sessions(user_id)`); for now the join is small enough that it's not measurable, but it's listed under Phase 42.5.
 
 ### Triggers
 
@@ -427,6 +441,11 @@ SqliteWorkspaceStore   →  IWorkspaceService                    (Phase 35)
 SqliteProjectStore     →  IProjectService                      (Phase 36)
 SqliteUserStore        →  IUserService                         (Phase 37)
 SqliteSwarmEventStore  →  ISwarmEventStore                     (Phase 37.5)
+SqliteRuntimeTraceStore      → IRuntimeTraceStore               (Phase 51)
+SqliteMissionScratchpadStore → IMissionScratchpadStore          (Phase 51)
+SqliteMissionStore           → IMissionStore                    (Phase 51)
+SqliteTeamRegistry           → ITeamRegistry                    (Phase 52, replaces InMemoryTeamRegistry)
+SqliteAgentRunStore          → IAgentRunStore                   (Phase 52)
 EvalResultStore        →  IEvalResultStore   (file-based, interface extracted)
 ```
 
@@ -540,7 +559,7 @@ The following concerns were surfaced during the Phase 37 audit of the SQLite lay
 
 ## Testing
 
-The persistence layer is exercised by **987 tests** across 9 test projects (all green as of 2026-04-07). Storage-focused suites include:
+The persistence layer is exercised by **1,285 tests** across 9 test projects (all green as of 2026-04-12). Storage-focused suites include:
 
 | Test Class | Validates |
 |---|---|
@@ -579,7 +598,7 @@ After a fresh install and first run, `~/.sovrant/` contains:
 ```
 
 A fresh boot with no existing DB produces:
-- `data/sovrant.db` at schema version 9 (V001–V009 applied in order)
+- `data/sovrant.db` at schema version 12 (V001–V012 applied in order)
 - A `users` row for the OS username (or `SOVRANT_USER_ID`) inserted via `SeedDefaultUser`
 - A `workspaces` row `ws-personal-{userId}` inserted via `SeedPersonalWorkspace`
 - A `workspace_members` row linking the seeded user as `owner`
