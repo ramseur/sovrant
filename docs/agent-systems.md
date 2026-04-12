@@ -1,6 +1,6 @@
 # Sovrant — Agent Systems: Team vs Swarm
 
-**Last updated:** 2026-04-08
+**Last updated:** 2026-04-12
 
 Sovrant ships **two distinct multi-agent systems** that share the same agent factory (`SovrantAgentFactory`) and template registry (`AgentTemplateRegistry`) underneath but solve very different problems and live at very different levels of the stack.
 
@@ -17,9 +17,10 @@ This document explains what each one is, where the value comes from, where the o
 
 | Concept | Code path |
 |---|---|
-| **Team registry & member model** | `src/Sovrant.Agents/Teams/` (~89 LOC across 4 files) |
-| **Team tools (LLM-callable)** | `src/Sovrant.Tools/Team/{TeamCreateTool,TeamDelegateTool,TeamStatusTool,TeamDeleteTool}.cs` |
-| **Swarm engine** | `src/Sovrant.Agents/Swarm/` (~1,376 LOC across 14 files) |
+| **Team registry & member model** | `src/Sovrant.Agents/Teams/` (~388 LOC across 6 files, including `SqliteTeamRegistry`) |
+| **Team tools (LLM-callable)** | `src/Sovrant.Tools/Team/{TeamCreateTool,TeamDelegateTool,TeamStatusTool,TeamDeleteTool,TeamRunTool,TeamPublishTool}.cs` |
+| **Team HTTP** | `src/Sovrant.Server/Routes/TeamRoutes.cs` (`/v1/teams/*`, `/v1/runs/*`) |
+| **Swarm engine** | `src/Sovrant.Agents/Swarm/` (~1,493 LOC across 15 files) |
 | **Swarm CLI** | `src/Sovrant.Cli/Program.cs` (`swarm` subcommand) |
 | **Swarm HTTP** | `src/Sovrant.Server/Routes/SwarmRoutes.cs` (`/v1/swarm/*`) |
 | **Shared infrastructure** | `SovrantAgentFactory`, `AgentTemplateRegistry`, `IMultiAgentSystem` — used by both |
@@ -32,19 +33,19 @@ This document explains what each one is, where the value comes from, where the o
 
 | Dimension | **Team** | **Swarm** |
 |---|---|---|
-| **Lines of code** | ~89 LOC + 4 small tools | ~1,376 LOC across 14 files |
-| **Who drives it?** | The **LLM** calls `TeamCreate`, `TeamDelegate`, `TeamStatus`, `TeamDelete` like any other tool inside its tool-use loop | The **user** runs `sovrant swarm "<task>"` from the CLI; the LLM is not in the conversation loop while a swarm runs |
-| **Lifecycle** | Persistent — members live in an in-memory `ITeamRegistry` for the whole conversation; the LLM creates one and reuses it across turns | Ephemeral — one swarm = one task, lives only until completion |
-| **State** | `InMemoryTeamRegistry` (a `ConcurrentDictionary`). Lost on process restart. | `SwarmStateTracker` + `SwarmSession` writing events to the SQLite `swarm_events` table (shipped in Phase 37.5). Legacy JSONL can be imported via `sovrant db import-swarm`. |
+| **Lines of code** | ~388 LOC + 6 tools | ~1,493 LOC across 15 files |
+| **Who drives it?** | The **LLM** calls `TeamCreate`, `TeamDelegate`, `TeamStatus`, `TeamDelete`, `TeamRun`, `TeamPublish` like any other tool inside its tool-use loop. Users can also manage teams via `POST/GET/DELETE /v1/teams/*` HTTP endpoints. | The **user** runs `sovrant swarm "<task>"` from the CLI; the LLM is not in the conversation loop while a swarm runs |
+| **Lifecycle** | Persistent — members live in `SqliteTeamRegistry` (Phase 52), surviving process restarts. The LLM creates one and reuses it across turns and sessions. | Ephemeral — one swarm = one task, lives only until completion |
+| **State** | `SqliteTeamRegistry` backed by the `teams` and `team_members` tables (Phase 52). Persists across restarts with full workspace/project scoping. `InMemoryTeamRegistry` is still available as a fallback. | `SwarmStateTracker` + `SwarmSession` writing events to the SQLite `swarm_events` table (shipped in Phase 37.5). Legacy JSONL can be imported via `sovrant db import-swarm`. |
 | **Concurrency** | Sequential by construction — `TeamDelegate` is one call → one agent → one result | Wave-based parallelism. `LlmSwarmDecomposer` builds a DAG (`SwarmTaskNode` with `Dependencies`), `SwarmOrchestrator` topologically sorts it into waves, then runs each wave's tasks in parallel with a `SemaphoreSlim` concurrency cap |
 | **Coordination primitives** | None — each delegation is independent | `SwarmFileLockManager` (pessimistic file locks declared up-front via `FilesToModify`), `SwarmQualityGate`, retry logic, token-budget enforcement, file-conflict resolution |
 | **Task decomposition** | The caller (the LLM) decides what to delegate and when | `LlmSwarmDecomposer` (218 LOC) calls an LLM to break the user's natural-language goal into a `SwarmPlan` of `SwarmTaskNode`s with explicit dependencies and predicted file-touch sets |
 | **Agent identity** | Each member has a name, role, system prompt, optional tool whitelist, optional model — created once, reused | Each task wave spawns ephemeral agents from templates (coder, reviewer, etc.); same `SovrantAgentFactory` and `AgentTemplateRegistry`, but no persistent identity |
-| **Workspace scoping** | None today — registry is process-global | `SwarmOrchestrator` takes a `WorkspaceContext` in its constructor; scoping flows into the `swarm_events` table via `WorkspaceContextMiddleware` |
-| **Trigger surface** | LLM tool calls (`TeamCreate` / `TeamDelegate` / `TeamStatus` / `TeamDelete`) | CLI `sovrant swarm` command, `Swarm` tool from inside an agent conversation, `POST /v1/swarm` HTTP endpoint |
+| **Workspace scoping** | Full workspace/project scoping via `SqliteTeamRegistry` (Phase 52). `teams` and `team_members` tables carry `workspace_id` and `project_id`. HTTP endpoints filter by workspace. | `SwarmOrchestrator` takes a `WorkspaceContext` in its constructor; scoping flows into the `swarm_events` table via `WorkspaceContextMiddleware` |
+| **Trigger surface** | LLM tool calls (`TeamCreate` / `TeamDelegate` / `TeamStatus` / `TeamDelete` / `TeamRun` / `TeamPublish`), HTTP REST API (`POST/GET/DELETE /v1/teams/*`, `POST /v1/teams/{id}/runs`, `GET /v1/runs/*`) | CLI `sovrant swarm` command, `Swarm` tool from inside an agent conversation, `POST /v1/swarm` HTTP endpoint |
 | **Cancellation** | Implicit via `CancellationToken` | First-class — wave-by-wave checks; can stop mid-DAG |
 | **Failure model** | Single delegation fails → caller decides | Per-task retry budgets, quality gate scoring, partial completion semantics, token-budget halts |
-| **Observability** | `TeamStatus` tool returns last output / error per member; lost on restart | SQLite event log per swarm run (in `swarm_events` table), replayable via `/v1/swarm/{id}/events` and `GET /v1/swarm/sessions` |
+| **Observability** | `TeamStatus` tool returns last output / error per member. `agent_runs` table (Phase 52) tracks all delegations with token counts and status. HTTP: `GET /v1/runs`, `GET /v1/runs/{id}`. | SQLite event log per swarm run (in `swarm_events` table), replayable via `/v1/swarm/{id}/events` and `GET /v1/swarm/sessions` |
 
 ---
 
@@ -53,7 +54,7 @@ This document explains what each one is, where the value comes from, where the o
 ### Team's value-add
 1. **Conversational delegation.** The model can say "spin up a security reviewer with these tools and ask it to look at this diff," all inside its tool-use loop. Swarm cannot do that — there is no `Swarm` tool that creates persistent specialists.
 2. **Persistent specialists.** You can build a "code reviewer" once at the start of a session and call back to it 10 turns later with new context. Swarm tears everything down at the end of every run.
-3. **Tiny surface area** (~90 LOC). Easy to reason about, easy to extend (e.g. add `TeamUpdate`, persist to SQLite).
+3. **Full HTTP API** (Phase 52). Teams are first-class HTTP citizens — `POST/GET/DELETE /v1/teams/*`, member management, and `POST /v1/teams/{id}/runs` for starting multi-agent runs. `TeamPublish` lets swarm workers be published as reusable team members.
 4. **No DAG ceremony.** When you just want one sub-agent to look at one thing, you do not need wave scheduling or file locks.
 
 ### Swarm's value-add
@@ -70,40 +71,40 @@ This document explains what each one is, where the value comes from, where the o
 - **Massive code-to-value ratio difference.** Swarm is ~15× the LOC for capabilities most users probably never trigger (DAG decomposition, file locking, wave scheduling). Team is tiny but heavily used by the LLM in normal conversation.
 - **Surface overlap.** Both spawn sub-agents from the same factory + templates. From the user's perspective, "ask an agent to do X" has two completely different code paths and two completely different observability stories. That is confusion debt.
 - **Decomposition tax.** Swarm's killer feature (auto-decomposition) costs an LLM call up front. For tasks the user could decompose themselves, the swarm overhead is pure loss.
-- **No persistence on Team.** Team's "co-workers" evaporate on restart. For a system that just shipped per-user identity and workspaces (Phases 35–37), that is an obvious gap.
-- **No bridge between the two.** The LLM cannot launch a swarm directly via a tool that returns the resulting team of specialists. The swarm cannot use a long-lived team member as one of its workers (well — it can in theory, since `SwarmOrchestrator` takes `ITeamRegistry`, but no wiring resolves named team members as swarm workers today). They are two stovepipes that share infrastructure but not surface.
+- **~~No persistence on Team.~~** ✓ Resolved in Phase 52. Teams now persist to SQLite via `SqliteTeamRegistry` with full workspace/project scoping.
+- **Bridge between the two is partial.** `TeamPublish` lets swarm workers be published as reusable team members, and `TeamRun` can run an existing team with optional parallelism/locking. The swarm can use long-lived team members as workers since `SwarmOrchestrator` takes `ITeamRegistry`. Full composition (a swarm that transparently uses pre-existing teams as its worker pool) is still being refined.
 
 ---
 
 ## Honest take
 
-**Team is the more general primitive and the one your LLM actually uses.** It is also the one that needs the least work to make great. Adding SQLite persistence + per-workspace scoping + a "reuse a template" shortcut would close the biggest gaps in maybe 200 LOC.
+**Team is the more general primitive and the one your LLM actually uses.** Phase 52 shipped the missing pieces — SQLite persistence via `SqliteTeamRegistry`, full workspace/project scoping, `TeamRun` for parallelism, and `TeamPublish` to bridge swarm workers into reusable teams. The ~388 LOC investment is modest relative to the value.
 
 **Swarm is a much bigger investment whose value depends entirely on how often the decomposer produces a good plan.** The file-lock mechanism, the wave scheduler, and the quality gate are real engineering, but they only pay off on tasks where (a) the decomposition is accurate and (b) parallelism actually saves time vs the LLM-decomposition cost up front. For a single-user dev workstation, those wins are narrower than they look.
 
 ---
 
-## A possible future: unify them
+## Unification status (Phase 52 — shipped)
 
-If you wanted to consolidate, the natural path would be:
+Phase 52 unified the two systems. The path followed was:
 
-1. **Promote Team to first-class citizen**
-   - SQLite-backed `ITeamRegistry` — persists across restarts and workspace boundaries
-   - Workspace-scoped membership — `team_members` table linked to `workspaces.workspace_id`
-   - LLM still creates them via `TeamCreate`; users can also pre-create personas via the server API
+1. **✓ Team promoted to first-class citizen**
+   - `SqliteTeamRegistry` persists teams to the `teams` and `team_members` SQLite tables across restarts
+   - Workspace-scoped membership — `team_members` table carries `workspace_id` and `project_id`
+   - LLM creates teams via `TeamCreate`; users can also manage teams via the HTTP REST API (`POST/GET/DELETE /v1/teams/*`)
 
-2. **Expose Swarm as one orchestration mode of Team**
-   - `SwarmPlan` becomes "here is a team of N agents, here is a DAG of work, run it under the locking scheduler"
-   - The decomposer becomes optional — callers who already know their DAG skip it
-   - The CLI `sovrant swarm` command stays, but now it operates on whatever team the user has set up rather than spinning up ephemeral workers
+2. **✓ Swarm exposed as one orchestration mode of Team**
+   - `TeamRunTool` runs an existing team with optional parallelism and file-locking
+   - `TeamPublishTool` converts ephemeral swarm workers into reusable team members
+   - Three creation modes: (1) pre-existing team, (2) multiple composed teams, (3) engine's own decomposition (swarm default)
+   - The CLI `sovrant swarm` command stays; swarms can now operate on whatever team the user has set up
 
-3. **Single observability store**
-   - Both systems write to the same `agent_runs` / `agent_events` tables (replacing JSONL and the in-memory registry)
-   - Per-user, per-workspace, per-project queries work uniformly
+3. **✓ Single observability store**
+   - Both systems write to the `agent_runs` table (unified run ledger for delegations, swarm tasks, and mission steps)
+   - `swarm_events` extended with `kind` (discriminator) and `run_id` (link to `agent_runs`)
+   - Per-user, per-workspace, per-project queries work uniformly via `GET /v1/runs`
 
-This would let you keep Swarm's hard-won machinery (file locks, decomposer, quality gate) without maintaining two parallel concepts on top of the same agent factory.
-
-This is now tracked as **[Phase 52 — Unified Agent Orchestration](roadmap.md#phase-52--unified-agent-orchestration-one-team-or-swarm-abstraction-in-the-database)** in the roadmap. Phase 37.5 (Swarm Sessions Into the Database) shipped the prerequisite — swarm events live in SQLite, so the rest of the agent state (team members, agent runs, conversation links) can join them in the same store under the same backup, query, and scoping story. Phase 52 adds three explicit creation modes so a swarm can run against (1) one pre-existing team, (2) multiple composed teams, or (3) the engine's own decomposition (current behavior), with all three going through the same orchestrator and persisting to the same tables.
+This keeps Swarm's hard-won machinery (file locks, decomposer, quality gate) without maintaining two parallel concepts on top of the same agent factory.
 
 ---
 

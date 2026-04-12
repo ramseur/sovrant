@@ -356,11 +356,16 @@ Operations:
 - `RecordAsync` — inserts a usage row per LLM turn
 - `GetSessionTotalsAsync` — aggregates tokens and cost for a session
 
-### Eval Result Store (`IEvalResultStore`)
+### Eval Result Store (`SqliteEvalResultStore`)
 
-**Extracted from:** `EvalResultStore` (concrete class)
+**Replaces:** `EvalResultStore` (file-based)
 
-The existing file-based `EvalResultStore` now implements `IEvalResultStore`. A SQLite-backed implementation can be swapped in later using the `eval_runs` and `eval_results` tables from V005.
+| Interface | `IEvalResultStore` |
+|---|---|
+| Tables | `eval_runs`, `eval_results` |
+| Features | Suite-based eval runs with per-case pass/fail results, linked by `run_id` (CASCADE on delete) |
+
+`SqliteEvalResultStore` is the primary implementation, using the `eval_runs` and `eval_results` tables from V005.
 
 ### Workspace Service (`SqliteWorkspaceStore`) — Phase 35
 
@@ -446,7 +451,7 @@ SqliteMissionScratchpadStore → IMissionScratchpadStore          (Phase 51)
 SqliteMissionStore           → IMissionStore                    (Phase 51)
 SqliteTeamRegistry           → ITeamRegistry                    (Phase 52, replaces InMemoryTeamRegistry)
 SqliteAgentRunStore          → IAgentRunStore                   (Phase 52)
-EvalResultStore        →  IEvalResultStore   (file-based, interface extracted)
+SqliteEvalResultStore  →  IEvalResultStore                      (Phase 42.5, replaced file-based)
 ```
 
 Storage is initialized during `InitializeRuntimeAsync` (called from `Program.cs:154` in the server, after `app.Build()`) — migrations run before MCP servers connect or any request is served. The flow on every boot is:
@@ -594,7 +599,7 @@ After a fresh install and first run, `~/.sovrant/` contains:
 ├── sessions/                ← (legacy, only if SOVRANT_SESSION_JSONL=true)
 ├── audit/                   ← (legacy, only if SOVRANT_AUDIT_JSONL=true)
 ├── swarm/sessions/          ← (legacy, pre-Phase 37.5; import via `sovrant db import-swarm`)
-└── evals/results/           ← Eval report JSON files (Phase 42.5: migrate to eval_results table)
+└── evals/results/           ← Legacy eval report JSON files (migrated to `eval_results` table)
 ```
 
 A fresh boot with no existing DB produces:
