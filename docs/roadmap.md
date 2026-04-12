@@ -4090,6 +4090,7 @@ A thin **`ModelCapabilities`** layer that answers three questions per model id: 
 ## Phase 55 — Cost Tracking, Budgets & Dashboard via OpenRouter (Consolidated from Phases 39 + 55)
 
 **Depends on:** Phase 10 (token usage tracking — already complete)
+**External dependency:** Requires live access to OpenRouter's `GET https://openrouter.ai/api/v1/models` endpoint for model pricing data. This is a free, unauthenticated API but it is a third-party service — if OpenRouter is unreachable, cost estimation degrades to zero-cost fallback. Users routing through OpenRouter also use `GET /api/v1/generation/:id` for actual charged costs.
 **Absorbs:** Phase 39 (budget enforcement, cost dashboard, metrics logging). Phase 51's mission cost envelopes read from this phase.
 **Difficulty:** Medium
 
@@ -4582,13 +4583,15 @@ This means it works for all providers (OpenRouter, OpenAI, Gemini, Ollama) witho
 
 ---
 
-## Phase 59 — Agentic Loop Hardening (Intent Classification, Plan Approval, Execution Governance & Progress Visibility)
+## Phase 59 — Agentic Loop Hardening (Intent Classification, Plan Approval, Execution Governance & Progress Visibility) ✅
 
 **Depends on:** None (improves core runtime, independent of other phases)
 
 **Goal:** Make the agentic loop safe, predictable, and transparent. Users must always know what the system is about to do, why, and be able to approve or reject it before execution. The system must never take destructive action on ambiguous input.
 
 **Priority:** Critical
+
+**Status:** Complete. Semantic intent gate (`SemanticIntentGate`) replaces crude `LooksLikeToolRequest()`. Graduated tool tiers (`GraduatedToolTiers`) classify all 49+ tools into Safe/Moderate/Dangerous/Escalation. Plan approval gate (`PlanApprovalGate`) with three modes. Execution budget enforcement (`ExecutionBudget`). Step tool enforcer, intent injector, plan presenter, progress tracker, orchestration router — all shipped with full test coverage. New `RuntimeEvent` types (`ClarificationNeeded`, `PlanPresented`, `StepProgress`) wired into all four clients (CLI, Desktop, Web, Server). `ModeAwarePermissionPolicy` refactored to use graduated tiers — DontAsk mode now requires confirmation for Dangerous/Escalation tools.
 
 ### Motivation — The "test" Problem
 
