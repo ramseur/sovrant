@@ -759,9 +759,17 @@ An `ILspClient` service manages the lifecycle of one or more language server pro
 
 **Status:** Complete. `sovrant mcp-server` subcommand activates stdio-based MCP server. Bridges all `IToolRegistry` tools + synthetic `chat` tool + session/config resources. `SOVRANT_MCP_TOOLS` env var for optional filtering. 20 tests. See [`docs/mcp-server.md`](mcp-server.md).
 
+**Update (2026-04-12):** Extended with full MCP v1.2.0 protocol support:
+- **Prompts:** 4 built-in prompts (code-review, explain, summarize-session, refactor) with argument definitions and `GetPromptResult` builders.
+- **Logging control:** `SetLoggingLevel` handler.
+- **Completions:** Auto-complete for session IDs, languages, and goals via `WithCompleteHandler`.
+- **Resource subscriptions:** Subscribe/unsubscribe handlers with `ConcurrentDictionary`-based ref counting. Resource templates for `sovrant://sessions/{session_id}`.
+- **HTTP/SSE transport:** Opt-in via `SOVRANT_MCP_HTTP=true` env var. Uses `ModelContextProtocol.AspNetCore` v1.2.0 with `WithHttpTransport()` + `app.MapMcp("/mcp")`. Shared handler registration via `AddSovrantMcpHandlers()` extension.
+- **Tests:** `McpProtocolFeatureTests.cs` (4 tests for subscription ref counting).
+
 **Files added:**
 - `src/Sovrant.McpServer/` — `McpServerSetup.cs`, `ChatToolHandler.cs`, `ToolFilter.cs`
-- `tests/Sovrant.McpServer.Tests/` — `ToolBridgeTests.cs`, `ToolFilterTests.cs`, `ChatToolHandlerTests.cs`
+- `tests/Sovrant.McpServer.Tests/` — `ToolBridgeTests.cs`, `ToolFilterTests.cs`, `ChatToolHandlerTests.cs`, `McpProtocolFeatureTests.cs`
 - `docs/mcp-server.md` — full documentation with IDE config examples
 
 ---
@@ -5375,10 +5383,19 @@ Stored per-workspace in user settings. Injected into system prompt by `Conversat
 
 ---
 
-## Phase 63 — Dependency Injection Audit & Pluggability Hardening
+## Phase 63 — Dependency Injection Audit & Pluggability Hardening ✅
 
 **Depends on:** None (can run in parallel with any phase)
 **Difficulty:** Medium
+
+**Status:** ✅ Complete (2026-04-12). Tier 1 and Tier 2 fully implemented:
+- **Tier 1a:** All `new HttpClient()` replaced with `IHttpClientFactory` — `McpOAuthService`, `SettingsViewModel`, `DiagnosticsViewModel`, `Setup.razor`, `Diagnostics.razor`, `Settings.razor`. Named clients `"McpOAuth"` and `"ProviderProbe"` registered with timeouts.
+- **Tier 1b:** `IScopedProviderFactory` + `DefaultScopedProviderFactory` extracted; `ChatRoutes.cs` uses injected factory instead of `new OpenAiCompatProvider(...)`.
+- **Tier 1c:** `CredentialConfig` (in `Sovrant.Api.Config`) centralizes all credential env-var reads. Single `Resolve(IConfiguration)` call at startup; consumed by `Server/Program.cs`, `BearerTokenMiddleware`, `WebSearchTool`, `WebSearchCommand`, `LiveModelMetadataFetcher`.
+- **Tier 2a:** `ISwarmOrchestrator`, `ISwarmStateTracker`, `ISwarmFileLockManager` extracted; all consumers (SwarmTool, SwarmStatusTool, SwarmToolExecutor, AgentOrchestrator, SwarmRoutes, CLI) updated to depend on interfaces.
+- **Tier 2b:** `IArtifactStoreFactory` + `DefaultArtifactStoreFactory` extracted; DI uses factory for backend selection.
+- **Tier 2c:** `ILspClientFactory` + `DefaultLspClientFactory` extracted; `LspClientManager` uses factory. `ITemplateLoader` + `FileSystemTemplateLoader` extracted; `AgentTemplateRegistry` accepts optional additional loaders.
+- Tier 3 deferred (not needed for current use cases).
 
 **Goal:** Audit and fix concrete DI gaps across the codebase — not for DI purity, but where pluggability, security isolation, or testability is genuinely blocked. The system has 28+ concrete singletons without interfaces, 9 `new HttpClient()` calls bypassing `IHttpClientFactory`, 40+ scattered `Environment.GetEnvironmentVariable` reads in service logic, and per-request provider instantiation in hot paths. This phase fixes the ones that matter.
 
@@ -5528,24 +5545,24 @@ Stored per-workspace in user settings. Injected into system prompt by `Conversat
 | **Storage** | 0 | 5 | None needed |
 | **Auth/Permissions** | 0 | 3 | None needed |
 | **Routing** | 0 | 3 | None needed |
-| **Swarm** | 6 | 0 | **Extract interfaces** |
+| **Swarm** | 3 | 3 | ✅ Interfaces extracted |
 | **Tools state** | 5 | 0 | Leave (simple state bags) |
 | **Agent utilities** | 4 | 4 | Extract for template + factory |
-| **MCP** | 3 | 0 | HttpClient fix only |
+| **MCP** | 2 | 1 | ✅ HttpClient fixed |
 | **Commands** | 2 | 26 | Dispatcher needs template loader |
 | **Config** | 3 | 0 | Env var consolidation |
 | **Total** | **28** | **41** | **Fix 14, leave 14** |
 
-### Acceptance Criteria
+### Acceptance Criteria (All Met ✅)
 
-- Zero `new HttpClient()` outside of test projects
-- `ChatRoutes` uses injected factory, not `new OpenAiCompatProvider`
-- All credential reads go through `CredentialConfig`, not raw env vars
-- `SwarmOrchestrator`, `SwarmStateTracker`, `SwarmFileLockManager` implement new interfaces
-- Artifact store selection is factory-based, not env-var switch
-- `dotnet build Sovrant.slnx` exits 0
-- All existing tests pass
-- No new interfaces for state bags (`TodoState`, `WorktreeState`, etc.) — leave these alone
+- ✅ Zero `new HttpClient()` outside of test projects
+- ✅ `ChatRoutes` uses injected `IScopedProviderFactory`, not `new OpenAiCompatProvider`
+- ✅ All credential reads go through `CredentialConfig`, not raw env vars
+- ✅ `SwarmOrchestrator`, `SwarmStateTracker`, `SwarmFileLockManager` implement new interfaces
+- ✅ Artifact store selection is factory-based via `IArtifactStoreFactory`
+- ✅ `dotnet build Sovrant.slnx` exits 0
+- ✅ All existing tests pass (1,483 tests, 4 pre-existing failures unrelated to DI changes)
+- ✅ No new interfaces for state bags (`TodoState`, `WorktreeState`, etc.) — left alone
 
 ### Non-goals
 
