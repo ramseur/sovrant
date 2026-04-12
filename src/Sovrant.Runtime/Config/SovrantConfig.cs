@@ -1,5 +1,6 @@
 using Sovrant.Api.Routing;
 using Sovrant.Runtime.Permissions;
+using Sovrant.Runtime.TrustBoundary;
 
 namespace Sovrant.Runtime.Config;
 
@@ -49,6 +50,9 @@ public sealed class SovrantConfig
     public IReadOnlyDictionary<string, string> ModelLevels { get; init; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Trust boundary configuration (sanitization, ethical harness, intent verification).</summary>
+    public TrustBoundaryConfig TrustBoundary { get; init; } = new();
+
     /// <summary>MCP server configurations keyed by server name.</summary>
     public IReadOnlyDictionary<string, McpServerConfig> McpServers { get; init; } =
         new Dictionary<string, McpServerConfig>(StringComparer.Ordinal);
@@ -76,6 +80,7 @@ public sealed class SovrantConfig
         DbPath = DbPath,
         CompactThreshold = CompactThreshold,
         ModelLevels = ModelLevels,
+        TrustBoundary = TrustBoundary,
         McpServers = McpServers,
         LspServers = LspServers,
     };

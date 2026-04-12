@@ -84,6 +84,36 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Governance.PlanProgressTracker>();
         services.AddSingleton<Governance.IOrchestrationRouter, Governance.HeuristicOrchestrationRouter>();
 
+        // Phase 58 — Trust Boundary: sanitization, ethical harness, intent verification.
+        services.AddSingleton<TrustBoundary.EthicalAuditLog>();
+        services.AddSingleton<TrustBoundary.IEthicalHarness>(sp =>
+        {
+            var tbConfig = config.TrustBoundary;
+            return new TrustBoundary.ContentPolicyEngine(
+                tbConfig.EthicalHarness,
+                sp.GetRequiredService<TrustBoundary.EthicalAuditLog>());
+        });
+        services.AddSingleton<TrustBoundary.IPromptSanitizer>(sp =>
+        {
+            var tbConfig = config.TrustBoundary;
+            var corpConfig = new TrustBoundary.CorporateDataConfig
+            {
+                CorporateDomains = tbConfig.Sanitizer.CorporateDomains,
+                AllowList = tbConfig.Sanitizer.AllowList,
+            };
+            IEnumerable<TrustBoundary.IPatternDetector> detectors =
+            [
+                new TrustBoundary.PiiDetector(),
+                new TrustBoundary.CorporateDataDetector(corpConfig),
+                new TrustBoundary.CustomPatternRegistry(tbConfig.Sanitizer.CustomPatterns),
+            ];
+            return new TrustBoundary.PromptSanitizer(detectors);
+        });
+        services.AddSingleton<TrustBoundary.IntentVerificationBridge>(sp =>
+            new TrustBoundary.IntentVerificationBridge(
+                sp.GetService<Governance.IIntentGate>(),
+                sp.GetService<TrustBoundary.IEthicalHarness>()));
+
         // Tool registry and executor
         services.AddSingleton<IToolRegistry, InMemoryToolRegistry>();
         services.AddSingleton<IToolConfirmationHandler, DenyAllConfirmationHandler>();
