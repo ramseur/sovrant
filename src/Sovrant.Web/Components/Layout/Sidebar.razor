@@ -319,7 +319,8 @@
 
     private void ResumeSession(string sessionId)
     {
-        OnNavigate.InvokeAsync($"/?session={sessionId}");
+        ActiveContext.ResumeSession(sessionId);
+        OnNavigate.InvokeAsync("/");
     }
 
     private async Task DeleteSession(string sessionId)

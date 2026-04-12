@@ -80,7 +80,6 @@
     [Inject] private SlashCommandDispatcher CommandDispatcher { get; set; } = default!;
     [Inject] private BlazorConfirmationHandler ConfirmationHandler { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
-    [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
 
     private ElementReference _inputRef;
@@ -117,28 +116,19 @@
     {
         ConfirmationHandler.ConfirmationRequested += OnConfirmationRequested;
         ActiveContext.OnChanged += OnContextChanged;
-        Nav.LocationChanged += OnLocationChanged;
-
-        // Check for session resume via query string
-        CheckForSessionInUrl(Nav.Uri);
+        ActiveContext.OnSessionResume += OnSessionResume;
     }
 
-    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    private void OnSessionResume(string sessionId)
     {
-        CheckForSessionInUrl(e.Location);
-    }
-
-    private void CheckForSessionInUrl(string url)
-    {
-        var uri = Nav.ToAbsoluteUri(url);
-        var sid = System.Web.HttpUtility.ParseQueryString(uri.Query)["session"];
-        if (sid is { Length: > 0 } && sid != _sessionId)
+        if (sessionId == _sessionId) return;
+        InvokeAsync(async () =>
         {
-            _sessionId = sid;
+            _sessionId = sessionId;
             _messages.Clear();
             _tokenCount = 0;
-            _ = LoadSessionAsync(sid);
-        }
+            await LoadSessionAsync(sessionId);
+        });
     }
 
     private async Task LoadSessionAsync(string sessionId)
@@ -378,6 +368,6 @@
     {
         ConfirmationHandler.ConfirmationRequested -= OnConfirmationRequested;
         ActiveContext.OnChanged -= OnContextChanged;
-        Nav.LocationChanged -= OnLocationChanged;
+        ActiveContext.OnSessionResume -= OnSessionResume;
     }
 }

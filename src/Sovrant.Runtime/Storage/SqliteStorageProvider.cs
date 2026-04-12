@@ -426,6 +426,8 @@ public sealed partial class SqliteStorageProvider : IStorageProvider, ISqliteCon
     /// from old identities into the current one. Idempotent — no-ops if old IDs
     /// don't exist or have already been migrated.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Table names are hardcoded string arrays, not user input")]
     private static void MigrateHardcodedUserIds(SqliteConnection connection)
     {
         var canonicalId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
@@ -438,90 +440,102 @@ public sealed partial class SqliteStorageProvider : IStorageProvider, ISqliteCon
         string[] oldIds = ["desktop-user", "web-user"];
         var canonicalWsId = $"ws-personal-{canonicalId}";
 
-        foreach (var oldId in oldIds)
+        // Temporarily disable FK checks — many tables cross-reference users/workspaces
+        // and we need to update or delete across all of them atomically.
+        using var fkOff = connection.CreateCommand();
+        fkOff.CommandText = "PRAGMA foreign_keys = OFF";
+        fkOff.ExecuteNonQuery();
+
+        try
         {
-            var oldWsId = $"ws-personal-{oldId}";
+            foreach (var oldId in oldIds)
+            {
+                var oldWsId = $"ws-personal-{oldId}";
 
-            // Check if the old user exists at all.
-            using var checkCmd = connection.CreateCommand();
-            checkCmd.CommandText = "SELECT COUNT(*) FROM users WHERE user_id = $id";
-            checkCmd.Parameters.AddWithValue("$id", oldId);
-            if (Convert.ToInt32(checkCmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) == 0)
-                continue;
+                // Check if the old user exists at all.
+                using var checkCmd = connection.CreateCommand();
+                checkCmd.CommandText = "SELECT COUNT(*) FROM users WHERE user_id = $id";
+                checkCmd.Parameters.AddWithValue("$id", oldId);
+                if (Convert.ToInt32(checkCmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) == 0)
+                    continue;
 
-            // Migrate sessions: update user_id and workspace_id references.
-            using var sessCmd = connection.CreateCommand();
-            sessCmd.CommandText = """
-                UPDATE sessions SET user_id = $newId WHERE user_id = $oldId;
-                UPDATE sessions SET workspace_id = $newWsId
-                    WHERE workspace_id = $oldWsId;
-                """;
-            sessCmd.Parameters.AddWithValue("$newId", canonicalId);
-            sessCmd.Parameters.AddWithValue("$oldId", oldId);
-            sessCmd.Parameters.AddWithValue("$newWsId", canonicalWsId);
-            sessCmd.Parameters.AddWithValue("$oldWsId", oldWsId);
-            sessCmd.ExecuteNonQuery();
+                // Migrate all user_id references across every table.
+                var userTables = new[] { "sessions", "token_usage", "credentials", "api_tokens", "agent_runs" };
+                foreach (var table in userTables)
+                {
+                    using var cmd = connection.CreateCommand();
+                    cmd.CommandText = $"UPDATE {table} SET user_id = $newId WHERE user_id = $oldId";
+                    cmd.Parameters.AddWithValue("$newId", canonicalId);
+                    cmd.Parameters.AddWithValue("$oldId", oldId);
+                    cmd.ExecuteNonQuery();
+                }
 
-            // Migrate token_usage.
-            using var tuCmd = connection.CreateCommand();
-            tuCmd.CommandText = """
-                UPDATE token_usage SET user_id = $newId WHERE user_id = $oldId;
-                UPDATE token_usage SET workspace_id = $newWsId
-                    WHERE workspace_id = $oldWsId;
-                """;
-            tuCmd.Parameters.AddWithValue("$newId", canonicalId);
-            tuCmd.Parameters.AddWithValue("$oldId", oldId);
-            tuCmd.Parameters.AddWithValue("$newWsId", canonicalWsId);
-            tuCmd.Parameters.AddWithValue("$oldWsId", oldWsId);
-            tuCmd.ExecuteNonQuery();
+                // Migrate all workspace_id references across every table.
+                var wsTables = new[]
+                {
+                    "sessions", "token_usage", "credentials", "workspace_config",
+                    "workspace_invites", "workspace_memory", "projects", "teams",
+                    "agent_runs", "swarm_events", "eval_runs", "audit_governance",
+                    "audit_bash", "session_summaries", "runtime_traces",
+                };
+                foreach (var table in wsTables)
+                {
+                    using var cmd = connection.CreateCommand();
+                    cmd.CommandText = $"UPDATE {table} SET workspace_id = $newWsId WHERE workspace_id = $oldWsId";
+                    cmd.Parameters.AddWithValue("$newWsId", canonicalWsId);
+                    cmd.Parameters.AddWithValue("$oldWsId", oldWsId);
+                    cmd.ExecuteNonQuery();
+                }
 
-            // Migrate credentials.
-            using var credCmd = connection.CreateCommand();
-            credCmd.CommandText = """
-                UPDATE credentials SET user_id = $newId WHERE user_id = $oldId;
-                UPDATE credentials SET workspace_id = $newWsId
-                    WHERE workspace_id = $oldWsId;
-                """;
-            credCmd.Parameters.AddWithValue("$newId", canonicalId);
-            credCmd.Parameters.AddWithValue("$oldId", oldId);
-            credCmd.Parameters.AddWithValue("$newWsId", canonicalWsId);
-            credCmd.Parameters.AddWithValue("$oldWsId", oldWsId);
-            credCmd.ExecuteNonQuery();
+                // Delete old workspace_members and user_roles (canonical already seeded).
+                using var wmCmd = connection.CreateCommand();
+                wmCmd.CommandText = """
+                    DELETE FROM workspace_members WHERE user_id = $oldId;
+                    DELETE FROM workspace_members WHERE workspace_id = $oldWsId;
+                    """;
+                wmCmd.Parameters.AddWithValue("$oldId", oldId);
+                wmCmd.Parameters.AddWithValue("$oldWsId", oldWsId);
+                wmCmd.ExecuteNonQuery();
 
-            // Migrate workspace_members — delete old, canonical already seeded.
-            using var wmCmd = connection.CreateCommand();
-            wmCmd.CommandText = "DELETE FROM workspace_members WHERE user_id = $oldId";
-            wmCmd.Parameters.AddWithValue("$oldId", oldId);
-            wmCmd.ExecuteNonQuery();
+                // Migrate project_members.
+                using var pmCmd = connection.CreateCommand();
+                pmCmd.CommandText = """
+                    UPDATE OR IGNORE project_members SET user_id = $newId WHERE user_id = $oldId;
+                    DELETE FROM project_members WHERE user_id = $oldId;
+                    """;
+                pmCmd.Parameters.AddWithValue("$newId", canonicalId);
+                pmCmd.Parameters.AddWithValue("$oldId", oldId);
+                pmCmd.ExecuteNonQuery();
 
-            // Migrate project_members.
-            using var pmCmd = connection.CreateCommand();
-            pmCmd.CommandText = """
-                UPDATE OR IGNORE project_members SET user_id = $newId WHERE user_id = $oldId;
-                DELETE FROM project_members WHERE user_id = $oldId;
-                """;
-            pmCmd.Parameters.AddWithValue("$newId", canonicalId);
-            pmCmd.Parameters.AddWithValue("$oldId", oldId);
-            pmCmd.ExecuteNonQuery();
+                // Migrate user_roles.
+                using var urCmd = connection.CreateCommand();
+                urCmd.CommandText = """
+                    UPDATE OR IGNORE user_roles SET user_id = $newId WHERE user_id = $oldId;
+                    DELETE FROM user_roles WHERE user_id = $oldId;
+                    """;
+                urCmd.Parameters.AddWithValue("$newId", canonicalId);
+                urCmd.Parameters.AddWithValue("$oldId", oldId);
+                urCmd.ExecuteNonQuery();
 
-            // Migrate api_tokens.
-            using var atCmd = connection.CreateCommand();
-            atCmd.CommandText = "UPDATE api_tokens SET user_id = $newId WHERE user_id = $oldId";
-            atCmd.Parameters.AddWithValue("$newId", canonicalId);
-            atCmd.Parameters.AddWithValue("$oldId", oldId);
-            atCmd.ExecuteNonQuery();
+                // Delete old personal workspace (canonical one already exists via SeedDefaultUser).
+                using var delWsCmd = connection.CreateCommand();
+                delWsCmd.CommandText = "DELETE FROM workspaces WHERE workspace_id = $oldWsId";
+                delWsCmd.Parameters.AddWithValue("$oldWsId", oldWsId);
+                delWsCmd.ExecuteNonQuery();
 
-            // Delete old personal workspace (canonical one already exists via SeedDefaultUser).
-            using var delWsCmd = connection.CreateCommand();
-            delWsCmd.CommandText = "DELETE FROM workspaces WHERE workspace_id = $oldWsId";
-            delWsCmd.Parameters.AddWithValue("$oldWsId", oldWsId);
-            delWsCmd.ExecuteNonQuery();
-
-            // Delete old user row.
-            using var delUserCmd = connection.CreateCommand();
-            delUserCmd.CommandText = "DELETE FROM users WHERE user_id = $oldId";
-            delUserCmd.Parameters.AddWithValue("$oldId", oldId);
-            delUserCmd.ExecuteNonQuery();
+                // Delete old user row.
+                using var delUserCmd = connection.CreateCommand();
+                delUserCmd.CommandText = "DELETE FROM users WHERE user_id = $oldId";
+                delUserCmd.Parameters.AddWithValue("$oldId", oldId);
+                delUserCmd.ExecuteNonQuery();
+            }
+        }
+        finally
+        {
+            // Re-enable FK checks.
+            using var fkOn = connection.CreateCommand();
+            fkOn.CommandText = "PRAGMA foreign_keys = ON";
+            fkOn.ExecuteNonQuery();
         }
     }
 

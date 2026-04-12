@@ -887,11 +887,13 @@ dotnet test Sovrant.slnx   # 1,285 tests across 9 projects
 
 - **Knowledge Pages** — User-created markdown knowledge pages stored in the database, injectable into system prompt context. Tag-based organization, search, and management via both desktop and web UI. Future phases will support connecting external knowledge sources through integrations.
 - **Claws** — Third multi-agent orchestration mode (alongside Teams and Swarm). Details TBD.
+- **Workspace-Scoped Sessions & Artifacts** — All sessions and artifacts belong to a workspace (personal or team) and optionally a project. Enables solo users to organize work and teams to share conversation history, artifacts, and context across members.
 - **Web Remote Mode** — Connect the Blazor web app to `Sovrant.Server` via HTTP instead of embedding the runtime in-process, enabling multi-user deployments.
 - **External Knowledge Integrations** — Connect knowledge sources (Google Drive, Notion, Confluence, etc.) for automatic context enrichment.
 
 ### Recently Completed
 
+- Unified user identity across CLI/Desktop/Web (`SOVRANT_USER_ID` or OS username) with automatic DB migration
 - Desktop app (Avalonia) — full GUI with 15 pages, streaming chat, tool use, setup wizard
 - Web app (Blazor Server) — browser-based UI matching desktop feature set, port 5100
 - Cross-component state synchronization (ActiveContextService)

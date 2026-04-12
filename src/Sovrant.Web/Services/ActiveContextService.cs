@@ -20,6 +20,9 @@ public sealed class ActiveContextService
     /// <summary>Fires when workspaces or projects are created/deleted and lists need refreshing.</summary>
     public event Action? OnDataChanged;
 
+    /// <summary>Fires when a session should be resumed in the chat page.</summary>
+    public event Action<string>? OnSessionResume;
+
     public void SetWorkspace(string id, string name)
     {
         WorkspaceId = id;
@@ -46,4 +49,7 @@ public sealed class ActiveContextService
 
     /// <summary>Call after creating/deleting workspaces or projects to refresh sidebar lists.</summary>
     public void NotifyDataChanged() => OnDataChanged?.Invoke();
+
+    /// <summary>Request the chat page to resume the given session.</summary>
+    public void ResumeSession(string sessionId) => OnSessionResume?.Invoke(sessionId);
 }
