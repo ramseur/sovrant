@@ -52,7 +52,7 @@ public partial class ChatViewModel : ViewModelBase
         _commandDispatcher = commandDispatcher;
         _confirmationHandler = confirmationHandler;
         _activeContext = activeContext;
-        _sessionId = $"desktop-{Guid.NewGuid():N}";
+        _sessionId = $"session-{Guid.NewGuid():N}";
 
         if (_confirmationHandler is not null)
             _confirmationHandler.ConfirmationRequested += OnConfirmationRequested;
@@ -129,7 +129,7 @@ public partial class ChatViewModel : ViewModelBase
                     Messages.Clear();
                     HasMessages = false;
                     TokenCount = 0;
-                    SessionId = $"desktop-{Guid.NewGuid():N}";
+                    SessionId = $"session-{Guid.NewGuid():N}";
                 });
                 return;
             }
@@ -239,7 +239,7 @@ public partial class ChatViewModel : ViewModelBase
         Messages.Clear();
         HasMessages = false;
         TokenCount = 0;
-        SessionId = $"desktop-{Guid.NewGuid():N}";
+        SessionId = $"session-{Guid.NewGuid():N}";
     }
 
     [RelayCommand]

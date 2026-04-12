@@ -87,7 +87,7 @@
     private string _inputText = string.Empty;
     private bool _isSending;
     private int _tokenCount;
-    private string _sessionId = $"web-{Guid.NewGuid():N}";
+    private string _sessionId = $"session-{Guid.NewGuid():N}";
     private string _workspaceName => ActiveContext.WorkspaceName;
     private string _projectName => ActiveContext.ProjectName;
 
@@ -117,12 +117,26 @@
     {
         ConfirmationHandler.ConfirmationRequested += OnConfirmationRequested;
         ActiveContext.OnChanged += OnContextChanged;
+        Nav.LocationChanged += OnLocationChanged;
 
         // Check for session resume via query string
-        var uri = Nav.ToAbsoluteUri(Nav.Uri);
-        if (System.Web.HttpUtility.ParseQueryString(uri.Query)["session"] is { Length: > 0 } sid)
+        CheckForSessionInUrl(Nav.Uri);
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        CheckForSessionInUrl(e.Location);
+    }
+
+    private void CheckForSessionInUrl(string url)
+    {
+        var uri = Nav.ToAbsoluteUri(url);
+        var sid = System.Web.HttpUtility.ParseQueryString(uri.Query)["session"];
+        if (sid is { Length: > 0 } && sid != _sessionId)
         {
             _sessionId = sid;
+            _messages.Clear();
+            _tokenCount = 0;
             _ = LoadSessionAsync(sid);
         }
     }
@@ -212,7 +226,7 @@
             {
                 _messages.Clear();
                 _tokenCount = 0;
-                _sessionId = $"web-{Guid.NewGuid():N}";
+                _sessionId = $"session-{Guid.NewGuid():N}";
                 return;
             }
 
@@ -364,5 +378,6 @@
     {
         ConfirmationHandler.ConfirmationRequested -= OnConfirmationRequested;
         ActiveContext.OnChanged -= OnContextChanged;
+        Nav.LocationChanged -= OnLocationChanged;
     }
 }

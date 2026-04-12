@@ -24,6 +24,10 @@ public partial class App : Application
 {
     private ServiceProvider? _serviceProvider;
 
+    /// <summary>Unified user identity — matches the runtime's default (SOVRANT_USER_ID or OS username).</summary>
+    internal static readonly string SovrantUserId =
+        Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
+
     public static IServiceProvider Services { get; private set; } = null!;
     public static Window? MainWindow { get; private set; }
 
@@ -143,15 +147,15 @@ public partial class App : Application
 
                 // Ensure the desktop user exists (required by workspace FK constraints).
                 var userService = _serviceProvider.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
-                var user = await userService.GetAsync("desktop-user").ConfigureAwait(false);
+                var user = await userService.GetAsync(SovrantUserId).ConfigureAwait(false);
                 if (user is null)
-                    await userService.CreateAsync("desktop-user", userId: "desktop-user").ConfigureAwait(false);
+                    await userService.CreateAsync(SovrantUserId, userId: SovrantUserId).ConfigureAwait(false);
 
                 // Ensure a personal workspace exists for the desktop user.
                 var workspaceService = _serviceProvider.GetRequiredService<Sovrant.Runtime.Workspaces.IWorkspaceService>();
-                var personal = await workspaceService.GetPersonalAsync("desktop-user").ConfigureAwait(false);
+                var personal = await workspaceService.GetPersonalAsync(SovrantUserId).ConfigureAwait(false);
                 if (personal is null)
-                    await workspaceService.CreatePersonalWorkspaceAsync("desktop-user").ConfigureAwait(false);
+                    await workspaceService.CreatePersonalWorkspaceAsync(SovrantUserId).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

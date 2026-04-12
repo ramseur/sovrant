@@ -131,6 +131,10 @@ public sealed partial class SqliteStorageProvider : IStorageProvider, ISqliteCon
             // Seed the default user after migrations create the users table.
             SeedDefaultUser(connection);
 
+            // Phase 56 — migrate hardcoded "desktop-user" / "web-user" identities
+            // to the canonical SOVRANT_USER_ID (or OS username). Idempotent.
+            MigrateHardcodedUserIds(connection);
+
             if (preVersion == 0)
                 LogFirstBoot(_logger, _dbPath, _schemaVersion);
             else
@@ -413,6 +417,112 @@ public sealed partial class SqliteStorageProvider : IStorageProvider, ISqliteCon
         memberCmd.Parameters.AddWithValue("$wid", workspaceId);
         memberCmd.Parameters.AddWithValue("$uid", userId);
         memberCmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Phase 56 — one-time migration of hardcoded "desktop-user" and "web-user"
+    /// identities to the canonical user ID (SOVRANT_USER_ID or OS username).
+    /// Merges workspace ownership, session history, token usage, and credentials
+    /// from old identities into the current one. Idempotent — no-ops if old IDs
+    /// don't exist or have already been migrated.
+    /// </summary>
+    private static void MigrateHardcodedUserIds(SqliteConnection connection)
+    {
+        var canonicalId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
+            ?? Environment.UserName;
+
+        // Skip if canonical user is one of the hardcoded IDs (shouldn't happen, but be safe).
+        if (canonicalId is "desktop-user" or "web-user")
+            return;
+
+        string[] oldIds = ["desktop-user", "web-user"];
+        var canonicalWsId = $"ws-personal-{canonicalId}";
+
+        foreach (var oldId in oldIds)
+        {
+            var oldWsId = $"ws-personal-{oldId}";
+
+            // Check if the old user exists at all.
+            using var checkCmd = connection.CreateCommand();
+            checkCmd.CommandText = "SELECT COUNT(*) FROM users WHERE user_id = $id";
+            checkCmd.Parameters.AddWithValue("$id", oldId);
+            if (Convert.ToInt32(checkCmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) == 0)
+                continue;
+
+            // Migrate sessions: update user_id and workspace_id references.
+            using var sessCmd = connection.CreateCommand();
+            sessCmd.CommandText = """
+                UPDATE sessions SET user_id = $newId WHERE user_id = $oldId;
+                UPDATE sessions SET workspace_id = $newWsId
+                    WHERE workspace_id = $oldWsId;
+                """;
+            sessCmd.Parameters.AddWithValue("$newId", canonicalId);
+            sessCmd.Parameters.AddWithValue("$oldId", oldId);
+            sessCmd.Parameters.AddWithValue("$newWsId", canonicalWsId);
+            sessCmd.Parameters.AddWithValue("$oldWsId", oldWsId);
+            sessCmd.ExecuteNonQuery();
+
+            // Migrate token_usage.
+            using var tuCmd = connection.CreateCommand();
+            tuCmd.CommandText = """
+                UPDATE token_usage SET user_id = $newId WHERE user_id = $oldId;
+                UPDATE token_usage SET workspace_id = $newWsId
+                    WHERE workspace_id = $oldWsId;
+                """;
+            tuCmd.Parameters.AddWithValue("$newId", canonicalId);
+            tuCmd.Parameters.AddWithValue("$oldId", oldId);
+            tuCmd.Parameters.AddWithValue("$newWsId", canonicalWsId);
+            tuCmd.Parameters.AddWithValue("$oldWsId", oldWsId);
+            tuCmd.ExecuteNonQuery();
+
+            // Migrate credentials.
+            using var credCmd = connection.CreateCommand();
+            credCmd.CommandText = """
+                UPDATE credentials SET user_id = $newId WHERE user_id = $oldId;
+                UPDATE credentials SET workspace_id = $newWsId
+                    WHERE workspace_id = $oldWsId;
+                """;
+            credCmd.Parameters.AddWithValue("$newId", canonicalId);
+            credCmd.Parameters.AddWithValue("$oldId", oldId);
+            credCmd.Parameters.AddWithValue("$newWsId", canonicalWsId);
+            credCmd.Parameters.AddWithValue("$oldWsId", oldWsId);
+            credCmd.ExecuteNonQuery();
+
+            // Migrate workspace_members — delete old, canonical already seeded.
+            using var wmCmd = connection.CreateCommand();
+            wmCmd.CommandText = "DELETE FROM workspace_members WHERE user_id = $oldId";
+            wmCmd.Parameters.AddWithValue("$oldId", oldId);
+            wmCmd.ExecuteNonQuery();
+
+            // Migrate project_members.
+            using var pmCmd = connection.CreateCommand();
+            pmCmd.CommandText = """
+                UPDATE OR IGNORE project_members SET user_id = $newId WHERE user_id = $oldId;
+                DELETE FROM project_members WHERE user_id = $oldId;
+                """;
+            pmCmd.Parameters.AddWithValue("$newId", canonicalId);
+            pmCmd.Parameters.AddWithValue("$oldId", oldId);
+            pmCmd.ExecuteNonQuery();
+
+            // Migrate api_tokens.
+            using var atCmd = connection.CreateCommand();
+            atCmd.CommandText = "UPDATE api_tokens SET user_id = $newId WHERE user_id = $oldId";
+            atCmd.Parameters.AddWithValue("$newId", canonicalId);
+            atCmd.Parameters.AddWithValue("$oldId", oldId);
+            atCmd.ExecuteNonQuery();
+
+            // Delete old personal workspace (canonical one already exists via SeedDefaultUser).
+            using var delWsCmd = connection.CreateCommand();
+            delWsCmd.CommandText = "DELETE FROM workspaces WHERE workspace_id = $oldWsId";
+            delWsCmd.Parameters.AddWithValue("$oldWsId", oldWsId);
+            delWsCmd.ExecuteNonQuery();
+
+            // Delete old user row.
+            using var delUserCmd = connection.CreateCommand();
+            delUserCmd.CommandText = "DELETE FROM users WHERE user_id = $oldId";
+            delUserCmd.Parameters.AddWithValue("$oldId", oldId);
+            delUserCmd.ExecuteNonQuery();
+        }
     }
 
     /// <inheritdoc />

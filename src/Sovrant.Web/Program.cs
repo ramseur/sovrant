@@ -18,6 +18,10 @@ public static class Program
     /// <summary>Signals when runtime initialization (DB, model metadata) is complete.</summary>
     public static TaskCompletionSource RuntimeReady { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    /// <summary>Unified user identity — matches the runtime's default (SOVRANT_USER_ID or OS username).</summary>
+    internal static readonly string SovrantUserId =
+        Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
+
     public static async Task Main(string[] args)
     {
         // Desktop uses Fixed routing — the configured provider is used directly.
@@ -80,15 +84,15 @@ public static class Program
                 app.Services.GetRequiredService<ToolRegistrar>().RegisterAll();
 
                 var userService = app.Services.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
-                var user = await userService.GetAsync("web-user").ConfigureAwait(false);
+                var user = await userService.GetAsync(SovrantUserId).ConfigureAwait(false);
                 if (user is null)
-                    await userService.CreateAsync("web-user", userId: "web-user").ConfigureAwait(false);
+                    await userService.CreateAsync(SovrantUserId, userId: SovrantUserId).ConfigureAwait(false);
 
                 // Ensure personal workspace exists (same as desktop's WorkspacesViewModel)
                 var workspaceService = app.Services.GetRequiredService<Sovrant.Runtime.Workspaces.IWorkspaceService>();
-                var personal = await workspaceService.GetPersonalAsync("web-user").ConfigureAwait(false);
+                var personal = await workspaceService.GetPersonalAsync(SovrantUserId).ConfigureAwait(false);
                 if (personal is null)
-                    await workspaceService.CreatePersonalWorkspaceAsync("web-user").ConfigureAwait(false);
+                    await workspaceService.CreatePersonalWorkspaceAsync(SovrantUserId).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

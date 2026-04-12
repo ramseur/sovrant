@@ -54,7 +54,7 @@
     [Inject] private IWorkspaceService WorkspaceService { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
 
-    private const string UserId = "web-user";
+    private static string UserId => Sovrant.Web.Program.SovrantUserId;
     private string _newName = string.Empty;
     private string _status = string.Empty;
     private List<WorkspaceItem> _workspaces = [];

@@ -249,7 +249,7 @@
     {
         try
         {
-            var list = await WorkspaceService.ListForUserAsync("web-user");
+            var list = await WorkspaceService.ListForUserAsync(Sovrant.Web.Program.SovrantUserId);
             _workspaces = list.Select(w => new WorkspaceItem(w.WorkspaceId, w.Name, w.Type.ToString())).ToList();
             var personal = _workspaces.FirstOrDefault(w => w.Type.Equals("Personal", StringComparison.OrdinalIgnoreCase));
             if (personal is not null)

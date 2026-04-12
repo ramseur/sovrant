@@ -17,7 +17,8 @@ public partial class ActiveContextViewModel : ViewModelBase
     private readonly IWorkspaceService _workspaceService;
     private readonly IProjectService _projectService;
 
-    private const string UserId = "desktop-user";
+    private static readonly string UserId =
+        Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
 
     [ObservableProperty]
     private string _activeWorkspaceId = string.Empty;

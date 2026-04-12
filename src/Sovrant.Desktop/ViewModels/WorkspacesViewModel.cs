@@ -31,7 +31,7 @@ public partial class WorkspacesViewModel : ViewModelBase
 
     public ObservableCollection<WorkspaceItemViewModel> Workspaces { get; } = [];
 
-    private const string DesktopUserId = "desktop-user";
+    private static string DesktopUserId => App.SovrantUserId;
 
     public WorkspacesViewModel(IWorkspaceService workspaceService, IUserService userService)
     {
@@ -101,7 +101,7 @@ public partial class WorkspacesViewModel : ViewModelBase
         {
             var user = await _userService.GetAsync(DesktopUserId);
             if (user is null)
-                await _userService.CreateAsync("desktop-user", userId: DesktopUserId);
+                await _userService.CreateAsync(DesktopUserId, userId: DesktopUserId);
 
             var personal = await _workspaceService.GetPersonalAsync(DesktopUserId);
             if (personal is null)
