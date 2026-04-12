@@ -1,6 +1,6 @@
 # Sovrant — Competitor Analysis
 
-**Last updated:** 2026-04-12 (45 tools, desktop app, web app, MCP server, SDK covering 79 endpoints)
+**Last updated:** 2026-04-12 (50 tools, desktop app, web app, MCP server, mission engine, SDK covering 79 endpoints)
 **Products analysed:** Claude Code · OpenClaude · opencode (SST) · Sovrant
 
 ---
@@ -12,9 +12,9 @@ The agentic coding tool space has four meaningful reference points as of 2026:
 - **Claude Code** — the proprietary, Anthropic-backed gold standard. Deep Claude model integration, enterprise-grade safety tooling, and the widest IDE/CI coverage. Hard vendor lock-in and a closed codebase.
 - **OpenClaude** — a community fork derived from Claude Code source code that was accidentally leaked in March 2026. Full tool parity with Claude Code, genuine multi-provider support. Legally precarious; subject to ongoing DMCA takedowns.
 - **opencode (SST)** — a clean-room, MIT-licensed open source coding agent with 95K+ GitHub stars and 600K+ downloads. TypeScript/Bun, SQLite persistence, 75+ LLM providers, multi-interface (TUI + desktop + VS Code + web + remote server). The strongest open source competitor.
-- **Sovrant** — a .NET 10 / C# 14 agentic AI engine. Five delivery modes: CLI REPL, OpenAI-compatible HTTP server (95 endpoints), Avalonia desktop app (Windows/macOS/Linux), Blazor Server web app, and MCP server for IDE integration. SmartRouter with intent-aware model routing. 45 tools. 24 agent templates. 32 built-in skills. Multi-agent team orchestration, swarm auto-decomposition, SQLite persistence with FTS5, eval framework, LSP integration, and a TypeScript SDK covering all 79 server endpoints.
+- **Sovrant** — a clean-room C# / .NET 10 reimplementation inspired by the architecture of OpenClaude. **No Anthropic source code was copied or incorporated** — every line is original C#. Five delivery modes: CLI REPL, OpenAI-compatible HTTP server (95 endpoints), Avalonia desktop app (Windows/macOS/Linux), Blazor Server web app, and MCP server for IDE integration. SmartRouter with intent-aware model routing. 50 tools. 24 agent templates. 32 built-in skills. Multi-agent team orchestration, swarm auto-decomposition, mission engine, SQLite persistence with FTS5, eval framework, LSP integration, and a TypeScript SDK covering all 79 server endpoints.
 
-**Sovrant's unique position:** the only option that is natively .NET, provides five independent frontends (CLI, server, desktop, web, MCP), has built-in multi-agent orchestration with two backends, and ships enterprise multi-tenant infrastructure (per-user credentials, session TTL, rate limiting, workspace/project scoping) — without the legal exposure of OpenClaude or the Node.js runtime dependency of opencode.
+**Sovrant's unique position:** the only option that is natively .NET, provides five independent frontends (CLI, server, desktop, web, MCP), has built-in multi-agent orchestration with two backends, and ships enterprise multi-tenant infrastructure (per-user credentials, session TTL, rate limiting, workspace/project scoping). Unlike OpenClaude, Sovrant carries no Anthropic IP — it is a clean-room reimplementation in a different language and runtime, with no code derivation. Unlike opencode, it ships a mission engine, swarm orchestrator, and enterprise multi-tenant primitives out of the box.
 
 ---
 
@@ -46,9 +46,11 @@ opencode supports 75+ LLM providers through a unified AI SDK abstraction layer a
 
 ### Sovrant
 
-Sovrant is a .NET 10 / C# 14 agentic AI engine with five delivery modes: a CLI REPL for interactive developer use, `Sovrant.Server` (ASP.NET Core HTTP server with 95 OpenAI-compatible endpoints), `Sovrant.Desktop` (Avalonia GUI for Windows/macOS/Linux), `Sovrant.Web` (Blazor Server browser UI), and `Sovrant.McpServer` (MCP server for IDE integration via stdio).
+Sovrant is a clean-room C# / .NET 10 reimplementation of an agentic AI engine, inspired by the architecture and feature set of OpenClaude (the community fork of Claude Code). **No Anthropic source code was copied, translated, or incorporated** — the project uses OpenClaude only as a functional reference for capability parity. Every line of Sovrant is original C# 14 code written from scratch in a completely different language and runtime.
 
-The SmartRouter routes each LLM call across configured providers (OpenAI-compatible, Ollama, native messages API) based on latency, cost, and health scores, with intent-aware model tier routing. 45 tools cover file operations, shell execution (Bash, PowerShell, REPL), web access, task management, notebook editing, LSP code intelligence, sub-agents, plan/worktree mode, team orchestration, swarm orchestration, skill execution, MCP resources, and quality verification. 24 agent templates and 32 built-in skills ship with the engine. Session state persists in SQLite with FTS5 full-text search. Multi-agent team orchestration (two backends: isolated process-per-agent and shared in-process) and a swarm auto-decomposition engine with DAG execution, file locking, and quality gates are fully operational. A TypeScript/JavaScript SDK covers all 79 server endpoints with SSE streaming and a React `useChat()` hook.
+Five delivery modes: a CLI REPL for interactive developer use, `Sovrant.Server` (ASP.NET Core HTTP server with 95 OpenAI-compatible endpoints), `Sovrant.Desktop` (Avalonia GUI for Windows/macOS/Linux), `Sovrant.Web` (Blazor Server browser UI), and `Sovrant.McpServer` (MCP server for IDE integration via stdio).
+
+The SmartRouter routes each LLM call across configured providers (OpenAI-compatible, Ollama, native messages API) based on latency, cost, and health scores, with intent-aware model tier routing. 50 tools cover file operations, shell execution (Bash, PowerShell, REPL), web access, task management, notebook editing, LSP code intelligence, sub-agents, plan/worktree mode, team orchestration, swarm orchestration, mission management, skill execution, MCP resources, and quality verification. 24 agent templates and 32 built-in skills ship with the engine. Session state persists in SQLite with FTS5 full-text search. Multi-agent team orchestration (SQLite-backed teams with two agent backends: isolated process-per-agent and shared in-process), a swarm auto-decomposition engine with DAG execution, file locking, and quality gates, and a mission engine for long-lived goal-driven execution are fully operational. A TypeScript/JavaScript SDK covers all 79 server endpoints with SSE streaming and a React `useChat()` hook.
 
 ---
 
@@ -68,7 +70,7 @@ The SmartRouter routes each LLM call across configured providers (OpenAI-compati
 | **Remote server mode** | ❌ | ❌ | ✅ | ✅ |
 | **Session persistence** | Managed cloud | None | SQLite | ✅ SQLite + FTS5 |
 | **Session resumption** | ✅ | ❌ | ✅ | ✅ |
-| **Tool count** | ~40 | ~40 (inherited) | 20+ | 45 |
+| **Tool count** | ~40 | ~40 (inherited) | 20+ | 50 |
 | **LSP integration** | ❌ | ❌ | ✅ 20+ languages | ✅ 18 languages |
 | **MCP client** | ✅ | ✅ (inherited) | ✅ stdio + HTTP | ✅ |
 | **MCP server mode** | ❌ | ❌ | ❌ | ✅ (stdio transport) |
@@ -90,7 +92,7 @@ The SmartRouter routes each LLM call across configured providers (OpenAI-compati
 | **Frontend SDK** | ❌ | ❌ | ❌ | ✅ TypeScript (79 endpoints) |
 | **Cross-platform** | Mac / Linux / Windows | Mac / Linux / Windows | Mac / Linux / Windows | Windows / Linux / macOS |
 | **No Node/Python/Go dep** | ❌ (Node) | ❌ (Bun) | ❌ (Bun + Go) | ✅ |
-| **Legal status** | Proprietary ✅ | Contested ⚠️ | Clean MIT ✅ | Owned codebase ✅ |
+| **Legal status** | Proprietary ✅ | Contested ⚠️ | Clean MIT ✅ | Clean-room reimplementation ✅ |
 | **Community scale** | Enterprise + large OSS | Small (at-risk) | 95K stars, 600K+ DL | Early stage |
 
 ---
@@ -99,9 +101,21 @@ The SmartRouter routes each LLM call across configured providers (OpenAI-compati
 
 ### Licensing and Legal Posture
 
-Claude Code is proprietary and Anthropic-owned — no legal risk for users but also no ability to fork, audit, or self-host. OpenClaude is effectively a pirated distribution of Anthropic proprietary code dressed in an MIT label; it can be taken down at any time and cannot be used as a foundation for any commercial or enterprise product without legal exposure. opencode is clean-room MIT with no IP entanglement — the strongest open source position. Sovrant is a wholly owned codebase with no Claude Code source derivation; its legal status is clean.
+Claude Code is proprietary and Anthropic-owned — no legal risk for users but also no ability to fork, audit, or self-host. OpenClaude is effectively a pirated distribution of Anthropic proprietary code dressed in an MIT label; it can be taken down at any time and cannot be used as a foundation for any commercial or enterprise product without legal exposure. opencode is clean-room MIT with no IP entanglement — the strongest open source position.
 
-**Sovrant advantage:** no IP risk, full ownership of the codebase, free to commercialise.
+**Sovrant's provenance:** Sovrant is a **clean-room reimplementation** inspired by OpenClaude's architecture and feature set, written entirely in C# / .NET 10. No Anthropic source code was copied, translated, or incorporated at any point. The project used OpenClaude as a functional reference — understanding *what* an agentic coding tool should do (tool set, permission model, session flow, agent loop structure) — but all implementation is original code in a different language, runtime, and architecture. This is analogous to how a company might study a competitor's product to understand its capabilities and then build its own from scratch.
+
+Key legal distinctions from OpenClaude:
+
+| Factor | OpenClaude | Sovrant |
+|---|---|---|
+| **Source origin** | Direct fork of leaked Anthropic code | Clean-room reimplementation, no code copied |
+| **Language** | Same as Claude Code (TypeScript) | Different language and runtime (C# / .NET 10) |
+| **Code lineage** | Line-for-line derivation traceable to Anthropic | No line of code traces to any Anthropic source |
+| **DMCA exposure** | Subject to takedowns (Anthropic has issued notices) | Not subject to code-derivation claims |
+| **Commercial use** | High legal risk | Standard IP ownership — free to commercialise |
+
+**Sovrant advantage:** clean provenance, full ownership of the codebase, no code-derivation IP risk, free to commercialise. The different-language clean-room approach is a well-established legal pattern (cf. Compaq's BIOS reverse-engineering of IBM PC, Google's reimplementation of Java APIs in Android — upheld by the Supreme Court in *Google v. Oracle*).
 
 ### LLM Provider Strategy
 
@@ -123,9 +137,9 @@ Claude Code's session state is managed in Anthropic's cloud — opaque, inaccess
 
 ### Tool Parity
 
-Claude Code and OpenClaude lead at ~40 tools (the leaked source). opencode has 20+ plus LSP integration (which makes file manipulation more semantically aware). Sovrant now has 45 tools — surpassing all competitors — including 5 LSP tools (LspHover, LspDefinition, LspReferences, LspDiagnostics, LspRename) supporting 18 languages, MCP resource tools (ListMcpResources, ReadMcpResource), ToolSearch, Skill/SkillCreate, Swarm/SwarmStatus, team orchestration tools (TeamCreate, TeamDelete, TeamStatus, TeamDelegate), and a 6-phase Verify quality gate.
+Claude Code and OpenClaude lead at ~40 tools (the leaked source). opencode has 20+ plus LSP integration (which makes file manipulation more semantically aware). Sovrant now has 50 tools — surpassing all competitors — including 5 LSP tools (18 languages), 4 MCP tools (ListMcpResources, ReadMcpResource, MCPTool, McpAuth), ToolSearch, Skill/SkillCreate, Swarm/SwarmStatus, team orchestration tools (TeamCreate, TeamDelete, TeamStatus, TeamDelegate, TeamRun, TeamPublish), Mission, and a 6-phase Verify quality gate.
 
-**Sovrant advantage:** highest tool count in the field, with LSP parity and unique tools (Swarm, Verify, SkillCreate) that no competitor offers.
+**Sovrant advantage:** highest tool count in the field, with LSP parity and unique tools (Swarm, Mission, TeamRun, TeamPublish, Verify, SkillCreate) that no competitor offers.
 
 ### Enterprise and Multi-Tenant Readiness
 
@@ -166,11 +180,11 @@ Both exploit Claude Code's trust model around project files and hooks. Sovrant's
 
 1. **Five independent frontends** — CLI, HTTP server (95 endpoints), desktop app (Avalonia), web app (Blazor), and MCP server. No competitor ships more than three.
 2. **SmartRouter + intent-aware routing** — multi-provider routing with health/latency/cost scoring plus automatic model tier selection per intent class. Unique in the field.
-3. **45 tools with LSP** — highest tool count, with 5 LSP tools (18 languages), swarm orchestration, quality gates, and skill system.
-4. **Multi-agent orchestration** — Teams (persistent agents with two backends) + Swarm (auto-decomposition with DAG execution). Claude Code has teams behind feature flags; no other competitor has anything comparable.
+3. **50 tools with LSP** — highest tool count, with 5 LSP tools (18 languages), swarm orchestration, mission management, quality gates, and skill system.
+4. **Multi-agent orchestration + missions** — Teams (SQLite-backed, two agent backends) + Swarm (auto-decomposition with DAG execution) + Missions (long-lived goal-driven execution). Claude Code has teams behind feature flags; no other competitor has anything comparable.
 5. **Enterprise multi-tenant** — per-request LLM keys, API token issuance, session TTL/LRU, rate limiting, usage tracking, workspace/project scoping, audit log. All shipped, not roadmap.
 6. **Native .NET** — zero runtime dependency for .NET shops; natural fit for Windows-first or Azure-first environments.
-7. **Clean legal posture** — wholly owned, no derived code, no IP risk.
+7. **Clean legal posture** — clean-room C# reimplementation with no Anthropic code copied. Different language, different runtime, no code-derivation IP risk.
 8. **TypeScript SDK** — typed client covering all 79 server endpoints with SSE streaming and React hook. No competitor exposes an SDK for their API.
 9. **Eval framework** — 3 grader types, pass@k metrics, trend tracking. No competitor ships a built-in eval system.
 
@@ -283,7 +297,7 @@ The following features exist in one or more competitors but are not yet in Sovra
 | **Best for multi-user teams** | ✅ (managed) | ❌ | ❌ | ✅ (shipped) |
 | **Best for enterprise deploy** | ✅ (Anthropic SaaS) | ❌ | ❌ | ✅ (self-hosted, shipped) |
 | **Best provider flexibility** | ❌ | ✅ | ✅ | ✅ + SmartRouter + intent routing |
-| **Best tool/agent ecosystem** | ✅ | ✅ (inherited) | ❌ | ✅ (45 tools, 24 templates, 32 skills) |
+| **Best tool/agent ecosystem** | ✅ | ✅ (inherited) | ❌ | ✅ (50 tools, 24 templates, 32 skills) |
 | **Best multi-agent** | Partial (feature flag) | Partial (inherited) | ❌ | ✅ (Teams + Swarm) |
 | **Best legal posture** | ✅ | ❌ | ✅ | ✅ |
 | **Best .NET / Windows fit** | ❌ | ❌ | ❌ | ✅ |
