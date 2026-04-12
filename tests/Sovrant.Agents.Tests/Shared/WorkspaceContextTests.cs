@@ -26,10 +26,10 @@ public class WorkspaceContextTests : IDisposable
     }
 
     [Fact]
-    public void GetOrCreateArtifactsDirectory_CreatesFolder()
+    public async Task GetOrCreateArtifactsDirectory_CreatesFolder()
     {
         var ctx = new WorkspaceContext { WorkingDirectory = _tempDir };
-        var dir = ctx.GetOrCreateArtifactsDirectory("Write a whitepaper on lean knitting");
+        var dir = await ctx.GetOrCreateArtifactsDirectoryAsync("Write a whitepaper on lean knitting");
 
         Assert.True(Directory.Exists(dir));
         Assert.StartsWith(Path.Combine(_tempDir, "artifacts"), dir);
@@ -39,11 +39,11 @@ public class WorkspaceContextTests : IDisposable
     }
 
     [Fact]
-    public void GetOrCreateArtifactsDirectory_SamePromptReturnsSamePath()
+    public async Task GetOrCreateArtifactsDirectory_SamePromptReturnsSamePath()
     {
         var ctx = new WorkspaceContext { WorkingDirectory = _tempDir };
-        var dir1 = ctx.GetOrCreateArtifactsDirectory("Create a report");
-        var dir2 = ctx.GetOrCreateArtifactsDirectory("Create a report");
+        var dir1 = await ctx.GetOrCreateArtifactsDirectoryAsync("Create a report");
+        var dir2 = await ctx.GetOrCreateArtifactsDirectoryAsync("Create a report");
 
         Assert.Equal(dir1, dir2);
     }

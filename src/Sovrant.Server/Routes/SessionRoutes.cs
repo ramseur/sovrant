@@ -160,7 +160,11 @@ internal static class SessionRoutes
             return Results.NotFound(new { error = $"Session '{id}' is not active in the pool." });
 
         if (req.Model is not null)
+        {
+            if (!InputValidation.IsValidModelName(req.Model))
+                return Results.BadRequest(new { error = "Invalid model name." });
             sessionConfig.Model = req.Model;
+        }
 
         if (req.PermissionMode is not null &&
             Enum.TryParse<PermissionMode>(req.PermissionMode, ignoreCase: true, out var pm))

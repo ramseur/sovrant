@@ -152,16 +152,18 @@ export class SovrantClient {
         const content = chunk.choices?.[0]?.delta?.content;
         if (content) {
           fullText += content;
-          callbacks.onText?.(content);
+          try { callbacks.onText?.(content); } catch { /* callback error — non-fatal */ }
         }
 
         // Tool events (Sovrant extension)
         if (chunk.sovrant) {
-          if (chunk.sovrant.event === "tool_use") {
-            callbacks.onToolUse?.(chunk.sovrant);
-          } else if (chunk.sovrant.event === "tool_result") {
-            callbacks.onToolResult?.(chunk.sovrant);
-          }
+          try {
+            if (chunk.sovrant.event === "tool_use") {
+              callbacks.onToolUse?.(chunk.sovrant);
+            } else if (chunk.sovrant.event === "tool_result") {
+              callbacks.onToolResult?.(chunk.sovrant);
+            }
+          } catch { /* callback error — non-fatal */ }
         }
 
         // Usage info (final chunk)

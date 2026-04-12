@@ -81,7 +81,7 @@ internal static class ChatRoutes
                 return;
             }
 
-            if (IsReservedAddress(parsedUrl.Host))
+            if (await IsReservedAddressAsync(parsedUrl.Host).ConfigureAwait(false))
             {
                 ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
                 await ctx.Response.WriteAsJsonAsync(
@@ -365,15 +365,31 @@ internal static class ChatRoutes
     /// <summary>
     /// Returns true if the host resolves to a reserved/private IP range, preventing SSRF
     /// attacks that target internal infrastructure via user-supplied base URLs.
+    /// DNS names are resolved and all resulting addresses are checked.
     /// </summary>
-    private static bool IsReservedAddress(string host)
+    private static async Task<bool> IsReservedAddressAsync(string host)
     {
         if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase))
             return true;
 
-        if (!System.Net.IPAddress.TryParse(host, out var ip))
-            return false; // DNS name — allow (can't resolve synchronously without blocking)
+        if (System.Net.IPAddress.TryParse(host, out var ip))
+            return IsReservedIp(ip);
 
+        // Resolve DNS name and check all resulting addresses.
+        try
+        {
+            var addresses = await System.Net.Dns.GetHostAddressesAsync(host).ConfigureAwait(false);
+            return addresses.Any(IsReservedIp);
+        }
+        catch (System.Net.Sockets.SocketException)
+        {
+            // Unresolvable host — block to be safe.
+            return true;
+        }
+    }
+
+    private static bool IsReservedIp(System.Net.IPAddress ip)
+    {
         var bytes = ip.GetAddressBytes();
         if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
         {

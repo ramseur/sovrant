@@ -45,6 +45,9 @@ export interface UseChatReturn {
 
 let nextId = 0;
 function genId(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return `msg-${crypto.randomUUID()}`;
+  }
   return `msg-${Date.now()}-${nextId++}`;
 }
 

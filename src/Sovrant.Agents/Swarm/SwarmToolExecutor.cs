@@ -60,6 +60,18 @@ internal sealed class SwarmToolExecutor : IToolExecutor
 
             if (!string.IsNullOrWhiteSpace(filePath))
             {
+                // Path traversal guard: resolved path must stay under the current working directory.
+                var resolved = Path.GetFullPath(filePath);
+                var cwd = Path.GetFullPath(Environment.CurrentDirectory);
+                if (!resolved.StartsWith(cwd + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(resolved, cwd, StringComparison.OrdinalIgnoreCase))
+                {
+                    return new ToolExecutionResult(
+                        false,
+                        $"Blocked: path '{filePath}' resolves outside the working directory.",
+                        IsError: true);
+                }
+
                 // If another task holds the lock, block.
                 if (_lockManager.IsLockedByOther(filePath, _taskId))
                 {

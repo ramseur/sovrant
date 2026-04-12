@@ -84,8 +84,12 @@ internal static class SwarmRoutes
             // Execute with SSE streaming
             var result = await orchestrator.ExecuteAsync(plan, config, onEvent: evt =>
             {
-                // Fire-and-forget SSE write (best effort for streaming)
-                _ = WriteSseEventAsync(ctx.Response, evt.GetType().Name, evt, CancellationToken.None);
+                // Fire-and-forget SSE write — catch exceptions to prevent unobserved task faults.
+                _ = WriteSseEventAsync(ctx.Response, evt.GetType().Name, evt, CancellationToken.None)
+                    .ContinueWith(static t =>
+                    {
+                        if (t.IsFaulted) _ = t.Exception;
+                    }, TaskScheduler.Default);
             }, executionContext: swarmContext, ct: ct);
 
             // Quality gate
@@ -118,7 +122,7 @@ internal static class SwarmRoutes
         // GET /v1/swarm/{id}/events — replay events from swarm_events
         app.MapGet("/v1/swarm/{id}/events", async (string id, SwarmSession session, CancellationToken ct) =>
         {
-            if (!session.Exists(id))
+            if (!await session.ExistsAsync(id, ct).ConfigureAwait(false))
                 return Results.NotFound(new { error = $"No session found for swarm '{id}'." });
 
             var events = new List<object>();
@@ -132,7 +136,7 @@ internal static class SwarmRoutes
 
         // GET /v1/swarm/sessions — list all sessions, optionally filtered by workspace/project.
         // Query params:  ?workspace_id=ws-...   ?project_id=proj-...   ?limit=50
-        app.MapGet("/v1/swarm/sessions", (HttpContext ctx, SwarmSession session) =>
+        app.MapGet("/v1/swarm/sessions", async (HttpContext ctx, SwarmSession session, CancellationToken ct) =>
         {
             var workspaceId = ctx.Request.Query["workspace_id"].FirstOrDefault();
             var projectId = ctx.Request.Query["project_id"].FirstOrDefault();
@@ -143,7 +147,7 @@ internal static class SwarmRoutes
                 ProjectId: string.IsNullOrEmpty(projectId) ? null : projectId,
                 Limit: limit);
 
-            return Results.Ok(session.ListSessions(filter));
+            return Results.Ok(await session.ListSessionsAsync(filter, ct).ConfigureAwait(false));
         });
     }
 

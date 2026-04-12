@@ -86,29 +86,29 @@ public class SwarmSessionTests : IAsyncDisposable
         await _session.RecordAsync(new SwarmEvent.PlanCreated("s1", 1, 1));
         await _session.RecordAsync(new SwarmEvent.PlanCreated("s2", 1, 1));
 
-        var sessions = _session.ListSessions();
+        var sessions = await _session.ListSessionsAsync();
         Assert.Equal(2, sessions.Count);
         Assert.Contains("s1", sessions);
         Assert.Contains("s2", sessions);
     }
 
     [Fact]
-    public void ListSessions_EmptyStore_ReturnsEmpty()
+    public async Task ListSessions_EmptyStore_ReturnsEmpty()
     {
-        Assert.Empty(_session.ListSessions());
+        Assert.Empty(await _session.ListSessionsAsync());
     }
 
     [Fact]
     public async Task Exists_ReturnsTrueForRecordedSession()
     {
         await _session.RecordAsync(new SwarmEvent.PlanCreated("s1", 1, 1));
-        Assert.True(_session.Exists("s1"));
+        Assert.True(await _session.ExistsAsync("s1"));
     }
 
     [Fact]
-    public void Exists_ReturnsFalseForNonexistentSession()
+    public async Task Exists_ReturnsFalseForNonexistentSession()
     {
-        Assert.False(_session.Exists("nonexistent"));
+        Assert.False(await _session.ExistsAsync("nonexistent"));
     }
 
     [Fact]
@@ -183,17 +183,17 @@ public class SwarmSessionTests : IAsyncDisposable
         await _session.RecordAsync(new SwarmEvent.PlanCreated(swarmId, 1, 1), context);
 
         // The session can find it back
-        Assert.True(_session.Exists(swarmId));
+        Assert.True(await _session.ExistsAsync(swarmId));
 
         // And ListSessions filtered by workspace surfaces it; filtering by a different workspace does not.
-        var inWorkspace = _session.ListSessions(new SwarmListFilter(WorkspaceId: "ws-personal-alice"));
+        var inWorkspace = await _session.ListSessionsAsync(new SwarmListFilter(WorkspaceId: "ws-personal-alice"));
         Assert.Contains(swarmId, inWorkspace);
 
-        var inOtherWorkspace = _session.ListSessions(new SwarmListFilter(WorkspaceId: "ws-other"));
+        var inOtherWorkspace = await _session.ListSessionsAsync(new SwarmListFilter(WorkspaceId: "ws-other"));
         Assert.DoesNotContain(swarmId, inOtherWorkspace);
 
         // Project filter is independent.
-        var inProject = _session.ListSessions(new SwarmListFilter(ProjectId: "proj-1"));
+        var inProject = await _session.ListSessionsAsync(new SwarmListFilter(ProjectId: "proj-1"));
         Assert.Contains(swarmId, inProject);
     }
 
@@ -208,7 +208,7 @@ public class SwarmSessionTests : IAsyncDisposable
             new SwarmExecutionContext(WorkspaceId: "ws-team-1"));
         await _session.RecordAsync(new SwarmEvent.PlanCreated("s-unscoped", 1, 1));
 
-        var all = _session.ListSessions();
+        var all = await _session.ListSessionsAsync();
         Assert.Equal(3, all.Count);
         Assert.Contains("s-personal", all);
         Assert.Contains("s-team", all);

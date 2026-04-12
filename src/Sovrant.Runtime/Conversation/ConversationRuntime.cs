@@ -311,7 +311,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 _ = _hookRunner.RunAsync(
                     HookEvent.Stop,
                     new HookContext(HookEvent.Stop, SessionId, StopReason: accumulated.StopReason),
-                    CancellationToken.None);
+                    CancellationToken.None)
+                    .ContinueWith(static t => { if (t.IsFaulted) _ = t.Exception; }, TaskScheduler.Default);
                 yield break;
             }
 
@@ -356,7 +357,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     ToolOutput: execResult.Output,
                     FilePath: TryExtractFilePath(tu.Input),
                     IsError: execResult.IsError);
-                _ = _hookRunner.RunAsync(postEvent, postCtx, CancellationToken.None);
+                _ = _hookRunner.RunAsync(postEvent, postCtx, CancellationToken.None)
+                    .ContinueWith(static t => { if (t.IsFaulted) _ = t.Exception; }, TaskScheduler.Default);
 
                 toolResultPairs.Add((new ToolResultContentBlock.TextBlock(execResult.Output), execResult.IsError));
 

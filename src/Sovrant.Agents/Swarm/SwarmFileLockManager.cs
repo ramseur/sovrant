@@ -36,11 +36,13 @@ public sealed class SwarmFileLockManager
     /// <summary>Releases all locks held by <paramref name="taskId"/>.</summary>
     public void ReleaseAll(string taskId)
     {
-        foreach (var kvp in _fileLocks)
-        {
-            if (kvp.Value == taskId)
-                _fileLocks.TryRemove(kvp.Key, out _);
-        }
+        var keysToRemove = _fileLocks
+            .Where(kvp => kvp.Value == taskId)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var key in keysToRemove)
+            _fileLocks.TryRemove(key, out _);
     }
 
     /// <summary>Releases all locks (used when swarm completes).</summary>

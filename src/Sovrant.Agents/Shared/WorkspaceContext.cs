@@ -64,8 +64,8 @@ public sealed partial class WorkspaceContext
     /// are set, this method delegates to the scoped store. Otherwise it falls back to
     /// the legacy flat layout under <c>{cwd}/artifacts/</c>.
     /// </remarks>
-    [Obsolete("Use ArtifactStore + ArtifactScope instead. Will be removed in a future release.")]
-    public string GetOrCreateArtifactsDirectory(string prompt)
+    [Obsolete("Use GetArtifactsDirectoryAsync instead. Will be removed in a future release.")]
+    public async Task<string> GetOrCreateArtifactsDirectoryAsync(string prompt, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(prompt);
 
@@ -75,9 +75,9 @@ public sealed partial class WorkspaceContext
             // Ensure we have a handle
             if (ArtifactHandle is null)
             {
-                ArtifactHandle = ArtifactStore
-                    .CreateRunScopeAsync(ArtifactScope)
-                    .GetAwaiter().GetResult();
+                ArtifactHandle = await ArtifactStore
+                    .CreateRunScopeAsync(ArtifactScope, ct)
+                    .ConfigureAwait(false);
             }
 
             return ArtifactHandle.ResolvedRoot;
@@ -96,16 +96,16 @@ public sealed partial class WorkspaceContext
     /// Returns the resolved artifact directory for the current run scope.
     /// If no scoped store is configured, falls back to the legacy artifacts root.
     /// </summary>
-    public string GetArtifactsDirectory()
+    public async Task<string> GetArtifactsDirectoryAsync(CancellationToken ct = default)
     {
         if (ArtifactHandle is not null)
             return ArtifactHandle.ResolvedRoot;
 
         if (ArtifactStore is not null && ArtifactScope is not null)
         {
-            ArtifactHandle = ArtifactStore
-                .CreateRunScopeAsync(ArtifactScope)
-                .GetAwaiter().GetResult();
+            ArtifactHandle = await ArtifactStore
+                .CreateRunScopeAsync(ArtifactScope, ct)
+                .ConfigureAwait(false);
             return ArtifactHandle.ResolvedRoot;
         }
 

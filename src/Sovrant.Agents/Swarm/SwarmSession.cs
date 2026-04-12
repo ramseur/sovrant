@@ -84,15 +84,16 @@ public sealed class SwarmSession
     /// Lists all swarm IDs known to the store, most-recently-active first.
     /// Optional filter narrows by workspace and/or project.
     /// </summary>
-    public IReadOnlyList<string> ListSessions(SwarmListFilter? filter = null)
+    public async Task<IReadOnlyList<string>> ListSessionsAsync(SwarmListFilter? filter = null, CancellationToken ct = default)
     {
-        // Sync wrapper preserved for backwards compatibility with the old file-based API.
-        return _store.ListSwarmsAsync(filter).GetAwaiter().GetResult();
+        return await _store.ListSwarmsAsync(filter, ct).ConfigureAwait(false);
     }
 
     /// <summary>Returns whether any events exist for the given swarm ID.</summary>
-    public bool Exists(string swarmId) =>
-        _store.ExistsAsync(swarmId).GetAwaiter().GetResult();
+    public async Task<bool> ExistsAsync(string swarmId, CancellationToken ct = default)
+    {
+        return await _store.ExistsAsync(swarmId, ct).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Pulls the agent name out of an event when present, so it can be

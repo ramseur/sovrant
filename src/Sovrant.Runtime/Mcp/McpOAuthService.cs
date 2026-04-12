@@ -61,6 +61,7 @@ public sealed partial class McpOAuthService : IDisposable
         _credentialStore = credentialStore;
         _toolRegistrar = toolRegistrar;
         _logger = logger;
+        // Singleton-scoped: a single long-lived HttpClient is acceptable and avoids socket exhaustion.
         _http = new HttpClient();
         _serverPort = int.TryParse(
             Environment.GetEnvironmentVariable("SOVRANT_PORT"), out var p) ? p : 5200;

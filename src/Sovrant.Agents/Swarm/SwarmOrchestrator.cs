@@ -111,7 +111,7 @@ public sealed partial class SwarmOrchestrator
 
         // Resolve the artifact directory for this swarm's outputs.
         // Phase 53: uses scoped store when available, falls back to legacy layout.
-        var artifactsDir = _workspace.GetArtifactsDirectory();
+        var artifactsDir = await _workspace.GetArtifactsDirectoryAsync(ct).ConfigureAwait(false);
 
         var result = new SwarmResult
         {

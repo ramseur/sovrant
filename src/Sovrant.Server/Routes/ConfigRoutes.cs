@@ -57,7 +57,11 @@ internal static class ConfigRoutes
         }
 
         if (req.ApiKey is not null)
+        {
+            if (string.IsNullOrWhiteSpace(req.ApiKey))
+                return Results.BadRequest(new { error = "api_key must not be empty." });
             config.LlmApiKey = req.ApiKey;
+        }
 
         if (req.BaseUrl is not null)
         {

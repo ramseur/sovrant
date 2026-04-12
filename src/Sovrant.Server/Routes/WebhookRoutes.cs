@@ -77,7 +77,17 @@ internal static class WebhookRoutes
 
         // Apply model override to session config if provided.
         if (req.Model is not null && sessionConfig is not null)
+        {
+            if (!InputValidation.IsValidModelName(req.Model))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await ctx.Response.WriteAsJsonAsync(
+                    new { error = "Invalid model name." }, ct)
+                    .ConfigureAwait(false);
+                return;
+            }
             sessionConfig.Model = req.Model;
+        }
 
         // ── Run the agentic turn ────────────────────────────────────────────
         await sessionLock.WaitAsync(ct).ConfigureAwait(false);
