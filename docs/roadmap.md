@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-12 (Phase 41 complete — 39 phases shipped, 11 pending)
+**Last updated:** 2026-04-12 (Phase 41 complete — 39 phases shipped, 12 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -106,7 +106,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 
 ### Still pending
 
-> **Last audited:** 2026-04-12. 39 phases complete, 11 pending. Phase 39 consolidated into Phase 55. Everything below is *not yet shipped*.
+> **Last audited:** 2026-04-12. 39 phases complete, 12 pending. Phase 39 consolidated into Phase 55. Everything below is *not yet shipped*.
 
 | Gap | Phase | Priority |
 |---|---|---|
@@ -121,6 +121,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Cost tracking, budgets & dashboard via OpenRouter (consolidated from Phases 39+55) | Phase 55 | Medium |
 | LLM provider sanitizer — strip PII and corporate data from prompts before they leave the runtime | Phase 58 | High |
 | Agentic loop hardening — intent classification, plan approval, execution governance, progress visibility | Phase 59 | **Critical** |
+| Hermes Agent integration via MCP — alternative claw/federation bus provider with self-improving skills | Phase 60 | Medium |
 
 ---
 
@@ -4774,6 +4775,165 @@ User sees progress, results, and reasoning at every step
 - User-trained intent models (learning from corrections over time)
 - Per-user safety profiles (some users want full autonomy, others want approval on everything)
 - Undo/redo for executed plans (separate feature, possibly Phase 60)
+
+---
+
+---
+
+## Phase 60 — Hermes Agent Integration via MCP (Alternative Claw Provider)
+
+**Depends on:** Phase 16 (Dynamic MCP Tool Proxy), Phase 50 (OpenClaw integration — establishes the `IFederationBus` abstraction this phase implements a second backend for)
+**Difficulty:** Medium
+
+**Goal:** Add [Hermes Agent](https://github.com/NousResearch/hermes-agent) (by Nous Research) as a second federation bus provider alongside OpenClaw. Hermes Agent is an open-source, self-improving AI agent framework that ships an **MCP server mode** (`hermes mcp serve`) and an **OpenAI-compatible API**. Where OpenClaw is a routing gateway bridging messaging platforms to agents, Hermes is a full agent execution engine with its own planning loop, skill learning, and multi-agent coordination. Together they give Sovrant two complementary federation options: OpenClaw for human-reachable chat-channel routing, Hermes for agent-to-agent delegation with adaptive skill acquisition.
+
+#### What Hermes Agent is
+
+Hermes Agent (MIT license, Python, ~65K GitHub stars) is a self-improving agent framework built by Nous Research. Key capabilities:
+
+| Feature | Description |
+|---|---|
+| **Self-improving skills** | Closed learning loop — agent creates reusable "skills" from experience, refines them over use |
+| **MCP client** | Connects to any MCP server at startup, discovers tools, registers with namespaced prefixes (`mcp_<server>_<tool>`) |
+| **MCP server mode** | `hermes mcp serve` exposes conversations, sessions, and messaging tools to any MCP client |
+| **Sampling support** | MCP servers can request LLM inference from Hermes via `sampling/createMessage` |
+| **OpenAI-compatible API** | HTTP server exposing standard `/v1/chat/completions` endpoint backed by the Hermes agent loop |
+| **Subagent delegation** | Parent agents spawn child agents in isolated terminals, fan out work, collect results |
+| **5 sandbox backends** | Local, Docker, SSH, Singularity, Modal — agent execution isolation at every level |
+
+#### How Hermes compares to OpenClaw
+
+| Dimension | OpenClaw (Phase 50) | Hermes Agent (this phase) |
+|---|---|---|
+| **Role** | Message routing gateway | Agent execution engine |
+| **Strength** | Bridges 8+ messaging platforms (Discord, Slack, Telegram, WhatsApp, Signal, iMessage, Matrix) — every swarm becomes reachable from a phone | Self-improving skills, deep agent-to-agent delegation, adaptive planning |
+| **Integration surface** | 9 MCP tools (conversations, messages, events, permissions) | MCP server mode + OpenAI-compatible HTTP API |
+| **Multi-agent model** | Route-based pub/sub — agents publish events, operators subscribe from chat channels | Subagent delegation (L0), proposed DAG workflows (L1), shared scratchpad (L2), live dialogue (L3) |
+| **When to use** | Human-in-the-loop, cross-platform notifications, approval routing | Agent-to-agent task delegation where the remote agent has specialised skills or domain knowledge |
+
+**They are complementary, not competing.** A Sovrant swarm could use OpenClaw for human approval routing while delegating specialised subtasks to a Hermes agent that has learned domain-specific skills.
+
+#### Architecture
+
+The key insight: Phase 50 introduces `OpenClawBusClient` as a concrete implementation. This phase extracts the federation bus abstraction (`IFederationBus`) and adds `HermesBusClient` as a second implementation. Sovrant agents don't care which bus they're talking to — they call `PublishAsync`, `DelegateAsync`, `SubscribeAsync`.
+
+```
+src/Sovrant.Agents/Swarm/Bus/
+  IFederationBus.cs                    ← abstraction extracted from Phase 50's OpenClawBusClient
+  OpenClaw/
+    OpenClawBusClient.cs               ← Phase 50's implementation (refactored to implement IFederationBus)
+  Hermes/
+    HermesBusClient.cs                 ← MCP-backed client wrapping `hermes mcp serve`
+    HermesApiClient.cs                 ← optional: OpenAI-compatible HTTP client for direct API mode
+    HermesSkillDiscovery.cs            ← queries Hermes for its learned skills, surfaces them as delegatable capabilities
+```
+
+#### Integration modes
+
+Sovrant can talk to Hermes in two ways:
+
+**Mode 1 — MCP (recommended):** Sovrant launches `hermes mcp serve` as a managed MCP child process (same pattern as OpenClaw). Hermes tools surface in the Sovrant tool registry via Phase 16's `MCPTool` proxy. `HermesBusClient` wraps these tools into the `IFederationBus` interface. Transport: stdio or StreamableHTTP.
+
+**Mode 2 — OpenAI-compatible API:** Sovrant treats a running Hermes instance as an OpenAI-compatible endpoint. Useful when Hermes is deployed as a remote service. Sovrant's existing `OpenAiCompatProvider` can route requests to it, but `HermesApiClient` adds agent-specific capabilities (session management, skill queries) on top.
+
+#### Configuration
+
+```jsonc
+// .sovrant/swarm.json — federation bus providers
+{
+  "federation": {
+    "mode": "manager-led",
+    "providers": {
+      "openclaw": {
+        "enabled": true,
+        "mcpServerName": "openclaw"
+        // ... existing Phase 50 config
+      },
+      "hermes": {
+        "enabled": true,
+        "mode": "mcp",                              // "mcp" | "api"
+        "mcpServerName": "hermes",                   // references entry in mcp.json
+        "api": {                                     // only used when mode = "api"
+          "baseUrl": "http://localhost:8080",
+          "apiKey": "${HERMES_API_KEY}"
+        },
+        "skillDiscovery": true,                      // query Hermes for learned skills on connect
+        "delegationRoutePrefix": "sovrant/hermes"
+      }
+    },
+    "defaultProvider": "openclaw",                   // which bus handles unqualified PublishAsync calls
+    "managerAgent": "swarm-manager",
+    "maxChildSwarms": 8
+  }
+}
+```
+
+```jsonc
+// .sovrant/mcp.json — Hermes as a managed MCP server
+{
+  "mcpServers": {
+    "hermes": {
+      "command": "hermes",
+      "args": ["mcp", "serve", "--host", "localhost", "--port", "8765"],
+      "env": {
+        "HERMES_MODEL": "openrouter/anthropic/claude-sonnet-4-6:free"
+      }
+    }
+  }
+}
+```
+
+#### Components
+
+| Component | What it does |
+|---|---|
+| **`IFederationBus`** | Abstraction over federation bus providers: `PublishAsync`, `SubscribeAsync`, `DelegateAsync`, `QueryCapabilitiesAsync`. Extracted from Phase 50's `OpenClawBusClient`. |
+| **`HermesBusClient`** | `IFederationBus` implementation backed by Hermes MCP tools. Translates Sovrant swarm events into Hermes conversations/messages. |
+| **`HermesApiClient`** | Optional HTTP client for Hermes's OpenAI-compatible API. Used when `mode = "api"`. |
+| **`HermesSkillDiscovery`** | Queries Hermes for its learned skill catalogue on connection. Surfaces skills as delegatable capabilities so the swarm manager can route subtasks to Hermes when it has a relevant skill. |
+| **`FederationBusRouter`** | Routes `PublishAsync`/`DelegateAsync` calls to the correct provider based on route prefix or explicit provider hint. Supports fan-out (publish to both OpenClaw and Hermes simultaneously). |
+| **`CompositeFederationBus`** | Wraps multiple `IFederationBus` instances. Manager agents can use OpenClaw for human notifications while delegating compute-heavy subtasks to Hermes — same swarm, two buses. |
+
+#### Implementation plan
+
+1. Extract `IFederationBus` interface from Phase 50's `OpenClawBusClient`. Methods: `PublishAsync`, `SubscribeAsync`, `DelegateAsync(task, capabilities?)`, `QueryCapabilitiesAsync`, `HealthCheckAsync`. Refactor `OpenClawBusClient` to implement the new interface — zero behavior change.
+2. Implement `HermesBusClient : IFederationBus` backed by Phase 16's MCP tool proxy. On connect, discover Hermes's available tools and map them to `IFederationBus` operations. `DelegateAsync` creates a Hermes conversation, sends the task, polls for completion, returns the result.
+3. Implement `HermesSkillDiscovery` — on startup (and periodically), query Hermes for its learned skills. Cache the skill catalogue locally. The swarm manager can inspect this to decide whether to delegate a subtask to Hermes vs. running it in-process.
+4. Implement `FederationBusRouter` — given a `PublishAsync` call with a route, determine which provider handles it based on route prefix or explicit `provider: "hermes"` hint. Default provider from config.
+5. Implement `CompositeFederationBus` — the DI-registered `IFederationBus` that wraps all enabled providers. Supports parallel fan-out for publish operations.
+6. Optional: `HermesApiClient` for API mode — thin OpenAI-compatible HTTP client with Hermes-specific extensions (session management, skill listing).
+7. Extend `SwarmConfig.Federation.Providers` to accept multiple named providers with per-provider config.
+8. Wire into DI: register `IFederationBus` → `CompositeFederationBus` when multiple providers enabled, or the single concrete client when only one is configured.
+9. Extend `SwarmManagerAgent` template to be provider-aware — can route different subtasks to different bus providers based on the task's nature and Hermes's skill catalogue.
+10. New endpoints:
+    - `GET /v1/swarm/hermes/skills` — cached Hermes skill catalogue
+    - `GET /v1/swarm/hermes/status` — Hermes connection health + MCP tool list
+    - `GET /v1/swarm/federation/providers` — all registered providers and their status
+11. CLI: `sovrant federation providers` (list), `sovrant federation skills hermes` (Hermes skill catalogue)
+12. Tests:
+    - `IFederationBus` contract tests run against both `OpenClawBusClient` and `HermesBusClient` (shared test suite, parameterized by provider)
+    - `FederationBusRouter`: route prefix matching, default provider fallback, explicit provider hint
+    - `CompositeFederationBus`: fan-out publishes to both, `DelegateAsync` routes to the correct provider
+    - `HermesSkillDiscovery` against a mock MCP server returning a skill catalogue
+    - Manager-led swarm with mixed delegation: human approval via OpenClaw, subtask execution via Hermes
+    - Integration test gated behind `HERMES_E2E=1`: real `hermes mcp serve` → delegate task → collect result
+
+#### Acceptance criteria
+
+- `dotnet build` exits 0
+- Phase 50's `OpenClawBusClient` refactored to `IFederationBus` with zero behavior change (existing tests pass)
+- With Hermes configured, `sovrant federation providers` shows both OpenClaw and Hermes with health status
+- `DelegateAsync` to Hermes sends a task, Hermes processes it with its agent loop, Sovrant receives the result
+- `sovrant federation skills hermes` lists Hermes's learned skills
+- A manager-led swarm can use OpenClaw for human notifications while delegating subtasks to Hermes
+- Disabling Hermes in config falls back to OpenClaw-only with no errors
+
+#### Non-goals
+
+- Running Hermes in-process. Hermes is a Python application — Sovrant communicates with it over MCP (stdio/HTTP) or its OpenAI-compatible API. No Python embedding.
+- Replacing OpenClaw. Hermes and OpenClaw serve different purposes. OpenClaw remains the primary choice for human-reachable routing.
+- Managing Hermes's internal skill library. Sovrant reads Hermes's skills for routing decisions but does not write, edit, or delete them.
+- A2A (Agent-to-Agent Protocol) support. Google's A2A is a promising standard but not yet mature enough to build on. MCP is the integration protocol for this phase; A2A can be evaluated as a future addition.
 
 ---
 
