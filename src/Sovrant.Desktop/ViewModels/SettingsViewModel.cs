@@ -326,7 +326,7 @@ public partial class SettingsViewModel : ViewModelBase
     // ─── Provider Profiles ─────────────────────────────
 
     [RelayCommand]
-    private void AddProvider()
+    private async Task AddProviderAsync()
     {
         if (string.IsNullOrWhiteSpace(ApiKey))
         {
@@ -372,14 +372,14 @@ public partial class SettingsViewModel : ViewModelBase
         PersistProfiles();
 
         // Auto-switch to the newly added provider.
-        LoadProfile(SavedProfiles.Last(p => p.Name == name));
+        await LoadProfileAsync(SavedProfiles.Last(p => p.Name == name));
 
         NewProfileName = string.Empty;
         StatusMessage = $"Provider '{name}' added and activated.";
     }
 
     [RelayCommand]
-    private void LoadProfile(ProviderProfile profile)
+    private async Task LoadProfileAsync(ProviderProfile profile)
     {
         _suppressAutoSave = true;
         try
@@ -387,9 +387,13 @@ public partial class SettingsViewModel : ViewModelBase
             SelectedProvider = profile.Provider;
             ApiKey = profile.ApiKey;
             BaseUrl = profile.BaseUrl;
-            ModelName = profile.Model;
             MaxOutputTokens = profile.MaxTokens;
             SelectedProfile = profile;
+
+            // Wait for model list to load before setting ModelName,
+            // otherwise AutoCompleteBox clears it when AvailableModels is repopulated.
+            await LoadModelsForProviderAsync(profile.Provider);
+            ModelName = profile.Model;
         }
         finally
         {
@@ -397,7 +401,7 @@ public partial class SettingsViewModel : ViewModelBase
         }
 
         // Single save with all values set.
-        ScheduleAutoSave();
+        await SaveAsync();
         StatusMessage = $"Switched to '{profile.Name}'.";
     }
 

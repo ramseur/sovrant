@@ -55,8 +55,8 @@ public partial class MessageViewModel : ViewModelBase
     [ObservableProperty]
     private string _errorMessage = string.Empty;
 
-    /// <summary>Text with HTML escaped outside code blocks, safe for markdown rendering.</summary>
-    public string SafeMarkdown => EscapeHtmlOutsideCodeBlocks(Text);
+    /// <summary>Raw text passed to the Markdig-based markdown presenter.</summary>
+    public string SafeMarkdown => Text;
 
     public ObservableCollection<ToolUseViewModel> ToolUses { get; } = [];
 

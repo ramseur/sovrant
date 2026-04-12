@@ -67,7 +67,7 @@ public partial class ActiveContextViewModel : ViewModelBase
             await LoadWorkspacesAsync();
 
             // Default to personal workspace.
-            var personal = Workspaces.FirstOrDefault(w => w.Type == "personal");
+            var personal = Workspaces.FirstOrDefault(w => w.Type.Equals("personal", StringComparison.OrdinalIgnoreCase));
             if (personal is not null)
             {
                 await Dispatcher.UIThread.InvokeAsync(() => SelectedWorkspace = personal);

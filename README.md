@@ -4,13 +4,13 @@
 
 Sovrant is a general-purpose platform for running autonomous AI agents that can hold persistent conversations, use tools, coordinate teams of sub-agents, and integrate with any LLM provider. It is not limited to coding — Sovrant powers chat interfaces, research workflows, business process automation, content creation, project management, and any task that benefits from tool-augmented, session-persistent AI.
 
-The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HTTP server** for team and application integration, an **MCP server** for IDE embedding, or via **webhooks** from Slack, Teams, Discord, and custom systems. Agents read and write files, execute shell commands, search the web, call tools autonomously, delegate to sub-agents, and maintain full conversation history across sessions — all with configurable permission controls.
+The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HTTP server** for team and application integration, an **MCP server** for IDE embedding, a **desktop application** (Windows/macOS/Linux via Avalonia), a **web application** (Blazor Server), or via **webhooks** from Slack, Teams, Discord, and custom systems. Agents read and write files, execute shell commands, search the web, call tools autonomously, delegate to sub-agents, and maintain full conversation history across sessions — all with configurable permission controls.
 
-> **Architecture note:** The CLI and Server are independent frontends. Both consume the runtime layer (`Sovrant.Runtime`) directly — the server does **not** depend on the CLI. You can deploy the HTTP server without any CLI components.
+> **Architecture note:** The CLI, Server, Desktop, and Web are independent frontends. All consume the runtime layer (`Sovrant.Runtime`) directly — the server does **not** depend on the CLI, and the desktop/web apps run the runtime in-process. You can deploy any frontend independently.
 
 **Runtime:** .NET 10 / C# 13
 **License:** [see LICENSE]
-**Status:** Engine fully functional. 45 tools. 24 agent templates. 32 built-in skills. 28 server endpoints. Multi-agent team orchestration. Swarm orchestrator. Eval framework. MCP server mode. Frontend SDK. 910 tests passing.
+**Status:** Engine fully functional. 45 tools. 24 agent templates. 32 built-in skills. 95 server endpoints. Multi-agent team orchestration. Swarm orchestrator. Eval framework. MCP server mode. Desktop app. Web app. Frontend SDK. 1,285 tests passing.
 
 ---
 
@@ -26,6 +26,8 @@ The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HT
 - [Eval Framework](#eval-framework)
 - [Providers](#providers)
 - [Server API](#server-api)
+- [Desktop App](#desktop-app)
+- [Web App](#web-app)
 - [Frontend SDK](#frontend-sdk)
 - [MCP Server Mode](#mcp-server-mode)
 - [LSP Integration](#lsp-integration)
@@ -35,6 +37,7 @@ The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HT
 - [Configuration](#configuration)
 - [Production Deployment](#production-deployment)
 - [Tests](#tests)
+- [Roadmap](#roadmap)
 - [Documentation](#documentation)
 
 ---
@@ -42,7 +45,7 @@ The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HT
 ## Key Features
 
 ### Provider-Agnostic LLM Routing
-Connect to **any OpenAI-compatible API** — OpenAI, Anthropic (via proxy), Google Gemini, Ollama (local), or any provider that speaks the OpenAI chat completions format. The `SmartRouter` pings all configured providers on startup, scores them by latency, cost, and error rate, and routes each request to the optimal one. Switch providers by changing an environment variable — no code changes.
+Connect to **any OpenAI-compatible API** — OpenAI, OpenRouter, Google Gemini, DeepSeek, Groq, Mistral, Together AI, Ollama (local), LM Studio (local), Azure OpenAI, or any provider that speaks the OpenAI chat completions format. The `SmartRouter` pings all configured providers on startup, scores them by latency, cost, and error rate, and routes each request to the optimal one. Switch providers by changing an environment variable or from the desktop/web settings UI — no code changes.
 
 ### Intent-Aware Model Routing
 Automatically selects the best model for each turn based on what you're asking. A rule-based `IntentClassifier` categorizes every input into one of 10 intent classes (`SimpleQa`, `CodeGeneration`, `Refactor`, `Planning`, `Debugging`, etc.) with a complexity score (0.0-1.0), then routes to the appropriate model tier (`fast` / `standard` / `high`). The `ModelTierResolver` auto-assigns your discovered models into tiers from OpenRouter pricing data — no manual configuration needed. Simple questions go to cheap/fast models; complex reasoning goes to your strongest model.
@@ -67,6 +70,12 @@ sovrant router models
 sovrant router status
 ```
 
+### Desktop Application (Avalonia)
+Full-featured desktop app for Windows, macOS, and Linux. Dark/light theming, sidebar navigation with workspace/project context, streaming chat with tool use blocks and inline approve/deny, markdown rendering, multi-provider settings with profile management, and CRUD pages for all knowledge and orchestration entities (artifacts, tools, skills, agents, memory, projects, workspaces, multi-agent teams, integrations, automations, governance). First-run setup wizard for provider configuration.
+
+### Web Application (Blazor Server)
+Browser-based UI running the full runtime in-process via Blazor Server (SignalR). Matches the desktop feature set: streaming chat, tool use with confirmation, sidebar navigation, workspace/project management, settings with live model switching, and all 15 pages. Runs on port 5100. Designed for dual-mode: embedded mode (current) runs the runtime in-process; remote mode (future) can talk to `Sovrant.Server` via HTTP without changing any components.
+
 ### Swarm Orchestrator (Auto-Decomposition + Parallel DAG Execution)
 Submit a single complex prompt and the swarm auto-decomposes it into a task DAG, executes tasks in parallel waves via specialized agents, enforces file-level locking and token budgets, and runs an optional quality gate review. OFF by default — enable in `.sovrant/swarm.json`. Different orchestrations can reference different multi-agent teams, so the same swarm engine can leverage purpose-built agent rosters per use case. Available via CLI (`sovrant swarm "task"`), the `Swarm` tool, `/swarm` slash command, and `POST /v1/swarm` (SSE streaming).
 
@@ -89,7 +98,7 @@ Create persistent named agents with specific roles, custom system prompts, and t
 Every conversation is stored in a SQLite database (`~/.sovrant/data/sovrant.db`) with full-text search via FTS5. Resume sessions by name across CLI invocations or HTTP requests. The server keeps one runtime per session in memory for instant history access. Automatic context compaction when conversations exceed token limits. Optional dual-write to legacy JSONL files via `SOVRANT_SESSION_JSONL=true`. See [Persistence](docs/persistence.md).
 
 ### OpenAI-Compatible HTTP Server
-Drop-in replacement for OpenAI's chat completions API with streaming (SSE) support. 14 endpoints covering chat, sessions, config, status, models, usage, and webhooks. Any frontend built for the OpenAI API works with Sovrant.
+Drop-in replacement for OpenAI's chat completions API with streaming (SSE) support. 95 endpoints covering chat, sessions, config, status, models, usage, webhooks, projects, workspaces, teams, agents, skills, tools, evals, swarm, and user management. Any frontend built for the OpenAI API works with Sovrant.
 
 ### MCP Server Mode
 Expose all tools and resources via the Model Context Protocol (stdio transport). Connect Sovrant to VS Code, Cursor, Windsurf, or any MCP-aware IDE as a tool server — no extension required.
@@ -129,6 +138,25 @@ cd sovrant-engine
 git checkout sovrant-openc-dotnet-port
 dotnet restore
 dotnet build
+```
+
+### Desktop App
+
+The fastest way to get started. Full GUI with settings, chat, and all management pages.
+
+```bash
+dotnet run --project src/Sovrant.Desktop
+```
+
+On first launch, the setup wizard guides you through provider configuration (API key, model selection). Supports OpenAI, OpenRouter, DeepSeek, Groq, Mistral, Together AI, Google, Azure OpenAI, Ollama, and LM Studio.
+
+### Web App
+
+Browser-based UI on port 5100 with the full runtime embedded.
+
+```bash
+dotnet run --project src/Sovrant.Web
+# Open http://localhost:5100
 ```
 
 ### CLI
@@ -226,67 +254,73 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  Clients                                                     │
-│  ┌────────────┐   ┌──────────────────┐   ┌────────────────┐  │
-│  │ CLI (REPL) │   │  Sovrant.Server  │   │ Frontend / SDK │  │
-│  │ prompt     │   │  HTTP :5200      │   │ (browser/Node) │  │
-│  └─────┬──────��   └────────┬─────────┘   └───────┬────────┘  │
-└────────┼───────────────────┼─────────────────────┼───────────┘
-         │                   │  OpenAI-compat API   │
-         └──────────┬─────────┘─────────────────────┘
-                    │
-         ┌──────────▼─────────────────────────────────────┐
-         │  Sovrant.Runtime                               │
-         │                                                │
-         │  ConversationRuntime                           │
-         │  ├── agentic loop (up to 20 tool rounds)       │
-         │  ├── session history (List<InputMessage>)      │
-         │  ├── permission gate                           │
-         │  └── MCP client (tool registration)            │
-         │                                                │
-         │  IRuntimeSessionPool  (one runtime/session_id) │
-         │  ISessionStore  (SQLite ~/.sovrant/data/)       │
-         └──────────┬──────────────────┬──────────────────┘
-                    │                  │
-         ┌──────────▼───────┐  ┌───────▼───────��──────────────┐
-         │  Sovrant.Api     │  │  Sovrant.Tools               │
-         │                  │  │                              │
-         │  SmartRouter     │  │  File:  Read Write Edit      │
-         │  ├── OpenAI      │  │         Glob Grep LS         │
-         │  ├── Ollama      │  │  Shell: Bash PowerShell REPL │
-         │  └── Native API  │  │  Web:   WebFetch WebSearch   │
-         │                  │  │  Tasks: TodoWrite Task*      │
-         │  health ping     │  │  Agent  AskUser  Sleep       │
-         │  latency/cost    │  │  PlanMode  Worktree          │
-         │  error rate      │  │  Skill  ToolSearch           │
-         └──────────┬───────┘  │  MCP: ListResources Read     │
-                    │          │  NotebookEdit                │
-                    │          │  Team: Create Delete         │
-                    │          │        Status Delegate       │
-                    │          └──────────┬───────────────────┘
-                    │                     │
-         ┌─────────┘          ┌───────────▼──────────────────┐
-         │                    │  Sovrant.Agents              │
-         │                    │                              │
-         │                    │  ITeamRegistry               │
-         │                    │  SovrantAgentFactory          │
-         │                    │  ├── AgentPrompts (6 roles)  │
-         │                    │  └── FilteredToolRegistry    │
-         │                    │                              │
-         │                    │  IMultiAgentSystem            │
-         │                    │  ├── Isolated (process-based) │
-         │                    │  └── Shared (in-process)     │
-         │                    │                              │
-         │                    │  Swarm Orchestrator           │
-         │                    │  ├── LlmSwarmDecomposer      │
-         │                    │  ├── SwarmOrchestrator (DAG)  │
-         │                    │  └── SwarmQualityGate         │
-         │                    └──────────────────────────────┘
-         │
-         ┌──────────▼───────────────┐
-         │  LLM Providers           │
-         │  OpenAI · Gemini · Ollama│
-         │  · Native API            │
-         └──────────────────────────┘
+│  ┌──────────┐ ┌────────────┐ ┌──────────┐ ┌──────────────┐  │
+│  │ CLI      │ │  Desktop   │ │   Web    │ │  Server      │  │
+│  │ (REPL)   │ │ (Avalonia) │ │ (Blazor) │ │ HTTP :5200   │  │
+│  └────┬─────┘ └─────┬──────┘ └────┬─────┘ └──────┬───────┘  │
+│       │             │             │               │          │
+│  ┌────┴─────────────┴─────────────┴───────────────┘          │
+│  │  All consume Sovrant.Runtime in-process                   │
+└──┼───────────────────────────────────────────────────────────┘
+   │
+   ┌──────────▼─────────────────────────────────────┐
+   │  Sovrant.Runtime                               │
+   │                                                │
+   │  ConversationRuntime                           │
+   │  ├── agentic loop (up to 20 tool rounds)       │
+   │  ├── session history (List<InputMessage>)      │
+   │  ├── permission gate                           │
+   │  └── MCP client (tool registration)            │
+   │                                                │
+   │  IRuntimeSessionPool  (one runtime/session_id) │
+   │  ISessionStore  (SQLite ~/.sovrant/data/)       │
+   └──────────┬──────────────────┬──────────────────┘
+              │                  │
+   ┌──────────▼───────┐  ┌──────▼────────────────────┐
+   │  Sovrant.Api     │  │  Sovrant.Tools             │
+   │                  │  │                            │
+   │  SmartRouter     │  │  File:  Read Write Edit    │
+   │  ├── OpenAI      │  │         Glob Grep LS       │
+   │  ├── OpenRouter   │  │  Shell: Bash PowerShell   │
+   │  ├── DeepSeek    │  │         REPL               │
+   │  ├── Groq        │  │  Web:   WebFetch WebSearch │
+   │  ├── Mistral     │  │  Tasks: TodoWrite Task*    │
+   │  ├── Google      │  │  Agent  AskUser  Sleep     │
+   │  ├── Ollama      │  │  PlanMode  Worktree        │
+   │  ├── LM Studio   │  │  Skill  ToolSearch         │
+   │  └── Custom      │  │  MCP: ListResources Read   │
+   │                  │  │  NotebookEdit              │
+   │  health ping     │  │  Team: Create Delete       │
+   │  latency/cost    │  │        Status Delegate     │
+   │  error rate      │  └──────────┬─────────────────┘
+   └──────────┬───────┘             │
+              │          ┌──────────▼──────────────────┐
+              │          │  Sovrant.Agents              │
+              │          │                              │
+              │          │  ITeamRegistry               │
+              │          │  SovrantAgentFactory          │
+              │          │  ├── AgentPrompts (6 roles)  │
+              │          │  └── FilteredToolRegistry    │
+              │          │                              │
+              │          │  IMultiAgentSystem            │
+              │          │  ├── Isolated (process-based) │
+              │          │  └── Shared (in-process)     │
+              │          │                              │
+              │          │  Swarm Orchestrator           │
+              │          │  ├── LlmSwarmDecomposer      │
+              │          │  ├── SwarmOrchestrator (DAG)  │
+              │          │  └── SwarmQualityGate         │
+              │          └──────────────────────────────┘
+              │
+   ┌──────────▼───────────────┐
+   │  LLM Providers           │
+   │  OpenAI · OpenRouter ·   │
+   │  DeepSeek · Groq ·       │
+   │  Mistral · Google ·      │
+   │  Together AI · Ollama ·  │
+   │  LM Studio · Azure ·    │
+   │  Custom                  │
+   └──────────────────────────┘
 ```
 
 ### Projects
@@ -294,9 +328,11 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
 | Project | Description |
 |---|---|
 | `Sovrant.Cli` | Interactive REPL and one-shot `prompt` CLI. Entry point for local use. |
-| `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus session management and live config. |
+| `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus session, project, workspace, team, and user management. 95 endpoints. |
+| `Sovrant.Desktop` | Avalonia desktop app — full GUI with streaming chat, tool use, settings, and all knowledge/orchestration CRUD pages. |
+| `Sovrant.Web` | Blazor Server web app — browser-based UI with embedded runtime, matching the desktop feature set. Port 5100. |
 | `Sovrant.Runtime` | Core agentic loop, SQLite persistence layer (sessions, memory, audit, credentials, token usage), permission system, tool executor, MCP client. |
-| `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, native messages API. SmartRouter with health/latency/cost scoring. |
+| `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, native messages API. SmartRouter with health/latency/cost scoring. Per-model max_tokens capping. |
 | `Sovrant.Tools` | All 45 tool implementations (core + LSP + team + swarm + MCP + quality + skills). 32 built-in skill `.md` files. |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/clear`, `/session`, `/memory`, etc.). |
 | `Sovrant.Agents` | Multi-agent orchestration: team registry, agent factory, dual backends (isolated process-per-agent + shared in-process), 24 agent templates, tool filtering per agent, swarm orchestrator (auto-decomposition, DAG execution, file locking, quality gate). |
@@ -315,6 +351,8 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
 **Tool execution is permission-gated.** Every tool call goes through `IPermissionPolicy` before execution. The CLI uses `ModeAwarePermissionPolicy` (interactive prompts based on `PermissionMode`). The server defaults to `DontAsk` and can be changed live via `PUT /v1/config`.
 
 **Dual agent backends.** `IMultiAgentSystem` has two interchangeable backends. The active backend is selected at startup via `AGENT_MODE`; no other part of the system depends on the concrete implementation.
+
+**Per-model token capping.** The runtime automatically caps `max_tokens` / `max_completion_tokens` to model-specific limits (e.g., gpt-4o: 16,384, gpt-4.1: 32,768, legacy gpt-4: 4,096) to prevent 400 errors from providers that enforce strict limits. OpenAI's direct API also requires `max_completion_tokens` instead of `max_tokens` — the provider layer handles this automatically.
 
 ---
 
@@ -455,17 +493,12 @@ Sovrant ships **two distinct multi-agent systems** that share the same agent fac
 | **Decomposition** | Caller (the LLM) decides what to delegate and when | `LlmSwarmDecomposer` calls an LLM to produce a task DAG with deps and predicted file touches |
 | **Concurrency** | Sequential — one delegation at a time | Wave-based parallelism with topological sort + concurrency cap |
 | **Coordination** | None — each delegation is independent | File locks (`SwarmFileLockManager`), retries, quality gate, token budget |
-| **State / observability** | In-memory `ConcurrentDictionary`, lost on restart | JSONL session files (Phase 37.5: SQLite-backed) — fully replayable |
-| **Code footprint** | ~90 LOC + 4 small tools | ~1,376 LOC across 14 files |
-| **Workspace scoping** | Not yet (process-global registry) | Wired into `SwarmOrchestrator` (`WorkspaceContext`); Phase 37.5 stamps it onto every event |
 
-**Use Team when** the model needs persistent specialists it can call repeatedly during the same conversation — e.g., spin up a "security reviewer" with restricted tools at the start of a session and call back to it 10 turns later with new context.
+**Use Team when** the model needs persistent specialists it can call repeatedly during the same conversation.
 
-**Use Swarm when** you have one large task that benefits from parallel sub-tasks with file-touch coordination — e.g., "refactor auth across the whole codebase" where multiple files can be edited concurrently as long as no two agents touch the same file. The decomposition cost is an LLM call up front, so it only pays off when parallelism actually saves wall-clock time vs. the decomposition overhead.
+**Use Swarm when** you have one large task that benefits from parallel sub-tasks with file-touch coordination.
 
-**They are not exclusive.** A swarm plan can have a `TeamId` to draw its workers from a Team registry instead of from templates — see [Using Teams with Swarms](#using-teams-with-swarms) below.
-
-For the full architectural comparison, value-add analysis, and consolidation roadmap, see [`docs/agent-systems.md`](docs/agent-systems.md).
+**They are not exclusive.** A swarm plan can have a `TeamId` to draw its workers from a Team registry instead of from templates.
 
 ---
 
@@ -489,48 +522,9 @@ User prompt → [1. Decompose] → SwarmPlan (task DAG with waves)
 
 **Phase 3 — Quality Gate (optional):** A reviewer agent scores the combined output on a 1-10 scale with pass/needs_revision/fail verdict.
 
-### Using Teams with Swarms
-
-Different orchestrations can reference different multi-agent teams. When a swarm plan has a `TeamId`, the orchestrator resolves workers from that team before falling back to templates.
-
-```bash
-# CLI
-sovrant swarm "Refactor auth to JWT" --dry-run
-
-# Tool (from within an agent conversation)
-Swarm(prompt: "Add pagination to all API endpoints", team: "backend-team")
-
-# API
-curl -X POST http://localhost:5200/v1/swarm \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"prompt": "Add pagination", "team": "backend-team"}'
-```
-
-### Agent Isolation Model
-
-Swarm agents are isolated in execution context but share the working directory — they can all read and write files in the same project folder. Isolation is enforced through a layered system that prevents conflicts without requiring separate copies of the codebase.
-
-| Resource | Isolation Level | How |
-|---|---|---|
-| **Conversation history** | Per agent | Each agent gets its own `ConversationRuntime` with independent session history |
-| **Tool executor** | Per task | Each swarm task gets a `SwarmToolExecutor` decorator that enforces file locks at the tool level |
-| **File writes** | Enforced | `WriteFile`, `EditFile`, and `NotebookEdit` are intercepted — blocks if another task holds the lock, auto-acquires on first write |
-| **File reads** | Shared | Any agent can read any file at any time |
-| **Console prompts** | Serialized | Interactive confirmation prompts queue via `SemaphoreSlim` — no Spectre.Console concurrency crashes |
-| **Token tracking** | Thread-safe | `Interlocked.Add` for concurrent budget enforcement |
-| **Working directory** | Shared | All agents operate on the same folder — no git worktrees or copies required |
-
-**File lock enforcement** works at two levels:
-
-1. **Declared locks (pre-execution):** The LLM decomposer predicts which files each task will modify (`FilesToModify`). The orchestrator acquires pessimistic locks before a task starts. If a file is already held by another task, the task is blocked.
-
-2. **Auto-acquired locks (during execution):** When an agent writes to a file it didn't declare, the `SwarmToolExecutor` automatically acquires a lock before allowing the write. If the file is already locked by a different task, the write is rejected with an error explaining the conflict.
-
-This means agents are safe to run in parallel on the same codebase — they won't silently overwrite each other's work. The model scales to future peer-to-peer agent communication where agents can coordinate directly without going through the orchestrator.
-
 ### Configuration
 
-Config lives in `.sovrant/swarm.json` (OFF by default, designed for SQLite migration later):
+Config lives in `.sovrant/swarm.json` (OFF by default):
 
 ```json
 {
@@ -546,15 +540,6 @@ Config lives in `.sovrant/swarm.json` (OFF by default, designed for SQLite migra
 }
 ```
 
-### Server Endpoints
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/v1/swarm` | Start a swarm (SSE streaming of events) |
-| `GET` | `/v1/swarm/{id}` | Get swarm status and task states |
-| `GET` | `/v1/swarm/{id}/events` | Replay JSONL event log |
-| `GET` | `/v1/swarm/sessions` | List all swarm session IDs |
-
 ---
 
 ## Eval Framework
@@ -568,12 +553,6 @@ Define evaluation suites as JSON files in `.sovrant/evals/`. Run them from the C
 | **Code** | Runs a command with the output as a temp file. Checks exit code + optional regex pattern. |
 | **Model** | Sends output to an LLM with a rubric prompt. Parses `VERDICT: PASS/FAIL` + `SCORE: N`. |
 | **Human** | Returns "pending human review" — designed for manual assessment workflows. |
-
-### Metrics
-
-- **pass@1** — did the first attempt pass?
-- **pass@k** — did any of k attempts pass? (configurable via `attempts` per eval)
-- Trend tracking: results persisted to `~/.sovrant/evals/results/` for historical comparison (SQLite tables ready for future migration)
 
 ### Usage
 
@@ -594,10 +573,18 @@ GET  /v1/evals/{name}/history
 
 | Provider | How to enable |
 |---|---|
-| OpenAI | `LLM_API_KEY=sk-...` (default) |
+| OpenAI | `LLM_API_KEY=sk-...` (default base URL) |
+| OpenRouter | `LLM_BASE_URL=https://openrouter.ai/api/v1` + `LLM_API_KEY=sk-or-v1-...` |
 | Google AI Studio (Gemini) | `LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/` + `LLM_API_KEY=...` |
-| Ollama (local) | `OLLAMA_BASE_URL=http://localhost:11434/v1` |
-| Native messages API | `PROVIDER_BASE_URL=https://api.anthropic.com` + `PROVIDER_API_KEY=...` |
+| DeepSeek | `LLM_BASE_URL=https://api.deepseek.com/v1` + `LLM_API_KEY=...` |
+| Groq | `LLM_BASE_URL=https://api.groq.com/openai/v1` + `LLM_API_KEY=...` |
+| Mistral | `LLM_BASE_URL=https://api.mistral.ai/v1` + `LLM_API_KEY=...` |
+| Together AI | `LLM_BASE_URL=https://api.together.xyz/v1` + `LLM_API_KEY=...` |
+| Azure OpenAI | `LLM_BASE_URL=https://your-resource.openai.azure.com/openai/deployments/your-deployment/` + `LLM_API_KEY=...` |
+| Ollama (local) | `LLM_BASE_URL=http://localhost:11434/v1` (no API key needed) |
+| LM Studio (local) | `LLM_BASE_URL=http://localhost:1234/v1` (no API key needed) |
+
+> The desktop and web apps provide a GUI for managing providers with saved profiles — no environment variables needed.
 
 > Gemma models via Google AI Studio do not support function calling over the OpenAI-compat endpoint. Use Gemini 2.5 Flash or a newer Gemini model.
 
@@ -607,31 +594,55 @@ The `SmartRouter` pings all configured providers on startup, scores them by late
 
 ## Server API
 
-The server exposes an OpenAI-compatible chat completions endpoint plus session management, live config, status, models, evals, and swarm orchestration. See [`docs/server.md`](docs/server.md) for the full API reference.
+The server exposes an OpenAI-compatible chat completions endpoint plus comprehensive management APIs. 95 endpoints covering chat, sessions, config, status, models, usage, webhooks, projects, workspaces, teams, agents, skills, tools, evals, swarm, and user management. See [`docs/server.md`](docs/server.md) for the full API reference.
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/health` | Unauthenticated health check |
-| `POST` | `/v1/chat/completions` | Agentic chat — streaming (SSE) or non-streaming |
-| `GET` | `/v1/config` | Current live configuration |
-| `PUT` | `/v1/config` | Update model, API key, base URL, or permission mode without restart |
-| `GET` | `/v1/status` | Provider health, latency, and routing scores |
-| `GET` | `/v1/models` | OpenAI-compatible model list |
-| `GET` | `/v1/sessions` | List all saved session IDs |
-| `GET` | `/v1/sessions/{id}` | Get message history and token totals for a session |
-| `DELETE` | `/v1/sessions/{id}` | Delete a session |
-| `GET` | `/v1/sessions/{id}/config` | Get per-session config overlay |
-| `PUT` | `/v1/sessions/{id}/config` | Update per-session config without affecting other sessions |
-| `GET` | `/v1/usage` | Per-session token usage summary |
-| `POST` | `/v1/webhook` | Generic webhook — Slack, Teams, Discord, or custom sources |
-| `GET` | `/v1/sessions/{id}/export` | Export session as human-readable markdown |
-| `GET` | `/v1/evals` | List available eval suites |
-| `GET` | `/v1/evals/{name}/history` | Get eval trend data for a suite |
-| `POST` | `/v1/evals/run` | Run a named eval suite |
-| `POST` | `/v1/swarm` | Start a swarm orchestration (SSE streaming) |
-| `GET` | `/v1/swarm/{id}` | Get swarm status |
-| `GET` | `/v1/swarm/{id}/events` | Replay swarm JSONL events |
-| `GET` | `/v1/swarm/sessions` | List all swarm sessions |
+---
+
+## Desktop App
+
+The Avalonia-based desktop app provides a full GUI for interacting with the Sovrant runtime. It runs on Windows, macOS, and Linux.
+
+**Features:**
+- Streaming chat with thinking indicators, tool use blocks, and inline approve/deny
+- Markdown rendering with code blocks, lists, headings, and inline formatting
+- Dark and light theme toggle
+- Sidebar navigation with workspace/project context selectors
+- Settings with provider profiles (add, activate, delete), live model switching, and model auto-complete
+- 15 management pages: Chat, Settings, Diagnostics, Artifacts, Tools, Skills, Agents, Memory, Projects, Workspaces, Multi-Agent (Teams + Swarm + Claws), Integrations, Automations, Governance, Setup
+- First-run setup wizard
+- Session history with search
+- Governance configuration (blocked commands, protected files, secret detection)
+- Auto-focus input after send, workspace auto-selection on startup
+
+```bash
+dotnet run --project src/Sovrant.Desktop
+```
+
+---
+
+## Web App
+
+The Blazor Server web app provides a browser-based UI with the full runtime embedded in-process via SignalR.
+
+**Features:**
+- Streaming chat with real-time token rendering via SignalR circuit
+- Tool use blocks with inline Allow/Deny confirmation
+- Markdown rendering via Markdig (server-side HTML)
+- Dark/light theme with CSS custom properties
+- Sidebar navigation matching the desktop layout
+- Cross-component state synchronization (sidebar, settings, projects, chat)
+- Workspace and project management with context switching
+- Provider profile management with live model switching
+- All 15 pages matching the desktop feature set
+- Centered layout on wide screens
+- Auto-focus input after send
+
+```bash
+dotnet run --project src/Sovrant.Web
+# Open http://localhost:5100
+```
+
+**Dual-mode design:** Components depend on runtime interfaces (`IConversationRuntime`, `ISessionStore`, `IToolRegistry`, etc.). In embedded mode (current), these are real implementations via `AddSovrantRuntime()`. In remote mode (future), they can be HTTP client wrappers calling `Sovrant.Server`'s endpoints — components never change.
 
 ---
 
@@ -761,6 +772,8 @@ Place a markdown file at `.sovrant/commands/{name}.md`. Invoking `/{name}` in th
 | `SOVRANT_MCP_TOKEN` | No | Required bearer token for MCP server mode. Unset = no auth. |
 | `SOVRANT_MCP_TOOLS` | No | Comma-separated allow-list of tools to expose in MCP server mode. Unset = all tools. |
 
+> **Desktop and Web apps** store provider configuration in `~/.sovrant/settings.json` and `~/.sovrant/providers.json` via the Settings UI — no environment variables needed for basic usage.
+
 ---
 
 ## File Locations
@@ -771,10 +784,12 @@ Sovrant stores all runtime data under `~/.sovrant/`. On each platform this resol
 |---|---|---|---|
 | `~/.sovrant/` | `C:\Users\{user}\.sovrant\` | `/home/{user}/.sovrant/` | Root data directory |
 | `~/.sovrant/data/sovrant.db` | `C:\Users\{user}\.sovrant\data\sovrant.db` | `/home/{user}/.sovrant/data/sovrant.db` | SQLite database (sessions, audit, memory, credentials, evals, swarm) |
+| `~/.sovrant/settings.json` | `C:\Users\{user}\.sovrant\settings.json` | `/home/{user}/.sovrant/settings.json` | User settings (model, provider, API key, permissions) |
+| `~/.sovrant/providers.json` | `C:\Users\{user}\.sovrant\providers.json` | `/home/{user}/.sovrant/providers.json` | Saved provider profiles (desktop/web) |
+| `~/.sovrant/governance.json` | `C:\Users\{user}\.sovrant\governance.json` | `/home/{user}/.sovrant/governance.json` | Governance config (blocked commands, protected files, secrets) |
 | `~/.sovrant/logs/` | `C:\Users\{user}\.sovrant\logs\` | `/home/{user}/.sovrant/logs/` | Rolling application log files |
 | `~/.sovrant/credentials/.keystore` | `C:\Users\{user}\.sovrant\credentials\.keystore` | `/home/{user}/.sovrant/credentials/.keystore` | AES-256-GCM master key (auto-generated on first use) |
 | `~/.sovrant/sessions/` | `C:\Users\{user}\.sovrant\sessions\` | `/home/{user}/.sovrant/sessions/` | Legacy JSONL session files (only when `SOVRANT_SESSION_JSONL=true`) |
-| `~/.sovrant/settings.json` | `C:\Users\{user}\.sovrant\settings.json` | `/home/{user}/.sovrant/settings.json` | User settings |
 | `~/.sovrant/evals/` | `C:\Users\{user}\.sovrant\evals\` | `/home/{user}/.sovrant/evals/` | Eval suite definitions and results |
 
 > **Auto-creation:** The `data/` directory and SQLite database are created automatically on first run — no installer required. If directory creation fails (e.g. permissions), the error is logged and the application continues with degraded persistence.
@@ -814,21 +829,6 @@ dotnet publish src/Sovrant.Server/Sovrant.Server.csproj \
   -o ./publish/server
 ```
 
-### Reverse Proxy (nginx)
-
-Disable response buffering for SSE streaming:
-
-```nginx
-location /v1/chat/completions {
-    proxy_pass http://localhost:5200;
-    proxy_buffering off;
-    proxy_cache off;
-    proxy_set_header Connection '';
-    proxy_http_version 1.1;
-    chunked_transfer_encoding off;
-}
-```
-
 ### Docker
 
 ```dockerfile
@@ -864,7 +864,7 @@ Replace `-r linux-x64` with `-r win-x64` in all commands above.
 ## Tests
 
 ```bash
-dotnet test Sovrant.slnx   # 910 tests across 9 projects
+dotnet test Sovrant.slnx   # 1,285 tests across 9 projects
 ```
 
 | Project | Tests |
@@ -881,15 +881,37 @@ dotnet test Sovrant.slnx   # 910 tests across 9 projects
 
 ---
 
+## Roadmap
+
+### Planned
+
+- **Knowledge Pages** — User-created markdown knowledge pages stored in the database, injectable into system prompt context. Tag-based organization, search, and management via both desktop and web UI. Future phases will support connecting external knowledge sources through integrations.
+- **Claws** — Third multi-agent orchestration mode (alongside Teams and Swarm). Details TBD.
+- **Web Remote Mode** — Connect the Blazor web app to `Sovrant.Server` via HTTP instead of embedding the runtime in-process, enabling multi-user deployments.
+- **External Knowledge Integrations** — Connect knowledge sources (Google Drive, Notion, Confluence, etc.) for automatic context enrichment.
+
+### Recently Completed
+
+- Desktop app (Avalonia) — full GUI with 15 pages, streaming chat, tool use, setup wizard
+- Web app (Blazor Server) — browser-based UI matching desktop feature set, port 5100
+- Cross-component state synchronization (ActiveContextService)
+- Per-model max_tokens capping for OpenAI compatibility
+- Provider profile management with live model switching
+- Workspace/project CRUD with sidebar context switching
+- Governance configuration UI (blocked commands, protected files, secret detection)
+- Multi-agent UI with Teams, Swarm, and Claws tabs
+- Markdig-based markdown rendering (desktop + web)
+
+---
+
 ## Documentation
 
 | Document | Contents |
 |---|---|
-| [`docs/server.md`](docs/server.md) | Full server API reference — all 14 endpoints, auth, CORS, streaming format |
+| [`docs/server.md`](docs/server.md) | Full server API reference — all endpoints, auth, CORS, streaming format |
 | [`docs/frontend-integration.md`](docs/frontend-integration.md) | Node.js proxy setup, browser SSE client, Replit integration |
 | [`docs/engine-status.md`](docs/engine-status.md) | Tool test results, provider compatibility, known issues |
 | [`docs/ci-cd.md`](docs/ci-cd.md) | CI/CD integration — `--ci` flag, GitHub Actions action, GitLab CI template |
 | [`docs/webhooks.md`](docs/webhooks.md) | Webhook endpoint, Slack bot setup, Teams/Discord integration guides |
 | [`docs/mcp-server.md`](docs/mcp-server.md) | MCP server mode — IDE config, available tools/resources, env vars |
 | [`docs/code-review.md`](docs/code-review.md) | Code review findings and coverage report |
-

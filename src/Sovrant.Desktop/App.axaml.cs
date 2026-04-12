@@ -146,6 +146,12 @@ public partial class App : Application
                 var user = await userService.GetAsync("desktop-user").ConfigureAwait(false);
                 if (user is null)
                     await userService.CreateAsync("desktop-user", userId: "desktop-user").ConfigureAwait(false);
+
+                // Ensure a personal workspace exists for the desktop user.
+                var workspaceService = _serviceProvider.GetRequiredService<Sovrant.Runtime.Workspaces.IWorkspaceService>();
+                var personal = await workspaceService.GetPersonalAsync("desktop-user").ConfigureAwait(false);
+                if (personal is null)
+                    await workspaceService.CreatePersonalWorkspaceAsync("desktop-user").ConfigureAwait(false);
             }
             catch (Exception ex)
             {

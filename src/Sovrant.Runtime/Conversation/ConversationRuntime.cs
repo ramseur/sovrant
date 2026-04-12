@@ -739,22 +739,34 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         var slash = model.LastIndexOf('/');
         if (slash >= 0) name = model[(slash + 1)..];
 
-        // Modern gpt-4 variants that support high output — pass through
-        if (name.StartsWith("gpt-4o", StringComparison.OrdinalIgnoreCase)      // gpt-4o, gpt-4o-mini
-            || name.StartsWith("gpt-4.1", StringComparison.OrdinalIgnoreCase)  // gpt-4.1, gpt-4.1-mini
-            || name.StartsWith("gpt-4.5", StringComparison.OrdinalIgnoreCase)  // gpt-4.5
-            || name.StartsWith("gpt-5", StringComparison.OrdinalIgnoreCase))   // gpt-5
-        {
+        // gpt-4o / gpt-4o-mini — max output 16384
+        if (name.StartsWith("gpt-4o", StringComparison.OrdinalIgnoreCase))
+            return Math.Min(configured, 16_384);
+
+        // gpt-4.1, gpt-4.1-mini, gpt-4.1-nano — max output 32768
+        if (name.StartsWith("gpt-4.1", StringComparison.OrdinalIgnoreCase))
+            return Math.Min(configured, 32_768);
+
+        // gpt-4.5 — max output 16384
+        if (name.StartsWith("gpt-4.5", StringComparison.OrdinalIgnoreCase))
+            return Math.Min(configured, 16_384);
+
+        // gpt-5 — pass through (high output limit)
+        if (name.StartsWith("gpt-5", StringComparison.OrdinalIgnoreCase))
             return configured;
-        }
+
+        // o-series reasoning models — max output varies but 100K is safe
+        if (name.StartsWith("o1", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("o3", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("o4", StringComparison.OrdinalIgnoreCase))
+            return Math.Min(configured, 100_000);
 
         // Legacy gpt-4 and gpt-3.5 — cap at 4096
         if (name.StartsWith("gpt-4", StringComparison.OrdinalIgnoreCase)
             || name.StartsWith("gpt-3", StringComparison.OrdinalIgnoreCase))
-        {
             return Math.Min(configured, 4096);
-        }
 
+        // Non-OpenAI models (DeepSeek, Claude, Llama, etc.) — pass through
         return configured;
     }
 
