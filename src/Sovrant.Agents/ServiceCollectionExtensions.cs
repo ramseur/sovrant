@@ -49,10 +49,13 @@ public static class ServiceCollectionExtensions
         // Swarm orchestrator infrastructure
         services.AddSingleton(_ => SwarmConfigLoader.Load());
         services.AddSingleton<SwarmFileLockManager>();
+        services.AddSingleton<ISwarmFileLockManager>(sp => sp.GetRequiredService<SwarmFileLockManager>());
         services.AddSingleton<SwarmStateTracker>();
+        services.AddSingleton<ISwarmStateTracker>(sp => sp.GetRequiredService<SwarmStateTracker>());
         services.AddSingleton<SwarmSession>();
         services.AddSingleton<ISwarmDecomposer, LlmSwarmDecomposer>();
         services.AddSingleton<SwarmOrchestrator>();
+        services.AddSingleton<ISwarmOrchestrator>(sp => sp.GetRequiredService<SwarmOrchestrator>());
         services.AddSingleton<SwarmQualityGate>();
 
         // Unified agent orchestrator (Phase 52)

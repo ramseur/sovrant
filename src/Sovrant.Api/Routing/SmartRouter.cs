@@ -153,7 +153,7 @@ public sealed class SmartRouter : ISmartRouter, IAsyncDisposable, IDisposable
             var customTier = MatchCustomRule(lastUserText);
             if (customTier is not null)
             {
-                classification = new IntentClassification(IntentClass.ToolHeavy, 0.5f, customTier);
+                classification = new IntentClassification(IntentClass.CodeGeneration, 0.5f, customTier);
                 tier = customTier;
             }
             else

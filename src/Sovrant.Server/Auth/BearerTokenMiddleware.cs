@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Sovrant.Runtime.Auth;
+using Sovrant.Api.Config;
 
 namespace Sovrant.Server.Auth;
 
@@ -32,12 +33,11 @@ internal sealed class BearerTokenMiddleware : IMiddleware
     private readonly byte[] _expectedStaticTokenBytes;
     private readonly bool _hasStaticToken;
 
-    public BearerTokenMiddleware(IConfiguration configuration)
+    public BearerTokenMiddleware(CredentialConfig credentials)
     {
-        var staticToken =
-            Environment.GetEnvironmentVariable("SOVRANT_TOKEN")
-            ?? configuration["Server:Token"]
-            ?? string.Empty;
+        ArgumentNullException.ThrowIfNull(credentials);
+
+        var staticToken = credentials.SovrantToken;
 
         _hasStaticToken = !string.IsNullOrEmpty(staticToken);
         _expectedStaticTokenBytes = _hasStaticToken

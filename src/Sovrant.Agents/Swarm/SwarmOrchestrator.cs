@@ -14,7 +14,7 @@ namespace Sovrant.Agents.Swarm;
 /// Core swarm engine. Executes a <see cref="SwarmPlan"/> wave-by-wave with concurrency control,
 /// file locking, token budget tracking, retry logic, and event emission.
 /// </summary>
-public sealed partial class SwarmOrchestrator
+public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
 {
     private readonly SovrantAgentFactory _factory;
     private readonly AgentTemplateRegistry _templates;

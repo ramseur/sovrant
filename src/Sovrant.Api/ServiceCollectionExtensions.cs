@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Api.Auth;
 using Sovrant.Api.Capabilities;
 using Sovrant.Api.Providers;
+using Sovrant.Api.Config;
 using Sovrant.Api.Routing;
 
 namespace Sovrant.Api;
@@ -12,60 +13,25 @@ namespace Sovrant.Api;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers all LLM providers, the SmartRouter, and supporting services.
+    /// Registers all LLM providers, the SmartRouter, and supporting services
+    /// using a pre-resolved <see cref="CredentialConfig"/>.
     /// </summary>
-    /// <remarks>
-    /// Environment variable priority (highest first):
-    /// <list type="number">
-    ///   <item><description><c>LLM_API_KEY</c> / <c>LLM_BASE_URL</c></description></item>
-    ///   <item><description><c>OPENAI_API_KEY</c> / <c>OPENAI_BASE_URL</c></description></item>
-    ///   <item><description><c>PROVIDER_API_KEY</c> / <c>PROVIDER_BASE_URL</c></description></item>
-    ///   <item><description>Config file values</description></item>
-    /// </list>
-    /// </remarks>
-    /// <param name="services">The service collection.</param>
-    /// <param name="configuration">The application configuration.</param>
-    /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddLlmProviders(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        CredentialConfig credentials)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(credentials);
 
-        var apiKey = Environment.GetEnvironmentVariable("LLM_API_KEY")
-            ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")
-            ?? Environment.GetEnvironmentVariable("PROVIDER_API_KEY")
-            ?? configuration["Llm:ApiKey"]
-            ?? string.Empty;
-
-        var baseUrl = Environment.GetEnvironmentVariable("LLM_BASE_URL")
-            ?? Environment.GetEnvironmentVariable("OPENAI_BASE_URL")
-            ?? configuration["Llm:BaseUrl"]
-            ?? "https://api.openai.com/v1";
-
-        // Ensure trailing slash so relative paths (e.g. "chat/completions") resolve correctly
-        // against any base URL, including non-standard paths like Google AI Studio's /v1beta/openai/.
-        if (!baseUrl.EndsWith('/')) baseUrl += "/";
-
-        // ProviderApiProvider uses the native messages API format (/v1/messages).
-        // Only register it when a dedicated PROVIDER_BASE_URL is explicitly set — otherwise it
-        // would share the same base URL as OpenAiCompatProvider and cause 404s on incompatible hosts.
-        var providerApiUrl = Environment.GetEnvironmentVariable("PROVIDER_BASE_URL")
-            ?? configuration["Llm:ProviderBaseUrl"];
-        var providerApiKey = Environment.GetEnvironmentVariable("PROVIDER_API_KEY")
-            ?? configuration["Llm:ProviderApiKey"];
-        var hasProviderApi = !string.IsNullOrWhiteSpace(providerApiUrl);
-        if (hasProviderApi && !providerApiUrl!.EndsWith('/')) providerApiUrl += "/";
-
-        var ollamaUrl = Environment.GetEnvironmentVariable("OLLAMA_BASE_URL")
-            ?? configuration["Llm:OllamaBaseUrl"]
-            ?? "http://localhost:11434/v1";
-
-        if (!ollamaUrl.EndsWith('/')) ollamaUrl += "/";
-
-        var webSearchEnabled = string.Equals(
-            Environment.GetEnvironmentVariable("LLM_WEB_SEARCH"), "true", StringComparison.OrdinalIgnoreCase);
+        var apiKey = credentials.LlmApiKey;
+        var baseUrl = credentials.LlmBaseUrl;
+        var providerApiKey = credentials.ProviderApiKey;
+        var providerApiUrl = credentials.ProviderBaseUrl;
+        var hasProviderApi = credentials.HasProviderApi;
+        var ollamaUrl = credentials.OllamaBaseUrl;
+        var webSearchEnabled = credentials.WebSearchEnabled;
 
         var routerMode = Enum.TryParse<RouterMode>(
             Environment.GetEnvironmentVariable("ROUTER_MODE") ?? configuration["Router:Mode"], true,
@@ -87,7 +53,8 @@ public static class ServiceCollectionExtensions
             new LiveModelMetadataFetcher(
                 sp.GetRequiredService<IModelCapabilityRegistry>(),
                 sp.GetRequiredService<IHttpClientFactory>().CreateClient("ModelMetadataFetcher"),
-                sp.GetRequiredService<ILogger<LiveModelMetadataFetcher>>()));
+                sp.GetRequiredService<ILogger<LiveModelMetadataFetcher>>(),
+                sp.GetService<CredentialConfig>()));
 
         // Providers inject ILogger (non-generic base interface). Register a factory-backed instance
         // so the DI container can resolve it for typed HTTP clients.
@@ -153,6 +120,8 @@ public static class ServiceCollectionExtensions
             var config = sp.GetRequiredService<RoutingConfig>();
             return new ModelTierResolver(registry, tierLogger, config.TierModels, config.FreeModelsOnly);
         });
+
+        services.AddSingleton<IScopedProviderFactory, DefaultScopedProviderFactory>();
 
         return services;
     }

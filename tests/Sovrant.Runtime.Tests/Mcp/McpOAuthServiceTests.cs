@@ -35,14 +35,20 @@ public sealed class McpOAuthServiceTests
             config ?? ConfigWithOAuth(),
             new InMemoryCredentialStore(),
             null!,   // McpToolRegistrar — not needed for URL-generation tests
+            new StubHttpClientFactory(),
             NullLogger<McpOAuthService>.Instance);
+
+    private sealed class StubHttpClientFactory : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new();
+    }
 
     // ── GenerateAuthorizationUrlAsync ─────────────────────────────────────────
 
     [Fact]
     public async Task GenerateAuthorizationUrl_ContainsResponseTypeCode()
     {
-        using var svc = CreateService();
+        var svc = CreateService();
         var url = await svc.GenerateAuthorizationUrlAsync("github");
         Assert.Contains("response_type=code", url, StringComparison.Ordinal);
     }
@@ -50,7 +56,7 @@ public sealed class McpOAuthServiceTests
     [Fact]
     public async Task GenerateAuthorizationUrl_ContainsClientId()
     {
-        using var svc = CreateService();
+        var svc = CreateService();
         var url = await svc.GenerateAuthorizationUrlAsync("github");
         Assert.Contains("client_id=test-client-id", url, StringComparison.Ordinal);
     }
@@ -58,7 +64,7 @@ public sealed class McpOAuthServiceTests
     [Fact]
     public async Task GenerateAuthorizationUrl_ContainsRedirectUri()
     {
-        using var svc = CreateService();
+        var svc = CreateService();
         var url = await svc.GenerateAuthorizationUrlAsync("github");
         Assert.Contains("redirect_uri=", url, StringComparison.Ordinal);
         Assert.Contains("v1%2Fmcp%2Fauth%2Fcallback", url, StringComparison.Ordinal);
@@ -67,7 +73,7 @@ public sealed class McpOAuthServiceTests
     [Fact]
     public async Task GenerateAuthorizationUrl_ContainsStateParameter()
     {
-        using var svc = CreateService();
+        var svc = CreateService();
         var url = await svc.GenerateAuthorizationUrlAsync("github");
         Assert.Contains("state=", url, StringComparison.Ordinal);
     }
@@ -75,7 +81,7 @@ public sealed class McpOAuthServiceTests
     [Fact]
     public async Task GenerateAuthorizationUrl_ContainsPkceParameters()
     {
-        using var svc = CreateService();
+        var svc = CreateService();
         var url = await svc.GenerateAuthorizationUrlAsync("github");
         Assert.Contains("code_challenge=", url, StringComparison.Ordinal);
         Assert.Contains("code_challenge_method=S256", url, StringComparison.Ordinal);
@@ -84,7 +90,7 @@ public sealed class McpOAuthServiceTests
     [Fact]
     public async Task GenerateAuthorizationUrl_ContainsScopes()
     {
-        using var svc = CreateService();
+        var svc = CreateService();
         var url = await svc.GenerateAuthorizationUrlAsync("github");
         Assert.Contains("scope=", url, StringComparison.Ordinal);
         Assert.Contains("repo", url, StringComparison.Ordinal);
@@ -93,7 +99,7 @@ public sealed class McpOAuthServiceTests
     [Fact]
     public async Task GenerateAuthorizationUrl_TwoCallsProduceDifferentStates()
     {
-        using var svc = CreateService();
+        var svc = CreateService();
         var url1 = await svc.GenerateAuthorizationUrlAsync("github");
         var url2 = await svc.GenerateAuthorizationUrlAsync("github");
         Assert.NotEqual(url1, url2);
@@ -102,7 +108,7 @@ public sealed class McpOAuthServiceTests
     [Fact]
     public async Task GenerateAuthorizationUrl_UnknownServer_Throws()
     {
-        using var svc = CreateService();
+        var svc = CreateService();
         await Assert.ThrowsAsync<KeyNotFoundException>(
             () => svc.GenerateAuthorizationUrlAsync("unknown-server"));
     }
@@ -117,7 +123,7 @@ public sealed class McpOAuthServiceTests
                 ["bare"] = new McpServerConfig { Command = "echo" },
             },
         };
-        using var svc = CreateService(config);
+        var svc = CreateService(config);
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => svc.GenerateAuthorizationUrlAsync("bare"));
     }
@@ -127,7 +133,7 @@ public sealed class McpOAuthServiceTests
     [Fact]
     public async Task ExchangeCodeAsync_UnknownState_Throws()
     {
-        using var svc = CreateService();
+        var svc = CreateService();
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => svc.ExchangeCodeAsync("unknown-state-xyz", "any-code"));
     }

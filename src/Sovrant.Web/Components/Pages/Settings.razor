@@ -162,6 +162,7 @@
     [Inject] private MutableAuthProvider AuthProvider { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
+    [Inject] private IHttpClientFactory HttpFactory { get; set; } = default!;
 
     private int _selectedTab;
     private string _selectedProvider = "OpenAI";
@@ -270,11 +271,11 @@
         finally { _isLoadingModels = false; }
     }
 
-    private static async Task<List<string>> FetchModelIdsAsync(string baseUrl, string apiKey)
+    private async Task<List<string>> FetchModelIdsAsync(string baseUrl, string apiKey)
     {
         try
         {
-            using var http = new HttpClient();
+            using var http = HttpFactory.CreateClient("ProviderProbe");
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
             var modelsUrl = baseUrl.TrimEnd('/') + "/models";
             using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(modelsUrl));

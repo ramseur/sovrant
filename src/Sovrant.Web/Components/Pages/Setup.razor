@@ -61,6 +61,7 @@
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private SovrantConfig Config { get; set; } = default!;
     [Inject] private MutableAuthProvider AuthProvider { get; set; } = default!;
+    [Inject] private IHttpClientFactory HttpFactory { get; set; } = default!;
 
     private string _provider = "OpenAI";
     private string _apiKey = string.Empty;
@@ -133,7 +134,7 @@
         if (string.IsNullOrWhiteSpace(_apiKey) || string.IsNullOrWhiteSpace(_baseUrl)) return;
         try
         {
-            using var http = new HttpClient();
+            using var http = HttpFactory.CreateClient("ProviderProbe");
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
             var modelsUrl = _baseUrl.TrimEnd('/') + "/models";
             using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(modelsUrl));

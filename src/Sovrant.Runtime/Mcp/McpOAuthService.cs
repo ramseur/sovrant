@@ -22,7 +22,7 @@ namespace Sovrant.Runtime.Mcp;
 /// </list>
 /// Pending OAuth states expire after 10 minutes to limit the attack window for CSRF.
 /// </remarks>
-public sealed partial class McpOAuthService : IDisposable
+public sealed partial class McpOAuthService
 {
     private static readonly TimeSpan StateExpiry = TimeSpan.FromMinutes(10);
 
@@ -30,7 +30,7 @@ public sealed partial class McpOAuthService : IDisposable
     private readonly ICredentialStore _credentialStore;
     private readonly McpToolRegistrar _toolRegistrar;
     private readonly ILogger<McpOAuthService> _logger;
-    private readonly HttpClient _http;
+    private readonly IHttpClientFactory _httpFactory;
     private readonly int _serverPort;
 
     // state → (serverName, codeVerifier, expiry)
@@ -55,20 +55,17 @@ public sealed partial class McpOAuthService : IDisposable
         SovrantConfig config,
         ICredentialStore credentialStore,
         McpToolRegistrar toolRegistrar,
+        IHttpClientFactory httpFactory,
         ILogger<McpOAuthService> logger)
     {
         _config = config;
         _credentialStore = credentialStore;
         _toolRegistrar = toolRegistrar;
+        _httpFactory = httpFactory;
         _logger = logger;
-        // Singleton-scoped: a single long-lived HttpClient is acceptable and avoids socket exhaustion.
-        _http = new HttpClient();
         _serverPort = int.TryParse(
             Environment.GetEnvironmentVariable("SOVRANT_PORT"), out var p) ? p : 5200;
     }
-
-    /// <inheritdoc/>
-    public void Dispose() => _http.Dispose();
 
     /// <summary>
     /// Generates an OAuth 2.0 Authorization Code + PKCE authorization URL for the named MCP server.
@@ -245,8 +242,9 @@ public sealed partial class McpOAuthService : IDisposable
         if (!string.IsNullOrWhiteSpace(oauth.ClientSecret))
             formFields["client_secret"] = oauth.ClientSecret;
 
+        using var http = _httpFactory.CreateClient("McpOAuth");
         using var formContent = new FormUrlEncodedContent(formFields);
-        using var response = await _http.PostAsync(oauth.TokenUrl, formContent, ct)
+        using var response = await http.PostAsync(oauth.TokenUrl, formContent, ct)
             .ConfigureAwait(false);
 
         response.EnsureSuccessStatusCode();

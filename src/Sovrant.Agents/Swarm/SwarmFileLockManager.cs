@@ -6,7 +6,7 @@ namespace Sovrant.Agents.Swarm;
 /// Pessimistic file-level locking for swarm execution.
 /// Prevents multiple agents from modifying the same file concurrently.
 /// </summary>
-public sealed class SwarmFileLockManager
+public sealed class SwarmFileLockManager : ISwarmFileLockManager
 {
     private readonly ConcurrentDictionary<string, string> _fileLocks = new(StringComparer.OrdinalIgnoreCase);
 

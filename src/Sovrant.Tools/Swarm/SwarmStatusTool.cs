@@ -16,9 +16,9 @@ public sealed class SwarmStatusTool : ITool
             "Provide a swarm ID to check a specific swarm, or omit to see the most recent.",
     };
 
-    private readonly SwarmStateTracker _tracker;
+    private readonly ISwarmStateTracker _tracker;
 
-    public SwarmStatusTool(SwarmStateTracker tracker) => _tracker = tracker;
+    public SwarmStatusTool(ISwarmStateTracker tracker) => _tracker = tracker;
 
     public ToolDefinition Definition => s_definition;
 

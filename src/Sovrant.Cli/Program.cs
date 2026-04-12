@@ -320,9 +320,9 @@ swarmCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
     var dryRun = pr.GetValue(swarmDryRunOpt);
 
     var decomposer = sp.GetRequiredService<Sovrant.Agents.Swarm.ISwarmDecomposer>();
-    var orchestrator = sp.GetRequiredService<Sovrant.Agents.Swarm.SwarmOrchestrator>();
+    var orchestrator = sp.GetRequiredService<Sovrant.Agents.Swarm.ISwarmOrchestrator>();
     var qualityGate = sp.GetRequiredService<Sovrant.Agents.Swarm.SwarmQualityGate>();
-    var stateTracker = sp.GetRequiredService<Sovrant.Agents.Swarm.SwarmStateTracker>();
+    var stateTracker = sp.GetRequiredService<Sovrant.Agents.Swarm.ISwarmStateTracker>();
 
     AnsiConsole.MarkupLine("[bold]Decomposing task...[/]");
     var plan = await decomposer.DecomposeAsync(task, swarmConfig, ct).ConfigureAwait(false);

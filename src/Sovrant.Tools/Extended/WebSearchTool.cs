@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Sovrant.Api.Config;
 using Sovrant.Api.Routing;
 using Sovrant.Api.Types;
 using Sovrant.Runtime.Config;
@@ -35,12 +36,14 @@ public sealed class WebSearchTool : ITool
     };
 
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly CredentialConfig? _credentials;
     private readonly ISmartRouter? _router;
     private readonly SovrantConfig? _config;
 
-    public WebSearchTool(IHttpClientFactory httpClientFactory, ISmartRouter? router = null, SovrantConfig? config = null)
+    public WebSearchTool(IHttpClientFactory httpClientFactory, CredentialConfig? credentials = null, ISmartRouter? router = null, SovrantConfig? config = null)
     {
         _httpClientFactory = httpClientFactory;
+        _credentials = credentials;
         _router = router;
         _config = config;
     }
@@ -55,8 +58,8 @@ public sealed class WebSearchTool : ITool
 
         var count = Math.Clamp(input.GetIntProp("count", 5), 1, 20);
 
-        var braveKey = Environment.GetEnvironmentVariable("BRAVE_API_KEY");
-        var firecrawlKey = Environment.GetEnvironmentVariable("FIRECRAWL_API_KEY");
+        var braveKey = _credentials?.BraveApiKey ?? Environment.GetEnvironmentVariable("BRAVE_API_KEY");
+        var firecrawlKey = _credentials?.FirecrawlApiKey ?? Environment.GetEnvironmentVariable("FIRECRAWL_API_KEY");
 
         if (!string.IsNullOrWhiteSpace(braveKey))
             return await SearchBraveAsync(query, count, braveKey, ct).ConfigureAwait(false);

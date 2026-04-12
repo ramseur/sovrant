@@ -49,6 +49,10 @@ public static class Program
         builder.Services.AddSovrantTools();
         builder.Services.AddMultiAgentSystem();
         builder.Services.AddSovrantCommands();
+        builder.Services.AddHttpClient("ProviderProbe", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
 
         // Web-specific overrides
         var mutableAuth = new MutableAuthProvider(config.ApiKey ?? string.Empty, config.BaseUrl);

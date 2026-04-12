@@ -21,17 +21,17 @@ public sealed class SwarmTool : ITool
 
     private readonly SwarmConfig _config;
     private readonly ISwarmDecomposer _decomposer;
-    private readonly SwarmOrchestrator _orchestrator;
+    private readonly ISwarmOrchestrator _orchestrator;
     private readonly SwarmQualityGate _qualityGate;
-    private readonly SwarmStateTracker _stateTracker;
+    private readonly ISwarmStateTracker _stateTracker;
     private readonly ISwarmProgressReporter _progress;
 
     public SwarmTool(
         SwarmConfig config,
         ISwarmDecomposer decomposer,
-        SwarmOrchestrator orchestrator,
+        ISwarmOrchestrator orchestrator,
         SwarmQualityGate qualityGate,
-        SwarmStateTracker stateTracker,
+        ISwarmStateTracker stateTracker,
         ISwarmProgressReporter progress)
     {
         _config = config;

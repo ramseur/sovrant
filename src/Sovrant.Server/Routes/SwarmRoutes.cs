@@ -33,9 +33,9 @@ internal static class SwarmRoutes
             SwarmRunRequest request,
             SwarmConfig config,
             ISwarmDecomposer decomposer,
-            SwarmOrchestrator orchestrator,
+            ISwarmOrchestrator orchestrator,
             SwarmQualityGate qualityGate,
-            SwarmStateTracker stateTracker,
+            ISwarmStateTracker stateTracker,
             HttpContext ctx,
             CancellationToken ct) =>
         {
@@ -111,7 +111,7 @@ internal static class SwarmRoutes
         });
 
         // GET /v1/swarm/{id} — get swarm status
-        app.MapGet("/v1/swarm/{id}", (string id, SwarmStateTracker tracker) =>
+        app.MapGet("/v1/swarm/{id}", (string id, ISwarmStateTracker tracker) =>
         {
             var result = tracker.Get(id);
             return result is null

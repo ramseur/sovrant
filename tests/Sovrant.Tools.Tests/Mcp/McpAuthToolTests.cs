@@ -10,7 +10,12 @@ namespace Sovrant.Tools.Tests.Mcp;
 public sealed class McpAuthToolTests
 {
     private static McpOAuthService CreateOAuthService(SovrantConfig config) =>
-        new(config, new InMemoryCredentialStore(), null!, NullLogger<McpOAuthService>.Instance);
+        new(config, new InMemoryCredentialStore(), null!, new StubHttpClientFactory(), NullLogger<McpOAuthService>.Instance);
+
+    private sealed class StubHttpClientFactory : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new();
+    }
 
     private static SovrantConfig ConfigWithOAuth(string serverName = "github") =>
         new()
@@ -36,7 +41,7 @@ public sealed class McpAuthToolTests
     [Fact]
     public void Definition_Name_IsMcpAuth()
     {
-        using var oauthSvc = CreateOAuthService(ConfigWithOAuth());
+        var oauthSvc = CreateOAuthService(ConfigWithOAuth());
         var tool = new McpAuthTool(oauthSvc);
         Assert.Equal("McpAuth", tool.Definition.Name);
     }
@@ -44,7 +49,7 @@ public sealed class McpAuthToolTests
     [Fact]
     public void Definition_Description_MentionsOAuth()
     {
-        using var oauthSvc = CreateOAuthService(ConfigWithOAuth());
+        var oauthSvc = CreateOAuthService(ConfigWithOAuth());
         var tool = new McpAuthTool(oauthSvc);
         Assert.Contains("OAuth", tool.Definition.Description, StringComparison.OrdinalIgnoreCase);
     }
@@ -52,7 +57,7 @@ public sealed class McpAuthToolTests
     [Fact]
     public void Definition_Schema_RequiresServerParameter()
     {
-        using var oauthSvc = CreateOAuthService(ConfigWithOAuth());
+        var oauthSvc = CreateOAuthService(ConfigWithOAuth());
         var tool = new McpAuthTool(oauthSvc);
         var schema = tool.Definition.InputSchema;
         var required = schema.GetProperty("required");
@@ -65,7 +70,7 @@ public sealed class McpAuthToolTests
     [Fact]
     public async Task Execute_MissingServerParam_ReturnsHelpMessage()
     {
-        using var oauthSvc = CreateOAuthService(ConfigWithOAuth());
+        var oauthSvc = CreateOAuthService(ConfigWithOAuth());
         var tool = new McpAuthTool(oauthSvc);
         var input = JsonDocument.Parse("{}").RootElement;
         var result = await tool.ExecuteAsync(input);
@@ -76,7 +81,7 @@ public sealed class McpAuthToolTests
     [Fact]
     public async Task Execute_KnownServer_ReturnsAuthUrl()
     {
-        using var oauthSvc = CreateOAuthService(ConfigWithOAuth("github"));
+        var oauthSvc = CreateOAuthService(ConfigWithOAuth("github"));
         var tool = new McpAuthTool(oauthSvc);
         var input = JsonDocument.Parse("""{"server":"github"}""").RootElement;
         var result = await tool.ExecuteAsync(input);
@@ -86,7 +91,7 @@ public sealed class McpAuthToolTests
     [Fact]
     public async Task Execute_KnownServer_ResultMentionsServerName()
     {
-        using var oauthSvc = CreateOAuthService(ConfigWithOAuth("github"));
+        var oauthSvc = CreateOAuthService(ConfigWithOAuth("github"));
         var tool = new McpAuthTool(oauthSvc);
         var input = JsonDocument.Parse("""{"server":"github"}""").RootElement;
         var result = await tool.ExecuteAsync(input);
@@ -96,7 +101,7 @@ public sealed class McpAuthToolTests
     [Fact]
     public async Task Execute_UnknownServer_ReturnsErrorMessage()
     {
-        using var oauthSvc = CreateOAuthService(ConfigWithOAuth());
+        var oauthSvc = CreateOAuthService(ConfigWithOAuth());
         var tool = new McpAuthTool(oauthSvc);
         var input = JsonDocument.Parse("""{"server":"no-such-server"}""").RootElement;
         var result = await tool.ExecuteAsync(input);
@@ -113,7 +118,7 @@ public sealed class McpAuthToolTests
                 ["bare"] = new McpServerConfig { Command = "echo" },
             },
         };
-        using var oauthSvc = CreateOAuthService(config);
+        var oauthSvc = CreateOAuthService(config);
         var tool = new McpAuthTool(oauthSvc);
         var input = JsonDocument.Parse("""{"server":"bare"}""").RootElement;
         var result = await tool.ExecuteAsync(input);

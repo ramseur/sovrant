@@ -1,3 +1,4 @@
+using Sovrant.Api.Config;
 using Sovrant.Tools.Extended;
 
 namespace Sovrant.Commands.Commands;
@@ -8,6 +9,13 @@ namespace Sovrant.Commands.Commands;
 /// </summary>
 public sealed class WebSearchCommand : ISlashCommand
 {
+    private readonly CredentialConfig? _credentials;
+
+    public WebSearchCommand(CredentialConfig? credentials = null)
+    {
+        _credentials = credentials;
+    }
+
     public string Name => "websearch";
     public IReadOnlyList<string> Aliases => [];
     public string Description => "Toggle LLM-based web search fallback.";
@@ -34,8 +42,8 @@ public sealed class WebSearchCommand : ISlashCommand
         }
 
         var status = WebSearchTool.LlmFallbackEnabled ? "enabled" : "disabled";
-        var braveSet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BRAVE_API_KEY"));
-        var firecrawlSet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FIRECRAWL_API_KEY"));
+        var braveSet = !string.IsNullOrWhiteSpace(_credentials?.BraveApiKey ?? Environment.GetEnvironmentVariable("BRAVE_API_KEY"));
+        var firecrawlSet = !string.IsNullOrWhiteSpace(_credentials?.FirecrawlApiKey ?? Environment.GetEnvironmentVariable("FIRECRAWL_API_KEY"));
 
         var backends = new List<string>();
         if (braveSet) backends.Add("Brave Search (active)");

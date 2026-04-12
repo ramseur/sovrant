@@ -88,6 +88,8 @@ public partial class ActiveContextViewModel : ViewModelBase
         ActiveProjectId = string.Empty;
         ActiveProjectName = "No Project";
         HasActiveProject = false;
+        Environment.SetEnvironmentVariable("SOVRANT_WORKSPACE_ID", value.Id);
+        Environment.SetEnvironmentVariable("SOVRANT_PROJECT_ID", null);
         OnPropertyChanged(nameof(ContextDisplay));
         _ = LoadProjectsAsync();
         ContextChanged?.Invoke();
@@ -102,12 +104,14 @@ public partial class ActiveContextViewModel : ViewModelBase
             ActiveProjectId = string.Empty;
             ActiveProjectName = "No Project";
             HasActiveProject = false;
+            Environment.SetEnvironmentVariable("SOVRANT_PROJECT_ID", null);
         }
         else
         {
             ActiveProjectId = value.Id;
             ActiveProjectName = value.Name;
             HasActiveProject = true;
+            Environment.SetEnvironmentVariable("SOVRANT_PROJECT_ID", value.Id);
         }
         OnPropertyChanged(nameof(ContextDisplay));
         ContextChanged?.Invoke();

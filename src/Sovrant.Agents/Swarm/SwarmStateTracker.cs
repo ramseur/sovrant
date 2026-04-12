@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 namespace Sovrant.Agents.Swarm;
 
 /// <summary>Tracks live and completed swarm results for status queries.</summary>
-public sealed class SwarmStateTracker
+public sealed class SwarmStateTracker : ISwarmStateTracker
 {
     private readonly ConcurrentDictionary<string, SwarmResult> _swarms = new(StringComparer.Ordinal);
 

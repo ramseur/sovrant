@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using Sovrant.Api.Auth;
+using Sovrant.Api.Config;
 using Sovrant.Agents;
 using Sovrant.Runtime;
 using Sovrant.Runtime.Config;
@@ -11,23 +12,14 @@ using Sovrant.Server.Routes;
 using Sovrant.Server.ServerConfig;
 using Sovrant.Server.Webhooks;
 using Sovrant.Runtime.Logging;
+using Sovrant.McpServer;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 var sovrantConfig = ConfigLoader.Load();
-
-var llmApiKey =
-    Environment.GetEnvironmentVariable("LLM_API_KEY")
-    ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")
-    ?? sovrantConfig.ApiKey
-    ?? string.Empty;
-
-var llmBaseUrl =
-    Environment.GetEnvironmentVariable("LLM_BASE_URL")
-    ?? Environment.GetEnvironmentVariable("OPENAI_BASE_URL")
-    ?? sovrantConfig.BaseUrl?.ToString()
-    ?? "https://api.openai.com/v1";
+var apiConfig = ConfigLoader.BuildConfiguration();
+var credentials = CredentialConfig.Resolve(apiConfig);
 
 var serverPort = int.TryParse(
     Environment.GetEnvironmentVariable("SOVRANT_PORT"), out var p) ? p : 5200;
@@ -47,8 +39,8 @@ builder.Services.AddLogging(b => b.AddSovrantLogging());
 // Mutable runtime config — single source of truth for live config changes.
 var mutableConfig = new MutableServerConfig(
     model: sovrantConfig.Model,
-    llmApiKey: llmApiKey,
-    llmBaseUrl: llmBaseUrl,
+    llmApiKey: credentials.LlmApiKey,
+    llmBaseUrl: credentials.LlmBaseUrl,
     permissionMode: PermissionMode.DontAsk);   // server default: never prompt
 
 builder.Services.AddSingleton(mutableConfig);
@@ -71,6 +63,16 @@ builder.Services.AddSovrantTools();
 
 // Multi-agent system.
 builder.Services.AddMultiAgentSystem();
+
+// MCP server over HTTP/SSE transport (opt-in via SOVRANT_MCP_HTTP=true).
+var mcpHttpEnabled = string.Equals(
+    Environment.GetEnvironmentVariable("SOVRANT_MCP_HTTP"), "true", StringComparison.OrdinalIgnoreCase);
+if (mcpHttpEnabled)
+{
+    builder.Services.AddMcpServer(McpServerSetup.ConfigureMcpServerOptions)
+        .WithHttpTransport()
+        .AddSovrantMcpHandlers();
+}
 
 // AskUserQuestion cannot pause an HTTP stream — return a fixed message instead.
 builder.Services.AddSingleton<IUserInputProvider, HttpUserInputProvider>();
@@ -133,9 +135,7 @@ builder.Services.AddRateLimiter(options =>
 });
 
 // ── Startup validation ────────────────────────────────────────────────────────
-var sovrantToken = Environment.GetEnvironmentVariable("SOVRANT_TOKEN")
-    ?? builder.Configuration["Server:Token"];
-if (string.IsNullOrEmpty(sovrantToken))
+if (string.IsNullOrEmpty(credentials.SovrantToken))
 {
     throw new InvalidOperationException(
         "SOVRANT_TOKEN environment variable is required. " +
@@ -202,6 +202,13 @@ WorkspaceRoutes.Map(app);
 ProjectRoutes.Map(app);
 UserRoutes.Map(app);
 MeRoutes.Map(app);
+
+// MCP HTTP/SSE endpoint (only when SOVRANT_MCP_HTTP=true).
+if (mcpHttpEnabled)
+{
+    app.MapMcp("/mcp");
+    app.Logger.LogInformation("MCP HTTP/SSE endpoint enabled at /mcp");
+}
 
 Sovrant.Server.ServerLog.LogServerReady(app.Logger, serverPort);
 

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Sovrant.Api.Config;
 
 namespace Sovrant.Api.Capabilities;
 
@@ -13,6 +14,7 @@ public sealed partial class LiveModelMetadataFetcher
 {
     private readonly IModelCapabilityRegistry _registry;
     private readonly HttpClient _httpClient;
+    private readonly CredentialConfig? _credentials;
     private readonly ILogger<LiveModelMetadataFetcher> _logger;
 
     /// <summary>OpenRouter's public model listing — no auth required.</summary>
@@ -21,11 +23,13 @@ public sealed partial class LiveModelMetadataFetcher
     public LiveModelMetadataFetcher(
         IModelCapabilityRegistry registry,
         HttpClient httpClient,
-        ILogger<LiveModelMetadataFetcher> logger)
+        ILogger<LiveModelMetadataFetcher> logger,
+        CredentialConfig? credentials = null)
     {
         _registry = registry;
         _httpClient = httpClient;
         _logger = logger;
+        _credentials = credentials;
     }
 
     /// <summary>
@@ -35,7 +39,7 @@ public sealed partial class LiveModelMetadataFetcher
     public async Task FetchAsync(CancellationToken ct = default)
     {
         // Only fetch if an OpenRouter key is configured (no point otherwise)
-        var openRouterKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY");
+        var openRouterKey = _credentials?.OpenRouterApiKey ?? Environment.GetEnvironmentVariable("OPENROUTER_API_KEY");
         if (string.IsNullOrEmpty(openRouterKey))
             return;
 

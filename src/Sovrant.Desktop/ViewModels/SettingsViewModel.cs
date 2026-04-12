@@ -20,6 +20,7 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly IPermissionModeAccessor _permissionModeAccessor;
     private readonly SidebarViewModel _sidebar;
     private readonly MutableAuthProvider _authProvider;
+    private readonly IHttpClientFactory _httpFactory;
     private CancellationTokenSource? _autoSaveCts;
     private bool _initialized;
     private bool _suppressAutoSave;
@@ -110,12 +111,13 @@ public partial class SettingsViewModel : ViewModelBase
     public ObservableCollection<ProviderProfile> SavedProfiles { get; } = [];
 
     public SettingsViewModel(SovrantConfig config, IPermissionModeAccessor permissionModeAccessor,
-        SidebarViewModel sidebar, MutableAuthProvider authProvider)
+        SidebarViewModel sidebar, MutableAuthProvider authProvider, IHttpClientFactory httpFactory)
     {
         _config = config;
         _permissionModeAccessor = permissionModeAccessor;
         _sidebar = sidebar;
         _authProvider = authProvider;
+        _httpFactory = httpFactory;
 
         // Load current values from runtime config.
         _modelName = config.Model;
@@ -173,6 +175,8 @@ public partial class SettingsViewModel : ViewModelBase
 
     partial void OnSelectedProviderChanged(string value)
     {
+        if (_suppressAutoSave) return;
+
         // Update base URL for known providers.
         if (ProviderBaseUrls.TryGetValue(value, out var url))
             BaseUrl = url;
@@ -185,7 +189,25 @@ public partial class SettingsViewModel : ViewModelBase
     // saving partial values. They are saved when the provider dropdown changes
     // (which sets these programmatically) or when the user clicks Save Profile.
     // The debounced save from OnSelectedProviderChanged covers the switch case.
-    partial void OnModelNameChanged(string value) => ScheduleAutoSave();
+    partial void OnModelNameChanged(string value)
+    {
+        // Auto-detect correct provider from model name patterns so the user
+        // doesn't accidentally send an OpenRouter model to the OpenAI endpoint.
+        if (!_suppressAutoSave && _initialized)
+        {
+            var inferred = InferProviderFromModelName(value);
+            if (inferred is not null && !string.Equals(inferred, SelectedProvider, StringComparison.Ordinal))
+            {
+                _suppressAutoSave = true;
+                SelectedProvider = inferred;
+                if (ProviderBaseUrls.TryGetValue(inferred, out var url))
+                    BaseUrl = url;
+                _suppressAutoSave = false;
+            }
+        }
+
+        ScheduleAutoSave();
+    }
     partial void OnMaxOutputTokensChanged(int value) => ScheduleAutoSave();
     partial void OnStreamingChanged(bool value) => ScheduleAutoSave();
 
@@ -242,11 +264,11 @@ public partial class SettingsViewModel : ViewModelBase
     /// Fetches model IDs from any OpenAI-compatible /models endpoint using an API key.
     /// Works with OpenAI, DeepSeek, Groq, Mistral, Together AI, Google, etc.
     /// </summary>
-    private static async Task<List<string>> FetchAuthenticatedModelIdsAsync(string baseUrl, string apiKey)
+    private async Task<List<string>> FetchAuthenticatedModelIdsAsync(string baseUrl, string apiKey)
     {
         try
         {
-            using var http = new HttpClient();
+            using var http = _httpFactory.CreateClient("ProviderProbe");
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
 
             var modelsUrl = baseUrl.TrimEnd('/') + "/models";
@@ -278,11 +300,11 @@ public partial class SettingsViewModel : ViewModelBase
         }
     }
 
-    private static async Task<List<string>> FetchLocalModelIdsAsync(string url, string arrayProp, string idProp)
+    private async Task<List<string>> FetchLocalModelIdsAsync(string url, string arrayProp, string idProp)
     {
         try
         {
-            using var http = new HttpClient();
+            using var http = _httpFactory.CreateClient("ProviderProbe");
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             var response = await http.GetAsync(new Uri(url), cts.Token);
             response.EnsureSuccessStatusCode();
@@ -384,14 +406,16 @@ public partial class SettingsViewModel : ViewModelBase
         _suppressAutoSave = true;
         try
         {
+            // Set everything from the saved profile exactly as stored.
+            // Order matters: provider and base URL first, then model list, then model name.
             SelectedProvider = profile.Provider;
             ApiKey = profile.ApiKey;
             BaseUrl = profile.BaseUrl;
             MaxOutputTokens = profile.MaxTokens;
             SelectedProfile = profile;
 
-            // Wait for model list to load before setting ModelName,
-            // otherwise AutoCompleteBox clears it when AvailableModels is repopulated.
+            // Load model list for the provider so the dropdown is populated,
+            // then set the saved model name.
             await LoadModelsForProviderAsync(profile.Provider);
             ModelName = profile.Model;
         }
@@ -400,7 +424,7 @@ public partial class SettingsViewModel : ViewModelBase
             _suppressAutoSave = false;
         }
 
-        // Single save with all values set.
+        // Single save applies everything to runtime config + env vars.
         await SaveAsync();
         StatusMessage = $"Switched to '{profile.Name}'.";
     }
@@ -521,6 +545,45 @@ public partial class SettingsViewModel : ViewModelBase
         {
             StatusMessage = $"Save failed: {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// Infers the correct provider from a model name so the base URL auto-switches.
+    /// Returns null if the model doesn't clearly belong to a specific provider.
+    /// </summary>
+    private static string? InferProviderFromModelName(string model)
+    {
+        if (string.IsNullOrWhiteSpace(model))
+            return null;
+
+        var m = model.Trim();
+
+        // OpenRouter models use org/model format (e.g. "google/gemma-4-31b-it:free")
+        if (m.Contains('/', StringComparison.Ordinal))
+            return "OpenRouter";
+
+        // OpenAI models
+        if (m.StartsWith("gpt-", StringComparison.OrdinalIgnoreCase) ||
+            m.StartsWith("o1", StringComparison.OrdinalIgnoreCase) ||
+            m.StartsWith("o3", StringComparison.OrdinalIgnoreCase) ||
+            m.StartsWith("o4", StringComparison.OrdinalIgnoreCase) ||
+            m.StartsWith("chatgpt", StringComparison.OrdinalIgnoreCase))
+            return "OpenAI";
+
+        // DeepSeek models
+        if (m.StartsWith("deepseek", StringComparison.OrdinalIgnoreCase))
+            return "DeepSeek";
+
+        // Google Gemini models
+        if (m.StartsWith("gemini", StringComparison.OrdinalIgnoreCase))
+            return "Google";
+
+        // Mistral models (without org/ prefix — those go to OpenRouter)
+        if (m.StartsWith("mistral", StringComparison.OrdinalIgnoreCase) ||
+            m.StartsWith("open-mixtral", StringComparison.OrdinalIgnoreCase))
+            return "Mistral";
+
+        return null;
     }
 
     private static string InferProvider(SovrantConfig config)

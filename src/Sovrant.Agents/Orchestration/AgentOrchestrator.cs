@@ -32,7 +32,7 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
     [LoggerMessage(Level = LogLevel.Warning, Message = "AgentOrchestrator: run {RunId} failed: {Error}")]
     private static partial void LogRunFailed(ILogger logger, string runId, string error);
 
-    private readonly SwarmOrchestrator _swarmOrchestrator;
+    private readonly ISwarmOrchestrator _swarmOrchestrator;
     private readonly ISwarmDecomposer _decomposer;
     private readonly ITeamRegistry _teamRegistry;
     private readonly IAgentRunStore _runStore;
@@ -41,7 +41,7 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
     private readonly ILogger<AgentOrchestrator> _logger;
 
     public AgentOrchestrator(
-        SwarmOrchestrator swarmOrchestrator,
+        ISwarmOrchestrator swarmOrchestrator,
         ISwarmDecomposer decomposer,
         ITeamRegistry teamRegistry,
         IAgentRunStore runStore,

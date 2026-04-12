@@ -35,6 +35,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly Governance.IIntentGate? _intentGate;
     private readonly List<InputMessage> _history = [];
     private string _systemPrompt;
+    /// <summary>Once true, all subsequent turns expose tools (session used tools at least once).</summary>
+    private bool _sessionHasUsedTools;
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Turn started: session={SessionId}, model={Model}")]
     private static partial void LogTurnStart(ILogger logger, string sessionId, string model);
@@ -181,8 +183,15 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             // Phase 59a — On the first round, use the semantic intent gate (if
             // available) to decide whether tools should be exposed. Falls back
             // to the legacy keyword matcher when no gate is registered.
+            // Once a session has used tools, always expose them on subsequent turns
+            // so the LLM can continue multi-step work.
             IReadOnlyList<ToolDefinition> tools;
-            if (round == 0)
+            if (round > 0 || _sessionHasUsedTools)
+            {
+                // Tool-use rounds and sessions that already used tools always get tools.
+                tools = FilterToolsForModel(allTools);
+            }
+            else if (round == 0)
             {
                 if (_intentGate is not null)
                 {
@@ -302,6 +311,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             // repeatedly (common with some models like Gemma 4), break the loop.
             if (toolUseBlocks.Count > 0 && accumulated.StopReason == "tool_use")
             {
+                _sessionHasUsedTools = true;
                 var currentTools = new HashSet<string>(toolUseBlocks.Select(t => t.Name), StringComparer.Ordinal);
                 bool loopDetected = false;
                 foreach (var name in currentTools)
@@ -700,11 +710,11 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             "You are a highly capable AI assistant with access to tools. " +
             $"You are powered by the {_config.Model} model, served through the Sovrant runtime. " +
             "When asked what model or provider you are, state your actual model name. " +
-            "IMPORTANT: Only use tools when the user explicitly asks you to perform a specific action " +
-            "like reading a file, writing code, running a command, or searching. " +
-            "If the user sends a short message, greeting, question, or anything conversational, " +
-            "you MUST respond with plain text only. Never assume the user wants a tool action — " +
-            "for example, if the user says \"test\", respond conversationally; do NOT try to read or create a file called \"test\".");
+            "When you have tools available, USE them proactively to accomplish the user's request. " +
+            "Do not just describe what you would do — actually do it by calling the appropriate tools. " +
+            "If you need to read a file, call the read tool. If you need to write code, call the write tool. " +
+            "If you need permission for a dangerous action, call the tool and the system will prompt the user to approve. " +
+            "For simple greetings and conversational messages, respond with plain text.");
 
         if (_config.PermissionMode == Permissions.PermissionMode.Plan)
         {
@@ -715,21 +725,19 @@ public sealed partial class ConversationRuntime : IConversationRuntime
               .Append("You MAY call ExitPlanMode to leave plan mode when instructed by the user.");
         }
 
-        // Artifacts directory guidance — use the workspace/project/session scoped path.
-        var artifactsRoot = Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT")
-            ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".sovrant", "artifacts");
-        // Build the scoped path: {root}/{workspace}/{project}/{sessionId}/
+        // Artifacts guidance — use the Artifact tool for documents, plans, reports, etc.
         var workspaceId = Environment.GetEnvironmentVariable("SOVRANT_WORKSPACE_ID")
             ?? Artifacts.ArtifactScope.DefaultWorkspaceId;
         var projectId = Environment.GetEnvironmentVariable("SOVRANT_PROJECT_ID")
             ?? Artifacts.ArtifactScope.DefaultProjectId;
-        var scopedArtifactsDir = Path.Combine(artifactsRoot, workspaceId, projectId, _sessionId);
-        sb.Append("\n\nWhen creating files or documents that are not modifications to existing source code, ")
-          .Append("place them in the artifacts directory: ").Append(scopedArtifactsDir)
-          .Append(". Create this directory if it does not exist. ")
-          .Append("This keeps generated outputs organized per workspace, project, and session.");
+        sb.Append("\n\nWhen creating documents, plans, reports, specifications, or any deliverable that is NOT a direct modification to existing source code, ")
+          .Append("use the Artifact tool with action 'write' to store it. ")
+          .Append("Always pass workspace_id='").Append(workspaceId)
+          .Append("', project_id='").Append(projectId)
+          .Append("', and run_id='").Append(_sessionId)
+          .Append("'. Choose a descriptive path like 'plan.md', 'report.md', or 'docs/architecture.md'. ")
+          .Append("This keeps generated outputs organized per workspace, project, and session. ")
+          .Append("Only use the Write tool for modifying actual source code files in the project.");
 
         // Global memory: ~/.sovrant/memory.md
         var globalMemory = Path.Combine(

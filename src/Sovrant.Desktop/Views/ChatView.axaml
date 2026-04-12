@@ -303,6 +303,54 @@
                                                            Foreground="{DynamicResource TextSecondary}" />
                                             </StackPanel>
 
+                                            <!-- Execution status bar — visible during tool calls -->
+                                            <Border Margin="42,4,0,0"
+                                                    Padding="10,6"
+                                                    CornerRadius="6"
+                                                    Background="{DynamicResource ToolUseBackground}"
+                                                    BorderBrush="{DynamicResource BrandPrimary}"
+                                                    BorderThickness="1"
+                                                    IsVisible="{Binding IsExecutingTools}">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <Border Width="8" Height="8" CornerRadius="4"
+                                                            Background="{DynamicResource BrandPrimary}">
+                                                        <Border.Styles>
+                                                            <Style Selector="Border">
+                                                                <Style.Animations>
+                                                                    <Animation Duration="0:0:0.8" IterationCount="INFINITE">
+                                                                        <KeyFrame Cue="0%">
+                                                                            <Setter Property="Opacity" Value="1.0" />
+                                                                        </KeyFrame>
+                                                                        <KeyFrame Cue="50%">
+                                                                            <Setter Property="Opacity" Value="0.2" />
+                                                                        </KeyFrame>
+                                                                        <KeyFrame Cue="100%">
+                                                                            <Setter Property="Opacity" Value="1.0" />
+                                                                        </KeyFrame>
+                                                                    </Animation>
+                                                                </Style.Animations>
+                                                            </Style>
+                                                        </Border.Styles>
+                                                    </Border>
+                                                    <TextBlock Text="{Binding ExecutionStatusText}"
+                                                               FontSize="12" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextPrimary}" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Step progress bar — visible during plan execution -->
+                                            <Border Margin="42,4,0,0"
+                                                    Padding="10,6"
+                                                    CornerRadius="6"
+                                                    Background="{DynamicResource SurfaceCard}"
+                                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                                    BorderThickness="1"
+                                                    IsVisible="{Binding StepProgressText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                <TextBlock Text="{Binding StepProgressText}"
+                                                           FontSize="12"
+                                                           Foreground="{DynamicResource TextSecondary}" />
+                                            </Border>
+
                                             <!-- Raw text while streaming (fast, no re-parsing) -->
                                             <SelectableTextBlock Text="{Binding Text}"
                                                                  TextWrapping="Wrap"

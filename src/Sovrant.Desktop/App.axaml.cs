@@ -92,6 +92,10 @@ public partial class App : Application
         services.AddSovrantTools();
         services.AddMultiAgentSystem();
         services.AddSovrantCommands();
+        services.AddHttpClient("ProviderProbe", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
 
         // Desktop-specific overrides.
         var mutableAuth = new MutableAuthProvider(config.ApiKey ?? string.Empty);

@@ -25,14 +25,14 @@ internal sealed class SwarmToolExecutor : IToolExecutor
     };
 
     private readonly IToolExecutor _inner;
-    private readonly SwarmFileLockManager _lockManager;
+    private readonly ISwarmFileLockManager _lockManager;
     private readonly string _taskId;
     private readonly bool _bypassConfirmation;
     private readonly IToolRegistry? _registry;
 
     public SwarmToolExecutor(
         IToolExecutor inner,
-        SwarmFileLockManager lockManager,
+        ISwarmFileLockManager lockManager,
         string taskId,
         bool bypassConfirmation = false,
         IToolRegistry? registry = null)

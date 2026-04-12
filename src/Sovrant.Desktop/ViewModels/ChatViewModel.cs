@@ -297,7 +297,6 @@ public partial class ChatViewModel : ViewModelBase
                 break;
 
             case RuntimeEvent.ToolUseRequested t:
-                if (msg.IsThinking) msg.StopThinking();
                 msg.AddToolUse(t.ToolName, t.ToolUseId);
                 break;
 
@@ -320,13 +319,11 @@ public partial class ChatViewModel : ViewModelBase
 
             // ── Phase 59 events ─────────────────────────────────────────
             case RuntimeEvent.ClarificationNeeded { Question: var question }:
-                if (msg.IsThinking) msg.StopThinking();
                 msg.ClarificationQuestion = question;
                 msg.AppendText($"\n\n**Clarification needed:** {question}");
                 break;
 
             case RuntimeEvent.PlanPresented { PlanId: var planId, FormattedPlan: var plan, RequiresApproval: var needsApproval }:
-                if (msg.IsThinking) msg.StopThinking();
                 msg.PlanId = planId;
                 msg.PlanContent = plan;
                 msg.PlanRequiresApproval = needsApproval;

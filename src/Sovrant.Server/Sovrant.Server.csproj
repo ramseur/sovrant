@@ -29,6 +29,11 @@
     <ProjectReference Include="..\Sovrant.Commands\Sovrant.Commands.csproj" />
     <ProjectReference Include="..\Sovrant.Runtime\Sovrant.Runtime.csproj" />
     <ProjectReference Include="..\Sovrant.Tools\Sovrant.Tools.csproj" />
+    <ProjectReference Include="..\Sovrant.McpServer\Sovrant.McpServer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.2.0" />
   </ItemGroup>
 
 </Project>

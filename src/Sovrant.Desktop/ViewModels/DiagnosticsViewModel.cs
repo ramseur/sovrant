@@ -12,6 +12,7 @@ public partial class DiagnosticsViewModel : ViewModelBase
 {
     private readonly ISmartRouter _router;
     private readonly SovrantConfig _config;
+    private readonly IHttpClientFactory _httpFactory;
 
     [ObservableProperty]
     private bool _isRunning;
@@ -67,10 +68,11 @@ public partial class DiagnosticsViewModel : ViewModelBase
     // Health checks
     public ObservableCollection<HealthCheckItem> HealthChecks { get; } = [];
 
-    public DiagnosticsViewModel(ISmartRouter router, SovrantConfig config)
+    public DiagnosticsViewModel(ISmartRouter router, SovrantConfig config, IHttpClientFactory httpFactory)
     {
         _router = router;
         _config = config;
+        _httpFactory = httpFactory;
         LoadSystemInfo();
         _ = RunAllChecksAsync();
     }
@@ -166,7 +168,7 @@ public partial class DiagnosticsViewModel : ViewModelBase
         {
             try
             {
-                using var http = new HttpClient();
+                using var http = _httpFactory.CreateClient("ProviderProbe");
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 http.DefaultRequestHeaders.Add("Authorization", $"Bearer {_config.ApiKey}");
                 var modelsUrl = _config.BaseUrl.ToString().TrimEnd('/') + "/models";
@@ -251,7 +253,7 @@ public partial class DiagnosticsViewModel : ViewModelBase
             {
                 try
                 {
-                    using var http = new HttpClient();
+                    using var http = _httpFactory.CreateClient("ProviderProbe");
                     using var cts2 = new CancellationTokenSource(TimeSpan.FromSeconds(4));
                     // Only add auth for non-local providers.
                     if (!providerUrl.Contains("localhost", StringComparison.OrdinalIgnoreCase)

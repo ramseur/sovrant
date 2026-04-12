@@ -1,8 +1,6 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Sovrant.Api.Auth;
-using Sovrant.Api.Providers;
 using Sovrant.Api.Routing;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Conversation;
@@ -36,6 +34,7 @@ internal static class ChatRoutes
         ISmartRouter router,
         ToolRegistrar toolRegistrar,
         IHttpClientFactory httpClientFactory,
+        IScopedProviderFactory scopedProviderFactory,
         IToolExecutor toolExecutor,
         IToolRegistry toolRegistry,
         ISessionStore sessionStore,
@@ -93,10 +92,7 @@ internal static class ChatRoutes
             var scopedHttp = httpClientFactory.CreateClient("ScopedProvider");
             scopedHttp.BaseAddress = parsedUrl;
 
-            var scopedAuth = new ApiKeyAuthProvider(scopedApiKey!);
-            var scopedLogger = loggerFactory.CreateLogger("Sovrant.Api.ScopedProvider");
-            var scopedProvider = new OpenAiCompatProvider(scopedHttp, scopedAuth, scopedLogger);
-            activeRouter = new ScopedSingleProviderRouter(scopedProvider);
+            activeRouter = scopedProviderFactory.Create(scopedHttp, scopedApiKey!);
         }
         else
         {

@@ -54,7 +54,9 @@ public static class ServiceCollectionExtensions
 
         // Register API layer (providers + router) using the built configuration
         var apiConfig = ConfigLoader.BuildConfiguration();
-        services.AddLlmProviders(apiConfig);
+        var credentials = Sovrant.Api.Config.CredentialConfig.Resolve(apiConfig);
+        services.AddSingleton(credentials);
+        services.AddLlmProviders(apiConfig, credentials);
 
         // Permission policy — mutable so EnterPlanMode/ExitPlanMode tools can toggle it at runtime.
         // The server overrides both IPermissionPolicy and IPermissionModeAccessor with its own
@@ -211,13 +213,11 @@ public static class ServiceCollectionExtensions
 
         // Artifact store (Phase 53) — tenant-scoped artifact storage.
         // Backend is selected via SOVRANT_ARTIFACTS_BACKEND (default: local).
+        services.AddSingleton<IArtifactStoreFactory, DefaultArtifactStoreFactory>();
         services.AddSingleton<IArtifactStore>(sp =>
         {
             var backend = Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_BACKEND") ?? "local";
-            return string.Equals(backend, "local", StringComparison.OrdinalIgnoreCase)
-                ? new LocalArtifactStore(sp.GetRequiredService<ILogger<LocalArtifactStore>>())
-                : throw new InvalidOperationException(
-                    $"Unknown artifact backend: '{backend}'. Supported: local");
+            return sp.GetRequiredService<IArtifactStoreFactory>().Create(backend);
         });
         services.AddSingleton<LegacyArtifactImporter>();
 
@@ -232,6 +232,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<McpToolRegistrar>();
         services.AddSingleton<ICredentialStore>(sp =>
             new SqliteCredentialStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+        services.AddHttpClient("McpOAuth", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
         services.AddSingleton<McpOAuthService>();
 
         // Conversation runtime — transient so the pool creates independent instances per session.

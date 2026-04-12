@@ -8,7 +8,7 @@ namespace Sovrant.Lsp;
 /// </summary>
 public sealed class LspClientManager : ILspClientManager
 {
-    private readonly Dictionary<string, LspClient> _clients;
+    private readonly Dictionary<string, ILspClient> _clients;
     private readonly ILogger _logger;
 
     /// <summary>Extension-to-language mapping for common file types.</summary>
@@ -36,21 +36,22 @@ public sealed class LspClientManager : ILspClientManager
         [".zig"] = "zig",
     };
 
-    public LspClientManager(IEnumerable<LspServerConfig> configs, ILoggerFactory loggerFactory)
+    public LspClientManager(IEnumerable<LspServerConfig> configs, ILoggerFactory loggerFactory, ILspClientFactory? clientFactory = null)
     {
         ArgumentNullException.ThrowIfNull(configs);
         ArgumentNullException.ThrowIfNull(loggerFactory);
 
         _logger = loggerFactory.CreateLogger<LspClientManager>();
-        _clients = new Dictionary<string, LspClient>(StringComparer.OrdinalIgnoreCase);
+        _clients = new Dictionary<string, ILspClient>(StringComparer.OrdinalIgnoreCase);
 
+        var factory = clientFactory ?? new DefaultLspClientFactory();
         foreach (var config in configs)
         {
             if (string.IsNullOrWhiteSpace(config.Language) || string.IsNullOrWhiteSpace(config.Command))
                 continue;
 
             var logger = loggerFactory.CreateLogger($"Sovrant.Lsp.{config.Language}");
-            _clients[config.Language] = new LspClient(config, logger);
+            _clients[config.Language] = factory.Create(config, logger);
         }
     }
 

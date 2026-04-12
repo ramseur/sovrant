@@ -33,13 +33,29 @@ public sealed partial class SemanticIntentGate : IIntentGate
     /// </summary>
     private static readonly HashSet<IntentClass> ToolRequiringIntents =
     [
+        // Code tasks
         IntentClass.CodeGeneration,
+        IntentClass.CodeEdit,
         IntentClass.CodeReview,
         IntentClass.Refactor,
         IntentClass.Debugging,
-        IntentClass.ToolHeavy,
-        IntentClass.Analysis,
+        IntentClass.TestGeneration,
+        // Document tasks
+        IntentClass.DocGeneration,
+        IntentClass.SpecDrafting,
+        IntentClass.ReportGeneration,
+        // File operations
+        IntentClass.FileRead,
+        IntentClass.FileSearch,
+        IntentClass.FileManage,
+        // System operations
+        IntentClass.ShellExec,
+        IntentClass.EnvConfig,
+        IntentClass.GitOps,
     ];
+
+    [GeneratedRegex(@"\b(create|write|generate|draft|build|make)\b.{0,30}\b(document|file|artifact|plan|report|spec|markdown|readme|template)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex CreationRequestPattern();
 
     [GeneratedRegex(@"[\\/][\w.]+\.\w{1,5}\b", RegexOptions.Compiled)]
     private static partial Regex FilePathPattern();
@@ -139,26 +155,46 @@ public sealed partial class SemanticIntentGate : IIntentGate
         IntentClass intent, float complexity, string message)
     {
         // Messages with file paths are likely tool requests regardless of intent.
-        // Check this first — a user saying "read ./config.json" is a tool request
-        // even if the classifier says Conversation.
         if (FilePathPattern().IsMatch(message))
             return true;
 
-        // Conversational and simple Q&A never need tools.
-        if (intent is IntentClass.Conversation or IntentClass.SimpleQa)
+        // Messages that explicitly ask to create/write/generate a document or artifact
+        // always need tools, regardless of intent classification or complexity.
+        if (CreationRequestPattern().IsMatch(message))
+            return true;
+
+        // Conversational never needs tools.
+        if (intent == IntentClass.Conversation)
             return false;
 
-        // Creative writing typically doesn't need tools unless complex.
-        if (intent == IntentClass.Creative && complexity < 0.4f)
+        // Explain and Compare are knowledge tasks — no tools unless complex.
+        if (intent is IntentClass.Explain or IntentClass.Compare && complexity < 0.3f)
             return false;
 
         // Planning at low complexity is just discussion.
         if (intent == IntentClass.Planning && complexity < 0.3f)
             return false;
 
-        // Tool-heavy intents always require tools.
+        // Research at low complexity is just Q&A.
+        if (intent == IntentClass.Research && complexity < 0.3f)
+            return false;
+
+        // All tool-requiring intents (code, docs, files, system ops).
         if (ToolRequiringIntents.Contains(intent))
             return true;
+
+        // Planning, Research, Explain, Compare at higher complexity need tools.
+        if (intent is IntentClass.Planning or IntentClass.Research
+            or IntentClass.Explain or IntentClass.Compare)
+            return true;
+
+        // Legacy intents — map to tools.
+#pragma warning disable CS0618
+        if (intent is IntentClass.Creative or IntentClass.Analysis or IntentClass.ToolHeavy)
+            return true;
+        if (intent == IntentClass.SimpleQa)
+            return false;
+#pragma warning restore CS0618
 
         return false;
     }

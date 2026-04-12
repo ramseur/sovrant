@@ -61,6 +61,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITool>(sp =>
             new WebSearchTool(
                 sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetService<Sovrant.Api.Config.CredentialConfig>(),
                 sp.GetService<Sovrant.Api.Routing.ISmartRouter>(),
                 sp.GetService<Sovrant.Runtime.Config.SovrantConfig>()));
         services.AddSingleton<ITool, NotebookEditTool>();

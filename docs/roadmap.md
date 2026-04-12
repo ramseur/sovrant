@@ -5234,3 +5234,322 @@ Chat.razor doesn't change — it already consumes `IAsyncEnumerable<RuntimeEvent
 | Provider has no retry on 429/5xx | ✅ Phase 5 — 3 attempts with 1s/2s/4s backoff |
 | `EnterPlanMode`/`ExitPlanMode` are global in server mode | ✅ Phase 10 — session-scoped `SessionConfig` overlay |
 | `Sovrant.Agents` not wired into CLI or Server | ✅ Phase 19+20 — `AddMultiAgentSystem()` called in both hosts |
+
+---
+
+## Phase 62 — Sophisticated Conversational UX Across CLI, Desktop & Web (Intent-Driven Interaction & Voice)
+
+**Depends on:** Phase 59 (intent classification + semantic gate), Phase 56 (web frontend), Phase 61 (remote mode)
+**Difficulty:** High
+
+**Goal:** Elevate the user experience across all three surfaces (CLI, Desktop, Web) from "chat box that calls tools" to a sophisticated, intent-aware conversational interface. The system should feel like speaking with an intelligent collaborator — understanding nuance, adapting its interaction style to the prompt's intent, surfacing the right UI affordances at the right time, and supporting voice as a first-class input/output channel.
+
+**Why this matters:** Today all three surfaces share the same flat chat UX — a text box, a streaming response, and optional tool confirmations. But the intent classifier (Phase 59) already knows *what the user wants* before the LLM responds. That signal should drive the entire interaction: the UI layout, the response format, the confirmation flow, and the level of autonomy. A user asking "explain monads" should get a clean reading experience; a user saying "refactor auth.cs" should see a diff view with approve/reject; a user saying "build me an expense tracker" should see a project plan with checkboxes. Same runtime, different presentations.
+
+### Components
+
+| Component | Surface | What it does |
+|---|---|---|
+| **Intent-Adaptive Response Rendering** | All | Maps `IntentClass` to a response renderer: `Explain` → rich markdown with syntax highlighting and collapsible sections; `CodeGeneration`/`CodeEdit`/`Refactor` → side-by-side diff view; `Planning` → interactive checklist; `Debugging` → error trace with highlighted lines; `Compare` → comparison table; `Conversation` → plain chat bubble |
+| **Contextual Input Affordances** | Desktop, Web | The input area adapts based on conversation state: shows file drop zone when intent is code-related; shows "Attach context" button for explain/research intents; shows quick-action chips ("Run tests", "Apply changes", "Show diff") after code generation turns |
+| **Smart Suggestions & Follow-ups** | All | After each response, the system suggests 2–3 contextual follow-up actions based on the intent and result. After a code review: "Apply suggestions", "Explain issue #2", "Write tests for flagged code". After a plan: "Start execution", "Modify step 3", "Export as markdown" |
+| **Conversational Memory Indicators** | Desktop, Web | Visual indicators showing the system remembers context: "Continuing from your auth refactor discussion", session topic tags, pinned context items the user can see and dismiss |
+| **Voice Input/Output** | Desktop, Web | Speech-to-text for input (browser Web Speech API / desktop native), text-to-speech for responses (configurable, off by default). Voice mode adapts: shorter responses, confirmation prompts before destructive actions, audio cues for tool execution status |
+| **Prompt Composition Assistant** | All | When the intent classifier returns low confidence or `NeedsClarification`, instead of a generic "Could you clarify?", the UI shows structured options: radio buttons for likely intents, a template prompt the user can edit, or a guided wizard for complex multi-step requests |
+| **Thinking/Reasoning Transparency** | All | Show the intent classification, model tier selection, and routing decision in a collapsible "thinking" panel. Users see: "Intent: CodeGeneration (0.85 confidence) → Model: claude-sonnet → Tools: enabled". Builds trust and helps users learn to write better prompts |
+| **Tone & Personality Adaptation** | All | Configurable interaction style per workspace: "concise" (terse, code-focused), "mentor" (explains reasoning, suggests learning resources), "pair programmer" (collaborative, asks clarifying questions), "executive" (summaries and decisions only). Injected into system prompt based on user preference |
+
+### CLI-Specific Enhancements
+
+| Feature | What it does |
+|---|---|
+| **Rich terminal rendering** | Intent-aware output: `Explain` → boxed markdown with Spectre.Console panels; `CodeGeneration` → syntax-highlighted code blocks with copy hints; `Planning` → numbered task list with status markers; `Diff` → colored unified diff |
+| **Interactive confirmation flows** | Multi-step plans show a numbered list → user types step number to approve/skip/modify individual steps instead of all-or-nothing |
+| **Progress spinners with context** | During tool execution: `[2/5] Reading auth.cs...` with elapsed time, not just a generic spinner |
+| **Command completion** | Shell completion that understands Sovrant-specific patterns: `sovrant chat "fix the bug in` → suggests recent file names from the project |
+
+### Desktop-Specific Enhancements
+
+| Feature | What it does |
+|---|---|
+| **Split-pane response view** | Code intents automatically open a split view: chat on left, code/diff/artifact on right. Resizable, collapsible |
+| **Inline code actions** | Hover actions on generated code: "Copy", "Apply to file", "Open diff", "Run". No need to copy-paste from chat |
+| **Artifact preview panel** | When the intent produces an artifact (file, document, plan), it renders live in the artifact panel with syntax highlighting, not just a chat message |
+| **Session timeline** | Visual timeline showing conversation flow: messages, tool calls, artifacts created, decisions made. Clickable to jump to any point |
+| **Keyboard-driven workflow** | `Ctrl+Enter` to send, `Ctrl+Shift+Enter` to send and auto-approve all tools, `Ctrl+D` to toggle diff view, `Ctrl+P` to toggle plan view |
+
+### Web-Specific Enhancements
+
+| Feature | What it does |
+|---|---|
+| **Responsive intent layout** | Mobile: stacked chat; tablet: side panel for artifacts; desktop: full split-pane with resizable columns |
+| **Collaborative indicators** | When connected to a shared server (Phase 61), show who else is in the workspace, their active sessions, and allow session sharing |
+| **Export & share** | One-click export of a conversation thread as markdown, PDF, or shareable link |
+| **Notification system** | Browser notifications for long-running tasks: "Your refactor plan is ready for review", "Build completed with 2 warnings" |
+
+### Voice Architecture
+
+```
+User speaks → Browser/Desktop Speech-to-Text → Text prompt
+                                                    ↓
+                                           IntentClassifier (Phase 59)
+                                                    ↓
+                                           ConversationRuntime
+                                                    ↓
+                                           Response text
+                                                    ↓
+                          Text-to-Speech (optional) ← Response rendered in UI
+```
+
+- **Input:** Web Speech API (browser), Windows Speech Recognition / whisper.cpp (desktop)
+- **Output:** Web Speech Synthesis API (browser), Windows SAPI / configurable TTS engine (desktop)
+- **Voice mode toggle:** `SOVRANT_VOICE=true` env var or UI toggle
+- **Safety:** Voice mode always requires explicit confirmation for destructive tool actions (no auto-approve via voice)
+- **CLI:** No voice support (terminal has no audio context). Users who want voice + CLI can use a desktop app as input and pipe to CLI
+
+### Prompt Composition Templates
+
+When `NeedsClarification` is true, the UI presents structured alternatives rather than free-text:
+
+```
+You said: "test"
+
+What would you like to do?
+  ○ Run the test suite          → "run dotnet test"
+  ○ Create a new test file      → "create unit tests for [file]"
+  ○ Test the chat connection    → (just chatting)
+  ○ Something else              → [free text input]
+```
+
+Templates are driven by the `IntentClass` + `SuggestedClarification` from `SemanticIntentGate` (Phase 59a), extended with per-intent option sets.
+
+### Tone Profiles (System Prompt Injection)
+
+```json
+{
+  "concise": "Be brief. Lead with code or actions. Skip explanations unless asked.",
+  "mentor": "Explain your reasoning. Suggest learning resources. Ask if the user wants deeper explanation.",
+  "pair_programmer": "Think out loud. Ask clarifying questions. Propose alternatives before committing.",
+  "executive": "Summarize decisions and outcomes. Skip implementation details. Highlight risks and trade-offs."
+}
+```
+
+Stored per-workspace in user settings. Injected into system prompt by `ConversationRuntime` alongside intent context.
+
+### Implementation Plan
+
+1. **Intent-to-renderer mapping** — Create `IResponseRenderer` interface with implementations per intent class. CLI uses Spectre.Console, Desktop uses Avalonia views, Web uses Blazor components. The runtime emits `RuntimeEvent.IntentClassified` at turn start so the UI can pre-configure.
+2. **Smart suggestions engine** — After each turn, generate 2–3 follow-up suggestions based on intent + result. Rule-based initially (Phase 59 classifier), LLM-generated later. Emit as `RuntimeEvent.SuggestedActions`.
+3. **Prompt composition UI** — Extend `SemanticIntentGate.BuildClarification()` to return structured options (not just a string). Desktop and Web render as radio buttons; CLI renders as numbered list.
+4. **Thinking panel** — Add `RuntimeEvent.RoutingDecision` event with intent, confidence, model, tier. All three surfaces render it in a collapsible/debug panel.
+5. **Tone profiles** — Add `ToneProfile` to workspace settings. `ConversationRuntime` reads it and appends to system prompt.
+6. **Voice input (Web)** — Add `SpeechInputService` using Web Speech API. Blazor interop via JS. Toggle button in chat input area.
+7. **Voice input (Desktop)** — Add `DesktopSpeechService` using Windows Speech Recognition or whisper.cpp via P/Invoke.
+8. **Voice output** — Add `SpeechOutputService` (Web Speech Synthesis / Windows SAPI). Configurable per-session.
+9. **CLI rich rendering** — Add Spectre.Console renderers for each intent class. Progress bars for multi-step plans.
+10. **Desktop split-pane** — Add `SplitPaneView` that activates automatically for code/artifact intents.
+11. **Session timeline (Desktop)** — Visual timeline component fed by `RuntimeEvent` stream.
+12. **Web responsive layout** — CSS grid breakpoints for mobile/tablet/desktop with intent-aware panel allocation.
+13. **Follow-up action chips** — Clickable UI elements after each response that populate the input with the suggested follow-up.
+
+### Acceptance Criteria
+
+- All three surfaces (CLI, Desktop, Web) render responses differently based on intent class
+- `Explain` intent → rich markdown rendering (not raw text)
+- `CodeGeneration` intent → syntax-highlighted code with "Apply" action
+- `Planning` intent → interactive checklist
+- `NeedsClarification` → structured options UI (not just a text question)
+- Voice input works on Desktop and Web (opt-in)
+- Tone profiles affect system prompt and response style
+- Thinking/routing panel shows intent, model, and confidence
+- Smart follow-up suggestions appear after each turn
+- `dotnet build Sovrant.slnx` exits 0
+- All existing tests pass (no regressions)
+
+### Non-goals
+
+- Real-time multi-user collaboration (beyond session sharing indicators)
+- Custom voice model training or voice cloning
+- Non-English voice support (English-only in first iteration)
+- Plugin/extension system for custom renderers (future phase)
+
+---
+
+## Phase 63 — Dependency Injection Audit & Pluggability Hardening
+
+**Depends on:** None (can run in parallel with any phase)
+**Difficulty:** Medium
+
+**Goal:** Audit and fix concrete DI gaps across the codebase — not for DI purity, but where pluggability, security isolation, or testability is genuinely blocked. The system has 28+ concrete singletons without interfaces, 9 `new HttpClient()` calls bypassing `IHttpClientFactory`, 40+ scattered `Environment.GetEnvironmentVariable` reads in service logic, and per-request provider instantiation in hot paths. This phase fixes the ones that matter.
+
+**Philosophy:** Do not over-inject. A `TodoState` singleton that will never have a second implementation doesn't need an `ITodoState` interface. But an `McpOAuthService` doing `new HttpClient()` for OAuth token exchange is a socket-exhaustion bug waiting to happen, a `SwarmOrchestrator` that can't be swapped for a distributed implementation is an architecture wall, and credentials read from raw env vars deep in service logic blocks vault/secret-store integration. Fix what's blocking, leave what's fine.
+
+### Audit Findings
+
+#### Tier 1 — Fix Now (Security & Correctness)
+
+| Issue | Location | Impact |
+|---|---|---|
+| `new HttpClient()` in OAuth service | `Runtime/Mcp/McpOAuthService.cs:65` | Socket exhaustion in production; bypasses handler pipeline, no retry/timeout policy |
+| `new HttpClient()` in Desktop/Web UI (9 instances) | `Desktop/ViewModels/SettingsViewModel.cs:269,305`, `Desktop/ViewModels/DiagnosticsViewModel.cs:169,254`, `Web/Pages/Setup.razor:136`, `Web/Pages/Diagnostics.razor:227,283`, `Web/Pages/Settings.razor:277` | Same socket issue; blocks proxy/auth injection; no timeout defaults |
+| Per-request `new OpenAiCompatProvider(...)` in chat route | `Server/Routes/ChatRoutes.cs:96-99` | Bypasses DI lifecycle; no disposal tracking; blocks provider-level middleware (logging, metrics, circuit breaker) |
+| Credentials read from raw env vars in service logic | `Tools/Extended/WebSearchTool.cs:58-59` (BRAVE_API_KEY, FIRECRAWL_API_KEY), `Api/Capabilities/LiveModelMetadataFetcher.cs:38` (OPENROUTER_API_KEY), `McpServer/McpTokenValidator.cs:22` | Blocks secret vault integration; env vars checked on every call instead of once at startup; credentials in memory longer than necessary |
+
+#### Tier 2 — Fix for Pluggability (Architecture Walls)
+
+| Issue | Location | Impact |
+|---|---|---|
+| Swarm system — 6 concrete singletons, no interfaces | `Agents/ServiceCollectionExtensions.cs:51-56` — `SwarmFileLockManager`, `SwarmStateTracker`, `SwarmSession`, `SwarmOrchestrator`, `SwarmQualityGate` | Cannot swap for distributed swarm (Redis-backed locks, remote state, cluster orchestration) without modifying DI registration in every host |
+| Artifact backend hardcoded to "local" | `Runtime/ServiceCollectionExtensions.cs:216` — env var switch with only one case | Cannot plug cloud storage (S3, Azure Blob) without editing the composition root |
+| LSP client created directly in manager | `Lsp/LspClientManager.cs:53` — `new LspClient(config, logger)` | Cannot inject mock/remote LSP clients; blocks testing and remote language server support |
+| Agent template loading from filesystem only | `Agents/Templates/AgentTemplateRegistry.cs:82` — `File.ReadAllText(path)` | Cannot load templates from database, cloud, or version control |
+| `InProcessMultiAgentSystem` hardcoded in tool factory | `Tools/ServiceCollectionExtensions.cs:122` | Team delegation tool locked to in-process agents; blocks distributed agent execution |
+
+#### Tier 3 — Fix for Testability (Nice to Have)
+
+| Issue | Location | Impact |
+|---|---|---|
+| `SovrantConfig` injected as concrete singleton | `Runtime/ServiceCollectionExtensions.cs:41` | Tests must construct full config objects; no `IOptions<T>` hot-reload support |
+| 40+ `Environment.GetEnvironmentVariable` in service classes | Across Runtime, Api, Tools, Commands, Agents | Tests must manipulate real env vars or use reflection; no centralized config binding |
+| `HttpClient` injected directly (not factory) | `Api/Routing/SmartRouter.cs:63`, `Api/Capabilities/LiveModelMetadataFetcher.cs:21` | Works (DI provides them), but loses named-client handler pipeline benefits |
+| State singletons without interfaces | `Tools/ServiceCollectionExtensions.cs:44-48` — `TodoState`, `BackgroundTaskRegistry`, `WorktreeState`, `ShellSessionState`, `ShellEnvironment` | Cannot mock in unit tests; but these are simple state bags unlikely to have alternate implementations |
+| `SlashCommandDispatcher` reads files directly | `Commands/SlashCommandDispatcher.cs:49` | Cannot test with virtual file system; blocks template loading from DB |
+| `ProcessExecutor` / `ProcessAgent` call `Process.Start` directly | `Tools/ProcessExecutor.cs:58`, `Agents/Isolated/ProcessAgent.cs:64` | Cannot mock process execution in unit tests |
+
+#### What's Already Good (No Changes Needed)
+
+- **Storage layer** — `IStorageProvider`, `ISqliteConnectionFactory`, `ISessionStore`, `IArtifactStore` all interface-backed
+- **Auth** — `IAuthProvider`, `IPermissionPolicy`, `IPermissionModeAccessor` properly abstracted
+- **Router** — `ISmartRouter`, `IModelCapabilityRegistry`, `IModelTierResolver` all interfaces
+- **Runtime** — `IConversationRuntime` registered as transient (correct for per-session state)
+- **Commands** — All slash commands implement `ISlashCommand`
+- **Tools** — All tools implement `ITool`, registered via `IToolRegistry`
+- **Agent system** — `IMultiAgentSystem`, `ITeamRegistry`, `ISwarmDecomposer`, `IAgentOrchestrator` all interface-backed
+- **Composition roots** — Clean separation in `ServiceCollectionExtensions.cs` per assembly
+- **No service locator anti-pattern** — `IServiceProvider.GetService` only in factory methods inside composition roots
+
+### Implementation Plan
+
+#### Tier 1 — Security & Correctness (Do First)
+
+1. **HttpClient factory migration**
+   - `McpOAuthService`: inject `IHttpClientFactory`, register named client `"McpOAuth"` with timeout + retry policy
+   - Desktop ViewModels: inject `IHttpClientFactory` into `SettingsViewModel` and `DiagnosticsViewModel` via constructor; Avalonia ViewModels already support DI via `ViewModelBase`
+   - Web Razor pages: use `@inject IHttpClientFactory HttpFactory` instead of `new HttpClient()`
+   - Add `Polly` retry policy on the named clients for transient fault handling
+
+2. **Scoped provider factory for ChatRoutes**
+   - Extract `IScopedProviderFactory` interface:
+     ```csharp
+     public interface IScopedProviderFactory
+     {
+         ISmartRouter CreateScoped(string apiKey, string baseUrl, HttpClient http);
+     }
+     ```
+   - Register default implementation that wraps current `new OpenAiCompatProvider(...)` logic
+   - ChatRoutes receives factory via DI, not instantiating providers directly
+   - Enables: provider-level metrics, circuit breaker, disposal tracking
+
+3. **Credential binding at startup**
+   - Create `CredentialConfig` record bound once at startup from env vars:
+     ```csharp
+     public sealed record CredentialConfig(
+         string? BraveApiKey,
+         string? FirecrawlApiKey,
+         string? OpenRouterApiKey,
+         string? McpToken);
+     ```
+   - Register as singleton, inject into `WebSearchTool`, `LiveModelMetadataFetcher`, `McpTokenValidator`
+   - Eliminates per-call `Environment.GetEnvironmentVariable` for credentials
+   - Future: swap binding source from env vars to Azure Key Vault / HashiCorp Vault without touching services
+
+#### Tier 2 — Pluggability (Do Next)
+
+4. **Swarm abstraction interfaces**
+   - `ISwarmOrchestrator` — extract from `SwarmOrchestrator` (main orchestration logic)
+   - `ISwarmStateTracker` — extract from `SwarmStateTracker` (state management)
+   - `ISwarmFileLockManager` — extract from `SwarmFileLockManager` (file locking)
+   - Register concrete implementations as defaults; future distributed implementations swap in via config
+   - This is the main wall blocking distributed/remote swarm execution
+
+5. **Artifact store factory**
+   - Replace env-var switch with `IArtifactStoreFactory`:
+     ```csharp
+     public interface IArtifactStoreFactory
+     {
+         IArtifactStore Create(string backend); // "local", "s3", "azure"
+     }
+     ```
+   - Register factory; composition root calls `factory.Create(config.ArtifactBackend)`
+   - `LocalArtifactStore` becomes one implementation; cloud backends plug in later
+
+6. **LSP client factory**
+   - Extract `ILspClientFactory` from `LspClientManager`
+   - Manager calls `_factory.Create(config)` instead of `new LspClient(config, logger)`
+   - Enables: mock LSP in tests, remote LSP servers, language-specific client subclasses
+
+7. **Template loader abstraction**
+   - Extract `ITemplateLoader` from `AgentTemplateRegistry` and `SlashCommandDispatcher`
+   - Default: `FileSystemTemplateLoader`
+   - Future: `DatabaseTemplateLoader`, `GitTemplateLoader`
+
+#### Tier 3 — Testability (Do If Time Permits)
+
+8. **Environment variable consolidation**
+   - Create `SovrantEnvironment` config class bound once at startup:
+     ```csharp
+     public sealed record SovrantEnvironment(
+         string UserId,
+         string? WorkspaceId,
+         string? ProjectId,
+         string? ArtifactsRoot,
+         string? DbPath,
+         LoggingLevel LogLevel,
+         // ... all SOVRANT_* env vars
+     );
+     ```
+   - Inject everywhere that currently reads `Environment.GetEnvironmentVariable("SOVRANT_*")`
+   - Single point of truth; tests inject a test instance instead of manipulating env vars
+   - Does NOT replace `IConfiguration` — this is specifically for the 30+ `SOVRANT_*` env vars scattered across service logic
+
+9. **Process executor abstraction**
+   - Extract `IProcessExecutor` from `ProcessExecutor` and `ProcessAgent`
+   - Default implementation delegates to `Process.Start`
+   - Test implementation captures commands without spawning processes
+
+10. **Config wrapper for hot-reload support**
+    - Wrap `SovrantConfig` in `IOptionsMonitor<SovrantConfig>` for hot-reload
+    - Only worth doing if runtime config changes become a real use case (e.g., admin panel changing model mid-session)
+
+### Inventory Summary
+
+| Category | Concrete Singletons | Interface-Backed | Action |
+|---|---|---|---|
+| **Storage** | 0 | 5 | None needed |
+| **Auth/Permissions** | 0 | 3 | None needed |
+| **Routing** | 0 | 3 | None needed |
+| **Swarm** | 6 | 0 | **Extract interfaces** |
+| **Tools state** | 5 | 0 | Leave (simple state bags) |
+| **Agent utilities** | 4 | 4 | Extract for template + factory |
+| **MCP** | 3 | 0 | HttpClient fix only |
+| **Commands** | 2 | 26 | Dispatcher needs template loader |
+| **Config** | 3 | 0 | Env var consolidation |
+| **Total** | **28** | **41** | **Fix 14, leave 14** |
+
+### Acceptance Criteria
+
+- Zero `new HttpClient()` outside of test projects
+- `ChatRoutes` uses injected factory, not `new OpenAiCompatProvider`
+- All credential reads go through `CredentialConfig`, not raw env vars
+- `SwarmOrchestrator`, `SwarmStateTracker`, `SwarmFileLockManager` implement new interfaces
+- Artifact store selection is factory-based, not env-var switch
+- `dotnet build Sovrant.slnx` exits 0
+- All existing tests pass
+- No new interfaces for state bags (`TodoState`, `WorktreeState`, etc.) — leave these alone
+
+### Non-goals
+
+- Migrating to `IOptions<T>` pattern across the board (only where hot-reload is needed)
+- Adding interfaces to every singleton (only where a second implementation is plausible)
+- Replacing `Environment.GetEnvironmentVariable` in `Program.cs` / startup code (that's the right place for it)
+- DI purity — the goal is pluggability where it matters, not 100% interface coverage

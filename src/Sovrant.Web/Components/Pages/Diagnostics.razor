@@ -129,6 +129,7 @@
 @code {
     [Inject] private SovrantConfig Config { get; set; } = default!;
     [Inject] private ISmartRouter Router { get; set; } = default!;
+    [Inject] private IHttpClientFactory HttpFactory { get; set; } = default!;
 
     private bool _isRunning;
 
@@ -224,7 +225,7 @@
         {
             try
             {
-                using var http = new HttpClient();
+                using var http = HttpFactory.CreateClient("ProviderProbe");
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 http.DefaultRequestHeaders.Add("Authorization", $"Bearer {Config.ApiKey}");
                 var modelsUrl = Config.BaseUrl.ToString().TrimEnd('/') + "/models";
@@ -280,7 +281,7 @@
             {
                 try
                 {
-                    using var http = new HttpClient();
+                    using var http = HttpFactory.CreateClient("ProviderProbe");
                     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(4));
                     if (!providerUrl.Contains("localhost", StringComparison.OrdinalIgnoreCase)
                         && !string.IsNullOrWhiteSpace(Config.ApiKey))

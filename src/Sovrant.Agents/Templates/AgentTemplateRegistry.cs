@@ -23,7 +23,7 @@ public sealed partial class AgentTemplateRegistry
     [LoggerMessage(Level = LogLevel.Debug, Message = "User template '{Name}' overrides built-in")]
     private static partial void LogOverride(ILogger logger, string name);
 
-    public AgentTemplateRegistry(ILogger<AgentTemplateRegistry> logger)
+    public AgentTemplateRegistry(ILogger<AgentTemplateRegistry> logger, IEnumerable<ITemplateLoader>? loaders = null)
     {
         _logger = logger;
 
@@ -35,6 +35,20 @@ public sealed partial class AgentTemplateRegistry
 
         // Tier 2: project-local .sovrant/agents/ (overrides install-dir templates)
         LoadUserTemplates(Path.Combine(".sovrant", "agents"));
+
+        // Tier 3: additional loaders (e.g. database, cloud) — highest priority
+        if (loaders is not null)
+        {
+            foreach (var loader in loaders)
+            {
+                foreach (var (name, template) in loader.Load())
+                {
+                    if (_templates.ContainsKey(name))
+                        LogOverride(_logger, name);
+                    _templates[name] = template;
+                }
+            }
+        }
     }
 
     /// <summary>All templates currently registered (built-in + user-defined).</summary>
@@ -77,7 +91,7 @@ public sealed partial class AgentTemplateRegistry
         }
     }
 
-    private static AgentTemplate? ParseTemplateFile(string path)
+    internal static AgentTemplate? ParseTemplateFile(string path)
     {
         var text = File.ReadAllText(path).ReplaceLineEndings("\n");
 
