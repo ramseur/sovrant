@@ -119,7 +119,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | SearXNG web search backend (self-hosted, key-free) | Phase 49 | Low–Medium |
 | OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | Medium–High |
 | Cost tracking, budgets & dashboard via OpenRouter (consolidated from Phases 39+55) | Phase 55 | Medium |
-| LLM provider sanitizer — strip PII and corporate data from prompts before they leave the runtime | Phase 58 | High |
+| ~~LLM provider sanitizer~~ → **Sovrant Trust Boundary** (sanitization, ethical harness, intent verification) | Phase 58 ✅ | High |
 | Agentic loop hardening — intent classification, plan approval, execution governance, progress visibility | Phase 59 | **Critical** |
 | Hermes Agent integration via MCP — alternative claw/federation bus provider with self-improving skills | Phase 60 | Medium |
 | Remote server mode for web frontend — SignalR streaming, auth, `AddSovrantClient()` abstraction | Phase 61 | High |
@@ -4480,9 +4480,11 @@ Team A (frontend)          PM Agent A          PM Coordinator          PM Agent 
 
 ---
 
-## Phase 58 — Sovrant Trust Boundary (Sanitization, Ethical Harness & Intent Verification)
+## Phase 58 — Sovrant Trust Boundary (Sanitization, Ethical Harness & Intent Verification) ✅
 
 **Depends on:** Phase 59 (Agentic Loop Hardening — provides `IIntentGate` and `SemanticIntentGate`)
+
+**Status:** Complete. `TrustBoundaryProvider` decorator wraps any `ILlmProvider` with the three-stage pipeline. `PromptSanitizer` with `PiiDetector`, `CorporateDataDetector`, `CustomPatternRegistry` handles outbound redaction and inbound restoration via `RedactionMap`. `ContentPolicyEngine` provides model-independent ethical enforcement at Standard/Strict/Enterprise levels with 6+ harmful categories. `IntentVerificationBridge` connects Phase 59's `IIntentGate` as the first trust stage. `EthicalAuditLog` records all blocks/flags. `TrustBoundaryConfig` wired into `SovrantConfig` and DI. 72+ tests across 7 test files covering PII detection, corporate data detection, redaction round-trips, ethical classification, intent bridge, and provider decorator behavior.
 
 **Goal:** Establish a unified trust boundary that wraps every LLM provider interaction with three guarantees: (1) sensitive data never leaves the machine unless explicitly allowed, (2) the system enforces ethical guardrails at the Sovrant engine level — not delegated to whatever model happens to be running, and (3) user intent is verified before any data touches a provider. Businesses running any model — from Claude Opus to a 7B uncensored local model — get the same trust guarantees because they are enforced by Sovrant, not by the model.
 

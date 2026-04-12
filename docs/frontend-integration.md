@@ -761,6 +761,54 @@ await waitForServer("http://127.0.0.1:5200");
 
 ---
 
+## Agentic Events (Phase 59)
+
+Phase 59 added three new `RuntimeEvent` types that flow through the SSE `sovrant` extension field. Frontends should handle these for a complete agentic UX:
+
+### Clarification Needed
+
+When the user's intent is ambiguous (e.g. single-word input like "test"), the engine emits a clarification request instead of guessing. The SSE chunk carries `sovrant.clarification`:
+
+```ts
+await client.stream("test", {
+  onSovrantEvent: (event) => {
+    if (event.clarification) {
+      // Show to user: "Did you mean to run tests, create a test file, or just chatting?"
+      showClarificationPrompt(event.clarification);
+    }
+  },
+});
+```
+
+### Plan Presented
+
+Before executing a multi-step plan, the engine presents the plan for optional approval. The SSE chunk carries `sovrant.plan_id`, `sovrant.formatted_plan`, and `sovrant.requires_approval`:
+
+```ts
+if (event.plan_id && event.formatted_plan) {
+  // Show numbered step list with destructive warnings
+  showPlanUI(event.formatted_plan);
+  if (event.requires_approval) {
+    // Block execution until user approves/rejects
+    const approved = await promptUserApproval(event.plan_id);
+    // Send approval back via session config or follow-up message
+  }
+}
+```
+
+### Step Progress
+
+During plan execution, the engine emits progress updates per step. The SSE chunk carries `sovrant.step_current`, `sovrant.step_total`, `sovrant.step_intent`, and `sovrant.step_status`:
+
+```ts
+if (event.step_current != null) {
+  updateProgressBar(event.step_current, event.step_total);
+  showStepLabel(`Step ${event.step_current}/${event.step_total}: ${event.step_intent} [${event.step_status}]`);
+}
+```
+
+---
+
 ## Tool Events
 
 When the engine calls a tool (e.g. `Bash`, `Read`, `WebSearch`) during a streaming response, the SSE chunk includes a `sovrant` extension field. The SDK surfaces these via callbacks:

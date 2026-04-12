@@ -51,6 +51,7 @@ The server binds to `http://127.0.0.1:5200` by default.
 | `SOVRANT_USER_ID` | No | OS username | User identity for session ownership and audit logging |
 | `SOVRANT_SESSION_JSONL` | No | `false` | Set to `true` to also write sessions to legacy JSONL files (dual-write for migration) |
 | `SOVRANT_AUDIT_JSONL` | No | `false` | Set to `true` to also write audit events to legacy JSONL files (dual-write for migration) |
+| `SOVRANT_UNSAFE_DONTASK` | No | `false` | Set to `true` to disable graduated tool tier enforcement in `DontAsk` mode (auto-approve all tools, including Dangerous/Escalation) |
 
 ---
 
@@ -153,10 +154,18 @@ The `sovrant` extension field appears on tool-related chunks and carries:
 
 | Field | Type | Description |
 |---|---|---|
-| `event` | string | `tool_use`, `tool_result`, or `text` |
+| `event` | string | `tool_use`, `tool_result`, `text`, `clarification`, `plan_presented`, or `step_progress` |
 | `tool_name` | string? | Name of the tool being called |
 | `tool_use_id` | string? | Correlates call with result |
 | `is_error` | bool | Whether the tool result is an error |
+| `clarification` | string? | Phase 59 — clarification question when intent is ambiguous |
+| `plan_id` | string? | Phase 59 — unique plan identifier |
+| `formatted_plan` | string? | Phase 59 — human-readable plan description |
+| `requires_approval` | bool? | Phase 59 — whether user must approve before execution |
+| `step_current` | int? | Phase 59 — current step number (1-based) |
+| `step_total` | int? | Phase 59 — total steps in plan |
+| `step_intent` | string? | Phase 59 — intent description for current step |
+| `step_status` | string? | Phase 59 — step lifecycle status (started/completed/failed) |
 
 **Non-streaming response**
 
@@ -366,6 +375,17 @@ Requests from any other origin are blocked by the browser. The server itself doe
 
 The server defaults to `DontAsk` — tools run without interactive prompts. This is required because there is no user to prompt over an HTTP stream.
 
+> **Phase 59 — Graduated Tool Tiers:** `DontAsk` mode no longer auto-approves all tools. Tools are classified into four tiers via `GraduatedToolTiers`:
+>
+> | Tier | Behavior in DontAsk | Examples |
+> |---|---|---|
+> | **Safe** | Auto-approve | Read, Glob, Grep, LS, WebFetch, WebSearch, Sleep, AskUserQuestion |
+> | **Moderate** | Auto-approve | Write, Edit, NotebookEdit, TodoWrite, Skill, Artifact, McpProxy |
+> | **Dangerous** | Require confirmation | Bash, PowerShell, REPL |
+> | **Escalation** | Always show plan | Agent, TeamDelegate, Swarm, Mission |
+>
+> To restore the old behavior (auto-approve everything), set `SOVRANT_UNSAFE_DONTASK=true`.
+
 Change the permission mode live via `PUT /v1/config`:
 
 ```bash
@@ -378,6 +398,47 @@ curl -X PUT http://127.0.0.1:5200/v1/config \
 Valid values: `Default`, `AcceptEdits`, `BypassPermissions`, `DontAsk`, `Plan`
 
 > The `EnterPlanMode` and `ExitPlanMode` tools change the permission mode for the **current session only** via `SessionConfig`, not the global config. This prevents one user entering Plan mode from affecting other sessions. Use `PUT /v1/sessions/{id}/config` for explicit per-session overrides, or `PUT /v1/config` for server-wide defaults.
+
+---
+
+## Trust Boundary (Phase 58)
+
+Every LLM provider interaction is optionally wrapped by the **Sovrant Trust Boundary** — a three-stage pipeline that runs as an `ILlmProvider` decorator (`TrustBoundaryProvider`):
+
+1. **Intent Verification** — bridges Phase 59's `IIntentGate` to catch ambiguous or harmful intent before any data is sent
+2. **Ethical Harness** — Sovrant-level content policy enforcement independent of model safety (works with uncensored models)
+3. **Data Sanitizer** — strips PII and corporate data from outbound prompts, restores placeholders on response
+
+Configure via `trust_boundary` in `settings.json`:
+
+```json
+{
+  "trust_boundary": {
+    "enabled": true,
+    "sanitizer": {
+      "enabled": true,
+      "mode": "redact",
+      "corporate_domains": ["acme.com", "internal.corp"],
+      "custom_patterns": [{ "name": "codenames", "regex": "\\bProject Titan\\b", "action": "redact" }],
+      "allow_list": ["github.com"],
+      "exempt_providers": ["ollama"]
+    },
+    "ethical_harness": {
+      "enabled": true,
+      "strictness": "standard",
+      "response_scanning": true,
+      "audit_log": true
+    },
+    "intent_verification": {
+      "enabled": true,
+      "clarify_ambiguous": true,
+      "block_harmful_intent": true
+    }
+  }
+}
+```
+
+Blocked responses include `StopReason = "trust_boundary_block"` and a clear explanation of what was blocked and why. The ethical audit log records all blocks and flags for compliance reporting.
 
 ---
 

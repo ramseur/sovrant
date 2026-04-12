@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-12 (50 tools, 95 server endpoints, 1,285 tests, JS SDK covering 79 endpoints)
+**Last updated:** 2026-04-12 (50 tools, 95 server endpoints, 1,400+ tests, JS SDK covering 79 endpoints)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -16,7 +16,7 @@
 | Agentic loop | ✅ Working | Multi-turn tool use, up to 20 rounds per turn |
 | Session persistence (SQLite) | ✅ Working | `~/.sovrant/data/sovrant.db` — sessions + session_entries tables with FTS5 search. Legacy JSONL dual-write via `SOVRANT_SESSION_JSONL=true`. |
 | Session resumption (`--session <id>`) | ✅ Working | History replayed correctly across separate process invocations |
-| Permission system | ✅ Working | `bypassPermissions` / `dontAsk` / `default` / `plan` all functional |
+| Permission system | ✅ Working | `bypassPermissions` / `dontAsk` / `default` / `plan` all functional. Phase 59 refactored `ModeAwarePermissionPolicy` to use graduated tool tiers — `DontAsk` mode now requires confirmation for Dangerous/Escalation tools. |
 | SSE streaming | ✅ Working | Text chunks stream to console in real time |
 | Token counts | ✅ Fixed | OpenAI trailing usage chunk now captured. Input + output tokens reported correctly after each turn. |
 | HTTP server (`Sovrant.Server`) | ✅ Working | 95 endpoints: health, chat, config, status, models, sessions (CRUD + config + export), usage, webhook, MCP auth, evals, swarm, users (CRUD + sessions + usage + audit), workspaces (CRUD + members + invites + config + usage + memory), projects (CRUD + archive + members + config + sessions + usage + memory), teams (CRUD + members + runs), runs, missions (CRUD + run + events + export), engine (trace + in-flight + recover + delete), artifacts (list + download + delete), registries (tools + skills + agent templates) |
@@ -33,7 +33,7 @@
 | MCP server mode | ✅ Implemented | `sovrant mcp-server` — stdio transport (JSON-RPC 2.0). Bridges all `IToolRegistry` tools + synthetic `chat` tool + session/config resources to MCP protocol. Zero overlap with HTTP server. Bearer token auth via `SOVRANT_MCP_TOKEN` + `--token`. |
 | Dynamic MCP Tool Proxy (`MCPTool`) | ✅ Implemented | Calls any tool on any connected MCP server dynamically at execution time — no static registration needed. Optional `server` param; searches all clients when omitted. |
 | SQLite persistence layer | ✅ Implemented | `IStorageProvider` + `SqliteStorageProvider` + 5 versioned migrations (26+ tables). Stores: sessions, memory, audit, credentials, token usage. Schema pre-built for Phases 33-37. See [persistence.md](persistence.md). |
-| Unit test suite | ✅ 1,285 passing | Api(28) + Runtime(302) + Server(73) + Lsp(26) + Tools(174) + Commands(42) + McpServer(30) + Agents(160) + Integration(1) |
+| Unit test suite | ✅ 1,400+ passing | Api(28) + Runtime(700+) + Server(73) + Lsp(26) + Tools(174) + Commands(42) + McpServer(30) + Agents(160) + Integration(1) |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |
@@ -112,6 +112,42 @@
 | `GET /v1/status` includes `active_sessions`, `max_sessions`, `session_ttl_seconds` | ✅ |
 | Lock disposed on `Evict()` and lost-race cleanup | ✅ |
 | Tests: locking, TTL eviction, LRU cap, active count | ✅ 4 new tests (9 total RuntimeSessionPoolTests) |
+
+### Phase 58 — Sovrant Trust Boundary ✅
+
+| Item | Status |
+|---|---|
+| `TrustBoundaryProvider` — `ILlmProvider` decorator wrapping 3-stage pipeline | ✅ Sanitize outbound → forward → restore inbound → ethical scan |
+| `IPromptSanitizer` / `PromptSanitizer` — sanitizes all text content in `MessagesRequest` | ✅ System prompt, TextBlock, ToolResultBlock.TextBlock, ToolUseBlock JSON input |
+| `RedactionMap` — bidirectional original↔placeholder mapping, scoped per request | ✅ Deterministic `[CATEGORY_N]` naming, never persisted |
+| `PiiDetector` — regex-based PII detection (email, phone, SSN, card, internal IP) | ✅ GeneratedRegex, public IPs excluded |
+| `CorporateDataDetector` — connection strings, API keys, cloud ARNs, internal hostnames | ✅ Configurable domains + allow-list |
+| `CustomPatternRegistry` — user-defined regex patterns from config | ✅ Category = uppercase name |
+| `IEthicalHarness` / `ContentPolicyEngine` — rule-based harmful content classifier | ✅ Standard/Strict/Enterprise strictness, 6+ categories, response scanning |
+| `EthicalAuditLog` — thread-safe in-memory compliance log | ✅ `ConcurrentQueue` with max capacity eviction |
+| `IntentVerificationBridge` — connects Phase 59's `IIntentGate` as first trust stage | ✅ Ethical harness runs before intent gate |
+| `TrustBoundaryConfig` — root config with Sanitizer, EthicalHarness, IntentVerification | ✅ Wired into `SovrantConfig` |
+| DI wiring — all trust boundary services registered in `ServiceCollectionExtensions` | ✅ |
+| Tests — 7 test files (72+ tests): PII, corporate data, redaction map, sanitizer, ethical engine, intent bridge, provider | ✅ |
+
+### Phase 59 — Agentic Loop Hardening ✅
+
+| Item | Status |
+|---|---|
+| `IIntentGate` / `SemanticIntentGate` — semantic intent classification replacing `LooksLikeToolRequest()` | ✅ Wraps existing `IntentClassifier`, adds RequiresTools + NeedsClarification logic |
+| `GraduatedToolTiers` — classifies all 49+ tools into Safe/Moderate/Dangerous/Escalation tiers | ✅ Static classification |
+| `IPlanPresenter` / `PlanPresenter` — formats plans as numbered step lists with destructive warnings | ✅ |
+| `PlanApprovalGate` — AlwaysApprove / ApproveDestructive / AlwaysAsk modes | ✅ |
+| `StepToolEnforcer` — per-step tool allow-lists | ✅ |
+| `IntentInjector` — appends step intent and allowed tools to system prompt | ✅ |
+| `ExecutionBudget` — max tool calls, max files modified, max execution time | ✅ |
+| `IOrchestrationRouter` / `HeuristicOrchestrationRouter` — recommends Direct/SubAgent/Team/Swarm/Mission | ✅ |
+| `PlanProgressTracker` — emits `StepProgress` events on step start/complete | ✅ |
+| `ModeAwarePermissionPolicy` refactored — `DontAsk` uses graduated tiers | ✅ Safe/Moderate auto-approve, Dangerous requires confirmation |
+| `RuntimeEvent.ClarificationNeeded` — emitted when intent is ambiguous | ✅ Wired into CLI, Desktop, Web, Server |
+| `RuntimeEvent.PlanPresented` — emitted after plan creation | ✅ Wired into CLI, Desktop, Web, Server |
+| `RuntimeEvent.StepProgress` — emitted on step start/complete | ✅ Wired into CLI, Desktop, Web, Server |
+| Server SSE — `SovrantEvent` extension fields for Phase 59 events | ✅ `clarification`, `plan_id`, `formatted_plan`, `requires_approval`, `step_current/total/intent/status` |
 
 ---
 
