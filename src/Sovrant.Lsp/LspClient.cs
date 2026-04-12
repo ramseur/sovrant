@@ -62,13 +62,22 @@ public sealed class LspClient : ILspClient
             ?? throw new InvalidOperationException($"Failed to start language server: {_config.Command}");
 
         // Drain stderr to logger so it doesn't block.
+        var stderrProcess = _process;
         _ = Task.Run(async () =>
         {
-            while (!_process.HasExited)
+            try
             {
-                var line = await _process.StandardError.ReadLineAsync(ct).ConfigureAwait(false);
-                if (line is not null)
-                    _logger.LogDebug("[{Language} stderr] {Line}", Language, line);
+                while (!stderrProcess.HasExited && !ct.IsCancellationRequested)
+                {
+                    var line = await stderrProcess.StandardError.ReadLineAsync(ct).ConfigureAwait(false);
+                    if (line is not null)
+                        _logger.LogDebug("[{Language} stderr] {Line}", Language, line);
+                }
+            }
+            catch (OperationCanceledException) { /* expected on shutdown */ }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "LSP stderr drain for {Language} ended with error", Language);
             }
         }, ct);
 

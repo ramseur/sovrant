@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { SovrantClient } from "../client.js";
 import type {
   SovrantClientOptions,
@@ -83,8 +83,25 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  // Keep a stable client ref — recreated only when options change identity.
+  // Recreate client when connection-relevant options change.
   const clientRef = useRef<SovrantClient | null>(null);
+  const {
+    baseUrl,
+    token,
+    model,
+    sessionId,
+    maxRetries,
+    timeoutMs,
+    llmApiKey,
+    llmBaseUrl,
+  } = options;
+
+  useEffect(() => {
+    clientRef.current = new SovrantClient(options);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- track individual fields
+  }, [baseUrl, token, model, sessionId, maxRetries, timeoutMs, llmApiKey, llmBaseUrl]);
+
+  // Ensure a client exists on first render (before the effect fires).
   if (!clientRef.current) {
     clientRef.current = new SovrantClient(options);
   }

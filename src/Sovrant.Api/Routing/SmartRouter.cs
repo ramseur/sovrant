@@ -10,7 +10,7 @@ namespace Sovrant.Api.Routing;
 /// by latency/cost/health, routes each request to the optimal provider, and
 /// falls back automatically on failure. Ported from smart_router.py.
 /// </summary>
-public sealed class SmartRouter : ISmartRouter, IDisposable
+public sealed class SmartRouter : ISmartRouter, IAsyncDisposable, IDisposable
 {
     private readonly IReadOnlyList<ProviderInfo> _providers;
     private readonly Dictionary<string, ProviderInfo> _providersByName;
@@ -258,15 +258,14 @@ public sealed class SmartRouter : ISmartRouter, IDisposable
         if (!_providersByName.TryGetValue(providerName, out var info))
             return Task.CompletedTask;
 
-        info.RequestCount++;
+        info.IncrementRequests();
         if (success)
         {
-            const double alpha = 0.3;
-            info.AvgLatencyMs = alpha * durationMs + (1 - alpha) * info.AvgLatencyMs;
+            info.UpdateAvgLatency(durationMs);
         }
         else
         {
-            info.ErrorCount++;
+            info.IncrementErrors();
             if (info.RequestCount >= 3 && info.ErrorRate > 0.7)
             {
                 _logHighErrorRate(_logger, providerName, info.ErrorRate, null);
@@ -351,12 +350,27 @@ public sealed class SmartRouter : ISmartRouter, IDisposable
     }
 
     /// <inheritdoc/>
+    public async ValueTask DisposeAsync()
+    {
+        await _shutdownCts.CancelAsync().ConfigureAwait(false);
+        Task[] tasks;
+        lock (_recheckTasks) { tasks = [.. _recheckTasks]; }
+        try
+        {
+            await Task.WhenAny(Task.WhenAll(tasks), Task.Delay(TimeSpan.FromSeconds(5))).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { /* expected during shutdown */ }
+        _shutdownCts.Dispose();
+    }
+
+    /// <inheritdoc/>
     public void Dispose()
     {
         _shutdownCts.Cancel();
         Task[] tasks;
         lock (_recheckTasks) { tasks = [.. _recheckTasks]; }
-        Task.WhenAll(tasks).Wait(TimeSpan.FromSeconds(5));
+        try { Task.WhenAll(tasks).Wait(TimeSpan.FromSeconds(5)); }
+        catch (AggregateException) { /* timeout — acceptable during shutdown */ }
         _shutdownCts.Dispose();
     }
 }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -103,21 +104,26 @@ public static class McpServerSetup
                 Content = [new TextContentBlock { Text = result }],
             };
         }
-        catch (InvalidOperationException ex)
+        catch (OperationCanceledException)
         {
-            return ErrorResult(ex);
+            return ErrorResult(new InvalidOperationException("Tool execution was cancelled."));
         }
-        catch (IOException ex)
-        {
-            return ErrorResult(ex);
-        }
-        catch (JsonException ex)
+#pragma warning disable CA1031 // Catch-all is intentional: MCP tools must never crash the server process
+        catch (Exception ex)
+#pragma warning restore CA1031
         {
             return ErrorResult(ex);
         }
     }
 
     // ── Resources ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Resolves the MCP owner identity. MCP runs over stdio (single-user), so we
+    /// use the same SOVRANT_USER_ID / OS-username convention as Desktop and Web.
+    /// </summary>
+    private static string GetOwnerUserId() =>
+        Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
 
     private static ListResourcesResult ListResourcesSync()
     {
@@ -127,14 +133,14 @@ public static class McpServerSetup
             {
                 Uri = "sovrant://sessions",
                 Name = "Session list",
-                Description = "All session IDs that have at least one entry.",
+                Description = "Session IDs owned by the current user.",
                 MimeType = "application/json",
             },
             new()
             {
                 Uri = "sovrant://config",
                 Name = "Server configuration",
-                Description = "Current Sovrant runtime configuration.",
+                Description = "Current Sovrant runtime configuration (credentials redacted).",
                 MimeType = "application/json",
             },
         };
@@ -148,11 +154,12 @@ public static class McpServerSetup
         CancellationToken ct)
     {
         var uri = requestParams.Uri ?? string.Empty;
+        var ownerUserId = GetOwnerUserId();
 
         if (string.Equals(uri, "sovrant://sessions", StringComparison.Ordinal))
         {
             var store = services.GetRequiredService<ISessionStore>();
-            var sessions = await store.ListAsync(ownerUserId: null, ct).ConfigureAwait(false);
+            var sessions = await store.ListAsync(ownerUserId, ct).ConfigureAwait(false);
             var json = JsonSerializer.Serialize(sessions, s_jsonOptions);
             return new ReadResourceResult
             {
@@ -164,6 +171,17 @@ public static class McpServerSetup
         {
             var config = services.GetRequiredService<SovrantConfig>();
             var json = JsonSerializer.Serialize(config, s_jsonOptions);
+            // Redact credential fields before exposing via MCP.
+            var node = JsonNode.Parse(json);
+            if (node is JsonObject obj)
+            {
+                foreach (var key in new[] { "api_key", "llm_api_key" })
+                {
+                    if (obj.ContainsKey(key))
+                        obj[key] = "***";
+                }
+                json = obj.ToJsonString(s_jsonOptions);
+            }
             return new ReadResourceResult
             {
                 Contents = [new TextResourceContents { Uri = uri, MimeType = "application/json", Text = json }],
@@ -175,8 +193,16 @@ public static class McpServerSetup
         if (uri.StartsWith(sessionsPrefix, StringComparison.Ordinal))
         {
             var sessionId = Uri.UnescapeDataString(uri[sessionsPrefix.Length..]);
+            if (string.IsNullOrWhiteSpace(sessionId))
+            {
+                return new ReadResourceResult
+                {
+                    Contents = [new TextResourceContents { Uri = uri, MimeType = "text/plain", Text = "Invalid session ID." }],
+                };
+            }
+
             var store = services.GetRequiredService<ISessionStore>();
-            var entries = await store.LoadAsync(sessionId, ownerUserId: null, ct).ConfigureAwait(false);
+            var entries = await store.LoadAsync(sessionId, ownerUserId, ct).ConfigureAwait(false);
             var json = JsonSerializer.Serialize(entries, s_jsonOptions);
             return new ReadResourceResult
             {

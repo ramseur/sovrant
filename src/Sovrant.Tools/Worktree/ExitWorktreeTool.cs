@@ -31,34 +31,34 @@ public sealed class ExitWorktreeTool : ITool
             return "No active worktree. Nothing to exit.";
 
         var force = input.TryGetProperty("force", out var fv) && fv.GetBoolean();
-        var args = force
-            ? $"worktree remove --force {EscapeArg(path)}"
-            : $"worktree remove {EscapeArg(path)}";
+        var gitArgs = force
+            ? new[] { "worktree", "remove", "--force", path }
+            : new[] { "worktree", "remove", path };
 
-        var (output, exitCode) = await RunGitAsync(args, ct).ConfigureAwait(false);
+        var (output, exitCode) = await RunGitAsync(gitArgs, ct).ConfigureAwait(false);
         if (exitCode != 0)
-            return $"Error removing worktree: git {args}\n{output}";
+            return $"Error removing worktree:\n{output}";
 
         _state.Path = null;
         var result = $"Worktree at '{path}' removed. Session returned to main working tree.";
         return string.IsNullOrEmpty(output) ? result : $"{result}\n{output}";
     }
 
-    private static async Task<(string Output, int ExitCode)> RunGitAsync(string args, CancellationToken ct)
+    private static async Task<(string Output, int ExitCode)> RunGitAsync(string[] args, CancellationToken ct)
     {
         var sb = new StringBuilder();
-        using var proc = new Process
+        var psi = new ProcessStartInfo
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "git",
-                Arguments = args,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            },
+            FileName = "git",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
         };
+        foreach (var arg in args)
+            psi.ArgumentList.Add(arg);
+
+        using var proc = new Process { StartInfo = psi };
         proc.OutputDataReceived += (_, e) => { if (e.Data is not null) sb.AppendLine(e.Data); };
         proc.ErrorDataReceived  += (_, e) => { if (e.Data is not null) sb.AppendLine(e.Data); };
         proc.Start();
@@ -67,9 +67,6 @@ public sealed class ExitWorktreeTool : ITool
         await proc.WaitForExitAsync(ct).ConfigureAwait(false);
         return (sb.ToString().Trim(), proc.ExitCode);
     }
-
-    private static string EscapeArg(string arg) =>
-        arg.Contains(' ', StringComparison.Ordinal) ? $"\"{arg}\"" : arg;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

@@ -1,7 +1,7 @@
 # Sovrant Code Review
 
-**Date:** 2026-04-05
-**Scope:** Full codebase — Runtime, Providers, Server, Tools (39), Agents, CLI, TypeScript SDK
+**Date:** 2026-04-05 (Round 1) · 2026-04-12 (Round 2 — deep review)
+**Scope:** Full codebase — Runtime, Providers, Server, Tools (39), Agents, CLI, Desktop, Web, LSP, MCP, TypeScript SDK
 **Build:** 329 tests passing, 0 warnings
 **Tag:** v1.1.0-port2-agents (commit e8db520)
 
@@ -9,20 +9,29 @@
 
 ## Executive Summary
 
-| Severity | Count | Breakdown |
-|----------|-------|-----------|
-| **CRITICAL** | 9 | Server SSRF, command injection (4 tools), rate limit bypass, auth logic, unhandled exceptions, OAuth callback |
-| **HIGH** | 24 | CTS leaks, thread safety, credential exposure, missing timeouts, weak typing, test gaps |
-| **MEDIUM** | 58 | Concurrency races, validation gaps, inconsistent patterns, performance, error handling |
-| **LOW** | 38 | Naming, dead code, minor allocations, missing logging |
-| **TOTAL** | **129** | |
+| Severity | Round 1 | Round 2 (new) | Total |
+|----------|---------|---------------|-------|
+| **CRITICAL** | 9 | 10 | **19** |
+| **HIGH** | 24 | 20 | **44** |
+| **MEDIUM** | 58 | 18 | **76** |
+| **LOW** | 38 | 12 | **50** |
+| **TOTAL** | **129** | **60** | **189** |
 
-**Top priorities:**
-1. SSRF via `X-LLM-Base-Url` — no URL validation on user-supplied provider base URL
-2. Command injection in BashTool, PowerShellTool, ReplTool, TaskCreateTool — simplistic escaping
-3. Rate limiting bypass via IP spoofing / "anonymous" fallback key
-4. CancellationTokenSource leaks in MultiAgentCoordinator and ProcessBasedMultiAgentSystem
-5. Missing request timeouts across server, SDK, and webhook delivery
+**Round 1 top priorities (all COMPLETE — Phases A–F):**
+1. ~~SSRF via `X-LLM-Base-Url`~~ — fixed
+2. ~~Command injection in BashTool, PowerShellTool, ReplTool, TaskCreateTool~~ — fixed
+3. ~~Rate limiting bypass~~ — fixed
+4. ~~CancellationTokenSource leaks~~ — fixed
+5. ~~Missing request timeouts~~ — fixed
+
+**Round 2 top priorities (NEW):**
+1. MCP Server exposes all sessions without owner filtering (`ownerUserId: null`)
+2. Missing authorization checks in ProjectRoutes — no HTTP-layer permission enforcement
+3. Command injection in EnterWorktreeTool/ExitWorktreeTool — same `EscapeArg` pattern as original 1.2–1.5
+4. Race condition in SmartRouter `ProviderInfo` state updates — non-atomic counter increments
+5. useChat React hook never recreates client when options change — stale credentials
+6. Unhandled fire-and-forget task exceptions in Web/Desktop/LSP startup paths
+7. ETagMiddleware buffers entire response body — memory exhaustion on large/streaming responses
 
 ---
 
@@ -510,3 +519,407 @@ finally {
 2. **Add tool execution tests** — Mock `IToolRegistry` and test GlobTool, GrepTool, ReadFileTool edge cases (invalid paths, large files, binary detection).
 3. **Target 60% line coverage** — Focus on server (0% → 50%) and tools (25% → 50%) for highest ROI.
 4. **Add mutation testing** — Line coverage doesn't guarantee assertion quality. Consider Stryker.NET for mutation score.
+
+---
+
+# Round 2 — Deep Code Review (2026-04-12)
+
+**Scope:** Line-by-line review of all `.cs` and `.ts` files across Server, Tools, Runtime, Providers, Agents, CLI, Desktop, Web, LSP, MCP Server, and TypeScript SDK. Focused on issues missed in Round 1 and new code added since Phases A–F.
+
+---
+
+## 8. CRITICAL Issues (Round 2)
+
+### 8.1 MCP Server Exposes All Sessions — Missing Owner Filtering
+**Layer:** MCP Server
+**File:** `src/Sovrant.McpServer/McpServerSetup.cs:155,179`
+**Problem:** `store.ListAsync(ownerUserId: null, ct)` and `store.LoadAsync(sessionId, ownerUserId: null, ct)` pass `null` for the owner filter. Any authenticated MCP client can read every user's conversation history, tool outputs, and sensitive data.
+**Fix:** Extract user identity from MCP client connection context and pass it as `ownerUserId`. If MCP protocol doesn't provide user context, require an explicit owner claim in the MCP token and validate it.
+
+### 8.2 Missing Authorization Checks in ProjectRoutes
+**Layer:** Server
+**File:** `src/Sovrant.Server/Routes/ProjectRoutes.cs:41-189`
+**Problem:** None of the ProjectRoutes handlers (ListProjects, CreateProject, UpdateProject, DeleteProject, membership operations) perform HTTP-layer authorization checks. While `ProjectContextMiddleware` calls `HasAccessAsync()`, the route handlers themselves have zero `ctx.IsAdmin()` or `ctx.CanActOnUser()` guards. If the service layer has any auth bug, or direct API calls bypass middleware, attackers can manipulate other users' projects.
+**Fix:** Add explicit authorization checks in each handler:
+```csharp
+if (!ctx.IsAdmin() && !(await projectService.CanUserModifyAsync(id, ctx.GetUserId(), ct)))
+    return Results.Forbid();
+```
+
+### 8.3 Command Injection — EnterWorktreeTool
+**Layer:** Tools
+**File:** `src/Sovrant.Tools/Worktree/EnterWorktreeTool.cs:44-46,64`
+**Problem:** Git arguments are constructed via string concatenation with user input. `EscapeArg()` only adds quotes for spaces — shell metacharacters (`"`, `\`, `$`, backticks) are not escaped. Same pattern as the original 1.2–1.5 issues that were fixed in Phase A, but the worktree tools were missed.
+**Fix:** Use `ProcessStartInfo.ArgumentList` instead of building an `Arguments` string:
+```csharp
+var psi = new ProcessStartInfo { FileName = "git" };
+psi.ArgumentList.Add("worktree");
+psi.ArgumentList.Add("add");
+if (createNew) psi.ArgumentList.Add("-b");
+psi.ArgumentList.Add(branch);
+psi.ArgumentList.Add(path);
+```
+
+### 8.4 Command Injection — ExitWorktreeTool
+**Layer:** Tools
+**File:** `src/Sovrant.Tools/Worktree/ExitWorktreeTool.cs:34-36,55`
+**Problem:** Same `EscapeArg`-only pattern as 8.3.
+**Fix:** Same — use `ProcessStartInfo.ArgumentList`.
+
+### 8.5 Race Condition in ProviderInfo State Updates
+**Layer:** Providers
+**File:** `src/Sovrant.Api/Routing/SmartRouter.cs:261-273`
+**Problem:** `ProviderInfo` properties (`RequestCount`, `ErrorCount`, `AvgLatencyMs`, `Healthy`) are modified without synchronization from multiple threads. `info.RequestCount++` is not atomic — concurrent increments lose counts. The exponential moving average calculation is a classic read-modify-write race.
+**Fix:** Use `Interlocked.Increment` for counters. For `AvgLatencyMs`, use `lock` or compute-and-swap with `Interlocked.CompareExchange`.
+
+### 8.6 Blocking Wait in SmartRouter.Dispose
+**Layer:** Providers
+**File:** `src/Sovrant.Api/Routing/SmartRouter.cs:359`
+**Problem:** `Task.WhenAll(tasks).Wait(TimeSpan.FromSeconds(5))` blocks the calling thread during disposal. If tasks don't complete, they are abandoned without cleanup. Can deadlock if called from a synchronization context.
+**Fix:** Implement `IAsyncDisposable` and use `await Task.WhenAll(tasks)` with a timeout via `Task.WhenAny`:
+```csharp
+public async ValueTask DisposeAsync()
+{
+    _shutdownCts.Cancel();
+    Task[] tasks;
+    lock (_recheckTasks) { tasks = [.. _recheckTasks]; }
+    await Task.WhenAny(Task.WhenAll(tasks), Task.Delay(TimeSpan.FromSeconds(5)));
+    _shutdownCts.Dispose();
+}
+```
+
+### 8.7 Unhandled Fire-and-Forget Task Exceptions — Startup Paths
+**Layer:** Web, Desktop, LSP
+**Files:** `src/Sovrant.Web/Program.cs:78`, `src/Sovrant.Desktop/App.axaml.cs:141`, `src/Sovrant.Lsp/LspClient.cs:64`
+**Problem:** `_ = Task.Run(async () => { ... })` without any exception handling. If the background task throws, the exception becomes an unobserved task exception that can terminate the process (depending on `TaskScheduler.UnobservedTaskException` configuration).
+**Fix:** Wrap all fire-and-forget tasks with try-catch:
+```csharp
+_ = Task.Run(async () =>
+{
+    try { /* ... */ }
+    catch (Exception ex) { logger.LogError(ex, "Background initialization failed"); }
+});
+```
+
+### 8.8 useChat Hook Never Recreates Client on Options Change
+**Layer:** TypeScript SDK
+**File:** `sdk/js/src/hooks/use-chat.ts:86-90`
+**Problem:** `clientRef.current` is created once via `useRef` and never updated when `options` (baseUrl, token, model, llmApiKey) change. In multi-tenant scenarios or credential rotation, the hook continues using stale configuration silently.
+**Fix:**
+```typescript
+useEffect(() => {
+    clientRef.current = new SovrantClient(options);
+}, [options.baseUrl, options.token, options.model, options.sessionId,
+    options.maxRetries, options.timeoutMs, options.llmApiKey, options.llmBaseUrl]);
+```
+
+### 8.9 SSE Parser Silently Drops Malformed Chunks
+**Layer:** TypeScript SDK
+**File:** `sdk/js/src/sse.ts:62-66`
+**Problem:** `try { yield safeJsonParse(data); } catch { }` silently discards unparseable chunks. Users see incomplete responses with no error indication. Impossible to debug in production.
+**Fix:** Add warning logging and optional error callback:
+```typescript
+export async function* parseSSEStream(
+    response: Response,
+    onParseError?: (error: Error, data: string) => void
+): AsyncGenerator<ChatCompletionChunk> {
+    // ...
+    try { yield safeJsonParse(data); }
+    catch (err) { onParseError?.(err as Error, data); }
+}
+```
+
+### 8.10 Null Dereference in ShellEnvironment Process.Start()
+**Layer:** Tools
+**File:** `src/Sovrant.Tools/Shell/ShellEnvironment.cs:68`
+**Problem:** `using var proc = Process.Start(psi)!;` uses null-forgiving operator. `Process.Start()` can return `null` if the process fails to start, causing `NullReferenceException`.
+**Fix:** Check for null return:
+```csharp
+var proc = Process.Start(psi);
+if (proc == null) return new PowerShellInfo(path, Version: null, Edition: null);
+using (proc) { /* ... */ }
+```
+
+---
+
+## 9. HIGH Issues (Round 2)
+
+### 9.1 ETagMiddleware Buffers Entire Response Body
+**Layer:** Server
+**File:** `src/Sovrant.Server/Middleware/ETagMiddleware.cs:33-64`
+**Problem:** Buffers the full response into a `MemoryStream` to compute ETag hash. For streaming responses (SSE, large files), this defeats streaming, causes memory spikes, and enables DoS via large response amplification. No buffer size limit.
+**Fix:** Skip buffering for streaming/large responses:
+```csharp
+if (context.Response.ContentType?.Contains("text/event-stream") == true)
+{ await next(context); return; }
+```
+
+### 9.2 SSRF Protection Incomplete — DNS Rebinding
+**Layer:** Server
+**File:** `src/Sovrant.Server/Routes/ChatRoutes.cs:369-395`
+**Problem:** `IsReservedAddress()` only blocks IP-based requests. DNS names are allowed unconditionally (`return false;` for non-IP hosts). Attackers can use `localhost.example.com` or DNS rebinding to reach internal endpoints.
+**Fix:** Implement async DNS resolution with timeout, block resolved private IPs, and maintain a denylist of known internal hostnames.
+
+### 9.3 Missing Model Validation on Session Config Updates
+**Layer:** Server
+**Files:** `src/Sovrant.Server/Routes/SessionRoutes.cs:162-163`, `src/Sovrant.Server/Routes/WebhookRoutes.cs:79-80`
+**Problem:** `req.Model` is assigned directly to `sessionConfig.Model` without calling `InputValidation.IsValidModelName()`. ChatRoutes validates (line 190) but SessionRoutes and WebhookRoutes do not.
+**Fix:** Add validation before assignment in all routes.
+
+### 9.4 Fire-and-Forget SSE Writes in SwarmRoutes
+**Layer:** Server
+**File:** `src/Sovrant.Server/Routes/SwarmRoutes.cs:88`
+**Problem:** `_ = WriteSseEventAsync(ctx.Response, evt.GetType().Name, evt, CancellationToken.None)` — SSE writes are fire-and-forget. If the client disconnects, writes fail silently with no backpressure or error logging.
+**Fix:** Await the write and handle `OperationCanceledException` for client disconnection.
+
+### 9.5 Missing CancellationToken in SessionEvictionService
+**Layer:** Server
+**File:** `src/Sovrant.Server/SessionEvictionService.cs:50-64`
+**Problem:** `_pool.EvictExpired()` is called without passing the `stoppingToken`. If eviction involves I/O, it can't be cancelled on shutdown.
+**Fix:** Pass `stoppingToken` to `EvictExpired`.
+
+### 9.6 JsonDocument Not Disposed in Multiple Providers
+**Layer:** Providers
+**Files:** `src/Sovrant.Api/Providers/OpenAiCompatProvider.cs:246`, `ProviderApiProvider.cs:120`, `OpenAiResponsesProvider.cs:231`
+**Problem:** `JsonDocument.Parse(body)` returns an `IDisposable`. While `using` is present in some cases, early-return code paths can exit before the `using` block completes disposal.
+**Fix:** Restructure to ensure all paths go through the `using` block.
+
+### 9.7 Volatile Field Without Proper Synchronization — SmartRouter
+**Layer:** Providers
+**File:** `src/Sovrant.Api/Routing/SmartRouter.cs:27`
+**Problem:** `volatile string? _pinnedProviderName` — volatile ensures visibility but read-then-use is not atomic. Provider could be unpinned between read and use.
+**Fix:** Use `Interlocked.Exchange`/`Interlocked.CompareExchange` or proper locking.
+
+### 9.8 Unsafe Deserialization in HookRunner
+**Layer:** Runtime
+**File:** `src/Sovrant.Runtime/Hooks/HookRunner.cs:24`
+**Problem:** JSON deserialization uses `PropertyNameCaseInsensitive = true` without `TypeInfoResolver`, enabling potential type confusion. Should use the source-generated `SovrantJsonContext`.
+**Fix:** Switch to source-generated serializer context.
+
+### 9.9 HttpClient Instance Creation Anti-Pattern — McpOAuthService
+**Layer:** Runtime
+**File:** `src/Sovrant.Runtime/Mcp/McpOAuthService.cs:64`
+**Problem:** `_http = new HttpClient()` — creates unshared instance per service. Causes socket exhaustion and port leaks. (Upgrade from L8 in Round 1.)
+**Fix:** Inject `IHttpClientFactory` or use a shared singleton `HttpClient`.
+
+### 9.10 Blocking GetAwaiter().GetResult() in Multiple Files
+**Layer:** Agents
+**Files:** `src/Sovrant.Agents/Shared/WorkspaceContext.cs:80,108`, `Swarm/SwarmSession.cs:90,95`, `Commands/ArtifactsCommand.cs:75`, `Web/Components/Pages/Integrations.razor:109`
+**Problem:** `.GetAwaiter().GetResult()` blocks threads and can deadlock (especially in UI/ASP.NET synchronization contexts).
+**Fix:** Make callers async end-to-end. Replace sync property getters with async methods.
+
+### 9.11 Fire-and-Forget Hooks Without Exception Handling
+**Layer:** Runtime
+**File:** `src/Sovrant.Runtime/Conversation/ConversationRuntime.cs:311,359`
+**Problem:** `_ = _hookRunner.RunAsync(...)` with `CancellationToken.None`. If hook throws, the exception is unobserved.
+**Fix:** Attach `.ContinueWith(t => logger.LogWarning(t.Exception, "Hook failed"), TaskContinuationOptions.OnlyOnFaulted)`.
+
+### 9.12 Race Condition in SwarmFileLockManager.ReleaseAll
+**Layer:** Agents
+**File:** `src/Sovrant.Agents/Swarm/SwarmFileLockManager.cs:39-44`
+**Problem:** Iterating `_fileLocks` dictionary while concurrent tasks may modify it. `ConcurrentDictionary` enumeration is safe but `TryRemove` during enumeration can miss items added concurrently.
+**Fix:** Snapshot keys first:
+```csharp
+var keysToRemove = _fileLocks.Where(kvp => kvp.Value == taskId).Select(kvp => kvp.Key).ToList();
+foreach (var key in keysToRemove) _fileLocks.TryRemove(key, out _);
+```
+
+### 9.13 Semaphore Leak in SwarmOrchestrator
+**Layer:** Agents
+**File:** `src/Sovrant.Agents/Swarm/SwarmOrchestrator.cs:128-192`
+**Problem:** If `Task.WhenAll(execTasks)` throws during wave execution, semaphore slots acquired by completed tasks may not be released before the semaphore is disposed in `finally`.
+**Fix:** Track pending semaphore holders and release in catch block before re-throw.
+
+### 9.14 Stream Callback Exceptions Crash Entire Stream
+**Layer:** TypeScript SDK
+**File:** `sdk/js/src/client.ts:134-179`
+**Problem:** If any callback (`onText`, `onToolUse`, `onComplete`) throws, the stream terminates early, all subsequent chunks are lost, and `onComplete` is never called with final data.
+**Fix:** Wrap each callback invocation in try-catch.
+
+### 9.15 useCallback Missing Critical Dependencies
+**Layer:** TypeScript SDK
+**File:** `sdk/js/src/hooks/use-chat.ts:92-170`
+**Problem:** `send` callback closes over `clientRef` but dependency array is `[isStreaming, options]`. If client is recreated (after fixing 8.8), the callback still references the old client.
+**Fix:** Include `clientRef` in dependencies, or better: use `useMemo` for client creation.
+
+### 9.16 MCP Server Incomplete Exception Handling
+**Layer:** MCP Server
+**File:** `src/Sovrant.McpServer/McpServerSetup.cs:97-118`
+**Problem:** Only `InvalidOperationException`, `IOException`, and `JsonException` are caught. Any other exception (`NullReferenceException`, `TimeoutException`, `ArgumentException`) crashes the MCP server process.
+**Fix:** Add a catch-all `catch (Exception ex)` that returns an error result and logs.
+
+### 9.17 MCP Config Resource Exposes Internal Configuration
+**Layer:** MCP Server
+**File:** `src/Sovrant.McpServer/McpServerSetup.cs:122-143`
+**Problem:** `sovrant://config` resource exposes the full `SovrantConfig` (model selection, provider URLs, permission modes, pinned providers) to any MCP client with token access.
+**Fix:** Either remove the config resource or gate it behind admin authorization.
+
+### 9.18 Path Traversal in SwarmToolExecutor
+**Layer:** Agents
+**File:** `src/Sovrant.Agents/Swarm/SwarmToolExecutor.cs:60-75`
+**Problem:** File paths from tool input are not validated. An agent could specify `../../sensitive_file` to escape the artifacts directory.
+**Fix:** Validate with `Path.GetFullPath` containment check against allowed root.
+
+### 9.19 Missing API Key Validation in ConfigRoutes PUT
+**Layer:** Server
+**File:** `src/Sovrant.Server/Routes/ConfigRoutes.cs:59-60`
+**Problem:** `req.ApiKey` is assigned to `config.LlmApiKey` without checking for empty/whitespace. An attacker could set the API key to empty, breaking all LLM calls server-wide.
+**Fix:** Validate non-empty and reasonable length before assignment.
+
+### 9.20 Message ID Collision Risk in useChat
+**Layer:** TypeScript SDK
+**File:** `sdk/js/src/hooks/use-chat.ts:46-49`
+**Problem:** `genId()` uses `Date.now()` + incrementing counter. Concurrent `send()` calls within the same millisecond can collide. React key reconciliation could fail.
+**Fix:** Use `crypto.randomUUID()`.
+
+---
+
+## 10. MEDIUM Issues (Round 2)
+
+### Server Layer
+
+| # | File | Issue |
+|---|------|-------|
+| R2-M1 | `Program.cs` (Kestrel config) | No explicit `MaxRequestBodySize` or `MaxRequestLineSize` — defaults may be too permissive for DoS prevention |
+| R2-M2 | `ConfigRoutes.cs:59-60` | No audit logging on API key changes (similar to Round 1 2.13 but for PUT path) |
+| R2-M3 | `WebhookCallbackService.cs:44` | No explicit `HttpClient.Timeout` — default 100s may be too long for callback endpoints |
+| R2-M4 | `ProjectRoutes.cs`, `WorkspaceRoutes.cs` | Unvalidated `{id}`, `{wid}`, `{userId}` route parameters — no format validation |
+
+### Runtime + Providers Layer
+
+| # | File | Issue |
+|---|------|-------|
+| R2-M5 | `RuntimeSessionPool.cs:87-91,216-224` | Fire-and-forget `hookRunner.RunAsync()` with `CancellationToken.None` — unobserved exceptions |
+| R2-M6 | `ConversationRuntime.cs:220` | Non-null assertion `provider!` is fragile — could NPE if routing exception is caught above |
+| R2-M7 | `HookRunner.cs:179` | Process not killed if `WaitForExitAsync` throws — add `if (!process.HasExited) process.Kill()` in finally |
+
+### Tools Layer
+
+| # | File | Issue |
+|---|------|-------|
+| R2-M8 | `PowerShellTool.cs:30-31` | No command length validation — very large commands base64-encoded can exceed PowerShell limits or cause OOM |
+| R2-M9 | `ProcessExecutor.cs:37-51` | OutputDataReceived/ErrorDataReceived callbacks don't check cancellation — buffering continues after cancel |
+| R2-M10 | `ProcessExecutor.cs:133` | Temp file cleanup silently fails with no logging — files accumulate |
+| R2-M11 | `TaskCreateTool.cs:48-139` | Process event handlers never unhooked — handlers leak if process is referenced elsewhere |
+| R2-M12 | `ReadFileTool.cs:33-36` | TOCTOU race: file could grow between size check and read |
+
+### Agents + Desktop Layer
+
+| # | File | Issue |
+|---|------|-------|
+| R2-M13 | `SwarmOrchestrator.cs:182-188` | On cancellation, individual task nodes left in "Running" state — should be marked "Cancelled" |
+| R2-M14 | `ChatViewModel.cs:107-120` | Messages added to UI collection from async context without `Dispatcher.UIThread.InvokeAsync` |
+| R2-M15 | `SlashCommandDispatcher.cs:42-52` | Unhandled exceptions when reading project-local command files (permissions, encoding) |
+| R2-M16 | `LspClient.cs:64-72` | stderr drain loop doesn't check cancellation token — can hang indefinitely |
+
+### TypeScript SDK + MCP Layer
+
+| # | File | Issue |
+|---|------|-------|
+| R2-M17 | `sse.ts:26-72` | No timeout on SSE stream reading — once response starts, can hang forever |
+| R2-M18 | `client.ts:113-128` | No validation of response JSON structure — `as ChatCompletionResponse` is a compile-time-only cast |
+
+---
+
+## 11. LOW Issues (Round 2)
+
+| # | Layer | File | Issue |
+|---|-------|------|-------|
+| R2-L1 | Server | `RequestLoggingMiddleware.cs:24-35` | Request paths logged at INFO may contain sensitive session IDs |
+| R2-L2 | Server | `ETagMiddleware.cs:45` | ETag uses truncated hash (first 8 bytes of SHA256) — acceptable but full hash is more robust |
+| R2-L3 | Server | `HttpContextAuthExtensions.cs:14-22` | `ctx.Items[]` cast to string silently returns null on type mismatch — hides bugs |
+| R2-L4 | Server | `WorkspaceContextMiddleware.cs:53-57` | Missing workspace silently allowed — null propagates to downstream handlers |
+| R2-L5 | Tools | Multiple tools | Inconsistent error message formats: `"Error: ..."` vs `"error:"` vs raw exception messages |
+| R2-L6 | Tools | `WebFetchTool.cs:50-53` | `ReadAsStringAsync` loads full response before truncation — use stream-based bounded read |
+| R2-L7 | Tools | `SkillCreateTool.cs:73` | `StartsWith(..., OrdinalIgnoreCase)` for path comparison doesn't respect Unix case-sensitivity |
+| R2-L8 | Providers | `IntentClassifier.cs:35-45` | Source-generated regexes have no timeout; only `Regex.IsMatch` call uses 5-second timeout |
+| R2-L9 | Agents | `WorkspaceContext.cs:55-93` | Deprecated `GetOrCreateArtifactsDirectory()` method still blocks with `.GetAwaiter().GetResult()` |
+| R2-L10 | SDK | `sse.ts:3-4` | `MAX_BUFFER_SIZE = 10 MB` is excessive for browser environments — consider 1 MB |
+| R2-L11 | SDK | `types.ts:186-198` | `StreamCallbacks` don't indicate if async callbacks are supported — `void | Promise<void>` |
+| R2-L12 | MCP | `McpServerSetup.cs:72-118` | No logging of tool executions — blind spot for observability |
+
+---
+
+## 12. Recommended Fix Order (Round 2)
+
+### Phase G — Critical Security & Data Exposure (do first)
+
+| # | Issue | Effort | Risk if Unfixed |
+|---|-------|--------|-----------------|
+| 8.1 | MCP `ownerUserId: null` data exposure | Medium | **Any MCP client reads all users' conversations** |
+| 8.2 | ProjectRoutes missing authorization | Medium | **Unauthorized project manipulation** |
+| 8.3-8.4 | Worktree tool command injection | Low | Arbitrary code execution via git args |
+| 9.17 | MCP config resource info disclosure | Low | Internal config leaked to clients |
+| 9.19 | API key can be set to empty via PUT | Low | All LLM calls break server-wide |
+
+### Phase H — Concurrency & Stability
+
+| # | Issue | Effort | Risk if Unfixed |
+|---|-------|--------|-----------------|
+| 8.5 | ProviderInfo non-atomic state updates | Medium | Lost metrics, incorrect routing decisions |
+| 8.6 | SmartRouter blocking dispose | Low | Deadlock on shutdown |
+| 8.7 | Unhandled fire-and-forget exceptions | Low | Process crash on background task failure |
+| 8.10 | ShellEnvironment null dereference | Low | NullReferenceException on failed process start |
+| 9.12 | SwarmFileLockManager race | Low | Incorrect lock state |
+| 9.13 | SwarmOrchestrator semaphore leak | Medium | Resource exhaustion under errors |
+| 9.10 | Blocking `.GetAwaiter().GetResult()` | Medium | Thread starvation, deadlocks |
+
+### Phase I — Server Hardening
+
+| # | Issue | Effort | Risk if Unfixed |
+|---|-------|--------|-----------------|
+| 9.1 | ETagMiddleware response buffering | Low | Memory exhaustion on streaming |
+| 9.2 | SSRF DNS rebinding gap | Medium | Internal endpoint probing via DNS |
+| 9.3 | Missing model validation in Session/Webhook routes | Low | Invalid model names persisted |
+| 9.4 | Fire-and-forget SSE writes | Low | Silent data loss |
+| 9.5 | SessionEviction missing cancellation | Low | Delayed shutdown |
+| R2-M1 | Kestrel request size limits | Low | DoS amplification |
+
+### Phase J — SDK & Hook Fixes
+
+| # | Issue | Effort | Risk if Unfixed |
+|---|-------|--------|-----------------|
+| 8.8 | useChat stale client | Medium | **Stale credentials/config in multi-tenant** |
+| 8.9 | SSE silent chunk loss | Low | Invisible data loss |
+| 9.14 | Callback exceptions crash stream | Low | Partial responses |
+| 9.15 | useCallback dependency array | Low | Stale closure bugs |
+| 9.16 | MCP incomplete exception handling | Low | Server crash on unexpected errors |
+| 9.20 | Message ID collision | Low | React key conflicts |
+
+### Phase K — Remaining Medium/Low Items
+
+| # | Issue | Effort | Risk if Unfixed |
+|---|-------|--------|-----------------|
+| 9.6 | JsonDocument disposal paths | Low | Memory pressure |
+| 9.7-9.8 | Volatile misuse, unsafe deserialization | Medium | Thread safety, type confusion |
+| 9.9 | HttpClient singleton in McpOAuth | Low | Socket exhaustion |
+| 9.11 | Hook fire-and-forget exceptions | Low | Unobserved failures |
+| 9.18 | SwarmToolExecutor path traversal | Low | File access outside sandbox |
+| R2-M series | Remaining medium items | Low each | Various |
+| R2-L series | Low items | Low each | Polish |
+
+---
+
+## 13. Round 2 — Systemic Patterns Observed
+
+### New Patterns (not in Round 1)
+
+1. **Fire-and-forget epidemic** — Round 1 identified 3 locations; Round 2 found 8+ more across Server (webhooks, SSE), Runtime (hooks, sessions), Desktop, Web, and LSP startup. A project-wide `SafeFireAndForget` extension method or `IBackgroundTaskQueue` would address all at once.
+
+2. **Blocking-over-async** — `GetAwaiter().GetResult()` appears in 5+ files (WorkspaceContext, SwarmSession, ArtifactsCommand, Integrations.razor). This pattern risks deadlocks in UI and ASP.NET contexts. Need async-all-the-way refactor for these call chains.
+
+3. **Authorization at wrong layer** — ProjectRoutes and MCP resources rely entirely on service-layer or middleware auth. HTTP handlers should have their own authorization checks as defense-in-depth. Missing in at least 2 critical paths.
+
+4. **Process spawning still inconsistent** — Despite `ProcessExecutor` from Phase D, worktree tools still use the old `EscapeArg` + string concatenation pattern. All process-spawning code should route through `ProcessExecutor` or use `ArgumentList`.
+
+5. **SSE/streaming not treated as special** — ETagMiddleware buffers streaming responses, SSE writes are fire-and-forget, and SDK SSE parsing silently drops errors. Streaming paths need explicit bypass/handling throughout the pipeline.
+
+### Round 1 Patterns — Status Update
+
+| Pattern | Round 1 Status | Round 2 Assessment |
+|---------|---------------|-------------------|
+| `volatile` misuse | Identified in 4 files | Still present in SmartRouter (9.7). Partially addressed but systemic fix still needed |
+| Fire-and-forget tasks | 3 locations identified | **Worsened**: 8+ new locations found. Systemic solution required |
+| Process execution duplication | `ProcessExecutor` created in Phase D | Worktree tools not migrated (8.3-8.4). Needs completion |
+| Input validation gaps | Phase C added `InputValidation` | New gaps in SessionRoutes, WebhookRoutes, ProjectRoutes (9.3, R2-M4). Need enforcement middleware |
+| Error response format | Inconsistent (Round 1) | Still inconsistent. No changes observed |

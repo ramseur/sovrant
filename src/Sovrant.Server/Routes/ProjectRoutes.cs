@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Sovrant.Runtime.Projects;
 using Sovrant.Runtime.Workspaces;
+using Sovrant.Server.Auth;
 using Sovrant.Server.Middleware;
 
 namespace Sovrant.Server.Routes;
@@ -65,19 +66,41 @@ internal static class ProjectRoutes
         }
     }
 
+    // ── Auth helper ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Verifies the caller has access to the given project. Admins always pass;
+    /// non-admin callers must be a project member (or have open access).
+    /// </summary>
+    private static async Task<IResult?> RequireProjectAccess(
+        HttpContext ctx, string projectId, IProjectService svc, CancellationToken ct)
+    {
+        if (ctx.IsAdmin()) return null; // admin — always allowed
+        var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
+        if (!await svc.HasAccessAsync(projectId, userId, ct).ConfigureAwait(false))
+            return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
+        return null;
+    }
+
     // ── Project CRUD ───────────────────────────────────────────────────────
 
     private static async Task<IResult> GetProject(
-        string id, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string id, IProjectService svc, CancellationToken ct)
     {
+        var deny = await RequireProjectAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
+
         var project = await svc.GetAsync(id, ct).ConfigureAwait(false);
         return project is null ? Results.NotFound(new { error = "Project not found." }) : Results.Ok(project);
     }
 
     private static async Task<IResult> UpdateProject(
-        string id, UpdateProjectRequest req, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string id, UpdateProjectRequest req, IProjectService svc, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
+        var deny = await RequireProjectAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
+
         var updated = await svc.UpdateAsync(id, req.Name, req.Slug, req.Description, ct).ConfigureAwait(false);
         return updated is null
             ? Results.NotFound(new { error = "Project not found." })
@@ -85,8 +108,11 @@ internal static class ProjectRoutes
     }
 
     private static async Task<IResult> DeleteProject(
-        string id, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string id, IProjectService svc, CancellationToken ct)
     {
+        if (!ctx.IsAdmin())
+            return Results.Json(new { error = "Admin role required to delete projects." }, statusCode: StatusCodes.Status403Forbidden);
+
         var deleted = await svc.DeleteAsync(id, ct).ConfigureAwait(false);
         return deleted
             ? Results.Ok(new { deleted = id })
@@ -94,8 +120,11 @@ internal static class ProjectRoutes
     }
 
     private static async Task<IResult> ArchiveProject(
-        string id, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string id, IProjectService svc, CancellationToken ct)
     {
+        var deny = await RequireProjectAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
+
         var archived = await svc.ArchiveAsync(id, ct).ConfigureAwait(false);
         return archived
             ? Results.Ok(new { archived = id })
@@ -103,8 +132,11 @@ internal static class ProjectRoutes
     }
 
     private static async Task<IResult> UnarchiveProject(
-        string id, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string id, IProjectService svc, CancellationToken ct)
     {
+        var deny = await RequireProjectAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
+
         var unarchived = await svc.UnarchiveAsync(id, ct).ConfigureAwait(false);
         return unarchived
             ? Results.Ok(new { unarchived = id })
@@ -114,15 +146,21 @@ internal static class ProjectRoutes
     // ── Membership ─────────────────────────────────────────────────────────
 
     private static async Task<IResult> ListMembers(
-        string id, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string id, IProjectService svc, CancellationToken ct)
     {
+        var deny = await RequireProjectAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
+
         var members = await svc.ListMembersAsync(id, ct).ConfigureAwait(false);
         return Results.Ok(new { members });
     }
 
     private static async Task<IResult> AddMember(
-        string id, AddProjectMemberRequest req, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string id, AddProjectMemberRequest req, IProjectService svc, CancellationToken ct)
     {
+        if (!ctx.IsAdmin())
+            return Results.Json(new { error = "Admin role required to manage members." }, statusCode: StatusCodes.Status403Forbidden);
+
         ArgumentNullException.ThrowIfNull(req);
         if (string.IsNullOrWhiteSpace(req.UserId))
             return Results.BadRequest(new { error = "user_id is required." });
@@ -138,8 +176,11 @@ internal static class ProjectRoutes
     }
 
     private static async Task<IResult> RemoveMember(
-        string id, string userId, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string id, string userId, IProjectService svc, CancellationToken ct)
     {
+        if (!ctx.IsAdmin())
+            return Results.Json(new { error = "Admin role required to manage members." }, statusCode: StatusCodes.Status403Forbidden);
+
         var removed = await svc.RemoveMemberAsync(id, userId, ct).ConfigureAwait(false);
         return removed
             ? Results.Ok(new { removed = true })
@@ -149,8 +190,11 @@ internal static class ProjectRoutes
     // ── Config ─────────────────────────────────────────────────────────────
 
     private static async Task<IResult> GetConfig(
-        string id, bool? resolved, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string id, bool? resolved, IProjectService svc, CancellationToken ct)
     {
+        var deny = await RequireProjectAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
+
         var config = (resolved ?? false)
             ? await svc.GetResolvedConfigAsync(id, ct).ConfigureAwait(false)
             : await svc.GetConfigAsync(id, ct).ConfigureAwait(false);
@@ -158,8 +202,11 @@ internal static class ProjectRoutes
     }
 
     private static async Task<IResult> PutConfig(
-        string id, Dictionary<string, string> values, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string id, Dictionary<string, string> values, IProjectService svc, CancellationToken ct)
     {
+        var deny = await RequireProjectAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
+
         ArgumentNullException.ThrowIfNull(values);
         await svc.SetConfigAsync(id, values, ct).ConfigureAwait(false);
         return Results.Ok(new { updated = true });
@@ -168,22 +215,31 @@ internal static class ProjectRoutes
     // ── Sessions, Usage, Memory ────────────────────────────────────────────
 
     private static async Task<IResult> ListSessions(
-        string id, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string id, IProjectService svc, CancellationToken ct)
     {
+        var deny = await RequireProjectAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
+
         var sessions = await svc.ListSessionsAsync(id, ct).ConfigureAwait(false);
         return Results.Ok(new { sessions });
     }
 
     private static async Task<IResult> GetUsage(
-        string id, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string id, IProjectService svc, CancellationToken ct)
     {
+        var deny = await RequireProjectAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
+
         var usage = await svc.GetUsageAsync(id, ct).ConfigureAwait(false);
         return Results.Ok(usage);
     }
 
     private static async Task<IResult> GetMemory(
-        string id, string? layer, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string id, string? layer, IProjectService svc, CancellationToken ct)
     {
+        var deny = await RequireProjectAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
+
         var memory = await svc.GetMemoryAsync(id, layer, ct).ConfigureAwait(false);
         return Results.Ok(new { memory });
     }

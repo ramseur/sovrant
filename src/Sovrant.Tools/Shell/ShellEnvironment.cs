@@ -65,7 +65,9 @@ public sealed class ShellEnvironment
             psi.ArgumentList.Add("-Command");
             psi.ArgumentList.Add("$PSVersionTable.PSVersion.ToString() + '|' + $PSVersionTable.PSEdition");
 
-            using var proc = System.Diagnostics.Process.Start(psi)!;
+            using var proc = System.Diagnostics.Process.Start(psi);
+            if (proc is null)
+                return new PowerShellInfo(path, Version: null, Edition: null);
             if (!proc.WaitForExit(5000))
             {
                 try { proc.Kill(); } catch (InvalidOperationException) { }

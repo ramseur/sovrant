@@ -41,33 +41,33 @@ public sealed class EnterWorktreeTool : ITool
         // Run: git worktree add <path> <branch>
         // If branch does not exist, add -b to create it.
         var createNew = input.TryGetProperty("create_branch", out var cb) && cb.GetBoolean();
-        var args = createNew
-            ? $"worktree add -b {EscapeArg(branch)} {EscapeArg(path)}"
-            : $"worktree add {EscapeArg(path)} {EscapeArg(branch)}";
+        var gitArgs = createNew
+            ? new[] { "worktree", "add", "-b", branch, path }
+            : new[] { "worktree", "add", path, branch };
 
-        var (output, exitCode) = await RunGitAsync(args, ct).ConfigureAwait(false);
+        var (output, exitCode) = await RunGitAsync(gitArgs, ct).ConfigureAwait(false);
         if (exitCode != 0)
-            return $"Error: git {args}\n{output}";
+            return $"Error: git worktree add\n{output}";
 
         _state.Path = System.IO.Path.GetFullPath(path);
         return $"Worktree created at '{_state.Path}' on branch '{branch}'.\n{output}".TrimEnd();
     }
 
-    private static async Task<(string Output, int ExitCode)> RunGitAsync(string args, CancellationToken ct)
+    private static async Task<(string Output, int ExitCode)> RunGitAsync(string[] args, CancellationToken ct)
     {
         var sb = new StringBuilder();
-        using var proc = new Process
+        var psi = new ProcessStartInfo
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "git",
-                Arguments = args,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            },
+            FileName = "git",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
         };
+        foreach (var arg in args)
+            psi.ArgumentList.Add(arg);
+
+        using var proc = new Process { StartInfo = psi };
         proc.OutputDataReceived += (_, e) => { if (e.Data is not null) sb.AppendLine(e.Data); };
         proc.ErrorDataReceived  += (_, e) => { if (e.Data is not null) sb.AppendLine(e.Data); };
         proc.Start();
@@ -76,10 +76,6 @@ public sealed class EnterWorktreeTool : ITool
         await proc.WaitForExitAsync(ct).ConfigureAwait(false);
         return (sb.ToString().Trim(), proc.ExitCode);
     }
-
-
-    private static string EscapeArg(string arg) =>
-        arg.Contains(' ', StringComparison.Ordinal) ? $"\"{arg}\"" : arg;
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

@@ -22,9 +22,15 @@ function safeJsonParse(data: string): ChatCompletionChunk {
  *
  * Handles partial lines across chunk boundaries and stops on `data: [DONE]`.
  * Enforces a maximum buffer size to guard against unbounded memory growth.
+ *
+ * @param response - The fetch Response whose body will be streamed.
+ * @param onParseError - Optional callback invoked when a chunk fails to parse.
+ *   Receives the error and the raw data string. When omitted, malformed chunks
+ *   are silently skipped.
  */
 export async function* parseSSEStream(
-  response: Response
+  response: Response,
+  onParseError?: (error: Error, rawData: string) => void
 ): AsyncGenerator<ChatCompletionChunk> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error("Response body is not readable.");
@@ -61,8 +67,12 @@ export async function* parseSSEStream(
 
         try {
           yield safeJsonParse(data);
-        } catch {
-          // Skip malformed chunks.
+        } catch (err) {
+          // Report malformed chunk via callback; skip if no handler provided.
+          onParseError?.(
+            err instanceof Error ? err : new Error(String(err)),
+            data.length > 200 ? data.slice(0, 200) + "…" : data
+          );
         }
       }
     }
