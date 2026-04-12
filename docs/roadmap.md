@@ -4480,30 +4480,92 @@ Team A (frontend)          PM Agent A          PM Coordinator          PM Agent 
 
 ---
 
-## Phase 58 — LLM Provider Sanitizer (PII & Corporate Data Stripping)
+## Phase 58 — Sovrant Trust Boundary (Sanitization, Ethical Harness & Intent Verification)
 
-**Depends on:** None (can be implemented independently)
+**Depends on:** Phase 59 (Agentic Loop Hardening — provides `IIntentGate` and `SemanticIntentGate`)
 
-**Goal:** Intercept all outbound LLM requests and strip personally identifiable information (PII) and corporate-sensitive data before prompts leave the Sovrant runtime, ensuring only the raw task reaches the provider. Reconstruct the original context on response return so the user experience is seamless.
+**Goal:** Establish a unified trust boundary that wraps every LLM provider interaction with three guarantees: (1) sensitive data never leaves the machine unless explicitly allowed, (2) the system enforces ethical guardrails at the Sovrant engine level — not delegated to whatever model happens to be running, and (3) user intent is verified before any data touches a provider. Businesses running any model — from Claude Opus to a 7B uncensored local model — get the same trust guarantees because they are enforced by Sovrant, not by the model.
 
 **Priority:** High
 
-### Motivation
+### Motivation — Why Sovrant Must Be the Trust Layer
 
-Every prompt sent to an LLM provider (OpenRouter, OpenAI, Google, etc.) leaves the user's machine and enters third-party infrastructure. Users working in corporate environments routinely paste code containing internal hostnames, API keys, database connection strings, employee names, email addresses, customer data, and proprietary business logic. Today, all of this goes to the provider unfiltered. The sanitizer sits at the provider boundary and ensures only the task-relevant content crosses the wire.
+Every prompt sent to an LLM provider leaves the user's machine and enters third-party infrastructure. Users working in corporate environments routinely paste code containing internal hostnames, API keys, database connection strings, employee names, email addresses, customer data, and proprietary business logic. Today, all of this goes to the provider unfiltered.
 
-### Design
+But sanitization alone is not enough. Some models have their own safety guardrails (Claude, GPT-4) and some don't (uncensored Ollama models, fine-tunes, smaller open models). **Sovrant cannot rely on the model being ethical — Sovrant must be the ethical layer.** A business running a cheap local model should be able to trust that Sovrant won't help produce harmful output, won't act on misunderstood intent, and won't leak sensitive data — the same guarantees as running a frontier model through a premium provider.
+
+The trust boundary is a single decorator pipeline that wraps every `ILlmProvider`. It is the place where Sovrant earns the trust of the businesses and individuals who use it.
+
+### Architecture — The Trust Pipeline
+
+Every turn flows through three stages before any data reaches a provider:
+
+```
+User message
+    ↓
+┌─────────────────────────────────────────────────┐
+│ Stage 1: Intent Verification (Phase 59 bridge)  │
+│  IIntentGate.ClassifyAsync()                    │
+│  → Ambiguous? Clarify first, don't send.        │
+│  → Clearly harmful? Block here, never reaches   │
+│    provider.                                     │
+│  → Clear and benign? Proceed.                    │
+└─────────────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────────────┐
+│ Stage 2: Ethical Harness                         │
+│  Sovrant-level content policy enforcement        │
+│  → Outbound: refuse prompts requesting harmful   │
+│    output (weapons synthesis, CSAM, doxxing,     │
+│    fraud instructions, etc.)                     │
+│  → Model-independent: works even with            │
+│    uncensored models                             │
+│  → Configurable strictness per workspace         │
+│  → Audit log: every block/flag recorded          │
+└─────────────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────────────┐
+│ Stage 3: Data Sanitizer                          │
+│  Strip PII & corporate data from outbound prompt │
+│  → RedactionMap keeps originals local            │
+│  → Deterministic placeholders ([EMAIL_1], etc.)  │
+│  → Configurable per workspace/project            │
+│  → Local providers (Ollama) exemptable           │
+└─────────────────────────────────────────────────┘
+    ↓
+            Provider (any model, any provider)
+    ↓
+┌─────────────────────────────────────────────────┐
+│ Stage 3 (return): Sanitizer Restore              │
+│  Replace placeholders with originals             │
+└─────────────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────────────┐
+│ Stage 2 (return): Ethical Harness — Response     │
+│  Scan model response before surfacing to user    │
+│  → Catch harmful content from uncensored models  │
+│  → Flag but don't silently drop (transparency)   │
+└─────────────────────────────────────────────────┘
+    ↓
+User sees clean, safe, correctly-understood response
+```
+
+### Sub-phase 58a — Data Sanitizer
+
+The sanitizer intercepts all outbound LLM requests and strips personally identifiable information (PII) and corporate-sensitive data before prompts leave the Sovrant runtime. It reconstructs the original context on response return so the user experience is seamless.
+
+#### Design
 
 | Component | Description |
 |---|---|
-| `IPromptSanitizer` | Pipeline interface — `SanitizeAsync(prompt) → (sanitized, redaction_map)` and `RestoreAsync(response, redaction_map) → restored` |
-| `RedactionMap` | Bidirectional mapping of original values ↔ placeholder tokens. Stays local, never sent to provider. |
+| `IPromptSanitizer` | Pipeline interface — `SanitizeAsync(request) → (sanitized, redaction_map)` and `RestoreAsync(response, redaction_map) → restored` |
+| `RedactionMap` | Bidirectional mapping of original values ↔ placeholder tokens. Stays local, never sent to provider, never persisted. |
 | `PiiDetector` | Regex + heuristic detector for common PII patterns: emails, phone numbers, SSNs, credit cards, IP addresses, UUIDs that match internal formats |
 | `CorporateDataDetector` | Configurable rules for corporate patterns: internal hostnames, domain-specific keywords, connection strings, API keys, env var values |
 | `CustomPatternRegistry` | User-defined regex/glob patterns via config — organizations add their own sensitive patterns |
 | `SanitizationPolicy` | Per-workspace/project config: what to redact, what to allow, severity levels (block vs. redact vs. warn) |
 
-### How it works
+#### How it works
 
 ```
 User prompt: "Fix the auth bug in api.acme-corp.internal connecting to postgres://admin:s3cret@db.acme.com:5432/users for user john.doe@acme.com"
@@ -4521,7 +4583,7 @@ LLM response: "The issue with [HOSTNAME_1] is likely a TLS certificate mismatch.
 Restored:   "The issue with api.acme-corp.internal is likely a TLS certificate mismatch. Check the connection at postgres://admin:s3cret@db.acme.com:5432/users..."
 ```
 
-### Built-in detectors
+#### Built-in detectors
 
 | Pattern | Examples | Default action |
 |---|---|---|
@@ -4535,51 +4597,112 @@ Restored:   "The issue with api.acme-corp.internal is likely a TLS certificate m
 | Internal hostnames | Configurable domain suffixes | Redact → `[HOSTNAME_N]` |
 | AWS/Azure/GCP resource ARNs | `arn:aws:`, `https://*.blob.core.windows.net` | Redact → `[CLOUD_RESOURCE_N]` |
 
+### Sub-phase 58b — Ethical Harness
+
+A Sovrant-level content policy that does not depend on the model having its own safety guardrails. This is what makes Sovrant safe to use with any model — the ethical enforcement happens before the prompt reaches the provider and after the response comes back.
+
+#### Design
+
+| Component | Description |
+|---|---|
+| `IEthicalHarness` | Interface — `EvaluateOutboundAsync(prompt) → EthicalVerdict` and `EvaluateInboundAsync(response) → EthicalVerdict` |
+| `EthicalVerdict` | Result: `Allow`, `Block(reason)`, `Flag(reason, severity)` — blocked content never reaches the provider or user; flagged content is logged and optionally surfaced with a warning |
+| `ContentPolicyEngine` | Rule-based classifier for known harmful categories: weapons/explosives synthesis, CSAM, doxxing/stalking, fraud/scam instructions, malware creation, self-harm instructions |
+| `EthicalPolicy` | Per-workspace config: strictness level (`standard`, `strict`, `enterprise`), custom blocked categories, audit settings |
+| `EthicalAuditLog` | Every block and flag is recorded with timestamp, category, severity, and sanitized snippet (no raw PII in audit logs) — for compliance reporting |
+
+#### Strictness levels
+
+| Level | Behavior |
+|---|---|
+| `standard` | Block clearly harmful categories (weapons synthesis, CSAM, doxxing, fraud). Allow dual-use topics with professional context (security research, medical, legal). |
+| `strict` | Standard + block borderline content, require explicit professional justification for dual-use topics. |
+| `enterprise` | Strict + custom blocked keyword lists, mandatory audit logging, admin-only policy changes. |
+
+#### Key principle: transparency over silent filtering
+
+When content is blocked, the user is told what was blocked and why. Sovrant does not silently drop or alter content — that erodes trust. The message is clear: "This request was blocked by Sovrant's content policy because [reason]. If you believe this is incorrect, adjust the policy in Settings or contact your workspace admin."
+
+### Sub-phase 58c — Intent Verification Bridge
+
+Connects Phase 59's `IIntentGate` into the trust boundary so intent classification is the first stage of every interaction with a provider. This is not new classification logic — it bridges the existing `SemanticIntentGate` into the trust pipeline.
+
+| Scenario | Trust boundary action |
+|---|---|
+| Intent is ambiguous (e.g. "test", "run") | Clarify first — do not sanitize and send a message we don't understand |
+| Intent is clearly harmful | Block at this layer — never reaches ethical harness or sanitizer (fast path) |
+| Intent is clear and benign | Proceed to ethical harness → sanitizer → provider |
+| Intent is dual-use (security research, medical) | Flag for ethical harness to evaluate with professional context |
+
+### Integration point
+
+The trust boundary hooks into the existing `ILlmProvider` pipeline as a decorator:
+
+```
+ConversationRuntime → SmartRouter → TrustBoundaryProvider (decorator) → actual provider
+```
+
+`TrustBoundaryProvider` wraps any `ILlmProvider` and runs the three-stage pipeline on every `SendAsync` and `StreamAsync` call. This means it works for all providers (OpenRouter, OpenAI, Gemini, Ollama) without any per-provider changes. Local providers (Ollama) can be exempted from sanitization (data stays on-machine) but still pass through the ethical harness and intent verification.
+
 ### Configuration
 
 ```json
 {
-  "sanitizer": {
+  "trust_boundary": {
     "enabled": true,
-    "mode": "redact",
-    "corporate_domains": ["acme.com", "acme-corp.internal"],
-    "custom_patterns": [
-      { "name": "project_codenames", "regex": "\\b(Project\\s+Titan|Moonshot)\\b", "action": "redact" }
-    ],
-    "allow_list": ["github.com", "stackoverflow.com"],
-    "log_redactions": true
+    "sanitizer": {
+      "enabled": true,
+      "mode": "redact",
+      "corporate_domains": ["acme.com", "acme-corp.internal"],
+      "custom_patterns": [
+        { "name": "project_codenames", "regex": "\\b(Project\\s+Titan|Moonshot)\\b", "action": "redact" }
+      ],
+      "allow_list": ["github.com", "stackoverflow.com"],
+      "exempt_providers": ["ollama"],
+      "log_redactions": true
+    },
+    "ethical_harness": {
+      "enabled": true,
+      "strictness": "standard",
+      "audit_log": true,
+      "custom_blocked_categories": [],
+      "response_scanning": true
+    },
+    "intent_verification": {
+      "enabled": true,
+      "clarify_ambiguous": true,
+      "block_harmful_intent": true
+    }
   }
 }
 ```
 
-### Integration point
-
-The sanitizer hooks into the existing `ILlmClient` pipeline as a decorator:
-
-```
-ConversationRuntime → ILlmClient → SanitizingLlmClient (decorator) → actual provider
-```
-
-This means it works for all providers (OpenRouter, OpenAI, Gemini, Ollama) without any per-provider changes. Ollama (local) can be exempted since prompts never leave the machine.
-
 ### Implementation plan
 
-1. Define `IPromptSanitizer` interface with `SanitizeAsync` / `RestoreAsync` methods
-2. Implement `RedactionMap` — bidirectional dictionary with deterministic placeholder naming
-3. Implement `PiiDetector` — regex-based detection for common PII patterns
-4. Implement `CorporateDataDetector` — configurable domain/hostname/keyword rules
-5. Implement `CustomPatternRegistry` — user-defined patterns loaded from config
-6. Implement `SanitizingLlmClient` — `ILlmClient` decorator that sanitizes on send, restores on receive
-7. Add `SanitizationPolicy` to workspace/project config
-8. Wire into DI as an optional decorator (enabled via config, disabled by default for local providers)
-9. Add `sovrant sanitizer test` CLI command — dry-run a prompt through the sanitizer to see what would be redacted
-10. Tests: PII detection accuracy, redaction/restoration round-trip, custom patterns, multi-provider scenarios
+1. **58a — Sanitizer core:** `IPromptSanitizer`, `RedactionMap`, `PiiDetector`, `CorporateDataDetector`, `CustomPatternRegistry`, round-trip tests
+2. **58b — Ethical harness:** `IEthicalHarness`, `ContentPolicyEngine`, `EthicalPolicy`, `EthicalAuditLog`, category detection tests
+3. **58c — Intent bridge:** Wire `IIntentGate` as the first stage of the trust pipeline, harmful intent fast-path blocking
+4. **58d — Provider decorator:** `TrustBoundaryProvider` implementing `ILlmProvider`, wrapping the three-stage pipeline for both `SendAsync` and `StreamAsync`
+5. **58e — Configuration & DI:** `TrustBoundaryConfig` loaded from `SovrantConfig`, DI wiring as optional decorator, per-workspace policy
+6. **58f — CLI & UI:** `/sanitize` dry-run command, trust boundary status in diagnostics screen, audit log viewer
+7. **58g — Tests:** PII detection accuracy, ethical category detection, round-trip redaction/restoration, streaming chunk boundary handling, allow-list, exempt providers, audit log entries
+
+### Verification
+
+- `dotnet build` exits 0
+- "Fix bug in api.acme-corp.internal for john.doe@acme.com" → email and hostname redacted, restored on response
+- Harmful prompt → blocked with clear reason, never reaches provider, audit log entry created
+- Ambiguous single-word input → clarification requested before any provider call
+- Uncensored model producing harmful response → flagged before surfacing to user
+- Ollama provider → ethical harness active, sanitizer skipped (local)
+- `/sanitize` dry-run shows what would be redacted without sending
 
 ### Out of scope (future)
 
-- Semantic understanding of sensitivity (requires an LLM to classify — chicken-and-egg problem)
-- DLP (Data Loss Prevention) integration with enterprise DLP tools (Microsoft Purview, etc.)
-- Response sanitization (stripping sensitive data the LLM generates, not just reflects back)
+- Semantic/LLM-based sensitivity detection (chicken-and-egg — would require sending text to an LLM to classify)
+- Enterprise DLP integration (Microsoft Purview, Google DLP API, etc.)
+- Multi-language PII detection (initial implementation covers English patterns; international patterns added incrementally)
+- Per-user policy overrides (initial implementation is per-workspace)
 
 ---
 
