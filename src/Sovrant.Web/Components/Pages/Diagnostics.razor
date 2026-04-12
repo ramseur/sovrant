@@ -23,6 +23,10 @@
             <div class="info-value">@_dotNetVersion</div>
         </div>
         <div class="info-item">
+            <div class="info-label">C#</div>
+            <div class="info-value">@_csharpVersion</div>
+        </div>
+        <div class="info-item">
             <div class="info-label">OS</div>
             <div class="info-value">@_osInfo</div>
         </div>
@@ -130,6 +134,7 @@
 
     private string _runtimeVersion = string.Empty;
     private string _dotNetVersion = string.Empty;
+    private string _csharpVersion = string.Empty;
     private string _osInfo = string.Empty;
     private string _currentModel = string.Empty;
     private string _currentProvider = string.Empty;
@@ -175,6 +180,7 @@
         _runtimeVersion = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? asm.GetName().Version?.ToString() ?? "unknown";
         _dotNetVersion = RuntimeInformation.FrameworkDescription;
+        _csharpVersion = $"C# {Environment.Version.Major + 4}";
         _osInfo = $"{RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})";
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);

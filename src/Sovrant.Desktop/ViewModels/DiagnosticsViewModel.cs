@@ -44,6 +44,9 @@ public partial class DiagnosticsViewModel : ViewModelBase
     private string _dotNetVersion = string.Empty;
 
     [ObservableProperty]
+    private string _cSharpVersion = string.Empty;
+
+    [ObservableProperty]
     private string _osInfo = string.Empty;
 
     [ObservableProperty]
@@ -98,6 +101,7 @@ public partial class DiagnosticsViewModel : ViewModelBase
         RuntimeVersion = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? asm.GetName().Version?.ToString() ?? "unknown";
         DotNetVersion = RuntimeInformation.FrameworkDescription;
+        CSharpVersion = $"C# {Environment.Version.Major + 4}";
         OsInfo = $"{RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})";
 
         // Paths
