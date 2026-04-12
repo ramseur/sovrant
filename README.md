@@ -8,7 +8,7 @@ The engine runs as a **CLI agent** for individual use, an **OpenAI-compatible HT
 
 > **Architecture note:** The CLI, Server, Desktop, and Web are independent frontends. All consume the runtime layer (`Sovrant.Runtime`) directly — the server does **not** depend on the CLI, and the desktop/web apps run the runtime in-process. You can deploy any frontend independently.
 
-**Runtime:** .NET 10 / C# 13
+**Runtime:** .NET 10 / C# 14
 **License:** [see LICENSE]
 **Status:** Engine fully functional. 45 tools. 24 agent templates. 32 built-in skills. 95 server endpoints. Multi-agent team orchestration. Swarm orchestrator. Eval framework. MCP server mode. Desktop app. Web app. Frontend SDK. 1,285 tests passing.
 
