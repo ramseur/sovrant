@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-12 (Phase 41 complete — 39 of 42 phases shipped)
+**Last updated:** 2026-04-12 (Phase 41 complete — 39 phases shipped, 11 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -106,11 +106,10 @@ The engine is fully functional across five delivery modes with enterprise multi-
 
 ### Still pending
 
-> **Last audited:** 2026-04-12. 39 of 45 phases are complete. Everything below is *not yet shipped*.
+> **Last audited:** 2026-04-12. 39 phases complete, 11 pending. Phase 39 consolidated into Phase 55. Everything below is *not yet shipped*.
 
 | Gap | Phase | Priority |
 |---|---|---|
-| Cost tracking, token budgets & dashboard (pricing moved to Phase 55) | Phase 39 (partially superseded) | Deferred |
 | Enterprise auth & multi-tenancy (RBAC, OAuth/OIDC, SSO) | Phase 40 | Deferred |
 | Inter-agent communication — team-to-team, swarm-to-swarm, claw-to-claw coordination through leader/PM agents | Phase 57 | Medium–High |
 | VS Code native extension | Phase 42 | Deferred (MCP server covers MCP-aware IDEs) |
@@ -119,7 +118,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Workspace backup, import & export | Phase 47 | Medium |
 | SearXNG web search backend (self-hosted, key-free) | Phase 49 | Low–Medium |
 | OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | Medium–High |
-| Live cost tracking via OpenRouter (pricing-as-a-service, no local registry) | Phase 55 | Low–Medium |
+| Cost tracking, budgets & dashboard via OpenRouter (consolidated from Phases 39+55) | Phase 55 | Medium |
 | LLM provider sanitizer — strip PII and corporate data from prompts before they leave the runtime | Phase 58 | High |
 | Agentic loop hardening — intent classification, plan approval, execution governance, progress visibility | Phase 59 | **Critical** |
 
@@ -1662,7 +1661,7 @@ Evals stored in `.sovrant/evals/`:
 > **Status: ✅ Complete** — 17 new files, 62 new tests, 0 warnings. OFF by default; foundation for frontend-driven orchestration.
 
 **Inspired by:** [claude-swarm](https://github.com/affaan-m/claude-swarm) (parallel task decomposition with dependency DAGs, file locking, budget enforcement, quality gate)
-**Depends on:** Phase 19+20 (multi-agent team tools), Phase 22 (agent templates), Phase 39 (cost tracking — optional)
+**Depends on:** Phase 19+20 (multi-agent team tools), Phase 22 (agent templates), Phase 55 (cost tracking — optional)
 
 **Goal:** Add a **swarm orchestration layer** on top of Sovrant's existing multi-agent infrastructure. A user gives a single complex prompt; a high-capability model automatically decomposes it into a dependency graph of 2-8 subtasks; subtasks execute in parallel waves respecting dependencies, with file-level conflict prevention, budget enforcement, and a quality gate review phase. The swarm uses whatever models the admin/user has configured — decomposition and quality gates use the "high" level model, workers use the "standard" level (all provider-agnostic via Phase 22's model resolution). Available via CLI (`sovrant swarm "task"`), the `SwarmTool` for programmatic use, and `POST /v1/swarm` for frontend integration.
 
@@ -2385,7 +2384,7 @@ project memory  +  workspace memory  (both visible within project context)
 6. Memory scoping: project memory writes go to `workspace_memory` with `project_id` set; reads merge project + workspace layers
 7. Session creation auto-associates with active project context
 8. Project-scoped agent templates and skills (load from project config in addition to workspace/global)
-9. Budget enforcement at project level (Phase 39's `ICostModel` + project config budget cap)
+9. Budget enforcement at project level (Phase 55's `ICostModel` + project config budget cap)
 10. Tests: project isolation within workspace, config inheritance chain, memory scoping (project sees own + workspace memory), membership subset validation, archive behavior
 
 #### Relationship to Phase 41 (Artifact System)
@@ -2626,77 +2625,9 @@ Applied in this phase because per-user identity makes ownership enforcement mean
 
 ---
 
-### Phase 39 — Cost Tracking, Token Budgets & Model Pricing Registry ⏸️ Deferred (partially superseded by Phase 55)
+### Phase 39 — ~~Cost Tracking, Token Budgets & Model Pricing Registry~~ Consolidated into Phase 55
 
-**Depends on:** Phase 10 (token usage tracking — already complete), Phase 55 (live OpenRouter pricing — provides `ICostModel` and the JSONL metrics stream this phase's dashboard reads)
-
-**Superseded components:** The "multi-source pricing registry", "layered local pricing", "bundled defaults", and `CostMetricsLogger` components listed below are replaced by **Phase 55**, which pulls live pricing from OpenRouter's `/api/v1/models` endpoint instead of maintaining a local registry. What remains in scope for Phase 39 is the **budget enforcement** (`SOVRANT_SESSION_BUDGET_USD`, `SOVRANT_PROJECT_BUDGET_USD`, 80%/100% warnings and blocks) and the **`/cost` dashboard** (CLI + `GET /v1/cost` with daily/weekly/monthly aggregation over the JSONL Phase 55 writes). The "design space" discussion below is kept for historical context but no longer reflects the chosen approach — we picked "use OpenRouter" as the pricing source, which none of the rows in that table matched.
-
-**Goal:** End-to-end cost management — per-session/per-project token tracking with JSONL metrics log, budget enforcement, a `/cost` dashboard, and a multi-source pricing registry that maps model names to USD-per-token rates. Merges the former Phase 26 (cost tracking) with model pricing so the full cost pipeline ships as one coherent feature.
-
-#### What exists today
-
-Phase 10 already tracks `TotalInputTokens` and `TotalOutputTokens` per session in `SessionConfig`, and `GET /v1/usage` returns per-session token summaries. This phase adds budget limits, persistent metrics logging, a cost dashboard, and USD estimation via a layered pricing registry.
-
-#### Components
-
-| Component | What it does |
-|---|---|
-| **`ICostModel`** | Interface: `decimal? EstimateCost(string model, long inputTokens, long outputTokens)` — layered pricing lookup |
-| **Metrics Logger** | Appends per-turn token/cost events to `~/.sovrant/metrics/cost.jsonl` |
-| **Budget Enforcer** | Optional per-session or per-project budget cap; warns at 80%, blocks at 100% |
-| **Cost Dashboard** | `GET /v1/cost` endpoint and `/cost` CLI command — daily/weekly/monthly breakdown |
-| **Pricing Registry** | Multi-source, user-overridable model-to-price mapping |
-
-#### Why pricing is non-trivial
-
-- Vendors change prices without notice — any static table is immediately a liability
-- Provider-agnostic design means Sovrant must price models from OpenAI, Anthropic, Google, Mistral, Ollama (free), Azure (different pricing than direct), and arbitrary OpenAI-compatible endpoints
-- Model name aliasing: `gpt-4o-2024-08-06` vs `gpt-4o`, `claude-sonnet-4-6` vs `claude-sonnet-4-6-20250514`
-- Some deployments are free (Ollama, self-hosted) or have custom enterprise pricing
-- Cache tokens, batch API, and prompt caching have different rates
-
-#### Design space (needs resolution before implementation)
-
-| Approach | Pros | Cons |
-|---|---|---|
-| **User-editable local config** (`~/.sovrant/cost-models.json`) | Simple, no network, user controls everything | User must manually track vendor changes |
-| **Bundled defaults + user overrides** | Works offline, good defaults, overridable | Stale between releases |
-| **Remote pricing URL** (fetch on startup, cache locally) | Always current if maintained | Network dependency, who hosts it? |
-| **Provider API introspection** | Authoritative | Most providers don't expose pricing via API |
-| **Community-maintained registry** (e.g., GitHub-hosted JSON) | Crowdsourced freshness | Depends on external contributors |
-
-#### Recommended architecture (layered, highest priority wins)
-
-1. **User overrides** — `~/.sovrant/cost-models.json` (always wins)
-2. **Project overrides** — `.sovrant/cost-models.json` (per-project custom pricing)
-3. **Remote registry** (optional) — URL in config, fetched periodically, cached to disk
-4. **Bundled defaults** — ships with each release, covers major models at time of build
-
-#### Open questions
-
-- Should the remote registry be opt-in or opt-out?
-- What schema handles cache token pricing, batch discounts, and per-region Azure pricing?
-- Should `ICostModel` expose a confidence level (exact vs estimated vs unknown)?
-- How to handle model name normalization (fuzzy match? alias table?)
-- Is there value in a `sovrant update-pricing` CLI command that fetches latest?
-
-#### Implementation Plan
-
-1. Define `ICostModel` interface in `Sovrant.Runtime/Metrics/`
-2. Define `CostModelEntry` record: `InputPer1KTokens`, `OutputPer1KTokens`, optional `CacheReadPer1KTokens`, `CacheWritePer1KTokens`
-3. Implement `LayeredCostModel : ICostModel` — walks the 4-tier pricing chain
-4. `CostModelFileLoader` — reads/merges JSON from user → project → bundled paths
-5. Optional `RemoteCostModelFetcher` — periodic background refresh with local disk cache
-6. Model name normalization — alias map or prefix matching
-7. Ship bundled `cost-models.json` with current pricing for top ~20 models
-8. Add `CostMetricsLogger` — appends to `~/.sovrant/metrics/cost.jsonl` per turn
-9. Add `BudgetEnforcer` — reads `SOVRANT_SESSION_BUDGET_USD` and `SOVRANT_PROJECT_BUDGET_USD`
-10. Add `GET /v1/cost` endpoint with daily/weekly/monthly aggregation
-11. Update `/cost` CLI command to show token counts + estimated spend
-12. Wire cost logging into `TurnComplete` event handling
-13. `sovrant update-pricing` CLI command (if remote registry enabled)
-14. Tests: layering precedence, alias resolution, metrics logging, budget enforcement, JSONL format, offline fallback
+> **Status:** Fully absorbed into Phase 55. The original Phase 39 split pricing/budgets into two phases — Phase 39 for the local registry + dashboard + budgets, Phase 55 for the OpenRouter-backed live pricing. Since all cost tracking runs through OpenRouter's free `/api/v1/models` endpoint anyway, the split was artificial. Phase 55 now owns the entire cost pipeline: pricing, budgets, dashboard, and metrics logging. All cross-references elsewhere in this roadmap have been updated to point to Phase 55.
 
 ---
 
@@ -3160,7 +3091,7 @@ Intent-aware routing solves this by classifying each input and routing to the ap
 - **Model tier mapping** — maps intent + complexity to model tiers: `fast` (Haiku-class), `standard` (Sonnet-class), `high` (Opus-class)
 - **Escalation** — if the model produces a low-confidence or incomplete response, automatically retry with a higher-tier model
 - **User override** — `/model <name>` pins to a specific model; `/model auto` re-enables intent routing
-- **Cost budget awareness** — if a cost budget is set (Phase 39), prefer cheaper models when budget is running low
+- **Cost budget awareness** — if a cost budget is set (Phase 55), prefer cheaper models when budget is running low
 - **Capability-aware tier resolution** — the tier map (`fast` / `standard` / `high`) is **not hardcoded to Claude names**. At startup, the router enumerates every connected provider's available models (via `/v1/models` for OpenAI-compatible endpoints, `/api/tags` for Ollama, the configured model list for native providers) and builds the tier map from what is actually reachable. A user running only Ollama gets tiers populated from local models (e.g. `qwen2.5:3b` → fast, `qwen2.5:14b` → standard, `qwen2.5:72b` → high); a user with GPT-4o-mini + GPT-4o gets those; a user with the full Anthropic suite gets Haiku/Sonnet/Opus. If a tier has no candidate, it collapses to the next-best available tier rather than failing.
 
 #### Routing rules (configurable)
@@ -3192,7 +3123,7 @@ The router needs to know **which models the user actually has connected** and wh
   - `context_window`, `max_output_tokens`
   - `supports_tools`, `supports_vision`, `supports_json_mode`, `supports_thinking`
   - `intent_affinity` — optional per-intent score boost (e.g. a coding-specialised model gets +0.3 on `code_generation`)
-  - `cost_per_1k_input`, `cost_per_1k_output` (feeds Phase 39)
+  - `cost_per_1k_input`, `cost_per_1k_output` (feeds Phase 55)
 - **Auto-tier assignment** — when discovery finishes, the router groups every reachable model by `tier_hint`, picks the cheapest healthy one in each bucket as the default for that tier, and falls back to the next bucket up if a tier is empty (e.g. user only has one large local model → `fast` collapses to `standard`).
 - **User override** — `.sovrant/routing.json` can pin specific models to specific tiers, overriding auto-assignment. Discovery still runs so unknown models surface in `/v1/router/status`.
 - **Re-discovery triggers** — startup, manual refresh, provider added/removed, ping recovery from unhealthy.
@@ -3275,7 +3206,7 @@ Implemented in full. Delivered:
 Items deferred to future phases:
 - Response-quality escalation (retry with higher tier on low-confidence response) → Phase 49+
 - `X-Model-Tier` / `X-Intent-Class` response headers → Phase 49+
-- Cost budget awareness (reduce tier when budget low) → depends on Phase 39
+- Cost budget awareness (reduce tier when budget low) → depends on Phase 55
 - Per-session re-discovery for credential overrides → Phase 49+
 - `/model auto` CLI command → Phase 49+
 
@@ -3536,7 +3467,7 @@ This box is the post-delivery summary. Everything below the horizontal rule that
 
 ---
 
-**Depends on:** Phase 22 (agent templates + model routing), Phase 24 (verification loop), Phase 27 (memory), Phase 29 (Swarm orchestrator), Phase 32 (persistence), Phase 37.5 (swarm event store), Phase 48 (intent-aware model routing), Phase 50 (federated bus, optional), **Phase 55 (live OpenRouter cost tracking — provides `ICostModel` and per-turn cost capture so `MissionGuard` has real numbers to gate on)**
+**Depends on:** Phase 22 (agent templates + model routing), Phase 24 (verification loop), Phase 27 (memory), Phase 29 (Swarm orchestrator), Phase 32 (persistence), Phase 37.5 (swarm event store), Phase 48 (intent-aware model routing), Phase 50 (federated bus, optional), **Phase 55 (cost tracking + budgets via OpenRouter — provides `ICostModel`, `BudgetEnforcer`, and per-turn cost capture so `MissionGuard` has real numbers to gate on)**
 
 **Goal:** Make the Sovrant **engine and runtime** materially more sophisticated, then put a **long-running autonomous mission loop** on top of it. Today the engine runs one agentic turn at a time and the swarm runs one decomposition + one DAG + one quality gate before exiting. Competitors are shipping engines that re-plan mid-turn, route every sub-step to a different model, hold parallel sub-agents against a shared scratchpad, compact their own context, and own a task across hours of wall-clock time. This phase closes that gap on two layers at once because they reinforce each other:
 
@@ -4054,7 +3985,7 @@ One-shot importer runs at startup if `{cwd}/artifacts/` is non-empty and `SOVRAN
 
 - Shipping the cloud backend. S3/Azure/R2 implementations are a follow-up; this phase only guarantees they can be added without touching callers.
 - Artifact versioning or diffing. Phase 41's `IArtifact` version counter covers team-workspace versioning; this phase is about *where bytes live*, not history.
-- Quotas and retention policies. Tenant quotas belong with Phase 39 (cost) and Phase 40 (multi-tenancy).
+- Quotas and retention policies. Tenant quotas belong with Phase 55 (cost) and Phase 40 (multi-tenancy).
 - A GC/sweeper for orphaned runs. Cleanup happens via `DeleteAsync` when sessions/projects/workspaces are deleted; a background sweeper is a later concern.
 
 ---
@@ -4154,15 +4085,15 @@ A thin **`ModelCapabilities`** layer that answers three questions per model id: 
 
 ---
 
-## Phase 55 — Live Cost Tracking via OpenRouter (Pricing-as-a-Service)
+## Phase 55 — Cost Tracking, Budgets & Dashboard via OpenRouter (Consolidated from Phases 39 + 55)
 
 **Depends on:** Phase 10 (token usage tracking — already complete)
-**Supersedes:** The cost-model and pricing-registry components of Phase 39 (which is otherwise still valid for the *dashboard* and *budget enforcement* pieces but no longer needs its own pricing infrastructure). Phase 51's mission cost envelopes read from this phase.
-**Difficulty:** Low–Medium
+**Absorbs:** Phase 39 (budget enforcement, cost dashboard, metrics logging). Phase 51's mission cost envelopes read from this phase.
+**Difficulty:** Medium
 
-**Goal:** Track real dollar costs per turn, per session, per mission, and per project — **without reinventing a local pricing registry**. OpenRouter already maintains live, per-model, per-provider pricing for hundreds of models through its `/api/v1/models` endpoint (and per-generation actuals through `/api/v1/generation/:id`). Sovrant should pull that data live and cache it briefly, rather than shipping a bundled JSON that goes stale the moment a vendor changes a price.
+**Goal:** End-to-end cost management — live pricing from OpenRouter's free `/api/v1/models` endpoint, per-turn JSONL metrics logging, per-session and per-project budget enforcement with 80%/100% warnings, and a `sovrant cost` CLI + `GET /v1/cost` dashboard. No local pricing registry — OpenRouter is the single source of truth for model pricing across all providers.
 
-**Why this is its own phase** (not a slice of Phase 39 or Phase 51): pricing is a dedicated concern with a single external source of truth. Splitting it out keeps Phase 51's mission loop focused on orchestration and gives Phase 39 a clean path to retire its "layered local pricing" design in favour of this one. It also lets `ICostModel` ship on its own schedule — useful independently of missions (session-level `/cost` display, per-turn budget warnings, agent template cost hints).
+**Why consolidated:** The original split had Phase 39 owning budgets/dashboard and Phase 55 owning OpenRouter pricing. Since all cost data flows through OpenRouter anyway, maintaining two phases created artificial dependency chains and duplicated `ICostModel`. One phase, one pipeline.
 
 #### The key insight
 
@@ -4187,7 +4118,7 @@ OpenRouter's `GET https://openrouter.ai/api/v1/models` returns an authoritative,
 }
 ```
 
-That single endpoint covers OpenAI, Anthropic, Google, Mistral, Cohere, DeepSeek, Meta, Qwen, and dozens more. It is maintained by the OpenRouter team. It is free to query. **This is the pricing registry we wanted to build in Phase 39 — except it already exists, it is live, and it costs us nothing but an HTTP call.**
+That single endpoint covers OpenAI, Anthropic, Google, Mistral, Cohere, DeepSeek, Meta, Qwen, and dozens more. It is maintained by the OpenRouter team. It is free to query. **This is the pricing registry — it already exists, it is live, and it costs us nothing but an HTTP call.**
 
 For Sovrant users who route *through* OpenRouter, the picture is even cleaner: every generation gets an `id`, and `GET /api/v1/generation/:id` returns the authoritative cost OpenRouter actually charged — the source of truth, post-routing, post-caching, post-any-discounts. For users on direct provider APIs (OpenAI direct, Anthropic direct), Sovrant falls back to estimating via the `/models` pricing table keyed by a normalised model name.
 
@@ -4200,8 +4131,10 @@ For Sovrant users who route *through* OpenRouter, the picture is even cleaner: e
 | **`OpenRouterCostModel`** | `ICostModel` implementation: normalises the Sovrant model id (`gpt-4o-2024-08-06` → `openai/gpt-4o`, `claude-sonnet-4-6` → `anthropic/claude-sonnet-4.5`, etc.), looks up the pricing row, multiplies by the token counts, returns the sum |
 | **`OpenRouterGenerationFetcher`** | When Sovrant routes a request through OpenRouter and gets back a `generation_id`, this fetches `/api/v1/generation/:id` asynchronously (with a bounded queue) and records the *actual* cost charged. Used for reconciliation against the estimate. |
 | **`ModelIdNormaliser`** | Small table-driven normaliser mapping Sovrant internal model ids to OpenRouter ids. Handles aliases, date suffixes, provider prefixes. Ships with the top ~30 models covered; unknown ids pass through untouched and get an estimate of `null` rather than a wrong number. |
-| **`CostMetricsLogger`** | Appends per-turn cost events to `~/.sovrant/metrics/cost.jsonl` — one JSON line per completed turn with `{session_id, model, input_tokens, output_tokens, estimated_usd, actual_usd_or_null, source, timestamp}`. This is the raw data the Phase 39 dashboard eventually reads. |
+| **`CostMetricsLogger`** | Appends per-turn cost events to `~/.sovrant/metrics/cost.jsonl` — one JSON line per completed turn with `{session_id, model, input_tokens, output_tokens, estimated_usd, actual_usd_or_null, source, timestamp}`. This is the raw data the cost dashboard reads. |
 | **`CostModelLoggerFacade`** | Thin wrapper over `ICostModel` + `CostMetricsLogger` so the runtime calls one method (`RecordTurnAsync`) and the cost estimate + the JSONL write happen atomically. |
+| **`BudgetEnforcer`** | Reads `SOVRANT_SESSION_BUDGET_USD` and `SOVRANT_PROJECT_BUDGET_USD`; warns at 80% spend, blocks new turns at 100%. Integrated into the turn pipeline via `CostModelLoggerFacade`. (Absorbed from Phase 39.) |
+| **Cost Dashboard** | `GET /v1/cost` endpoint + `sovrant cost` CLI command — daily/weekly/monthly aggregation over the JSONL metrics log. Per-session and per-project breakdowns. (Absorbed from Phase 39.) |
 
 #### Why the disk cache matters
 
@@ -4274,6 +4207,8 @@ src/Sovrant.Runtime/Metrics/
   OpenRouterModelAliases.json          ← bundled alias table
   CostMetricsLogger.cs                 ← JSONL writer
   CostModelLoggerFacade.cs             ← combined facade used by the runtime
+  BudgetEnforcer.cs                    ← session + project budget caps with 80%/100% thresholds
+  CostDashboardService.cs             ← aggregation over JSONL for /v1/cost endpoint
 ```
 
 #### Implementation plan
@@ -4285,15 +4220,18 @@ src/Sovrant.Runtime/Metrics/
 5. `CostMetricsLogger`: append-only JSONL writer with a file lock and a rotation guard (rotate at 10 MB to `cost.jsonl.1`).
 6. `CostModelLoggerFacade` wiring both together: `RecordTurnAsync(model, sessionId, usage) → (estimatedUsd, loggedLine)`.
 7. Register the facade in `AddSovrantRuntime` so every `TurnComplete` event writes a cost line. Existing token counting in `SessionConfig` stays untouched — this phase *adds* USD alongside.
-8. CLI: add `sovrant cost status` (live pricing snapshot age, cache hits, recent turns + estimated spend) and wire `sovrant /cost` to show per-session $ from the JSONL tail.
-9. Optional: `OpenRouterGenerationFetcher` — a bounded background queue that fetches actuals for generations routed through OpenRouter and writes an updated JSONL line with `actual_usd` filled in. This is what lets users see their real spend (post-discount, post-cache) rather than just the estimate.
-10. Tests:
+8. `BudgetEnforcer` — reads `SOVRANT_SESSION_BUDGET_USD` and `SOVRANT_PROJECT_BUDGET_USD`, warns at 80%, blocks at 100%. Hooks into `CostModelLoggerFacade.RecordTurnAsync`.
+9. `GET /v1/cost` endpoint with daily/weekly/monthly aggregation over the JSONL log. Per-session and per-project breakdowns.
+10. CLI: add `sovrant cost status` (live pricing snapshot age, cache hits, recent turns + estimated spend) and `sovrant cost` for per-session $ from the JSONL tail.
+11. Optional: `OpenRouterGenerationFetcher` — a bounded background queue that fetches actuals for generations routed through OpenRouter and writes an updated JSONL line with `actual_usd` filled in. This is what lets users see their real spend (post-discount, post-cache) rather than just the estimate.
+12. Tests:
     - Unit: `ModelIdNormaliser` table covers every model currently in `SovrantConfig` defaults, plus one unknown id → `null`
     - Unit: `OpenRouterCostModel.EstimateCost` against a captured snapshot for the top 10 models — arithmetic matches hand-computed expected values
     - Integration: `OpenRouterPricingClient` against a WireMock stub of the `/models` endpoint — cache hit, cache miss, network error, disk fallback
     - Integration (behind `COST_LIVE=1`): real call against `openrouter.ai/api/v1/models` — asserts that the top 10 models from `SovrantConfig` all resolve to non-null estimates
     - Integration: end-to-end turn → JSONL line written with the right shape and the estimate matches the unit-tested formula
     - Offline mode: `SOVRANT_COST_PROVIDER=none` → `ICostModel` returns null for everything, no HTTP calls made, no JSONL writes
+    - Budget: 80% warning fires at correct threshold, 100% blocks new turns, project budget separate from session budget
 
 #### Acceptance criteria
 
@@ -4305,13 +4243,15 @@ src/Sovrant.Runtime/Metrics/
 - `sovrant cost status` shows the pricing snapshot age, cache hit ratio, and a one-line summary of the last 10 turns
 - Missions (Phase 51) consume `ICostModel` and see consistent numbers across the mission guard, the session display, and the JSONL log
 - Zero local pricing tables beyond the ~30-entry alias map — the dollar figures come from OpenRouter, not from Sovrant
+- `SOVRANT_SESSION_BUDGET_USD=5.00` blocks new turns when cumulative session spend reaches $5, with a warning at $4
+- `SOVRANT_PROJECT_BUDGET_USD=50.00` blocks new turns across all sessions in a project when cumulative project spend reaches $50
+- `GET /v1/cost?range=weekly` returns a breakdown with per-session and per-project totals
 
 #### Non-goals
 
 - Reinventing a local pricing registry. OpenRouter's `/models` endpoint *is* the pricing registry.
 - Per-provider direct-API integrations (OpenAI billing API, Anthropic billing API). Those are proprietary, rate-limited, and not worth building when OpenRouter already aggregates them. Users who want provider-direct actuals can route through OpenRouter (which will just forward and pass the real cost back).
-- The full Phase 39 dashboard. `sovrant cost status` is a one-line CLI view, not a charting dashboard. The Phase 39 dashboard can still ship later — it just reads from the JSONL this phase produces rather than computing prices itself.
-- Budget enforcement. That stays with Phase 39 (`SOVRANT_SESSION_BUDGET_USD`, `SOVRANT_PROJECT_BUDGET_USD`) and with Phase 51's mission guard. This phase is *measurement*, not enforcement.
+- A charting/graphing dashboard. `sovrant cost` and `GET /v1/cost` are data views, not a full BI tool. A richer dashboard can be built on top of the JSONL later.
 - Pricing for exotic / self-hosted / fine-tuned models outside OpenRouter's catalogue. Users set `SOVRANT_COST_PROVIDER=none` or provide an alias override that points at the closest public model.
 
 ---
