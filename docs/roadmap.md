@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-13 (Phase 57 complete — 44 phases shipped, 8 pending)
+**Last updated:** 2026-04-13 (Phase 61 complete — 45 phases shipped, 7 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -12,7 +12,7 @@ This document tracks planned features, architectural decisions, and the reasonin
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
 - **51 tools** across 11 categories (file, shell, web, task, agent, team, mission, swarm, artifact, MCP, LSP)
-- **1,564 tests** across 9 projects, 0 failures
+- **1,584 tests** across 9 projects, 0 failures
 - **96 server endpoints** (chat, sessions, config, status, models, usage, cost, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
@@ -24,6 +24,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 - Model capability registry with layered resolution (Phase 54 ✅)
 - SmartRouter with health/latency/cost scoring + intent-aware model tier routing (Phase 48 ✅)
 - Cost tracking with OpenRouter pricing, per-session/project budgets, JSONL metrics log, `/cost` CLI, `GET /v1/cost` API (Phase 55 ✅)
+- Remote server mode for web frontend — SignalR streaming, bearer auth, `AddSovrantClient()` DI abstraction (Phase 61 ✅)
 - Workspace/project/user hierarchy with membership, invites, config inheritance (Phases 35–37 ✅)
 - Per-user token auth with API token issuance/revocation (Phase 38 ✅)
 - Multi-provider support: OpenAI, Gemini, Ollama, native messages API, OpenAI Responses API
@@ -108,11 +109,12 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | 58 | Sovrant Trust Boundary — sanitization, ethical harness, intent verification as unified trust pipeline |
 | 59 | Agentic loop hardening — intent classification, plan approval, execution governance, progress visibility |
 | 57 | Inter-agent communication — PM agents, GroupMailbox, PMCoordinator, CoordinationStatus tool, V013 migration (30 tests) |
+| 61 | Remote server mode — SignalR ChatHub, `RuntimeEventDto`, `AddSovrantClient()`, 8 remote service implementations, bearer auth query string for WebSocket, dual embedded/remote mode (20 tests) |
 | 63 | DI audit & pluggability hardening — MCP v1.2.0 protocol additions |
 
 ### Still pending
 
-> **Last audited:** 2026-04-13. 44 phases complete, 8 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61. Everything below is *not yet shipped*.
+> **Last audited:** 2026-04-13. 45 phases complete, 7 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61. Everything below is *not yet shipped*.
 
 | Gap | Phase | Priority |
 |---|---|---|
@@ -128,7 +130,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | ~~LLM provider sanitizer~~ → **Sovrant Trust Boundary** (sanitization, ethical harness, intent verification) | Phase 58 ✅ | High |
 | ~~Agentic loop hardening — intent classification, plan approval, execution governance, progress visibility~~ | Phase 59 ✅ | **Critical** |
 | Hermes Agent integration via MCP — alternative claw/federation bus provider with self-improving skills | Phase 60 | Medium |
-| Remote server mode for web frontend — SignalR streaming, auth, `AddSovrantClient()` abstraction | Phase 61 | High |
+| ~~Remote server mode for web frontend — SignalR streaming, auth, `AddSovrantClient()` abstraction~~ | Phase 61 ✅ | High |
 
 ---
 
@@ -5084,7 +5086,7 @@ Sovrant can talk to Hermes in two ways:
 
 ---
 
-## Phase 61 — Remote Server Mode for Web Frontend (SignalR Streaming, Auth & Client Abstraction)
+## Phase 61 — Remote Server Mode for Web Frontend (SignalR Streaming, Auth & Client Abstraction) ✅
 
 **Depends on:** Phase 56 (web frontend — embedded mode, already shipped), Phase 38 (per-user token auth)
 **Difficulty:** Medium–High

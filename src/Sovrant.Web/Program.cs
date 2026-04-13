@@ -10,6 +10,7 @@ using Sovrant.Tools;
 using Sovrant.Tools.Extended;
 using Sovrant.Web.Adapters;
 using Sovrant.Web.Services;
+using Sovrant.Web.Services.Remote;
 
 namespace Sovrant.Web;
 
@@ -24,19 +25,8 @@ public static class Program
 
     public static async Task Main(string[] args)
     {
-        // Desktop uses Fixed routing — the configured provider is used directly.
-        Environment.SetEnvironmentVariable("ROUTER_MODE", "Fixed");
-        var config = ConfigLoader.Load();
-
-        // Bridge config into env vars so the API layer picks them up.
-        if (!string.IsNullOrWhiteSpace(config.ApiKey))
-        {
-            Environment.SetEnvironmentVariable("LLM_API_KEY", config.ApiKey);
-            if (config.BaseUrl?.ToString().Contains("openrouter", StringComparison.OrdinalIgnoreCase) == true)
-                Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", config.ApiKey);
-        }
-        if (config.BaseUrl is not null)
-            Environment.SetEnvironmentVariable("LLM_BASE_URL", config.BaseUrl.ToString());
+        var runtimeMode = Environment.GetEnvironmentVariable("SOVRANT_RUNTIME_MODE") ?? "embedded";
+        var isRemote = string.Equals(runtimeMode, "remote", StringComparison.OrdinalIgnoreCase);
 
         var builder = WebApplication.CreateBuilder(args);
         builder.WebHost.UseUrls("http://localhost:5100");
@@ -44,29 +34,58 @@ public static class Program
 
         builder.Services.AddLogging(b => b.AddSovrantLogging(consoleMinOverride: LogLevel.Warning));
 
-        // Core runtime — same as Desktop's App.axaml.cs BuildApp()
-        builder.Services.AddSovrantRuntime(config);
-        builder.Services.AddSovrantTools();
-        builder.Services.AddMultiAgentSystem();
-        builder.Services.AddSovrantCommands();
-        builder.Services.AddHttpClient("ProviderProbe", client =>
+        if (isRemote)
         {
-            client.Timeout = TimeSpan.FromSeconds(10);
-        });
+            // ── Remote mode: connect to an existing Sovrant.Server ──────────
+            var remoteOptions = new SovrantRemoteOptions
+            {
+                Url = Environment.GetEnvironmentVariable("SOVRANT_SERVER_URL") ?? "http://localhost:5200",
+                ApiToken = Environment.GetEnvironmentVariable("SOVRANT_API_TOKEN") ?? string.Empty,
+            };
 
-        // Web-specific overrides
-        var mutableAuth = new MutableAuthProvider(config.ApiKey ?? string.Empty, config.BaseUrl);
-        var permissionPolicy = new MutableCliPermissionPolicy(config.PermissionMode);
-        builder.Services.AddSingleton<IPermissionPolicy>(permissionPolicy);
-        builder.Services.AddSingleton<IPermissionModeAccessor>(permissionPolicy);
-        builder.Services.AddSingleton(config);
-        var confirmationHandler = new BlazorConfirmationHandler();
-        builder.Services.AddSingleton<IToolConfirmationHandler>(confirmationHandler);
-        builder.Services.AddSingleton(confirmationHandler);
-        builder.Services.AddSingleton<IUserInputProvider, BlazorUserInputProvider>();
-        builder.Services.AddSingleton<IAuthProvider>(mutableAuth);
-        builder.Services.AddSingleton(mutableAuth);
-        builder.Services.AddSingleton<ActiveContextService>();
+            builder.Services.AddSovrantClient(remoteOptions);
+            builder.Services.AddSingleton<ActiveContextService>();
+        }
+        else
+        {
+            // ── Embedded mode: full in-process runtime (existing path) ──────
+            Environment.SetEnvironmentVariable("ROUTER_MODE", "Fixed");
+            var config = ConfigLoader.Load();
+
+            // Bridge config into env vars so the API layer picks them up.
+            if (!string.IsNullOrWhiteSpace(config.ApiKey))
+            {
+                Environment.SetEnvironmentVariable("LLM_API_KEY", config.ApiKey);
+                if (config.BaseUrl?.ToString().Contains("openrouter", StringComparison.OrdinalIgnoreCase) == true)
+                    Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", config.ApiKey);
+            }
+            if (config.BaseUrl is not null)
+                Environment.SetEnvironmentVariable("LLM_BASE_URL", config.BaseUrl.ToString());
+
+            // Core runtime — same as Desktop's App.axaml.cs BuildApp()
+            builder.Services.AddSovrantRuntime(config);
+            builder.Services.AddSovrantTools();
+            builder.Services.AddMultiAgentSystem();
+            builder.Services.AddSovrantCommands();
+            builder.Services.AddHttpClient("ProviderProbe", client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(10);
+            });
+
+            // Web-specific overrides
+            var mutableAuth = new MutableAuthProvider(config.ApiKey ?? string.Empty, config.BaseUrl);
+            var permissionPolicy = new MutableCliPermissionPolicy(config.PermissionMode);
+            builder.Services.AddSingleton<IPermissionPolicy>(permissionPolicy);
+            builder.Services.AddSingleton<IPermissionModeAccessor>(permissionPolicy);
+            builder.Services.AddSingleton(config);
+            var confirmationHandler = new BlazorConfirmationHandler();
+            builder.Services.AddSingleton<IToolConfirmationHandler>(confirmationHandler);
+            builder.Services.AddSingleton(confirmationHandler);
+            builder.Services.AddSingleton<IUserInputProvider, BlazorUserInputProvider>();
+            builder.Services.AddSingleton<IAuthProvider>(mutableAuth);
+            builder.Services.AddSingleton(mutableAuth);
+            builder.Services.AddSingleton<ActiveContextService>();
+        }
 
         builder.Services.AddRazorComponents()
             .AddInteractiveServerComponents();
@@ -79,35 +98,63 @@ public static class Program
         app.MapRazorComponents<Sovrant.Web.Components.App>()
             .AddInteractiveServerRenderMode();
 
-        // Initialize runtime in background (DB migrations, model metadata, MCP servers).
-        _ = Task.Run(async () =>
+        if (isRemote)
         {
-            try
+            // Remote mode — connect SignalR and signal readiness.
+            _ = Task.Run(async () =>
             {
-                await app.Services.InitializeRuntimeAsync().ConfigureAwait(false);
-                app.Services.GetRequiredService<ToolRegistrar>().RegisterAll();
+                try
+                {
+                    var signalR = app.Services.GetRequiredService<SignalRStreamingClient>();
+                    await signalR.EnsureConnectedAsync();
 
-                var userService = app.Services.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
-                var user = await userService.GetAsync(SovrantUserId).ConfigureAwait(false);
-                if (user is null)
-                    await userService.CreateAsync(SovrantUserId, userId: SovrantUserId).ConfigureAwait(false);
+                    // Refresh tool registry from server.
+                    if (app.Services.GetService<Sovrant.Runtime.Tools.IToolRegistry>() is RemoteToolRegistry remoteTools)
+                        await remoteTools.RefreshAsync();
+                }
+                catch (Exception ex)
+                {
+                    var logger = app.Services.GetRequiredService<ILogger<RemoteConnectionState>>();
+                    logger.LogError(ex, "Failed to connect to remote Sovrant server");
+                }
+                finally
+                {
+                    RuntimeReady.TrySetResult();
+                }
+            });
+        }
+        else
+        {
+            // Embedded mode — initialize runtime in background (DB migrations, model metadata, MCP servers).
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await app.Services.InitializeRuntimeAsync().ConfigureAwait(false);
+                    app.Services.GetRequiredService<ToolRegistrar>().RegisterAll();
 
-                // Ensure personal workspace exists (same as desktop's WorkspacesViewModel)
-                var workspaceService = app.Services.GetRequiredService<Sovrant.Runtime.Workspaces.IWorkspaceService>();
-                var personal = await workspaceService.GetPersonalAsync(SovrantUserId).ConfigureAwait(false);
-                if (personal is null)
-                    await workspaceService.CreatePersonalWorkspaceAsync(SovrantUserId).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                var logger = app.Services.GetRequiredService<ILogger<BlazorConfirmationHandler>>();
-                logger.LogError(ex, "Runtime initialization failed");
-            }
-            finally
-            {
-                RuntimeReady.TrySetResult();
-            }
-        });
+                    var userService = app.Services.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
+                    var user = await userService.GetAsync(SovrantUserId).ConfigureAwait(false);
+                    if (user is null)
+                        await userService.CreateAsync(SovrantUserId, userId: SovrantUserId).ConfigureAwait(false);
+
+                    // Ensure personal workspace exists (same as desktop's WorkspacesViewModel)
+                    var workspaceService = app.Services.GetRequiredService<Sovrant.Runtime.Workspaces.IWorkspaceService>();
+                    var personal = await workspaceService.GetPersonalAsync(SovrantUserId).ConfigureAwait(false);
+                    if (personal is null)
+                        await workspaceService.CreatePersonalWorkspaceAsync(SovrantUserId).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    var logger = app.Services.GetRequiredService<ILogger<BlazorConfirmationHandler>>();
+                    logger.LogError(ex, "Runtime initialization failed");
+                }
+                finally
+                {
+                    RuntimeReady.TrySetResult();
+                }
+            });
+        }
 
         await app.RunAsync();
     }

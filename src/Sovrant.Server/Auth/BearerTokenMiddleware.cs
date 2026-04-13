@@ -116,10 +116,20 @@ internal sealed class BearerTokenMiddleware : IMiddleware
 
     private static bool TryExtractToken(HttpContext context, out string token)
     {
+        // Standard Authorization header.
         var header = context.Request.Headers.Authorization.FirstOrDefault();
         if (header is not null && header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
             token = header["Bearer ".Length..].Trim();
+            return token.Length > 0;
+        }
+
+        // SignalR WebSocket transport sends the token via query string (Phase 61).
+        if (context.Request.Path.StartsWithSegments("/hubs", StringComparison.OrdinalIgnoreCase) &&
+            context.Request.Query.TryGetValue("access_token", out var queryToken) &&
+            queryToken.Count > 0)
+        {
+            token = queryToken[0]?.Trim() ?? string.Empty;
             return token.Length > 0;
         }
 
