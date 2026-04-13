@@ -321,6 +321,12 @@ internal static class ChatRoutes
                     await SseWriter.WriteChunkAsync(ctx.Response,
                         SseWriter.StepProgressChunk(completionId, model, current, total, intent, status), ct).ConfigureAwait(false);
                     break;
+
+                // ── Phase 55 events ─────────────────────────────────────
+                case RuntimeEvent.TurnCost { EstimatedUsd: var usd, Source: var source }:
+                    await SseWriter.WriteChunkAsync(ctx.Response,
+                        SseWriter.CostChunk(completionId, model, usd, source), ct).ConfigureAwait(false);
+                    break;
             }
         }
 
@@ -341,6 +347,8 @@ internal static class ChatRoutes
         var outputTokens = 0;
         string? clarification = null;
         SovrantEvent? presentedPlan = null;
+        decimal? estimatedUsd = null;
+        string? costSource = null;
 
         await foreach (var ev in runtime.RunTurnAsync(userMessage, ct).ConfigureAwait(false))
         {
@@ -366,15 +374,21 @@ internal static class ChatRoutes
                         RequiresApproval = needsApproval,
                     };
                     break;
+                case RuntimeEvent.TurnCost { EstimatedUsd: var usd, Source: var source }:
+                    estimatedUsd = usd;
+                    costSource = source;
+                    break;
             }
         }
 
-        // Build the Sovrant extension if any Phase 59 events were captured.
+        // Build the Sovrant extension if any Phase 59/55 events were captured.
         SovrantEvent? sovrantExt = null;
         if (clarification is not null)
             sovrantExt = new SovrantEvent { Event = "clarification_needed", Clarification = clarification };
         else if (presentedPlan is not null)
             sovrantExt = presentedPlan;
+        else if (estimatedUsd is not null || costSource is not null)
+            sovrantExt = new SovrantEvent { Event = "turn_cost", EstimatedUsd = estimatedUsd, CostSource = costSource };
 
         var response = new ChatCompletionResponse
         {

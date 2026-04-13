@@ -202,6 +202,7 @@ WorkspaceRoutes.Map(app);
 ProjectRoutes.Map(app);
 UserRoutes.Map(app);
 MeRoutes.Map(app);
+CostRoutes.Map(app);
 
 // MCP HTTP/SSE endpoint (only when SOVRANT_MCP_HTTP=true).
 if (mcpHttpEnabled)

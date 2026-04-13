@@ -27,6 +27,11 @@ public abstract partial record RuntimeEvent
         int InputTokens,
         int OutputTokens) : RuntimeEvent;
 
+    /// <summary>Cost estimate for a completed turn (emitted after <see cref="TurnComplete"/> when cost tracking is enabled).</summary>
+    public sealed record TurnCost(
+        decimal? EstimatedUsd,
+        string Source) : RuntimeEvent;
+
     /// <summary>A tool was denied by the permission policy.</summary>
     public sealed record PermissionDenied(
         string ToolName,

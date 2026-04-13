@@ -52,9 +52,9 @@ public sealed class ProviderCommandTests
 
         Assert.NotNull(result.Output);
         Assert.Contains("alpha", result.Output, StringComparison.Ordinal);
-        Assert.Contains("yes", result.Output, StringComparison.Ordinal);
+        Assert.Contains("Yes", result.Output, StringComparison.Ordinal);
         Assert.Contains("beta", result.Output, StringComparison.Ordinal);
-        Assert.Contains("NO", result.Output, StringComparison.Ordinal);
+        Assert.Contains("**NO**", result.Output, StringComparison.Ordinal);
     }
 
     [Fact]

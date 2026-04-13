@@ -204,6 +204,12 @@ public sealed class SmartRouterTests
             CostPerMillionInput = 0.1m,
             Source = CapabilitySource.Live,
         });
+        registry.Register("standard-model", new ModelCapabilities
+        {
+            TierHint = ModelTier.Standard,
+            CostPerMillionInput = 3m,
+            Source = CapabilitySource.Live,
+        });
         registry.Register("expensive-model", new ModelCapabilities
         {
             TierHint = ModelTier.High,
@@ -218,14 +224,14 @@ public sealed class SmartRouterTests
         var router = new SmartRouter([info], RouterMode.Smart, RouterStrategy.Balanced,
             pingHttp, NullLogger<SmartRouter>.Instance, registry, tierResolver);
 
-        // Simple question → should classify as SimpleQa → fast tier
+        // "what is X" matches the Explain intent → standard tier
         var req = new MessagesRequest("gpt-4o", 100, [InputMessage.UserText("what is 2+2?")]);
         var decision = await router.RouteWithIntentAsync(req);
 
         Assert.NotNull(decision.Classification);
-        Assert.Equal(IntentClass.SimpleQa, decision.Classification.Intent);
-        Assert.Equal(ModelTier.Fast, decision.Tier);
-        Assert.Equal("cheap-model", decision.ResolvedModel);
+        Assert.Equal(IntentClass.Explain, decision.Classification.Intent);
+        Assert.Equal(ModelTier.Standard, decision.Tier);
+        Assert.Equal("standard-model", decision.ResolvedModel);
     }
 
     [Fact]

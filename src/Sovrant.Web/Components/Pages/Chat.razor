@@ -67,10 +67,16 @@
         <button class="btn-primary send-btn" @onclick="SendAsync" disabled="@(!CanSend)">Send</button>
     </div>
 
-    <!-- Token count -->
+    <!-- Token count & cost -->
     @if (_tokenCount > 0)
     {
-        <div class="token-counter">@_tokenCount.ToString("N0") tokens</div>
+        <div class="token-counter">
+            @_tokenCount.ToString("N0") tokens
+            @if (_sessionCost > 0)
+            {
+                <span class="cost-indicator"> &middot; ~$@_sessionCost.ToString("F4")</span>
+            }
+        </div>
     }
 </div>
 
@@ -86,6 +92,7 @@
     private string _inputText = string.Empty;
     private bool _isSending;
     private int _tokenCount;
+    private decimal _sessionCost;
     private string _sessionId = $"session-{Guid.NewGuid():N}";
     private string _workspaceName => ActiveContext.WorkspaceName;
     private string _projectName => ActiveContext.ProjectName;
@@ -127,6 +134,7 @@
             _sessionId = sessionId;
             _messages.Clear();
             _tokenCount = 0;
+            _sessionCost = 0;
             await LoadSessionAsync(sessionId);
         });
     }
@@ -216,6 +224,7 @@
             {
                 _messages.Clear();
                 _tokenCount = 0;
+            _sessionCost = 0;
                 _sessionId = $"session-{Guid.NewGuid():N}";
                 return;
             }
@@ -308,6 +317,10 @@
             case RuntimeEvent.TurnComplete t:
                 _tokenCount += t.InputTokens + t.OutputTokens;
                 msg.CompleteStreaming();
+                break;
+            case RuntimeEvent.TurnCost { EstimatedUsd: var usd }:
+                if (usd is not null)
+                    _sessionCost += usd.Value;
                 break;
             case RuntimeEvent.RuntimeError { Message: var errMsg }:
                 msg.SetError(errMsg);

@@ -111,6 +111,16 @@ public sealed class SovrantEvent
     [JsonPropertyName("step_status")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? StepStatus { get; init; }
+
+    // ── Phase 55 fields ─────────────────────────────────────────────
+
+    [JsonPropertyName("estimated_usd")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? EstimatedUsd { get; init; }
+
+    [JsonPropertyName("cost_source")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CostSource { get; init; }
 }
 
 /// <summary>Token usage summary on the final chunk.</summary>

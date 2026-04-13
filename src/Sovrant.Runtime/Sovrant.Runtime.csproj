@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Storage\Migrations\*.sql" />
+    <EmbeddedResource Include="Metrics\OpenRouterModelAliases.json" />
   </ItemGroup>
 
 </Project>

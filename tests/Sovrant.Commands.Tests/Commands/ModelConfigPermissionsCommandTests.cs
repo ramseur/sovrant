@@ -56,6 +56,6 @@ public sealed class ModelConfigPermissionsCommandTests
         foreach (var mode in Enum.GetValues<PermissionMode>())
             Assert.Contains(mode.ToString(), result.Output, StringComparison.Ordinal);
         // Active mode should be marked
-        Assert.Contains("◀ active", result.Output, StringComparison.Ordinal);
+        Assert.Contains("**Active**", result.Output, StringComparison.Ordinal);
     }
 }

@@ -238,6 +238,24 @@ public static class ServiceCollectionExtensions
         });
         services.AddSingleton<McpOAuthService>();
 
+        // Cost tracking (Phase 55)
+        var costProvider = Environment.GetEnvironmentVariable("SOVRANT_COST_PROVIDER") ?? "openrouter";
+        if (!string.Equals(costProvider, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddHttpClient<Metrics.OpenRouterPricingClient>();
+            services.AddSingleton<Metrics.OpenRouterPricingClient>();
+            services.AddSingleton<Metrics.ModelIdNormaliser>();
+            services.AddSingleton<Metrics.ICostModel, Metrics.OpenRouterCostModel>();
+            services.AddSingleton<Metrics.CostMetricsLogger>();
+            services.AddSingleton<Metrics.BudgetEnforcer>();
+            services.AddSingleton<Metrics.CostModelLoggerFacade>();
+            services.AddSingleton<Metrics.CostDashboardService>();
+        }
+        else
+        {
+            services.AddSingleton<Metrics.ICostModel>(Metrics.NullCostModel.Instance);
+        }
+
         // Conversation runtime — transient so the pool creates independent instances per session.
         services.AddTransient<IConversationRuntime, ConversationRuntime>();
 

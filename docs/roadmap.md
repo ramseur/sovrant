@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-12 (Phase 41 complete — 39 phases shipped, 13 pending)
+**Last updated:** 2026-04-13 (Phase 55 complete — 40 phases shipped, 12 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -12,8 +12,8 @@ This document tracks planned features, architectural decisions, and the reasonin
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
 - **51 tools** across 11 categories (file, shell, web, task, agent, team, mission, swarm, artifact, MCP, LSP)
-- **1,285 tests** across 9 projects, 0 warnings
-- **95 server endpoints** (chat, sessions, config, status, models, usage, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
+- **1,534 tests** across 9 projects, 0 failures
+- **96 server endpoints** (chat, sessions, config, status, models, usage, cost, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
 - SQLite persistence layer with 12 versioned migrations, 34 tables, 48 indexes (Phase 32 + 42.5 + 51 + 52)
@@ -23,6 +23,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 - Agent artifact tools — isolated produce-and-deposit pattern for team deliverables (Phase 41 ✅)
 - Model capability registry with layered resolution (Phase 54 ✅)
 - SmartRouter with health/latency/cost scoring + intent-aware model tier routing (Phase 48 ✅)
+- Cost tracking with OpenRouter pricing, per-session/project budgets, JSONL metrics log, `/cost` CLI, `GET /v1/cost` API (Phase 55 ✅)
 - Workspace/project/user hierarchy with membership, invites, config inheritance (Phases 35–37 ✅)
 - Per-user token auth with API token issuance/revocation (Phase 38 ✅)
 - Multi-provider support: OpenAI, Gemini, Ollama, native messages API, OpenAI Responses API
@@ -102,11 +103,12 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | 52 | Unified agent orchestration — SqliteTeamRegistry, AgentOrchestrator, agent_runs ledger, TeamRun/TeamPublish, /v1/teams + /v1/runs API |
 | 53 | Scoped artifact storage — IArtifactStore, workspace-first layout, /v1/artifacts API, /artifacts CLI |
 | 54 | Model capability registry — layered resolution (user > bundled > live > default), Gemma 4 support |
+| 55 | Cost tracking & budgets — OpenRouter pricing, `ICostModel`, `BudgetEnforcer`, JSONL metrics log, `/cost` CLI command, `GET /v1/cost` API, cost display in Desktop + Web, `RuntimeEvent.TurnCost` |
 | 56 | Web application — Blazor Server, 15 pages, streaming chat, embedded runtime, port 5100 (remote mode split to Phase 61) |
 
 ### Still pending
 
-> **Last audited:** 2026-04-12. 39 phases complete, 13 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61. Everything below is *not yet shipped*.
+> **Last audited:** 2026-04-13. 40 phases complete, 12 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61. Everything below is *not yet shipped*.
 
 | Gap | Phase | Priority |
 |---|---|---|
@@ -118,7 +120,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Workspace backup, import & export | Phase 47 | Medium |
 | SearXNG web search backend (self-hosted, key-free) | Phase 49 | Low–Medium |
 | OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | Medium–High |
-| Cost tracking, budgets & dashboard via OpenRouter (consolidated from Phases 39+55) | Phase 55 | Medium |
+| ~~Cost tracking, budgets & dashboard via OpenRouter (consolidated from Phases 39+55)~~ | Phase 55 ✅ | Medium |
 | ~~LLM provider sanitizer~~ → **Sovrant Trust Boundary** (sanitization, ethical harness, intent verification) | Phase 58 ✅ | High |
 | Agentic loop hardening — intent classification, plan approval, execution governance, progress visibility | Phase 59 | **Critical** |
 | Hermes Agent integration via MCP — alternative claw/federation bus provider with self-improving skills | Phase 60 | Medium |
@@ -5247,7 +5249,7 @@ Chat.razor doesn't change — it already consumes `IAsyncEnumerable<RuntimeEvent
 
 ## Phase 62 — Sophisticated Conversational UX Across CLI, Desktop & Web (Intent-Driven Interaction & Voice)
 
-**Depends on:** Phase 59 (intent classification + semantic gate), Phase 56 (web frontend), Phase 61 (remote mode)
+**Depends on:** Phase 59 (intent classification + semantic gate), Phase 56 (web frontend), Phase 61 (remote mode), Phase 55 (cost tracking — for cost dashboard and budget UI)
 **Difficulty:** High
 
 **Goal:** Elevate the user experience across all three surfaces (CLI, Desktop, Web) from "chat box that calls tools" to a sophisticated, intent-aware conversational interface. The system should feel like speaking with an intelligent collaborator — understanding nuance, adapting its interaction style to the prompt's intent, surfacing the right UI affordances at the right time, and supporting voice as a first-class input/output channel.
@@ -5265,6 +5267,9 @@ Chat.razor doesn't change — it already consumes `IAsyncEnumerable<RuntimeEvent
 | **Voice Input/Output** | Desktop, Web | Speech-to-text for input (browser Web Speech API / desktop native), text-to-speech for responses (configurable, off by default). Voice mode adapts: shorter responses, confirmation prompts before destructive actions, audio cues for tool execution status |
 | **Prompt Composition Assistant** | All | When the intent classifier returns low confidence or `NeedsClarification`, instead of a generic "Could you clarify?", the UI shows structured options: radio buttons for likely intents, a template prompt the user can edit, or a guided wizard for complex multi-step requests |
 | **Thinking/Reasoning Transparency** | All | Show the intent classification, model tier selection, and routing decision in a collapsible "thinking" panel. Users see: "Intent: CodeGeneration (0.85 confidence) → Model: claude-sonnet → Tools: enabled". Builds trust and helps users learn to write better prompts |
+| **Token Usage Display** | Desktop, Web | Show input and output token counts per turn and cumulative per session. Rendered inline below each assistant message (e.g., "↑ 1,204 tokens · ↓ 832 tokens") and as a running total in the session header/sidebar. When Phase 55 cost tracking is active, also shows estimated cost per turn and session total (e.g., "↑ 1,204 · ↓ 832 · $0.003"). CLI surfaces this via `--verbose` flag or `sovrant dashboard` command |
+| **Unified Dashboard** | All | A multi-tab dashboard view that aggregates operational visibility into one place. Desktop: full Avalonia view navigable from sidebar or `Ctrl+Shift+D`. Web: `/dashboard` Blazor page with tab navigation. CLI: `sovrant dashboard` command that prints a combined status table. Tabs described below — cost is one tab, not the whole dashboard. The dashboard consumes existing endpoints (`GET /v1/status`, `GET /v1/usage`, `GET /v1/cost`) so the data layer is already built. Tabs: **Overview** (active model, provider health, active sessions, quick spend summary), **Cost & Budget** (Phase 55 — daily/weekly/monthly spend, per-model and per-session breakdowns, budget gauges, budget configuration), **Sessions** (active sessions with token counts, resume links, session timeline), **Providers** (provider health, latency, error rates, routing scores — data from `/v1/status`), **Models** (available models, pricing snapshot age, per-model usage stats). Additional tabs can be added by future phases (e.g. Evals, Missions, Team activity) |
+| **Budget Inline Warnings** | Desktop, Web | When `BudgetEnforcer` hits 80% or 100% threshold, display an inline warning banner in the chat area: amber for 80% ("You've used 80% of your $5.00 session budget"), red for 100% with a "Budget exceeded" blocking message. Dismissible for 80%, non-dismissible for 100% |
 | **Tone & Personality Adaptation** | All | Configurable interaction style per workspace: "concise" (terse, code-focused), "mentor" (explains reasoning, suggests learning resources), "pair programmer" (collaborative, asks clarifying questions), "executive" (summaries and decisions only). Injected into system prompt based on user preference |
 
 ### CLI-Specific Enhancements
@@ -5284,6 +5289,7 @@ Chat.razor doesn't change — it already consumes `IAsyncEnumerable<RuntimeEvent
 | **Inline code actions** | Hover actions on generated code: "Copy", "Apply to file", "Open diff", "Run". No need to copy-paste from chat |
 | **Artifact preview panel** | When the intent produces an artifact (file, document, plan), it renders live in the artifact panel with syntax highlighting, not just a chat message |
 | **Session timeline** | Visual timeline showing conversation flow: messages, tool calls, artifacts created, decisions made. Clickable to jump to any point |
+| **Dashboard (Desktop)** | Full Avalonia view (`Ctrl+Shift+D` or sidebar icon) with tab strip matching the Unified Dashboard component. **Overview tab:** active model, provider health indicators, session count, quick spend counter. **Cost tab:** summary cards (today/week/month), per-model and per-session cost tables, daily spend bar chart (LiveCharts2 or OxyPlot), budget gauge bars with color thresholds, budget configuration panel (slider + text input, presets $1/$5/$10/$50/unlimited) that writes to `.sovrant/cost.json` and hot-reloads `BudgetEnforcer`. **Sessions tab:** active sessions list with token counts, resume buttons, and mini timeline. **Providers tab:** provider cards with latency/error rate/score from `/v1/status`. The sidebar also shows a mini spend counter that links into the dashboard |
 | **Keyboard-driven workflow** | `Ctrl+Enter` to send, `Ctrl+Shift+Enter` to send and auto-approve all tools, `Ctrl+D` to toggle diff view, `Ctrl+P` to toggle plan view |
 
 ### Web-Specific Enhancements
@@ -5292,6 +5298,7 @@ Chat.razor doesn't change — it already consumes `IAsyncEnumerable<RuntimeEvent
 |---|---|
 | **Responsive intent layout** | Mobile: stacked chat; tablet: side panel for artifacts; desktop: full split-pane with resizable columns |
 | **Collaborative indicators** | When connected to a shared server (Phase 61), show who else is in the workspace, their active sessions, and allow session sharing |
+| **Dashboard (Web)** | `/dashboard` Blazor page with tab navigation matching the Unified Dashboard component. Same tabs as Desktop (Overview, Cost, Sessions, Providers, Models) rendered with Blazor components. Responsive layout: mobile collapses tabs to dropdown, tablet shows two-column cards, desktop shows full tab strip with data tables. Cost tab includes daily spend sparkline (lightweight SVG or Chart.js interop). Budget configuration via `PUT /v1/cost/config` with hot-reload. Deep-linkable tabs via URL hash (`/dashboard#cost`, `/dashboard#sessions`) |
 | **Export & share** | One-click export of a conversation thread as markdown, PDF, or shareable link |
 | **Notification system** | Browser notifications for long-running tasks: "Your refactor plan is ready for review", "Build completed with 2 warnings" |
 
@@ -5350,15 +5357,22 @@ Stored per-workspace in user settings. Injected into system prompt by `Conversat
 2. **Smart suggestions engine** — After each turn, generate 2–3 follow-up suggestions based on intent + result. Rule-based initially (Phase 59 classifier), LLM-generated later. Emit as `RuntimeEvent.SuggestedActions`.
 3. **Prompt composition UI** — Extend `SemanticIntentGate.BuildClarification()` to return structured options (not just a string). Desktop and Web render as radio buttons; CLI renders as numbered list.
 4. **Thinking panel** — Add `RuntimeEvent.RoutingDecision` event with intent, confidence, model, tier. All three surfaces render it in a collapsible/debug panel.
-5. **Tone profiles** — Add `ToneProfile` to workspace settings. `ConversationRuntime` reads it and appends to system prompt.
-6. **Voice input (Web)** — Add `SpeechInputService` using Web Speech API. Blazor interop via JS. Toggle button in chat input area.
-7. **Voice input (Desktop)** — Add `DesktopSpeechService` using Windows Speech Recognition or whisper.cpp via P/Invoke.
-8. **Voice output** — Add `SpeechOutputService` (Web Speech Synthesis / Windows SAPI). Configurable per-session.
-9. **CLI rich rendering** — Add Spectre.Console renderers for each intent class. Progress bars for multi-step plans.
-10. **Desktop split-pane** — Add `SplitPaneView` that activates automatically for code/artifact intents.
-11. **Session timeline (Desktop)** — Visual timeline component fed by `RuntimeEvent` stream.
-12. **Web responsive layout** — CSS grid breakpoints for mobile/tablet/desktop with intent-aware panel allocation.
-13. **Follow-up action chips** — Clickable UI elements after each response that populate the input with the suggested follow-up.
+5. **Token usage display** — Subscribe to `TurnComplete` events (already carry `InputTokens`/`OutputTokens`). Desktop: add a `TokenUsageBadge` control below each assistant message showing "↑ N · ↓ N" with optional cost from `ICostModel` (Phase 55). Web: Blazor `<TokenBadge>` component. Session totals accumulated in a `SessionTokenTracker` and shown in sidebar. CLI: print token line when `--verbose`.
+6. **Unified dashboard shell** — Define `IDashboardTab` interface with `Name`, `Icon`, and `Render()` method. Desktop: `DashboardView` Avalonia view with `TabStrip` + `ContentControl`, navigable via sidebar icon or `Ctrl+Shift+D`. Web: `/dashboard` Blazor page with `<TabNavigation>` component and deep-linkable hash routes. CLI: `sovrant dashboard` command that prints a combined Spectre.Console table. Each tab is a self-contained component that can be developed independently.
+7. **Dashboard — Overview tab** — Summary view consuming `GET /v1/status`. Shows: active model badge, provider health cards (green/amber/red dots), active session count, quick spend counter (from `CostDashboardService` if enabled). Desktop: Avalonia `UniformGrid` of status cards. Web: Blazor `<OverviewTab>`. CLI: single-table summary.
+8. **Dashboard — Cost & Budget tab** — Consumes `GET /v1/cost?range=...` and `CostDashboardService`. Summary cards (today/week/month), per-model and per-session cost tables (sortable), budget gauge bars with color thresholds, budget configuration panel (slider + text input, presets, writes to `.sovrant/cost.json` via `PUT /v1/cost/config`, hot-reloads `BudgetEnforcer`). Desktop: daily spend bar chart (LiveCharts2 or OxyPlot). Web: daily sparkline (SVG or Chart.js interop). Budget inline warnings injected into chat `ItemsControl` at 80%/100% thresholds.
+9. **Dashboard — Sessions tab** — Consumes `GET /v1/usage`. Active sessions list with token counts, resume buttons, per-session cost if Phase 55 is active. Desktop: `DataGrid` with session resume action. Web: sortable table with session links.
+10. **Dashboard — Providers tab** — Consumes `GET /v1/status`. Provider cards with latency/error rate/score/health. Desktop: `ItemsRepeater` with provider cards. Web: responsive card grid.
+11. **Dashboard — Models tab** — Consumes `GET /v1/models`. Available models with pricing snapshot age (if Phase 55), per-model usage stats from cost log. Desktop + Web: sortable table.
+12. **Tone profiles** — Add `ToneProfile` to workspace settings. `ConversationRuntime` reads it and appends to system prompt.
+13. **Voice input (Web)** — Add `SpeechInputService` using Web Speech API. Blazor interop via JS. Toggle button in chat input area.
+14. **Voice input (Desktop)** — Add `DesktopSpeechService` using Windows Speech Recognition or whisper.cpp via P/Invoke.
+15. **Voice output** — Add `SpeechOutputService` (Web Speech Synthesis / Windows SAPI). Configurable per-session.
+16. **CLI rich rendering** — Add Spectre.Console renderers for each intent class. Progress bars for multi-step plans.
+17. **Desktop split-pane** — Add `SplitPaneView` that activates automatically for code/artifact intents.
+18. **Session timeline (Desktop)** — Visual timeline component fed by `RuntimeEvent` stream.
+19. **Web responsive layout** — CSS grid breakpoints for mobile/tablet/desktop with intent-aware panel allocation.
+20. **Follow-up action chips** — Clickable UI elements after each response that populate the input with the suggested follow-up.
 
 ### Acceptance Criteria
 
@@ -5370,6 +5384,16 @@ Stored per-workspace in user settings. Injected into system prompt by `Conversat
 - Voice input works on Desktop and Web (opt-in)
 - Tone profiles affect system prompt and response style
 - Thinking/routing panel shows intent, model, and confidence
+- Token usage (input/output) displayed per turn on Desktop and Web; session total visible in header/sidebar
+- When cost tracking (Phase 55) is enabled, estimated cost shown alongside token counts
+- Unified dashboard accessible on all three surfaces: Desktop (`Ctrl+Shift+D`), Web (`/dashboard`), CLI (`sovrant dashboard`)
+- Dashboard Overview tab shows active model, provider health, session count, and quick spend summary
+- Dashboard Cost tab shows daily/weekly/monthly spend, per-model and per-session breakdowns, budget gauges, and budget configuration
+- Dashboard Sessions tab shows active sessions with token counts and resume links
+- Dashboard Providers tab shows provider health, latency, error rates from `/v1/status`
+- Budget warnings appear inline in chat at 80% (amber, dismissible) and 100% (red, blocking)
+- Budget caps configurable from the dashboard Cost tab on Desktop and Web with immediate effect
+- Dashboard is extensible — future phases can add tabs (Evals, Missions, Teams) without restructuring
 - Smart follow-up suggestions appear after each turn
 - `dotnet build Sovrant.slnx` exits 0
 - All existing tests pass (no regressions)

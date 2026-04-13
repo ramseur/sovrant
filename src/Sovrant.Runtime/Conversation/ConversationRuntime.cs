@@ -33,6 +33,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly MemoryInjector? _memoryInjector;
     private readonly IModelCapabilityRegistry? _capabilityRegistry;
     private readonly Governance.IIntentGate? _intentGate;
+    private readonly Metrics.CostModelLoggerFacade? _costFacade;
     private readonly List<InputMessage> _history = [];
     private string _systemPrompt;
     /// <summary>Once true, all subsequent turns expose tools (session used tools at least once).</summary>
@@ -91,7 +92,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         MemoryInjector? memoryInjector = null,
         string? systemPromptOverride = null,
         IModelCapabilityRegistry? capabilityRegistry = null,
-        Governance.IIntentGate? intentGate = null)
+        Governance.IIntentGate? intentGate = null,
+        Metrics.CostModelLoggerFacade? costFacade = null)
     {
         _router = router;
         _toolExecutor = toolExecutor;
@@ -103,6 +105,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         _memoryInjector = memoryInjector;
         _capabilityRegistry = capabilityRegistry;
         _intentGate = intentGate;
+        _costFacade = costFacade;
         _systemPrompt = systemPromptOverride ?? BuildSystemPrompt();
     }
 
@@ -335,6 +338,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     LogTurnComplete(_logger, turnSw.ElapsedMilliseconds, accumulated.InputTokens, accumulated.OutputTokens);
                     yield return new RuntimeEvent.TurnComplete(
                         "end_turn", accumulated.InputTokens, accumulated.OutputTokens);
+                    var costEvt1 = RecordCostIfEnabled(accumulated.InputTokens, accumulated.OutputTokens);
+                    if (costEvt1 is not null) yield return costEvt1;
                     yield break;
                 }
             }
@@ -351,6 +356,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     accumulated.StopReason,
                     accumulated.InputTokens,
                     accumulated.OutputTokens);
+                var costEvt2 = RecordCostIfEnabled(accumulated.InputTokens, accumulated.OutputTokens);
+                if (costEvt2 is not null) yield return costEvt2;
                 // Stop hook is fire-and-forget — agent does not wait for it.
                 _ = _hookRunner.RunAsync(
                     HookEvent.Stop,
@@ -702,6 +709,14 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         };
 
         await _sessionStore.AppendAsync(SessionId, entry, _ownerUserId, ct).ConfigureAwait(false);
+    }
+
+    private RuntimeEvent.TurnCost? RecordCostIfEnabled(int inputTokens, int outputTokens)
+    {
+        if (_costFacade is null) return null;
+        var record = _costFacade.RecordTurn(
+            _sessionId, _config.Model, inputTokens, outputTokens);
+        return new RuntimeEvent.TurnCost(record.EstimatedUsd, record.Source);
     }
 
     private string BuildSystemPrompt()

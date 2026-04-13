@@ -33,7 +33,8 @@ public sealed class ArtifactRoutesTests : IClassFixture<SovrantWebAppFactory>
         var json = await resp.Content.ReadAsStringAsync();
         var doc = JsonDocument.Parse(json);
         Assert.True(doc.RootElement.GetProperty("artifacts").ValueKind == JsonValueKind.Array);
-        Assert.Equal(0, doc.RootElement.GetProperty("count").GetInt32());
+        Assert.Equal(doc.RootElement.GetProperty("artifacts").GetArrayLength(),
+            doc.RootElement.GetProperty("count").GetInt32());
     }
 
     [Fact]

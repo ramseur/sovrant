@@ -31,6 +31,9 @@ public partial class ChatViewModel : ViewModelBase
     private int _tokenCount;
 
     [ObservableProperty]
+    private decimal _sessionCost;
+
+    [ObservableProperty]
     private bool _hasMessages;
 
     [ObservableProperty]
@@ -129,6 +132,7 @@ public partial class ChatViewModel : ViewModelBase
                     Messages.Clear();
                     HasMessages = false;
                     TokenCount = 0;
+                    SessionCost = 0;
                     SessionId = $"session-{Guid.NewGuid():N}";
                 });
                 return;
@@ -307,6 +311,11 @@ public partial class ChatViewModel : ViewModelBase
             case RuntimeEvent.TurnComplete t:
                 TokenCount += t.InputTokens + t.OutputTokens;
                 msg.CompleteStreaming();
+                break;
+
+            case RuntimeEvent.TurnCost { EstimatedUsd: var usd }:
+                if (usd is not null)
+                    SessionCost += usd.Value;
                 break;
 
             case RuntimeEvent.RuntimeError { Message: var errMsg }:

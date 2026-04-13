@@ -84,6 +84,28 @@
             </DockPanel>
         </Border>
 
+        <!-- Session stats (tokens + cost) — visible once messages exist -->
+        <Border DockPanel.Dock="Bottom"
+                Padding="24,4"
+                IsVisible="{Binding HasMessages}">
+            <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Right">
+                <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center">
+                    <TextBlock.Text>
+                        <MultiBinding StringFormat="{}{0:N0} tokens">
+                            <Binding Path="TokenCount" />
+                        </MultiBinding>
+                    </TextBlock.Text>
+                </TextBlock>
+                <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center">
+                    <TextBlock.Text>
+                        <MultiBinding StringFormat="~${0:F4}">
+                            <Binding Path="SessionCost" />
+                        </MultiBinding>
+                    </TextBlock.Text>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+
         <!-- Context breadcrumb -->
         <Border DockPanel.Dock="Top"
                 Padding="24,8"

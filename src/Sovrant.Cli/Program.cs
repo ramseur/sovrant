@@ -999,6 +999,11 @@ async Task RunTurnWithCancelAsync(IConversationRuntime runtime, string message, 
                     AnsiConsole.Write(new Rule().RuleStyle("grey dim"));
                     break;
 
+                case RuntimeEvent.TurnCost { EstimatedUsd: var usd, Source: var source }:
+                    if (usd is not null)
+                        AnsiConsole.MarkupLine($"[grey dim]  \U0001F4B2 ~${usd:F4} ({Markup.Escape(source)})[/]");
+                    break;
+
                 case RuntimeEvent.RuntimeError { Message: var msg }:
                     if (firstToken)
                     {
@@ -1104,6 +1109,11 @@ async Task RunTurnAsync(IConversationRuntime runtime, string message, Cancellati
                 AnsiConsole.MarkupLine($"\n[grey dim]({inTok}\u2191 {outTok}\u2193 tokens)[/]");
                 break;
 
+            case RuntimeEvent.TurnCost { EstimatedUsd: var usd, Source: var source }:
+                if (usd is not null)
+                    AnsiConsole.MarkupLine($"[grey dim]  \U0001F4B2 ~${usd:F4} ({Markup.Escape(source)})[/]");
+                break;
+
             case RuntimeEvent.RuntimeError { Message: var msg }:
                 if (firstToken)
                 {
@@ -1146,6 +1156,8 @@ async Task<int> RunCiTurnAsync(IConversationRuntime runtime, string message, Can
     var errors = new List<string>();
     int inputTokens = 0;
     int outputTokens = 0;
+    decimal? estimatedUsd = null;
+    string? costSource = null;
     string? clarification = null;
     CiPlanInfo? presentedPlan = null;
     var stepProgress = new List<CiStepProgress>();
@@ -1177,6 +1189,11 @@ async Task<int> RunCiTurnAsync(IConversationRuntime runtime, string message, Can
                 outputTokens = outTok;
                 break;
 
+            case RuntimeEvent.TurnCost { EstimatedUsd: var usd, Source: var source }:
+                estimatedUsd = usd;
+                costSource = source;
+                break;
+
             case RuntimeEvent.RuntimeError { Message: var msg }:
                 errors.Add(msg);
                 break;
@@ -1203,6 +1220,8 @@ async Task<int> RunCiTurnAsync(IConversationRuntime runtime, string message, Can
         errors: errors,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
+        estimated_usd: estimatedUsd,
+        cost_source: costSource,
         clarification: clarification,
         plan: presentedPlan,
         step_progress: stepProgress.Count > 0 ? stepProgress : null);
@@ -1256,6 +1275,8 @@ sealed record CiOutput(
     List<string> errors,
     int input_tokens,
     int output_tokens,
+    decimal? estimated_usd = null,
+    string? cost_source = null,
     string? clarification = null,
     CiPlanInfo? plan = null,
     List<CiStepProgress>? step_progress = null);

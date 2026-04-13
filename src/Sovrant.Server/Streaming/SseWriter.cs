@@ -120,6 +120,22 @@ internal static class SseWriter
             },
         };
 
+    /// <summary>Builds a turn-cost extension chunk (Phase 55).</summary>
+    public static ChatCompletionChunk CostChunk(
+        string id, string model, decimal? estimatedUsd, string source) =>
+        new()
+        {
+            Id = id,
+            Model = model,
+            Choices = [new ChunkChoice { Delta = new DeltaContent { Content = string.Empty } }],
+            Sovrant = new SovrantEvent
+            {
+                Event = "turn_cost",
+                EstimatedUsd = estimatedUsd,
+                CostSource = source,
+            },
+        };
+
     /// <summary>Builds the final stop chunk with token usage.</summary>
     public static ChatCompletionChunk StopChunk(
         string id, string model, int inputTokens, int outputTokens) =>
