@@ -38,4 +38,16 @@ public abstract record SwarmEvent(string SwarmId, DateTimeOffset Timestamp)
     /// <summary>The swarm has completed (successfully or with failures).</summary>
     public sealed record SwarmCompleted(string SwarmId, SwarmStatus FinalStatus, int TotalTokens, double DurationSeconds)
         : SwarmEvent(SwarmId, DateTimeOffset.UtcNow);
+
+    /// <summary>Phase 57 — a wave of tasks has completed execution.</summary>
+    public sealed record WaveCompleted(string SwarmId, int Wave, int CompletedTasks, int FailedTasks)
+        : SwarmEvent(SwarmId, DateTimeOffset.UtcNow);
+
+    /// <summary>Phase 57 — a coordination event was received from another group.</summary>
+    public sealed record CoordinationReceived(string SwarmId, string SourceGroupId, string EventType, string Summary)
+        : SwarmEvent(SwarmId, DateTimeOffset.UtcNow);
+
+    /// <summary>Phase 57 — a coordination event was sent to another group.</summary>
+    public sealed record CoordinationSent(string SwarmId, string TargetGroupId, string EventType, string Summary)
+        : SwarmEvent(SwarmId, DateTimeOffset.UtcNow);
 }

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Config;
+using Sovrant.Agents.Coordination;
 using Sovrant.Agents.Orchestration;
 using Sovrant.Agents.Shared;
 using Sovrant.Agents.Swarm;
@@ -60,6 +61,9 @@ public static class ServiceCollectionExtensions
 
         // Unified agent orchestrator (Phase 52)
         services.AddSingleton<IAgentOrchestrator, AgentOrchestrator>();
+
+        // PM Coordinator (Phase 57) — inter-group coordination
+        services.AddSingleton<IPMCoordinator, PMCoordinator>();
 
         return services;
     }

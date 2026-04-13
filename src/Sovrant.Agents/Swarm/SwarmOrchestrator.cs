@@ -155,6 +155,13 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
 
                 await Task.WhenAll(execTasks).ConfigureAwait(false);
 
+                // Phase 57 — emit WaveCompleted event
+                var waveCompleted = waveTasks.Count(t => t.Status == SwarmTaskStatus.Completed);
+                var waveFailed = waveTasks.Count(t => t.Status == SwarmTaskStatus.Failed);
+                await EmitAsync(
+                    new SwarmEvent.WaveCompleted(plan.Id, wave, waveCompleted, waveFailed),
+                    onEvent, swarmContext, ct).ConfigureAwait(false);
+
                 // Check budget after each wave
                 if (tokenCounter.Value > config.MaxTokenBudget)
                 {

@@ -60,4 +60,10 @@ public sealed class EnsembleRunRequest
 
     /// <summary>Event callback for SSE streaming.</summary>
     public Action<SwarmEvent>? OnEvent { get; init; }
+
+    /// <summary>Phase 57 — whether to enable inter-group coordination via PM agents.</summary>
+    public bool? EnableCoordination { get; init; }
+
+    /// <summary>Phase 57 — PM agent template override (defaults to <c>pm-coordinator</c>).</summary>
+    public string? PMTemplate { get; init; }
 }

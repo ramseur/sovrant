@@ -211,6 +211,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAgentRunStore>(sp =>
             new SqliteAgentRunStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
+        // Coordination event store and group PM store (Phase 57)
+        services.AddSingleton<ICoordinationEventStore>(sp =>
+            new SqliteCoordinationEventStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+        services.AddSingleton<IGroupPMStore>(sp =>
+            new SqliteGroupPMStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+
         // Artifact store (Phase 53) — tenant-scoped artifact storage.
         // Backend is selected via SOVRANT_ARTIFACTS_BACKEND (default: local).
         services.AddSingleton<IArtifactStoreFactory, DefaultArtifactStoreFactory>();

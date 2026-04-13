@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Sovrant.Agents.Coordination;
 using Sovrant.Agents.Swarm;
 using Sovrant.Agents.Teams;
 using Sovrant.Runtime.Storage;
@@ -38,6 +39,7 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
     private readonly IAgentRunStore _runStore;
     private readonly SwarmQualityGate _qualityGate;
     private readonly SwarmConfig _swarmConfig;
+    private readonly IPMCoordinator? _pmCoordinator;
     private readonly ILogger<AgentOrchestrator> _logger;
 
     public AgentOrchestrator(
@@ -47,7 +49,8 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
         IAgentRunStore runStore,
         SwarmQualityGate qualityGate,
         SwarmConfig swarmConfig,
-        ILogger<AgentOrchestrator> logger)
+        ILogger<AgentOrchestrator> logger,
+        IPMCoordinator? pmCoordinator = null)
     {
         ArgumentNullException.ThrowIfNull(swarmOrchestrator);
         ArgumentNullException.ThrowIfNull(decomposer);
@@ -62,6 +65,7 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
         _runStore = runStore;
         _qualityGate = qualityGate;
         _swarmConfig = swarmConfig;
+        _pmCoordinator = pmCoordinator;
         _logger = logger;
     }
 
@@ -154,6 +158,19 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
             // ── Execute via SwarmOrchestrator ────────────────────────────
             var result = await _swarmOrchestrator.ExecuteAsync(
                 plan, effectiveConfig, request.OnEvent, swarmContext, ct).ConfigureAwait(false);
+
+            // ── Phase 57: Inter-group coordination via PM agents ────────
+            if (request.EnableCoordination == true && _pmCoordinator is not null && teamId is not null)
+            {
+                try
+                {
+                    await _pmCoordinator.BroadcastFromGroupAsync(teamId, ct).ConfigureAwait(false);
+                }
+                finally
+                {
+                    _pmCoordinator.UnregisterGroup(teamId);
+                }
+            }
 
             // ── Update run ledger ───────────────────────────────────────
             var statusStr = result.Status switch

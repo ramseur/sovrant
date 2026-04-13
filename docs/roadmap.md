@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-13 (Phase 63 complete — 43 phases shipped, 9 pending)
+**Last updated:** 2026-04-13 (Phase 57 complete — 44 phases shipped, 8 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -12,7 +12,7 @@ This document tracks planned features, architectural decisions, and the reasonin
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
 - **51 tools** across 11 categories (file, shell, web, task, agent, team, mission, swarm, artifact, MCP, LSP)
-- **1,534 tests** across 9 projects, 0 failures
+- **1,564 tests** across 9 projects, 0 failures
 - **96 server endpoints** (chat, sessions, config, status, models, usage, cost, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
@@ -107,16 +107,17 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | 56 | Web application — Blazor Server, 15 pages, streaming chat, embedded runtime, port 5100 (remote mode split to Phase 61) |
 | 58 | Sovrant Trust Boundary — sanitization, ethical harness, intent verification as unified trust pipeline |
 | 59 | Agentic loop hardening — intent classification, plan approval, execution governance, progress visibility |
+| 57 | Inter-agent communication — PM agents, GroupMailbox, PMCoordinator, CoordinationStatus tool, V013 migration (30 tests) |
 | 63 | DI audit & pluggability hardening — MCP v1.2.0 protocol additions |
 
 ### Still pending
 
-> **Last audited:** 2026-04-13. 43 phases complete, 9 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61. Everything below is *not yet shipped*.
+> **Last audited:** 2026-04-13. 44 phases complete, 8 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61. Everything below is *not yet shipped*.
 
 | Gap | Phase | Priority |
 |---|---|---|
 | Enterprise auth & multi-tenancy (RBAC, OAuth/OIDC, SSO) | Phase 40 | Deferred |
-| Inter-agent communication — team-to-team, swarm-to-swarm, claw-to-claw coordination through leader/PM agents | Phase 57 | Medium–High |
+| ~~Inter-agent communication — team-to-team, swarm-to-swarm coordination through leader/PM agents~~ | Phase 57 ✅ | Medium–High |
 | VS Code native extension | Phase 42 | Deferred (MCP server covers MCP-aware IDEs) |
 | Embedded terminal panel inside the desktop app | Phase 45 | Deferred |
 | n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |

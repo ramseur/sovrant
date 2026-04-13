@@ -35,8 +35,8 @@ public sealed class SqliteStorageProviderTests : IAsyncDisposable
     {
         await _provider.InitializeAsync();
 
-        // Bumped to 12 after V012 (Phase 52 unified orchestration — teams, team_members, agent_runs).
-        Assert.Equal(12, _provider.SchemaVersion);
+        // Bumped to 13 after V013 (Phase 57 inter-agent coordination — coordination_events, group_pm_assignments).
+        Assert.Equal(13, _provider.SchemaVersion);
     }
 
     [Fact]

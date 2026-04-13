@@ -15,10 +15,10 @@ public sealed class AgentTemplateRegistryTests
     // ── Built-in count ───────────────────────────────────────────────────────
 
     [Fact]
-    public void All_Returns24BuiltInTemplates()
+    public void All_Returns25BuiltInTemplates()
     {
         var registry = CreateRegistry();
-        Assert.Equal(24, registry.All.Count);
+        Assert.Equal(25, registry.All.Count);
     }
 
     // ── Lookup ───────────────────────────────────────────────────────────────

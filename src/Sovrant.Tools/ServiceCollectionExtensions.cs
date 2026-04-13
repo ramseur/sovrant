@@ -14,6 +14,7 @@ using Sovrant.Tools.Todo;
 using Sovrant.Tools.Quality;
 using Sovrant.Tools.Shell;
 using Sovrant.Tools.Missions;
+using Sovrant.Tools.Coordination;
 using Sovrant.Tools.Swarm;
 using Sovrant.Tools.Team;
 using Sovrant.Tools.Artifacts;
@@ -142,6 +143,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISwarmProgressReporter, NullSwarmProgressReporter>();
         services.AddSingleton<ITool, SwarmTool>();
         services.AddSingleton<ITool, SwarmStatusTool>();
+
+        // Coordination tools (Phase 57)
+        services.AddSingleton<ITool, CoordinationStatusTool>();
 
         // LSP tools — only registered if ILspClientManager is available
         services.AddSingleton<ILspClientManager>(sp =>
