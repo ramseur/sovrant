@@ -68,6 +68,9 @@
                                                    Foreground="{DynamicResource TextSecondary}"
                                                    TextTrimming="CharacterEllipsis" />
                                         <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock Text="{Binding WorkspaceId}"
+                                                       FontSize="10"
+                                                       Foreground="{DynamicResource TextMuted}" />
                                             <TextBlock Text="{Binding ContentType}"
                                                        FontSize="10"
                                                        Foreground="{DynamicResource TextMuted}" />
@@ -110,13 +113,20 @@
                         BorderThickness="1"
                         Padding="20,16"
                         IsVisible="{Binding !!SelectedArtifact}">
-                    <ContentControl Content="{Binding SelectedArtifact}">
-                        <ContentControl.ContentTemplate>
-                            <DataTemplate DataType="vm:ArtifactItemViewModel">
-                                <md:MarkdownScrollViewer Markdown="{Binding Markdown}" />
-                            </DataTemplate>
-                        </ContentControl.ContentTemplate>
-                    </ContentControl>
+                    <Panel>
+                        <!-- Markdown preview for .md files -->
+                        <md:MarkdownScrollViewer Markdown="{Binding DetailText}"
+                                                 IsVisible="{Binding IsMarkdownPreview}" />
+                        <!-- Plain text preview for other files -->
+                        <ScrollViewer IsVisible="{Binding !IsMarkdownPreview}">
+                            <SelectableTextBlock Text="{Binding DetailText}"
+                                                 TextWrapping="Wrap"
+                                                 FontSize="13"
+                                                 FontFamily="Consolas,Menlo,monospace"
+                                                 Foreground="{DynamicResource TextPrimary}"
+                                                 Padding="4" />
+                        </ScrollViewer>
+                    </Panel>
                 </Border>
             </Grid>
         </Grid>

@@ -13,26 +13,31 @@
                     OnSearch="Search">
     <ItemTemplate>
         <div class="item-title">@context.FileName</div>
-        <div class="item-subtitle">@context.SizeDisplay &middot; @context.ContentType</div>
+        <div class="item-subtitle">@context.WorkspaceId &middot; @context.SizeDisplay &middot; @context.ContentType</div>
     </ItemTemplate>
     <DetailTemplate>
         <div class="detail-content">
             <h2>@context.FileName</h2>
             <div class="detail-meta">
-                <span>@context.RelativePath</span>
+                <span>@context.Path</span>
                 <span>@context.SizeDisplay</span>
                 <span>@context.ContentType</span>
                 <span>@context.LastModified.LocalDateTime.ToString("g")</span>
+                <span>@context.WorkspaceId / @context.ProjectId</span>
                 @if (context.RunId is not null)
                 {
                     <span>Run: @context.RunId[..Math.Min(8, context.RunId.Length)]</span>
                 }
             </div>
-            @if (!string.IsNullOrEmpty(context.Preview))
+            @if (context.IsMarkdown && !string.IsNullOrEmpty(context.Preview))
             {
                 <div class="detail-preview message-markdown">
                     @((MarkupString)Markdown.ToHtml(context.Preview, _pipeline))
                 </div>
+            }
+            else if (!string.IsNullOrEmpty(context.Preview))
+            {
+                <pre class="detail-preview" style="white-space: pre-wrap; font-size: 13px; font-family: Consolas, monospace;">@context.Preview</pre>
             }
             else
             {
@@ -61,28 +66,58 @@
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
-    private async Task LoadAsync()
+    private Task LoadAsync()
     {
-        var scope = new ArtifactScope();
-        var items = new List<ArtifactItem>();
-        await foreach (var entry in ArtifactStore.ListAsync(scope))
+        // Scan the entire artifact root to find artifacts across ALL workspaces
+        var root = (ArtifactStore as LocalArtifactStore)?.Root;
+        if (root is null || !Directory.Exists(root))
         {
-            var fileName = Path.GetFileName(entry.RelativePath);
-            var ext = Path.GetExtension(fileName);
+            _all = [];
+            ApplyFilter();
+            return Task.CompletedTask;
+        }
+
+        var items = new List<ArtifactItem>();
+        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        {
+            var fileName = System.IO.Path.GetFileName(file);
+            if (string.Equals(fileName, "_manifest.json", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var relativePath = System.IO.Path.GetRelativePath(root, file).Replace('\\', '/');
+            var info = new FileInfo(file);
+            var ext = System.IO.Path.GetExtension(file);
+
+            // Parse workspace/project/run from path: {workspace}/{project}/{run}/{rest}
+            var segments = relativePath.Split('/');
+            var workspaceId = segments.Length > 0 ? segments[0] : "";
+            var projectId = segments.Length > 1 ? segments[1] : "";
+            var runId = segments.Length > 2 ? segments[2] : "";
+            var artifactPath = segments.Length > 3
+                ? string.Join('/', segments[3..])
+                : fileName;
+
             items.Add(new ArtifactItem
             {
-                RelativePath = entry.RelativePath,
+                FullDiskPath = file,
+                RelativePath = relativePath,
+                Path = artifactPath,
                 FileName = fileName,
                 Extension = ext,
-                SizeBytes = entry.SizeBytes,
-                SizeDisplay = FormatSize(entry.SizeBytes),
-                ContentType = entry.ContentType ?? GuessMime(ext),
-                LastModified = entry.LastModified,
-                RunId = entry.RunId,
+                SizeBytes = info.Length,
+                SizeDisplay = FormatSize(info.Length),
+                ContentType = GuessMime(ext),
+                LastModified = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
+                WorkspaceId = workspaceId,
+                ProjectId = projectId,
+                RunId = runId,
+                IsMarkdown = ext.Equals(".md", StringComparison.OrdinalIgnoreCase),
             });
         }
+
         _all = items.OrderByDescending(a => a.LastModified).ToList();
         ApplyFilter();
+        return Task.CompletedTask;
     }
 
     private async Task SelectItem(ArtifactItem item)
@@ -92,18 +127,16 @@
         {
             try
             {
-                var scope = new ArtifactScope { RunId = item.RunId };
-                var handle = await ArtifactStore.CreateRunScopeAsync(scope);
-                var path = item.RunId is not null && item.RelativePath.StartsWith(item.RunId + "/", StringComparison.Ordinal)
-                    ? item.RelativePath[(item.RunId.Length + 1)..]
-                    : item.RelativePath;
-                using var stream = await ArtifactStore.ReadAsync(handle, path);
-                using var reader = new StreamReader(stream);
-                var content = await reader.ReadToEndAsync();
-                var isCode = !item.Extension.Equals(".md", StringComparison.OrdinalIgnoreCase)
-                    && !item.Extension.Equals(".txt", StringComparison.OrdinalIgnoreCase);
-                item.Preview = isCode ? $"```{item.Extension.TrimStart('.')}\n{content}\n```" : content;
-                StateHasChanged();
+                if (File.Exists(item.FullDiskPath))
+                {
+                    var content = await File.ReadAllTextAsync(item.FullDiskPath);
+
+                    if (content.Length > 20000)
+                        content = content[..20000] + "\n\n... (truncated at 20,000 chars)";
+
+                    item.Preview = content;
+                    StateHasChanged();
+                }
             }
             catch { item.Preview = "(Could not load preview)"; }
         }
@@ -117,7 +150,8 @@
             ? _all
             : _all.Where(a =>
                 a.FileName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                a.RelativePath.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                a.Path.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                a.WorkspaceId.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
                 (a.RunId?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false)
             ).ToList();
     }
@@ -140,14 +174,19 @@
 
     private sealed class ArtifactItem
     {
+        public string FullDiskPath { get; init; } = string.Empty;
         public string RelativePath { get; init; } = string.Empty;
+        public string Path { get; init; } = string.Empty;
         public string FileName { get; init; } = string.Empty;
         public string Extension { get; init; } = string.Empty;
         public long SizeBytes { get; init; }
         public string SizeDisplay { get; init; } = string.Empty;
         public string ContentType { get; init; } = string.Empty;
         public DateTimeOffset LastModified { get; init; }
+        public string WorkspaceId { get; init; } = string.Empty;
+        public string ProjectId { get; init; } = string.Empty;
         public string? RunId { get; init; }
+        public bool IsMarkdown { get; init; }
         public string? Preview { get; set; }
     }
 }

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -26,7 +27,11 @@ public partial class ArtifactsViewModel : ViewModelBase
     private ArtifactItemViewModel? _selectedArtifact;
 
     [ObservableProperty]
-    private string _detailMarkdown = string.Empty;
+    private string _detailText = string.Empty;
+
+    /// <summary>When true, the detail pane renders markdown; when false, plain text.</summary>
+    [ObservableProperty]
+    private bool _isMarkdownPreview;
 
     public ObservableCollection<ArtifactItemViewModel> FilteredArtifacts { get; } = [];
 
@@ -48,28 +53,60 @@ public partial class ArtifactsViewModel : ViewModelBase
 
         try
         {
-            var scope = new ArtifactScope();
-            await foreach (var entry in _store.ListAsync(scope))
+            // Scan the entire artifact root so we find artifacts across ALL workspaces.
+            var root = (_store as LocalArtifactStore)?.Root;
+            if (root is null || !Directory.Exists(root))
+                return;
+
+            await Task.Run(() =>
             {
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                    _allArtifacts.Add(new ArtifactItemViewModel
-                    {
-                        Path = entry.RelativePath,
-                        FileName = System.IO.Path.GetFileName(entry.RelativePath),
-                        Extension = System.IO.Path.GetExtension(entry.RelativePath).TrimStart('.'),
-                        SizeBytes = entry.SizeBytes,
-                        SizeDisplay = FormatSize(entry.SizeBytes),
-                        ContentType = entry.ContentType ?? GuessContentType(entry.RelativePath),
-                        LastModified = entry.LastModified,
-                        RunId = entry.RunId ?? "",
-                    }));
-            }
+                foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (string.Equals(fileName, "_manifest.json", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var relativePath = Path.GetRelativePath(root, file).Replace('\\', '/');
+                    var info = new FileInfo(file);
+
+                    // Parse workspace/project/run from path: {workspace}/{project}/{run}/{rest}
+                    var segments = relativePath.Split('/');
+                    var workspaceId = segments.Length > 0 ? segments[0] : "";
+                    var projectId = segments.Length > 1 ? segments[1] : "";
+                    var runId = segments.Length > 2 ? segments[2] : "";
+                    var artifactPath = segments.Length > 3
+                        ? string.Join('/', segments[3..])
+                        : fileName;
+
+                    Dispatcher.UIThread.Post(() =>
+                        _allArtifacts.Add(new ArtifactItemViewModel
+                        {
+                            FullDiskPath = file,
+                            RelativeFromRoot = relativePath,
+                            Path = artifactPath,
+                            FileName = fileName,
+                            Extension = Path.GetExtension(file).TrimStart('.'),
+                            SizeBytes = info.Length,
+                            SizeDisplay = FormatSize(info.Length),
+                            ContentType = GuessContentType(file),
+                            LastModified = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
+                            WorkspaceId = workspaceId,
+                            ProjectId = projectId,
+                            RunId = runId,
+                        }));
+                }
+            }).ConfigureAwait(false);
         }
         finally
         {
-            TotalCount = _allArtifacts.Count;
-            ApplyFilter();
-            IsLoading = false;
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                // Sort newest first
+                _allArtifacts.Sort((a, b) => b.LastModified.CompareTo(a.LastModified));
+                TotalCount = _allArtifacts.Count;
+                ApplyFilter();
+                IsLoading = false;
+            });
         }
     }
 
@@ -79,7 +116,7 @@ public partial class ArtifactsViewModel : ViewModelBase
     {
         if (value is null)
         {
-            DetailMarkdown = string.Empty;
+            DetailText = string.Empty;
             return;
         }
 
@@ -88,73 +125,99 @@ public partial class ArtifactsViewModel : ViewModelBase
 
     private async Task LoadPreviewAsync(ArtifactItemViewModel artifact)
     {
-        var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"# {artifact.FileName}");
-        sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"**Path:** `{artifact.Path}`");
-        sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"**Size:** {artifact.SizeDisplay}");
-        sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"**Type:** {artifact.ContentType}");
-        sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"**Modified:** {artifact.LastModified:yyyy-MM-dd HH:mm:ss}");
-        sb.AppendLine();
+        var isMarkdown = string.Equals(artifact.Extension, "MD", StringComparison.OrdinalIgnoreCase);
 
-        if (!string.IsNullOrEmpty(artifact.RunId))
-        {
-            sb.AppendLine(CultureInfo.InvariantCulture, $"**Run:** `{artifact.RunId}`");
-            sb.AppendLine();
-        }
-
-        sb.AppendLine("---");
-        sb.AppendLine();
-
-        // Try to read and preview text content
-        if (IsTextFile(artifact.Extension) && artifact.SizeBytes < 512 * 1024) // < 512KB
+        // For markdown files: render the file content as formatted markdown
+        if (isMarkdown && artifact.SizeBytes < 512 * 1024 && File.Exists(artifact.FullDiskPath))
         {
             try
             {
-                var artifactRoot = (_store as LocalArtifactStore)?.Root;
-                if (artifactRoot is not null)
+                var content = await File.ReadAllTextAsync(artifact.FullDiskPath).ConfigureAwait(false);
+
+                if (content.Length > 20000)
+                    content = content[..20000] + "\n\n*... (truncated at 20,000 chars)*";
+
+                // Sanitize to avoid MarkdownScrollViewer crashes on code fences/backticks
+                content = SanitizeForMarkdown(content);
+
+                await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    var fullPath = System.IO.Path.Combine(artifactRoot, artifact.Path.Replace('/', System.IO.Path.DirectorySeparatorChar));
-                    if (File.Exists(fullPath))
-                    {
-                        var content = await File.ReadAllTextAsync(fullPath);
+                    IsMarkdownPreview = true;
+                    DetailText = content;
+                });
+                return;
+            }
+            catch
+            {
+                // Fall through to plain text
+            }
+        }
 
-                        // Truncate very long files
-                        if (content.Length > 10000)
-                            content = content[..10000] + "\n\n... (truncated)";
+        // For non-markdown: show metadata header + plain text content
+        var sb = new StringBuilder();
+        sb.AppendLine(artifact.FileName);
+        sb.AppendLine(new string('=', artifact.FileName.Length));
+        sb.AppendLine();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Path:      {artifact.Path}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Size:      {artifact.SizeDisplay}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Type:      {artifact.ContentType}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Modified:  {artifact.LastModified:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Workspace: {artifact.WorkspaceId}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Project:   {artifact.ProjectId}");
 
-                        var lang = GetLanguage(artifact.Extension);
-                        sb.AppendLine("## Preview");
-                        sb.AppendLine();
-                        sb.AppendLine(CultureInfo.InvariantCulture, $"```{lang}");
-                        sb.AppendLine(content);
-                        sb.AppendLine("```");
-                    }
+        if (!string.IsNullOrEmpty(artifact.RunId))
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Run:       {artifact.RunId}");
+
+        sb.AppendLine();
+        sb.AppendLine(new string('-', 60));
+        sb.AppendLine();
+
+        if (IsTextFile(artifact.Extension) && artifact.SizeBytes < 512 * 1024)
+        {
+            try
+            {
+                if (File.Exists(artifact.FullDiskPath))
+                {
+                    var content = await File.ReadAllTextAsync(artifact.FullDiskPath).ConfigureAwait(false);
+
+                    if (content.Length > 20000)
+                        content = content[..20000] + "\n\n... (truncated at 20,000 chars)";
+
+                    sb.Append(content);
                 }
             }
             catch
             {
-                sb.AppendLine("*Preview unavailable*");
+                sb.AppendLine("(Preview unavailable)");
             }
         }
         else if (artifact.SizeBytes >= 512 * 1024)
         {
-            sb.AppendLine("*File too large to preview*");
+            sb.AppendLine("(File too large to preview)");
         }
         else
         {
-            sb.AppendLine("*Binary file — preview not available*");
+            sb.AppendLine("(Binary file — preview not available)");
         }
 
-        artifact.Markdown = sb.ToString();
-        DetailMarkdown = artifact.Markdown;
-        // Force ContentControl to recreate MarkdownScrollViewer
-        var current = SelectedArtifact;
-        SelectedArtifact = null;
-        SelectedArtifact = current;
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            IsMarkdownPreview = false;
+            DetailText = sb.ToString();
+        });
+    }
+
+    /// <summary>
+    /// Strips code fences and inline backticks that crash MarkdownScrollViewer,
+    /// while preserving headings, bold, bullets, and other safe markdown.
+    /// </summary>
+    private static string SanitizeForMarkdown(string text)
+    {
+        // Remove code fence lines (```lang or ```)
+        var result = Regex.Replace(text, @"^```\w*\s*$", "", RegexOptions.Multiline);
+        // Remove inline backticks
+        result = result.Replace("`", "", StringComparison.Ordinal);
+        return result;
     }
 
     private void ApplyFilter()
@@ -166,8 +229,10 @@ public partial class ArtifactsViewModel : ViewModelBase
         {
             if (query.Length > 0
                 && !artifact.Path.Contains(query, StringComparison.OrdinalIgnoreCase)
+                && !artifact.FileName.Contains(query, StringComparison.OrdinalIgnoreCase)
                 && !artifact.RunId.Contains(query, StringComparison.OrdinalIgnoreCase)
-                && !artifact.ContentType.Contains(query, StringComparison.OrdinalIgnoreCase))
+                && !artifact.ContentType.Contains(query, StringComparison.OrdinalIgnoreCase)
+                && !artifact.WorkspaceId.Contains(query, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
@@ -216,28 +281,6 @@ public partial class ArtifactsViewModel : ViewModelBase
             _ => false,
         };
     }
-
-    private static string GetLanguage(string extension)
-    {
-        return extension.ToUpperInvariant() switch
-        {
-            "CS" => "csharp",
-            "JS" => "javascript",
-            "TS" => "typescript",
-            "PY" => "python",
-            "MD" => "markdown",
-            "JSON" => "json",
-            "XML" or "AXAML" or "XAML" or "CSPROJ" => "xml",
-            "HTML" or "HTM" or "RAZOR" => "html",
-            "CSS" => "css",
-            "SQL" => "sql",
-            "YAML" or "YML" => "yaml",
-            "SH" => "bash",
-            "PS1" => "powershell",
-            "BAT" => "batch",
-            _ => "",
-        };
-    }
 }
 
 public partial class ArtifactItemViewModel : ViewModelBase
@@ -266,5 +309,15 @@ public partial class ArtifactItemViewModel : ViewModelBase
     [ObservableProperty]
     private string _runId = string.Empty;
 
-    public string Markdown { get; set; } = string.Empty;
+    [ObservableProperty]
+    private string _workspaceId = string.Empty;
+
+    [ObservableProperty]
+    private string _projectId = string.Empty;
+
+    /// <summary>Full path on disk for preview reading.</summary>
+    public string FullDiskPath { get; init; } = string.Empty;
+
+    /// <summary>Path relative to the artifact store root.</summary>
+    public string RelativeFromRoot { get; init; } = string.Empty;
 }
