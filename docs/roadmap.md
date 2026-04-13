@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-13 (Phase 55 complete — 40 phases shipped, 12 pending)
+**Last updated:** 2026-04-13 (Phase 63 complete — 43 phases shipped, 9 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -105,10 +105,13 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | 54 | Model capability registry — layered resolution (user > bundled > live > default), Gemma 4 support |
 | 55 | Cost tracking & budgets — OpenRouter pricing, `ICostModel`, `BudgetEnforcer`, JSONL metrics log, `/cost` CLI command, `GET /v1/cost` API, cost display in Desktop + Web, `RuntimeEvent.TurnCost` |
 | 56 | Web application — Blazor Server, 15 pages, streaming chat, embedded runtime, port 5100 (remote mode split to Phase 61) |
+| 58 | Sovrant Trust Boundary — sanitization, ethical harness, intent verification as unified trust pipeline |
+| 59 | Agentic loop hardening — intent classification, plan approval, execution governance, progress visibility |
+| 63 | DI audit & pluggability hardening — MCP v1.2.0 protocol additions |
 
 ### Still pending
 
-> **Last audited:** 2026-04-13. 40 phases complete, 12 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61. Everything below is *not yet shipped*.
+> **Last audited:** 2026-04-13. 43 phases complete, 9 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61. Everything below is *not yet shipped*.
 
 | Gap | Phase | Priority |
 |---|---|---|
@@ -122,7 +125,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | Medium–High |
 | ~~Cost tracking, budgets & dashboard via OpenRouter (consolidated from Phases 39+55)~~ | Phase 55 ✅ | Medium |
 | ~~LLM provider sanitizer~~ → **Sovrant Trust Boundary** (sanitization, ethical harness, intent verification) | Phase 58 ✅ | High |
-| Agentic loop hardening — intent classification, plan approval, execution governance, progress visibility | Phase 59 | **Critical** |
+| ~~Agentic loop hardening — intent classification, plan approval, execution governance, progress visibility~~ | Phase 59 ✅ | **Critical** |
 | Hermes Agent integration via MCP — alternative claw/federation bus provider with self-improving skills | Phase 60 | Medium |
 | Remote server mode for web frontend — SignalR streaming, auth, `AddSovrantClient()` abstraction | Phase 61 | High |
 
