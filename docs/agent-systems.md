@@ -1,6 +1,6 @@
 # Sovrant — Agent Systems: Team vs Swarm
 
-**Last updated:** 2026-04-12
+**Last updated:** 2026-04-13
 
 Sovrant ships **two distinct multi-agent systems** that share the same agent factory (`SovrantAgentFactory`) and template registry (`AgentTemplateRegistry`) underneath but solve very different problems and live at very different levels of the stack.
 
@@ -105,6 +105,42 @@ Phase 52 unified the two systems. The path followed was:
    - Per-user, per-workspace, per-project queries work uniformly via `GET /v1/runs`
 
 This keeps Swarm's hard-won machinery (file locks, decomposer, quality gate) without maintaining two parallel concepts on top of the same agent factory.
+
+---
+
+## Inter-Agent Coordination (Phase 57)
+
+Phase 57 adds a coordination layer on top of both Team and Swarm, enabling agent groups to communicate through dedicated PM (Project Manager) agents.
+
+### Architecture
+
+```
+Group A  ──►  PM Agent A  ──►  GroupMailbox  ──►  PM Agent B  ──►  Group B
+                                    │
+                              coordination_events
+                              (SQLite V013 table)
+```
+
+### Key Components
+
+| Component | Code path | Purpose |
+|---|---|---|
+| `GroupMailbox` | `src/Sovrant.Agents/Coordination/GroupMailbox.cs` | Typed message queue between agent groups. Messages carry `event_type`, `payload`, `status` (pending/delivered/acknowledged), and workspace/project scoping. Backed by `coordination_events` table (V013). |
+| `PMCoordinator` | `src/Sovrant.Agents/Coordination/PMCoordinator.cs` | Orchestrates PM agents across groups. Instantiates PM agents from templates stored in `group_pm_assignments` table. Handles message routing and delivery confirmation. |
+| `CoordinationStatusTool` | `src/Sovrant.Tools/Coordination/CoordinationStatusTool.cs` | LLM-callable tool that lets agents query the coordination state — pending messages, group status, active PM assignments. |
+
+### How it works
+
+1. Each agent group (team or swarm) can be assigned a PM agent via `group_pm_assignments`
+2. PM agents send typed messages to other groups through the `GroupMailbox`
+3. Messages flow through the `coordination_events` table with delivery tracking
+4. The `CoordinationStatusTool` lets any agent in the conversation inspect coordination state
+5. Swarm's `WaveCompleted` events can trigger coordination messages to dependent groups
+
+### Database (V013)
+
+- `coordination_events` — mailbox rows with `source_group_id`, `target_group_id`, `event_type`, `payload`, `status`, and delivery/acknowledgement timestamps
+- `group_pm_assignments` — maps `group_id` to a PM agent template, scoped by workspace/project
 
 ---
 

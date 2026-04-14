@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-12 (50 tools, 95 server endpoints, 1,400+ tests, JS SDK covering 79 endpoints)
+**Last updated:** 2026-04-13 (50 tools, 96 server endpoints + SignalR hub, 1,584 tests, JS SDK covering 79 endpoints)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -19,7 +19,7 @@
 | Permission system | ✅ Working | `bypassPermissions` / `dontAsk` / `default` / `plan` all functional. Phase 59 refactored `ModeAwarePermissionPolicy` to use graduated tool tiers — `DontAsk` mode now requires confirmation for Dangerous/Escalation tools. |
 | SSE streaming | ✅ Working | Text chunks stream to console in real time |
 | Token counts | ✅ Fixed | OpenAI trailing usage chunk now captured. Input + output tokens reported correctly after each turn. |
-| HTTP server (`Sovrant.Server`) | ✅ Working | 95 endpoints: health, chat, config, status, models, sessions (CRUD + config + export), usage, webhook, MCP auth, evals, swarm, users (CRUD + sessions + usage + audit), workspaces (CRUD + members + invites + config + usage + memory), projects (CRUD + archive + members + config + sessions + usage + memory), teams (CRUD + members + runs), runs, missions (CRUD + run + events + export), engine (trace + in-flight + recover + delete), artifacts (list + download + delete), registries (tools + skills + agent templates) |
+| HTTP server (`Sovrant.Server`) | ✅ Working | 96 endpoints + SignalR hub: health, chat, config, status, models, sessions (CRUD + config + export), usage, cost, webhook, MCP auth, evals, swarm, users (CRUD + sessions + usage + audit), workspaces (CRUD + members + invites + config + usage + memory), projects (CRUD + archive + members + config + sessions + usage + memory), teams (CRUD + members + runs), runs, missions (CRUD + run + events + export), engine (trace + in-flight + recover + delete), artifacts (list + download + delete), registries (tools + skills + agent templates). SignalR ChatHub at `/hubs/chat` for real-time streaming (Phase 61). |
 | Server session pool (`IRuntimeSessionPool`) | ✅ Implemented | One `ConversationRuntime` per session ID with per-session `SemaphoreSlim` lock, `SessionConfig` overlay, token accumulators. TTL eviction + LRU cap via `SessionEvictionService`. |
 | Session-scoped config | ✅ Implemented | Per-session model + permission mode overlays via `SessionConfig`. `EnterPlanMode`/`ExitPlanMode` scoped to current session via `AsyncLocal`. `PUT /v1/sessions/{id}/config` for explicit overrides. |
 | Per-session rate limiting | ✅ Implemented | ASP.NET Core `RateLimiter` keyed on `X-Session-Id` header or client IP. `SOVRANT_RATE_LIMIT_RPM` env var (default 60). Returns 429 when exceeded. |
@@ -32,8 +32,11 @@
 | Session export | ✅ Implemented | `GET /v1/sessions/{id}/export` — markdown rendering of full session history |
 | MCP server mode | ✅ Implemented | `sovrant mcp-server` — stdio transport (JSON-RPC 2.0). Bridges all `IToolRegistry` tools + synthetic `chat` tool + session/config resources to MCP protocol. Zero overlap with HTTP server. Bearer token auth via `SOVRANT_MCP_TOKEN` + `--token`. |
 | Dynamic MCP Tool Proxy (`MCPTool`) | ✅ Implemented | Calls any tool on any connected MCP server dynamically at execution time — no static registration needed. Optional `server` param; searches all clients when omitted. |
-| SQLite persistence layer | ✅ Implemented | `IStorageProvider` + `SqliteStorageProvider` + 5 versioned migrations (26+ tables). Stores: sessions, memory, audit, credentials, token usage. Schema pre-built for Phases 33-37. See [persistence.md](persistence.md). |
-| Unit test suite | ✅ 1,400+ passing | Api(28) + Runtime(700+) + Server(73) + Lsp(26) + Tools(174) + Commands(42) + McpServer(30) + Agents(160) + Integration(1) |
+| SQLite persistence layer | ✅ Implemented | `IStorageProvider` + `SqliteStorageProvider` + 13 versioned migrations (38 tables, 52 indexes). Stores: sessions, memory, audit, credentials, token usage, workspaces, projects, teams, missions, swarm events, coordination events. See [persistence.md](persistence.md). |
+| Unit test suite | ✅ 1,584 passing | Api(146) + Runtime(769) + Server(160) + Lsp(26) + Tools(193) + Commands(56) + McpServer(34) + Agents(199) + Integration(4) |
+| Cost tracking (Phase 55) | ✅ Implemented | `ICostModel`, `OpenRouterCostModel`, `BudgetEnforcer`, `CostMetricsLogger` (JSONL), `/cost` CLI command, `GET /v1/cost` API, cost display in Desktop + Web, `RuntimeEvent.TurnCost`. |
+| Inter-agent coordination (Phase 57) | ✅ Implemented | `GroupMailbox`, `PMCoordinator`, `LlmPMAgent`, `CoordinationStatusTool`. SQLite V013 migration (`coordination_events`, `group_pm_assignments`). Enables team-to-team and swarm-to-swarm coordination through leader/PM agents. |
+| Remote server mode (Phase 61) | ✅ Implemented | SignalR `ChatHub` at `/hubs/chat`, `RuntimeEventDto` shared DTO, `AddSovrantClient()` DI extension. Web frontend can run in embedded mode (in-process) or remote mode (connecting to Sovrant.Server via SignalR). Controlled by `SOVRANT_RUNTIME_MODE=embedded\|remote`. |
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |

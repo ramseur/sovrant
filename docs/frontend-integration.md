@@ -895,6 +895,61 @@ import type {
 
 ---
 
+## Remote Mode — Dual-Mode Web Frontend (Phase 61)
+
+`Sovrant.Web` supports two runtime modes, controlled by the `SOVRANT_RUNTIME_MODE` environment variable:
+
+### Embedded Mode (default)
+
+```
+SOVRANT_RUNTIME_MODE=embedded
+```
+
+The agentic loop runs in-process via `AddSovrantRuntime()`. The web app is fully self-contained — it owns its own SQLite database, session pool, tool registry, and artifact store. No external server is needed.
+
+### Remote Mode
+
+```
+SOVRANT_RUNTIME_MODE=remote
+SOVRANT_SERVER_URL=http://localhost:5200
+SOVRANT_API_TOKEN=your-token
+```
+
+The web app connects to an external `Sovrant.Server` instance. All runtime operations are delegated over SignalR (streaming turns) and REST (sessions, tools, artifacts).
+
+### How it works
+
+All Blazor components depend on interfaces (`IRuntimeSessionPool`, `ISessionStore`, `IToolRegistry`, `IArtifactStore`, `IToolConfirmationHandler`), so switching between modes is purely a DI registration concern — no component code changes.
+
+| Interface | Embedded impl | Remote impl |
+|---|---|---|
+| `IRuntimeSessionPool` | `RuntimeSessionPool` (in-process) | `RemoteRuntimeSessionPool` (SignalR) |
+| `ISessionStore` | `SqliteSessionStore` | `RemoteSessionStore` (REST) |
+| `IToolRegistry` | `ToolRegistry` (local) | `RemoteToolRegistry` (REST) |
+| `IArtifactStore` | `FileArtifactStore` | `RemoteArtifactStore` (REST) |
+| `IToolConfirmationHandler` | `ToolConfirmationHandler` | `RemoteToolConfirmationHandler` (SignalR) |
+
+### SignalR Streaming
+
+In remote mode, `SignalRStreamingClient` manages the hub connection to `/hubs/chat`. Features:
+
+- **Automatic reconnection** with exponential backoff (configurable base interval and max attempts)
+- **Connection state tracking** via `RemoteConnectionState` (Connected/Reconnecting/Disconnected)
+- **Tool confirmation round-trips** — `ConfirmToolAsync()` and `DenyToolAsync()` resolve server-side `TaskCompletionSource<bool>` instances
+- **Authentication** — bearer token sent via `?access_token=` query string (standard SignalR WebSocket pattern)
+
+### When to use each mode
+
+| Scenario | Recommended mode |
+|---|---|
+| Single-user local development | Embedded |
+| Desktop app (Avalonia) | Embedded |
+| Team sharing one server | Remote — point multiple web frontends at a single `Sovrant.Server` |
+| Cloud deployment | Remote — web frontend on one node, server on another |
+| CI/CD or automated workflows | Remote — headless server, API access only |
+
+---
+
 ## Migration from Raw Fetch
 
 If you previously wrote raw `fetch` + SSE parsing code, here's how to migrate:

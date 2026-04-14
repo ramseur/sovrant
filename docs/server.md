@@ -52,6 +52,10 @@ The server binds to `http://127.0.0.1:5200` by default.
 | `SOVRANT_SESSION_JSONL` | No | `false` | Set to `true` to also write sessions to legacy JSONL files (dual-write for migration) |
 | `SOVRANT_AUDIT_JSONL` | No | `false` | Set to `true` to also write audit events to legacy JSONL files (dual-write for migration) |
 | `SOVRANT_UNSAFE_DONTASK` | No | `false` | Set to `true` to disable graduated tool tier enforcement in `DontAsk` mode (auto-approve all tools, including Dangerous/Escalation) |
+| `SOVRANT_RUNTIME_MODE` | No | `embedded` | Controls how `Sovrant.Web` connects to the runtime. `embedded` runs the agentic loop in-process; `remote` connects to a `Sovrant.Server` instance via SignalR + REST. |
+| `SOVRANT_SERVER_URL` | No | `http://localhost:5200` | Base URL of the remote `Sovrant.Server` instance. Required when `SOVRANT_RUNTIME_MODE=remote`. |
+| `SOVRANT_API_TOKEN` | No | — | Bearer token sent to the remote server for auth. Required when `SOVRANT_RUNTIME_MODE=remote`. |
+| `SOVRANT_COST_PROVIDER` | No | `openrouter` | Cost tracking provider. Set to `none` to disable cost tracking. |
 
 ---
 
@@ -363,6 +367,7 @@ http://localhost:5173
 http://localhost:8080
 http://127.0.0.1
 http://127.0.0.1:3000
+http://127.0.0.1:5100
 http://127.0.0.1:5173
 http://127.0.0.1:8080
 ```
@@ -952,3 +957,54 @@ Returns `{ "templates": [...], "count": N }`.
 ### Get Agent Template — `GET /v1/agents/templates/{name}`
 
 Returns the template including system prompt.
+
+---
+
+## Cost Tracking — `GET /v1/cost` (Phase 55)
+
+Returns cost tracking data from the OpenRouter pricing model. Query param: `range` (`daily`, `weekly`, `monthly`, `all`; default `daily`).
+
+```json
+{
+  "range": "daily",
+  "total_cost_usd": 1.42,
+  "sessions": [ ... ],
+  "by_model": [ ... ]
+}
+```
+
+If cost tracking is disabled (`SOVRANT_COST_PROVIDER=none`), returns `{ "enabled": false, "message": "..." }`.
+
+---
+
+## SignalR Hub — `/hubs/chat` (Phase 61)
+
+`Sovrant.Server` exposes a SignalR hub at `/hubs/chat` for real-time streaming to the web frontend. This is the transport layer for `SOVRANT_RUNTIME_MODE=remote`.
+
+### Authentication
+
+Standard WebSocket upgrades cannot send `Authorization` headers. The `BearerTokenMiddleware` accepts `?access_token=<token>` on `/hubs/*` paths as an alternative to the header.
+
+### Hub Methods
+
+| Method | Direction | Description |
+|---|---|---|
+| `StreamTurn(sessionId, userMessage)` | Client → Server | Streams an agentic turn as `IAsyncEnumerable<RuntimeEventDto>` |
+| `ConfirmTool(toolUseId)` | Client → Server | Approves a pending tool confirmation |
+| `DenyTool(toolUseId)` | Client → Server | Denies a pending tool confirmation |
+| `CancelTurn` | Client → Server | Cancels the current turn |
+
+### RuntimeEventDto
+
+All 13 `RuntimeEvent` subtypes are mapped to a flat JSON-friendly `RuntimeEventDto` with a string `Type` discriminator. The DTO lives in `Sovrant.Runtime.Conversation` so both `Sovrant.Server` (serialization) and `Sovrant.Web` (deserialization) can reference it without a cross-project dependency.
+
+### Tool Confirmation Flow
+
+When a tool requires user confirmation, the hub emits a `ToolConfirmationRequested` event. The client calls `ConfirmTool(toolUseId)` or `DenyTool(toolUseId)` to resolve the pending `TaskCompletionSource<bool>`. Pending confirmations are keyed by `{connectionId}:{toolUseId}` and cleaned up on disconnect.
+
+### Dual-Mode Web Frontend
+
+`Sovrant.Web` supports two runtime modes controlled by `SOVRANT_RUNTIME_MODE`:
+
+- **`embedded`** (default) — The agentic loop runs in-process via `AddSovrantRuntime()`. The web app is self-contained with its own SQLite database.
+- **`remote`** — The web app connects to an external `Sovrant.Server` via SignalR + REST using `AddSovrantClient()`. All Blazor components depend on interfaces (`IRuntimeSessionPool`, `ISessionStore`, `IToolRegistry`, `IArtifactStore`, `IToolConfirmationHandler`), so swapping modes is purely a DI registration concern.
