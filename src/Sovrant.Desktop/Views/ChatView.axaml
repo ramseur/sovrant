@@ -14,6 +14,7 @@
                 BorderThickness="0,1,0,0"
                 BorderBrush="{DynamicResource SurfaceBorder}">
             <DockPanel>
+                <!-- Send button — visible when idle -->
                 <Button DockPanel.Dock="Right"
                         Content="Send"
                         Command="{Binding SendCommand}"
@@ -23,7 +24,25 @@
                         Foreground="White"
                         CornerRadius="8"
                         FontWeight="SemiBold"
-                        VerticalAlignment="Bottom" />
+                        VerticalAlignment="Bottom"
+                        IsVisible="{Binding !IsSending}" />
+                <!-- Stop button — visible while sending -->
+                <Button DockPanel.Dock="Right"
+                        Command="{Binding StopCommand}"
+                        Padding="16,10"
+                        Margin="8,0,0,0"
+                        Background="{DynamicResource StatusFail}"
+                        Foreground="White"
+                        CornerRadius="8"
+                        FontWeight="SemiBold"
+                        VerticalAlignment="Bottom"
+                        IsVisible="{Binding IsSending}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Border Width="10" Height="10" CornerRadius="2"
+                                Background="White" VerticalAlignment="Center" />
+                        <TextBlock Text="Stop" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
                 <Grid>
                     <TextBox x:Name="InputBox"
                              Text="{Binding InputText}"

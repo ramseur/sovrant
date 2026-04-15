@@ -10,7 +10,7 @@ using Sovrant.Runtime.Session;
 
 namespace Sovrant.Desktop.ViewModels;
 
-public partial class ChatViewModel : ViewModelBase
+public partial class ChatViewModel : ViewModelBase, IDisposable
 {
     private readonly IRuntimeSessionPool _sessionPool;
     private readonly ISessionStore _sessionStore;
@@ -26,6 +26,8 @@ public partial class ChatViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _isSending;
+
+    private CancellationTokenSource? _sendCts;
 
     [ObservableProperty]
     private int _tokenCount;
@@ -169,8 +171,16 @@ public partial class ChatViewModel : ViewModelBase
 
     private async Task SendToRuntimeAsync(string text, CancellationToken ct)
     {
+        _sendCts?.Dispose();
+        _sendCts = new CancellationTokenSource();
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _sendCts.Token);
+        var linkedToken = linked.Token;
+
         IsSending = true;
         HasMessages = true;
+
+        // Track whether this is the first user message (for auto-titling).
+        var isFirstMessage = Messages.All(m => m.Role != "user");
 
         // Add user message only if not already added (slash command inject path).
         if (Messages.Count == 0 || Messages[^1].Role != "user" || Messages[^1].Text != text)
@@ -184,10 +194,10 @@ public partial class ChatViewModel : ViewModelBase
         try
         {
             // Wait for runtime initialization (DB migrations, model metadata) before first send.
-            await App.RuntimeReady.Task.WaitAsync(ct).ConfigureAwait(false);
+            await App.RuntimeReady.Task.WaitAsync(linkedToken).ConfigureAwait(false);
 
-            var pooled = await _sessionPool.GetOrCreateAsync(SessionId, ct: ct).ConfigureAwait(false);
-            await foreach (var ev in pooled.Runtime.RunTurnAsync(text, ct))
+            var pooled = await _sessionPool.GetOrCreateAsync(SessionId, ct: linkedToken).ConfigureAwait(false);
+            await foreach (var ev in pooled.Runtime.RunTurnAsync(text, linkedToken))
             {
                 await Dispatcher.UIThread.InvokeAsync(() => HandleEvent(ev, assistantMsg));
             }
@@ -206,7 +216,36 @@ public partial class ChatViewModel : ViewModelBase
                 assistantMsg.CompleteStreaming();
                 TurnCompleted?.Invoke();
             });
+
+            // Auto-title from the first user message.
+            if (isFirstMessage)
+            {
+                var title = text.Length > 60 ? text[..60] + "..." : text;
+                _ = _sessionStore.SetTitleAsync(SessionId, title, ct: CancellationToken.None);
+            }
         }
+    }
+
+    [RelayCommand]
+    private void Stop()
+    {
+        _sendCts?.Cancel();
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _sendCts?.Dispose();
+            if (_confirmationHandler is not null)
+                _confirmationHandler.ConfirmationRequested -= OnConfirmationRequested;
+        }
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
 
     [RelayCommand]

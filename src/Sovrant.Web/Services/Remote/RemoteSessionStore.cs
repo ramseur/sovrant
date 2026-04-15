@@ -93,4 +93,48 @@ public sealed class RemoteSessionStore : ISessionStore
         // Owner resolution happens server-side; the client doesn't need this.
         return Task.FromResult<string?>(null);
     }
+
+    public async Task SetTitleAsync(string sessionId, string title, string? ownerUserId = null, CancellationToken ct = default)
+    {
+        using var content = new StringContent(
+            JsonSerializer.Serialize(new { title }),
+            System.Text.Encoding.UTF8,
+            "application/json");
+        await _http.PatchAsync(new Uri($"/v1/sessions/{Uri.EscapeDataString(sessionId)}", UriKind.Relative), content, ct);
+    }
+
+    public async Task<string?> GetTitleAsync(string sessionId, CancellationToken ct = default)
+    {
+        var response = await _http.GetAsync(new Uri($"/v1/sessions/{Uri.EscapeDataString(sessionId)}", UriKind.Relative), ct);
+        if (!response.IsSuccessStatusCode)
+            return null;
+
+        var json = await response.Content.ReadAsStringAsync(ct);
+        var doc = JsonDocument.Parse(json);
+        return doc.RootElement.TryGetProperty("title", out var t) ? t.GetString() : null;
+    }
+
+    public async Task<IReadOnlyList<SessionListItem>> ListWithTitlesAsync(string? ownerUserId = null, CancellationToken ct = default)
+    {
+        var response = await _http.GetAsync(new Uri("/v1/sessions", UriKind.Relative), ct);
+        if (!response.IsSuccessStatusCode)
+            return [];
+
+        var json = await response.Content.ReadAsStringAsync(ct);
+        var doc = JsonDocument.Parse(json);
+
+        var summaries = new List<SessionListItem>();
+        if (doc.RootElement.TryGetProperty("sessions", out var arr))
+        {
+            foreach (var item in arr.EnumerateArray())
+            {
+                var id = item.GetProperty("session_id").GetString();
+                if (id is null) continue;
+                var title = item.TryGetProperty("title", out var t) ? t.GetString() : null;
+                var updated = item.TryGetProperty("updated_at", out var u) ? u.GetDateTimeOffset() : DateTimeOffset.UtcNow;
+                summaries.Add(new SessionListItem(id, title, updated));
+            }
+        }
+        return summaries;
+    }
 }

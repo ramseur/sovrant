@@ -199,4 +199,61 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
         var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
         return result as string;
     }
+
+    public async Task SetTitleAsync(string sessionId, string title, string? ownerUserId = null, CancellationToken ct = default)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        if (ownerUserId is not null)
+        {
+            using var ownerCheck = connection.CreateCommand();
+            ownerCheck.CommandText = "SELECT user_id FROM sessions WHERE session_id = $sid";
+            ownerCheck.Parameters.AddWithValue("$sid", sessionId);
+            var owner = await ownerCheck.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
+            if (owner is null || !string.Equals(owner, ownerUserId, StringComparison.Ordinal))
+                return;
+        }
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "UPDATE sessions SET title = $title WHERE session_id = $sid";
+        cmd.Parameters.AddWithValue("$sid", sessionId);
+        cmd.Parameters.AddWithValue("$title", title);
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task<string?> GetTitleAsync(string sessionId, CancellationToken ct = default)
+    {
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT title FROM sessions WHERE session_id = $sid";
+        cmd.Parameters.AddWithValue("$sid", sessionId);
+        var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        return result as string;
+    }
+
+    public async Task<IReadOnlyList<SessionListItem>> ListWithTitlesAsync(string? ownerUserId = null, CancellationToken ct = default)
+    {
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        if (ownerUserId is null)
+        {
+            cmd.CommandText = "SELECT session_id, title, updated_at FROM sessions ORDER BY updated_at DESC";
+        }
+        else
+        {
+            cmd.CommandText = "SELECT session_id, title, updated_at FROM sessions WHERE user_id = $uid ORDER BY updated_at DESC";
+            cmd.Parameters.AddWithValue("$uid", ownerUserId);
+        }
+
+        using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        var summaries = new List<SessionListItem>();
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            summaries.Add(new SessionListItem(
+                SessionId: reader.GetString(0),
+                Title: await reader.IsDBNullAsync(1, ct).ConfigureAwait(false) ? null : reader.GetString(1),
+                UpdatedAt: DateTimeOffset.Parse(reader.GetString(2), CultureInfo.InvariantCulture)));
+        }
+        return summaries;
+    }
 }

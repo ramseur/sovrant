@@ -165,6 +165,31 @@ public sealed class FakeSessionStore : ISessionStore
         _owners.TryGetValue(sessionId, out var owner);
         return Task.FromResult(owner);
     }
+
+    private readonly Dictionary<string, string> _titles = new(StringComparer.OrdinalIgnoreCase);
+
+    public Task SetTitleAsync(string sessionId, string title, string? ownerUserId = null, CancellationToken ct = default)
+    {
+        _titles[sessionId] = title;
+        return Task.CompletedTask;
+    }
+
+    public Task<string?> GetTitleAsync(string sessionId, CancellationToken ct = default)
+    {
+        _titles.TryGetValue(sessionId, out var title);
+        return Task.FromResult<string?>(title);
+    }
+
+    public Task<IReadOnlyList<SessionListItem>> ListWithTitlesAsync(string? ownerUserId = null, CancellationToken ct = default)
+    {
+        IEnumerable<string> keys = _sessions.Keys;
+        if (ownerUserId is not null)
+            keys = keys.Where(k => _owners.TryGetValue(k, out var o) && string.Equals(o, ownerUserId, StringComparison.Ordinal));
+        var result = keys
+            .Select(id => new SessionListItem(id, _titles.GetValueOrDefault(id), DateTimeOffset.UtcNow))
+            .ToList();
+        return Task.FromResult<IReadOnlyList<SessionListItem>>(result);
+    }
 }
 
 /// <summary>Fake smart router that returns a canned provider list.</summary>

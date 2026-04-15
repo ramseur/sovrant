@@ -29,6 +29,14 @@
                 </div>
             }
 
+            @if (Message.IsExecutingTools)
+            {
+                <div class="execution-status msg-indent">
+                    <span class="thinking-dot"></span>
+                    <span class="execution-status-text">@Message.ExecutionStatusText</span>
+                </div>
+            }
+
             @if (Message.ToolUses.Count > 0)
             {
                 <div class="msg-indent">
@@ -107,7 +115,20 @@
     {
         try
         {
-            return Markdown.ToHtml(markdown, Pipeline);
+            var html = Markdown.ToHtml(markdown, Pipeline);
+            // Wrap each <pre> in a container with a copy button
+            html = System.Text.RegularExpressions.Regex.Replace(html,
+                @"<pre><code(?:\s+class=""language-(\w+)"")?>([\s\S]*?)</code></pre>",
+                m =>
+                {
+                    var lang = m.Groups[1].Value;
+                    var code = m.Groups[2].Value;
+                    var langLabel = !string.IsNullOrEmpty(lang) ? $"<span class=\"code-lang\">{lang}</span>" : "";
+                    return $"<div class=\"code-block-wrapper\">" +
+                           $"<div class=\"code-block-header\">{langLabel}<button class=\"btn-copy\" onclick=\"sovrantInterop.copyCode(this)\">Copy</button></div>" +
+                           $"<pre><code>{code}</code></pre></div>";
+                });
+            return html;
         }
         catch
         {

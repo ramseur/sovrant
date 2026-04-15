@@ -15,6 +15,17 @@ window.sovrantInterop = {
         return localStorage.getItem('sovrant-theme') || 'dark';
     },
 
+    copyCode: function (button) {
+        const wrapper = button.closest('.code-block-wrapper');
+        if (!wrapper) return;
+        const codeEl = wrapper.querySelector('pre code');
+        if (!codeEl) return;
+        navigator.clipboard.writeText(codeEl.textContent).then(function () {
+            button.textContent = 'Copied!';
+            setTimeout(function () { button.textContent = 'Copy'; }, 1500);
+        });
+    },
+
     registerCtrlK: function (dotNetRef) {
         document.addEventListener('keydown', function (e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 'k') {

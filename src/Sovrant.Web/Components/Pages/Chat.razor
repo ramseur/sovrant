@@ -64,7 +64,14 @@
                       rows="1"
                       disabled="@_isSending"></textarea>
         </div>
-        <button class="btn-primary send-btn" @onclick="SendAsync" disabled="@(!CanSend)">Send</button>
+        @if (_isSending)
+        {
+            <button class="btn-stop send-btn" @onclick="StopAsync">Stop</button>
+        }
+        else
+        {
+            <button class="btn-primary send-btn" @onclick="SendAsync" disabled="@(!CanSend)">Send</button>
+        }
     </div>
 
     <!-- Token count & cost -->
@@ -91,6 +98,7 @@
     private ElementReference _inputRef;
     private string _inputText = string.Empty;
     private bool _isSending;
+    private CancellationTokenSource? _sendCts;
     private int _tokenCount;
     private decimal _sessionCost;
     private string _sessionId = $"session-{Guid.NewGuid():N}";
@@ -252,7 +260,12 @@
 
     private async Task SendToRuntimeAsync(string text)
     {
+        _sendCts?.Dispose();
+        _sendCts = new CancellationTokenSource();
+        var ct = _sendCts.Token;
+
         _isSending = true;
+        var isFirstMessage = _messages.All(m => m.Role != "user");
 
         // Add user message
         if (_messages.Count == 0 || _messages[^1].Role != "user" || _messages[^1].Text != text)
@@ -267,10 +280,10 @@
 
         try
         {
-            await Sovrant.Web.Program.RuntimeReady.Task;
-            var pooled = await SessionPool.GetOrCreateAsync(_sessionId);
+            await Sovrant.Web.Program.RuntimeReady.Task.WaitAsync(ct);
+            var pooled = await SessionPool.GetOrCreateAsync(_sessionId, ct: ct);
 
-            await foreach (var ev in pooled.Runtime.RunTurnAsync(text))
+            await foreach (var ev in pooled.Runtime.RunTurnAsync(text, ct))
             {
                 HandleEvent(ev, assistantMsg);
                 StateHasChanged();
@@ -291,7 +304,19 @@
             StateHasChanged();
             await ScrollToBottom();
             await FocusInput();
+
+            if (isFirstMessage)
+            {
+                var title = text.Length > 60 ? text[..60] + "..." : text;
+                _ = SessionStore.SetTitleAsync(_sessionId, title);
+            }
         }
+    }
+
+    private Task StopAsync()
+    {
+        _sendCts?.Cancel();
+        return Task.CompletedTask;
     }
 
     private void HandleEvent(RuntimeEvent ev, ChatMessageModel msg)
@@ -302,17 +327,10 @@
                 msg.AppendText(chunk);
                 break;
             case RuntimeEvent.ToolUseRequested t:
-                if (msg.IsThinking) msg.StopThinking();
-                msg.ToolUses.Add(new ToolUseModel { ToolName = t.ToolName, ToolUseId = t.ToolUseId, Status = "Running..." });
+                msg.AddToolUse(t.ToolName, t.ToolUseId);
                 break;
             case RuntimeEvent.ToolResult t:
-                var tu = msg.ToolUses.FirstOrDefault(u => u.ToolUseId == t.ToolUseId);
-                if (tu is not null)
-                {
-                    tu.Result = t.Content;
-                    tu.IsError = t.IsError;
-                    tu.Status = t.IsError ? "Error" : "Done";
-                }
+                msg.UpdateToolResult(t.ToolUseId, t.Content, t.IsError);
                 break;
             case RuntimeEvent.TurnComplete t:
                 _tokenCount += t.InputTokens + t.OutputTokens;

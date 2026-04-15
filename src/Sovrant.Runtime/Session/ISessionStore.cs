@@ -51,4 +51,15 @@ public interface ISessionStore
     /// pre-flight ownership checks without loading entry data.
     /// </summary>
     Task<string?> GetOwnerAsync(string sessionId, CancellationToken ct = default);
+
+    /// <summary>Sets or updates the title for a session.</summary>
+    Task SetTitleAsync(string sessionId, string title, string? ownerUserId = null, CancellationToken ct = default);
+
+    /// <summary>Returns the title for a session, or <c>null</c> if unset.</summary>
+    Task<string?> GetTitleAsync(string sessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Lists sessions with titles and timestamps, ordered by most recently updated.
+    /// </summary>
+    Task<IReadOnlyList<SessionListItem>> ListWithTitlesAsync(string? ownerUserId = null, CancellationToken ct = default);
 }

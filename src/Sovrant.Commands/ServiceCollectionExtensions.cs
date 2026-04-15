@@ -24,6 +24,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISlashCommand, ModelCommand>();
         services.AddSingleton<ISlashCommand, ConfigCommand>();
         services.AddSingleton<ISlashCommand, SessionCommand>();
+        services.AddSingleton<ISlashCommand, RenameCommand>();
         services.AddSingleton<ISlashCommand, StatusCommand>();
         services.AddSingleton<ISlashCommand, CompactCommand>();
         services.AddSingleton<ISlashCommand, PermissionsCommand>();

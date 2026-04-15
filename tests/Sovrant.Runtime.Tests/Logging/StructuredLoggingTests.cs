@@ -204,5 +204,14 @@ public sealed class StructuredLoggingTests
 
         public Task<string?> GetOwnerAsync(string sessionId, CancellationToken ct = default)
             => Task.FromResult<string?>(null);
+
+        public Task SetTitleAsync(string sessionId, string title, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.CompletedTask;
+
+        public Task<string?> GetTitleAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
+
+        public Task<IReadOnlyList<SessionListItem>> ListWithTitlesAsync(string? ownerUserId = null, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<SessionListItem>>(Array.Empty<SessionListItem>());
     }
 }

@@ -1,9 +1,9 @@
 # Sovrant Code Review
 
-**Date:** 2026-04-05 (Round 1) · 2026-04-12 (Round 2 — deep review)
-**Scope:** Full codebase — Runtime, Providers, Server, Tools (39), Agents, CLI, Desktop, Web, LSP, MCP, TypeScript SDK
-**Build:** 329 tests passing, 0 warnings
-**Tag:** v1.1.0-port2-agents (commit e8db520)
+**Date:** 2026-04-05 (Round 1) · 2026-04-12 (Round 2 — deep review) · 2026-04-14 (Round 3 — UX gap analysis)
+**Scope:** Full codebase — Runtime, Providers, Server, Tools (50), Agents, CLI, Desktop, Web, LSP, MCP, TypeScript SDK
+**Build:** 1,584 tests passing, 0 warnings
+**Tag:** v1.3.0
 
 ---
 
@@ -923,3 +923,160 @@ foreach (var key in keysToRemove) _fileLocks.TryRemove(key, out _);
 | Process execution duplication | `ProcessExecutor` created in Phase D | Worktree tools not migrated (8.3-8.4). Needs completion |
 | Input validation gaps | Phase C added `InputValidation` | New gaps in SessionRoutes, WebhookRoutes, ProjectRoutes (9.3, R2-M4). Need enforcement middleware |
 | Error response format | Inconsistent (Round 1) | Still inconsistent. No changes observed |
+
+---
+
+## 14. Round 3 — UX Gap Analysis (2026-04-14)
+
+**Scope:** Full UX audit of CLI, Desktop (Avalonia), and Web (Blazor) against Claude Code, Cursor, Windsurf, opencode, Aider, and Continue.dev.
+**Method:** Codebase exploration of streaming paths, tool execution, session management, configuration, rendering, and developer workflow integration.
+**Baseline:** v1.3.0 (50 tools, 96 endpoints + SignalR hub, 1,584 tests, 5 delivery modes)
+
+### Strengths (at or above parity)
+
+| Area | Assessment | Details |
+|------|-----------|---------|
+| Error resilience & retry | **Strong** | 3-attempt provider retry with exponential backoff (1s/2s/4s), tool-level exception handling, tool call loop detection, routing fallback on provider failure |
+| Context window management | **Excellent** | `LlmContextCompactor` with budget-aware LLM summarization, naive fallback, preserves recent 3+ outcomes verbatim, 25% budget reserved for summary |
+| Tool execution robustness | **Strong** | 256 KB bash output cap, 50 KB general cap with temp file offload, configurable timeouts (120s default), governance pre/post checks, tool confirmation gate |
+| Provider routing | **Unique** | SmartRouter with health/latency/cost scoring + intent-aware model tier routing. No competitor has comparable intelligent routing |
+| Enterprise multi-tenant | **Unique** | Per-request LLM keys, API token issuance, session TTL/LRU, rate limiting, workspace/project scoping. No competitor ships this self-hosted |
+
+### Priority 1 — Critical (table stakes all competitors have)
+
+#### 14.1 Streaming Tool Status — Replace Generic Thinking Text
+**Severity:** HIGH
+**Affected:** Desktop (`ChatView.axaml` thinking indicator), Web (`Chat.razor` thinking phrases)
+**Problem:** During tool execution, both UIs cycle through generic phrases ("Thinking really hard...", "Consulting the oracle..."). Claude Code, Cursor, and Windsurf show the specific tool being executed: "Reading src/Auth.cs...", "Running bash...", "Searching for 'login'...". The infrastructure exists — `RuntimeEvent.ToolUseRequested` fires with the tool name, and Desktop already has `IsExecutingTools` + `ExecutionStatusText` — but the thinking indicator competes visually and doesn't yield to it.
+**Fix:** When a `ToolUseRequested` event arrives, immediately stop the thinking indicator and show the tool execution status. Format as: "{ToolIcon} Running {ToolName}..." with the tool's input summary (filename for Read, command for Bash, pattern for Grep).
+**Effort:** Small.
+**Impact:** Immediate perception of "this tool knows what it's doing."
+
+#### 14.2 Code Block Copy Button
+**Severity:** HIGH
+**Affected:** Desktop (`SafeMarkdownPresenter`), Web (Blazor markdown rendering)
+**Problem:** No copy button on code blocks in either UI. This is the single most-used interaction in a coding tool's output. Every competitor has it. Its absence immediately signals "not polished."
+**Fix:** Desktop: add a button overlay on code block borders in `SafeMarkdownPresenter` that calls `Clipboard.SetTextAsync()`. Web: add a button with JS interop `navigator.clipboard.writeText()`.
+**Effort:** Small–Medium.
+**Impact:** High — most frequently needed action in a coding assistant.
+
+#### 14.3 Session Naming and Search
+**Severity:** HIGH
+**Affected:** CLI, Desktop, Web — all session management paths
+**Problem:** Sessions are all `session-{guid}`. Users can't find past conversations. Claude Code, Cursor, and opencode let you name, search, and browse sessions by content or date. The data infrastructure is there — SQLite with FTS5 full-text search — but there's no UI or CLI surface for naming or searching.
+**Fix:** (a) Add `title` column to `sessions` table (or use existing metadata). (b) Add `/rename <title>` slash command. (c) Surface session list in Desktop/Web sidebar with title, date, message count. (d) Add `GET /v1/sessions?q=` search parameter using FTS5. (e) Auto-generate title from first user message if no explicit name.
+**Effort:** Medium.
+**Impact:** High — users currently have no way to find past work.
+
+#### 14.4 Git Context Injection
+**Severity:** HIGH
+**Affected:** `ConversationRuntime` — system prompt construction
+**Problem:** The agent has zero ambient git awareness. It doesn't know what branch you're on, what's staged, or what changed recently unless it explicitly runs `git status` via Bash. Claude Code and Cursor automatically inject git branch, status, and recent commits into the agent's context.
+**Fix:** At session init (or first turn in a git repo), run `git rev-parse --abbrev-ref HEAD`, `git status --short`, and `git log --oneline -5` and inject the results into the system prompt as a "Current Repository State" block. Refresh on each turn if the working directory is a git repo.
+**Effort:** Medium.
+**Impact:** High — contextual awareness is what separates a chat box from a coding partner.
+
+### Priority 2 — High (noticeable polish gap)
+
+#### 14.5 Syntax Highlighting in Code Blocks
+**Severity:** MEDIUM
+**Affected:** Desktop (`SafeMarkdownPresenter`), Web (Blazor)
+**Problem:** Code blocks render as monospace text on a dark background with no language-specific coloring. Competitors all have full syntax highlighting. This is the second-most visible quality signal after the copy button.
+**Fix:** Desktop: integrate a TextMate grammar library or AvaloniaEdit's highlighting engine. Web: add Prism.js or highlight.js via JS interop, triggered after markdown render.
+**Effort:** Medium.
+
+#### 14.6 Keyboard Shortcuts
+**Severity:** MEDIUM
+**Affected:** Desktop, Web
+**Problem:** Only `Enter` to send, `Shift+Enter` for newline, and `Ctrl+K` for command palette exist. No `Ctrl+L` (clear), `Ctrl+N` (new chat), `Escape` (stop/cancel), or documented shortcut reference. Competitors have extensive keybinding systems.
+**Fix:** Define a shortcut map covering at minimum: `Ctrl+L` (clear chat), `Ctrl+N` (new session), `Escape` (stop current turn — now possible with Stop button CTS), `Ctrl+Shift+C` (copy last code block). Wire into both AXAML KeyBindings and Blazor `@onkeydown`.
+**Effort:** Small–Medium.
+
+#### 14.7 Git-Backed `/undo` and `/redo`
+**Severity:** MEDIUM
+**Affected:** Runtime — tool execution layer
+**Problem:** Every file write/edit the agent makes is permanent. opencode commits each agent action to a git stash or temporary branch, allowing `/undo` to revert and `/redo` to reapply. This dramatically lowers the trust barrier for giving agents write permissions. Sovrant has `EnterWorktree`/`ExitWorktree` for branch isolation but no per-action undo.
+**Fix:** Before each `Write`/`Edit` tool execution, snapshot the affected file(s) via `git stash push -m "sovrant:{toolUseId}"` or a lightweight checkpoint. Implement `/undo` and `/redo` slash commands that walk the checkpoint stack.
+**Effort:** Medium–Large.
+
+#### 14.8 Streaming Bash Output
+**Severity:** MEDIUM
+**Affected:** `ProcessExecutor`, `BashTool`, `PowerShellTool`
+**Problem:** Bash tool waits for the command to complete, then returns the full output. Claude Code and Cursor stream bash output live — you see build progress, test runner output, etc. in real-time. This matters especially for long-running commands (builds, test suites, installations).
+**Fix:** `ProcessExecutor` should yield stdout/stderr lines as they arrive via `IAsyncEnumerable<string>` rather than buffering to completion. The runtime's tool result path would need to support incremental output events.
+**Effort:** Medium.
+
+### Priority 3 — Medium (separates good from great)
+
+#### 14.9 First-Time Setup Validation
+**Severity:** MEDIUM
+**Affected:** CLI (`Program.cs`), Server (`Program.cs`)
+**Problem:** If `LLM_API_KEY` is unset, the CLI fails on first LLM call with a cryptic provider error. Competitors detect this at startup and guide the user. Desktop has a setup wizard, but CLI and Server don't validate config upfront.
+**Fix:** Add a pre-flight check at CLI/Server boot: verify `LLM_API_KEY` is set (or `OLLAMA_BASE_URL` for local models), validate the URL format of `LLM_BASE_URL`, and print a clear message with setup instructions on failure.
+**Effort:** Small.
+
+#### 14.10 Collapsible Tool Output
+**Severity:** LOW
+**Affected:** Desktop (`ChatView.axaml` tool use template), Web (`ChatMessage` component)
+**Problem:** Tool results (especially large grep/read output) take up enormous vertical space. Competitors collapse them by default with "Show output" toggles. Sovrant shows everything inline, pushing the actual response text off-screen.
+**Fix:** Default tool result cards to collapsed state (showing tool name + status only). Add an expand/collapse toggle. Show first 3–5 lines as preview.
+**Effort:** Small–Medium.
+
+#### 14.11 File Watching and Auto-Context
+**Severity:** LOW
+**Affected:** Runtime — session context management
+**Problem:** Claude Code and Cursor detect when files change on disk and update context. Sovrant has no file watcher. When the user edits files manually between turns, the agent operates on stale information.
+**Fix:** Add `FileSystemWatcher` on the working directory (filtered to source files). On change, inject a brief "Files changed since last turn: {list}" note into the next system prompt. Debounce to avoid noise.
+**Effort:** Medium–Large.
+
+#### 14.12 Structured Diff Preview for Edits
+**Severity:** LOW
+**Affected:** CLI (REPL output), Desktop, Web
+**Problem:** Before applying `Edit`/`Write`, no visual diff is shown. opencode and Claude Code show colored unified diffs so the user can verify changes before they land. Sovrant shows the raw tool result after the fact.
+**Fix:** CLI: render a colored unified diff using Spectre.Console markup before the edit is applied. Desktop/Web: add a diff component showing old vs new with red/green highlighting.
+**Effort:** Medium.
+
+### Priority 4 — Nice to Have
+
+#### 14.13 Table Rendering in Markdown
+**Severity:** LOW
+**Problem:** Markdig supports tables but `SafeMarkdownPresenter` doesn't render them. Tables appear as raw pipe-delimited text.
+**Effort:** Medium.
+
+#### 14.14 Image / Diagram Display in Chat
+**Severity:** LOW
+**Problem:** No inline image rendering for screenshots or diagrams referenced by the agent.
+**Effort:** Medium.
+
+#### 14.15 Config Validation Command
+**Severity:** LOW
+**Problem:** No `sovrant config validate` to check env vars, API key validity, provider reachability before running.
+**Effort:** Small.
+
+#### 14.16 Session Export Improvements
+**Severity:** LOW
+**Problem:** Export exists as flat markdown only. No shareable link, no import, no JSON export with full metadata.
+**Effort:** Small–Medium.
+
+---
+
+### Round 3 — Recommended Implementation Order
+
+The following order maximizes perceived quality improvement per unit of effort:
+
+| Order | Item | Effort | Impact | Rationale |
+|-------|------|--------|--------|-----------|
+| 1 | 14.1 Streaming tool status | Small | High | Already wired — just needs UI connection. Instant perception boost. |
+| 2 | 14.2 Code block copy button | Small–Med | High | Most-used interaction. Absence is the #1 "unpolished" signal. |
+| 3 | 14.9 First-time setup validation | Small | Medium | Prevents frustrating first impressions for new users. |
+| 4 | 14.6 Keyboard shortcuts | Small–Med | Medium | Low effort, disproportionate "feels professional" signal. |
+| 5 | 14.3 Session naming & search | Medium | High | Unlocks the value of persistent sessions. |
+| 6 | 14.4 Git context injection | Medium | High | Makes the agent feel like a coding partner, not a chat box. |
+| 7 | 14.10 Collapsible tool output | Small–Med | Medium | Reduces visual noise, keeps focus on the response. |
+| 8 | 14.5 Syntax highlighting | Medium | Medium | Visual quality of every code response improves. |
+| 9 | 14.8 Streaming bash output | Medium | Medium | Critical for long-running commands (builds, tests). |
+| 10 | 14.7 `/undo` / `/redo` | Med–Large | High | Trust barrier reduction for write permissions. |
+| 11 | 14.12 Structured diff preview | Medium | Medium | Trust + verification before destructive edits. |
+| 12 | 14.11 File watching | Med–Large | Medium | "Work alongside me" use case enabler. |
+
+**Bottom line:** Items 1–4 can ship in a single sprint and bring the UX from "functional prototype" to "credible tool." Items 5–8 close the remaining visible gap with competitors. Items 9–12 move into "best in class" territory.

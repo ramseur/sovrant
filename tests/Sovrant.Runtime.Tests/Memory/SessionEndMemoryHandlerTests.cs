@@ -111,5 +111,27 @@ public sealed class SessionEndMemoryHandlerTests : IAsyncDisposable
 
         public Task<string?> GetOwnerAsync(string sessionId, CancellationToken ct = default)
             => Task.FromResult<string?>(null);
+
+        private readonly Dictionary<string, string> _titles = new(StringComparer.Ordinal);
+
+        public Task SetTitleAsync(string sessionId, string title, string? ownerUserId = null, CancellationToken ct = default)
+        {
+            _titles[sessionId] = title;
+            return Task.CompletedTask;
+        }
+
+        public Task<string?> GetTitleAsync(string sessionId, CancellationToken ct = default)
+        {
+            _titles.TryGetValue(sessionId, out var title);
+            return Task.FromResult<string?>(title);
+        }
+
+        public Task<IReadOnlyList<SessionListItem>> ListWithTitlesAsync(string? ownerUserId = null, CancellationToken ct = default)
+        {
+            var result = _sessions.Keys
+                .Select(id => new SessionListItem(id, _titles.GetValueOrDefault(id), DateTimeOffset.UtcNow))
+                .ToList();
+            return Task.FromResult<IReadOnlyList<SessionListItem>>(result);
+        }
     }
 }

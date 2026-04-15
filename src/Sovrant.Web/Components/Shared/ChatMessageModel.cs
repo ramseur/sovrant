@@ -21,6 +21,9 @@ public sealed class ChatMessageModel
     public bool IsComplete { get; set; }
     public bool HasError { get; set; }
     public string ErrorMessage { get; set; } = string.Empty;
+    public bool IsExecutingTools { get; set; }
+    public string ExecutionStatusText { get; set; } = string.Empty;
+    private int _completedToolCount;
     public List<ToolUseModel> ToolUses { get; } = [];
 
     // ── Phase 59 properties ─────────────────────────────────────────────
@@ -62,10 +65,32 @@ public sealed class ChatMessageModel
         Text += chunk;
     }
 
+    public void AddToolUse(string toolName, string toolUseId)
+    {
+        if (IsThinking) StopThinking();
+        IsExecutingTools = true;
+        ExecutionStatusText = $"Running {toolName}...";
+        ToolUses.Add(new ToolUseModel { ToolName = toolName, ToolUseId = toolUseId, Status = "Running..." });
+    }
+
+    public void UpdateToolResult(string toolUseId, string content, bool isError)
+    {
+        var tu = ToolUses.FirstOrDefault(u => u.ToolUseId == toolUseId);
+        if (tu is not null)
+        {
+            tu.Result = content;
+            tu.IsError = isError;
+            tu.Status = isError ? "Error" : "Done";
+            _completedToolCount++;
+            ExecutionStatusText = $"Completed {_completedToolCount}/{ToolUses.Count} tool calls";
+        }
+    }
+
     public void CompleteStreaming()
     {
         IsStreaming = false;
         IsComplete = true;
+        IsExecutingTools = false;
     }
 
     public void SetError(string rawError)

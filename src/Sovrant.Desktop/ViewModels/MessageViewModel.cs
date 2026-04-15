@@ -21,18 +21,6 @@ public partial class MessageViewModel : ViewModelBase
         "Mulling it over...",
     ];
 
-    private static readonly string[] WorkingPhrases =
-    [
-        "Working on it...",
-        "Making progress...",
-        "Almost there...",
-        "Crunching the details...",
-        "Putting it together...",
-        "On it...",
-        "Doing the thing...",
-        "Building your answer...",
-    ];
-
     private DispatcherTimer? _thinkingTimer;
     private int _phraseIndex;
 
@@ -136,22 +124,6 @@ public partial class MessageViewModel : ViewModelBase
         _thinkingTimer = null;
     }
 
-    /// <summary>Restarts the thinking indicator with tool-execution phrases.</summary>
-    public void StartWorking()
-    {
-        _thinkingTimer?.Stop();
-        IsThinking = true;
-        _phraseIndex = RandomNumberGenerator.GetInt32(WorkingPhrases.Length);
-        ThinkingText = WorkingPhrases[_phraseIndex];
-        _thinkingTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
-        _thinkingTimer.Tick += (_, _) =>
-        {
-            _phraseIndex = (_phraseIndex + 1) % WorkingPhrases.Length;
-            ThinkingText = WorkingPhrases[_phraseIndex];
-        };
-        _thinkingTimer.Start();
-    }
-
     public void StartStreaming()
     {
         IsStreaming = true;
@@ -208,14 +180,11 @@ public partial class MessageViewModel : ViewModelBase
 
     public void AddToolUse(string toolName, string toolUseId)
     {
+        // Stop the thinking carousel — the execution status bar takes over.
+        if (IsThinking) StopThinking();
+
         IsExecutingTools = true;
         ExecutionStatusText = $"Running {toolName}...";
-
-        // Switch to "working" phrases so the user always sees activity.
-        if (!IsThinking)
-            StartWorking();
-        else
-            ThinkingText = $"Running {toolName}...";
 
         ToolUses.Add(new ToolUseViewModel
         {
@@ -249,10 +218,6 @@ public partial class MessageViewModel : ViewModelBase
                 tu.Status = isError ? "Error" : "Done";
                 _completedToolCount++;
                 ExecutionStatusText = $"Completed {_completedToolCount}/{ToolUses.Count} tool calls";
-
-                // Keep the working indicator alive — another LLM round may follow.
-                if (IsThinking)
-                    ThinkingText = $"Done with {tu.ToolName}, continuing...";
                 break;
             }
         }

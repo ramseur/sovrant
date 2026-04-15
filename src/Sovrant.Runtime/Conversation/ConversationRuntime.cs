@@ -765,6 +765,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             Directory.GetCurrentDirectory(), ".sovrant", "memory.md");
         AppendMemoryFile(sb, projectMemory, "Project memory");
 
+        // Git context: branch, status, recent commits
+        AppendGitContext(sb, Directory.GetCurrentDirectory());
+
         return sb.ToString();
     }
 
@@ -780,6 +783,66 @@ public sealed partial class ConversationRuntime : IConversationRuntime
               .Append(content);
         }
         catch (IOException) { /* silently skip unreadable files */ }
+    }
+
+    private static void AppendGitContext(StringBuilder sb, string workingDir)
+    {
+        try
+        {
+            // Check if we're in a git repo
+            var branch = RunGit(workingDir, "rev-parse --abbrev-ref HEAD");
+            if (string.IsNullOrEmpty(branch)) return;
+
+            sb.Append("\n\n---\n## Git Context\n\n");
+            sb.Append("- **Branch:** ").Append(branch).Append('\n');
+
+            var status = RunGit(workingDir, "status --porcelain");
+            if (!string.IsNullOrEmpty(status))
+            {
+                var lines = status.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                sb.Append("- **Working tree:** ").Append(lines.Length).Append(" changed file(s)\n");
+            }
+            else
+            {
+                sb.Append("- **Working tree:** clean\n");
+            }
+
+            var log = RunGit(workingDir, "log --oneline -5");
+            if (!string.IsNullOrEmpty(log))
+            {
+                sb.Append("\n**Recent commits:**\n```\n").Append(log).Append("\n```\n");
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Git not available or not a repo — silently skip.
+        }
+    }
+
+    private static string? RunGit(string workingDir, string args)
+    {
+        try
+        {
+            using var process = new System.Diagnostics.Process();
+            process.StartInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "git",
+                Arguments = args,
+                WorkingDirectory = workingDir,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            process.Start();
+            var output = process.StandardOutput.ReadToEnd().Trim();
+            process.WaitForExit(3000);
+            return process.ExitCode == 0 ? output : null;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

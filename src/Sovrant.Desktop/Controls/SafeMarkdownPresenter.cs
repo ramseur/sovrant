@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -160,16 +161,50 @@ public class SafeMarkdownPresenter : ContentControl
     {
         var panel = new StackPanel();
 
+        // Header row: language label + copy button
+        var headerRow = new DockPanel { Margin = new Thickness(12, 6, 8, 0) };
+
         if (language is not null)
         {
-            panel.Children.Add(new TextBlock
+            headerRow.Children.Add(new TextBlock
             {
                 Text = language,
                 FontSize = 11,
                 Foreground = GetBrush("#999999"),
-                Margin = new Thickness(12, 6, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
             });
         }
+
+        var copyButton = new Button
+        {
+            Content = "Copy",
+            FontSize = 10,
+            Padding = new Thickness(8, 2),
+            Background = GetBrush("#2A2A2A"),
+            Foreground = GetBrush("#AAAAAA"),
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(4),
+            Cursor = new Cursor(StandardCursorType.Hand),
+            HorizontalAlignment = HorizontalAlignment.Right,
+        };
+        DockPanel.SetDock(copyButton, Dock.Right);
+        headerRow.Children.Insert(0, copyButton);
+
+        // Capture code text for the click handler
+        var codeText = code;
+        copyButton.Click += async (_, _) =>
+        {
+            var clipboard = TopLevel.GetTopLevel(copyButton)?.Clipboard;
+            if (clipboard is not null)
+            {
+                await clipboard.SetTextAsync(codeText);
+                ((Button)copyButton).Content = "Copied!";
+                await Task.Delay(1500);
+                ((Button)copyButton).Content = "Copy";
+            }
+        };
+
+        panel.Children.Add(headerRow);
 
         panel.Children.Add(new SelectableTextBlock
         {

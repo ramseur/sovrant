@@ -36,11 +36,13 @@ public sealed class SessionCommand : ISlashCommand
             return await DeleteSessionAsync(args[7..].Trim(), ct).ConfigureAwait(false);
 
         var entries = await _store.LoadAsync(_runtime.SessionId, ownerUserId: null, ct).ConfigureAwait(false);
+        var title = await _store.GetTitleAsync(_runtime.SessionId, ct).ConfigureAwait(false);
         var sb = new StringBuilder();
         sb.AppendLine("# Current Session");
         sb.AppendLine();
         sb.AppendLine("| Property | Value |");
         sb.AppendLine("|----------|-------|");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| Title | {title ?? "(untitled)"} |");
         sb.AppendLine(CultureInfo.InvariantCulture, $"| Session ID | {_runtime.SessionId} |");
         sb.AppendLine(CultureInfo.InvariantCulture, $"| Entries | {entries.Count} |");
 
@@ -60,22 +62,23 @@ public sealed class SessionCommand : ISlashCommand
 
     private async Task<SlashCommandResult> ListSessionsAsync(CancellationToken ct)
     {
-        var ids = await _store.ListAsync(ownerUserId: null, ct).ConfigureAwait(false);
-        if (ids.Count == 0)
+        var summaries = await _store.ListWithTitlesAsync(ownerUserId: null, ct).ConfigureAwait(false);
+        if (summaries.Count == 0)
             return new SlashCommandResult("No saved sessions.");
 
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"# Sessions ({ids.Count})");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# Sessions ({summaries.Count})");
         sb.AppendLine();
-        sb.AppendLine("| Session ID | |");
-        sb.AppendLine("|------------|-|");
-        foreach (var id in ids)
+        sb.AppendLine("| Title | Session ID | Updated | |");
+        sb.AppendLine("|-------|------------|---------|--|");
+        foreach (var s in summaries)
         {
-            var marker = id == _runtime.SessionId ? "**current**" : "";
-            sb.AppendLine(CultureInfo.InvariantCulture, $"| {id} | {marker} |");
+            var title = s.Title ?? "(untitled)";
+            var marker = s.SessionId == _runtime.SessionId ? "**current**" : "";
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| {title} | {s.SessionId} | {s.UpdatedAt:yyyy-MM-dd HH:mm} | {marker} |");
         }
         sb.AppendLine();
-        sb.Append("Use /resume (session-id) to resume, /session delete (id) to delete, /session purge to delete all.");
+        sb.Append("Use /resume (session-id) to resume, /rename <title> to name this session, /session delete (id) to delete.");
         return new SlashCommandResult(sb.ToString());
     }
 
