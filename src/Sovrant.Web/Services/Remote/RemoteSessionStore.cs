@@ -137,4 +137,33 @@ public sealed class RemoteSessionStore : ISessionStore
         }
         return summaries;
     }
+
+    public async Task<IReadOnlyList<SessionListItem>> SearchAsync(string query, string? ownerUserId = null, int limit = 50, CancellationToken ct = default)
+    {
+        var url = $"/v1/sessions?q={Uri.EscapeDataString(query)}";
+        var response = await _http.GetAsync(new Uri(url, UriKind.Relative), ct);
+        if (!response.IsSuccessStatusCode)
+            return [];
+
+        var json = await response.Content.ReadAsStringAsync(ct);
+        var doc = JsonDocument.Parse(json);
+
+        var results = new List<SessionListItem>();
+        if (doc.RootElement.TryGetProperty("sessions", out var arr))
+        {
+            foreach (var item in arr.EnumerateArray())
+            {
+                var id = item.TryGetProperty("session_id", out var sid) ? sid.GetString()
+                       : item.TryGetProperty("sessionId", out var sid2) ? sid2.GetString()
+                       : null;
+                if (id is null) continue;
+                var title = item.TryGetProperty("title", out var t) ? t.GetString() : null;
+                var updated = item.TryGetProperty("updated_at", out var u) ? u.GetDateTimeOffset()
+                            : item.TryGetProperty("updatedAt", out var u2) ? u2.GetDateTimeOffset()
+                            : DateTimeOffset.UtcNow;
+                results.Add(new SessionListItem(id, title, updated));
+            }
+        }
+        return results;
+    }
 }

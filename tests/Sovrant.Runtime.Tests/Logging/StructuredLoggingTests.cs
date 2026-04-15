@@ -213,5 +213,8 @@ public sealed class StructuredLoggingTests
 
         public Task<IReadOnlyList<SessionListItem>> ListWithTitlesAsync(string? ownerUserId = null, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<SessionListItem>>(Array.Empty<SessionListItem>());
+
+        public Task<IReadOnlyList<SessionListItem>> SearchAsync(string query, string? ownerUserId = null, int limit = 50, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<SessionListItem>>(Array.Empty<SessionListItem>());
     }
 }

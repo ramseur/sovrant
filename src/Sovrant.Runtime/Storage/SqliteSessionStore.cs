@@ -256,4 +256,61 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
         }
         return summaries;
     }
+
+    public async Task<IReadOnlyList<SessionListItem>> SearchAsync(
+        string query,
+        string? ownerUserId = null,
+        int limit = 50,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return [];
+
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+
+        // Use FTS5 MATCH to search session entry content, join back to sessions
+        // for title and ownership. Group by session so each session appears once.
+        if (ownerUserId is null)
+        {
+            cmd.CommandText = """
+                SELECT s.session_id, s.title, s.updated_at
+                FROM session_entries_fts f
+                JOIN session_entries e ON e.entry_id = f.rowid
+                JOIN sessions s ON s.session_id = e.session_id
+                WHERE session_entries_fts MATCH $query
+                GROUP BY s.session_id
+                ORDER BY rank
+                LIMIT $limit
+                """;
+        }
+        else
+        {
+            cmd.CommandText = """
+                SELECT s.session_id, s.title, s.updated_at
+                FROM session_entries_fts f
+                JOIN session_entries e ON e.entry_id = f.rowid
+                JOIN sessions s ON s.session_id = e.session_id
+                WHERE session_entries_fts MATCH $query AND s.user_id = $uid
+                GROUP BY s.session_id
+                ORDER BY rank
+                LIMIT $limit
+                """;
+            cmd.Parameters.AddWithValue("$uid", ownerUserId);
+        }
+
+        cmd.Parameters.AddWithValue("$query", query);
+        cmd.Parameters.AddWithValue("$limit", limit);
+
+        using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        var results = new List<SessionListItem>();
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            results.Add(new SessionListItem(
+                SessionId: reader.GetString(0),
+                Title: await reader.IsDBNullAsync(1, ct).ConfigureAwait(false) ? null : reader.GetString(1),
+                UpdatedAt: DateTimeOffset.Parse(reader.GetString(2), CultureInfo.InvariantCulture)));
+        }
+        return results;
+    }
 }

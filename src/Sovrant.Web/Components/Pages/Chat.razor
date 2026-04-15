@@ -7,7 +7,7 @@
 @using System.Security.Cryptography
 @implements IDisposable
 
-<div class="chat-page">
+<div class="chat-page" @onkeydown="HandleGlobalKeyDown" tabindex="0">
     <!-- Context breadcrumb -->
     <div class="chat-breadcrumb">
         <span>&#x1F3E2;</span>
@@ -188,6 +188,93 @@
         if (e.Key == "Enter" && !e.ShiftKey)
         {
             await SendAsync();
+            return;
+        }
+
+        // Escape — stop current turn
+        if (e.Key == "Escape" && _isSending)
+        {
+            await StopAsync();
+            return;
+        }
+
+        // Ctrl+L — clear chat
+        if (e.CtrlKey && !e.ShiftKey && e.Key == "l")
+        {
+            ClearChat();
+            return;
+        }
+
+        // Ctrl+N — new session
+        if (e.CtrlKey && !e.ShiftKey && e.Key == "n")
+        {
+            ClearChat();
+            return;
+        }
+
+        // Ctrl+Shift+C — copy last code block
+        if (e.CtrlKey && e.ShiftKey && e.Key == "C")
+        {
+            await CopyLastCodeBlockAsync();
+        }
+    }
+
+    private void ClearChat()
+    {
+        _messages.Clear();
+        _tokenCount = 0;
+        _sessionCost = 0;
+        _sessionId = $"session-{Guid.NewGuid():N}";
+        StateHasChanged();
+    }
+
+    private async Task HandleGlobalKeyDown(KeyboardEventArgs e)
+    {
+        // Escape — stop current turn
+        if (e.Key == "Escape" && _isSending)
+        {
+            await StopAsync();
+            return;
+        }
+
+        // Ctrl+L — clear chat
+        if (e.CtrlKey && !e.ShiftKey && e.Key == "l")
+        {
+            ClearChat();
+            return;
+        }
+
+        // Ctrl+N — new session
+        if (e.CtrlKey && !e.ShiftKey && e.Key == "n")
+        {
+            ClearChat();
+            return;
+        }
+
+        // Ctrl+Shift+C — copy last code block
+        if (e.CtrlKey && e.ShiftKey && e.Key == "C")
+        {
+            await CopyLastCodeBlockAsync();
+        }
+    }
+
+    private async Task CopyLastCodeBlockAsync()
+    {
+        for (var i = _messages.Count - 1; i >= 0; i--)
+        {
+            var msg = _messages[i];
+            if (msg.Role != "assistant" || string.IsNullOrEmpty(msg.Text))
+                continue;
+
+            var match = System.Text.RegularExpressions.Regex.Match(
+                msg.Text, @"```[\w]*\r?\n([\s\S]*?)```",
+                System.Text.RegularExpressions.RegexOptions.RightToLeft);
+            if (match.Success)
+            {
+                var code = match.Groups[1].Value.TrimEnd();
+                await JS.InvokeVoidAsync("navigator.clipboard.writeText", code);
+                return;
+            }
         }
     }
 

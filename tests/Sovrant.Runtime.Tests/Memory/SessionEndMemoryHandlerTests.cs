@@ -133,5 +133,8 @@ public sealed class SessionEndMemoryHandlerTests : IAsyncDisposable
                 .ToList();
             return Task.FromResult<IReadOnlyList<SessionListItem>>(result);
         }
+
+        public Task<IReadOnlyList<SessionListItem>> SearchAsync(string query, string? ownerUserId = null, int limit = 50, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<SessionListItem>>([]);
     }
 }

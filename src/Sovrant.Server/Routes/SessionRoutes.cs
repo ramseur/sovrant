@@ -40,6 +40,15 @@ internal static class SessionRoutes
         ISessionStore store,
         CancellationToken ct)
     {
+        var query = ctx.Request.Query["q"].FirstOrDefault();
+
+        // If a search query is provided, use FTS5 full-text search.
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var searchResults = await store.SearchAsync(query, OwnerFilter(ctx), ct: ct).ConfigureAwait(false);
+            return Results.Ok(new { sessions = searchResults });
+        }
+
         var ids = await store.ListAsync(OwnerFilter(ctx), ct).ConfigureAwait(false);
         var items = ids.Select(id => new SessionSummaryDto { Id = id }).ToList();
         return Results.Ok(new { sessions = items });

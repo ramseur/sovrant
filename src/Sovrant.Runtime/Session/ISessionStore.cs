@@ -62,4 +62,12 @@ public interface ISessionStore
     /// Lists sessions with titles and timestamps, ordered by most recently updated.
     /// </summary>
     Task<IReadOnlyList<SessionListItem>> ListWithTitlesAsync(string? ownerUserId = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Searches session content using FTS5 full-text search. Returns sessions
+    /// whose entries match the query, ordered by relevance. If
+    /// <paramref name="ownerUserId"/> is non-null, only sessions owned by
+    /// that user are returned.
+    /// </summary>
+    Task<IReadOnlyList<SessionListItem>> SearchAsync(string query, string? ownerUserId = null, int limit = 50, CancellationToken ct = default);
 }

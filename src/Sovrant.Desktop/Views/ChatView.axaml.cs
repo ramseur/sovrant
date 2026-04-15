@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -13,6 +14,71 @@ public partial class ChatView : UserControl
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+
+        if (DataContext is not ChatViewModel vm)
+            return;
+
+        // Escape — stop current turn
+        if (e.Key == Key.Escape && vm.IsSending)
+        {
+            vm.StopCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
+        var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+
+        // Ctrl+L — clear chat
+        if (ctrl && !shift && e.Key == Key.L)
+        {
+            vm.ClearChatCommand.Execute(null);
+            InputBox?.Focus();
+            e.Handled = true;
+            return;
+        }
+
+        // Ctrl+N — new session (same as clear)
+        if (ctrl && !shift && e.Key == Key.N)
+        {
+            vm.ClearChatCommand.Execute(null);
+            InputBox?.Focus();
+            e.Handled = true;
+            return;
+        }
+
+        // Ctrl+Shift+C — copy last code block from assistant messages
+        if (ctrl && shift && e.Key == Key.C)
+        {
+            _ = CopyLastCodeBlockAsync(vm);
+            e.Handled = true;
+        }
+    }
+
+    private async Task CopyLastCodeBlockAsync(ChatViewModel vm)
+    {
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null) return;
+
+        // Walk messages in reverse to find the last code block in an assistant message.
+        for (var i = vm.Messages.Count - 1; i >= 0; i--)
+        {
+            var msg = vm.Messages[i];
+            if (msg.Role != "assistant" || string.IsNullOrEmpty(msg.Text))
+                continue;
+
+            var match = Regex.Match(msg.Text, @"```[\w]*\r?\n([\s\S]*?)```", RegexOptions.RightToLeft);
+            if (match.Success)
+            {
+                await clipboard.SetTextAsync(match.Groups[1].Value.TrimEnd());
+                return;
+            }
+        }
     }
 
     private void OnDataContextChanged(object? sender, EventArgs e)

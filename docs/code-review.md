@@ -960,13 +960,14 @@ foreach (var key in keysToRemove) _fileLocks.TryRemove(key, out _);
 **Effort:** Small–Medium.
 **Impact:** High — most frequently needed action in a coding assistant.
 
-#### 14.3 Session Naming and Search
+#### 14.3 Session Naming and Search ✅ COMPLETE
 **Severity:** HIGH
 **Affected:** CLI, Desktop, Web — all session management paths
 **Problem:** Sessions are all `session-{guid}`. Users can't find past conversations. Claude Code, Cursor, and opencode let you name, search, and browse sessions by content or date. The data infrastructure is there — SQLite with FTS5 full-text search — but there's no UI or CLI surface for naming or searching.
 **Fix:** (a) Add `title` column to `sessions` table (or use existing metadata). (b) Add `/rename <title>` slash command. (c) Surface session list in Desktop/Web sidebar with title, date, message count. (d) Add `GET /v1/sessions?q=` search parameter using FTS5. (e) Auto-generate title from first user message if no explicit name.
 **Effort:** Medium.
 **Impact:** High — users currently have no way to find past work.
+**Status:** (a)–(c)+(e) completed in prior phases. (d) FTS5 search endpoint added: `SearchAsync` on `ISessionStore`, `SqliteSessionStore` FTS5 MATCH query, `GET /v1/sessions?q=` wired in `SessionRoutes`.
 
 #### 14.4 Git Context Injection
 **Severity:** HIGH
@@ -985,12 +986,13 @@ foreach (var key in keysToRemove) _fileLocks.TryRemove(key, out _);
 **Fix:** Desktop: integrate a TextMate grammar library or AvaloniaEdit's highlighting engine. Web: add Prism.js or highlight.js via JS interop, triggered after markdown render.
 **Effort:** Medium.
 
-#### 14.6 Keyboard Shortcuts
+#### 14.6 Keyboard Shortcuts ✅ COMPLETE
 **Severity:** MEDIUM
 **Affected:** Desktop, Web
 **Problem:** Only `Enter` to send, `Shift+Enter` for newline, and `Ctrl+K` for command palette exist. No `Ctrl+L` (clear), `Ctrl+N` (new chat), `Escape` (stop/cancel), or documented shortcut reference. Competitors have extensive keybinding systems.
 **Fix:** Define a shortcut map covering at minimum: `Ctrl+L` (clear chat), `Ctrl+N` (new session), `Escape` (stop current turn — now possible with Stop button CTS), `Ctrl+Shift+C` (copy last code block). Wire into both AXAML KeyBindings and Blazor `@onkeydown`.
 **Effort:** Small–Medium.
+**Status:** Desktop `ChatView.axaml.cs` — `OnKeyDown` override handles Escape (stop), Ctrl+L (clear), Ctrl+N (new session), Ctrl+Shift+C (copy last code block via regex). Web `Chat.razor` — `HandleKeyDown` + `HandleGlobalKeyDown` with same shortcuts via `@onkeydown`.
 
 #### 14.7 Git-Backed `/undo` and `/redo`
 **Severity:** MEDIUM

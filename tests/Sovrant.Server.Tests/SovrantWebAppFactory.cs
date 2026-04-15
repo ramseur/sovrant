@@ -190,6 +190,18 @@ public sealed class FakeSessionStore : ISessionStore
             .ToList();
         return Task.FromResult<IReadOnlyList<SessionListItem>>(result);
     }
+
+    public Task<IReadOnlyList<SessionListItem>> SearchAsync(string query, string? ownerUserId = null, int limit = 50, CancellationToken ct = default)
+    {
+        // Simple in-memory substring search for tests.
+        var matches = _sessions
+            .Where(kv => ownerUserId is null || (_owners.TryGetValue(kv.Key, out var o) && string.Equals(o, ownerUserId, StringComparison.Ordinal)))
+            .Where(kv => kv.Value.Any(e => e.Content.Contains(query, StringComparison.OrdinalIgnoreCase)))
+            .Take(limit)
+            .Select(kv => new SessionListItem(kv.Key, _titles.GetValueOrDefault(kv.Key), DateTimeOffset.UtcNow))
+            .ToList();
+        return Task.FromResult<IReadOnlyList<SessionListItem>>(matches);
+    }
 }
 
 /// <summary>Fake smart router that returns a canned provider list.</summary>
