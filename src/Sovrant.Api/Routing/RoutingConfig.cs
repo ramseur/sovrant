@@ -10,9 +10,9 @@ namespace Sovrant.Api.Routing;
 /// </summary>
 public sealed class RoutingConfig
 {
-    /// <summary>Whether intent-based routing is enabled. Default: true when multiple models are available.</summary>
+    /// <summary>Whether intent-based routing is enabled. Default: false (use the configured model as-is).</summary>
     [JsonPropertyName("intent_routing")]
-    public bool IntentRouting { get; init; } = true;
+    public bool IntentRouting { get; init; }
 
     /// <summary>Default tier when no intent match or classification fails.</summary>
     [JsonPropertyName("default_tier")]
@@ -117,7 +117,7 @@ public static class RoutingConfigLoader
             }
         }
 
-        var intentRouting = true;
+        var intentRouting = false;
         var freeModelsOnly = false;
 
         // Check env var overrides

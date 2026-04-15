@@ -97,6 +97,14 @@ public sealed class RuntimeEventDto
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Status { get; init; }
 
+    [JsonPropertyName("model")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Model { get; init; }
+
+    [JsonPropertyName("provider_name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ProviderName { get; init; }
+
     [JsonPropertyName("server_name")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ServerName { get; init; }
@@ -109,10 +117,11 @@ public sealed class RuntimeEventDto
     /// <summary>Maps a core <see cref="RuntimeEvent"/> to its DTO form.</summary>
     public static RuntimeEventDto FromEvent(RuntimeEvent ev) => ev switch
     {
+        RuntimeEvent.ModelSelected e => new() { Type = "model_selected", Model = e.Model, ProviderName = e.ProviderName },
         RuntimeEvent.TextChunk e => new() { Type = "text_chunk", Text = e.Text },
         RuntimeEvent.ToolUseRequested e => new() { Type = "tool_use_requested", ToolUseId = e.ToolUseId, ToolName = e.ToolName, Input = e.Input },
         RuntimeEvent.ToolResult e => new() { Type = "tool_result", ToolUseId = e.ToolUseId, ToolName = e.ToolName, Content = e.Content, IsError = e.IsError },
-        RuntimeEvent.TurnComplete e => new() { Type = "turn_complete", StopReason = e.StopReason, InputTokens = e.InputTokens, OutputTokens = e.OutputTokens },
+        RuntimeEvent.TurnComplete e => new() { Type = "turn_complete", StopReason = e.StopReason, InputTokens = e.InputTokens, OutputTokens = e.OutputTokens, Model = e.Model, ProviderName = e.ProviderName },
         RuntimeEvent.TurnCost e => new() { Type = "turn_cost", EstimatedUsd = e.EstimatedUsd, Source = e.Source },
         RuntimeEvent.PermissionDenied e => new() { Type = "permission_denied", ToolName = e.ToolName, Reason = e.Reason },
         RuntimeEvent.RuntimeError e => new() { Type = "runtime_error", Message = e.Message },
@@ -128,10 +137,11 @@ public sealed class RuntimeEventDto
     /// <summary>Maps a DTO back to a core <see cref="RuntimeEvent"/>.</summary>
     public RuntimeEvent? ToEvent() => Type switch
     {
+        "model_selected" => new RuntimeEvent.ModelSelected(Model ?? string.Empty, ProviderName ?? string.Empty),
         "text_chunk" => new RuntimeEvent.TextChunk(Text ?? string.Empty),
         "tool_use_requested" => new RuntimeEvent.ToolUseRequested(ToolUseId ?? string.Empty, ToolName ?? string.Empty, Input ?? default),
         "tool_result" => new RuntimeEvent.ToolResult(ToolUseId ?? string.Empty, ToolName ?? string.Empty, Content ?? string.Empty, IsError ?? false),
-        "turn_complete" => new RuntimeEvent.TurnComplete(StopReason, InputTokens ?? 0, OutputTokens ?? 0),
+        "turn_complete" => new RuntimeEvent.TurnComplete(StopReason, InputTokens ?? 0, OutputTokens ?? 0, Model, ProviderName),
         "turn_cost" => new RuntimeEvent.TurnCost(EstimatedUsd, Source ?? string.Empty),
         "permission_denied" => new RuntimeEvent.PermissionDenied(ToolName ?? string.Empty, Reason ?? string.Empty),
         "runtime_error" => new RuntimeEvent.RuntimeError(Message ?? string.Empty),

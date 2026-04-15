@@ -93,6 +93,39 @@ public partial class MessageViewModel : ViewModelBase
     [ObservableProperty]
     private string _executionStatusText = string.Empty;
 
+    /// <summary>The model that generated this response (e.g. "deepseek/deepseek-chat:free").</summary>
+    [ObservableProperty]
+    private string? _modelName;
+
+    /// <summary>The provider that served this response (e.g. "OpenRouter").</summary>
+    [ObservableProperty]
+    private string? _providerName;
+
+    /// <summary>
+    /// Display label for the message sender. Shows "Provider / model" for assistant
+    /// messages once the turn completes, falls back to "Sovrant" while streaming.
+    /// </summary>
+    public string SenderLabel
+    {
+        get
+        {
+            if (Role == "user") return "You";
+            if (ProviderName is not null && ModelName is not null)
+                return $"{ProviderName} · {FormatModelName(ModelName)}";
+            if (ModelName is not null)
+                return FormatModelName(ModelName);
+            return "Sovrant";
+        }
+    }
+
+    /// <summary>Formats a model ID for display (e.g. "deepseek/deepseek-chat:free" → "deepseek-chat:free").</summary>
+    private static string FormatModelName(string model)
+    {
+        // Strip the provider prefix (e.g. "deepseek/" from "deepseek/deepseek-chat:free").
+        var slash = model.LastIndexOf('/');
+        return slash >= 0 ? model[(slash + 1)..] : model;
+    }
+
     /// <summary>Count of completed tool calls in this message.</summary>
     private int _completedToolCount;
 
@@ -102,6 +135,8 @@ public partial class MessageViewModel : ViewModelBase
     public ObservableCollection<ToolUseViewModel> ToolUses { get; } = [];
 
     partial void OnRoleChanged(string value) => IsUser = value == "user";
+    partial void OnModelNameChanged(string? value) => OnPropertyChanged(nameof(SenderLabel));
+    partial void OnProviderNameChanged(string? value) => OnPropertyChanged(nameof(SenderLabel));
 
     public void StartThinking()
     {

@@ -5,6 +5,9 @@ public abstract partial record RuntimeEvent
 {
     private RuntimeEvent() { }
 
+    /// <summary>Emitted after routing resolves the provider, before any text streams.</summary>
+    public sealed record ModelSelected(string Model, string ProviderName) : RuntimeEvent;
+
     /// <summary>A streaming text chunk from the model.</summary>
     public sealed record TextChunk(string Text) : RuntimeEvent;
 
@@ -25,7 +28,9 @@ public abstract partial record RuntimeEvent
     public sealed record TurnComplete(
         string? StopReason,
         int InputTokens,
-        int OutputTokens) : RuntimeEvent;
+        int OutputTokens,
+        string? Model = null,
+        string? ProviderName = null) : RuntimeEvent;
 
     /// <summary>Cost estimate for a completed turn (emitted after <see cref="TurnComplete"/> when cost tracking is enabled).</summary>
     public sealed record TurnCost(

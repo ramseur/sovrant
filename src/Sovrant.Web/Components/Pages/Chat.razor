@@ -3,6 +3,7 @@
 @using Sovrant.Runtime.Session
 @using Sovrant.Commands
 @using Sovrant.Web.Adapters
+@using Sovrant.Runtime.Config
 @using Sovrant.Web.Services
 @using System.Security.Cryptography
 @implements IDisposable
@@ -94,6 +95,7 @@
     [Inject] private BlazorConfirmationHandler ConfirmationHandler { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
+    [Inject] private SovrantConfig Config { get; set; } = default!;
 
     private ElementReference _inputRef;
     private string _inputText = string.Empty;
@@ -359,7 +361,7 @@
             _messages.Add(new ChatMessageModel { Role = "user", Text = text, IsComplete = true });
 
         // Add assistant placeholder with thinking
-        var assistantMsg = new ChatMessageModel { Role = "assistant" };
+        var assistantMsg = new ChatMessageModel { Role = "assistant", ModelName = Config.Model };
         assistantMsg.StartThinking();
         _messages.Add(assistantMsg);
         StateHasChanged();
@@ -410,6 +412,11 @@
     {
         switch (ev)
         {
+            case RuntimeEvent.ModelSelected { Model: var model, ProviderName: var prov }:
+                msg.ModelName = model;
+                msg.ProviderName = prov;
+                break;
+
             case RuntimeEvent.TextChunk { Text: var chunk }:
                 msg.AppendText(chunk);
                 break;
@@ -421,6 +428,8 @@
                 break;
             case RuntimeEvent.TurnComplete t:
                 _tokenCount += t.InputTokens + t.OutputTokens;
+                msg.ModelName = t.Model;
+                msg.ProviderName = t.ProviderName;
                 msg.CompleteStreaming();
                 break;
             case RuntimeEvent.TurnCost { EstimatedUsd: var usd }:

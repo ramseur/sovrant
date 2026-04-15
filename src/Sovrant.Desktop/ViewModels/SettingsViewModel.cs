@@ -6,6 +6,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Api.Routing;
 using Sovrant.Desktop.Adapters;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Permissions;
@@ -21,6 +22,7 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly SidebarViewModel _sidebar;
     private readonly MutableAuthProvider _authProvider;
     private readonly IHttpClientFactory _httpFactory;
+    private readonly ISmartRouter? _router;
     private CancellationTokenSource? _autoSaveCts;
     private bool _initialized;
     private bool _suppressAutoSave;
@@ -96,6 +98,9 @@ public partial class SettingsViewModel : ViewModelBase
     private PermissionMode _permissionMode;
 
     [ObservableProperty]
+    private bool _intentRoutingEnabled;
+
+    [ObservableProperty]
     private string _statusMessage = string.Empty;
 
     [ObservableProperty]
@@ -111,13 +116,15 @@ public partial class SettingsViewModel : ViewModelBase
     public ObservableCollection<ProviderProfile> SavedProfiles { get; } = [];
 
     public SettingsViewModel(SovrantConfig config, IPermissionModeAccessor permissionModeAccessor,
-        SidebarViewModel sidebar, MutableAuthProvider authProvider, IHttpClientFactory httpFactory)
+        SidebarViewModel sidebar, MutableAuthProvider authProvider, IHttpClientFactory httpFactory,
+        ISmartRouter? router = null)
     {
         _config = config;
         _permissionModeAccessor = permissionModeAccessor;
         _sidebar = sidebar;
         _authProvider = authProvider;
         _httpFactory = httpFactory;
+        _router = router;
 
         // Load current values from runtime config.
         _modelName = config.Model;
@@ -125,6 +132,7 @@ public partial class SettingsViewModel : ViewModelBase
         _apiKey = config.ApiKey ?? string.Empty;
         _baseUrl = config.BaseUrl?.ToString() ?? string.Empty;
         _permissionMode = permissionModeAccessor.Mode;
+        _intentRoutingEnabled = router?.IntentRoutingEnabled ?? false;
         _selectedProvider = InferProvider(config);
 
         LoadProfiles();
@@ -345,6 +353,13 @@ public partial class SettingsViewModel : ViewModelBase
         ScheduleAutoSave();
     }
 
+    partial void OnIntentRoutingEnabledChanged(bool value)
+    {
+        if (_router is not null)
+            _router.IntentRoutingEnabled = value;
+        ScheduleAutoSave();
+    }
+
     // ─── Provider Profiles ─────────────────────────────
 
     [RelayCommand]
@@ -490,6 +505,7 @@ public partial class SettingsViewModel : ViewModelBase
             existing["Model"] = ModelName;
             existing["MaxTokens"] = MaxOutputTokens;
             existing["PermissionMode"] = PermissionMode.ToString();
+            existing["IntentRouting"] = IntentRoutingEnabled;
 
             if (!string.IsNullOrWhiteSpace(ApiKey))
                 existing["ApiKey"] = ApiKey;

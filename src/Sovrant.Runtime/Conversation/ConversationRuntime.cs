@@ -266,6 +266,12 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             var resolvedProvider = provider;
             LogProviderSelected(_logger, resolvedProvider.Name);
 
+            // Emit model/provider info immediately so UIs can show it before text streams.
+            // Use _config.Model (the user's selected model) rather than request.Model
+            // which may have been overridden by intent routing to a different tier.
+            if (round == 0)
+                yield return new RuntimeEvent.ModelSelected(_config.Model, FriendlyProviderName(resolvedProvider));
+
             var llmSw = Stopwatch.StartNew();
 
             // Collect all streamed events (buffered to avoid yield-in-try/catch restriction)
@@ -337,7 +343,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     turnSw.Stop();
                     LogTurnComplete(_logger, turnSw.ElapsedMilliseconds, accumulated.InputTokens, accumulated.OutputTokens);
                     yield return new RuntimeEvent.TurnComplete(
-                        "end_turn", accumulated.InputTokens, accumulated.OutputTokens);
+                        "end_turn", accumulated.InputTokens, accumulated.OutputTokens,
+                        Model: _config.Model, ProviderName: FriendlyProviderName(resolvedProvider));
                     var costEvt1 = RecordCostIfEnabled(accumulated.InputTokens, accumulated.OutputTokens);
                     if (costEvt1 is not null) yield return costEvt1;
                     yield break;
@@ -355,7 +362,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 yield return new RuntimeEvent.TurnComplete(
                     accumulated.StopReason,
                     accumulated.InputTokens,
-                    accumulated.OutputTokens);
+                    accumulated.OutputTokens,
+                    Model: _config.Model,
+                    ProviderName: FriendlyProviderName(resolvedProvider));
                 var costEvt2 = RecordCostIfEnabled(accumulated.InputTokens, accumulated.OutputTokens);
                 if (costEvt2 is not null) yield return costEvt2;
                 // Stop hook is fire-and-forget — agent does not wait for it.
@@ -890,6 +899,29 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
         // Non-OpenAI models (DeepSeek, Claude, Llama, etc.) — pass through
         return configured;
+    }
+
+    /// <summary>
+    /// Derives a human-friendly provider name from the provider's base URL host.
+    /// E.g. "openrouter.ai" → "OpenRouter", "api.openai.com" → "OpenAI".
+    /// Falls back to the provider's internal name if the host isn't recognized.
+    /// </summary>
+    private static string FriendlyProviderName(Sovrant.Api.Providers.ILlmProvider provider)
+    {
+        var host = provider.BaseUrl.Host;
+        if (host.Contains("openrouter", StringComparison.OrdinalIgnoreCase)) return "OpenRouter";
+        if (host.Contains("openai", StringComparison.OrdinalIgnoreCase)) return "OpenAI";
+        if (host.Contains("anthropic", StringComparison.OrdinalIgnoreCase)) return "Anthropic";
+        if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || host == "127.0.0.1") return "Local";
+        if (host.Contains("ollama", StringComparison.OrdinalIgnoreCase)) return "Ollama";
+        if (host.Contains("groq", StringComparison.OrdinalIgnoreCase)) return "Groq";
+        if (host.Contains("together", StringComparison.OrdinalIgnoreCase)) return "Together";
+        if (host.Contains("mistral", StringComparison.OrdinalIgnoreCase)) return "Mistral";
+        if (host.Contains("deepseek", StringComparison.OrdinalIgnoreCase)) return "DeepSeek";
+        if (host.Contains("google", StringComparison.OrdinalIgnoreCase)) return "Google";
+        // Fallback: capitalize the first segment of the host.
+        var firstSegment = host.Split('.')[0];
+        return char.ToUpperInvariant(firstSegment[0]) + firstSegment[1..];
     }
 
     private static bool LooksLikeToolRequest(string message)

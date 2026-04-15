@@ -1,4 +1,6 @@
 @page "/settings"
+@using Microsoft.Extensions.DependencyInjection
+@using Sovrant.Api.Routing
 @using Sovrant.Runtime.Config
 @using Sovrant.Runtime.Permissions
 @using Sovrant.Web.Adapters
@@ -119,6 +121,17 @@
                 </label>
             </div>
 
+            <div class="toggle-card">
+                <div>
+                    <div class="toggle-title">Intent Routing</div>
+                    <div class="toggle-desc">Auto-select model tier based on message intent (fast/standard/high)</div>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" @bind="_intentRoutingEnabled" @bind:after="OnIntentRoutingChanged" />
+                    <span class="slider"></span>
+                </label>
+            </div>
+
             <h2>Permissions</h2>
             <div class="form-field">
                 <label>Permission Mode</label>
@@ -163,7 +176,9 @@
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
     [Inject] private IHttpClientFactory HttpFactory { get; set; } = default!;
+    [Inject] private IServiceProvider Services { get; set; } = default!;
 
+    private ISmartRouter? _router;
     private int _selectedTab;
     private string _selectedProvider = "OpenAI";
     private string _apiKey = string.Empty;
@@ -176,6 +191,7 @@
     private string _statusMessage = string.Empty;
     private string _newProfileName = string.Empty;
     private bool _isLoadingModels;
+    private bool _intentRoutingEnabled;
     private List<string> _availableModels = [];
     private List<ProviderProfile> _savedProfiles = [];
 
@@ -223,11 +239,13 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _router = Services.GetService<ISmartRouter>();
         _modelName = Config.Model;
         _maxOutputTokens = Config.MaxTokens;
         _apiKey = Config.ApiKey ?? string.Empty;
         _baseUrl = Config.BaseUrl?.ToString() ?? string.Empty;
         _permissionMode = PermissionModeAccessor.Mode.ToString();
+        _intentRoutingEnabled = _router?.IntentRoutingEnabled ?? false;
         _selectedProvider = InferProvider();
         LoadProfiles();
         await LoadModelsForProviderAsync(_selectedProvider);
@@ -367,6 +385,13 @@
         ScheduleAutoSave();
     }
 
+    private void OnIntentRoutingChanged()
+    {
+        if (_router is not null)
+            _router.IntentRoutingEnabled = _intentRoutingEnabled;
+        ScheduleAutoSave();
+    }
+
     private async Task ToggleTheme(ChangeEventArgs e)
     {
         _isDarkMode = (bool)(e.Value ?? true);
@@ -399,6 +424,7 @@
             existing["Model"] = _modelName;
             existing["MaxTokens"] = _maxOutputTokens;
             existing["PermissionMode"] = _permissionMode;
+            existing["IntentRouting"] = _intentRoutingEnabled;
             if (!string.IsNullOrWhiteSpace(_apiKey)) existing["ApiKey"] = _apiKey;
             if (!string.IsNullOrWhiteSpace(_baseUrl)) existing["BaseUrl"] = _baseUrl; else existing.Remove("BaseUrl");
 

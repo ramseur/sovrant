@@ -243,6 +243,25 @@
                     </DockPanel>
                 </Border>
 
+                <!-- Intent Routing toggle -->
+                <Border Padding="12" CornerRadius="8"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <ToggleSwitch DockPanel.Dock="Right"
+                                      IsChecked="{Binding IntentRoutingEnabled}"
+                                      OnContent="" OffContent="" />
+                        <StackPanel>
+                            <TextBlock Text="Intent Routing" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="Auto-select model tier based on message intent (fast/standard/high)"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondary}" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
                 <!-- Permissions section -->
                 <TextBlock Text="Permissions" FontSize="16" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimary}"

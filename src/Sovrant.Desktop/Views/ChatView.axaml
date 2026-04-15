@@ -310,7 +310,7 @@
                                                                HorizontalAlignment="Center"
                                                                VerticalAlignment="Center" />
                                                 </Border>
-                                                <TextBlock Text="Sovrant" FontSize="14" FontWeight="SemiBold"
+                                                <TextBlock Text="{Binding SenderLabel}" FontSize="14" FontWeight="SemiBold"
                                                            Foreground="{DynamicResource TextPrimary}"
                                                            VerticalAlignment="Center" />
                                             </StackPanel>

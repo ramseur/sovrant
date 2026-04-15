@@ -5600,3 +5600,156 @@ Stored per-workspace in user settings. Injected into system prompt by `Conversat
 - Adding interfaces to every singleton (only where a second implementation is plausible)
 - Replacing `Environment.GetEnvironmentVariable` in `Program.cs` / startup code (that's the right place for it)
 - DI purity — the goal is pluggability where it matters, not 100% interface coverage
+
+---
+
+## Phase 64 — Cloud Storage Backends & Workspace Isolation (Google Docs, Box, Amazon S3)
+
+**Depends on:** Phase 53 (scoped artifact storage — `IArtifactStore` + `IArtifactStoreFactory`), Phase 35 (workspaces), Phase 36 (projects)
+**Relates to:** Phase 47 (workspace backup/export), Phase 38 (per-user auth)
+**Difficulty:** Large
+
+**Goal:** Extend the artifact and workspace storage layer to support cloud backends — Amazon S3, Google Drive/Docs, and Box — as first-class storage providers. Each workspace or project can independently select a storage backend, enabling true multi-tenant isolation where different teams, clients, or projects keep their work areas in separate cloud accounts.
+
+### Motivation
+
+Phase 53 shipped `IArtifactStore` and `IArtifactStoreFactory` with a `LocalArtifactStore` implementation and a factory that recognizes `"local"` as the backend key. The abstraction was explicitly designed for cloud follow-up: `GetAccessUrlAsync` returns presigned URLs for cloud stores and `file://` for local. The `{workspace_id}/{project_id}/{run_id}/` path layout maps directly to S3 prefixes, Google Drive folder hierarchies, and Box folder trees.
+
+What's missing:
+- No cloud `IArtifactStore` implementations exist yet.
+- Workspace/project config doesn't carry a `storage_backend` setting — all tenants share the local filesystem.
+- No document-aware integration (Google Docs, Box Notes) for structured output beyond raw files.
+- No credential management for per-workspace cloud accounts (OAuth flows for Google/Box, IAM roles or access keys for S3).
+
+### Target Architecture
+
+#### Storage Backend Registry
+
+```
+IArtifactStoreFactory
+  ├── "local"    → LocalArtifactStore (existing)
+  ├── "s3"       → S3ArtifactStore (new)
+  ├── "gcs"      → GcsArtifactStore (new, Google Cloud Storage)
+  ├── "gdrive"   → GoogleDriveArtifactStore (new)
+  ├── "box"      → BoxArtifactStore (new)
+  └── "azure"    → AzureBlobArtifactStore (future)
+```
+
+Each backend implements `IArtifactStore`. The factory reads per-workspace config to select the backend. A workspace without explicit config falls back to the global default (`SOVRANT_ARTIFACTS_BACKEND` env var, default `"local"`).
+
+#### Per-Workspace Storage Config
+
+Add `storage_backend` and `storage_config` columns to the `workspaces` table:
+
+```sql
+ALTER TABLE workspaces ADD COLUMN storage_backend TEXT DEFAULT 'local';
+ALTER TABLE workspaces ADD COLUMN storage_config TEXT; -- JSON blob for backend-specific settings
+```
+
+`storage_config` holds backend-specific settings as JSON:
+
+| Backend | `storage_config` schema |
+|---|---|
+| `s3` | `{ "bucket": "sovrant-ws-acme", "region": "us-east-1", "prefix": "artifacts/", "role_arn": "arn:aws:iam::..." }` |
+| `gdrive` | `{ "folder_id": "1abc...", "service_account_key_ref": "cred:gdrive-acme" }` |
+| `box` | `{ "folder_id": "12345", "client_id": "...", "client_secret_ref": "cred:box-acme" }` |
+| `gcs` | `{ "bucket": "sovrant-acme", "prefix": "artifacts/" }` |
+| `local` | `null` (uses default `SOVRANT_ARTIFACTS_ROOT`) |
+
+Credentials are stored via the existing `ICredentialStore` (SQLite `credentials` table, encrypted at rest) — `storage_config` only holds references, never raw secrets.
+
+#### Amazon S3 Backend (`S3ArtifactStore`)
+
+- Uses the AWS SDK for .NET (`AWSSDK.S3`).
+- Bucket per deployment or per workspace (configurable).
+- Object key layout: `{workspace_id}/{project_id}/{run_id}/{relative_path}`.
+- `GetAccessUrlAsync` returns presigned GET URLs with configurable TTL.
+- `WriteAsync` uses multipart upload for files > 5 MB.
+- `DeleteAsync` uses `DeleteObjectsAsync` with batched keys.
+- Supports IAM roles (for EC2/ECS/Lambda), access keys, and assumed roles (for cross-account).
+- `ListAsync` uses `ListObjectsV2` with prefix filtering.
+
+#### Google Drive Backend (`GoogleDriveArtifactStore`)
+
+- Uses the Google Drive API v3 via `Google.Apis.Drive.v3`.
+- Workspace → top-level Drive folder. Projects → subfolders. Runs → leaf folders.
+- `WriteAsync` creates files; for `.md`/`.txt` content, optionally converts to Google Docs format for native editing.
+- `ReadAsync` exports Google Docs back to markdown/plain text.
+- `GetAccessUrlAsync` returns shareable Drive links with domain-scoped ACLs.
+- Auth: OAuth 2.0 consent flow (interactive) or service account key (headless).
+- Supports shared drives (Team Drives) for workspace-level isolation.
+
+#### Box Backend (`BoxArtifactStore`)
+
+- Uses the Box .NET SDK (`Box.V2`).
+- Folder hierarchy mirrors S3 key layout: workspace → project → run → files.
+- `WriteAsync` uploads files; for `.md`/`.txt`, optionally creates Box Notes.
+- `GetAccessUrlAsync` returns shared links with password/expiry.
+- Auth: OAuth 2.0 (user context) or JWT (server-to-server for enterprise).
+- Supports Box metadata templates for tagging artifacts with run context.
+
+#### Google Cloud Storage Backend (`GcsArtifactStore`)
+
+- Uses `Google.Cloud.Storage.V1`.
+- Same prefix layout as S3 (`{workspace_id}/{project_id}/{run_id}/`).
+- `GetAccessUrlAsync` returns signed URLs.
+- Auth: application default credentials, service account key, or workload identity.
+
+### Workspace Isolation Model
+
+```
+Workspace "Acme Corp"
+  ├── storage_backend: "s3"
+  ├── storage_config: { bucket: "acme-sovrant", region: "us-east-1" }
+  ├── Project "Backend API"
+  │     └── runs/ → s3://acme-sovrant/ws-acme/proj-api/{run_id}/
+  └── Project "Mobile App"
+        └── runs/ → s3://acme-sovrant/ws-acme/proj-mobile/{run_id}/
+
+Workspace "Personal"
+  ├── storage_backend: "local"  (default)
+  └── Project "experiments"
+        └── runs/ → ~/.sovrant/artifacts/ws-personal/proj-experiments/{run_id}/
+
+Workspace "Client XYZ"
+  ├── storage_backend: "gdrive"
+  ├── storage_config: { folder_id: "1abc...", service_account_key_ref: "cred:gdrive-xyz" }
+  └── Project "Audit Report"
+        └── runs/ → Google Drive: Client XYZ/Audit Report/{run_id}/
+```
+
+Each workspace is hermetically sealed — artifacts in workspace A are never accessible from workspace B, enforced at the storage backend level (separate buckets, folders, or credentials).
+
+### API Surface
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `PUT /v1/workspaces/{id}/storage` | PUT | Configure storage backend for a workspace (admin only) |
+| `GET /v1/workspaces/{id}/storage` | GET | Read current storage config (redacted credentials) |
+| `POST /v1/workspaces/{id}/storage/test` | POST | Verify connectivity to the configured backend |
+| `POST /v1/workspaces/{id}/storage/migrate` | POST | Migrate artifacts from one backend to another |
+
+### Implementation Plan
+
+1. **Database migration (V013)** — add `storage_backend` + `storage_config` columns to `workspaces`.
+2. **Scoped factory** — `IArtifactStoreFactory.Create(string backend, string? configJson)` overload that accepts backend-specific config. `DefaultArtifactStoreFactory` dispatches to the correct implementation.
+3. **S3 backend** — `S3ArtifactStore` in `Sovrant.Runtime.Artifacts.Cloud`. New NuGet: `AWSSDK.S3`.
+4. **Google Drive backend** — `GoogleDriveArtifactStore`. New NuGet: `Google.Apis.Drive.v3`.
+5. **Box backend** — `BoxArtifactStore`. New NuGet: `Box.V2`.
+6. **GCS backend** — `GcsArtifactStore`. New NuGet: `Google.Cloud.Storage.V1`.
+7. **Storage routes** — `PUT/GET /v1/workspaces/{id}/storage` in `WorkspaceRoutes`.
+8. **Migration tool** — `POST /v1/workspaces/{id}/storage/migrate` streams artifacts from source to destination backend.
+9. **Tests** — integration tests with mocked cloud SDK clients; contract tests verifying all backends produce identical behavior for the `IArtifactStore` interface.
+
+### Acceptance Criteria
+
+- [ ] `IArtifactStoreFactory.Create("s3", configJson)` returns a working `S3ArtifactStore`
+- [ ] `IArtifactStoreFactory.Create("gdrive", configJson)` returns a working `GoogleDriveArtifactStore`
+- [ ] `IArtifactStoreFactory.Create("box", configJson)` returns a working `BoxArtifactStore`
+- [ ] Workspace storage config persisted in SQLite, credentials stored via `ICredentialStore`
+- [ ] `PUT /v1/workspaces/{id}/storage` configures backend; `POST .../test` verifies connectivity
+- [ ] Artifacts written by agents in workspace A are stored in workspace A's configured backend
+- [ ] Artifacts in workspace B are unreachable from workspace A (isolation verified by test)
+- [ ] Migration endpoint copies all artifacts from one backend to another without data loss
+- [ ] `LocalArtifactStore` remains the default — no cloud dependency for single-user/self-hosted deployments
+- [ ] All existing tests continue to pass (cloud backends do not affect local-only code paths)

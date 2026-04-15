@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Commands;
 using Sovrant.Desktop.Adapters;
+using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Session;
 
@@ -17,6 +18,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private readonly SlashCommandDispatcher _commandDispatcher;
     private readonly DesktopConfirmationHandler? _confirmationHandler;
     private readonly ActiveContextViewModel _activeContext;
+    private readonly SovrantConfig _config;
 
     [ObservableProperty]
     private string _sessionId;
@@ -50,6 +52,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     public ChatViewModel(IRuntimeSessionPool sessionPool, ISessionStore sessionStore,
         SlashCommandDispatcher commandDispatcher, ActiveContextViewModel activeContext,
+        SovrantConfig config,
         DesktopConfirmationHandler? confirmationHandler = null)
     {
         _sessionPool = sessionPool;
@@ -57,6 +60,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         _commandDispatcher = commandDispatcher;
         _confirmationHandler = confirmationHandler;
         _activeContext = activeContext;
+        _config = config;
         _sessionId = $"session-{Guid.NewGuid():N}";
 
         if (_confirmationHandler is not null)
@@ -185,7 +189,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
         // Add user message only if not already added (slash command inject path).
         // Phase I (R2-M14): ensure collection mutations happen on the UI thread.
-        var assistantMsg = new MessageViewModel { Role = "assistant" };
+        var assistantMsg = new MessageViewModel { Role = "assistant", ModelName = _config.Model };
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             if (Messages.Count == 0 || Messages[^1].Role != "user" || Messages[^1].Text != text)
@@ -340,6 +344,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     {
         switch (ev)
         {
+            case RuntimeEvent.ModelSelected { Model: var model, ProviderName: var prov }:
+                msg.ModelName = model;
+                msg.ProviderName = prov;
+                break;
+
             case RuntimeEvent.TextChunk { Text: var chunk }:
                 msg.AppendText(chunk);
                 break;
@@ -354,6 +363,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
             case RuntimeEvent.TurnComplete t:
                 TokenCount += t.InputTokens + t.OutputTokens;
+                msg.ModelName = t.Model;
+                msg.ProviderName = t.ProviderName;
                 msg.CompleteStreaming();
                 break;
 

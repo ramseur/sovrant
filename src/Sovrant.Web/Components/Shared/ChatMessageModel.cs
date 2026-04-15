@@ -26,6 +26,35 @@ public sealed class ChatMessageModel
     private int _completedToolCount;
     public List<ToolUseModel> ToolUses { get; } = [];
 
+    /// <summary>The model that generated this response.</summary>
+    public string? ModelName { get; set; }
+
+    /// <summary>The provider that served this response.</summary>
+    public string? ProviderName { get; set; }
+
+    /// <summary>
+    /// Display label for the message sender. Shows "Provider · model" for assistant
+    /// messages once the turn completes, falls back to "Sovrant" while streaming.
+    /// </summary>
+    public string SenderLabel
+    {
+        get
+        {
+            if (Role == "user") return "You";
+            if (ProviderName is not null && ModelName is not null)
+                return $"{ProviderName} · {FormatModelName(ModelName)}";
+            if (ModelName is not null)
+                return FormatModelName(ModelName);
+            return "Sovrant";
+        }
+    }
+
+    private static string FormatModelName(string model)
+    {
+        var slash = model.LastIndexOf('/');
+        return slash >= 0 ? model[(slash + 1)..] : model;
+    }
+
     // ── Phase 59 properties ─────────────────────────────────────────────
 
     /// <summary>Phase 59a — clarification question from the intent gate.</summary>
