@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 using Sovrant.Agents.Swarm;
 using Sovrant.Runtime.Storage;
 using Sovrant.Server.Middleware;
@@ -82,13 +83,16 @@ internal static class SwarmRoutes
                 ProjectId: ctx.Request.Headers["X-Project-Id"].FirstOrDefault());
 
             // Execute with SSE streaming
+            var logger = ctx.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("Sovrant.Server.SwarmRoutes");
             var result = await orchestrator.ExecuteAsync(plan, config, onEvent: evt =>
             {
-                // Fire-and-forget SSE write — catch exceptions to prevent unobserved task faults.
-                _ = WriteSseEventAsync(ctx.Response, evt.GetType().Name, evt, CancellationToken.None)
-                    .ContinueWith(static t =>
+                // Phase I (9.4): SSE write is fire-and-forget because onEvent is sync.
+                // Log failures (typically client disconnect) instead of silently swallowing.
+                _ = WriteSseEventAsync(ctx.Response, evt.GetType().Name, evt, ct)
+                    .ContinueWith(t =>
                     {
-                        if (t.IsFaulted) _ = t.Exception;
+                        if (t.IsFaulted)
+                            logger?.LogDebug(t.Exception?.InnerException, "SSE write failed (client likely disconnected)");
                     }, TaskScheduler.Default);
             }, executionContext: swarmContext, ct: ct);
 

@@ -864,16 +864,16 @@ foreach (var key in keysToRemove) _fileLocks.TryRemove(key, out _);
 | 9.13 | SwarmOrchestrator semaphore leak | Medium | Resource exhaustion under errors | ✅ Already fixed (try/finally per-task) |
 | 9.10 | Blocking `.GetAwaiter().GetResult()` | Medium | Thread starvation, deadlocks | ✅ Fixed — 4 blocking calls converted to async (McpServerSetup, ArtifactsCommand, Integrations.razor, OpenRouterCostModel) |
 
-### Phase I — Server Hardening
+### Phase I — Server Hardening ✅ COMPLETE
 
-| # | Issue | Effort | Risk if Unfixed |
-|---|-------|--------|-----------------|
-| 9.1 | ETagMiddleware response buffering | Low | Memory exhaustion on streaming |
-| 9.2 | SSRF DNS rebinding gap | Medium | Internal endpoint probing via DNS |
-| 9.3 | Missing model validation in Session/Webhook routes | Low | Invalid model names persisted |
-| 9.4 | Fire-and-forget SSE writes | Low | Silent data loss |
-| 9.5 | SessionEviction missing cancellation | Low | Delayed shutdown |
-| R2-M1 | Kestrel request size limits | Low | DoS amplification |
+| # | Issue | Effort | Risk if Unfixed | Status |
+|---|-------|--------|-----------------|--------|
+| 9.1 | ETagMiddleware response buffering | Low | Memory exhaustion on streaming | ✅ Already fixed (CacheablePrefixes allow-list excludes streaming) |
+| 9.2 | SSRF DNS rebinding gap | Medium | Internal endpoint probing via DNS | ✅ Already fixed (DNS resolved, all IPs checked against IsReservedIp) |
+| 9.3 | Missing model validation in Session/Webhook routes | Low | Invalid model names persisted | ✅ Already fixed (IsValidModelName called in both routes) |
+| 9.4 | Fire-and-forget SSE writes | Low | Silent data loss | ✅ Fixed — added logging on SSE write failure, pass cancellation token |
+| 9.5 | SessionEviction missing cancellation | Low | Delayed shutdown | ✅ Not needed — EvictExpired is sync in-memory, completes instantly |
+| R2-M1 | Kestrel request size limits | Low | DoS amplification | ✅ Already fixed (10MB body, 16KB request line) |
 
 ### Phase J — SDK & Hook Fixes
 
