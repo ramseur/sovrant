@@ -875,28 +875,28 @@ foreach (var key in keysToRemove) _fileLocks.TryRemove(key, out _);
 | 9.5 | SessionEviction missing cancellation | Low | Delayed shutdown | ✅ Not needed — EvictExpired is sync in-memory, completes instantly |
 | R2-M1 | Kestrel request size limits | Low | DoS amplification | ✅ Already fixed (10MB body, 16KB request line) |
 
-### Phase J — SDK & Hook Fixes
+### Phase J — SDK & Hook Fixes ✅ COMPLETE
 
-| # | Issue | Effort | Risk if Unfixed |
-|---|-------|--------|-----------------|
-| 8.8 | useChat stale client | Medium | **Stale credentials/config in multi-tenant** |
-| 8.9 | SSE silent chunk loss | Low | Invisible data loss |
-| 9.14 | Callback exceptions crash stream | Low | Partial responses |
-| 9.15 | useCallback dependency array | Low | Stale closure bugs |
-| 9.16 | MCP incomplete exception handling | Low | Server crash on unexpected errors |
-| 9.20 | Message ID collision | Low | React key conflicts |
+| # | Issue | Effort | Risk if Unfixed | Status |
+|---|-------|--------|-----------------|--------|
+| 8.8 | useChat stale client | Medium | **Stale credentials/config in multi-tenant** | ✅ Already fixed (useEffect recreates client on options change) |
+| 8.9 | SSE silent chunk loss | Low | Invisible data loss | ✅ Already fixed (onParseError callback added) |
+| 9.14 | Callback exceptions crash stream | Low | Partial responses | ✅ Already fixed (callbacks wrapped in try-catch) |
+| 9.15 | useCallback dependency array | Low | Stale closure bugs | ✅ Already fixed (options in deps; clientRef is a ref — correct React pattern) |
+| 9.16 | MCP incomplete exception handling | Low | Server crash on unexpected errors | ✅ Already fixed (catch-all Exception handler in CallToolAsync) |
+| 9.20 | Message ID collision | Low | React key conflicts | ✅ Already fixed (crypto.randomUUID with Date.now fallback) |
 
-### Phase K — Remaining Medium/Low Items
+### Phase K — Remaining Medium/Low Items ✅ COMPLETE
 
-| # | Issue | Effort | Risk if Unfixed |
-|---|-------|--------|-----------------|
-| 9.6 | JsonDocument disposal paths | Low | Memory pressure |
-| 9.7-9.8 | Volatile misuse, unsafe deserialization | Medium | Thread safety, type confusion |
-| 9.9 | HttpClient singleton in McpOAuth | Low | Socket exhaustion |
-| 9.11 | Hook fire-and-forget exceptions | Low | Unobserved failures |
-| 9.18 | SwarmToolExecutor path traversal | Low | File access outside sandbox |
-| R2-M series | Remaining medium items | Low each | Various |
-| R2-L series | Low items | Low each | Polish |
+| # | Issue | Effort | Risk if Unfixed | Status |
+|---|-------|--------|-----------------|--------|
+| 9.6 | JsonDocument disposal paths | Low | Memory pressure | ✅ Already fixed (all using blocks, no early-return leaks) |
+| 9.7-9.8 | Volatile misuse, unsafe deserialization | Medium | Thread safety, type confusion | ✅ Already fixed (volatile appropriate for simple ref; deserialization uses controlled types) |
+| 9.9 | HttpClient singleton in McpOAuth | Low | Socket exhaustion | ✅ Already fixed (IHttpClientFactory with named "McpOAuth" client) |
+| 9.11 | Hook fire-and-forget exceptions | Low | Unobserved failures | ✅ Already fixed (ContinueWith observes exceptions) |
+| 9.18 | SwarmToolExecutor path traversal | Low | File access outside sandbox | ✅ Already fixed (Path.GetFullPath containment check) |
+| R2-M series | Remaining medium items | Low each | Various | ✅ All verified — timeout, validation, dispatcher, cleanup all fixed |
+| R2-L series | Low items | Low each | Polish | ✅ Minor items — no code changes needed |
 
 ---
 

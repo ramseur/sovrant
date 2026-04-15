@@ -111,7 +111,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private async Task HandleSlashCommandAsync(string text, CancellationToken ct)
     {
         HasMessages = true;
-        Messages.Add(new MessageViewModel { Role = "user", Text = text });
+        await Dispatcher.UIThread.InvokeAsync(() =>
+            Messages.Add(new MessageViewModel { Role = "user", Text = text }));
 
         try
         {
@@ -183,13 +184,17 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         var isFirstMessage = Messages.All(m => m.Role != "user");
 
         // Add user message only if not already added (slash command inject path).
-        if (Messages.Count == 0 || Messages[^1].Role != "user" || Messages[^1].Text != text)
-            Messages.Add(new MessageViewModel { Role = "user", Text = text });
-
-        // Add assistant placeholder with thinking indicator.
+        // Phase I (R2-M14): ensure collection mutations happen on the UI thread.
         var assistantMsg = new MessageViewModel { Role = "assistant" };
-        assistantMsg.StartThinking();
-        Messages.Add(assistantMsg);
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            if (Messages.Count == 0 || Messages[^1].Role != "user" || Messages[^1].Text != text)
+                Messages.Add(new MessageViewModel { Role = "user", Text = text });
+
+            // Add assistant placeholder with thinking indicator.
+            assistantMsg.StartThinking();
+            Messages.Add(assistantMsg);
+        });
 
         try
         {
