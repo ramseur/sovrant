@@ -92,11 +92,12 @@
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
     };
 
-    protected override void OnInitialized() => LoadServers();
+    protected override async Task OnInitializedAsync() => await LoadServersAsync().ConfigureAwait(false);
 
-    private void LoadServers()
+    private async Task LoadServersAsync()
     {
-        _servers = Config.McpServers.Select(kv =>
+        var servers = new List<ServerView>();
+        foreach (var kv in Config.McpServers)
         {
             var isConnected = McpRegistry.Clients.ContainsKey(kv.Key);
             var toolCount = 0;
@@ -106,21 +107,22 @@
                 try
                 {
                     var client = McpRegistry.Clients[kv.Key];
-                    var tools = client.ListToolsAsync().GetAwaiter().GetResult();
+                    var tools = await client.ListToolsAsync().ConfigureAwait(false);
                     toolCount = tools.Count;
                     toolNames = string.Join(", ", tools.Select(t => t.Name).Take(10));
                     if (tools.Count > 10) toolNames += $" +{tools.Count - 10} more";
                 }
                 catch { /* best effort */ }
             }
-            return new ServerView
+            servers.Add(new ServerView
             {
                 Name = kv.Key, Command = kv.Value.Command,
                 Args = kv.Value.Args.ToList(), IsConnected = isConnected,
                 ToolCount = toolCount, ToolNames = toolNames,
                 EnvVars = kv.Value.Env.ToDictionary(e => e.Key, e => e.Value),
-            };
-        }).ToList();
+            });
+        }
+        _servers = servers;
     }
 
     private async Task AddServerAsync()

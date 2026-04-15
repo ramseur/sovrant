@@ -85,7 +85,7 @@ public static class McpServerSetup
             .WithListPromptsHandler((_, _) => new ValueTask<ListPromptsResult>(ListPromptsSync()))
             .WithGetPromptHandler((context, _) => new ValueTask<GetPromptResult>(GetPromptSync(context.Params!)))
             // Completions
-            .WithCompleteHandler((context, ct) => new ValueTask<CompleteResult>(CompleteAsync(context.Services!, context.Params!, ct)))
+            .WithCompleteHandler(async (context, ct) => await CompleteAsync(context.Services!, context.Params!, ct).ConfigureAwait(false))
             // Logging
             .WithSetLoggingLevelHandler((context, _) => new ValueTask<EmptyResult>(SetLoggingLevel(context.Services!, context.Params!)))
             // Resource subscriptions
@@ -442,12 +442,11 @@ public static class McpServerSetup
 
     // ── Completions ──────────────────────────────────────────────────────────
 
-    private static CompleteResult CompleteAsync(
+    private static async Task<CompleteResult> CompleteAsync(
         IServiceProvider services,
         CompleteRequestParams requestParams,
         CancellationToken ct)
     {
-        _ = ct;
         var argument = requestParams.Argument;
         var argName = argument.Name;
         var argValue = argument.Value ?? string.Empty;
@@ -459,8 +458,7 @@ public static class McpServerSetup
             if (store is not null)
             {
                 var ownerUserId = GetOwnerUserId();
-                // Use a synchronous list — session store ListAsync is fast (file-based).
-                var sessions = store.ListAsync(ownerUserId, CancellationToken.None).GetAwaiter().GetResult();
+                var sessions = await store.ListAsync(ownerUserId, ct).ConfigureAwait(false);
                 var matching = sessions
                     .Where(s => s.StartsWith(argValue, StringComparison.OrdinalIgnoreCase))
                     .Take(20)

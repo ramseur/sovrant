@@ -119,6 +119,12 @@ public sealed partial class OpenRouterPricingClient : IDisposable
         }
     }
 
+    /// <summary>
+    /// Returns the in-memory cached snapshot if available, or <c>null</c> if not yet loaded.
+    /// Non-blocking — use this from sync callers to avoid <c>.GetAwaiter().GetResult()</c>.
+    /// </summary>
+    public PricingSnapshot? CachedSnapshot => _memoryCache;
+
     /// <summary>The source label for the last successfully loaded snapshot.</summary>
     public string LastSource => _memoryCache?.Source ?? "none";
 

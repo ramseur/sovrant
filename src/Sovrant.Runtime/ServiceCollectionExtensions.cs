@@ -295,6 +295,11 @@ public static class ServiceCollectionExtensions
         var metadataFetcher = services.GetRequiredService<Sovrant.Api.Capabilities.LiveModelMetadataFetcher>();
         await metadataFetcher.FetchAsync(ct).ConfigureAwait(false);
 
+        // Warm the pricing cache so sync EstimateCost calls don't block (Phase H / 9.10).
+        var pricingClient = services.GetService<Sovrant.Runtime.Metrics.OpenRouterPricingClient>();
+        if (pricingClient is not null)
+            await pricingClient.GetSnapshotAsync(ct).ConfigureAwait(false);
+
         // Rebuild tier assignments now that live metadata is available (Phase 48).
         var tierResolver = services.GetService<Sovrant.Api.Routing.IModelTierResolver>();
         tierResolver?.Rebuild();

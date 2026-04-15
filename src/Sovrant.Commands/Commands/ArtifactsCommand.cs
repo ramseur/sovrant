@@ -31,7 +31,7 @@ public sealed class ArtifactsCommand : ISlashCommand
         return parts[0] switch
         {
             "ls" or "list" => await ListArtifacts(parts[1..], ct).ConfigureAwait(false),
-            "open" => parts.Length > 1 ? OpenArtifact(parts[1]) : Err("usage: /artifacts open <run_id>"),
+            "open" => parts.Length > 1 ? await OpenArtifactAsync(parts[1], ct).ConfigureAwait(false) : Err("usage: /artifacts open <run_id>"),
             "rm" or "delete" => parts.Length > 1
                 ? await DeleteArtifacts(parts[1], ct).ConfigureAwait(false)
                 : Err("usage: /artifacts rm <run_id>"),
@@ -69,10 +69,10 @@ public sealed class ArtifactsCommand : ISlashCommand
         return new SlashCommandResult(sb.ToString());
     }
 
-    private SlashCommandResult OpenArtifact(string runId)
+    private async Task<SlashCommandResult> OpenArtifactAsync(string runId, CancellationToken ct)
     {
         var scope = new ArtifactScope { RunId = runId };
-        var handle = _store.CreateRunScopeAsync(scope).GetAwaiter().GetResult();
+        var handle = await _store.CreateRunScopeAsync(scope, ct).ConfigureAwait(false);
         var path = handle.Location;
 
         if (!Directory.Exists(path))

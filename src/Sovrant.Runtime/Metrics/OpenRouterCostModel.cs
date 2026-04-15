@@ -27,9 +27,9 @@ public sealed class OpenRouterCostModel : ICostModel
         if (openRouterId is null)
             return null;
 
-        // GetSnapshotAsync is async but we need a sync path here.
-        // The snapshot is already in memory after the first call — this blocks only on the first invocation.
-        var snapshot = _pricingClient.GetSnapshotAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+        // Use the non-blocking cached snapshot. Returns null if not yet loaded
+        // (runtime initialization warms the cache via GetSnapshotAsync at startup).
+        var snapshot = _pricingClient.CachedSnapshot;
         if (snapshot is null)
             return null;
 

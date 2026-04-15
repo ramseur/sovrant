@@ -852,17 +852,17 @@ foreach (var key in keysToRemove) _fileLocks.TryRemove(key, out _);
 | 9.17 | MCP config resource info disclosure | Low | Internal config leaked to clients | ✅ Fixed — sovrant://config resource removed from MCP |
 | 9.19 | API key can be set to empty via PUT | Low | All LLM calls break server-wide | ✅ Already fixed (empty/whitespace validation in place) |
 
-### Phase H — Concurrency & Stability
+### Phase H — Concurrency & Stability ✅ COMPLETE
 
-| # | Issue | Effort | Risk if Unfixed |
-|---|-------|--------|-----------------|
-| 8.5 | ProviderInfo non-atomic state updates | Medium | Lost metrics, incorrect routing decisions |
-| 8.6 | SmartRouter blocking dispose | Low | Deadlock on shutdown |
-| 8.7 | Unhandled fire-and-forget exceptions | Low | Process crash on background task failure |
-| 8.10 | ShellEnvironment null dereference | Low | NullReferenceException on failed process start |
-| 9.12 | SwarmFileLockManager race | Low | Incorrect lock state |
-| 9.13 | SwarmOrchestrator semaphore leak | Medium | Resource exhaustion under errors |
-| 9.10 | Blocking `.GetAwaiter().GetResult()` | Medium | Thread starvation, deadlocks |
+| # | Issue | Effort | Risk if Unfixed | Status |
+|---|-------|--------|-----------------|--------|
+| 8.5 | ProviderInfo non-atomic state updates | Medium | Lost metrics, incorrect routing decisions | ✅ Already fixed (Interlocked + lock) |
+| 8.6 | SmartRouter blocking dispose | Low | Deadlock on shutdown | ✅ Already fixed (IAsyncDisposable with timeout) |
+| 8.7 | Unhandled fire-and-forget exceptions | Low | Process crash on background task failure | ✅ Already fixed (try-catch in all paths) |
+| 8.10 | ShellEnvironment null dereference | Low | NullReferenceException on failed process start | ✅ Already fixed (null check on Process.Start) |
+| 9.12 | SwarmFileLockManager race | Low | Incorrect lock state | ✅ Already fixed (snapshot keys with ToList) |
+| 9.13 | SwarmOrchestrator semaphore leak | Medium | Resource exhaustion under errors | ✅ Already fixed (try/finally per-task) |
+| 9.10 | Blocking `.GetAwaiter().GetResult()` | Medium | Thread starvation, deadlocks | ✅ Fixed — 4 blocking calls converted to async (McpServerSetup, ArtifactsCommand, Integrations.razor, OpenRouterCostModel) |
 
 ### Phase I — Server Hardening
 
