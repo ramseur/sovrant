@@ -842,15 +842,15 @@ foreach (var key in keysToRemove) _fileLocks.TryRemove(key, out _);
 
 ## 12. Recommended Fix Order (Round 2)
 
-### Phase G — Critical Security & Data Exposure (do first)
+### Phase G — Critical Security & Data Exposure (do first) ✅ COMPLETE
 
-| # | Issue | Effort | Risk if Unfixed |
-|---|-------|--------|-----------------|
-| 8.1 | MCP `ownerUserId: null` data exposure | Medium | **Any MCP client reads all users' conversations** |
-| 8.2 | ProjectRoutes missing authorization | Medium | **Unauthorized project manipulation** |
-| 8.3-8.4 | Worktree tool command injection | Low | Arbitrary code execution via git args |
-| 9.17 | MCP config resource info disclosure | Low | Internal config leaked to clients |
-| 9.19 | API key can be set to empty via PUT | Low | All LLM calls break server-wide |
+| # | Issue | Effort | Risk if Unfixed | Status |
+|---|-------|--------|-----------------|--------|
+| 8.1 | MCP `ownerUserId: null` data exposure | Medium | **Any MCP client reads all users' conversations** | ✅ Already fixed (ownerUserId resolved via GetOwnerUserId) |
+| 8.2 | ProjectRoutes missing authorization | Medium | **Unauthorized project manipulation** | ✅ Fixed — ListProjects/CreateProject now require workspace membership |
+| 8.3-8.4 | Worktree tool command injection | Low | Arbitrary code execution via git args | ✅ Already fixed (ArgumentList used, not string concat) |
+| 9.17 | MCP config resource info disclosure | Low | Internal config leaked to clients | ✅ Fixed — sovrant://config resource removed from MCP |
+| 9.19 | API key can be set to empty via PUT | Low | All LLM calls break server-wide | ✅ Already fixed (empty/whitespace validation in place) |
 
 ### Phase H — Concurrency & Stability
 

@@ -4,6 +4,8 @@ using Sovrant.Runtime.Workspaces;
 using Sovrant.Server.Auth;
 using Sovrant.Server.Middleware;
 
+// Phase G (8.2) — added workspace-level auth checks to ListProjects and CreateProject.
+
 namespace Sovrant.Server.Routes;
 
 /// <summary>Registers project management endpoints (Phase 36).</summary>
@@ -40,19 +42,25 @@ internal static class ProjectRoutes
     // ── Workspace-scoped ───────────────────────────────────────────────────
 
     private static async Task<IResult> ListProjects(
-        string wid, bool? includeArchived, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string wid, bool? includeArchived,
+        IProjectService svc, IWorkspaceService wsSvc, CancellationToken ct)
     {
         if (!InputValidation.IsValidResourceId(wid))
             return Results.BadRequest(new { error = "Invalid workspace ID format." });
+        var deny = await RequireWorkspaceAccess(ctx, wid, wsSvc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
         var projects = await svc.ListAsync(wid, includeArchived ?? false, ct).ConfigureAwait(false);
         return Results.Ok(new { projects });
     }
 
     private static async Task<IResult> CreateProject(
-        string wid, CreateProjectRequest req, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string wid, CreateProjectRequest req,
+        IProjectService svc, IWorkspaceService wsSvc, CancellationToken ct)
     {
         if (!InputValidation.IsValidResourceId(wid))
             return Results.BadRequest(new { error = "Invalid workspace ID format." });
+        var deny = await RequireWorkspaceAccess(ctx, wid, wsSvc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
         ArgumentNullException.ThrowIfNull(req);
         if (string.IsNullOrWhiteSpace(req.Name))
             return Results.BadRequest(new { error = "Name is required." });
@@ -82,6 +90,20 @@ internal static class ProjectRoutes
         if (ctx.IsAdmin()) return null; // admin — always allowed
         var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
         if (!await svc.HasAccessAsync(projectId, userId, ct).ConfigureAwait(false))
+            return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
+        return null;
+    }
+
+    /// <summary>
+    /// Verifies the caller has access to the given workspace. Admins always pass;
+    /// non-admin callers must be a workspace member.
+    /// </summary>
+    private static async Task<IResult?> RequireWorkspaceAccess(
+        HttpContext ctx, string workspaceId, IWorkspaceService wsSvc, CancellationToken ct)
+    {
+        if (ctx.IsAdmin()) return null;
+        var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
+        if (!await wsSvc.IsMemberAsync(workspaceId, userId, ct).ConfigureAwait(false))
             return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
         return null;
     }

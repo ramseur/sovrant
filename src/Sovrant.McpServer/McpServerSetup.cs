@@ -1,11 +1,9 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
-using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Tools;
 
@@ -198,13 +196,8 @@ public static class McpServerSetup
                 Description = "Session IDs owned by the current user.",
                 MimeType = "application/json",
             },
-            new()
-            {
-                Uri = "sovrant://config",
-                Name = "Server configuration",
-                Description = "Current Sovrant runtime configuration (credentials redacted).",
-                MimeType = "application/json",
-            },
+            // Phase G (9.17): sovrant://config removed — exposed internal configuration
+            // (model selection, provider URLs, permission modes) to any MCP client.
         };
 
         return new ListResourcesResult { Resources = resources };
@@ -229,26 +222,8 @@ public static class McpServerSetup
             };
         }
 
-        if (string.Equals(uri, "sovrant://config", StringComparison.Ordinal))
-        {
-            var config = services.GetRequiredService<SovrantConfig>();
-            var json = JsonSerializer.Serialize(config, s_jsonOptions);
-            // Redact credential fields before exposing via MCP.
-            var node = JsonNode.Parse(json);
-            if (node is JsonObject obj)
-            {
-                foreach (var key in new[] { "api_key", "llm_api_key" })
-                {
-                    if (obj.ContainsKey(key))
-                        obj[key] = "***";
-                }
-                json = obj.ToJsonString(s_jsonOptions);
-            }
-            return new ReadResourceResult
-            {
-                Contents = [new TextResourceContents { Uri = uri, MimeType = "application/json", Text = json }],
-            };
-        }
+        // Phase G (9.17): sovrant://config resource removed — was exposing internal
+        // configuration (model, provider URLs, permission modes) to any MCP client.
 
         // sovrant://sessions/{id}
         const string sessionsPrefix = "sovrant://sessions/";
