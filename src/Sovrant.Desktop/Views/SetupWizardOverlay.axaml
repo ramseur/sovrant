@@ -31,10 +31,12 @@
                                FontSize="22" FontWeight="Bold"
                                Foreground="{DynamicResource TextPrimary}"
                                HorizontalAlignment="Center" />
-                    <TextBlock Text="Configure your LLM provider to get started."
+                    <TextBlock Text="Connect a provider to get started. You can switch models anytime from the sidebar."
                                FontSize="13"
                                Foreground="{DynamicResource TextSecondary}"
-                               HorizontalAlignment="Center" />
+                               HorizontalAlignment="Center"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center" />
                 </StackPanel>
 
                 <!-- Provider selector -->
@@ -59,32 +61,6 @@
                              Padding="10,8" />
                 </StackPanel>
 
-                <!-- Model dropdown -->
-                <StackPanel Spacing="4">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Right"
-                                   Text="Loading models..."
-                                   FontSize="10"
-                                   Foreground="{DynamicResource TextMuted}"
-                                   VerticalAlignment="Center"
-                                   IsVisible="{Binding IsLoadingModels}" />
-                        <TextBlock Text="Model" FontSize="12" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextSecondary}" />
-                    </DockPanel>
-                    <AutoCompleteBox x:Name="ModelBox"
-                                    ItemsSource="{Binding AvailableModels}"
-                                    Text="{Binding SelectedModel, Mode=TwoWay}"
-                                    Watermark="Click to browse or type to search..."
-                                    FilterMode="ContainsOrdinal"
-                                    IsTextCompletionEnabled="False"
-                                    MinimumPrefixLength="0"
-                                    MinimumPopulateDelay="0"
-                                    CornerRadius="8"
-                                    Padding="10,8"
-                                    FontSize="13"
-                                    MaxDropDownHeight="300" />
-                </StackPanel>
-
                 <!-- Base URL (auto-filled) -->
                 <StackPanel Spacing="4">
                     <TextBlock Text="Base URL" FontSize="12" FontWeight="SemiBold"
@@ -94,7 +70,7 @@
                              CornerRadius="8"
                              Padding="10,8"
                              FontSize="12" />
-                    <TextBlock Text="Auto-filled when you select a known provider. Override for custom endpoints."
+                    <TextBlock Text="Auto-filled when you select a known provider. Edit for custom endpoints."
                                FontSize="10"
                                Foreground="{DynamicResource TextMuted}" />
                 </StackPanel>
@@ -117,7 +93,7 @@
                         FontSize="14"
                         IsEnabled="{Binding !IsSaving}" />
 
-                <TextBlock Text="You can change these settings later in ⚙ Settings."
+                <TextBlock Text="You can add more providers and switch models from the sidebar."
                            FontSize="11"
                            Foreground="{DynamicResource TextMuted}"
                            HorizontalAlignment="Center" />

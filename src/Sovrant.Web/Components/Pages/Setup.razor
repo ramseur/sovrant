@@ -8,7 +8,7 @@
     <div class="setup-card">
         <div class="setup-icon">&#9889;</div>
         <h1>Welcome to Sovrant</h1>
-        <p class="text-secondary">Configure your AI provider to get started.</p>
+        <p class="text-secondary">Connect a provider to get started. You can switch models anytime from the sidebar.</p>
 
         <form autocomplete="off" @onsubmit:preventDefault>
         <div class="form-field">
@@ -27,22 +27,9 @@
         </div>
 
         <div class="form-field">
-            <label>Model</label>
-            <div class="input-group">
-                <input type="text" list="setup-models" @bind="_model" placeholder="Select or type a model..." />
-                <button class="input-addon" @onclick="RefreshModels" title="Refresh">&#8635;</button>
-            </div>
-            <datalist id="setup-models">
-                @foreach (var m in _availableModels)
-                {
-                    <option value="@m" />
-                }
-            </datalist>
-        </div>
-
-        <div class="form-field">
             <label>Base URL</label>
             <input type="text" @bind="_baseUrl" placeholder="Auto-filled from provider" />
+            <span class="text-muted text-sm">Auto-filled when you select a provider. Edit for custom endpoints.</span>
         </div>
 
         <button class="btn-primary" @onclick="SaveAsync" disabled="@_saving">
@@ -61,18 +48,17 @@
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private SovrantConfig Config { get; set; } = default!;
     [Inject] private MutableAuthProvider AuthProvider { get; set; } = default!;
-    [Inject] private IHttpClientFactory HttpFactory { get; set; } = default!;
 
     private string _provider = "OpenAI";
     private string _apiKey = string.Empty;
-    private string _model = "gpt-4o";
     private string _baseUrl = "https://api.openai.com/v1";
     private string _status = string.Empty;
     private bool _saving;
-    private List<string> _availableModels = [];
 
     private static readonly string SettingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".sovrant", "settings.json");
+    private static readonly string ProfilesPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".sovrant", "providers.json");
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -98,12 +84,17 @@
         ["Custom"] = "",
     };
 
-    private static readonly Dictionary<string, string[]> StaticModels = new(StringComparer.Ordinal)
+    // Default model per provider — used as initial model when none is configured yet.
+    private static readonly Dictionary<string, string> DefaultModels = new(StringComparer.Ordinal)
     {
-        ["OpenAI"] = ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o4-mini", "o3", "o3-mini"],
-        ["DeepSeek"] = ["deepseek-chat", "deepseek-reasoner"],
-        ["Groq"] = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
-        ["Google"] = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"],
+        ["OpenAI"] = "gpt-4o",
+        ["OpenRouter"] = "google/gemma-4-27b-it:free",
+        ["DeepSeek"] = "deepseek-chat",
+        ["Groq"] = "llama-3.3-70b-versatile",
+        ["Mistral"] = "mistral-large-latest",
+        ["Together AI"] = "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        ["Google"] = "gemini-2.5-flash",
+        ["Azure OpenAI"] = "gpt-4o",
     };
 
     protected override void OnInitialized()
@@ -113,73 +104,73 @@
             Nav.NavigateTo("/");
             return;
         }
-        LoadModels();
     }
 
     private void OnProviderChanged()
     {
         if (ProviderBaseUrls.TryGetValue(_provider, out var url))
             _baseUrl = url;
-        LoadModels();
-    }
-
-    private void LoadModels()
-    {
-        _availableModels = StaticModels.TryGetValue(_provider, out var models)
-            ? [.. models] : [];
-    }
-
-    private async Task RefreshModels()
-    {
-        if (string.IsNullOrWhiteSpace(_apiKey) || string.IsNullOrWhiteSpace(_baseUrl)) return;
-        try
-        {
-            using var http = HttpFactory.CreateClient("ProviderProbe");
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
-            var modelsUrl = _baseUrl.TrimEnd('/') + "/models";
-            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(modelsUrl));
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey.Trim());
-            var response = await http.SendAsync(request, cts.Token);
-            if (response.IsSuccessStatusCode)
-            {
-                using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
-                using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
-                var fetched = new List<string>();
-                if (doc.RootElement.TryGetProperty("data", out var data))
-                    foreach (var item in data.EnumerateArray())
-                        if (item.TryGetProperty("id", out var id) && id.GetString() is { } modelId)
-                            fetched.Add(modelId);
-                fetched.Sort(StringComparer.OrdinalIgnoreCase);
-                if (fetched.Count > 0) _availableModels = fetched;
-            }
-        }
-        catch { /* keep static list */ }
     }
 
     private async Task SaveAsync()
     {
         if (string.IsNullOrWhiteSpace(_apiKey)) { _status = "API key is required."; return; }
-        if (string.IsNullOrWhiteSpace(_model)) { _status = "Model is required."; return; }
         _saving = true;
         _status = string.Empty;
         try
         {
+            var dir = Path.GetDirectoryName(SettingsPath)!;
+            Directory.CreateDirectory(dir);
+
+            // Pick a sensible default model for the provider.
+            var defaultModel = DefaultModels.GetValueOrDefault(_provider, "gpt-4o");
+
+            // Save to settings.json
             Dictionary<string, object?> existing = [];
             if (File.Exists(SettingsPath))
                 existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(await File.ReadAllTextAsync(SettingsPath)) ?? [];
 
             existing["Provider"] = _provider;
-            existing["Model"] = _model.Trim();
+            existing["Model"] = defaultModel;
             existing["ApiKey"] = _apiKey.Trim();
             if (!string.IsNullOrWhiteSpace(_baseUrl)) existing["BaseUrl"] = _baseUrl.Trim();
 
-            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
             await File.WriteAllTextAsync(SettingsPath, JsonSerializer.Serialize(existing, JsonOpts));
 
+            // Also save as the first provider profile in providers.json
+            var profiles = new List<Dictionary<string, object>>
+            {
+                new()
+                {
+                    ["Name"] = _provider,
+                    ["Provider"] = _provider,
+                    ["ApiKey"] = _apiKey.Trim(),
+                    ["BaseUrl"] = _baseUrl.Trim(),
+                    ["MaxTokens"] = 32000,
+                }
+            };
+            // Merge with any existing profiles.
+            if (File.Exists(ProfilesPath))
+            {
+                try
+                {
+                    var existingProfiles = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(
+                        await File.ReadAllTextAsync(ProfilesPath)) ?? [];
+                    foreach (var p in existingProfiles)
+                    {
+                        if (p.TryGetValue("Provider", out var prov) && prov?.ToString() != _provider)
+                            profiles.Add(p);
+                    }
+                }
+                catch { /* ignore parse errors */ }
+            }
+            await File.WriteAllTextAsync(ProfilesPath, JsonSerializer.Serialize(profiles, JsonOpts));
+
             // Hot-swap runtime config
-            Config.Model = _model.Trim();
+            Config.Model = defaultModel;
             Config.ApiKey = _apiKey.Trim();
             Environment.SetEnvironmentVariable("LLM_API_KEY", _apiKey.Trim());
+            Environment.SetEnvironmentVariable("LLM_MODEL", defaultModel);
             AuthProvider.ApiKey = _apiKey.Trim();
             if (!string.IsNullOrWhiteSpace(_baseUrl))
             {
@@ -188,6 +179,8 @@
                 AuthProvider.BaseUrl = parsed;
                 Environment.SetEnvironmentVariable("LLM_BASE_URL", _baseUrl.Trim());
             }
+            if (_baseUrl.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
+                Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", _apiKey.Trim());
 
             Nav.NavigateTo("/");
         }

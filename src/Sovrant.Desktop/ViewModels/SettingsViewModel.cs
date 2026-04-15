@@ -228,7 +228,7 @@ public partial class SettingsViewModel : ViewModelBase
 
             if (provider == "OpenRouter")
             {
-                models = await SetupWizardViewModel.FetchOpenRouterModelIdsAsync();
+                models = await FetchAuthenticatedModelIdsAsync("https://openrouter.ai/api/v1", ApiKey);
             }
             else if (provider == "Ollama")
             {
@@ -371,24 +371,17 @@ public partial class SettingsViewModel : ViewModelBase
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(ModelName))
-        {
-            StatusMessage = "Please select a model.";
-            return;
-        }
-
-        var name = string.IsNullOrWhiteSpace(NewProfileName)
-            ? $"{SelectedProvider} - {SidebarViewModel.ShortenModelName(ModelName)}"
+        var displayName = string.IsNullOrWhiteSpace(NewProfileName)
+            ? SelectedProvider
             : NewProfileName.Trim();
 
-        // Update existing or add new.
+        // Update existing profile for same provider, or add new.
         var existing = SavedProfiles.FirstOrDefault(p =>
-            p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            p.Provider.Equals(SelectedProvider, StringComparison.OrdinalIgnoreCase));
 
         if (existing is not null)
         {
-            existing.Provider = SelectedProvider;
-            existing.Model = ModelName;
+            existing.Name = displayName;
             existing.ApiKey = ApiKey;
             existing.BaseUrl = BaseUrl;
             existing.MaxTokens = MaxOutputTokens;
@@ -397,9 +390,8 @@ public partial class SettingsViewModel : ViewModelBase
         {
             SavedProfiles.Add(new ProviderProfile
             {
-                Name = name,
+                Name = displayName,
                 Provider = SelectedProvider,
-                Model = ModelName,
                 ApiKey = ApiKey,
                 BaseUrl = BaseUrl,
                 MaxTokens = MaxOutputTokens,
@@ -409,10 +401,11 @@ public partial class SettingsViewModel : ViewModelBase
         PersistProfiles();
 
         // Auto-switch to the newly added provider.
-        await LoadProfileAsync(SavedProfiles.Last(p => p.Name == name));
+        await LoadProfileAsync(SavedProfiles.First(p =>
+            p.Provider.Equals(SelectedProvider, StringComparison.OrdinalIgnoreCase)));
 
         NewProfileName = string.Empty;
-        StatusMessage = $"Provider '{name}' added and activated.";
+        StatusMessage = $"Provider '{SelectedProvider}' added and activated.";
     }
 
     [RelayCommand]
@@ -422,17 +415,11 @@ public partial class SettingsViewModel : ViewModelBase
         try
         {
             // Set everything from the saved profile exactly as stored.
-            // Order matters: provider and base URL first, then model list, then model name.
             SelectedProvider = profile.Provider;
             ApiKey = profile.ApiKey;
             BaseUrl = profile.BaseUrl;
             MaxOutputTokens = profile.MaxTokens;
             SelectedProfile = profile;
-
-            // Load model list for the provider so the dropdown is populated,
-            // then set the saved model name.
-            await LoadModelsForProviderAsync(profile.Provider);
-            ModelName = profile.Model;
         }
         finally
         {
@@ -441,6 +428,8 @@ public partial class SettingsViewModel : ViewModelBase
 
         // Single save applies everything to runtime config + env vars.
         await SaveAsync();
+        // Refresh sidebar dropdown to reflect changes.
+        _sidebar.LoadProviderProfiles();
         StatusMessage = $"Switched to '{profile.Name}'.";
     }
 

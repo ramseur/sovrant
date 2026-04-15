@@ -49,6 +49,9 @@
                 <!-- Saved Providers list -->
                 <TextBlock Text="Your Providers" FontSize="16" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="Configure API keys and endpoints. Switch providers from the sidebar dropdown."
+                           FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                           TextWrapping="Wrap" />
 
                 <TextBlock Text="Add a provider below to get started."
                            FontSize="12" Foreground="{DynamicResource TextSecondary}"
@@ -76,13 +79,10 @@
                                                 Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
                                     </StackPanel>
                                     <StackPanel Spacing="2">
-                                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"
+                                        <TextBlock Text="{Binding Provider}" FontSize="13" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource TextPrimary}" />
-                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}">
-                                            <Run Text="{Binding Provider}" />
-                                            <Run Text=" / " />
-                                            <Run Text="{Binding Model}" />
-                                        </TextBlock>
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}"
+                                                   Text="{Binding BaseUrl}" />
                                     </StackPanel>
                                 </DockPanel>
                             </Border>
@@ -104,56 +104,6 @@
                               HorizontalAlignment="Stretch"
                               CornerRadius="8"
                               Padding="12,8" />
-                </StackPanel>
-
-                <!-- Model name -->
-                <StackPanel Spacing="6">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Right"
-                                   Text="Loading models..."
-                                   FontSize="11"
-                                   Foreground="{DynamicResource TextMuted}"
-                                   VerticalAlignment="Center"
-                                   IsVisible="{Binding IsLoadingModels}" />
-                        <TextBlock Text="Model" FontSize="13" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextSecondary}" />
-                    </DockPanel>
-                    <Grid ColumnDefinitions="*,Auto,Auto">
-                        <AutoCompleteBox Grid.Column="0"
-                                         ItemsSource="{Binding AvailableModels}"
-                                         Text="{Binding ModelName, Mode=TwoWay}"
-                                         Watermark="Click to browse or type to search..."
-                                         FilterMode="ContainsOrdinal"
-                                         IsTextCompletionEnabled="False"
-                                         MinimumPrefixLength="0"
-                                         MinimumPopulateDelay="0"
-                                         CornerRadius="8,0,0,0"
-                                         Padding="12,8"
-                                         FontSize="13"
-                                         MaxDropDownHeight="300" />
-                        <Button Grid.Column="1"
-                                Content="↻"
-                                Command="{Binding RefreshModelsCommand}"
-                                Padding="10,8"
-                                CornerRadius="0"
-                                Background="{DynamicResource SurfaceCard}"
-                                BorderBrush="{DynamicResource SurfaceBorder}"
-                                BorderThickness="0,1,0,1"
-                                Foreground="{DynamicResource TextSecondary}"
-                                FontSize="13"
-                                ToolTip.Tip="Refresh models from provider (requires API key)" />
-                        <Button Grid.Column="2"
-                                Content="X"
-                                Command="{Binding ClearModelCommand}"
-                                Padding="10,8"
-                                CornerRadius="0,8,8,0"
-                                Background="{DynamicResource SurfaceCard}"
-                                BorderBrush="{DynamicResource SurfaceBorder}"
-                                BorderThickness="0,1,1,1"
-                                Foreground="{DynamicResource TextSecondary}"
-                                FontSize="12"
-                                ToolTip.Tip="Clear to browse all models" />
-                    </Grid>
                 </StackPanel>
 
                 <!-- API Key -->

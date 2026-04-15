@@ -1,7 +1,9 @@
+@using System.Text.Json
 @using Sovrant.Runtime.Config
 @using Sovrant.Runtime.Session
 @using Sovrant.Runtime.Workspaces
 @using Sovrant.Runtime.Projects
+@using Sovrant.Web.Adapters
 @using Sovrant.Web.Services
 @implements IDisposable
 
@@ -26,17 +28,60 @@
             <input type="text" placeholder="Search conversations..." @bind="_searchText" @bind:event="oninput" @bind:after="FilterSessions" />
         </div>
 
-        <!-- Model/Provider card -->
-        <button class="model-card" @onclick='() => OnNavigate.InvokeAsync("/settings")' title="Click to change model">
-            <span class="status-dot connected"></span>
-            <span class="model-name">@_currentModel</span>
-            <span class="provider-name">@_currentProvider</span>
-        </button>
-
-        <!-- Connection status -->
-        <div class="connection-status">
-            <span class="status-dot @(_isConnected ? "connected" : "warning")"></span>
-            <span>@_connectionStatus</span>
+        <!-- Model/Provider two-step switcher -->
+        <div class="model-tree-switcher">
+            <button class="model-tree-trigger" @onclick="ToggleTreeDropdown" @onclick:stopPropagation="true">
+                <div class="model-tree-trigger-content">
+                    <span class="status-dot @(_isConnected ? "connected" : "warning")"></span>
+                    <div class="model-tree-trigger-text">
+                        <span class="model-tree-model">@_currentModel</span>
+                        <span class="model-tree-provider">@_currentProvider</span>
+                    </div>
+                </div>
+                <span class="model-tree-chevron @(_treeOpen ? "open" : "")">&#x25BE;</span>
+            </button>
+            @if (_treeOpen)
+            {
+                <div class="model-tree-dropdown" @onclick:stopPropagation="true">
+                    @if (_providerProfiles.Count == 0)
+                    {
+                        <div class="model-tree-empty">No providers configured. <a href="#" @onclick='() => { _treeOpen = false; OnNavigate.InvokeAsync("/settings"); }' @onclick:preventDefault="true">Add one in Settings</a></div>
+                    }
+                    else if (_selectedTreeGroup is null)
+                    {
+                        <!-- Step 1: Pick a provider -->
+                        <div class="model-tree-step-label">Select provider</div>
+                        @foreach (var group in _treeGroups)
+                        {
+                            var isCurrent = group.Provider.Equals(_currentProvider, StringComparison.OrdinalIgnoreCase);
+                            <button class="model-tree-provider-item @(isCurrent ? "active" : "")"
+                                    @onclick="() => DrillIntoProvider(group)">
+                                <span class="model-tree-provider-name">@group.Provider</span>
+                                <span class="model-tree-group-badge">@(group.Models.Count > 0 ? group.Models.Count.ToString() : "...")</span>
+                            </button>
+                        }
+                    }
+                    else
+                    {
+                        <!-- Step 2: Pick a model within the selected provider -->
+                        <button class="model-tree-back" @onclick="() => _selectedTreeGroup = null">
+                            &#x25C2; Back to providers
+                        </button>
+                        <div class="model-tree-step-label">@_selectedTreeGroup.Provider models</div>
+                        <div class="model-tree-models">
+                            @foreach (var model in _selectedTreeGroup.Models)
+                            {
+                                var isActive = model == Config.Model
+                                    || model == ShortenModelName(Config.Model);
+                                <button class="model-tree-model-item @(isActive ? "active" : "")"
+                                        @onclick="() => SelectModel(_selectedTreeGroup, model)">
+                                    @ShortenModelName(model)
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
         </div>
 
         <!-- Workspace/Project selectors -->
@@ -122,10 +167,40 @@
     [Inject] private IWorkspaceService WorkspaceService { get; set; } = default!;
     [Inject] private IProjectService ProjectService { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
+    [Inject] private MutableAuthProvider AuthProvider { get; set; } = default!;
+    [Inject] private IHttpClientFactory HttpFactory { get; set; } = default!;
 
     private string _searchText = string.Empty;
     private string _currentModel = string.Empty;
     private string _currentProvider = string.Empty;
+    private bool _treeOpen;
+
+    private record ProviderProfileItem(string Name, string Provider, string Model, string ApiKey, string BaseUrl, int MaxTokens);
+    private List<ProviderProfileItem> _providerProfiles = [];
+
+    private TreeGroup? _selectedTreeGroup;
+
+    private class TreeGroup
+    {
+        public string Provider { get; set; } = string.Empty;
+        public string ApiKey { get; set; } = string.Empty;
+        public string BaseUrl { get; set; } = string.Empty;
+        public int MaxTokens { get; set; } = 32000;
+        public List<string> Models { get; set; } = [];
+    }
+
+    private List<TreeGroup> _treeGroups = [];
+
+    private static readonly Dictionary<string, string[]> StaticProviderModels = new(StringComparer.Ordinal)
+    {
+        ["OpenAI"] = ["gpt-5", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini", "o4-mini", "o3", "o3-mini", "o1", "o1-mini"],
+        ["DeepSeek"] = ["deepseek-chat", "deepseek-reasoner"],
+        ["Groq"] = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"],
+        ["Mistral"] = ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest", "open-mixtral-8x22b"],
+        ["Together AI"] = ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", "mistralai/Mixtral-8x7B-Instruct-v0.1", "Qwen/Qwen2.5-72B-Instruct-Turbo"],
+        ["Google"] = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"],
+        ["Azure OpenAI"] = ["gpt-4o", "gpt-4o-mini", "gpt-4.1"],
+    };
     private bool _isConnected;
     private string _connectionStatus = "Connected";
     private string _userName = Environment.UserName;
@@ -150,11 +225,184 @@
         _isConnected = !string.IsNullOrWhiteSpace(Config.ApiKey);
         _connectionStatus = _isConnected ? "Connected" : "No API key";
         InferProvider();
+        LoadProviderProfiles();
 
         // Seed the shared context with initial model/provider
         ActiveContext.SetModel(_currentModel, _currentProvider);
         ActiveContext.OnChanged += OnActiveContextChanged;
         ActiveContext.OnDataChanged += OnDataChanged;
+    }
+
+    private void LoadProviderProfiles()
+    {
+        var path = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".sovrant", "providers.json");
+        _providerProfiles = [];
+        _treeGroups = [];
+        if (!File.Exists(path)) return;
+        try
+        {
+            var json = File.ReadAllText(path);
+            using var doc = JsonDocument.Parse(json);
+            var list = new List<ProviderProfileItem>();
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                list.Add(new ProviderProfileItem(
+                    el.GetProperty("Name").GetString() ?? "",
+                    el.GetProperty("Provider").GetString() ?? "",
+                    el.TryGetProperty("Model", out var m) ? m.GetString() ?? "" : "",
+                    el.GetProperty("ApiKey").GetString() ?? "",
+                    el.GetProperty("BaseUrl").GetString() ?? "",
+                    el.TryGetProperty("MaxTokens", out var mt) ? mt.GetInt32() : 32000));
+            }
+            _providerProfiles = list;
+            BuildTreeGroups();
+        }
+        catch { /* best effort */ }
+    }
+
+    private void BuildTreeGroups()
+    {
+        // Group profiles by provider, merge their models with static fallbacks.
+        var groups = new Dictionary<string, TreeGroup>(StringComparer.OrdinalIgnoreCase);
+        foreach (var profile in _providerProfiles)
+        {
+            if (!groups.TryGetValue(profile.Provider, out var group))
+            {
+                group = new TreeGroup
+                {
+                    Provider = profile.Provider,
+                    ApiKey = profile.ApiKey,
+                    BaseUrl = profile.BaseUrl,
+                    MaxTokens = profile.MaxTokens,
+                };
+                // Seed with static model list if available.
+                if (StaticProviderModels.TryGetValue(profile.Provider, out var staticModels))
+                    group.Models.AddRange(staticModels);
+                groups[profile.Provider] = group;
+            }
+            // Add profile's own model if not already present.
+            if (!string.IsNullOrWhiteSpace(profile.Model) &&
+                !group.Models.Contains(profile.Model, StringComparer.OrdinalIgnoreCase))
+            {
+                group.Models.Insert(0, profile.Model);
+            }
+        }
+        _treeGroups = groups.Values.ToList();
+    }
+
+    private void ToggleTreeDropdown()
+    {
+        _treeOpen = !_treeOpen;
+        if (!_treeOpen) _selectedTreeGroup = null;
+    }
+
+    private async Task DrillIntoProvider(TreeGroup group)
+    {
+        _selectedTreeGroup = group;
+        // If the group has no models yet (no static list), fetch live from the provider.
+        if (group.Models.Count == 0 && !string.IsNullOrWhiteSpace(group.BaseUrl) && !string.IsNullOrWhiteSpace(group.ApiKey))
+        {
+            var fetched = await FetchModelIdsAsync(group.BaseUrl, group.ApiKey);
+            if (fetched.Count > 0)
+            {
+                group.Models.Clear();
+                group.Models.AddRange(fetched);
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task<List<string>> FetchModelIdsAsync(string baseUrl, string apiKey)
+    {
+        try
+        {
+            using var http = HttpFactory.CreateClient("ProviderProbe");
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            var modelsUrl = baseUrl.TrimEnd('/') + "/models";
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(modelsUrl));
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey.Trim());
+            var response = await http.SendAsync(request, cts.Token);
+            response.EnsureSuccessStatusCode();
+            using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
+            var models = new List<string>();
+            if (doc.RootElement.TryGetProperty("data", out var data))
+                foreach (var item in data.EnumerateArray())
+                    if (item.TryGetProperty("id", out var id) && id.GetString() is { } modelId)
+                        models.Add(modelId);
+            models.Sort(StringComparer.OrdinalIgnoreCase);
+            return models;
+        }
+        catch { return []; }
+    }
+
+    private async Task SelectModel(TreeGroup group, string model)
+    {
+        // Hot-swap runtime config.
+        Config.ApiKey = group.ApiKey;
+        Config.MaxTokens = group.MaxTokens;
+        Config.Model = model;
+        AuthProvider.ApiKey = group.ApiKey;
+
+        if (!string.IsNullOrWhiteSpace(group.BaseUrl))
+        {
+            var parsed = new Uri(group.BaseUrl);
+            Config.BaseUrl = parsed;
+            AuthProvider.BaseUrl = parsed;
+            Environment.SetEnvironmentVariable("LLM_BASE_URL", group.BaseUrl);
+        }
+        else
+        {
+            Config.BaseUrl = null;
+            AuthProvider.BaseUrl = null;
+            Environment.SetEnvironmentVariable("LLM_BASE_URL", null);
+        }
+
+        Environment.SetEnvironmentVariable("LLM_API_KEY", group.ApiKey);
+        Environment.SetEnvironmentVariable("LLM_MODEL", model);
+        if (group.BaseUrl.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
+            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", group.ApiKey);
+
+        // Update display.
+        _currentModel = ShortenModelName(model);
+        _currentProvider = group.Provider;
+        _isConnected = !string.IsNullOrWhiteSpace(group.ApiKey);
+        _connectionStatus = _isConnected ? "Connected" : "No API key";
+        _treeOpen = false;
+
+        ActiveContext.SetModel(_currentModel, _currentProvider);
+
+        // Persist.
+        var profile = new ProviderProfileItem("", group.Provider, model, group.ApiKey, group.BaseUrl, group.MaxTokens);
+        await PersistActiveProviderAsync(profile);
+    }
+
+    private static async Task PersistActiveProviderAsync(ProviderProfileItem profile)
+    {
+        try
+        {
+            var settingsPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".sovrant", "settings.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
+            Dictionary<string, object?> existing = [];
+            if (File.Exists(settingsPath))
+                existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(
+                    await File.ReadAllTextAsync(settingsPath)) ?? [];
+
+            existing["Provider"] = profile.Provider;
+            if (!string.IsNullOrWhiteSpace(profile.Model))
+                existing["Model"] = profile.Model;
+            existing["MaxTokens"] = profile.MaxTokens;
+            if (!string.IsNullOrWhiteSpace(profile.ApiKey)) existing["ApiKey"] = profile.ApiKey;
+            if (!string.IsNullOrWhiteSpace(profile.BaseUrl)) existing["BaseUrl"] = profile.BaseUrl;
+
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            await File.WriteAllTextAsync(settingsPath, JsonSerializer.Serialize(existing, options));
+        }
+        catch { /* best effort */ }
     }
 
     private void OnDataChanged()
@@ -176,6 +424,7 @@
             _isConnected = !string.IsNullOrWhiteSpace(Config.ApiKey);
             _connectionStatus = _isConnected ? "Connected" : "No API key";
             InferProvider();
+            LoadProviderProfiles();
             StateHasChanged();
         });
     }

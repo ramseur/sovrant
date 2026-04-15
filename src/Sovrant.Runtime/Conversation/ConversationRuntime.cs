@@ -557,13 +557,15 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         {
             LogRequestFailed(_logger, ex.Message);
             success = false;
-            events.Add(new RuntimeEvent.RuntimeError(ex.Message));
+            events.Add(new RuntimeEvent.RuntimeError(
+                FormatProviderError(ex.Message, provider.Name, request.Model)));
         }
         catch (HttpRequestException ex)
         {
             LogRequestFailed(_logger, ex.Message);
             success = false;
-            events.Add(new RuntimeEvent.RuntimeError(ex.Message));
+            events.Add(new RuntimeEvent.RuntimeError(
+                FormatProviderError(ex.Message, provider.Name, request.Model)));
         }
 
         // Build the collected content blocks
@@ -922,6 +924,20 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         // Fallback: capitalize the first segment of the host.
         var firstSegment = host.Split('.')[0];
         return char.ToUpperInvariant(firstSegment[0]) + firstSegment[1..];
+    }
+
+    /// <summary>
+    /// Enriches a raw provider error with model and provider context so the UI
+    /// can show the user exactly which model/provider failed and why.
+    /// </summary>
+    private static string FormatProviderError(string rawError, string providerName, string model)
+    {
+        // Strip provider prefix from model for display (e.g. "google/gemma-4:free" → "gemma-4:free")
+        var displayModel = model;
+        var slash = model.LastIndexOf('/');
+        if (slash >= 0) displayModel = model[(slash + 1)..];
+
+        return $"[{providerName} · {displayModel}] {rawError}";
     }
 
     private static bool LooksLikeToolRequest(string message)

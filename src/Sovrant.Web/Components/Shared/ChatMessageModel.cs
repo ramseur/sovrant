@@ -133,17 +133,39 @@ public sealed class ChatMessageModel
 
     private static string FriendlyError(string raw)
     {
-        if (raw.Contains("Provider returned error", StringComparison.OrdinalIgnoreCase))
-            return "The model provider returned an error. Try again or switch to a different model.";
-        if (raw.Contains("400", StringComparison.Ordinal) && raw.Contains("API error", StringComparison.OrdinalIgnoreCase))
-            return "The model rejected this request (400). Try starting a new chat.";
+        // Extract provider/model context prefix if present (e.g. "[OpenRouter · gemma-4:free] ...")
+        var context = ExtractProviderContext(raw);
+        var prefix = context is not null ? $"{context}: " : "";
+
         if (raw.Contains("429", StringComparison.Ordinal) || raw.Contains("rate limit", StringComparison.OrdinalIgnoreCase))
-            return "Rate limited. Wait a moment and try again.";
+            return $"{prefix}Rate limited by the provider. Wait a moment and try again, or switch to a different model in Settings.";
         if (raw.Contains("401", StringComparison.Ordinal) || raw.Contains("Authentication", StringComparison.OrdinalIgnoreCase))
-            return "Authentication failed. Check your API key in Settings.";
+            return $"{prefix}Authentication failed. Check your API key in Settings.";
+        if (raw.Contains("403", StringComparison.Ordinal))
+            return $"{prefix}Access denied. Your API key may not have permission for this model.";
+        if (raw.Contains("400", StringComparison.Ordinal) && raw.Contains("API error", StringComparison.OrdinalIgnoreCase))
+            return $"{prefix}The model rejected this request (400). Try starting a new chat or switching models.";
+        if (raw.Contains("Provider returned error", StringComparison.OrdinalIgnoreCase))
+            return $"{prefix}The provider returned an error. Try again or switch to a different model in Settings.";
         if (raw.Contains("timeout", StringComparison.OrdinalIgnoreCase))
-            return "The request timed out. Try again.";
-        return $"Something went wrong: {raw}";
+            return $"{prefix}The request timed out. Try again.";
+        if (raw.Contains("No provider available", StringComparison.OrdinalIgnoreCase))
+            return "No provider is available. Check your API key and provider settings.";
+        return $"{prefix}Something went wrong. {raw}";
+    }
+
+    /// <summary>
+    /// Extracts the "[Provider · model]" prefix from enriched error messages.
+    /// Returns e.g. "OpenRouter · gemma-4:free" or null if not present.
+    /// </summary>
+    private static string? ExtractProviderContext(string raw)
+    {
+        if (raw.Length > 2 && raw[0] == '[')
+        {
+            var end = raw.IndexOf(']', 1);
+            if (end > 1) return raw[1..end];
+        }
+        return null;
     }
 }
 

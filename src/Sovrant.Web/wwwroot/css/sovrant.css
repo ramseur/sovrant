@@ -170,37 +170,175 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
 .sidebar-search input::placeholder { color: var(--text-muted); }
 
-/* ===== Model card ===== */
-.model-card {
+/* ===== Model tree switcher ===== */
+.model-tree-switcher {
+    position: relative;
+    margin-bottom: 6px;
+    z-index: 50;
+}
+
+.model-tree-trigger {
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: space-between;
     width: 100%;
     padding: 8px 10px;
     border-radius: 6px;
     background: var(--surface-card);
     border: 1px solid var(--surface-border);
     color: var(--text-primary);
-    margin-bottom: 6px;
     text-align: left;
     font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
 }
+.model-tree-trigger:hover { background: var(--surface-hover); }
 
-.model-card:hover { background: var(--surface-hover); }
-
-.model-name {
+.model-tree-trigger-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.model-tree-trigger-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.model-tree-model {
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 140px;
+    line-height: 1.3;
+}
+.model-tree-provider {
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.3;
+}
+.model-tree-chevron {
+    font-size: 14px;
+    color: var(--text-muted);
+    transition: transform 0.15s;
+    flex-shrink: 0;
+}
+.model-tree-chevron.open { transform: rotate(180deg); }
+
+/* Dropdown panel */
+.model-tree-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 200;
+    background: var(--surface-card);
+    border: 1px solid var(--surface-border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 4px;
 }
 
-.provider-name {
+.model-tree-empty {
+    padding: 12px;
+    font-size: 12px;
     color: var(--text-secondary);
+    text-align: center;
+}
+.model-tree-empty a {
+    color: var(--brand-primary);
+    text-decoration: underline;
+}
+
+/* Step label */
+.model-tree-step-label {
+    padding: 6px 10px 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Back button */
+.model-tree-back {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 11px;
+    cursor: pointer;
+    text-align: left;
+}
+.model-tree-back:hover { background: var(--surface-hover); color: var(--text-primary); }
+
+/* Provider items (step 1) */
+.model-tree-provider-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+}
+.model-tree-provider-item:hover { background: var(--surface-hover); }
+.model-tree-provider-item.active {
+    background: color-mix(in srgb, var(--brand-primary) 20%, transparent);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.model-tree-provider-name { flex: 1; }
+
+.model-tree-group-badge {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--surface-background);
+    padding: 1px 6px;
+    border-radius: 8px;
+}
+
+/* Model items under a group */
+.model-tree-models {
+    padding-left: 12px;
+}
+
+.model-tree-model-item {
+    display: block;
+    width: 100%;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-align: left;
+    cursor: pointer;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+.model-tree-model-item:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+}
+.model-tree-model-item.active {
+    background: var(--brand-primary);
+    color: #fff;
+    font-weight: 600;
 }
 
 /* ===== Status dots ===== */

@@ -1,15 +1,23 @@
 using System.Collections.ObjectModel;
+using System.Text.Json;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Desktop.Adapters;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Session;
+using System.Diagnostics.CodeAnalysis;
+using System.Net.Http;
 
 namespace Sovrant.Desktop.ViewModels;
 
 public partial class SidebarViewModel : ViewModelBase
 {
     private readonly ISessionStore _sessionStore;
+    private readonly SovrantConfig _config;
+    private readonly MutableAuthProvider? _authProvider;
+    private readonly IHttpClientFactory? _httpFactory;
+    private bool _suppressProfileSwitch;
 
     public ActiveContextViewModel ActiveContext { get; }
 
@@ -39,17 +47,298 @@ public partial class SidebarViewModel : ViewModelBase
         ? Environment.UserName[..1].ToUpperInvariant()
         : "U";
 
+    [ObservableProperty]
+    private ProviderProfileEntry? _selectedProfile;
+
+    [ObservableProperty]
+    private bool _isDropdownOpen;
+
+    [ObservableProperty]
+    private ProviderTreeGroup? _selectedTreeGroup;
+
+    public ObservableCollection<ProviderProfileEntry> ProviderProfiles { get; } = [];
+    public ObservableCollection<ProviderTreeGroup> TreeGroups { get; } = [];
     public ObservableCollection<SessionListItem> RecentSessions { get; } = [];
+
+    /// <summary>True when showing providers list (step 1), false when showing models (step 2).</summary>
+    public bool IsProviderStep => SelectedTreeGroup is null;
+
+    private static readonly Dictionary<string, string[]> StaticProviderModels = new(StringComparer.Ordinal)
+    {
+        ["OpenAI"] = ["gpt-5", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini", "o4-mini", "o3", "o3-mini", "o1", "o1-mini"],
+        ["DeepSeek"] = ["deepseek-chat", "deepseek-reasoner"],
+        ["Groq"] = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"],
+        ["Mistral"] = ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest", "open-mixtral-8x22b"],
+        ["Together AI"] = ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", "mistralai/Mixtral-8x7B-Instruct-v0.1", "Qwen/Qwen2.5-72B-Instruct-Turbo"],
+        ["Google"] = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"],
+        ["Azure OpenAI"] = ["gpt-4o", "gpt-4o-mini", "gpt-4.1"],
+    };
 
     public event EventHandler<string>? NavigationRequested;
     public event EventHandler<string>? SessionResumeRequested;
 
-    public SidebarViewModel(ISessionStore sessionStore, SovrantConfig config, ActiveContextViewModel activeContext)
+    public SidebarViewModel(ISessionStore sessionStore, SovrantConfig config, ActiveContextViewModel activeContext,
+        MutableAuthProvider? authProvider = null, IHttpClientFactory? httpFactory = null)
     {
         _sessionStore = sessionStore;
+        _config = config;
+        _authProvider = authProvider;
+        _httpFactory = httpFactory;
         ActiveContext = activeContext;
         LoadFromConfig(config);
+        LoadProviderProfiles();
         _ = LoadSessionsAsync();
+    }
+
+    partial void OnSelectedTreeGroupChanged(ProviderTreeGroup? value)
+    {
+        OnPropertyChanged(nameof(IsProviderStep));
+    }
+
+    partial void OnSelectedProfileChanged(ProviderProfileEntry? value)
+    {
+        if (value is null || _suppressProfileSwitch) return;
+        SwitchToProfile(value);
+    }
+
+    [RelayCommand]
+    private void ToggleDropdown()
+    {
+        IsDropdownOpen = !IsDropdownOpen;
+        if (!IsDropdownOpen) SelectedTreeGroup = null;
+    }
+
+    [RelayCommand]
+    private async Task SelectProviderAsync(ProviderTreeGroup group)
+    {
+        SelectedTreeGroup = group;
+        // If no models yet (no static list), fetch live from the provider.
+        if (group.Models.Count == 0 && !string.IsNullOrWhiteSpace(group.BaseUrl) && !string.IsNullOrWhiteSpace(group.ApiKey) && _httpFactory is not null)
+        {
+            var fetched = await FetchModelIdsAsync(group.BaseUrl, group.ApiKey);
+            if (fetched.Count > 0)
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    group.Models.Clear();
+                    foreach (var m in fetched)
+                        group.Models.Add(new ModelOption(m, group));
+                    group.ModelCount = group.Models.Count;
+                });
+            }
+        }
+    }
+
+    private async Task<List<string>> FetchModelIdsAsync(string baseUrl, string apiKey)
+    {
+        try
+        {
+            using var http = _httpFactory!.CreateClient("ProviderProbe");
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            var modelsUrl = baseUrl.TrimEnd('/') + "/models";
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(modelsUrl));
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey.Trim());
+            var response = await http.SendAsync(request, cts.Token);
+            response.EnsureSuccessStatusCode();
+            using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
+            var models = new List<string>();
+            if (doc.RootElement.TryGetProperty("data", out var data))
+                foreach (var item in data.EnumerateArray())
+                    if (item.TryGetProperty("id", out var id) && id.GetString() is { } modelId)
+                        models.Add(modelId);
+            models.Sort(StringComparer.OrdinalIgnoreCase);
+            return models;
+        }
+        catch { return []; }
+    }
+
+    [RelayCommand]
+    private void BackToProviders()
+    {
+        SelectedTreeGroup = null;
+    }
+
+    [RelayCommand]
+    private void SelectModel(ModelOption option)
+    {
+        if (option.Group is null) return;
+        var group = option.Group;
+
+        // Hot-swap runtime config.
+        _config.ApiKey = group.ApiKey;
+        _config.MaxTokens = group.MaxTokens;
+        _config.Model = option.Model;
+
+        if (_authProvider is not null)
+        {
+            _authProvider.ApiKey = group.ApiKey;
+        }
+
+        if (!string.IsNullOrWhiteSpace(group.BaseUrl))
+        {
+            var parsed = new Uri(group.BaseUrl);
+            _config.BaseUrl = parsed;
+            if (_authProvider is not null) _authProvider.BaseUrl = parsed;
+            Environment.SetEnvironmentVariable("LLM_BASE_URL", group.BaseUrl);
+        }
+        else
+        {
+            _config.BaseUrl = null;
+            if (_authProvider is not null) _authProvider.BaseUrl = null;
+            Environment.SetEnvironmentVariable("LLM_BASE_URL", null);
+        }
+
+        Environment.SetEnvironmentVariable("LLM_API_KEY", group.ApiKey);
+        Environment.SetEnvironmentVariable("LLM_MODEL", option.Model);
+        if (group.BaseUrl.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
+            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", group.ApiKey);
+
+        // Update display.
+        CurrentModel = ShortenModelName(option.Model);
+        CurrentProvider = group.Provider;
+        IsConnected = !string.IsNullOrWhiteSpace(group.ApiKey);
+        ConnectionStatus = IsConnected ? "Connected" : "No API key";
+        IsDropdownOpen = false;
+        SelectedTreeGroup = null;
+
+        _ = PersistActiveProviderAsync(new ProviderProfileEntry
+        {
+            Provider = group.Provider, Model = option.Model,
+            ApiKey = group.ApiKey, BaseUrl = group.BaseUrl, MaxTokens = group.MaxTokens,
+        });
+    }
+
+    private void SwitchToProfile(ProviderProfileEntry profile)
+    {
+        // Hot-swap runtime config.
+        _config.ApiKey = profile.ApiKey;
+        _config.MaxTokens = profile.MaxTokens;
+
+        if (_authProvider is not null)
+        {
+            _authProvider.ApiKey = profile.ApiKey;
+        }
+
+        if (!string.IsNullOrWhiteSpace(profile.BaseUrl))
+        {
+            var parsed = new Uri(profile.BaseUrl);
+            _config.BaseUrl = parsed;
+            if (_authProvider is not null) _authProvider.BaseUrl = parsed;
+            Environment.SetEnvironmentVariable("LLM_BASE_URL", profile.BaseUrl);
+        }
+        else
+        {
+            _config.BaseUrl = null;
+            if (_authProvider is not null) _authProvider.BaseUrl = null;
+            Environment.SetEnvironmentVariable("LLM_BASE_URL", null);
+        }
+
+        Environment.SetEnvironmentVariable("LLM_API_KEY", profile.ApiKey);
+        if (profile.BaseUrl.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
+            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", profile.ApiKey);
+
+        if (!string.IsNullOrWhiteSpace(profile.Model))
+        {
+            _config.Model = profile.Model;
+            Environment.SetEnvironmentVariable("LLM_MODEL", profile.Model);
+        }
+
+        // Update display.
+        CurrentModel = ShortenModelName(_config.Model);
+        CurrentProvider = profile.Provider;
+        IsConnected = !string.IsNullOrWhiteSpace(profile.ApiKey);
+        ConnectionStatus = IsConnected ? "Connected" : "No API key";
+
+        _ = PersistActiveProviderAsync(profile);
+    }
+
+    public void LoadProviderProfiles()
+    {
+        var path = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".sovrant", "providers.json");
+        ProviderProfiles.Clear();
+        TreeGroups.Clear();
+        if (!File.Exists(path)) return;
+        try
+        {
+            var json = File.ReadAllText(path);
+            var profiles = JsonSerializer.Deserialize<List<ProviderProfileEntry>>(json);
+            if (profiles is null) return;
+            foreach (var p in profiles)
+                ProviderProfiles.Add(p);
+
+            // Select the profile matching current provider without triggering a switch.
+            _suppressProfileSwitch = true;
+            SelectedProfile = ProviderProfiles.FirstOrDefault(p =>
+                p.Provider.Equals(CurrentProvider, StringComparison.OrdinalIgnoreCase))
+                ?? ProviderProfiles.FirstOrDefault();
+            _suppressProfileSwitch = false;
+
+            BuildTreeGroups();
+        }
+        catch { /* best effort */ }
+    }
+
+    private void BuildTreeGroups()
+    {
+        TreeGroups.Clear();
+        var groups = new Dictionary<string, ProviderTreeGroup>(StringComparer.OrdinalIgnoreCase);
+        foreach (var profile in ProviderProfiles)
+        {
+            if (!groups.TryGetValue(profile.Provider, out var group))
+            {
+                group = new ProviderTreeGroup
+                {
+                    Provider = profile.Provider,
+                    ApiKey = profile.ApiKey,
+                    BaseUrl = profile.BaseUrl,
+                    MaxTokens = profile.MaxTokens,
+                };
+                if (StaticProviderModels.TryGetValue(profile.Provider, out var staticModels))
+                    foreach (var m in staticModels) group.Models.Add(new ModelOption(m, group));
+                groups[profile.Provider] = group;
+            }
+            if (!string.IsNullOrWhiteSpace(profile.Model) &&
+                !group.Models.Any(mo => mo.Model.Equals(profile.Model, StringComparison.OrdinalIgnoreCase)))
+            {
+                group.Models.Insert(0, new ModelOption(profile.Model, group));
+            }
+        }
+        foreach (var g in groups.Values)
+        {
+            g.IsCurrent = g.Provider.Equals(CurrentProvider, StringComparison.OrdinalIgnoreCase);
+            g.ModelCount = g.Models.Count;
+            TreeGroups.Add(g);
+        }
+    }
+
+    private static readonly JsonSerializerOptions s_jsonOptions = new() { WriteIndented = true };
+
+    private static async Task PersistActiveProviderAsync(ProviderProfileEntry profile)
+    {
+        try
+        {
+            var settingsPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".sovrant", "settings.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
+            Dictionary<string, object?> existing = [];
+            if (File.Exists(settingsPath))
+                existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(
+                    await File.ReadAllTextAsync(settingsPath)) ?? [];
+
+            existing["Provider"] = profile.Provider;
+            if (!string.IsNullOrWhiteSpace(profile.Model))
+                existing["Model"] = profile.Model;
+            existing["MaxTokens"] = profile.MaxTokens;
+            if (!string.IsNullOrWhiteSpace(profile.ApiKey)) existing["ApiKey"] = profile.ApiKey;
+            if (!string.IsNullOrWhiteSpace(profile.BaseUrl)) existing["BaseUrl"] = profile.BaseUrl;
+
+            await File.WriteAllTextAsync(settingsPath, JsonSerializer.Serialize(existing, s_jsonOptions));
+        }
+        catch { /* best effort */ }
     }
 
     /// <summary>Reads model and provider info from the current config.</summary>
@@ -183,6 +472,54 @@ public partial class SidebarViewModel : ViewModelBase
         });
     }
 
+}
+
+public sealed class ProviderProfileEntry
+{
+    public string Name { get; set; } = string.Empty;
+    public string Provider { get; set; } = string.Empty;
+    public string Model { get; set; } = string.Empty;
+    public string ApiKey { get; set; } = string.Empty;
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "Deserialized from JSON")]
+    public string BaseUrl { get; set; } = string.Empty;
+    public int MaxTokens { get; set; } = 32000;
+
+    public override string ToString() => Name;
+}
+
+public partial class ProviderTreeGroup : ViewModelBase
+{
+    [ObservableProperty]
+    private string _provider = string.Empty;
+
+    public string ApiKey { get; set; } = string.Empty;
+
+    [SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "Deserialized from JSON")]
+    public string BaseUrl { get; set; } = string.Empty;
+
+    public int MaxTokens { get; set; } = 32000;
+
+    [ObservableProperty]
+    private int _modelCount;
+
+    [ObservableProperty]
+    private bool _isCurrent;
+
+    public ObservableCollection<ModelOption> Models { get; } = [];
+
+    public override string ToString() => Provider;
+}
+
+public sealed class ModelOption(string model, ProviderTreeGroup group)
+{
+    public string Model { get; } = model;
+    public ProviderTreeGroup Group { get; } = group;
+
+    /// <summary>Display name with provider prefix stripped and :free/:extended removed.</summary>
+    public string DisplayName => SidebarViewModel.ShortenModelName(Model);
+
+    public override string ToString() => DisplayName;
 }
 
 public partial class SessionListItem : ViewModelBase
