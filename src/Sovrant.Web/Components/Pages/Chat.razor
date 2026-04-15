@@ -367,6 +367,18 @@
         StateHasChanged();
         await ScrollToBottom();
 
+        // Tick the elapsed timer every second while waiting.
+        using var elapsedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _ = Task.Run(async () =>
+        {
+            using var ticker = new PeriodicTimer(TimeSpan.FromSeconds(1));
+            while (await ticker.WaitForNextTickAsync(elapsedCts.Token).ConfigureAwait(false))
+            {
+                assistantMsg.UpdateElapsed();
+                await InvokeAsync(StateHasChanged);
+            }
+        }, elapsedCts.Token);
+
         try
         {
             await Sovrant.Web.Program.RuntimeReady.Task.WaitAsync(ct);
@@ -388,6 +400,7 @@
         }
         finally
         {
+            await elapsedCts.CancelAsync();
             _isSending = false;
             assistantMsg.CompleteStreaming();
             StateHasChanged();

@@ -803,6 +803,12 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     50% { opacity: 1; }
 }
 
+.elapsed-text {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: 4px;
+}
+
 /* ===== Execution status bar ===== */
 .execution-status {
     display: flex;

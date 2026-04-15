@@ -19,6 +19,10 @@
             <div class="msg-row">
                 <div class="msg-avatar sovrant-avatar">&#9889;</div>
                 <span class="msg-sender">@Message.SenderLabel</span>
+                @if (!string.IsNullOrEmpty(Message.ElapsedText))
+                {
+                    <span class="elapsed-text">@Message.ElapsedText</span>
+                }
             </div>
 
             @if (Message.IsThinking)
@@ -26,6 +30,7 @@
                 <div class="thinking-indicator msg-indent">
                     <span class="thinking-dot"></span>
                     <span class="thinking-text">@Message.ThinkingText</span>
+                    <span class="elapsed-text">@Message.ElapsedText</span>
                 </div>
             }
 

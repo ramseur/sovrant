@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using Sovrant.Web.Adapters;
 
@@ -5,6 +6,7 @@ namespace Sovrant.Web.Components.Shared;
 
 public sealed class ChatMessageModel
 {
+    private readonly Stopwatch _stopwatch = new();
     private static readonly string[] ThinkingPhrases =
     [
         "Thinking really hard...", "Consulting the oracle...", "Pondering the possibilities...",
@@ -23,6 +25,7 @@ public sealed class ChatMessageModel
     public string ErrorMessage { get; set; } = string.Empty;
     public bool IsExecutingTools { get; set; }
     public string ExecutionStatusText { get; set; } = string.Empty;
+    public string ElapsedText { get; set; } = string.Empty;
     private int _completedToolCount;
     public List<ToolUseModel> ToolUses { get; } = [];
 
@@ -83,6 +86,17 @@ public sealed class ChatMessageModel
         IsThinking = true;
         var idx = RandomNumberGenerator.GetInt32(ThinkingPhrases.Length);
         ThinkingText = ThinkingPhrases[idx];
+        _stopwatch.Restart();
+        ElapsedText = "0s";
+    }
+
+    /// <summary>Call periodically (e.g. every second) to refresh the elapsed display.</summary>
+    public void UpdateElapsed()
+    {
+        var elapsed = _stopwatch.Elapsed;
+        ElapsedText = elapsed.TotalMinutes >= 1
+            ? $"{(int)elapsed.TotalMinutes}m {elapsed.Seconds}s"
+            : $"{(int)elapsed.TotalSeconds}s";
     }
 
     public void StopThinking() => IsThinking = false;
@@ -120,11 +134,15 @@ public sealed class ChatMessageModel
         IsStreaming = false;
         IsComplete = true;
         IsExecutingTools = false;
+        _stopwatch.Stop();
+        UpdateElapsed();
     }
 
     public void SetError(string rawError)
     {
         StopThinking();
+        _stopwatch.Stop();
+        UpdateElapsed();
         IsStreaming = false;
         HasError = true;
         ErrorMessage = FriendlyError(rawError);

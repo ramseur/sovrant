@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -22,6 +23,8 @@ public partial class MessageViewModel : ViewModelBase
     ];
 
     private DispatcherTimer? _thinkingTimer;
+    private DispatcherTimer? _elapsedTimer;
+    private readonly Stopwatch _stopwatch = new();
     private int _phraseIndex;
 
     [ObservableProperty]
@@ -46,6 +49,10 @@ public partial class MessageViewModel : ViewModelBase
     /// <summary>True when streaming is done and markdown should be rendered.</summary>
     [ObservableProperty]
     private bool _isComplete;
+
+    /// <summary>Elapsed time string shown while thinking/streaming (e.g. "3s", "1m 12s").</summary>
+    [ObservableProperty]
+    private string _elapsedText = string.Empty;
 
     /// <summary>True when the response ended in an error (shows error UI with retry).</summary>
     [ObservableProperty]
@@ -150,6 +157,13 @@ public partial class MessageViewModel : ViewModelBase
             ThinkingText = ThinkingPhrases[_phraseIndex];
         };
         _thinkingTimer.Start();
+
+        // Start elapsed timer — ticks every second.
+        _stopwatch.Restart();
+        ElapsedText = "0s";
+        _elapsedTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _elapsedTimer.Tick += (_, _) => ElapsedText = FormatElapsed(_stopwatch.Elapsed);
+        _elapsedTimer.Start();
     }
 
     public void StopThinking()
@@ -170,12 +184,29 @@ public partial class MessageViewModel : ViewModelBase
         IsStreaming = false;
         IsComplete = true;
         IsExecutingTools = false;
+        StopElapsedTimer();
         OnPropertyChanged(nameof(SafeMarkdown));
+    }
+
+    private void StopElapsedTimer()
+    {
+        _stopwatch.Stop();
+        _elapsedTimer?.Stop();
+        _elapsedTimer = null;
+        ElapsedText = FormatElapsed(_stopwatch.Elapsed);
+    }
+
+    private static string FormatElapsed(TimeSpan elapsed)
+    {
+        if (elapsed.TotalMinutes >= 1)
+            return $"{(int)elapsed.TotalMinutes}m {elapsed.Seconds}s";
+        return $"{(int)elapsed.TotalSeconds}s";
     }
 
     public void SetError(string rawError)
     {
         StopThinking();
+        StopElapsedTimer();
         IsStreaming = false;
         HasError = true;
         ErrorMessage = FriendlyError(rawError);

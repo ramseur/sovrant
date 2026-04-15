@@ -995,7 +995,11 @@ async Task RunTurnWithCancelAsync(IConversationRuntime runtime, string message, 
                     break;
 
                 case RuntimeEvent.TurnComplete { InputTokens: var inTok, OutputTokens: var outTok }:
-                    AnsiConsole.MarkupLine($"\n[grey dim]({inTok}\u2191 {outTok}\u2193 tokens)[/]");
+                    var elapsed = spinner.Elapsed;
+                    var elapsedStr = elapsed.TotalMinutes >= 1
+                        ? $"{(int)elapsed.TotalMinutes}m {elapsed.Seconds}s"
+                        : $"{elapsed.TotalSeconds:F1}s";
+                    AnsiConsole.MarkupLine($"\n[grey dim]({inTok}\u2191 {outTok}\u2193 tokens \u00b7 {elapsedStr})[/]");
                     AnsiConsole.Write(new Rule().RuleStyle("grey dim"));
                     break;
 
@@ -1106,7 +1110,9 @@ async Task RunTurnAsync(IConversationRuntime runtime, string message, Cancellati
                 break;
 
             case RuntimeEvent.TurnComplete { InputTokens: var inTok, OutputTokens: var outTok }:
-                AnsiConsole.MarkupLine($"\n[grey dim]({inTok}\u2191 {outTok}\u2193 tokens)[/]");
+                var el = spinner.Elapsed;
+                var elStr = el.TotalMinutes >= 1 ? $"{(int)el.TotalMinutes}m {el.Seconds}s" : $"{el.TotalSeconds:F1}s";
+                AnsiConsole.MarkupLine($"\n[grey dim]({inTok}\u2191 {outTok}\u2193 tokens \u00b7 {elStr})[/]");
                 break;
 
             case RuntimeEvent.TurnCost { EstimatedUsd: var usd, Source: var source }:

@@ -313,6 +313,10 @@
                                                 <TextBlock Text="{Binding SenderLabel}" FontSize="14" FontWeight="SemiBold"
                                                            Foreground="{DynamicResource TextPrimary}"
                                                            VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding ElapsedText}" FontSize="11"
+                                                           Foreground="{DynamicResource TextMuted}"
+                                                           VerticalAlignment="Center" Margin="8,0,0,0"
+                                                           IsVisible="{Binding ElapsedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                                             </StackPanel>
 
                                             <!-- Thinking indicator -->
@@ -342,6 +346,10 @@
                                                 <TextBlock Text="{Binding ThinkingText}"
                                                            FontSize="13" FontStyle="Italic"
                                                            Foreground="{DynamicResource TextSecondary}" />
+                                                <TextBlock Text="{Binding ElapsedText}"
+                                                           FontSize="11" Margin="8,0,0,0"
+                                                           Foreground="{DynamicResource TextMuted}"
+                                                           VerticalAlignment="Center" />
                                             </StackPanel>
 
                                             <!-- Execution status bar — visible during tool calls -->
