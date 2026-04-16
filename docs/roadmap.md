@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-13 (Phase 61 complete — 45 phases shipped, 7 pending)
+**Last updated:** 2026-04-16 (Phase 61 complete — 45 phases shipped, 9 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -114,7 +114,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 
 ### Still pending
 
-> **Last audited:** 2026-04-13. 45 phases complete, 7 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61. Everything below is *not yet shipped*.
+> **Last audited:** 2026-04-16. 45 phases complete, 9 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61. Everything below is *not yet shipped*.
 
 | Gap | Phase | Priority |
 |---|---|---|
@@ -131,6 +131,8 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | ~~Agentic loop hardening — intent classification, plan approval, execution governance, progress visibility~~ | Phase 59 ✅ | **Critical** |
 | Hermes Agent integration via MCP — alternative claw/federation bus provider with self-improving skills | Phase 60 | Medium |
 | ~~Remote server mode for web frontend — SignalR streaming, auth, `AddSovrantClient()` abstraction~~ | Phase 61 ✅ | High |
+| Video generation — fal.ai, Kling AI, and pluggable provider support for text-to-video, image-to-video | Phase 65 | Medium |
+| Document generation — PDFs, Word, Excel, PowerPoint, presentations + industry templates (real estate, healthcare, legal, finance) | Phase 66 | Medium–High |
 
 ---
 
@@ -5753,3 +5755,409 @@ Each workspace is hermetically sealed — artifacts in workspace A are never acc
 - [ ] Migration endpoint copies all artifacts from one backend to another without data loss
 - [ ] `LocalArtifactStore` remains the default — no cloud dependency for single-user/self-hosted deployments
 - [ ] All existing tests continue to pass (cloud backends do not affect local-only code paths)
+
+---
+
+## Phase 65 — Video Generation (fal.ai, Kling AI & Pluggable Providers)
+
+**Depends on:** Phase 53 (artifact storage), Phase 54 (model capability registry), Phase 64 (cloud storage backends — for large video files)
+
+**Goal:** Give Sovrant the ability to generate, preview, and manage video content through external video generation APIs. Users can request video creation from chat across all delivery modes (CLI, Desktop, Web), with results stored as workspace-scoped artifacts.
+
+### Why
+
+Video generation is rapidly becoming a core creative capability. Services like fal.ai and Kling AI expose text-to-video and image-to-video APIs that can be orchestrated by an agentic coding assistant. Use cases include:
+
+- Generating demo videos from text descriptions
+- Creating animated content from static images or diagrams
+- Producing short explainer or marketing clips as part of a project workflow
+- Agent-driven video pipelines where the agent scripts, generates, and iterates on video content
+
+### Provider Architecture
+
+```
+IVideoProvider (interface)
+  ├── FalAiVideoProvider        — fal.ai (text-to-video, image-to-video, lip-sync, etc.)
+  ├── KlingAiVideoProvider      — Kling AI (text-to-video, image-to-video)
+  └── (future: Runway, Pika, Luma, Stability Video, etc.)
+
+IVideoProviderFactory
+  └── Resolves provider by name from DI, reads config from providers.json
+```
+
+Each provider implements a common interface:
+
+```csharp
+public interface IVideoProvider
+{
+    string Name { get; }
+    Task<VideoGenerationResult> GenerateAsync(VideoRequest request, CancellationToken ct);
+    Task<VideoStatus> CheckStatusAsync(string jobId, CancellationToken ct);
+    Task<Stream> DownloadAsync(string videoUrl, CancellationToken ct);
+}
+
+public record VideoRequest(
+    string Prompt,
+    string? ImageUrl = null,          // for image-to-video
+    string? Model = null,             // provider-specific model (e.g., "kling-v2", "minimax-video")
+    int? DurationSeconds = null,
+    string? AspectRatio = null,       // "16:9", "9:16", "1:1"
+    string? Style = null              // provider-specific style hints
+);
+
+public record VideoGenerationResult(
+    string JobId,
+    VideoStatus Status,
+    string? VideoUrl = null,
+    TimeSpan? EstimatedTime = null
+);
+
+public enum VideoStatus { Queued, Processing, Completed, Failed }
+```
+
+### Tool: `VideoGenerateTool`
+
+A new tool in `Sovrant.Tools.Media` that agents can invoke:
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `prompt` | string | Yes | Text description of the video to generate |
+| `image_path` | string | No | Path to an input image for image-to-video |
+| `provider` | string | No | Provider name (`fal`, `kling`). Defaults to first configured video provider |
+| `model` | string | No | Provider-specific model identifier |
+| `duration` | int | No | Target duration in seconds |
+| `aspect_ratio` | string | No | Aspect ratio (`16:9`, `9:16`, `1:1`) |
+| `wait` | bool | No | If true, poll until complete. If false, return job ID for async checking |
+
+Returns: artifact path to the generated video file, stored in the workspace artifact store.
+
+### Tool: `VideoStatusTool`
+
+Check the status of an async video generation job:
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | string | Yes | The job ID returned by `VideoGenerateTool` |
+| `provider` | string | No | Provider name |
+
+### UI Integration
+
+| Mode | Behavior |
+|---|---|
+| **CLI** | Show progress bar with estimated time, open video in default player on completion |
+| **Desktop** | Inline video player in chat (Avalonia `MediaElement` or `LibVLCSharp`), download button |
+| **Web** | HTML5 `<video>` tag in chat message, download link, preview thumbnail |
+
+### Provider Configuration
+
+Video providers are configured alongside LLM providers in `~/.sovrant/providers.json`:
+
+```json
+{
+  "videoProviders": [
+    {
+      "name": "fal",
+      "provider": "fal.ai",
+      "apiKey": "fal-...",
+      "baseUrl": "https://fal.run"
+    },
+    {
+      "name": "kling",
+      "provider": "kling",
+      "apiKey": "sk-...",
+      "baseUrl": "https://api.klingai.com"
+    }
+  ]
+}
+```
+
+Settings page (Desktop + Web) gets a "Video Providers" section similar to the existing LLM provider cards.
+
+### Implementation Plan
+
+1. **`IVideoProvider` interface + factory** — `Sovrant.Runtime.Video` namespace. Register in DI via `AddVideoProviders()`.
+2. **fal.ai provider** — REST client for fal.ai queue API (`POST /fal-ai/{model}`, `GET /requests/{id}/status`). Supports text-to-video and image-to-video.
+3. **Kling AI provider** — REST client for Kling API. Supports text-to-video and image-to-video models.
+4. **`VideoGenerateTool` + `VideoStatusTool`** — new tools in `Sovrant.Tools.Media`. Registered in tool registry with capability gate (only available when a video provider is configured).
+5. **Artifact integration** — generated videos saved to workspace artifact store with metadata (prompt, provider, model, duration, resolution).
+6. **Web UI** — `<video>` element in `ChatMessage.razor` for video artifacts. Thumbnail extraction via first-frame capture.
+7. **Desktop UI** — video player control in chat view. Fallback: "Open in player" button using `Process.Start`.
+8. **CLI** — progress display during generation, auto-open on completion.
+9. **Settings UI** — video provider cards in Settings page for both Desktop and Web.
+10. **Tests** — unit tests with mocked provider responses, integration test for artifact storage flow.
+
+### Acceptance Criteria
+
+- [ ] `IVideoProvider` interface defined with `GenerateAsync`, `CheckStatusAsync`, `DownloadAsync`
+- [ ] `FalAiVideoProvider` generates video from text prompt and returns downloadable URL
+- [ ] `KlingAiVideoProvider` generates video from text prompt and returns downloadable URL
+- [ ] Image-to-video works for both providers when `image_path` is supplied
+- [ ] `VideoGenerateTool` available in tool registry when a video provider is configured
+- [ ] Generated videos stored as workspace-scoped artifacts with metadata
+- [ ] Web UI renders inline `<video>` player for video artifacts in chat
+- [ ] Desktop UI provides video playback or "open in player" for video artifacts
+- [ ] CLI shows generation progress and opens completed video
+- [ ] Video providers configurable in `~/.sovrant/providers.json` and Settings UI
+- [ ] Async job polling works — agent can start generation, do other work, and check status later
+- [ ] All existing tests continue to pass
+
+---
+
+## Phase 66 — Document Generation (PDFs, Office Suite & Industry Templates)
+
+**Depends on:** Phase 53 (artifact storage), Phase 58 (trust boundary — for PII/PHI handling in healthcare docs)
+
+**Goal:** Give Sovrant agents the ability to generate professional documents — PDFs, Word, Excel, PowerPoint, and HTML — from chat, including industry-specific templates for real estate, healthcare, legal, finance, education, construction, and more. Documents are stored as workspace-scoped artifacts and downloadable from all delivery modes.
+
+### Why
+
+Every industry runs on documents. Contracts, reports, invoices, disclosures, care plans, proposals, compliance filings — the list is endless. Today, professionals spend hours formatting documents that an AI agent could draft, populate, and format in seconds. By combining Sovrant's agentic reasoning with structured document generation, the assistant becomes a true productivity multiplier across industries.
+
+The key differentiator: Sovrant doesn't just fill templates — the agent understands context, pulls data from the conversation and workspace, reasons about what sections to include, and generates complete, professional documents.
+
+### Document Engine Architecture
+
+```
+IDocumentGenerator (interface)
+  ├── PdfDocumentGenerator         — QuestPDF or iText for PDF output
+  ├── WordDocumentGenerator        — Open XML SDK (DocumentFormat.OpenXml)
+  ├── ExcelDocumentGenerator       — Open XML SDK / ClosedXML
+  ├── PowerPointGenerator          — Open XML SDK
+  ├── HtmlDocumentGenerator        — Razor templating → HTML → optional PDF conversion
+  └── MarkdownDocumentGenerator    — Markdig → styled HTML/PDF
+
+IDocumentTemplateStore
+  ├── BuiltInTemplateStore         — shipped templates per industry
+  ├── WorkspaceTemplateStore       — user-created templates scoped to workspace
+  └── CommunityTemplateStore       — (future) shared template marketplace
+```
+
+### Supported Output Formats
+
+| Format | Library | Use Cases |
+|---|---|---|
+| **PDF** | QuestPDF (MIT) | Contracts, reports, invoices, official documents, compliance filings |
+| **Word (.docx)** | Open XML SDK | Editable contracts, proposals, letters, SOWs |
+| **Excel (.xlsx)** | ClosedXML | Financial models, data exports, inventories, schedules |
+| **PowerPoint (.pptx)** | Open XML SDK | Pitch decks, project updates, training materials |
+| **HTML** | Razor templates | Email-ready documents, web-embeddable reports |
+| **Markdown** | Markdig | Developer docs, READMEs, wikis |
+
+### Industry Template Library
+
+#### Real Estate
+| Template | Description |
+|---|---|
+| `real-estate/purchase-agreement` | Residential/commercial purchase and sale agreement |
+| `real-estate/lease-agreement` | Standard lease with configurable terms, clauses |
+| `real-estate/property-listing` | MLS-style listing sheet with property details, photos, pricing |
+| `real-estate/cma-report` | Comparative market analysis with comps table and pricing recommendation |
+| `real-estate/closing-disclosure` | HUD-style closing cost breakdown |
+| `real-estate/property-inspection` | Inspection report with findings, photos, severity ratings |
+| `real-estate/rental-application` | Tenant application with background check consent |
+
+#### Healthcare
+| Template | Description |
+|---|---|
+| `healthcare/patient-intake` | New patient intake form with medical history, insurance, consent |
+| `healthcare/care-plan` | Individualized care plan with goals, interventions, timeline |
+| `healthcare/discharge-summary` | Hospital discharge summary with medications, follow-up instructions |
+| `healthcare/hipaa-authorization` | HIPAA-compliant authorization for release of medical information |
+| `healthcare/superbill` | Encounter form with CPT/ICD-10 codes for insurance billing |
+| `healthcare/progress-note` | SOAP-format clinical progress note |
+| `healthcare/referral-letter` | Provider-to-provider referral with clinical summary |
+
+#### Legal
+| Template | Description |
+|---|---|
+| `legal/nda` | Non-disclosure agreement (mutual or one-way) |
+| `legal/service-agreement` | Master service agreement with SOW attachment |
+| `legal/engagement-letter` | Attorney-client engagement letter with fee schedule |
+| `legal/demand-letter` | Formal demand letter with timeline and consequences |
+| `legal/corporate-minutes` | Board meeting minutes with resolutions |
+| `legal/power-of-attorney` | General or limited power of attorney |
+| `legal/terms-of-service` | Website/app terms of service |
+
+#### Finance & Accounting
+| Template | Description |
+|---|---|
+| `finance/invoice` | Professional invoice with line items, tax, payment terms |
+| `finance/financial-statement` | Income statement, balance sheet, cash flow (individual or combined) |
+| `finance/budget-report` | Department or project budget with actuals vs. planned |
+| `finance/expense-report` | Employee expense report with receipt references |
+| `finance/loan-amortization` | Amortization schedule with payment breakdown |
+| `finance/audit-report` | Internal/external audit findings with severity and recommendations |
+| `finance/proposal` | Business proposal with executive summary, pricing, timeline |
+
+#### Education
+| Template | Description |
+|---|---|
+| `education/syllabus` | Course syllabus with schedule, grading policy, objectives |
+| `education/lesson-plan` | Structured lesson plan with standards alignment |
+| `education/report-card` | Student performance report with grades and teacher comments |
+| `education/iep` | Individualized Education Program (special education) |
+| `education/transcript` | Academic transcript with GPA calculation |
+
+#### Construction & Engineering
+| Template | Description |
+|---|---|
+| `construction/bid-proposal` | Construction bid with scope, materials, labor, timeline |
+| `construction/change-order` | Change order with cost impact and schedule adjustment |
+| `construction/daily-log` | Daily site report with weather, crew, progress, issues |
+| `construction/punch-list` | Pre-completion punch list with items, photos, assignees |
+| `construction/safety-report` | OSHA-style safety inspection report |
+
+#### General Business
+| Template | Description |
+|---|---|
+| `business/sow` | Statement of work with deliverables, milestones, acceptance criteria |
+| `business/project-status` | Weekly/monthly project status report |
+| `business/meeting-notes` | Structured meeting notes with action items and owners |
+| `business/employee-offer` | Employment offer letter with compensation details |
+| `business/performance-review` | Employee performance review with ratings and goals |
+| `business/business-plan` | Full business plan with market analysis, financials, projections |
+
+### Tools
+
+#### `DocumentGenerateTool`
+
+Primary tool for document generation:
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `template` | string | No | Template ID (e.g., `real-estate/purchase-agreement`). If omitted, agent infers from prompt |
+| `prompt` | string | Yes | Description of what to generate, or data to populate the template with |
+| `format` | string | No | Output format: `pdf`, `docx`, `xlsx`, `pptx`, `html`, `md`. Default: `pdf` |
+| `data` | object | No | Structured data to populate template fields (key-value pairs) |
+| `style` | string | No | Style preset: `professional`, `minimal`, `modern`, `corporate`, `creative` |
+| `filename` | string | No | Output filename. Auto-generated from template + timestamp if omitted |
+
+#### `DocumentListTemplatesTool`
+
+Browse available templates:
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `industry` | string | No | Filter by industry (`real-estate`, `healthcare`, `legal`, `finance`, etc.) |
+| `search` | string | No | Search templates by name or description |
+
+#### `DocumentPreviewTool`
+
+Preview a template's structure and required fields before generating:
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `template` | string | Yes | Template ID to preview |
+
+### Template System
+
+Templates are defined as structured JSON schemas + Razor/HTML layout:
+
+```
+~/.sovrant/templates/
+  ├── built-in/                    ← shipped with Sovrant
+  │   ├── real-estate/
+  │   │   ├── purchase-agreement.json    ← schema (fields, types, defaults)
+  │   │   └── purchase-agreement.razor   ← layout template
+  │   ├── healthcare/
+  │   ├── legal/
+  │   └── ...
+  └── custom/                      ← user-created, workspace-scoped
+      └── {workspace-id}/
+          └── my-template.json + .razor
+```
+
+Template schema example:
+```json
+{
+  "id": "real-estate/purchase-agreement",
+  "name": "Purchase and Sale Agreement",
+  "industry": "real-estate",
+  "description": "Residential or commercial property purchase agreement",
+  "formats": ["pdf", "docx"],
+  "fields": [
+    { "name": "buyer_name", "type": "string", "required": true },
+    { "name": "seller_name", "type": "string", "required": true },
+    { "name": "property_address", "type": "string", "required": true },
+    { "name": "purchase_price", "type": "currency", "required": true },
+    { "name": "closing_date", "type": "date", "required": true },
+    { "name": "contingencies", "type": "string[]", "default": ["inspection", "financing", "appraisal"] },
+    { "name": "earnest_money", "type": "currency" },
+    { "name": "special_terms", "type": "text" }
+  ],
+  "style": {
+    "default": "professional",
+    "header_logo": true,
+    "page_numbers": true
+  }
+}
+```
+
+### Agent-Driven Document Workflow
+
+The agent doesn't just fill forms — it reasons about document generation:
+
+1. **Inference** — user says "draft me an NDA for my consulting client" → agent selects `legal/nda`, asks clarifying questions about parties, duration, scope
+2. **Data gathering** — agent pulls context from conversation history, workspace files, or asks the user for missing required fields
+3. **Generation** — agent calls `DocumentGenerateTool` with populated data
+4. **Review cycle** — user can say "make the non-compete clause 2 years instead of 1" → agent regenerates with modifications
+5. **Multi-document workflows** — "Generate the full closing package" → agent produces purchase agreement, closing disclosure, inspection report, and title commitment as separate artifacts
+
+### UI Integration
+
+| Mode | Behavior |
+|---|---|
+| **CLI** | Document saved to workspace artifacts, path printed, `xdg-open` / `start` to open |
+| **Desktop** | Document preview card in chat with download button. PDF rendered inline via Avalonia PDF viewer or "Open" button. Office docs open in default app |
+| **Web** | Document card with download link, PDF inline preview via `<iframe>` or PDF.js, Office docs downloadable with preview of first page |
+
+### Compliance & Safety Considerations
+
+- **Healthcare (HIPAA):** Templates that handle PHI are flagged. Trust Boundary (Phase 58) gates generation with a consent check. Generated docs with PHI are encrypted at rest in the artifact store.
+- **Legal:** Disclaimer: "This document was AI-generated and should be reviewed by a qualified attorney before execution." Auto-appended to legal templates unless explicitly suppressed.
+- **Financial:** PII/financial data redaction available. Audit trail logged for compliance-sensitive documents.
+- **Template validation:** Required fields enforced before generation. Agent prompted to collect missing data rather than generating incomplete documents.
+
+### Implementation Plan
+
+1. **`IDocumentGenerator` interface + factory** — `Sovrant.Runtime.Documents` namespace. `AddDocumentGenerators()` DI extension.
+2. **PDF generator** — QuestPDF integration. Razor template → PDF pipeline with configurable styles.
+3. **Word/Excel/PowerPoint generators** — Open XML SDK + ClosedXML. Template-driven generation from structured data.
+4. **HTML/Markdown generators** — Razor templating engine for HTML output, Markdig for markdown.
+5. **Template store** — `IDocumentTemplateStore` with built-in and workspace-scoped custom templates. JSON schema + Razor layout pairs.
+6. **Built-in template library** — Ship 40+ templates across 7 industries (real estate, healthcare, legal, finance, education, construction, general business).
+7. **`DocumentGenerateTool` + `DocumentListTemplatesTool` + `DocumentPreviewTool`** — new tools in `Sovrant.Tools.Documents`. Registered with capability gate.
+8. **Artifact integration** — generated documents saved to workspace artifact store with metadata (template, format, fields used, generation timestamp).
+9. **Web UI** — document card component in `ChatMessage.razor` with download, inline PDF preview, and format icon.
+10. **Desktop UI** — document card in chat view with download and open-in-app buttons.
+11. **CLI** — document path output, auto-open option.
+12. **Compliance layer** — HIPAA/PHI flagging, legal disclaimers, audit logging for sensitive templates.
+13. **Custom template authoring** — UI for creating workspace-scoped templates (JSON schema editor + Razor layout editor).
+14. **Tests** — unit tests per generator, template validation tests, integration tests for full generate-and-store pipeline.
+
+### NuGet Dependencies
+
+| Package | Purpose | License |
+|---|---|---|
+| `QuestPDF` | PDF generation | MIT |
+| `DocumentFormat.OpenXml` | Word/PowerPoint | MIT |
+| `ClosedXML` | Excel | MIT |
+
+### Acceptance Criteria
+
+- [ ] `IDocumentGenerator` interface with implementations for PDF, DOCX, XLSX, PPTX, HTML, MD
+- [ ] `DocumentGenerateTool` generates documents from templates + structured data
+- [ ] `DocumentListTemplatesTool` lists and searches available templates by industry
+- [ ] `DocumentPreviewTool` shows template fields and structure before generation
+- [ ] 40+ built-in templates across 7 industries ship with Sovrant
+- [ ] Agent can infer correct template from natural language ("draft me an NDA")
+- [ ] Agent collects missing required fields via conversation before generating
+- [ ] Multi-document workflows work ("generate the full closing package")
+- [ ] Custom workspace-scoped templates can be created and used
+- [ ] Generated documents stored as workspace artifacts with full metadata
+- [ ] Web UI shows document card with download + inline PDF preview
+- [ ] Desktop UI shows document card with download + open-in-app
+- [ ] CLI outputs document path and optionally auto-opens
+- [ ] Healthcare templates flag PHI handling through Trust Boundary
+- [ ] Legal templates include AI-generated disclaimer
+- [ ] All existing tests continue to pass
