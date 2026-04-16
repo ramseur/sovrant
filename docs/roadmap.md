@@ -11,12 +11,12 @@ This document tracks planned features, architectural decisions, and the reasonin
 
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
-- **51 tools** across 11 categories (file, shell, web, task, agent, team, mission, swarm, artifact, MCP, LSP)
-- **1,584 tests** across 9 projects, 0 failures
-- **96 server endpoints** (chat, sessions, config, status, models, usage, cost, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
+- **50 tools** across 11 categories (file, shell, web, task, agent, team, mission, swarm, artifact, MCP, LSP)
+- **1,367 tests** across 9 projects, 0 failures
+- **95 server endpoints** (chat, sessions, config, status, models, usage, cost, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
-- SQLite persistence layer with 12 versioned migrations, 34 tables, 48 indexes (Phase 32 + 42.5 + 51 + 52)
+- SQLite persistence layer with 14 versioned migrations (V001–V014), 36 tables, 61 indexes (Phase 32 + 42.5 + 51 + 52 + coordination_mailbox + session_titles)
 - Mission engine with durable goals, re-planning, acceptance gates, and event journal (Phase 51 ✅)
 - Unified agent orchestration: SQLite-backed teams + swarm + agent run ledger (Phase 52 ✅)
 - Scoped artifact storage with workspace-first layout (Phase 53 ✅)
