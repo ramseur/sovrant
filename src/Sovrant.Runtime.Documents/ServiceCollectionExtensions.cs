@@ -18,6 +18,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDocumentGenerator, MarkdownGenerator>();
         services.AddSingleton<IDocumentGenerator, PdfSharpGenerator>();
         services.AddSingleton<IDocumentGenerator, MigraDocGenerator>();
+        services.AddSingleton<IDocumentGenerator, WordDocumentGenerator>();
+        services.AddSingleton<IDocumentGenerator, ExcelDocumentGenerator>();
+        services.AddSingleton<IDocumentGenerator, PowerPointGenerator>();
 
         services.AddSingleton<IDocumentGeneratorRegistry, DocumentGeneratorRegistry>();
 

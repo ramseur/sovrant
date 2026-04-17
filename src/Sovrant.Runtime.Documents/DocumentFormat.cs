@@ -15,4 +15,13 @@ public enum DocumentFormat
 
     /// <summary>Structured PDF (tables/headers/styles) via MigraDoc.</summary>
     StructuredPdf,
+
+    /// <summary>Editable Word document (.docx) via Open XML SDK.</summary>
+    Word,
+
+    /// <summary>Excel spreadsheet (.xlsx) via ClosedXML.</summary>
+    Excel,
+
+    /// <summary>PowerPoint presentation (.pptx) via Open XML SDK.</summary>
+    PowerPoint,
 }

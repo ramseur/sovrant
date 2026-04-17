@@ -2,6 +2,7 @@ using System.Text.Json;
 using Sovrant.Api.Types;
 using Sovrant.Runtime.Artifacts;
 using Sovrant.Runtime.Documents;
+using DocFormat = Sovrant.Runtime.Documents.DocumentFormat;
 
 namespace Sovrant.Tools.Documents;
 
@@ -16,9 +17,11 @@ public sealed class DocumentGenerateTool : ITool
     private static readonly ToolDefinition s_definition = new("DocumentGenerate", CreateSchema())
     {
         Description =
-            "Generate a document (markdown, pdf, structured_pdf) and store it as a run-scoped artifact. " +
-            "Use 'markdown' for plain .md, 'pdf' for simple text PDFs (logs, raw output), and " +
-            "'structured_pdf' for styled reports with headings/lists/code blocks (markdown body). " +
+            "Generate a document and store it as a run-scoped artifact. Supported formats: " +
+            "'markdown' (.md verbatim), 'pdf' (simple text PDFs for logs/raw output), " +
+            "'structured_pdf' (styled PDF from markdown — headings, lists, code), " +
+            "'word' (.docx from markdown), 'excel' (.xlsx from JSON {headers, rows}), " +
+            "'powerpoint' (.pptx where each H1 in markdown becomes a new slide). " +
             "Returns the artifact path and a file:// or presigned URL.",
     };
 
@@ -93,30 +96,48 @@ public sealed class DocumentGenerateTool : ITool
         }
     }
 
-    private static bool TryParseFormat(string raw, out DocumentFormat format)
+    private static bool TryParseFormat(string raw, out DocFormat format)
     {
         if (string.Equals(raw, "markdown", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(raw, "md", StringComparison.OrdinalIgnoreCase))
         {
-            format = DocumentFormat.Markdown; return true;
+            format = DocFormat.Markdown; return true;
         }
         if (string.Equals(raw, "pdf", StringComparison.OrdinalIgnoreCase))
         {
-            format = DocumentFormat.Pdf; return true;
+            format = DocFormat.Pdf; return true;
         }
         if (string.Equals(raw, "structured_pdf", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(raw, "report", StringComparison.OrdinalIgnoreCase))
         {
-            format = DocumentFormat.StructuredPdf; return true;
+            format = DocFormat.StructuredPdf; return true;
+        }
+        if (string.Equals(raw, "word", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(raw, "docx", StringComparison.OrdinalIgnoreCase))
+        {
+            format = DocFormat.Word; return true;
+        }
+        if (string.Equals(raw, "excel", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(raw, "xlsx", StringComparison.OrdinalIgnoreCase))
+        {
+            format = DocFormat.Excel; return true;
+        }
+        if (string.Equals(raw, "powerpoint", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(raw, "pptx", StringComparison.OrdinalIgnoreCase))
+        {
+            format = DocFormat.PowerPoint; return true;
         }
         format = default; return false;
     }
 
-    private static string DefaultFileName(DocumentFormat format) => format switch
+    private static string DefaultFileName(DocFormat format) => format switch
     {
-        DocumentFormat.Markdown => "document.md",
-        DocumentFormat.Pdf => "document.pdf",
-        DocumentFormat.StructuredPdf => "document.pdf",
+        DocFormat.Markdown => "document.md",
+        DocFormat.Pdf => "document.pdf",
+        DocFormat.StructuredPdf => "document.pdf",
+        DocFormat.Word => "document.docx",
+        DocFormat.Excel => "document.xlsx",
+        DocFormat.PowerPoint => "document.pptx",
         _ => "document.bin",
     };
 
@@ -126,12 +147,12 @@ public sealed class DocumentGenerateTool : ITool
             "properties": {
                 "format": {
                     "type": "string",
-                    "enum": ["markdown", "pdf", "structured_pdf"],
-                    "description": "Output format. 'markdown' writes a .md file; 'pdf' writes a simple text PDF; 'structured_pdf' renders markdown into a styled PDF with headings, lists, and code blocks."
+                    "enum": ["markdown", "pdf", "structured_pdf", "word", "excel", "powerpoint"],
+                    "description": "Output format. 'markdown' writes a .md file; 'pdf' writes a simple text PDF; 'structured_pdf' renders markdown into a styled PDF; 'word' writes a .docx from markdown; 'excel' expects a JSON body {headers:[...], rows:[[...]]}; 'powerpoint' writes a .pptx where each H1 starts a new slide."
                 },
                 "body": {
                     "type": "string",
-                    "description": "The source content. For markdown and structured_pdf this is interpreted as Markdown; for pdf it is treated as plain text."
+                    "description": "The source content. Markdown/structured_pdf/word/powerpoint expect Markdown; pdf expects plain text; excel expects a JSON string {\"headers\":[\"A\",\"B\"],\"rows\":[[1,2],[3,4]]}."
                 },
                 "title": {
                     "type": "string",
