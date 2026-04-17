@@ -5927,20 +5927,22 @@ All chosen libraries are **truly permissively licensed** (MIT / Apache 2.0 / MPL
 | iText 7 | AGPL or commercial — AGPL is viral and forces entire app open-source |
 | EPPlus (v5+) | Polyform Noncommercial after v5 — same revenue-threshold gotcha |
 | Pandoc | GPL — viral license, contaminates linking code |
+| Playwright / Puppeteer (for PDF) | Requires ~150MB Chromium download on first run; adds external binary dependency and cold-start latency. Deferred indefinitely — users who need pixel-perfect HTML/CSS PDFs can print from their own browser after receiving the HTML output |
 
 ### Document Engine Architecture
 
 ```
 IDocumentGenerator (interface)
-  ├── PdfDocumentGenerator         — PDFSharp (simple docs) + Playwright→PDF (complex/styled)
+  ├── PdfSharpGenerator            — PDFSharp (simple text-based PDFs)
+  ├── MigraDocGenerator            — MigraDoc → PDFSharp (structured PDFs with tables/styles/headers)
   ├── WordDocumentGenerator        — DocumentFormat.OpenXml (Microsoft, MIT)
   ├── ExcelDocumentGenerator       — ClosedXML (friendlier API over OpenXml)
   ├── PowerPointGenerator          — DocumentFormat.OpenXml
-  ├── HtmlDocumentGenerator        — Razor templating → HTML → optional PDF via Playwright
-  └── MarkdownDocumentGenerator    — Markdig → styled HTML/PDF
+  ├── HtmlDocumentGenerator        — Razor templating → HTML (user can browser-print to PDF)
+  └── MarkdownDocumentGenerator    — Markdig → markdown/HTML
 
 IDocumentTemplateStore
-  ├── BuiltInTemplateStore         — shipped templates per industry
+  ├── BuiltInTemplateStore         — shipped templates per industry (embedded resources)
   ├── WorkspaceTemplateStore       — user-created templates scoped to workspace
   └── CommunityTemplateStore       — (future) shared template marketplace
 ```
@@ -5949,16 +5951,16 @@ IDocumentTemplateStore
 
 | Format | Library | License | Use Cases |
 |---|---|---|---|
-| **PDF (simple)** | PDFSharp | MIT | Invoices, contracts, single-column reports, signed documents |
-| **PDF (designed)** | Playwright → Chromium | Apache 2.0 / MIT | Multi-column brochures, reports with charts, marketing collateral |
+| **PDF (simple)** | PDFSharp | MIT | Plain text exports, simple receipts |
+| **PDF (structured)** | MigraDoc + PDFSharp | MIT | Invoices, contracts, reports, financial statements, medical forms, proposals — 95% of business PDFs |
 | **Word (.docx)** | DocumentFormat.OpenXml | MIT (Microsoft) | Editable contracts, proposals, letters, SOWs |
 | **Excel (.xlsx)** | ClosedXML (+ OpenXml) | MIT | Financial models, data exports, inventories, schedules |
 | **PowerPoint (.pptx)** | DocumentFormat.OpenXml | MIT | Pitch decks, project updates, training materials |
-| **HTML** | Razor templates | MIT (.NET) | Email-ready documents, web-embeddable reports |
+| **HTML** | Razor templates | MIT (.NET) | Email-ready docs, web-embeddable reports, browser-printable designed PDFs |
 | **Markdown** | Markdig | BSD-2-Clause | Developer docs, READMEs, wikis |
-| **Typst (optional)** | Typst CLI | Apache 2.0 | Beautiful typeset reports — modern LaTeX alternative |
+| **Typst (optional)** | Typst CLI | Apache 2.0 | Beautiful typeset reports — opt-in, future phase |
 
-**Why two PDF engines:** PDFSharp handles 80% of business documents quickly and with no browser dependency. Playwright handles the other 20% where HTML/CSS design fidelity matters (multi-column layouts, embedded charts, complex typography). The agent picks based on the template's declared complexity, or the user can override via the `format` parameter (`pdf` vs `pdf-designed`).
+**Why PDFSharp + MigraDoc instead of headless Chromium:** No external binaries, no 150MB first-run download, no cold-start latency, no extra process to supervise. Total NuGet footprint for the PDF stack: ~2MB. MigraDoc provides a high-level document model (paragraphs, tables, headers, footers, page numbers, styles) that covers 95% of real business documents. For the remaining 5% where pixel-perfect HTML/CSS design fidelity matters (marketing brochures, Figma-exported layouts), the agent emits HTML and the user prints-to-PDF from their browser — no runtime dependency required.
 
 ### Industry Template Library
 
@@ -6138,7 +6140,7 @@ The agent doesn't just fill forms — it reasons about document generation:
 ### Implementation Plan
 
 1. **`IDocumentGenerator` interface + factory** — `Sovrant.Runtime.Documents` namespace. `AddDocumentGenerators()` DI extension.
-2. **PDF generators** — `PdfSharpGenerator` for simple structured docs (invoices, contracts); `PlaywrightPdfGenerator` for HTML/CSS-designed PDFs via headless Chromium. Template declares which engine to use.
+2. **PDF generators** — `PdfSharpGenerator` for plain text-based PDFs; `MigraDocGenerator` for structured PDFs (invoices, contracts, reports) with tables, styles, headers/footers, page numbers, embedded images. No external binaries, no Chromium, no runtime download.
 3. **Word/Excel/PowerPoint generators** — Open XML SDK + ClosedXML. Template-driven generation from structured data.
 4. **HTML/Markdown generators** — Razor templating engine for HTML output, Markdig for markdown.
 5. **Template store** — `IDocumentTemplateStore` with built-in and workspace-scoped custom templates. JSON schema + Razor layout pairs.
@@ -6156,11 +6158,13 @@ The agent doesn't just fill forms — it reasons about document generation:
 
 | Package | Purpose | License |
 |---|---|---|
-| `PDFsharp` | Simple PDF generation (invoices, contracts, reports) | MIT |
-| `Microsoft.Playwright` | Complex/designed PDFs via headless Chromium HTML→PDF | Apache 2.0 |
+| `PDFsharp` | PDF output (low-level API) | MIT |
+| `PDFsharp.MigraDoc` | Structured PDF generation (tables, styles, headers, page numbers) — renders via PDFSharp | MIT |
 | `DocumentFormat.OpenXml` | Word, Excel, PowerPoint generation (Microsoft official) | MIT |
 | `ClosedXML` | Friendly Excel API on top of OpenXml | MIT |
-| `Markdig` | Markdown → HTML | BSD-2-Clause |
+| `Markdig` | Markdown parsing (already referenced in Desktop/Web projects) | BSD-2-Clause |
+
+**Total additional footprint: ~10MB NuGet packages. Zero external binaries. Zero first-run downloads.**
 
 **Optional / later phases:**
 
