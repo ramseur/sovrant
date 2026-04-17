@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sovrant.Lsp;
 using Sovrant.Runtime.Config;
+using Sovrant.Runtime.Documents;
 using Sovrant.Tools.Agent;
 using Sovrant.Tools.Core;
 using Sovrant.Tools.Extended;
@@ -18,6 +19,7 @@ using Sovrant.Tools.Coordination;
 using Sovrant.Tools.Swarm;
 using Sovrant.Tools.Team;
 using Sovrant.Tools.Artifacts;
+using Sovrant.Tools.Documents;
 using Sovrant.Tools.Worktree;
 
 namespace Sovrant.Tools;
@@ -135,6 +137,10 @@ public static class ServiceCollectionExtensions
 
         // Artifact tools — agent-side producer interface (Phase 41)
         services.AddSingleton<ITool, ArtifactTool>();
+
+        // Document generation (Phase 66) — markdown, simple PDF, structured PDF.
+        services.AddSovrantDocuments();
+        services.AddSingleton<ITool, DocumentGenerateTool>();
 
         // Quality / verification tools
         services.AddSingleton<ITool, VerifyTool>();

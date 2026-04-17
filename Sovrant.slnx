@@ -4,6 +4,7 @@
     <Project Path="src/Sovrant.Cli/Sovrant.Cli.csproj" />
     <Project Path="src/Sovrant.Commands/Sovrant.Commands.csproj" />
     <Project Path="src/Sovrant.Runtime/Sovrant.Runtime.csproj" />
+    <Project Path="src/Sovrant.Runtime.Documents/Sovrant.Runtime.Documents.csproj" />
     <Project Path="src/Sovrant.Server/Sovrant.Server.csproj" />
     <Project Path="src/Sovrant.Lsp/Sovrant.Lsp.csproj" />
     <Project Path="src/Sovrant.Tools/Sovrant.Tools.csproj" />
@@ -18,6 +19,7 @@
     <Project Path="tests/Sovrant.Commands.Tests/Sovrant.Commands.Tests.csproj" />
     <Project Path="tests/Sovrant.Integration.Tests/Sovrant.Integration.Tests.csproj" />
     <Project Path="tests/Sovrant.Runtime.Tests/Sovrant.Runtime.Tests.csproj" />
+    <Project Path="tests/Sovrant.Runtime.Documents.Tests/Sovrant.Runtime.Documents.Tests.csproj" />
     <Project Path="tests/Sovrant.Lsp.Tests/Sovrant.Lsp.Tests.csproj" />
     <Project Path="tests/Sovrant.Server.Tests/Sovrant.Server.Tests.csproj" />
     <Project Path="tests/Sovrant.Tools.Tests/Sovrant.Tools.Tests.csproj" />
