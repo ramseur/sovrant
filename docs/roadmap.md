@@ -12,8 +12,8 @@ This document tracks planned features, architectural decisions, and the reasonin
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
 - **50 tools** across 11 categories (file, shell, web, task, agent, team, mission, swarm, artifact, MCP, LSP)
-- **1,367 tests** across 9 projects, 0 failures
-- **95 server endpoints** (chat, sessions, config, status, models, usage, cost, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
+- **1,587 tests** across 9 projects, 0 failures
+- **96 server endpoints** (chat, sessions, config, status, models, usage, cost, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
 - SQLite persistence layer with 14 versioned migrations (V001–V014), 36 tables, 61 indexes (Phase 32 + 42.5 + 51 + 52 + coordination_mailbox + session_titles)
@@ -5915,15 +5915,28 @@ Every industry runs on documents. Contracts, reports, invoices, disclosures, car
 
 The key differentiator: Sovrant doesn't just fill templates — the agent understands context, pulls data from the conversation and workspace, reasons about what sections to include, and generates complete, professional documents.
 
+### Open-Source Library Strategy
+
+All chosen libraries are **truly permissively licensed** (MIT / Apache 2.0 / MPL) — no LGPL/AGPL/GPL viral clauses, no commercial-revenue-threshold gotchas. This matters because Sovrant is self-hostable enterprise software; licensing ambiguity is a non-starter.
+
+**Deliberately excluded alternatives:**
+
+| Library | Why excluded |
+|---|---|
+| QuestPDF | Free for companies under $1M revenue, commercial license above — not truly open source for enterprise |
+| iText 7 | AGPL or commercial — AGPL is viral and forces entire app open-source |
+| EPPlus (v5+) | Polyform Noncommercial after v5 — same revenue-threshold gotcha |
+| Pandoc | GPL — viral license, contaminates linking code |
+
 ### Document Engine Architecture
 
 ```
 IDocumentGenerator (interface)
-  ├── PdfDocumentGenerator         — QuestPDF or iText for PDF output
-  ├── WordDocumentGenerator        — Open XML SDK (DocumentFormat.OpenXml)
-  ├── ExcelDocumentGenerator       — Open XML SDK / ClosedXML
-  ├── PowerPointGenerator          — Open XML SDK
-  ├── HtmlDocumentGenerator        — Razor templating → HTML → optional PDF conversion
+  ├── PdfDocumentGenerator         — PDFSharp (simple docs) + Playwright→PDF (complex/styled)
+  ├── WordDocumentGenerator        — DocumentFormat.OpenXml (Microsoft, MIT)
+  ├── ExcelDocumentGenerator       — ClosedXML (friendlier API over OpenXml)
+  ├── PowerPointGenerator          — DocumentFormat.OpenXml
+  ├── HtmlDocumentGenerator        — Razor templating → HTML → optional PDF via Playwright
   └── MarkdownDocumentGenerator    — Markdig → styled HTML/PDF
 
 IDocumentTemplateStore
@@ -5934,14 +5947,18 @@ IDocumentTemplateStore
 
 ### Supported Output Formats
 
-| Format | Library | Use Cases |
-|---|---|---|
-| **PDF** | QuestPDF (MIT) | Contracts, reports, invoices, official documents, compliance filings |
-| **Word (.docx)** | Open XML SDK | Editable contracts, proposals, letters, SOWs |
-| **Excel (.xlsx)** | ClosedXML | Financial models, data exports, inventories, schedules |
-| **PowerPoint (.pptx)** | Open XML SDK | Pitch decks, project updates, training materials |
-| **HTML** | Razor templates | Email-ready documents, web-embeddable reports |
-| **Markdown** | Markdig | Developer docs, READMEs, wikis |
+| Format | Library | License | Use Cases |
+|---|---|---|---|
+| **PDF (simple)** | PDFSharp | MIT | Invoices, contracts, single-column reports, signed documents |
+| **PDF (designed)** | Playwright → Chromium | Apache 2.0 / MIT | Multi-column brochures, reports with charts, marketing collateral |
+| **Word (.docx)** | DocumentFormat.OpenXml | MIT (Microsoft) | Editable contracts, proposals, letters, SOWs |
+| **Excel (.xlsx)** | ClosedXML (+ OpenXml) | MIT | Financial models, data exports, inventories, schedules |
+| **PowerPoint (.pptx)** | DocumentFormat.OpenXml | MIT | Pitch decks, project updates, training materials |
+| **HTML** | Razor templates | MIT (.NET) | Email-ready documents, web-embeddable reports |
+| **Markdown** | Markdig | BSD-2-Clause | Developer docs, READMEs, wikis |
+| **Typst (optional)** | Typst CLI | Apache 2.0 | Beautiful typeset reports — modern LaTeX alternative |
+
+**Why two PDF engines:** PDFSharp handles 80% of business documents quickly and with no browser dependency. Playwright handles the other 20% where HTML/CSS design fidelity matters (multi-column layouts, embedded charts, complex typography). The agent picks based on the template's declared complexity, or the user can override via the `format` parameter (`pdf` vs `pdf-designed`).
 
 ### Industry Template Library
 
@@ -6121,7 +6138,7 @@ The agent doesn't just fill forms — it reasons about document generation:
 ### Implementation Plan
 
 1. **`IDocumentGenerator` interface + factory** — `Sovrant.Runtime.Documents` namespace. `AddDocumentGenerators()` DI extension.
-2. **PDF generator** — QuestPDF integration. Razor template → PDF pipeline with configurable styles.
+2. **PDF generators** — `PdfSharpGenerator` for simple structured docs (invoices, contracts); `PlaywrightPdfGenerator` for HTML/CSS-designed PDFs via headless Chromium. Template declares which engine to use.
 3. **Word/Excel/PowerPoint generators** — Open XML SDK + ClosedXML. Template-driven generation from structured data.
 4. **HTML/Markdown generators** — Razor templating engine for HTML output, Markdig for markdown.
 5. **Template store** — `IDocumentTemplateStore` with built-in and workspace-scoped custom templates. JSON schema + Razor layout pairs.
@@ -6139,9 +6156,18 @@ The agent doesn't just fill forms — it reasons about document generation:
 
 | Package | Purpose | License |
 |---|---|---|
-| `QuestPDF` | PDF generation | MIT |
-| `DocumentFormat.OpenXml` | Word/PowerPoint | MIT |
-| `ClosedXML` | Excel | MIT |
+| `PDFsharp` | Simple PDF generation (invoices, contracts, reports) | MIT |
+| `Microsoft.Playwright` | Complex/designed PDFs via headless Chromium HTML→PDF | Apache 2.0 |
+| `DocumentFormat.OpenXml` | Word, Excel, PowerPoint generation (Microsoft official) | MIT |
+| `ClosedXML` | Friendly Excel API on top of OpenXml | MIT |
+| `Markdig` | Markdown → HTML | BSD-2-Clause |
+
+**Optional / later phases:**
+
+| Package | Purpose | License |
+|---|---|---|
+| `Typst CLI` (shell-out) | Modern typeset reports — beautiful output, LaTeX alternative | Apache 2.0 |
+| `SkiaSharp` | Chart rendering for PDFs | MIT |
 
 ### Acceptance Criteria
 
