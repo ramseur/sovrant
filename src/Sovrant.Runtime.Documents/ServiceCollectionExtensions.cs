@@ -1,5 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Sovrant.Runtime.Documents.Generators;
+using Sovrant.Runtime.Documents.Templates;
+using Sovrant.Runtime.Documents.Templates.Business;
+using Sovrant.Runtime.Documents.Templates.Finance;
+using Sovrant.Runtime.Documents.Templates.Legal;
+using Sovrant.Runtime.Documents.Templates.RealEstate;
 
 namespace Sovrant.Runtime.Documents;
 
@@ -23,6 +28,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDocumentGenerator, PowerPointGenerator>();
 
         services.AddSingleton<IDocumentGeneratorRegistry, DocumentGeneratorRegistry>();
+
+        services.AddSingleton<IDocumentTemplate, InvoiceTemplate>();
+        services.AddSingleton<IDocumentTemplate, MeetingNotesTemplate>();
+        services.AddSingleton<IDocumentTemplate, NdaTemplate>();
+        services.AddSingleton<IDocumentTemplate, ExpenseReportTemplate>();
+        services.AddSingleton<IDocumentTemplate, PropertyListingTemplate>();
+
+        services.AddSingleton<ITemplateRegistry, TemplateRegistry>();
 
         return services;
     }

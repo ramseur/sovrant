@@ -27,7 +27,7 @@ public sealed class ExcelDocumentGenerator : DocumentGeneratorBase
 
     protected override Task<byte[]> RenderAsync(DocumentRequest request, CancellationToken ct)
     {
-        var (headers, rows) = ParseBody(request.Body);
+        var parsed = ParseBody(request.Body);
 
         using var workbook = new XLWorkbook();
         var sheetName = SanitizeSheetName(request.Title ?? "Sheet1");
@@ -35,19 +35,32 @@ public sealed class ExcelDocumentGenerator : DocumentGeneratorBase
 
         var row = 1;
 
-        if (headers.Count > 0)
+        foreach (var preamble in parsed.Preamble)
         {
-            for (var i = 0; i < headers.Count; i++)
+            ct.ThrowIfCancellationRequested();
+            for (var i = 0; i < preamble.Count; i++)
             {
                 var cell = sheet.Cell(row, i + 1);
-                cell.Value = headers[i];
+                SetCellValue(cell, preamble[i]);
+                if (i == 0 && !string.IsNullOrEmpty(preamble[i]))
+                    cell.Style.Font.Bold = true;
+            }
+            row++;
+        }
+
+        if (parsed.Headers.Count > 0)
+        {
+            for (var i = 0; i < parsed.Headers.Count; i++)
+            {
+                var cell = sheet.Cell(row, i + 1);
+                cell.Value = parsed.Headers[i];
                 cell.Style.Font.Bold = true;
                 cell.Style.Fill.BackgroundColor = XLColor.LightGray;
             }
             row++;
         }
 
-        foreach (var dataRow in rows)
+        foreach (var dataRow in parsed.Rows)
         {
             ct.ThrowIfCancellationRequested();
             for (var i = 0; i < dataRow.Count; i++)
@@ -57,7 +70,7 @@ public sealed class ExcelDocumentGenerator : DocumentGeneratorBase
             row++;
         }
 
-        if (headers.Count > 0 || rows.Count > 0)
+        if (parsed.Headers.Count > 0 || parsed.Rows.Count > 0 || parsed.Preamble.Count > 0)
             sheet.Columns().AdjustToContents();
 
         using var ms = new MemoryStream();
@@ -89,10 +102,12 @@ public sealed class ExcelDocumentGenerator : DocumentGeneratorBase
         cell.Value = raw;
     }
 
-    private static (List<string> Headers, List<List<string>> Rows) ParseBody(string body)
+    private readonly record struct ParsedSheet(List<List<string>> Preamble, List<string> Headers, List<List<string>> Rows);
+
+    private static ParsedSheet ParseBody(string body)
     {
         if (string.IsNullOrWhiteSpace(body))
-            return ([], []);
+            return new ParsedSheet([], [], []);
 
         var trimmed = body.TrimStart();
         if (trimmed.StartsWith('{'))
@@ -101,6 +116,21 @@ public sealed class ExcelDocumentGenerator : DocumentGeneratorBase
             {
                 using var doc = JsonDocument.Parse(body);
                 var root = doc.RootElement;
+
+                var preamble = new List<List<string>>();
+                if (root.TryGetProperty("preamble", out var pre) && pre.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var row in pre.EnumerateArray())
+                    {
+                        var cells = new List<string>();
+                        if (row.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var cell in row.EnumerateArray())
+                                cells.Add(CellText(cell));
+                        }
+                        preamble.Add(cells);
+                    }
+                }
 
                 var headers = new List<string>();
                 if (root.TryGetProperty("headers", out var h) && h.ValueKind == JsonValueKind.Array)
@@ -124,7 +154,7 @@ public sealed class ExcelDocumentGenerator : DocumentGeneratorBase
                     }
                 }
 
-                return (headers, rows);
+                return new ParsedSheet(preamble, headers, rows);
             }
             catch (JsonException)
             {
@@ -132,7 +162,8 @@ public sealed class ExcelDocumentGenerator : DocumentGeneratorBase
             }
         }
 
-        return ParseCsv(body);
+        var csv = ParseCsv(body);
+        return new ParsedSheet([], csv.Headers, csv.Rows);
     }
 
     private static string CellText(JsonElement el) => el.ValueKind switch

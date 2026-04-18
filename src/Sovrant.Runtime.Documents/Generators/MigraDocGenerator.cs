@@ -1,7 +1,9 @@
 using Markdig;
+using Markdig.Extensions.Tables;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using MigraDoc.DocumentObjectModel;
+using MigraDoc.DocumentObjectModel.Tables;
 using MigraDoc.Rendering;
 using PdfSharp.Fonts;
 using Sovrant.Runtime.Artifacts;
@@ -162,11 +164,58 @@ public sealed class MigraDocGenerator : DocumentGeneratorBase
                 section.AddParagraph(new string('─', 40));
                 break;
 
+            case Markdig.Extensions.Tables.Table table:
+                RenderTable(section, table);
+                break;
+
             default:
                 // Fallback — dump the raw markdown so nothing goes missing.
                 var fallback = section.AddParagraph(block.ToString() ?? string.Empty);
                 fallback.Style = "Normal";
                 break;
+        }
+    }
+
+    private static void RenderTable(Section section, Markdig.Extensions.Tables.Table source)
+    {
+        var columnCount = source.ColumnDefinitions.Count > 0
+            ? source.ColumnDefinitions.Count
+            : source.OfType<Markdig.Extensions.Tables.TableRow>().Select(r => r.Count).DefaultIfEmpty(1).Max();
+        if (columnCount == 0) return;
+
+        var table = section.AddTable();
+        table.Borders.Width = 0.5;
+        table.Borders.Color = Colors.Gray;
+        table.LeftPadding = Unit.FromPoint(4);
+        table.RightPadding = Unit.FromPoint(4);
+        table.TopPadding = Unit.FromPoint(2);
+        table.BottomPadding = Unit.FromPoint(2);
+
+        for (var i = 0; i < columnCount; i++)
+            table.AddColumn(Unit.FromCentimeter(17.0 / columnCount));
+
+        foreach (var rowObj in source)
+        {
+            if (rowObj is not Markdig.Extensions.Tables.TableRow mdRow) continue;
+
+            var row = table.AddRow();
+            if (mdRow.IsHeader)
+            {
+                row.Shading.Color = Colors.LightGray;
+                row.Format.Font.Bold = true;
+            }
+
+            for (var c = 0; c < columnCount; c++)
+            {
+                var cellPara = row.Cells[c].AddParagraph();
+                if (c < mdRow.Count && mdRow[c] is Markdig.Extensions.Tables.TableCell mdCell)
+                {
+                    foreach (var block in mdCell)
+                    {
+                        if (block is ParagraphBlock p) AppendInlines(cellPara, p.Inline);
+                    }
+                }
+            }
         }
     }
 

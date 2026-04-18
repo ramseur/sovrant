@@ -141,6 +141,8 @@ public static class ServiceCollectionExtensions
         // Document generation (Phase 66) — markdown, simple PDF, structured PDF.
         services.AddSovrantDocuments();
         services.AddSingleton<ITool, DocumentGenerateTool>();
+        services.AddSingleton<ITool, DocumentFromTemplateTool>();
+        services.AddSingleton<ITool, DocumentListTemplatesTool>();
 
         // Quality / verification tools
         services.AddSingleton<ITool, VerifyTool>();

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <NoWarn>CA1034;CA1710;CA1000;CA2225;CA1716;CA1031;CA1849;CA1724</NoWarn>
+    <NoWarn>CA1034;CA1710;CA1000;CA2225;CA1716;CA1031;CA1849;CA1724;CA1720</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
