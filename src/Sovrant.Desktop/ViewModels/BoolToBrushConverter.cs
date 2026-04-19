@@ -29,6 +29,12 @@ public sealed class BoolToBrushConverter : IValueConverter
         FalseResource = "TextSecondary",
     };
 
+    public static readonly BoolToBrushConverter ErrorOrToolBorder = new()
+    {
+        TrueResource = "StatusFail",
+        FalseResource = "ToolUseBorder",
+    };
+
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         var flag = value is bool b && b;

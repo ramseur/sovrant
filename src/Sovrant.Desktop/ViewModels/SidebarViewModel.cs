@@ -112,21 +112,49 @@ public partial class SidebarViewModel : ViewModelBase
     private async Task SelectProviderAsync(ProviderTreeGroup group)
     {
         SelectedTreeGroup = group;
-        // If no models yet (no static list), fetch live from the provider.
-        if (group.Models.Count == 0 && !string.IsNullOrWhiteSpace(group.BaseUrl) && !string.IsNullOrWhiteSpace(group.ApiKey) && _httpFactory is not null)
+        // Always prefer the provider's live model list — the static dictionary is just an offline
+        // fallback. Fetch once per session per provider; static list stays visible until live arrives.
+        if (!group.ModelsFetchedLive && !string.IsNullOrWhiteSpace(group.BaseUrl)
+            && !string.IsNullOrWhiteSpace(group.ApiKey) && _httpFactory is not null)
         {
             var fetched = await FetchModelIdsAsync(group.BaseUrl, group.ApiKey);
-            if (fetched.Count > 0)
+            var filtered = FilterChatModels(group.Provider, fetched);
+            if (filtered.Count > 0)
             {
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     group.Models.Clear();
-                    foreach (var m in fetched)
+                    foreach (var m in filtered)
                         group.Models.Add(new ModelOption(m, group));
                     group.ModelCount = group.Models.Count;
+                    group.ModelsFetchedLive = true;
                 });
             }
         }
+    }
+
+    /// <summary>
+    /// Drop obvious non-chat models from a live provider response (embeddings, TTS, image gen,
+    /// moderation, whisper, legacy completion). Safe default: keep unknown entries.
+    /// </summary>
+    private static List<string> FilterChatModels(string provider, List<string> ids)
+    {
+        if (ids.Count == 0) return ids;
+        var excludes = new[]
+        {
+            "embedding", "embed-", "-embed",
+            "dall-e", "dalle", "image-",
+            "whisper", "tts-", "-tts",
+            "moderation",
+            "realtime-preview", "transcribe",
+            "babbage", "ada-00", "curie", "davinci",
+        };
+        return ids.Where(id =>
+        {
+            foreach (var ex in excludes)
+                if (id.Contains(ex, StringComparison.OrdinalIgnoreCase)) return false;
+            return true;
+        }).ToList();
     }
 
     private async Task<List<string>> FetchModelIdsAsync(string baseUrl, string apiKey)
@@ -507,6 +535,9 @@ public partial class ProviderTreeGroup : ViewModelBase
     private bool _isCurrent;
 
     public ObservableCollection<ModelOption> Models { get; } = [];
+
+    /// <summary>True once we've successfully fetched the live model list for this provider in this session.</summary>
+    public bool ModelsFetchedLive { get; set; }
 
     public override string ToString() => Provider;
 }

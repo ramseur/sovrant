@@ -153,6 +153,7 @@
         public string BaseUrl { get; set; } = string.Empty;
         public int MaxTokens { get; set; } = 32000;
         public List<string> Models { get; set; } = [];
+        public bool ModelsFetchedLive { get; set; }
     }
 
     private List<TreeGroup> _treeGroups = [];
@@ -264,17 +265,40 @@
     private async Task DrillIntoProvider(TreeGroup group)
     {
         _selectedTreeGroup = group;
-        // If the group has no models yet (no static list), fetch live from the provider.
-        if (group.Models.Count == 0 && !string.IsNullOrWhiteSpace(group.BaseUrl) && !string.IsNullOrWhiteSpace(group.ApiKey))
+        // Always prefer the provider's live model list — the static dictionary is just an offline
+        // fallback. Fetch once per session per provider; static list stays visible until live arrives.
+        if (!group.ModelsFetchedLive && !string.IsNullOrWhiteSpace(group.BaseUrl) && !string.IsNullOrWhiteSpace(group.ApiKey))
         {
             var fetched = await FetchModelIdsAsync(group.BaseUrl, group.ApiKey);
-            if (fetched.Count > 0)
+            var filtered = FilterChatModels(fetched);
+            if (filtered.Count > 0)
             {
                 group.Models.Clear();
-                group.Models.AddRange(fetched);
+                group.Models.AddRange(filtered);
+                group.ModelsFetchedLive = true;
                 StateHasChanged();
             }
         }
+    }
+
+    private static List<string> FilterChatModels(List<string> ids)
+    {
+        if (ids.Count == 0) return ids;
+        var excludes = new[]
+        {
+            "embedding", "embed-", "-embed",
+            "dall-e", "dalle", "image-",
+            "whisper", "tts-", "-tts",
+            "moderation",
+            "realtime-preview", "transcribe",
+            "babbage", "ada-00", "curie", "davinci",
+        };
+        return ids.Where(id =>
+        {
+            foreach (var ex in excludes)
+                if (id.Contains(ex, StringComparison.OrdinalIgnoreCase)) return false;
+            return true;
+        }).ToList();
     }
 
     private async Task<List<string>> FetchModelIdsAsync(string baseUrl, string apiKey)

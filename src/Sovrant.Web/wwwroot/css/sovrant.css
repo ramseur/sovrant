@@ -956,7 +956,14 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
 .tool-name { font-weight: 600; color: var(--text-primary); }
 
-.tool-status { font-size: 10px; margin-left: auto; }
+.tool-status {
+    font-size: 10px;
+    font-weight: 600;
+    margin-left: auto;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--surface-card);
+}
 .status-done { color: var(--status-pass); }
 .status-error { color: var(--status-fail); }
 .status-running { color: var(--status-warn); }

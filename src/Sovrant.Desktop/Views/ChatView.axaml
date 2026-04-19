@@ -456,26 +456,67 @@
                                                                 Padding="10,8"
                                                                 CornerRadius="8"
                                                                 Background="{DynamicResource ToolUseBackground}"
-                                                                BorderBrush="{DynamicResource ToolUseBorder}"
+                                                                BorderBrush="{Binding IsError, Converter={x:Static vm:BoolToBrushConverter.ErrorOrToolBorder}}"
                                                                 BorderThickness="1">
                                                             <StackPanel Spacing="4">
-                                                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                                                    <TextBlock Text="🔧" FontSize="12" />
-                                                                    <TextBlock Text="{Binding ToolName}"
-                                                                               FontWeight="SemiBold"
-                                                                               FontSize="12"
-                                                                               Foreground="{DynamicResource TextPrimary}" />
-                                                                    <TextBlock Text="{Binding Status}"
-                                                                               FontSize="11"
-                                                                               Foreground="{DynamicResource TextSecondary}" />
-                                                                </StackPanel>
+                                                                <DockPanel LastChildFill="False">
+                                                                    <!-- Status chip docks right -->
+                                                                    <Border DockPanel.Dock="Right"
+                                                                            Padding="6,1" CornerRadius="10"
+                                                                            Background="{DynamicResource SurfaceCard}"
+                                                                            BorderThickness="0"
+                                                                            VerticalAlignment="Center"
+                                                                            IsVisible="{Binding IsStatusDone}">
+                                                                        <TextBlock Text="{Binding Status}"
+                                                                                   FontSize="10" FontWeight="SemiBold"
+                                                                                   Foreground="{DynamicResource StatusPass}" />
+                                                                    </Border>
+                                                                    <Border DockPanel.Dock="Right"
+                                                                            Padding="6,1" CornerRadius="10"
+                                                                            Background="{DynamicResource SurfaceCard}"
+                                                                            BorderThickness="0"
+                                                                            VerticalAlignment="Center"
+                                                                            IsVisible="{Binding IsStatusError}">
+                                                                        <TextBlock Text="{Binding Status}"
+                                                                                   FontSize="10" FontWeight="SemiBold"
+                                                                                   Foreground="{DynamicResource StatusFail}" />
+                                                                    </Border>
+                                                                    <Border DockPanel.Dock="Right"
+                                                                            Padding="6,1" CornerRadius="10"
+                                                                            Background="{DynamicResource SurfaceCard}"
+                                                                            BorderThickness="0"
+                                                                            VerticalAlignment="Center"
+                                                                            IsVisible="{Binding IsStatusRunning}">
+                                                                        <TextBlock Text="{Binding Status}"
+                                                                                   FontSize="10" FontWeight="SemiBold"
+                                                                                   Foreground="{DynamicResource StatusWarn}" />
+                                                                    </Border>
+                                                                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                                        <TextBlock Text="🔧" FontSize="12" />
+                                                                        <TextBlock Text="{Binding ToolName}"
+                                                                                   FontWeight="SemiBold"
+                                                                                   FontSize="12"
+                                                                                   Foreground="{DynamicResource TextPrimary}" />
+                                                                    </StackPanel>
+                                                                </DockPanel>
                                                                 <SelectableTextBlock Text="{Binding Result}"
                                                                                      TextWrapping="Wrap"
                                                                                      FontSize="11"
                                                                                      FontFamily="Consolas,Menlo,monospace"
                                                                                      Foreground="{DynamicResource TextSecondary}"
-                                                                                     IsVisible="{Binding Result, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                                                                     MaxLines="10" />
+                                                                                     IsVisible="{Binding HasResult}"
+                                                                                     MaxLines="{Binding ResultMaxLines}" />
+
+                                                                <!-- Expand/collapse toggle for long results -->
+                                                                <Button Command="{Binding ToggleExpandedCommand}"
+                                                                        Content="{Binding ExpandToggleText}"
+                                                                        IsVisible="{Binding IsResultLong}"
+                                                                        HorizontalAlignment="Left"
+                                                                        Padding="0,2"
+                                                                        Background="Transparent"
+                                                                        BorderThickness="0"
+                                                                        Foreground="{DynamicResource TextSecondary}"
+                                                                        FontSize="11" />
 
                                                                 <!-- Phase 66: Document artifact cards (one per generated doc) -->
                                                                 <ItemsControl ItemsSource="{Binding DocumentArtifacts}"

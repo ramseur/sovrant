@@ -6797,3 +6797,82 @@ while, then take an honest look.
 - [ ] If outcome is "keep": short polish pass to address the most common
       friction observed during the review window
 
+## Phase 76 — In-App Document Viewing
+
+### Why
+
+Phase 66 gave chat a `DocumentArtifactCard` that surfaces generated PDFs,
+Word, Excel, and PowerPoint files. Today both shells expose only a pair of
+out-of-app handoffs:
+
+- **Desktop** — `Open` (launches the OS default handler via
+  `Process.Start`) and `RevealInFolder` (Explorer/Finder). No in-app
+  preview at all.
+- **Web** — a `Download` anchor plus an optional `<iframe>` that points at
+  `art.AccessUrl` for PDFs. In the default deployment,
+  `LocalArtifactStore.GetAccessUrlAsync` returns a `file:///…` URI,
+  which every modern browser refuses to render inside an iframe on a
+  non-`file://` origin — so **the PDF preview is effectively unavailable
+  out of the box today**. The "preview" box renders empty or blocked, and
+  users have to fall back to `Download`.
+
+The user ask is twofold: (1) be able to **click over to the document from
+the app** (reliable handoff that actually opens it), and (2) be able to
+**open it within the app** (true in-surface viewer for at least PDF, and
+ideally Word/Excel/PowerPoint). This phase studies what's feasible,
+cross-shell, before committing to an implementation.
+
+### Questions to answer
+
+1. What's the minimum fix to make the Web preview actually work? Options:
+   - Serve artifacts through an authenticated controller endpoint
+     (`/artifacts/{handle}/{path}`) instead of `file:///` URLs, so the
+     iframe has a same-origin source the browser will render.
+   - Keep `LocalArtifactStore` for on-disk layout but have the Web host
+     expose a streaming controller that resolves the file path and sets
+     `Content-Disposition: inline` with the right `Content-Type`.
+2. For Desktop, is the right move an **embedded PDF viewer** (e.g.,
+   PDFium via `PdfiumViewer`/`PDFtoImage`, or a rendered-to-bitmap preview
+   pane) or a **click-to-open** polish pass that just makes `Open` /
+   `RevealInFolder` more discoverable? What's the Avalonia story for
+   embedding a PDF view on Windows vs. macOS vs. Linux?
+3. Do Word / Excel / PowerPoint need in-app viewers at all, or is
+   "Open in system default" good enough for those formats since they have
+   excellent native viewers on every OS we target?
+4. How does in-app viewing interact with the future remote/hosted
+   `RemoteArtifactStore` path? A browser-native iframe PDF viewer is
+   cheap and works anywhere a signed URL works; a Desktop-embedded viewer
+   has to download the bytes locally first.
+5. Should the chat artifact card grow a third affordance ("Preview") in
+   addition to Open/Download/Reveal, or should preview be the default
+   when the card is expanded?
+
+### Possible outcomes
+
+- **Web-only fix, Desktop stays handoff** — ship an authenticated
+  artifact controller so `<iframe>` preview actually renders PDFs in the
+  browser; Desktop keeps `Open` / `RevealInFolder`. Lowest effort, resolves
+  the immediate "preview is unavailable" problem.
+- **Cross-shell PDF preview** — add a PDFium-backed viewer component to
+  Desktop alongside the Web iframe fix. Word/Excel/PowerPoint continue to
+  use `Open` in their native apps.
+- **Full in-app viewer suite** — embed viewers for PDF and Office formats
+  in both shells (likely via server-side rendering to HTML/images). High
+  effort; only pursue if usage data shows users staying in-app is
+  genuinely valuable.
+
+### Acceptance criteria
+
+- [ ] Web `DocumentArtifactCard` iframe preview renders PDFs without
+      requiring the user to click Download (i.e., `AccessUrl` resolves
+      to a same-origin HTTP(S) URL the browser will embed)
+- [ ] Decision recorded in `docs/engine-status.md` on whether Desktop
+      gets an embedded viewer or stays with `Open` / `RevealInFolder`
+- [ ] If Desktop embedded viewer is adopted: PDF preview works on
+      Windows at minimum; macOS/Linux behavior documented
+- [ ] `LocalArtifactStore.GetAccessUrlAsync` path and any new controller
+      endpoint enforce the existing workspace/project scope guard — no
+      cross-tenant path traversal
+- [ ] Remote artifact store path (future) does not regress; preview
+      works through signed HTTPS URLs without code changes in the card
+

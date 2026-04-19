@@ -366,7 +366,32 @@ public partial class ToolUseViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isPendingConfirmation;
 
+    [ObservableProperty]
+    private bool _isExpanded;
+
     public ConfirmationRequest? PendingRequest { get; set; }
+
+    public bool HasResult => !string.IsNullOrEmpty(Result);
+
+    public bool IsResultLong
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(Result)) return false;
+            if (Result.Length > 400) return true;
+            int nl = 0;
+            foreach (var ch in Result) { if (ch == '\n') { nl++; if (nl > 6) return true; } }
+            return false;
+        }
+    }
+
+    public int ResultMaxLines => IsExpanded ? 10000 : 6;
+
+    public string ExpandToggleText => IsExpanded ? "▾ Show less" : "▸ Show more";
+
+    public bool IsStatusDone => !IsError && (Status == "Done" || Status == "Approved");
+    public bool IsStatusError => IsError || Status == "Denied";
+    public bool IsStatusRunning => !IsStatusDone && !IsStatusError;
 
     /// <summary>
     /// Phase 66 — populated from the JSON result of document-generation tools
@@ -377,8 +402,37 @@ public partial class ToolUseViewModel : ViewModelBase
 
     public bool HasDocumentArtifacts => DocumentArtifacts.Count > 0;
 
-    partial void OnResultChanged(string value) => RebuildDocumentArtifacts();
+    partial void OnResultChanged(string value)
+    {
+        RebuildDocumentArtifacts();
+        OnPropertyChanged(nameof(HasResult));
+        OnPropertyChanged(nameof(IsResultLong));
+    }
+
     partial void OnToolNameChanged(string value) => RebuildDocumentArtifacts();
+
+    partial void OnStatusChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsStatusDone));
+        OnPropertyChanged(nameof(IsStatusError));
+        OnPropertyChanged(nameof(IsStatusRunning));
+    }
+
+    partial void OnIsErrorChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsStatusDone));
+        OnPropertyChanged(nameof(IsStatusError));
+        OnPropertyChanged(nameof(IsStatusRunning));
+    }
+
+    partial void OnIsExpandedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ResultMaxLines));
+        OnPropertyChanged(nameof(ExpandToggleText));
+    }
+
+    [RelayCommand]
+    private void ToggleExpanded() => IsExpanded = !IsExpanded;
 
     private void RebuildDocumentArtifacts()
     {
