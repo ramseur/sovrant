@@ -745,6 +745,9 @@ dbCmd.Add(dbResetCmd);
 
 root.Add(dbCmd);
 
+// ── 'document' subcommand group ──────────────────────────────────────────────
+root.Add(DocumentCommand.Build(BuildServices));
+
 // ── REPL (default handler) ────────────────────────────────────────────────────
 root.SetAction(async (ParseResult pr, CancellationToken ct) =>
 {
