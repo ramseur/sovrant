@@ -6474,3 +6474,121 @@ the rest of the LSP-supported surface.
 - [ ] Dependency manifest validation integrated with Trust Boundary
 - [ ] CLI / Desktop / Web all surface a "Create project" entry point
 - [ ] Golden-path tests per language verify scaffold → build → test pipeline
+
+---
+
+## Phase 74 — Markdown-Backed Document Templates
+
+### Why
+
+The document template library (Phase 66 and 66.4, currently ~34 templates across
+7 industries) is entirely hardcoded as C# classes. Each template is a sealed
+class implementing `IDocumentTemplate` whose `Render(JsonElement)` builds a
+markdown body with a `StringBuilder`. Adding or tweaking a template requires a
+developer, a rebuild, and a deploy. That mirror-images the pattern we already
+use for **agent templates**, which are markdown files with YAML frontmatter
+loaded at runtime via `FileSystemTemplateLoader` (`src/Sovrant.Agents/Templates/FileSystemTemplateLoader.cs`).
+
+The goal of this phase is to bring document templates to parity: let domain
+experts (legal, clinical, finance, education) author and revise templates as
+`.md` files — with field schema in YAML frontmatter, body in markdown with an
+expression syntax — without touching C#. A small hybrid escape hatch preserves
+the ability to express non-trivial logic (computed totals, conditional
+sections, dynamic tables) for templates that genuinely need it.
+
+This also unlocks **user-authored templates**, matching the planned knowledge
+pages subsystem (`project_knowledge_pages.md`): users can drop a template into
+their workspace and have it appear in the registry automatically.
+
+### Scope
+
+1. **Template file format**
+   - YAML frontmatter declares `id`, `name`, `industry`, `description`,
+     `format` (Word / StructuredPdf / Excel), and a `fields:` list matching
+     the existing `TemplateField` schema (String, Text, Integer, Decimal,
+     Currency, Date, Boolean, StringArray, ObjectArray with nested
+     `itemFields`).
+   - Body is markdown with an expression syntax for field interpolation,
+     conditionals, and loops. Evaluate candidates: Scriban (fastest, .NET-
+     native, safe), Liquid via DotLiquid (familiar to non-devs), Handlebars.
+     **Lean: Scriban** — it's already .NET-native, has strong sandboxing,
+     supports custom functions for our format helpers, and doesn't require
+     a separate interpreter.
+2. **Runtime loader**
+   - New `MarkdownDocumentTemplate : IDocumentTemplate` that accepts a parsed
+     file. Registered alongside existing C# templates.
+   - `FileSystemDocumentTemplateLoader` scans one or more directories (built-
+     in resources, workspace overrides, user overrides) in override order.
+   - Expose format helpers (`FormatMoney`, `FormatDate`, `FormatPercent`,
+     `EscapePipes`, `Slug`) as Scriban functions so markdown templates use
+     the same rendering conventions as the hardcoded ones.
+3. **Validation and error surfacing**
+   - Field validation still runs through `TemplateData.Validate`; frontmatter
+     deserialization produces the same `TemplateField` list.
+   - Template-file errors (bad YAML, unknown field, unresolved expression)
+     should produce actionable error messages at load time, not at render
+     time. Load-time errors fail the registry cold; render-time errors
+     return a `TemplateValidationException`-shaped result.
+4. **Hybrid escape hatch**
+   - Some templates have logic a pure template engine shouldn't express:
+     computed totals (superbill line-item sums, CMA $/sqft averages, closing
+     disclosure cash-to-close), custom table column counts (optional columns
+     only appearing when any row has data), HIPAA-specific sequencing of
+     required clauses, contingency `[Waived]` markers, etc.
+   - Support a **code-behind** model: a markdown template can reference a
+     class (via frontmatter `codeBehind: Sovrant.Runtime.Documents.Templates.Healthcare.SuperbillCodeBehind`)
+     that exposes computed properties to the template context. Simple
+     templates need no code-behind.
+5. **Migration**
+   - Convert the ~20 templates that are purely "fields + markdown body"
+     (NDA, terms-of-service, lease agreement, syllabus, etc.) to `.md` files.
+     Delete the corresponding C# classes.
+   - Keep the ~14 templates with real logic (superbill, CMA, closing
+     disclosure, HIPAA authorization, progress note, business plan,
+     performance review with competencies table, etc.) as markdown + code-
+     behind. Their C# render method shrinks to a handful of computed
+     properties.
+   - All 51 existing template tests must continue to pass, unchanged —
+     they exercise the `IDocumentTemplate` contract, not the implementation.
+6. **User overrides**
+   - Workspace directory `<workspace>/.sovrant/templates/` is scanned by the
+     loader. Templates there shadow built-in templates with the same `id`.
+   - A future Phase 74.x can expose a UI for editing templates in-app; this
+     phase only needs the filesystem contract.
+7. **Author ergonomics**
+   - Document the file format under `docs/document-templates.md` with one
+     worked example per field type, including nested ObjectArray.
+   - Ship a `sovrant templates lint <file>` CLI command that validates a
+     template file without rendering it — useful for authors before they
+     commit.
+
+### Non-Goals
+
+- **Not** building a visual template editor. That's a follow-on phase.
+- **Not** replacing the `IDocumentTemplate` interface; this phase adds a new
+  implementation backed by markdown files, not a new contract.
+- **Not** migrating the code generation / agent / runtime template systems —
+  they already are, or intentionally aren't, file-based.
+
+### Acceptance Criteria
+
+- [ ] Template file format spec documented with field-type reference and
+      worked examples
+- [ ] `MarkdownDocumentTemplate` implementation + `FileSystemDocumentTemplateLoader`
+      merged and registered in DI alongside C# templates
+- [ ] Scriban (or chosen engine) integrated with format-helper bindings
+      (`format_money`, `format_date`, `format_percent`, `escape_pipes`, `slug`)
+- [ ] Frontmatter schema covers every `TemplateFieldType`, including nested
+      `ObjectArray` with `itemFields`
+- [ ] At least 15 simple templates ported from C# to `.md`, corresponding
+      C# classes deleted
+- [ ] Code-behind mechanism in place for hybrid templates; at least 3 complex
+      templates (e.g. superbill, CMA, closing disclosure) migrated with
+      code-behind
+- [ ] Workspace override directory loads and shadows built-ins by `id`
+- [ ] `sovrant templates lint` CLI command validates a file without rendering
+- [ ] All existing document-template tests still pass; new tests cover the
+      markdown loader, Scriban rendering, and override precedence
+- [ ] Template authoring guide published under `docs/document-templates.md`
+      so non-developers can author a template end-to-end
+
