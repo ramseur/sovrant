@@ -6251,13 +6251,56 @@ driven in an autonomous mode without an external Claw process.
 
 ### Acceptance Criteria
 
-- [ ] `IAutonomousDriver` abstraction with OpenClaw, Hermes, and
-      Swarm-autonomous implementations
-- [ ] Swarm can run a mission to completion with no external Claw
-- [ ] Missions emit the same event journal regardless of driver
-- [ ] Driver selectable at mission-create time (CLI, API, Web, Desktop)
-- [ ] Trust Boundary sanitization + ethics + intent checks apply to all drivers
-- [ ] Integration tests exercise Swarm-autonomous driver end-to-end
+- [x] `IAutonomousDriver` abstraction shipped; `LlmAutonomousDriver`
+      (default) + `SwarmAutonomousDriver` registered through `DriverRegistry`.
+      OpenClaw and Hermes drivers intentionally deferred — neither Phase 50
+      nor Phase 60 actually shipped production code to wrap.
+- [x] Swarm can run a mission to completion with no external Claw
+      (`SwarmAutonomousDriver.AdvanceAsync` decomposes → orchestrates →
+      writes terminal state)
+- [x] Missions emit the same event journal regardless of driver — swarm
+      events are projected onto `mission_events` via a stable
+      `swarm_*` type vocabulary
+- [ ] Driver selectable at mission-create time (CLI, API, Web, Desktop) —
+      deferred; the seam exists but no UI writes a driver name onto the
+      mission row yet
+- [ ] Trust Boundary sanitization + ethics + intent checks apply to all
+      drivers — blocked on Phase 58 wiring
+- [ ] Integration tests exercise Swarm-autonomous driver end-to-end —
+      unit-level coverage only (7 tests with fake decomposer/orchestrator
+      against a real `SqliteMissionStore`)
+
+### Phase 67.1 — `IAutonomousDriver` abstraction
+
+Purely additive seam in `src/Sovrant.Runtime/Missions/`:
+
+- `IAutonomousDriver` — `Name`, `Capabilities`, `AdvanceAsync(missionId, ct)`
+- `DriverCapabilities` record — `SupportsReplanning`, `SupportsParallelSteps`,
+  `SupportsHumanAcceptance`, `MaxStepsPerCycle`
+- `DriverRegistry` — `ConcurrentDictionary`-backed lookup by name
+  (case-insensitive)
+- `LlmAutonomousDriver` — thin adapter over the existing `IMissionExecutor`;
+  registered as the default driver (`Name = "llm"`)
+
+No existing code path changes — mission routes and `MissionCommand` keep
+consuming `IMissionExecutor` directly.
+
+### Phase 67.2 — `SwarmAutonomousDriver`
+
+First non-default driver, in `src/Sovrant.Agents/Swarm/`:
+
+- Loads the mission, decomposes its goal via `ISwarmDecomposer`, runs the
+  plan through `ISwarmOrchestrator`
+- Buffers `SwarmEvent`s during execution and flushes them onto
+  `mission_events` after the run completes, under a stable `swarm_*` type
+  vocabulary (`swarm_task_started`, `swarm_task_completed`, `swarm_wave_completed`,
+  etc.) so downstream consumers can match on it
+- Terminal swarm status (`Completed` / `Failed` / `Cancelled`) maps directly
+  to the corresponding `MissionStatus` and writes the matching event
+- Driver name: `"swarm"`. Registered alongside `LlmAutonomousDriver` in DI
+  so `DriverRegistry.TryGet("swarm")` resolves it.
+
+Commits: `64223b6` (67.1), `8341b79` (67.2).
 
 ---
 
@@ -6292,12 +6335,58 @@ not a feature phase — the output is a measurably-tighter engine.
 
 ### Acceptance Criteria
 
-- [ ] All public async methods take `CancellationToken` and honor it
-- [ ] Single exception hierarchy; all tools return errors through it
+- [x] All public async methods in `Sovrant.Runtime` take `CancellationToken`
+      and honor it — full-source audit found zero missing
+- [x] Single exception base — `SovrantException` in `Sovrant.Api.Errors`;
+      `ApiError`, `MacroExpansionException`, `TemplateValidationException`,
+      `MigrationDriftException` re-parented. Tool error-shape unification
+      (coded errors, consistent JSON-RPC / HTTP mapping) remains.
 - [ ] Cold-start latency dashboarded and reduced from baseline
-- [ ] Zero shared-mutable-state hot paths without documented synchronization
+- [x] DI-singleton registries (`InMemoryToolRegistry`,
+      `AgentTemplateRegistry`) converted to `ConcurrentDictionary` with
+      concurrent-writer tests; broader shared-state sweep still pending
 - [ ] Logging scope taxonomy documented and enforced by an analyzer or test
 - [ ] Test tiers wall-clocked and under target budgets
+
+### Phase 68.1 — Thread-safe singletons
+
+Two DI singletons were holding mutable `Dictionary<,>` — silent corruption
+waiting to happen under concurrent requests:
+
+- `InMemoryToolRegistry` in `src/Sovrant.Runtime/Tools/`
+- `AgentTemplateRegistry` in `src/Sovrant.Agents/Templates/`
+
+Both now use `ConcurrentDictionary<,>` (keeping `OrdinalIgnoreCase` for
+the template registry). A `Parallel.For` concurrent-writer test was added
+to each (16×64 writers on the tool registry, 8×24 on the template
+registry) to prove the fix.
+
+### Phase 68.2 — `SovrantException` base
+
+New `SovrantException : Exception` in `src/Sovrant.Api/Errors/`. Four
+existing ad-hoc exception types were re-parented:
+
+- `ApiError`
+- `MacroExpansionException` (`Sovrant.Runtime/Engine/`)
+- `TemplateValidationException` (`Sovrant.Runtime.Documents/Templates/`)
+- `MigrationDriftException` (`Sovrant.Runtime/Storage/`) — also drops its
+  previous `InvalidOperationException` parent, which was never caught
+  specifically
+
+Callers can now distinguish Sovrant-originated errors from framework
+exceptions (`HttpRequestException`, `IOException`, `JsonException`)
+without `catch (Exception)`. The 253 existing `catch (Exception)` sites
+are explicitly out of scope — that sweep is tracked separately.
+
+### Phase 68.3 — Cancellation audit
+
+Full-source audit of `src/Sovrant.Runtime/`: every public async method
+(including ones returning `Task`, `Task<T>`, `ValueTask`, `ValueTask<T>`,
+or `IAsyncEnumerable<T>`) already takes a `CancellationToken`. No code
+changes needed. An older plan estimated ~30 missing methods; that
+estimate was stale.
+
+Commits: `b730a02` (68.1), `ab2acde` (68.2).
 
 ---
 

@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-13 (50 tools, 96 server endpoints + SignalR hub, 1,584 tests, JS SDK covering 79 endpoints)
+**Last updated:** 2026-04-19 (50 tools, 96 server endpoints + SignalR hub, 1,584+ tests, JS SDK covering 79 endpoints)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -46,6 +46,8 @@
 | Swarm orchestrator (Phase 28) | ✅ Implemented | Auto-decomposition via LLM, Kahn's topological sort for wave assignment, wave-by-wave parallel execution (`SemaphoreSlim`), pessimistic file locking, token budget enforcement, per-task retry + timeout, optional quality gate, JSONL session recording, team bridge (different orchestrations use different teams). OFF by default. `SwarmTool` + `SwarmStatusTool`, `/swarm` command, 4 server endpoints (SSE streaming). 62 tests. |
 | OpenAI Responses API provider | ✅ Implemented + tested | `OpenAiResponsesProvider` routes through `POST /v1/responses` when `LLM_WEB_SEARCH=true`. Injects `web_search_preview`, suppresses `WebSearch` function tool, full multi-turn agentic loop support. |
 | Phase 7 hardening | ✅ Complete | Context auto-compaction (`SOVRANT_COMPACT_THRESHOLD`, default 80k tokens); BashTool 256 KB cap + dangerous env stripping; WebFetchTool SSRF guard (RFC-1918, loopback, link-local, non-HTTP(S)); provider retry 3×(1s/2s/4s) on 429/5xx; AgentTool recursion depth ≤ 5; ReadFileTool 10 MB cap; GlobTool 1000-file cap; atomic writes in Write/Edit tools. |
+| Autonomous-driver layer (Phase 67) | ✅ Implemented | `IAutonomousDriver` + `DriverCapabilities` + `DriverRegistry` seam in `Sovrant.Runtime/Missions/`. `LlmAutonomousDriver` (name: `"llm"`) wraps `IMissionExecutor`; `SwarmAutonomousDriver` (name: `"swarm"`) decomposes + orchestrates and projects `SwarmEvent`s onto `mission_events` under a stable `swarm_*` type vocabulary. `LlmMissionExecutor` remains the default mission execution path — the driver layer is additive. |
+| Foundations hardening (Phase 68) | ✅ Partial | `SovrantException` base in `Sovrant.Api.Errors` — `ApiError`, `MacroExpansionException`, `TemplateValidationException`, `MigrationDriftException` re-parented. DI-singleton registries (`InMemoryToolRegistry`, `AgentTemplateRegistry`) moved to `ConcurrentDictionary` with concurrent-writer tests. Full-source audit confirmed every public async method in `Sovrant.Runtime` already takes `CancellationToken`. DI sweep, logging taxonomy, cold-start profiling, broader catch-site audit remain. |
 
 ### Known issues fixed during testing
 
