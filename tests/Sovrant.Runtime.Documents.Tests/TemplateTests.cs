@@ -7,6 +7,7 @@ using Sovrant.Runtime.Documents;
 using Sovrant.Runtime.Documents.Generators;
 using Sovrant.Runtime.Documents.Templates;
 using Sovrant.Runtime.Documents.Templates.Business;
+using Sovrant.Runtime.Documents.Templates.Construction;
 using Sovrant.Runtime.Documents.Templates.Education;
 using Sovrant.Runtime.Documents.Templates.Finance;
 using Sovrant.Runtime.Documents.Templates.Healthcare;
@@ -1312,6 +1313,173 @@ public class TemplateTests : IDisposable
         Assert.Equal("application/pdf", result.ContentType);
     }
 
+    [Fact]
+    public async Task Bid_proposal_template_renders_itemized_bid()
+    {
+        var template = new BidProposalTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "contractor_name": "Acme Construction",
+            "client_name": "Beta Properties",
+            "project_name": "Warehouse Expansion",
+            "project_address": "200 Industrial Way",
+            "bid_date": "2026-04-18",
+            "bid_valid_until": "2026-05-18",
+            "currency": "USD",
+            "scope_summary": "Construction of 10,000 sqft warehouse expansion including foundation, slab, tilt-up panels, and roofing.",
+            "line_items": [
+                {"description":"Sitework","amount":45000},
+                {"description":"Foundation and slab","amount":85000},
+                {"description":"Tilt-up panels","amount":180000},
+                {"description":"Roofing","amount":60000}
+            ],
+            "overhead_and_profit_percent": 10,
+            "contingency_percent": 5
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.StructuredPdf, rendered.Format);
+        Assert.Contains("Bid Proposal", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Warehouse Expansion", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Total bid price", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new MigraDocGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.Equal("application/pdf", result.ContentType);
+    }
+
+    [Fact]
+    public async Task Change_order_template_renders_contract_math()
+    {
+        var template = new ChangeOrderTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "project_name": "Warehouse Expansion",
+            "owner_name": "Beta Properties",
+            "contractor_name": "Acme Construction",
+            "change_order_number": "CO-003",
+            "change_order_date": "2026-04-18",
+            "reason": "Owner-requested addition of skylights.",
+            "description_of_change": "Add 4 skylights to roof with required framing, flashing, and rough-in.",
+            "currency": "USD",
+            "original_contract_sum": 400000,
+            "net_change_prior_orders": 15000,
+            "this_change_amount": 12500,
+            "days_added": 7
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Change Order", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("CO-003", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("427,500", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Daily_log_template_renders_crews_and_work()
+    {
+        var template = new DailyLogTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "project_name": "Warehouse Expansion",
+            "log_date": "2026-04-18",
+            "prepared_by": "Sam Foreman",
+            "weather_am": "Partly cloudy",
+            "weather_pm": "Sunny",
+            "temperature_high_f": 72,
+            "temperature_low_f": 55,
+            "crews": [
+                {"trade":"Framing","company":"Acme Framers","workers":6,"hours":8},
+                {"trade":"Electrical","company":"Bolt Electric","workers":3,"hours":8}
+            ],
+            "equipment_on_site": ["Crawler crane", "Scissor lift"],
+            "work_performed": "Erected framing on west elevation. Rough electrical in panel B."
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Daily Construction Log", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Crews on Site", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Framing", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Punch_list_template_renders_items()
+    {
+        var template = new PunchListTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "project_name": "Warehouse Expansion",
+            "walkthrough_date": "2026-04-18",
+            "prepared_by": "Sam Foreman",
+            "owner_representative": "Dana Owner",
+            "contractor": "Acme Construction",
+            "items": [
+                {"location":"Office 101","trade":"Paint","description":"Touch up wall scuff near door","status":"Open"},
+                {"location":"Main floor","trade":"Electrical","description":"Replace burned-out LED lamp at bay 4","assigned_to":"Bolt Electric","due_date":"2026-04-25","status":"In progress"}
+            ]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Punch List", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Office 101", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Bolt Electric", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Safety_report_template_renders_narrative_and_actions()
+    {
+        var template = new SafetyReportTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "project_name": "Warehouse Expansion",
+            "report_date": "2026-04-18",
+            "incident_date": "2026-04-18",
+            "incident_time": "10:15",
+            "incident_type": "Near miss",
+            "severity": "First aid",
+            "reported_by": "Sam Foreman",
+            "reporter_role": "Site superintendent",
+            "location_on_site": "Bay 4 mezzanine",
+            "narrative": "Unsecured plank slipped on mezzanine; worker caught balance on rail. No injury but potential for fall from 12 ft.",
+            "immediate_causes": ["Unsecured plank", "Rushed setup"],
+            "root_causes": ["Pre-task plan not reviewed with crew"],
+            "corrective_actions": [
+                {"action":"Re-train crew on fall protection and plank securement","responsible":"Sam Foreman","due_date":"2026-04-20"}
+            ],
+            "osha_recordable": false
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Safety Incident Report", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Near miss", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Corrective Actions", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("OSHA", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
     private static IEnumerable<IDocumentTemplate> AllTemplates() => new IDocumentTemplate[]
     {
         new InvoiceTemplate(),
@@ -1353,6 +1521,11 @@ public class TemplateTests : IDisposable
         new ReportCardTemplate(),
         new IepTemplate(),
         new TranscriptTemplate(),
+        new BidProposalTemplate(),
+        new ChangeOrderTemplate(),
+        new DailyLogTemplate(),
+        new PunchListTemplate(),
+        new SafetyReportTemplate(),
     };
 
     private static DocumentRequest BuildRequest(TemplateRenderResult rendered) => new()
