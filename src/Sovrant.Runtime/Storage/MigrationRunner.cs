@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using Sovrant.Api.Errors;
 
 namespace Sovrant.Runtime.Storage;
 
@@ -193,7 +194,7 @@ internal sealed partial class MigrationRunner(ILogger logger)
 /// versions. Catching this at boot prevents corrupt "I edited the old
 /// migration but nothing happened" states.
 /// </summary>
-public sealed class MigrationDriftException : InvalidOperationException
+public sealed class MigrationDriftException : SovrantException
 {
     public int Version { get; }
     public string Description { get; }

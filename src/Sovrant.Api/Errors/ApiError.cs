@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace Sovrant.Api.Errors;
 
 /// <summary>Domain error from the LLM API layer.</summary>
-public sealed class ApiError : Exception
+public sealed class ApiError : SovrantException
 {
     /// <summary>Initializes a new instance of <see cref="ApiError"/>.</summary>
     public ApiError() : base("An LLM API error occurred.") { }

@@ -1,3 +1,5 @@
+using Sovrant.Api.Errors;
+
 namespace Sovrant.Runtime.Engine;
 
 /// <summary>
@@ -104,7 +106,7 @@ public sealed class MacroExpander
 }
 
 /// <summary>Thrown when a plan references a macro the registry cannot resolve.</summary>
-public sealed class MacroExpansionException : Exception
+public sealed class MacroExpansionException : SovrantException
 {
     public MacroExpansionException(string message) : base(message) { }
     public MacroExpansionException(string message, Exception inner) : base(message, inner) { }

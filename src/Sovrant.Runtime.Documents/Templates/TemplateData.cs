@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Sovrant.Api.Errors;
 
 namespace Sovrant.Runtime.Documents.Templates;
 
@@ -151,7 +152,7 @@ public sealed class TemplateData
 }
 
 /// <summary>Thrown when template data fails schema validation.</summary>
-public sealed class TemplateValidationException : Exception
+public sealed class TemplateValidationException : SovrantException
 {
     public TemplateValidationException(string message) : base(message) { }
     public TemplateValidationException() { }
