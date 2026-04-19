@@ -6876,3 +6876,20 @@ cross-shell, before committing to an implementation.
 - [ ] Remote artifact store path (future) does not regress; preview
       works through signed HTTPS URLs without code changes in the card
 
+### Related: team-ready artifact storage (follow-on)
+
+Today `LocalArtifactStore` writes to `~/.sovrant/artifacts/` — the
+*invoking user's* home directory. That is single-user by design: anyone
+else on a shared host can't see those files, and a cloud deployment has
+no per-user home. When Phase 76 study completes, the follow-on should:
+
+- Replace the user-home default with a **workspace-scoped root** (e.g.,
+  `{deployment_root}/{workspace}/{project}/{run}/`) under a path the
+  host controls, not the OS user.
+- Gate `/artifacts/...` behind authentication (bearer token / cookie)
+  with workspace membership checks — not just traversal guards.
+- Make the URL contract match signed-URL semantics so
+  `LocalArtifactStore` (dev) and a future `S3ArtifactStore` / SMB-mounted
+  backend (team) are drop-in compatible.
+
+

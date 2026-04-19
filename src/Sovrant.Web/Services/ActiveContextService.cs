@@ -23,6 +23,13 @@ public sealed class ActiveContextService
     /// <summary>Fires when a session should be resumed in the chat page.</summary>
     public event Action<string>? OnSessionResume;
 
+    /// <summary>
+    /// Session id set by <see cref="ResumeSession"/> so the Chat page can pick
+    /// it up even when it hasn't been mounted yet (first click from another page).
+    /// Chat clears this after consuming.
+    /// </summary>
+    public string? PendingResumeSessionId { get; set; }
+
     public void SetWorkspace(string id, string name)
     {
         WorkspaceId = id;
@@ -51,5 +58,9 @@ public sealed class ActiveContextService
     public void NotifyDataChanged() => OnDataChanged?.Invoke();
 
     /// <summary>Request the chat page to resume the given session.</summary>
-    public void ResumeSession(string sessionId) => OnSessionResume?.Invoke(sessionId);
+    public void ResumeSession(string sessionId)
+    {
+        PendingResumeSessionId = sessionId;
+        OnSessionResume?.Invoke(sessionId);
+    }
 }

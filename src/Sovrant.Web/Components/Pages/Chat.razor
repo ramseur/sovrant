@@ -134,6 +134,15 @@
         ConfirmationHandler.ConfirmationRequested += OnConfirmationRequested;
         ActiveContext.OnChanged += OnContextChanged;
         ActiveContext.OnSessionResume += OnSessionResume;
+
+        // Pick up a resume request that fired before we mounted (e.g. user
+        // clicked a Recent item while on another page).
+        var pending = ActiveContext.PendingResumeSessionId;
+        if (!string.IsNullOrEmpty(pending) && pending != _sessionId)
+        {
+            ActiveContext.PendingResumeSessionId = null;
+            OnSessionResume(pending);
+        }
     }
 
     private void OnSessionResume(string sessionId)
@@ -145,6 +154,7 @@
             _messages.Clear();
             _tokenCount = 0;
             _sessionCost = 0;
+            ActiveContext.PendingResumeSessionId = null;
             await LoadSessionAsync(sessionId);
         });
     }
@@ -384,6 +394,13 @@
             await Sovrant.Web.Program.RuntimeReady.Task.WaitAsync(ct);
             var pooled = await SessionPool.GetOrCreateAsync(_sessionId, ct: ct);
 
+            if (isFirstMessage)
+            {
+                var previewTitle = text.Length > 60 ? text[..60] + "..." : text;
+                await SessionStore.SetTitleAsync(_sessionId, previewTitle);
+                ActiveContext.NotifyDataChanged();
+            }
+
             await foreach (var ev in pooled.Runtime.RunTurnAsync(text, ct))
             {
                 HandleEvent(ev, assistantMsg);
@@ -408,10 +425,7 @@
             await FocusInput();
 
             if (isFirstMessage)
-            {
-                var title = text.Length > 60 ? text[..60] + "..." : text;
-                _ = SessionStore.SetTitleAsync(_sessionId, title);
-            }
+                ActiveContext.NotifyDataChanged();
         }
     }
 

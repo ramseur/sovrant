@@ -1073,6 +1073,9 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     padding: 4px 10px;
     border: 1px solid var(--brand-primary);
     border-radius: 6px;
+    cursor: pointer;
+    display: inline-block;
+    white-space: nowrap;
 }
 .doc-artifact-download:hover { background: var(--brand-primary); color: #fff; }
 

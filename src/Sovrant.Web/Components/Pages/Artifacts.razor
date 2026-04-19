@@ -29,7 +29,20 @@
                     <span>Run: @context.RunId[..Math.Min(8, context.RunId.Length)]</span>
                 }
             </div>
-            @if (context.IsMarkdown && !string.IsNullOrEmpty(context.Preview))
+            @if (!string.IsNullOrEmpty(context.AccessUrl))
+            {
+                <div class="detail-meta" style="margin-top: 6px; gap: 10px;">
+                    <a href="@context.AccessUrl" target="_blank" rel="noopener" class="btn-outline btn-sm">Open</a>
+                    <a href="@context.AccessUrl" target="_blank" rel="noopener" download="@context.FileName" class="btn-outline btn-sm">Download</a>
+                    <code style="font-size: 12px; background: var(--surface-card); padding: 2px 6px; border-radius: 4px; user-select: all;">@context.AccessUrl</code>
+                </div>
+            }
+            @if (context.IsPdf && !string.IsNullOrEmpty(context.AccessUrl))
+            {
+                <iframe src="@context.AccessUrl" title="@context.FileName"
+                        style="width: 100%; height: 520px; border: 1px solid var(--surface-border); border-radius: 6px; margin-top: 10px; background: #fff;"></iframe>
+            }
+            else if (context.IsMarkdown && !string.IsNullOrEmpty(context.Preview))
             {
                 <div class="detail-preview message-markdown">
                     @((MarkupString)Markdown.ToHtml(context.Preview, _pipeline))
@@ -39,7 +52,7 @@
             {
                 <pre class="detail-preview" style="white-space: pre-wrap; font-size: 13px; font-family: Consolas, monospace;">@context.Preview</pre>
             }
-            else
+            else if (!context.IsPdf)
             {
                 <p class="text-muted">No preview available for this file type.</p>
             }
@@ -97,6 +110,13 @@
                 ? string.Join('/', segments[3..])
                 : fileName;
 
+            var accessUrl = string.Empty;
+            if (!string.IsNullOrEmpty(workspaceId) && !string.IsNullOrEmpty(projectId) && !string.IsNullOrEmpty(runId))
+            {
+                var escapedTail = string.Join('/', artifactPath.Split('/').Select(Uri.EscapeDataString));
+                accessUrl = $"/artifacts/{Uri.EscapeDataString(workspaceId)}/{Uri.EscapeDataString(projectId)}/{Uri.EscapeDataString(runId)}/{escapedTail}";
+            }
+
             items.Add(new ArtifactItem
             {
                 FullDiskPath = file,
@@ -112,6 +132,8 @@
                 ProjectId = projectId,
                 RunId = runId,
                 IsMarkdown = ext.Equals(".md", StringComparison.OrdinalIgnoreCase),
+                IsPdf = ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase),
+                AccessUrl = accessUrl,
             });
         }
 
@@ -187,6 +209,8 @@
         public string ProjectId { get; init; } = string.Empty;
         public string? RunId { get; init; }
         public bool IsMarkdown { get; init; }
+        public bool IsPdf { get; init; }
+        public string AccessUrl { get; init; } = string.Empty;
         public string? Preview { get; set; }
     }
 }
