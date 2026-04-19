@@ -206,6 +206,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMissionExecutor, LlmMissionExecutor>();
         services.AddSingleton<MissionExportService>();
 
+        // Autonomous-driver layer (Phase 67) — named strategies for advancing
+        // a mission forward. The LLM driver wraps IMissionExecutor; additional
+        // drivers (swarm, external orchestrator) register alongside it and are
+        // resolved by name through DriverRegistry.
+        services.AddSingleton<IAutonomousDriver, LlmAutonomousDriver>();
+        services.AddSingleton<DriverRegistry>();
+
         // Agent run store (Phase 52) — unified ledger tracking delegations,
         // swarm tasks, and mission steps in one table.
         services.AddSingleton<IAgentRunStore>(sp =>
