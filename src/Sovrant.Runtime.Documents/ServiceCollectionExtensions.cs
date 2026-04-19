@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Sovrant.Runtime.Documents.Generators;
+using Sovrant.Runtime.Documents.Packages;
 using Sovrant.Runtime.Documents.Templates;
 using Sovrant.Runtime.Documents.Templates.Business;
 using Sovrant.Runtime.Documents.Templates.Construction;
@@ -8,6 +10,7 @@ using Sovrant.Runtime.Documents.Templates.Finance;
 using Sovrant.Runtime.Documents.Templates.Healthcare;
 using Sovrant.Runtime.Documents.Templates.Legal;
 using Sovrant.Runtime.Documents.Templates.RealEstate;
+using Sovrant.Runtime.Documents.Trust;
 
 namespace Sovrant.Runtime.Documents;
 
@@ -91,6 +94,18 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDocumentTemplate, SafetyReportTemplate>();
 
         services.AddSingleton<ITemplateRegistry, TemplateRegistry>();
+
+        // Document packages — bundles of templates rendered against shared data.
+        foreach (var pkg in BuiltInDocumentPackages.All)
+            services.AddSingleton(pkg);
+        services.AddSingleton<IDocumentPackageRegistry>(sp =>
+            new DocumentPackageRegistry(sp.GetServices<DocumentPackage>()));
+
+        // Default trust gate — refuses healthcare/* templates without
+        // explicit PHI consent. Apps wanting different policy register
+        // their own IDocumentTrustGate before calling AddSovrantDocuments
+        // (TryAddSingleton honors existing registration).
+        services.TryAddSingleton<IDocumentTrustGate, HealthcarePhiTrustGate>();
 
         return services;
     }

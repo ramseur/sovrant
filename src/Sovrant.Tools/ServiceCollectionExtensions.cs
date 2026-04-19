@@ -144,6 +144,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITool, DocumentFromTemplateTool>();
         services.AddSingleton<ITool, DocumentListTemplatesTool>();
         services.AddSingleton<ITool, DocumentSuggestTemplateTool>();
+        services.AddSingleton<ITool, DocumentPackageTool>();
+        services.AddSingleton<ITool, DocumentListPackagesTool>();
 
         // Quality / verification tools
         services.AddSingleton<ITool, VerifyTool>();

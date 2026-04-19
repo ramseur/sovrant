@@ -6182,14 +6182,14 @@ The agent doesn't just fill forms — it reasons about document generation:
 - [x] 44 built-in templates across 7 industries ship with Sovrant (see Phase 66.4 below)
 - [x] Agent can infer correct template from natural language via `DocumentSuggestTemplateTool` ("draft me an NDA" → `legal/nda`)
 - [x] Agent collects missing required fields via conversation — `TemplateValidationException` reports the missing set
-- [ ] Multi-document workflows ("generate the full closing package") — deferred; the three template-aware tools compose but no single driver tool exists yet
+- [x] Multi-document workflows — `DocumentPackageTool` + `DocumentListPackagesTool` render a registered `DocumentPackage` (e.g. `real-estate/closing-package`) in one call against shared data
 - [ ] Custom workspace-scoped templates — deferred to Phase 74 (markdown-backed templates)
 - [x] Generated documents stored as workspace artifacts with full metadata (scope, content-type, size, access URL)
-- [ ] Web UI document-card-in-chat with inline PDF preview — the `/documents` page ships; in-chat card is pending
-- [ ] Desktop UI document-card-in-chat — the Documents view ships; in-chat card is pending
+- [x] Web UI document-card-in-chat with inline PDF preview — `DocumentArtifactCard.razor` parses document-tool results and renders cards (with PDF iframe) inline in `ChatMessage.razor`
+- [x] Desktop UI document-card-in-chat — `DocumentArtifactViewModel` + `DocumentArtifactParser` populate cards under each tool result in `ChatView.axaml` with Open + Reveal buttons
 - [x] CLI outputs document path; `sovrant document render --output` copies the artifact to a local file
-- [ ] Healthcare PHI Trust Boundary gate — blocked on Phase 58 completion
-- [ ] Legal "AI-generated — review before execution" auto-disclaimer — pending
+- [x] Healthcare PHI Trust Boundary gate — `IDocumentTrustGate` + `HealthcarePhiTrustGate` (default) refuses any `healthcare/*` template without explicit `consent_acknowledged: true` in the data payload
+- [x] Legal "AI-generated — review before execution" auto-disclaimer — `NdaTemplate` + `DemandLetterTemplate` auto-append a counsel-review notice (toggleable via `include_ai_disclaimer`)
 - [x] All existing tests continue to pass (71/71 in `Sovrant.Runtime.Documents.Tests`)
 
 ### Phase 66.4 — Industry Expansion, User Surfaces, and Agent Routing
@@ -6220,6 +6220,38 @@ generation is a real product surface." Three sub-deliveries:
      empty-prompt behavior
 
 Commits: `36160e2` through `f7eb73a` on `sovrant-openc-dotnet-port`.
+
+### Phase 66.5 — Closeout (packages, trust gate, in-chat artifact cards)
+
+The remaining acceptance items shipped in one pass:
+
+- **Multi-document packages** — `DocumentPackage` + `DocumentPackageItem` records,
+  `DocumentPackageRegistry`, three built-in packages (`real-estate/closing-package`,
+  `business/onboarding-package`, `healthcare/intake-package`), and the
+  `DocumentPackageTool` + `DocumentListPackagesTool` agent surfaces. The package
+  tool runs each item through the trust gate independently and reports
+  per-document status (`generated` / `refused` / `error`) so partial successes
+  are visible.
+- **Healthcare PHI gate** — `IDocumentTrustGate` abstraction in
+  `Sovrant.Runtime.Documents.Trust`. Default implementation
+  `HealthcarePhiTrustGate` refuses any template whose `Industry == "healthcare"`
+  unless the data payload sets `"consent_acknowledged": true`. Wired into
+  `DocumentFromTemplateTool` and `DocumentPackageTool`. 5 unit tests.
+- **Web in-chat document card** — new `DocumentArtifactCard.razor` parses tool
+  results from `DocumentGenerate` / `DocumentFromTemplate` / `DocumentPackage`
+  and renders one card per artifact with format icon, size, download link, and
+  inline PDF iframe preview. `ChatMessage.razor` mounts it above the existing
+  collapsible raw-result block.
+- **Desktop in-chat document card** — `DocumentArtifactViewModel` +
+  `DocumentArtifactParser` populate an `ObservableCollection` on
+  `ToolUseViewModel` whenever a document tool completes. `ChatView.axaml`
+  renders cards beneath each tool result with Open and Reveal-in-folder
+  commands.
+- **Tests** — 9 new tests (5 trust gate + 4 package registry); existing
+  Documents test suite unchanged at 84/84 passing.
+
+The only remaining unchecked item is workspace-scoped custom templates,
+which is intentionally deferred to Phase 74 (markdown-backed templates).
 
 ---
 

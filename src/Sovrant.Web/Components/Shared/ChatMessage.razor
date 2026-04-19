@@ -65,6 +65,10 @@
                             }
                             else if (!string.IsNullOrEmpty(tool.Result))
                             {
+                                @if (DocumentArtifactCard.ProducesArtifacts(tool.ToolName))
+                                {
+                                    <DocumentArtifactCard ToolName="@tool.ToolName" ResultJson="@tool.Result" />
+                                }
                                 <details class="tool-result">
                                     <summary>Result</summary>
                                     <pre>@tool.Result</pre>

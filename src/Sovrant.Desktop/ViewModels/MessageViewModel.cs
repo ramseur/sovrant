@@ -368,6 +368,31 @@ public partial class ToolUseViewModel : ViewModelBase
 
     public ConfirmationRequest? PendingRequest { get; set; }
 
+    /// <summary>
+    /// Phase 66 — populated from the JSON result of document-generation tools
+    /// (<c>DocumentGenerate</c>, <c>DocumentFromTemplate</c>, <c>DocumentPackage</c>).
+    /// Empty for every other tool.
+    /// </summary>
+    public ObservableCollection<DocumentArtifactViewModel> DocumentArtifacts { get; } = new();
+
+    public bool HasDocumentArtifacts => DocumentArtifacts.Count > 0;
+
+    partial void OnResultChanged(string value) => RebuildDocumentArtifacts();
+    partial void OnToolNameChanged(string value) => RebuildDocumentArtifacts();
+
+    private void RebuildDocumentArtifacts()
+    {
+        DocumentArtifacts.Clear();
+        if (!DocumentArtifactParser.ProducesArtifacts(ToolName) || string.IsNullOrWhiteSpace(Result))
+        {
+            OnPropertyChanged(nameof(HasDocumentArtifacts));
+            return;
+        }
+        foreach (var art in DocumentArtifactParser.Parse(ToolName, Result))
+            DocumentArtifacts.Add(art);
+        OnPropertyChanged(nameof(HasDocumentArtifacts));
+    }
+
     [RelayCommand]
     private void Approve()
     {

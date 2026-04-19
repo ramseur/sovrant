@@ -3,6 +3,7 @@ using Sovrant.Api.Types;
 using Sovrant.Runtime.Artifacts;
 using Sovrant.Runtime.Documents;
 using Sovrant.Runtime.Documents.Templates;
+using Sovrant.Runtime.Documents.Trust;
 using DocFormat = Sovrant.Runtime.Documents.DocumentFormat;
 
 namespace Sovrant.Tools.Documents;
@@ -27,11 +28,16 @@ public sealed class DocumentFromTemplateTool : ITool
 
     private readonly ITemplateRegistry _templates;
     private readonly IDocumentGeneratorRegistry _generators;
+    private readonly IDocumentTrustGate _trustGate;
 
-    public DocumentFromTemplateTool(ITemplateRegistry templates, IDocumentGeneratorRegistry generators)
+    public DocumentFromTemplateTool(
+        ITemplateRegistry templates,
+        IDocumentGeneratorRegistry generators,
+        IDocumentTrustGate trustGate)
     {
         _templates = templates ?? throw new ArgumentNullException(nameof(templates));
         _generators = generators ?? throw new ArgumentNullException(nameof(generators));
+        _trustGate = trustGate ?? throw new ArgumentNullException(nameof(trustGate));
     }
 
     public ToolDefinition Definition => s_definition;
@@ -51,6 +57,10 @@ public sealed class DocumentFromTemplateTool : ITool
 
         if (!_templates.TryResolve(templateId, out var template) || template is null)
             return $"Error: unknown template '{templateId}'. Use DocumentListTemplates to see available templates.";
+
+        var decision = _trustGate.Evaluate(template, data);
+        if (!decision.IsAllowed)
+            return $"Error: trust gate refused generation. {decision.DenyReason}";
 
         TemplateRenderResult rendered;
         try
