@@ -709,6 +709,199 @@ public class TemplateTests : IDisposable
         Assert.True(await IsZipArchiveAsync(result));
     }
 
+    [Fact]
+    public async Task Purchase_agreement_template_renders_with_contingencies()
+    {
+        var template = new PurchaseAgreementTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "buyer_name": "Brooke Buyer",
+            "seller_name": "Sally Seller",
+            "property_address": "123 Oak St\nSan Jose, CA 95112",
+            "purchase_price": 1200000,
+            "earnest_money": 36000,
+            "currency": "USD",
+            "financing_contingency": true,
+            "inspection_contingency": true,
+            "appraisal_contingency": false,
+            "closing_date": "2026-06-15",
+            "governing_state": "California",
+            "effective_date": "2026-04-19"
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Contingencies", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("waived", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Lease_agreement_template_renders_with_rent_and_rules()
+    {
+        var template = new LeaseAgreementTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "landlord_name": "Logan Landlord",
+            "tenant_names": ["Taylor Tenant","Jordan Tenant"],
+            "premises_address": "456 Pine Ave, Apt 3\nOakland, CA 94607",
+            "lease_start": "2026-05-01",
+            "lease_end": "2027-04-30",
+            "monthly_rent": 3200,
+            "currency": "USD",
+            "rent_due_day": 1,
+            "security_deposit": 3200,
+            "pets_allowed": false,
+            "smoking_allowed": false,
+            "house_rules": ["Quiet hours 10pm-7am","No sublets"],
+            "governing_state": "California"
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Quiet hours", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Security Deposit", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Cma_template_renders_with_comparables_and_averages()
+    {
+        var template = new CmaReportTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "prepared_for": "Sally Seller",
+            "prepared_by": "Pat Realtor",
+            "report_date": "2026-04-19",
+            "subject_address": "123 Oak St, San Jose",
+            "subject_bedrooms": 3,
+            "subject_bathrooms": 2,
+            "subject_square_feet": 1800,
+            "comparables": [
+                {"address":"100 Oak St","sold_price":1150000,"sold_date":"2026-03-15","bedrooms":3,"bathrooms":2,"square_feet":1750},
+                {"address":"200 Oak St","sold_price":1250000,"sold_date":"2026-02-10","bedrooms":3,"bathrooms":2.5,"square_feet":1900}
+            ],
+            "suggested_price_low": 1180000,
+            "suggested_price_high": 1250000
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.StructuredPdf, rendered.Format);
+        Assert.Contains("Average sold price", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Suggested Listing Price Range", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new MigraDocGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.Equal("application/pdf", result.ContentType);
+    }
+
+    [Fact]
+    public async Task Closing_disclosure_template_renders_loan_terms()
+    {
+        var template = new ClosingDisclosureTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "borrower_name": "Brooke Buyer",
+            "seller_name": "Sally Seller",
+            "property_address": "123 Oak St",
+            "closing_date": "2026-06-15",
+            "lender_name": "Big Bank",
+            "loan_amount": 900000,
+            "interest_rate_percent": 6.25,
+            "loan_term_years": 30,
+            "monthly_principal_interest": 5543,
+            "purchase_price": 1200000,
+            "down_payment": 300000,
+            "currency": "USD",
+            "closing_costs": [
+                {"description":"Title insurance","amount":2500,"paid_by":"Borrower"},
+                {"description":"Origination fee","amount":4500,"paid_by":"Borrower"}
+            ],
+            "cash_to_close": 307000
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.StructuredPdf, rendered.Format);
+        Assert.Contains("Loan Terms", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Cash to Close", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new MigraDocGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.Equal("application/pdf", result.ContentType);
+    }
+
+    [Fact]
+    public async Task Inspection_template_renders_sections_and_severity()
+    {
+        var template = new PropertyInspectionTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "property_address": "123 Oak St",
+            "client_name": "Brooke Buyer",
+            "inspector_name": "Ira Inspector",
+            "inspection_date": "2026-04-18",
+            "overall_condition": "Good",
+            "sections": [
+                {"name":"Roof","condition":"Good","findings":[
+                    {"description":"Minor flashing wear near chimney","severity":"Minor","recommendation":"Monitor; reseal in 6 months."}
+                ]},
+                {"name":"Electrical","findings":[
+                    {"description":"Outlet near sink is not GFCI","severity":"Safety","recommendation":"Install GFCI outlet."}
+                ]}
+            ]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.StructuredPdf, rendered.Format);
+        Assert.Contains("[Safety]", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("GFCI", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new MigraDocGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.Equal("application/pdf", result.ContentType);
+    }
+
+    [Fact]
+    public async Task Rental_application_template_renders_applicant_and_employment()
+    {
+        var template = new RentalApplicationTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "property_address": "456 Pine Ave, Apt 3",
+            "desired_move_in": "2026-05-01",
+            "monthly_rent": 3200,
+            "currency": "USD",
+            "applicant_name": "Alex Applicant",
+            "applicant_email": "alex@example.com",
+            "applicant_phone": "555-123-4567",
+            "employer_name": "Acme Corp",
+            "position": "Engineer",
+            "monthly_income": 9500,
+            "has_pets": false
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Employment", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Authorization and Signature", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
     private static IEnumerable<IDocumentTemplate> AllTemplates() => new IDocumentTemplate[]
     {
         new InvoiceTemplate(),
@@ -732,6 +925,12 @@ public class TemplateTests : IDisposable
         new CorporateMinutesTemplate(),
         new PowerOfAttorneyTemplate(),
         new TermsOfServiceTemplate(),
+        new PurchaseAgreementTemplate(),
+        new LeaseAgreementTemplate(),
+        new CmaReportTemplate(),
+        new ClosingDisclosureTemplate(),
+        new PropertyInspectionTemplate(),
+        new RentalApplicationTemplate(),
     };
 
     private static DocumentRequest BuildRequest(TemplateRenderResult rendered) => new()

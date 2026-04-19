@@ -57,6 +57,12 @@ public static class ServiceCollectionExtensions
 
         // Real estate
         services.AddSingleton<IDocumentTemplate, PropertyListingTemplate>();
+        services.AddSingleton<IDocumentTemplate, PurchaseAgreementTemplate>();
+        services.AddSingleton<IDocumentTemplate, LeaseAgreementTemplate>();
+        services.AddSingleton<IDocumentTemplate, CmaReportTemplate>();
+        services.AddSingleton<IDocumentTemplate, ClosingDisclosureTemplate>();
+        services.AddSingleton<IDocumentTemplate, PropertyInspectionTemplate>();
+        services.AddSingleton<IDocumentTemplate, RentalApplicationTemplate>();
 
         services.AddSingleton<ITemplateRegistry, TemplateRegistry>();
 
