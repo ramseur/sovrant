@@ -6175,22 +6175,51 @@ The agent doesn't just fill forms — it reasons about document generation:
 
 ### Acceptance Criteria
 
-- [ ] `IDocumentGenerator` interface with implementations for PDF, DOCX, XLSX, PPTX, HTML, MD
-- [ ] `DocumentGenerateTool` generates documents from templates + structured data
-- [ ] `DocumentListTemplatesTool` lists and searches available templates by industry
-- [ ] `DocumentPreviewTool` shows template fields and structure before generation
-- [ ] 40+ built-in templates across 7 industries ship with Sovrant
-- [ ] Agent can infer correct template from natural language ("draft me an NDA")
-- [ ] Agent collects missing required fields via conversation before generating
-- [ ] Multi-document workflows work ("generate the full closing package")
-- [ ] Custom workspace-scoped templates can be created and used
-- [ ] Generated documents stored as workspace artifacts with full metadata
-- [ ] Web UI shows document card with download + inline PDF preview
-- [ ] Desktop UI shows document card with download + open-in-app
-- [ ] CLI outputs document path and optionally auto-opens
-- [ ] Healthcare templates flag PHI handling through Trust Boundary
-- [ ] Legal templates include AI-generated disclaimer
-- [ ] All existing tests continue to pass
+- [x] `IDocumentGenerator` interface with implementations for PDF (PDFSharp + MigraDoc), DOCX, XLSX, PPTX, MD (HTML/Razor deferred to Phase 74)
+- [x] `DocumentGenerateTool` generates documents from freeform markdown + structured data
+- [x] `DocumentListTemplatesTool` lists and searches available templates by industry
+- [x] Template field schema exposed via `DocumentListTemplates` (dedicated `DocumentPreviewTool` folded in — same response shape)
+- [x] 44 built-in templates across 7 industries ship with Sovrant (see Phase 66.4 below)
+- [x] Agent can infer correct template from natural language via `DocumentSuggestTemplateTool` ("draft me an NDA" → `legal/nda`)
+- [x] Agent collects missing required fields via conversation — `TemplateValidationException` reports the missing set
+- [ ] Multi-document workflows ("generate the full closing package") — deferred; the three template-aware tools compose but no single driver tool exists yet
+- [ ] Custom workspace-scoped templates — deferred to Phase 74 (markdown-backed templates)
+- [x] Generated documents stored as workspace artifacts with full metadata (scope, content-type, size, access URL)
+- [ ] Web UI document-card-in-chat with inline PDF preview — the `/documents` page ships; in-chat card is pending
+- [ ] Desktop UI document-card-in-chat — the Documents view ships; in-chat card is pending
+- [x] CLI outputs document path; `sovrant document render --output` copies the artifact to a local file
+- [ ] Healthcare PHI Trust Boundary gate — blocked on Phase 58 completion
+- [ ] Legal "AI-generated — review before execution" auto-disclaimer — pending
+- [x] All existing tests continue to pass (71/71 in `Sovrant.Runtime.Documents.Tests`)
+
+### Phase 66.4 — Industry Expansion, User Surfaces, and Agent Routing
+
+Phase 66.4 closed the gap between "document generation works" and "document
+generation is a real product surface." Three sub-deliveries:
+
+1. **Template library expansion** (tasks #48–#54): brought the library from ~18
+   to **44 templates** across 7 industries — business (6), finance (7), legal
+   (7), real-estate (7), healthcare (7), education (5), construction (5).
+
+2. **Three-surface rollout** (task #55, split into #57/#58 plus the CLI):
+   - CLI: `sovrant document {list,fields,render,suggest}` with Spectre.Console
+     tables + `--json` emission
+   - Web: `/documents` Blazor page with master-detail layout (sidebar Documents
+     entry under KNOWLEDGE)
+   - Desktop: Avalonia `DocumentsView` with master-detail layout using native
+     controls only (avoids `Markdown.Avalonia` crashes on code fences)
+
+3. **Natural-language template routing** (task #56):
+   - `TemplateMatcher` — deterministic keyword ranker with weighted token
+     overlap against id/name/industry/description + a small synonym table
+     (nda → nondisclosure, bill → invoice, hipaa, cma, iep, sow, etc.)
+   - `DocumentSuggestTemplateTool` — agent tool returning top-N matches with
+     score, matched terms, and the full field schema in one call
+   - `sovrant document suggest` — CLI surface of the same router
+   - 10 new matcher tests cover routing, stopword handling, synonyms, and
+     empty-prompt behavior
+
+Commits: `36160e2` through `f7eb73a` on `sovrant-openc-dotnet-port`.
 
 ---
 
@@ -6481,7 +6510,7 @@ the rest of the LSP-supported surface.
 
 ### Why
 
-The document template library (Phase 66 and 66.4, currently ~34 templates across
+The document template library (Phase 66 and 66.4, currently 44 templates across
 7 industries) is entirely hardcoded as C# classes. Each template is a sealed
 class implementing `IDocumentTemplate` whose `Render(JsonElement)` builds a
 markdown body with a `StringBuilder`. Adding or tweaking a template requires a
