@@ -7,6 +7,7 @@ using Sovrant.Runtime.Documents;
 using Sovrant.Runtime.Documents.Generators;
 using Sovrant.Runtime.Documents.Templates;
 using Sovrant.Runtime.Documents.Templates.Business;
+using Sovrant.Runtime.Documents.Templates.Education;
 using Sovrant.Runtime.Documents.Templates.Finance;
 using Sovrant.Runtime.Documents.Templates.Healthcare;
 using Sovrant.Runtime.Documents.Templates.Legal;
@@ -1122,6 +1123,195 @@ public class TemplateTests : IDisposable
         Assert.True(await IsZipArchiveAsync(result));
     }
 
+    [Fact]
+    public async Task Syllabus_template_renders_grading_and_schedule()
+    {
+        var template = new SyllabusTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "institution_name": "State University",
+            "course_code": "CS 101",
+            "course_title": "Introduction to Computer Science",
+            "term": "Fall 2026",
+            "credits": "3",
+            "instructor_name": "Dr. Jamie Park",
+            "instructor_email": "jpark@state.edu",
+            "course_description": "A foundational survey of computing and programming concepts.",
+            "learning_objectives": ["Write basic programs in Python", "Explain algorithmic complexity"],
+            "grading_breakdown": [
+                {"category":"Assignments","weight_percent":40,"description":"Weekly problem sets"},
+                {"category":"Midterm","weight_percent":25},
+                {"category":"Final","weight_percent":35}
+            ],
+            "schedule": [
+                {"week":"1","topic":"Variables and expressions","readings":"Ch. 1"}
+            ]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("CS 101", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Learning Objectives", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Assignments", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Variables and expressions", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Lesson_plan_template_renders_procedure()
+    {
+        var template = new LessonPlanTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "teacher_name": "Ms. Rivera",
+            "subject": "Math",
+            "grade_level": "Grade 5",
+            "lesson_title": "Multiplying Fractions",
+            "lesson_date": "2026-04-22",
+            "duration_minutes": 45,
+            "objectives": ["Multiply two proper fractions", "Simplify the result"],
+            "procedure": [
+                {"phase":"Warm-up","minutes":5,"description":"Fraction review on the board."},
+                {"phase":"Direct instruction","minutes":15,"description":"Model multiplication with visual fractions."},
+                {"phase":"Guided practice","minutes":20,"description":"Students work in pairs on worksheet."}
+            ]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Multiplying Fractions", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Warm-up", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Direct instruction (15 min)", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Report_card_template_renders_subjects_and_attendance()
+    {
+        var template = new ReportCardTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "school_name": "Lakeshore Elementary",
+            "student_name": "Robin Learner",
+            "grade_level": "Grade 4",
+            "term": "Q2 2026",
+            "report_date": "2026-04-18",
+            "subjects": [
+                {"subject":"Reading","teacher":"Ms. Rivera","grade":"A","effort":"E"},
+                {"subject":"Math","teacher":"Mr. Chen","grade":"B+","effort":"S","comments":"Good progress on fractions."}
+            ],
+            "days_present": 42,
+            "days_absent": 3,
+            "promotion_status": "On track"
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Robin Learner", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Academic Performance", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Days present: 42", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Iep_template_renders_goals_and_team()
+    {
+        var template = new IepTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "district_name": "Lakeshore Public Schools",
+            "school_name": "Lakeshore Middle School",
+            "student_name": "Avery Student",
+            "date_of_birth": "2013-08-15",
+            "grade_level": "Grade 6",
+            "primary_disability": "Specific Learning Disability",
+            "iep_date": "2026-04-18",
+            "next_review_date": "2027-04-18",
+            "case_manager": "Ms. Patel",
+            "present_levels_academic": "Reads at grade 4 level; strong in math computation.",
+            "present_levels_functional": "Needs support with organization and task initiation.",
+            "annual_goals": [
+                {
+                    "area":"Reading",
+                    "goal":"Given a grade-level passage, Avery will answer comprehension questions with 80% accuracy.",
+                    "measurement":"Curriculum-based measurement biweekly.",
+                    "objectives":["Identify main idea with 80% accuracy","Summarize key details"]
+                }
+            ],
+            "services": [
+                {"service":"Resource room","provider":"Ms. Patel","frequency":"5x/week, 45 min","location":"Resource room"}
+            ],
+            "team_members": [
+                {"name":"Ms. Patel","role":"Case Manager / Special Educator"},
+                {"name":"Mr. Chen","role":"General Education Teacher"}
+            ]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Individualized Education Program", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Annual Goals", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Resource room", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("FERPA", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Transcript_template_renders_terms_and_gpa()
+    {
+        var template = new TranscriptTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "institution_name": "State University",
+            "student_name": "Alex Graduate",
+            "student_id": "SU-12345",
+            "program": "B.S. Computer Science",
+            "issue_date": "2026-04-18",
+            "official": true,
+            "terms": [
+                {
+                    "term":"Fall 2025",
+                    "courses": [
+                        {"course_code":"CS 101","course_title":"Intro to CS","credits":3,"grade":"A","grade_points":12},
+                        {"course_code":"MATH 151","course_title":"Calculus I","credits":4,"grade":"B+","grade_points":13.2}
+                    ],
+                    "term_gpa":3.6
+                }
+            ],
+            "cumulative_gpa": 3.6,
+            "cumulative_credits": 7
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.StructuredPdf, rendered.Format);
+        Assert.Contains("Official", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Fall 2025", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("CS 101", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Cumulative", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("FERPA", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new MigraDocGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.Equal("application/pdf", result.ContentType);
+    }
+
     private static IEnumerable<IDocumentTemplate> AllTemplates() => new IDocumentTemplate[]
     {
         new InvoiceTemplate(),
@@ -1158,6 +1348,11 @@ public class TemplateTests : IDisposable
         new SuperbillTemplate(),
         new ProgressNoteTemplate(),
         new ReferralLetterTemplate(),
+        new SyllabusTemplate(),
+        new LessonPlanTemplate(),
+        new ReportCardTemplate(),
+        new IepTemplate(),
+        new TranscriptTemplate(),
     };
 
     private static DocumentRequest BuildRequest(TemplateRenderResult rendered) => new()

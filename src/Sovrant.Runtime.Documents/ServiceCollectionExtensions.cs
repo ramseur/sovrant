@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Sovrant.Runtime.Documents.Generators;
 using Sovrant.Runtime.Documents.Templates;
 using Sovrant.Runtime.Documents.Templates.Business;
+using Sovrant.Runtime.Documents.Templates.Education;
 using Sovrant.Runtime.Documents.Templates.Finance;
 using Sovrant.Runtime.Documents.Templates.Healthcare;
 using Sovrant.Runtime.Documents.Templates.Legal;
@@ -73,6 +74,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDocumentTemplate, SuperbillTemplate>();
         services.AddSingleton<IDocumentTemplate, ProgressNoteTemplate>();
         services.AddSingleton<IDocumentTemplate, ReferralLetterTemplate>();
+
+        // Education
+        services.AddSingleton<IDocumentTemplate, SyllabusTemplate>();
+        services.AddSingleton<IDocumentTemplate, LessonPlanTemplate>();
+        services.AddSingleton<IDocumentTemplate, ReportCardTemplate>();
+        services.AddSingleton<IDocumentTemplate, IepTemplate>();
+        services.AddSingleton<IDocumentTemplate, TranscriptTemplate>();
 
         services.AddSingleton<ITemplateRegistry, TemplateRegistry>();
 
