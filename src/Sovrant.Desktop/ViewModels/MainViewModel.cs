@@ -66,6 +66,7 @@ public partial class MainViewModel : ViewModelBase
             "Diagnostics" => _services.GetRequiredService<DiagnosticsViewModel>(),
             "Integrations" => _services.GetRequiredService<IntegrationsViewModel>(),
             "Artifacts" => _services.GetRequiredService<ArtifactsViewModel>(),
+            "Documents" => _services.GetRequiredService<DocumentsViewModel>(),
             "Tools" => _services.GetRequiredService<ToolsViewModel>(),
             "Skills" => _services.GetRequiredService<SkillsViewModel>(),
             "Memory" => _services.GetRequiredService<MemoryViewModel>(),

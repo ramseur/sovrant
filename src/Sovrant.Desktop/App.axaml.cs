@@ -119,6 +119,7 @@ public partial class App : Application
         services.AddTransient<DiagnosticsViewModel>();
         services.AddTransient<IntegrationsViewModel>();
         services.AddTransient<ArtifactsViewModel>();
+        services.AddTransient<DocumentsViewModel>();
         services.AddTransient<ToolsViewModel>();
         services.AddTransient<SkillsViewModel>();
         services.AddTransient<MemoryViewModel>();

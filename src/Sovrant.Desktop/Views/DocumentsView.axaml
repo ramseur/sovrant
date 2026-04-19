@@ -1,0 +1,243 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.DocumentsView"
+             x:DataType="vm:DocumentsViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel>
+        <!-- Header -->
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="12">
+            <DockPanel>
+                <Button DockPanel.Dock="Right"
+                        Content="Refresh"
+                        Command="{Binding RefreshCommand}"
+                        Padding="12,6"
+                        CornerRadius="6"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
+                <StackPanel>
+                    <TextBlock Text="Documents" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
+                        <Run Text="{Binding TotalCount}" />
+                        <Run Text=" templates registered — select one to view fields and generate" />
+                    </TextBlock>
+                </StackPanel>
+            </DockPanel>
+
+            <TextBox Text="{Binding SearchText}"
+                     Watermark="Search templates..."
+                     CornerRadius="8"
+                     Padding="12,8" />
+        </StackPanel>
+
+        <!-- Master-detail -->
+        <Grid Margin="32,12,32,24" ColumnDefinitions="320,12,*">
+            <!-- List -->
+            <ScrollViewer Grid.Column="0">
+                <ItemsControl ItemsSource="{Binding FilteredTemplates}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:TemplateItemViewModel">
+                            <Button Command="{Binding $parent[ItemsControl].((vm:DocumentsViewModel)DataContext).SelectTemplateCommand}"
+                                    CommandParameter="{Binding}"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Padding="0" Margin="0,2"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Cursor="Hand">
+                                <Border Padding="12,8"
+                                        CornerRadius="8"
+                                        Background="{DynamicResource SurfaceCard}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                        BorderThickness="1">
+                                    <StackPanel Spacing="2">
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <TextBlock Text="{Binding Industry}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource BrandPrimary}" />
+                                            <TextBlock Text="·" FontSize="11"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                            <TextBlock Text="{Binding DefaultFormatName}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TextSecondary}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Detail pane -->
+            <Grid Grid.Column="2">
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding !SelectedTemplate}">
+                    <TextBlock Text="Select a template to view its fields and generate a document"
+                               FontSize="14"
+                               Foreground="{DynamicResource TextMuted}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding !!SelectedTemplate}">
+                    <ScrollViewer>
+                        <StackPanel Spacing="12">
+                            <!-- Header -->
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{Binding SelectedTemplate.Name}"
+                                           FontSize="18" FontWeight="Bold"
+                                           Foreground="{DynamicResource TextPrimary}" />
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="{Binding SelectedTemplate.Id}"
+                                               FontFamily="Consolas,Menlo,monospace"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                    <TextBlock Text="{Binding SelectedTemplate.Industry}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource BrandPrimary}" />
+                                    <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}">
+                                        <Run Text="Default:" />
+                                        <Run Text="{Binding SelectedTemplate.DefaultFormatName}" />
+                                    </TextBlock>
+                                </StackPanel>
+                                <TextBlock Text="{Binding SelectedTemplate.Description}"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextSecondary}" />
+                            </StackPanel>
+
+                            <!-- Fields -->
+                            <TextBlock Text="Fields" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <Border BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1" CornerRadius="6">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+                                    <Grid Grid.Row="0" ColumnDefinitions="2*,*,Auto,3*"
+                                          Background="{DynamicResource SurfaceBackground}">
+                                        <TextBlock Grid.Column="0" Text="Name" Padding="10,6"
+                                                   FontWeight="SemiBold" FontSize="11" />
+                                        <TextBlock Grid.Column="1" Text="Type" Padding="10,6"
+                                                   FontWeight="SemiBold" FontSize="11" />
+                                        <TextBlock Grid.Column="2" Text="Req" Padding="10,6"
+                                                   FontWeight="SemiBold" FontSize="11" Width="40" />
+                                        <TextBlock Grid.Column="3" Text="Description" Padding="10,6"
+                                                   FontWeight="SemiBold" FontSize="11" />
+                                    </Grid>
+                                    <ItemsControl Grid.Row="1" ItemsSource="{Binding SelectedTemplate.Fields}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="vm:TemplateFieldViewModel">
+                                                <Grid ColumnDefinitions="2*,*,Auto,3*">
+                                                    <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                                               Padding="10,4" FontSize="11"
+                                                               FontFamily="Consolas,Menlo,monospace" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding TypeName}"
+                                                               Padding="10,4" FontSize="11"
+                                                               Foreground="{DynamicResource TextSecondary}" />
+                                                    <TextBlock Grid.Column="2" Text="{Binding RequiredDisplay}"
+                                                               Padding="10,4" FontSize="11" Width="40" />
+                                                    <TextBlock Grid.Column="3" Text="{Binding Description}"
+                                                               Padding="10,4" FontSize="11"
+                                                               TextWrapping="Wrap"
+                                                               Foreground="{DynamicResource TextSecondary}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Grid>
+                            </Border>
+
+                            <!-- Render controls -->
+                            <TextBlock Text="Render" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <TextBlock Text="Format:" VerticalAlignment="Center" FontSize="12" />
+                                <ComboBox ItemsSource="{Binding FormatOptions}"
+                                          SelectedValue="{Binding SelectedFormatKey}"
+                                          SelectedValueBinding="{Binding Key}"
+                                          Width="180">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate DataType="vm:FormatOption">
+                                            <TextBlock Text="{Binding Display}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <Button Content="Generate"
+                                        Command="{Binding GenerateCommand}"
+                                        IsEnabled="{Binding !IsBusy}"
+                                        Padding="14,6"
+                                        CornerRadius="6"
+                                        Background="{DynamicResource BrandPrimary}"
+                                        Foreground="White" />
+                                <TextBlock Text="Generating..."
+                                           VerticalAlignment="Center" FontSize="11"
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           IsVisible="{Binding IsBusy}" />
+                            </StackPanel>
+
+                            <TextBox Text="{Binding JsonInput}"
+                                     AcceptsReturn="True"
+                                     TextWrapping="NoWrap"
+                                     FontFamily="Consolas,Menlo,monospace"
+                                     FontSize="12"
+                                     MinHeight="200"
+                                     Watermark='Enter JSON satisfying the field schema. Example: {"project_name": "..."}' />
+
+                            <!-- Error -->
+                            <Border Background="#332d1b1b"
+                                    BorderBrush="#c94a4a"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="12,8"
+                                    IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                <TextBlock Text="{Binding ErrorMessage}"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Foreground="#ff8080" />
+                            </Border>
+
+                            <!-- Result -->
+                            <Border Background="{DynamicResource SurfaceBackground}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="12,10"
+                                    IsVisible="{Binding HasResult}">
+                                <StackPanel Spacing="4">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="Generated:" FontWeight="SemiBold" FontSize="12" />
+                                        <TextBlock Text="{Binding ResultPath}"
+                                                   FontFamily="Consolas,Menlo,monospace"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource BrandPrimary}" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding ResultSummary}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</UserControl>

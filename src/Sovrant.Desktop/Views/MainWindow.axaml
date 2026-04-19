@@ -26,6 +26,9 @@
         <DataTemplate DataType="vm:ArtifactsViewModel">
             <views:ArtifactsView />
         </DataTemplate>
+        <DataTemplate DataType="vm:DocumentsViewModel">
+            <views:DocumentsView />
+        </DataTemplate>
         <DataTemplate DataType="vm:ToolsViewModel">
             <views:ToolsView />
         </DataTemplate>
@@ -109,6 +112,10 @@
                                     CornerRadius="6" HorizontalAlignment="Center" />
                             <Button Content="📄" ToolTip.Tip="Artifacts"
                                     Command="{Binding Sidebar.NavigateCommand}" CommandParameter="Artifacts"
+                                    Padding="8,5" FontSize="13" Background="Transparent"
+                                    CornerRadius="6" HorizontalAlignment="Center" />
+                            <Button Content="📝" ToolTip.Tip="Documents"
+                                    Command="{Binding Sidebar.NavigateCommand}" CommandParameter="Documents"
                                     Padding="8,5" FontSize="13" Background="Transparent"
                                     CornerRadius="6" HorizontalAlignment="Center" />
                             <Button Content="🛠" ToolTip.Tip="Tools"

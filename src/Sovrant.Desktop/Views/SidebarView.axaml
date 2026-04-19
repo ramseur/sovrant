@@ -260,6 +260,11 @@
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
                         Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                <Button Content="📝  Documents"
+                        Command="{Binding NavigateCommand}" CommandParameter="Documents"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
+                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
                 <Button Content="🛠  Tools"
                         Command="{Binding NavigateCommand}" CommandParameter="Tools"
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
