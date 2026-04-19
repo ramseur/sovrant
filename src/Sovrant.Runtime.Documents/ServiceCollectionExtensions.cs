@@ -3,6 +3,7 @@ using Sovrant.Runtime.Documents.Generators;
 using Sovrant.Runtime.Documents.Templates;
 using Sovrant.Runtime.Documents.Templates.Business;
 using Sovrant.Runtime.Documents.Templates.Finance;
+using Sovrant.Runtime.Documents.Templates.Healthcare;
 using Sovrant.Runtime.Documents.Templates.Legal;
 using Sovrant.Runtime.Documents.Templates.RealEstate;
 
@@ -63,6 +64,15 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDocumentTemplate, ClosingDisclosureTemplate>();
         services.AddSingleton<IDocumentTemplate, PropertyInspectionTemplate>();
         services.AddSingleton<IDocumentTemplate, RentalApplicationTemplate>();
+
+        // Healthcare
+        services.AddSingleton<IDocumentTemplate, PatientIntakeTemplate>();
+        services.AddSingleton<IDocumentTemplate, CarePlanTemplate>();
+        services.AddSingleton<IDocumentTemplate, DischargeSummaryTemplate>();
+        services.AddSingleton<IDocumentTemplate, HipaaAuthorizationTemplate>();
+        services.AddSingleton<IDocumentTemplate, SuperbillTemplate>();
+        services.AddSingleton<IDocumentTemplate, ProgressNoteTemplate>();
+        services.AddSingleton<IDocumentTemplate, ReferralLetterTemplate>();
 
         services.AddSingleton<ITemplateRegistry, TemplateRegistry>();
 

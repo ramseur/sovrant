@@ -8,6 +8,7 @@ using Sovrant.Runtime.Documents.Generators;
 using Sovrant.Runtime.Documents.Templates;
 using Sovrant.Runtime.Documents.Templates.Business;
 using Sovrant.Runtime.Documents.Templates.Finance;
+using Sovrant.Runtime.Documents.Templates.Healthcare;
 using Sovrant.Runtime.Documents.Templates.Legal;
 using Sovrant.Runtime.Documents.Templates.RealEstate;
 
@@ -902,6 +903,225 @@ public class TemplateTests : IDisposable
         Assert.True(await IsZipArchiveAsync(result));
     }
 
+    [Fact]
+    public async Task Patient_intake_template_renders_demographics_and_history()
+    {
+        var template = new PatientIntakeTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "practice_name": "Lakeshore Family Medicine",
+            "intake_date": "2026-04-18",
+            "patient_name": "Jordan Sample",
+            "date_of_birth": "1988-03-14",
+            "reason_for_visit": "Annual physical and medication review.",
+            "current_medications": ["Atorvastatin 20mg daily", "Lisinopril 10mg daily"],
+            "allergies": ["Penicillin"],
+            "medical_history": ["Hypertension", "Hyperlipidemia"]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Patient Intake Form", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Penicillin", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Protected Health Information", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Care_plan_template_renders_problems_and_interventions()
+    {
+        var template = new CarePlanTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "patient_name": "Jordan Sample",
+            "plan_date": "2026-04-18",
+            "author_name": "Dr. Morgan Lee",
+            "author_role": "MD",
+            "diagnoses": ["Type 2 Diabetes Mellitus", "Essential Hypertension"],
+            "problems": [
+                {
+                    "problem": "Poorly controlled A1c",
+                    "goal": "A1c below 7.0 within 6 months.",
+                    "interventions": ["Start metformin 500mg BID", "Diabetes education referral"],
+                    "responsible": "PCP and CDE",
+                    "target_date": "2026-10-18"
+                }
+            ]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Care Plan", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Poorly controlled A1c", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("metformin", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Discharge_summary_template_renders_hospital_course()
+    {
+        var template = new DischargeSummaryTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "patient_name": "Jordan Sample",
+            "admission_date": "2026-04-10",
+            "discharge_date": "2026-04-15",
+            "attending_physician": "Dr. Morgan Lee",
+            "admission_diagnosis": "Community-acquired pneumonia.",
+            "discharge_diagnosis": "Resolved community-acquired pneumonia.",
+            "hospital_course": "Patient admitted with fever and productive cough. Treated with IV ceftriaxone. Improved over 5 days.",
+            "discharge_instructions": "Complete oral antibiotic course. Follow up with PCP in 1 week.",
+            "discharge_medications": ["Amoxicillin 500mg TID x7 days"],
+            "follow_up_appointments": ["PCP — 2026-04-22"]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Discharge Summary", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Hospital Course", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Amoxicillin", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Hipaa_authorization_template_renders_required_clauses()
+    {
+        var template = new HipaaAuthorizationTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "patient_name": "Jordan Sample",
+            "date_of_birth": "1988-03-14",
+            "releasing_entity": "Lakeshore Family Medicine",
+            "receiving_party": "Metro Cardiology Associates",
+            "information_to_release": ["Office visit notes", "Lab results", "Imaging reports"],
+            "purpose_of_release": "Cardiology consultation for chest pain workup.",
+            "authorization_date": "2026-04-18",
+            "expiration_date": "2027-04-18"
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Authorization for Release", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Right to Revoke", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Redisclosure Notice", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Superbill_template_renders_codes_and_totals()
+    {
+        var template = new SuperbillTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "practice_name": "Lakeshore Family Medicine",
+            "provider_name": "Dr. Morgan Lee",
+            "patient_name": "Jordan Sample",
+            "patient_dob": "1988-03-14",
+            "date_of_service": "2026-04-18",
+            "currency": "USD",
+            "diagnoses": [
+                {"code":"I10","description":"Essential hypertension"}
+            ],
+            "charges": [
+                {"cpt_code":"99213","description":"Office visit, established, low complexity","units":1,"fee":125.00,"diagnosis_pointer":"1"},
+                {"cpt_code":"36415","description":"Venipuncture","units":1,"fee":15.00}
+            ]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Superbill", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("99213", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("I10", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("140.00", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Progress_note_template_renders_soap_sections()
+    {
+        var template = new ProgressNoteTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "patient_name": "Jordan Sample",
+            "encounter_date": "2026-04-18",
+            "provider_name": "Dr. Morgan Lee",
+            "provider_role": "MD",
+            "chief_complaint": "Follow-up hypertension.",
+            "subjective": "Patient reports adherence to lisinopril. Denies dizziness.",
+            "objective": "BP 128/82. Lungs clear. Heart regular rate and rhythm.",
+            "vital_signs": ["BP 128/82", "HR 72"],
+            "assessment": "Hypertension, well controlled on current regimen.",
+            "plan": "Continue lisinopril. Recheck in 3 months."
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("S — Subjective", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("O — Objective", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("A — Assessment", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("P — Plan", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("BP 128/82", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Referral_letter_template_renders_clinical_summary()
+    {
+        var template = new ReferralLetterTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "letter_date": "2026-04-18",
+            "referring_provider_name": "Dr. Morgan Lee",
+            "referring_provider_role": "MD",
+            "referring_practice": "Lakeshore Family Medicine",
+            "receiving_provider_name": "Dr. Priya Singh",
+            "receiving_provider_specialty": "Cardiology",
+            "patient_name": "Jordan Sample",
+            "patient_dob": "1988-03-14",
+            "urgency": "Routine",
+            "reason_for_referral": "Evaluation of exertional chest pain.",
+            "clinical_summary": "38-year-old with two-week history of substernal chest pain on exertion. EKG sinus rhythm. Troponin negative.",
+            "current_medications": ["Lisinopril 10mg daily"]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Dr. Priya Singh", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Cardiology", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Clinical Summary", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Routine", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
     private static IEnumerable<IDocumentTemplate> AllTemplates() => new IDocumentTemplate[]
     {
         new InvoiceTemplate(),
@@ -931,6 +1151,13 @@ public class TemplateTests : IDisposable
         new ClosingDisclosureTemplate(),
         new PropertyInspectionTemplate(),
         new RentalApplicationTemplate(),
+        new PatientIntakeTemplate(),
+        new CarePlanTemplate(),
+        new DischargeSummaryTemplate(),
+        new HipaaAuthorizationTemplate(),
+        new SuperbillTemplate(),
+        new ProgressNoteTemplate(),
+        new ReferralLetterTemplate(),
     };
 
     private static DocumentRequest BuildRequest(TemplateRenderResult rendered) => new()
