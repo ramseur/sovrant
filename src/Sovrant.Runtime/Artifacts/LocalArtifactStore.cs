@@ -18,6 +18,7 @@ namespace Sovrant.Runtime.Artifacts;
 public sealed partial class LocalArtifactStore : IArtifactStore
 {
     private readonly string _root;
+    private readonly string? _accessPathPrefix;
     private readonly ILogger<LocalArtifactStore> _logger;
 
     private static readonly JsonSerializerOptions s_jsonOptions = new()
@@ -25,7 +26,10 @@ public sealed partial class LocalArtifactStore : IArtifactStore
         WriteIndented = true,
     };
 
-    public LocalArtifactStore(ILogger<LocalArtifactStore> logger, string? root = null)
+    public LocalArtifactStore(
+        ILogger<LocalArtifactStore> logger,
+        string? root = null,
+        string? accessPathPrefix = null)
     {
         _logger = logger;
         _root = root
@@ -33,6 +37,8 @@ public sealed partial class LocalArtifactStore : IArtifactStore
             ?? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                 ".sovrant", "artifacts");
+        _accessPathPrefix = accessPathPrefix
+            ?? Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_URL_PREFIX");
     }
 
     /// <summary>The resolved root directory for all artifacts.</summary>
@@ -185,6 +191,21 @@ public sealed partial class LocalArtifactStore : IArtifactStore
 
         if (!File.Exists(fullPath))
             return Task.FromResult<Uri?>(null);
+
+        if (!string.IsNullOrEmpty(_accessPathPrefix))
+        {
+            var scope = handle.Scope;
+            var prefix = _accessPathPrefix.TrimEnd('/');
+            var segs = new List<string> { prefix, Uri.EscapeDataString(scope.WorkspaceId), Uri.EscapeDataString(scope.ProjectId) };
+            if (!string.IsNullOrEmpty(scope.RunId))
+                segs.Add(Uri.EscapeDataString(scope.RunId));
+            // Escape each path segment but keep the separators.
+            foreach (var seg in relativePath.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries))
+                segs.Add(Uri.EscapeDataString(seg));
+            var url = string.Join('/', segs);
+            var kind = Uri.IsWellFormedUriString(url, UriKind.Absolute) ? UriKind.Absolute : UriKind.Relative;
+            return Task.FromResult<Uri?>(new Uri(url, kind));
+        }
 
         return Task.FromResult<Uri?>(new Uri($"file:///{fullPath.Replace('\\', '/')}"));
     }

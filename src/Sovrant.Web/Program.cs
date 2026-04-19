@@ -50,6 +50,11 @@ public static class Program
         {
             // ── Embedded mode: full in-process runtime (existing path) ──────
             Environment.SetEnvironmentVariable("ROUTER_MODE", "Fixed");
+            // Route artifact access URLs through our own HTTP endpoint so
+            // the browser-side <iframe> preview can load PDFs (file:/// URIs
+            // are blocked inside iframes on non-file origins).
+            if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_URL_PREFIX")))
+                Environment.SetEnvironmentVariable("SOVRANT_ARTIFACTS_URL_PREFIX", "/artifacts");
             var config = ConfigLoader.Load();
 
             // Bridge config into env vars so the API layer picks them up.
@@ -97,6 +102,9 @@ public static class Program
 
         app.MapRazorComponents<Sovrant.Web.Components.App>()
             .AddInteractiveServerRenderMode();
+
+        if (!isRemote)
+            MapArtifactsEndpoint(app);
 
         if (isRemote)
         {
@@ -157,5 +165,59 @@ public static class Program
         }
 
         await app.RunAsync();
+    }
+
+    // Serves artifact files by workspace/project/run from the LocalArtifactStore
+    // root. Needed so the chat DocumentArtifactCard iframe can embed PDFs
+    // (browsers block file:/// in iframes on non-file origins).
+    private static void MapArtifactsEndpoint(WebApplication app)
+    {
+        app.MapGet("/artifacts/{workspaceId}/{projectId}/{runId}/{*relPath}",
+            (string workspaceId, string projectId, string runId, string relPath,
+             Sovrant.Runtime.Artifacts.IArtifactStore store) =>
+        {
+            if (store is not Sovrant.Runtime.Artifacts.LocalArtifactStore local)
+                return Results.NotFound();
+
+            if (string.IsNullOrWhiteSpace(relPath) ||
+                relPath.Contains("..", StringComparison.Ordinal) ||
+                workspaceId.Contains("..", StringComparison.Ordinal) ||
+                projectId.Contains("..", StringComparison.Ordinal) ||
+                runId.Contains("..", StringComparison.Ordinal))
+            {
+                return Results.BadRequest();
+            }
+
+            var ws = Uri.UnescapeDataString(workspaceId);
+            var proj = Uri.UnescapeDataString(projectId);
+            var run = Uri.UnescapeDataString(runId);
+            var rel = string.Join(Path.DirectorySeparatorChar,
+                relPath.Split('/').Select(Uri.UnescapeDataString));
+
+            var rootFull = Path.GetFullPath(local.Root);
+            var fullPath = Path.GetFullPath(Path.Combine(rootFull, ws, proj, run, rel));
+            if (!fullPath.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
+                return Results.BadRequest();
+            if (!File.Exists(fullPath))
+                return Results.NotFound();
+
+            var contentType = GuessContentType(fullPath);
+            return Results.File(fullPath, contentType, enableRangeProcessing: true);
+        });
+    }
+
+    private static string GuessContentType(string path)
+    {
+        var ext = Path.GetExtension(path);
+        if (ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase)) return "application/pdf";
+        if (ext.Equals(".docx", StringComparison.OrdinalIgnoreCase)) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        if (ext.Equals(".xlsx", StringComparison.OrdinalIgnoreCase)) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        if (ext.Equals(".pptx", StringComparison.OrdinalIgnoreCase)) return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+        if (ext.Equals(".md", StringComparison.OrdinalIgnoreCase) || ext.Equals(".txt", StringComparison.OrdinalIgnoreCase)) return "text/plain; charset=utf-8";
+        if (ext.Equals(".json", StringComparison.OrdinalIgnoreCase)) return "application/json";
+        if (ext.Equals(".html", StringComparison.OrdinalIgnoreCase) || ext.Equals(".htm", StringComparison.OrdinalIgnoreCase)) return "text/html; charset=utf-8";
+        if (ext.Equals(".png", StringComparison.OrdinalIgnoreCase)) return "image/png";
+        if (ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase) || ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)) return "image/jpeg";
+        return "application/octet-stream";
     }
 }
