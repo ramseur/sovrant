@@ -44,7 +44,7 @@ public class TemplateTests : IDisposable
         Assert.Equal("legal/nda", legal[0].Id);
 
         var invoiceHits = registry.Find(search: "invoice").ToList();
-        Assert.Contains(invoiceHits, t => t.Id == "business/invoice");
+        Assert.Contains(invoiceHits, t => t.Id == "finance/invoice");
     }
 
     [Fact]
@@ -223,6 +223,319 @@ public class TemplateTests : IDisposable
         Assert.Equal("application/pdf", result.ContentType);
     }
 
+    [Fact]
+    public async Task Financial_statement_template_renders_to_structured_pdf()
+    {
+        var template = new FinancialStatementTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "entity_name": "Acme Corp",
+            "period": "Q1 2026",
+            "income_statement": [
+                {"label":"Revenue","amount":250000},
+                {"label":"COGS","amount":-100000},
+                {"label":"Operating expenses","amount":-60000}
+            ],
+            "balance_sheet": [
+                {"label":"Cash","amount":50000,"section":"Assets"},
+                {"label":"Accounts receivable","amount":25000,"section":"Assets"},
+                {"label":"Accounts payable","amount":15000,"section":"Liabilities"}
+            ]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.StructuredPdf, rendered.Format);
+        Assert.Contains("Income Statement", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Assets", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new MigraDocGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.Equal("application/pdf", result.ContentType);
+    }
+
+    [Fact]
+    public async Task Budget_report_template_renders_with_variance()
+    {
+        var template = new BudgetReportTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "owner": "Engineering",
+            "period": "April 2026",
+            "categories": [
+                {"category":"Salaries","planned":100000,"actual":98000},
+                {"category":"Software","planned":10000,"actual":12500}
+            ]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Contains("Variance", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new MigraDocGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.Equal("application/pdf", result.ContentType);
+    }
+
+    [Fact]
+    public async Task Loan_amortization_template_renders_to_excel()
+    {
+        var template = new LoanAmortizationTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "borrower": "Jane Doe",
+            "loan_name": "5-year auto loan",
+            "principal": 25000,
+            "annual_rate_percent": 6.5,
+            "term_months": 60,
+            "first_payment_date": "2026-05-01"
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Excel, rendered.Format);
+
+        using var body = JsonDocument.Parse(rendered.Body);
+        Assert.True(body.RootElement.TryGetProperty("rows", out var rows));
+        Assert.True(rows.GetArrayLength() > 60);
+
+        var generator = new ExcelDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", result.ContentType);
+    }
+
+    [Fact]
+    public async Task Audit_report_template_groups_findings_by_severity()
+    {
+        var template = new AuditReportTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "entity_name": "Acme Corp",
+            "audit_type": "Internal Controls",
+            "period": "FY 2025",
+            "auditor": "Internal Audit Team",
+            "report_date": "2026-04-17",
+            "scope": "Review of financial reporting controls.",
+            "findings": [
+                {"title":"Segregation of duties","severity":"High","description":"Same person creates and approves journal entries."},
+                {"title":"Vendor master hygiene","severity":"Medium","description":"Stale vendors not deactivated."},
+                {"title":"Documentation","severity":"Low","description":"Some reconciliations lack sign-off."}
+            ]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Contains("Severity: High", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Segregation of duties", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new MigraDocGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.Equal("application/pdf", result.ContentType);
+    }
+
+    [Fact]
+    public async Task Proposal_template_renders_pricing_and_acceptance()
+    {
+        var template = new ProposalTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "proposal_title": "Website Redesign",
+            "prepared_for": "Beta LLC",
+            "prepared_by": "Acme Design Studio",
+            "proposal_date": "2026-04-18",
+            "executive_summary": "Full redesign of the Beta LLC marketing site.",
+            "scope": "Information architecture, visual design, and front-end build.",
+            "deliverables": ["Wireframes","High-fidelity mockups","Production site"],
+            "pricing": [
+                {"item":"Discovery","quantity":1,"unit_price":5000},
+                {"item":"Design","quantity":1,"unit_price":25000},
+                {"item":"Build","quantity":1,"unit_price":40000}
+            ],
+            "timeline": [
+                {"milestone":"Kickoff","target_date":"2026-05-01"},
+                {"milestone":"Final delivery","target_date":"2026-08-30"}
+            ]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Contains("Acceptance", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Pricing", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new MigraDocGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.Equal("application/pdf", result.ContentType);
+    }
+
+    [Fact]
+    public async Task Sow_template_renders_to_word_with_signatures()
+    {
+        var template = new StatementOfWorkTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "sow_number": "SOW-2026-014",
+            "effective_date": "2026-04-20",
+            "client_name": "Beta LLC",
+            "vendor_name": "Acme Consulting",
+            "scope": "Implementation of analytics dashboard.",
+            "deliverables": [
+                {"name":"Discovery report","acceptance_criteria":"Approved by sponsor."},
+                {"name":"Production rollout","acceptance_criteria":"Pilot users sign off."}
+            ],
+            "milestones": [
+                {"name":"Discovery complete","target_date":"2026-05-15","payment_percent":25},
+                {"name":"Final delivery","target_date":"2026-08-30","payment_percent":75}
+            ],
+            "total_fee": 80000,
+            "currency": "USD"
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("SOW-2026-014", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Signatures", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Project_status_template_renders_milestones_and_risks()
+    {
+        var template = new ProjectStatusReportTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "project_name": "Atlas",
+            "period": "Week of 2026-04-13",
+            "project_manager": "Alice",
+            "overall_health": "Yellow",
+            "summary": "Schedule slipped two days due to vendor delay.",
+            "milestones": [
+                {"name":"API freeze","status":"At Risk","target_date":"2026-04-30","notes":"Awaiting vendor SDK."}
+            ],
+            "accomplishments": ["Closed 12 issues"],
+            "planned_next_period": ["Resume integration testing"],
+            "risks": [
+                {"title":"Vendor SDK delay","severity":"High","mitigation":"Escalate to account manager."}
+            ]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Yellow", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Vendor SDK delay", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Offer_letter_template_renders_with_compensation()
+    {
+        var template = new EmployeeOfferLetterTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "company_name": "Acme Corp",
+            "candidate_name": "Sam Hire",
+            "position_title": "Senior Engineer",
+            "department": "Platform",
+            "start_date": "2026-05-12",
+            "base_salary": 175000,
+            "salary_frequency": "annual",
+            "currency": "USD",
+            "sign_on_bonus": 15000,
+            "target_bonus_percent": 15,
+            "contingencies": ["Background check","Work authorization"],
+            "signer_name": "Pat Hiring",
+            "signer_title": "VP Engineering",
+            "letter_date": "2026-04-17"
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Senior Engineer", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Sign-on bonus", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("at-will", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Performance_review_template_renders_competencies_and_goals()
+    {
+        var template = new PerformanceReviewTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "employee_name": "Jordan Dev",
+            "employee_title": "Engineer II",
+            "reviewer_name": "Alex Manager",
+            "review_period": "FY2025",
+            "review_date": "2026-04-17",
+            "overall_rating": "Exceeds",
+            "summary": "Strong year with significant impact.",
+            "competencies": [
+                {"name":"Technical depth","rating":"Exceeds","comments":"Led the migration to .NET 10."},
+                {"name":"Collaboration","rating":"Meets"}
+            ],
+            "accomplishments": ["Shipped feature X","Mentored two new hires"],
+            "goals_next_period": [
+                {"goal":"Lead architecture council","target_date":"2026-12-31","success_criteria":"Quarterly arch review on time."}
+            ]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Competency Ratings", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Goals for Next Period", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Business_plan_template_renders_with_financial_projections()
+    {
+        var template = new BusinessPlanTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "company_name": "Nimbus Robotics",
+            "plan_date": "2026-04-17",
+            "currency": "USD",
+            "executive_summary": "Nimbus Robotics designs warehouse automation.",
+            "company_overview": "Founded 2024 in San Francisco.",
+            "products_services": "Autonomous mobile robots and fleet software.",
+            "market_analysis": "Warehouse automation is a $30B market growing 15% annually.",
+            "competitors": ["Locus","6 River Systems"],
+            "management_team": [
+                {"name":"Sam Founder","role":"CEO","background":"15 years robotics."}
+            ],
+            "financial_projections": [
+                {"year":"2026","revenue":2000000,"expenses":3500000,"net_income":-1500000},
+                {"year":"2027","revenue":8000000,"expenses":7000000,"net_income":1000000}
+            ],
+            "funding_request": "Seeking $10M Series A."
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.StructuredPdf, rendered.Format);
+        Assert.Contains("Financial Projections", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Nimbus Robotics", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new MigraDocGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.Equal("application/pdf", result.ContentType);
+    }
+
     private static IEnumerable<IDocumentTemplate> AllTemplates() => new IDocumentTemplate[]
     {
         new InvoiceTemplate(),
@@ -230,6 +543,16 @@ public class TemplateTests : IDisposable
         new NdaTemplate(),
         new ExpenseReportTemplate(),
         new PropertyListingTemplate(),
+        new FinancialStatementTemplate(),
+        new BudgetReportTemplate(),
+        new LoanAmortizationTemplate(),
+        new AuditReportTemplate(),
+        new ProposalTemplate(),
+        new StatementOfWorkTemplate(),
+        new ProjectStatusReportTemplate(),
+        new EmployeeOfferLetterTemplate(),
+        new PerformanceReviewTemplate(),
+        new BusinessPlanTemplate(),
     };
 
     private static DocumentRequest BuildRequest(TemplateRenderResult rendered) => new()

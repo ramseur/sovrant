@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
-namespace Sovrant.Runtime.Documents.Templates.Business;
+namespace Sovrant.Runtime.Documents.Templates.Finance;
 
 /// <summary>
 /// Structured-PDF invoice: header with invoice number / dates, seller +
@@ -12,9 +12,9 @@ namespace Sovrant.Runtime.Documents.Templates.Business;
 /// </summary>
 public sealed class InvoiceTemplate : IDocumentTemplate
 {
-    public string Id => "business/invoice";
+    public string Id => "finance/invoice";
     public string Name => "Invoice";
-    public string Industry => "business";
+    public string Industry => "finance";
     public string Description => "Professional invoice with line items, tax, and totals.";
     public DocumentFormat DefaultFormat => DocumentFormat.StructuredPdf;
 

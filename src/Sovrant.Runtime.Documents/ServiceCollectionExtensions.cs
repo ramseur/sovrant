@@ -29,10 +29,27 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IDocumentGeneratorRegistry, DocumentGeneratorRegistry>();
 
-        services.AddSingleton<IDocumentTemplate, InvoiceTemplate>();
+        // Business
         services.AddSingleton<IDocumentTemplate, MeetingNotesTemplate>();
-        services.AddSingleton<IDocumentTemplate, NdaTemplate>();
+        services.AddSingleton<IDocumentTemplate, StatementOfWorkTemplate>();
+        services.AddSingleton<IDocumentTemplate, ProjectStatusReportTemplate>();
+        services.AddSingleton<IDocumentTemplate, EmployeeOfferLetterTemplate>();
+        services.AddSingleton<IDocumentTemplate, PerformanceReviewTemplate>();
+        services.AddSingleton<IDocumentTemplate, BusinessPlanTemplate>();
+
+        // Finance
+        services.AddSingleton<IDocumentTemplate, InvoiceTemplate>();
         services.AddSingleton<IDocumentTemplate, ExpenseReportTemplate>();
+        services.AddSingleton<IDocumentTemplate, FinancialStatementTemplate>();
+        services.AddSingleton<IDocumentTemplate, BudgetReportTemplate>();
+        services.AddSingleton<IDocumentTemplate, LoanAmortizationTemplate>();
+        services.AddSingleton<IDocumentTemplate, AuditReportTemplate>();
+        services.AddSingleton<IDocumentTemplate, ProposalTemplate>();
+
+        // Legal
+        services.AddSingleton<IDocumentTemplate, NdaTemplate>();
+
+        // Real estate
         services.AddSingleton<IDocumentTemplate, PropertyListingTemplate>();
 
         services.AddSingleton<ITemplateRegistry, TemplateRegistry>();
