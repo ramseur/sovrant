@@ -40,8 +40,8 @@ public class TemplateTests : IDisposable
         var registry = new TemplateRegistry(AllTemplates());
 
         var legal = registry.Find(industry: "legal").ToList();
-        Assert.Single(legal);
-        Assert.Equal("legal/nda", legal[0].Id);
+        Assert.Contains(legal, t => t.Id == "legal/nda");
+        Assert.All(legal, t => Assert.Equal("legal", t.Industry));
 
         var invoiceHits = registry.Find(search: "invoice").ToList();
         Assert.Contains(invoiceHits, t => t.Id == "finance/invoice");
@@ -536,6 +536,179 @@ public class TemplateTests : IDisposable
         Assert.Equal("application/pdf", result.ContentType);
     }
 
+    [Fact]
+    public async Task Service_agreement_template_renders_with_boilerplate()
+    {
+        var template = new ServiceAgreementTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "client_name": "Beta LLC",
+            "provider_name": "Acme Consulting",
+            "effective_date": "2026-04-20",
+            "services_description": "Consulting on analytics strategy.",
+            "fees": "Hourly at $250/hr, billed monthly.",
+            "payment_terms": "Net 30",
+            "term": "1 year, auto-renewing",
+            "governing_law": "State of Delaware"
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Limitation of Liability", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Delaware", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Engagement_letter_template_renders_with_retainer()
+    {
+        var template = new EngagementLetterTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "firm_name": "Smith & Jones LLP",
+            "client_name": "Beta LLC",
+            "letter_date": "2026-04-19",
+            "matter_description": "Review of vendor contracts.",
+            "scope_of_services": "Negotiation support and redlines.",
+            "fee_structure": "Hourly at attorney rates ranging $350-$600/hr.",
+            "retainer_amount": 5000,
+            "currency": "USD",
+            "billing_cycle": "monthly",
+            "signer_name": "Alex Smith",
+            "signer_title": "Partner"
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("retainer", rendered.Body, StringComparison.OrdinalIgnoreCase);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Demand_letter_template_renders_with_deadline()
+    {
+        var template = new DemandLetterTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "sender_name": "Pat Plaintiff",
+            "recipient_name": "Devin Debtor",
+            "letter_date": "2026-04-19",
+            "subject": "Unpaid Invoice #4821",
+            "facts": "Invoice #4821 for $12,500 was issued 2026-01-15 and remains unpaid.",
+            "demand": "Payment of the outstanding balance in full.",
+            "amount_due": 12500,
+            "response_deadline": "2026-05-05"
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("2026-05-05", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Unpaid Invoice", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Corporate_minutes_template_renders_resolutions()
+    {
+        var template = new CorporateMinutesTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "company_name": "Acme Corp",
+            "meeting_type": "Board of Directors",
+            "meeting_date": "2026-04-10",
+            "meeting_time": "10:00 AM",
+            "location": "Company HQ",
+            "chair": "Chris Chair",
+            "secretary": "Sara Secretary",
+            "attendees_present": ["Chris Chair","Sara Secretary","Drew Director"],
+            "quorum_established": true,
+            "agenda": ["Approve minutes","Budget ratification"],
+            "resolutions": [
+                {"title":"Ratify FY26 budget","text":"RESOLVED, the FY26 budget is approved as presented.","moved_by":"Drew Director","seconded_by":"Sara Secretary","votes_for":3,"votes_against":0,"votes_abstain":0,"outcome":"Passed"}
+            ]
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Ratify FY26 budget", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Passed", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Power_of_attorney_template_renders_with_powers()
+    {
+        var template = new PowerOfAttorneyTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "principal_name": "Mia Principal",
+            "agent_name": "Avi Agent",
+            "poa_type": "Durable",
+            "effective_date": "2026-04-19",
+            "is_durable": true,
+            "powers_granted": [
+                "Manage real property transactions",
+                "File tax returns",
+                "Access bank accounts"
+            ],
+            "governing_state": "California"
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("attorney-in-fact", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Manage real property transactions", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("shall not be affected", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
+    [Fact]
+    public async Task Terms_of_service_template_renders_standard_sections()
+    {
+        var template = new TermsOfServiceTemplate();
+        using var doc = JsonDocument.Parse("""
+        {
+            "company_name": "Nimbus Inc",
+            "service_name": "Nimbus Cloud",
+            "website_url": "https://nimbus.example",
+            "effective_date": "2026-04-19",
+            "contact_email": "legal@nimbus.example",
+            "service_description": "Nimbus Cloud is a hosted file-sync service.",
+            "acceptable_use": ["Upload malware","Impersonate others","Violate law"],
+            "governing_law": "State of California"
+        }
+        """);
+
+        var rendered = template.Render(doc.RootElement);
+        Assert.Equal(DocumentFormat.Word, rendered.Format);
+        Assert.Contains("Limitation of Liability", rendered.Body, StringComparison.Ordinal);
+        Assert.Contains("Acceptable Use", rendered.Body, StringComparison.Ordinal);
+
+        var generator = new WordDocumentGenerator(_store);
+        var result = await generator.GenerateAsync(BuildRequest(rendered));
+        Assert.True(await IsZipArchiveAsync(result));
+    }
+
     private static IEnumerable<IDocumentTemplate> AllTemplates() => new IDocumentTemplate[]
     {
         new InvoiceTemplate(),
@@ -553,6 +726,12 @@ public class TemplateTests : IDisposable
         new EmployeeOfferLetterTemplate(),
         new PerformanceReviewTemplate(),
         new BusinessPlanTemplate(),
+        new ServiceAgreementTemplate(),
+        new EngagementLetterTemplate(),
+        new DemandLetterTemplate(),
+        new CorporateMinutesTemplate(),
+        new PowerOfAttorneyTemplate(),
+        new TermsOfServiceTemplate(),
     };
 
     private static DocumentRequest BuildRequest(TemplateRenderResult rendered) => new()

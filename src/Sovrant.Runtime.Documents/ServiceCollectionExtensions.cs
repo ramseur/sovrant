@@ -48,6 +48,12 @@ public static class ServiceCollectionExtensions
 
         // Legal
         services.AddSingleton<IDocumentTemplate, NdaTemplate>();
+        services.AddSingleton<IDocumentTemplate, ServiceAgreementTemplate>();
+        services.AddSingleton<IDocumentTemplate, EngagementLetterTemplate>();
+        services.AddSingleton<IDocumentTemplate, DemandLetterTemplate>();
+        services.AddSingleton<IDocumentTemplate, CorporateMinutesTemplate>();
+        services.AddSingleton<IDocumentTemplate, PowerOfAttorneyTemplate>();
+        services.AddSingleton<IDocumentTemplate, TermsOfServiceTemplate>();
 
         // Real estate
         services.AddSingleton<IDocumentTemplate, PropertyListingTemplate>();
