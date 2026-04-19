@@ -13,11 +13,11 @@
 
     <!-- Tab bar -->
     <div class="tab-bar">
-        <button class="tab-btn @(_selectedTab == 0 ? "active" : "")" @onclick="() => _selectedTab = 0">Providers</button>
-        <button class="tab-btn @(_selectedTab == 1 ? "active" : "")" @onclick="() => _selectedTab = 1">General</button>
+        <button class="tab-btn @(_selectedTab == 0 ? "active" : "")" @onclick="() => _selectedTab = 0">General</button>
+        <button class="tab-btn @(_selectedTab == 1 ? "active" : "")" @onclick="() => _selectedTab = 1">Providers</button>
     </div>
 
-    @if (_selectedTab == 0)
+    @if (_selectedTab == 1)
     {
         <!-- Providers tab -->
         <div class="settings-section">

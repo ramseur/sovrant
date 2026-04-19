@@ -1,0 +1,12 @@
+@*  Phase 69 — Knowledge group secondary panel.  *@
+
+<div class="rail-secondary-header">Knowledge</div>
+<NavButton Href="/artifacts" Icon="&#x1F4C4;" Label="Artifacts" OnClick="OnNavigate" />
+<NavButton Href="/documents" Icon="&#x1F4DD;" Label="Documents" OnClick="OnNavigate" />
+<NavButton Href="/tools" Icon="&#x1F6E0;" Label="Tools" OnClick="OnNavigate" />
+<NavButton Href="/skills" Icon="&#x1F4DC;" Label="Skills" OnClick="OnNavigate" />
+<NavButton Href="/memory" Icon="&#x1F9E0;" Label="Memory" OnClick="OnNavigate" />
+
+@code {
+    [Parameter] public EventCallback<string> OnNavigate { get; set; }
+}

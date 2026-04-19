@@ -141,13 +141,13 @@ public partial class SettingsViewModel : ViewModelBase
         _initialized = true;
     }
 
-    public bool IsProvidersTab => SelectedTab == 0;
-    public bool IsGeneralTab => SelectedTab == 1;
+    public bool IsGeneralTab => SelectedTab == 0;
+    public bool IsProvidersTab => SelectedTab == 1;
 
     partial void OnSelectedTabChanged(int value)
     {
-        OnPropertyChanged(nameof(IsProvidersTab));
         OnPropertyChanged(nameof(IsGeneralTab));
+        OnPropertyChanged(nameof(IsProvidersTab));
     }
 
     [RelayCommand]

@@ -16,6 +16,27 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private CommandPaletteViewModel _commandPalette;
 
+    /// <summary>Phase 69 — currently selected rail group: chat, knowledge, agents, workspace, connect, governance.</summary>
+    [ObservableProperty]
+    private string _selectedGroup = "chat";
+
+    public bool IsChatGroup => SelectedGroup == "chat";
+    public bool IsKnowledgeGroup => SelectedGroup == "knowledge";
+    public bool IsAgentsGroup => SelectedGroup == "agents";
+    public bool IsWorkspaceGroup => SelectedGroup == "workspace";
+    public bool IsConnectGroup => SelectedGroup == "connect";
+    public bool IsGovernanceGroup => SelectedGroup == "governance";
+
+    partial void OnSelectedGroupChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsChatGroup));
+        OnPropertyChanged(nameof(IsKnowledgeGroup));
+        OnPropertyChanged(nameof(IsAgentsGroup));
+        OnPropertyChanged(nameof(IsWorkspaceGroup));
+        OnPropertyChanged(nameof(IsConnectGroup));
+        OnPropertyChanged(nameof(IsGovernanceGroup));
+    }
+
     private readonly IServiceProvider _services;
 
     public MainViewModel(SidebarViewModel sidebar, CommandPaletteViewModel commandPalette, IServiceProvider services)
@@ -30,6 +51,12 @@ public partial class MainViewModel : ViewModelBase
         sidebar.SessionResumeRequested += OnSessionResumeRequested;
         commandPalette.CommandExecuted += OnCommandExecuted;
     }
+
+    [RelayCommand]
+    private void SelectGroup(string group) => SelectedGroup = group;
+
+    [RelayCommand]
+    private void OpenSettings() => OnNavigationRequested(this, "Settings");
 
     private void OnCommandExecuted(object? sender, SlashCommandResult result)
     {

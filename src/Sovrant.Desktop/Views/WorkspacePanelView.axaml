@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.WorkspacePanelView"
+             x:DataType="vm:SidebarViewModel"
+             Background="{DynamicResource SidebarBackground}">
+    <ScrollViewer>
+        <StackPanel Margin="10">
+            <TextBlock Text="WORKSPACE" FontSize="11" FontWeight="Bold"
+                       Foreground="{DynamicResource TextMuted}"
+                       Margin="6,4,0,10" />
+            <Button Content="🏢  Workspaces"
+                    Command="{Binding NavigateCommand}" CommandParameter="Workspaces"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="📁  Projects"
+                    Command="{Binding NavigateCommand}" CommandParameter="Projects"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

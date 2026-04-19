@@ -502,31 +502,138 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .user-name { font-size: 12px; color: var(--text-primary); }
 .user-workspace { font-size: 10px; color: var(--text-secondary); }
 
-/* ===== Collapsed sidebar ===== */
-.sidebar-collapsed {
-    width: 48px;
-    min-width: 48px;
+/* ===== Phase 69 — single sidebar: icon row + panel body + footer ===== */
+.rail-secondary {
+    width: 240px;
+    min-width: 240px;
     background: var(--sidebar-background);
+    border-right: 1px solid var(--surface-border);
+    height: 100vh;
     display: flex;
     flex-direction: column;
+}
+
+.rail-icons-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
     align-items: center;
-    padding: 8px 0;
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--surface-border);
     gap: 2px;
-    height: 100vh;
-    border-right: 1px solid var(--surface-border);
 }
 
-.sidebar-collapsed .icon-btn { width: auto; padding: 8px; }
-.icon-divider {
-    width: 24px;
-    height: 1px;
-    background: var(--surface-border);
-    margin: 4px 0;
+.rail-icon {
+    flex: 1;
+    height: 36px;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: none;
+    transition: background-color 0.12s ease, color 0.12s ease;
 }
 
-.sidebar-collapsed-bottom {
-    margin-top: auto;
-    padding-bottom: 8px;
+.rail-icon:hover { background: var(--surface-hover); color: var(--text-primary); }
+
+.rail-icon.active {
+    background: var(--brand-primary);
+    color: white;
+}
+
+.rail-secondary-body {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.rail-secondary-header {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 12px 12px 8px;
+}
+
+/* Inside .rail-secondary-body, the chat panel renders an .sidebar wrapper.
+   Neutralize its outer chrome so the chat content sits flush in the slot. */
+.rail-secondary-body .sidebar {
+    width: 100%;
+    min-width: 0;
+    border-right: none;
+    height: auto;
+}
+
+.rail-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--surface-border);
+}
+
+.rail-footer-settings {
+    background: transparent;
+    color: var(--text-secondary);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+}
+
+.rail-footer-settings:hover { background: var(--surface-hover); color: var(--text-primary); }
+
+.rail-footer-user {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.rail-footer-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 15px;
+    background: var(--brand-primary);
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.rail-footer-info {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.rail-footer-name {
+    font-size: 12px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rail-footer-sub {
+    font-size: 10px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* ===== Chat page ===== */

@@ -262,7 +262,7 @@
                 <ItemsControl ItemsSource="{Binding Messages}"
                               Margin="32,16"
                               MaxWidth="800"
-                              HorizontalAlignment="Center">
+                              HorizontalAlignment="Stretch">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:MessageViewModel">
                             <Border Margin="0,8" Padding="0">

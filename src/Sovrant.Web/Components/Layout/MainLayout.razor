@@ -2,35 +2,45 @@
 @implements IDisposable
 
 <div class="app-shell">
-    @if (_isCollapsed)
-    {
-        <nav class="sidebar-collapsed">
-            <button class="icon-btn" @onclick="ToggleSidebar" title="Expand sidebar">&#9707;</button>
-            <button class="icon-btn" @onclick='() => Navigate("/")' title="Chat">&#x1F4AC;</button>
-            <button class="icon-btn" @onclick='() => Navigate("/settings")' title="Settings">&#9881;</button>
-            <button class="icon-btn" @onclick='() => Navigate("/diagnostics")' title="Diagnostics">&#x1F527;</button>
-            <div class="icon-divider"></div>
-            <button class="icon-btn" @onclick='() => Navigate("/artifacts")' title="Artifacts">&#x1F4C4;</button>
-            <button class="icon-btn" @onclick='() => Navigate("/tools")' title="Tools">&#x1F6E0;</button>
-            <button class="icon-btn" @onclick='() => Navigate("/skills")' title="Skills">&#x1F4DC;</button>
-            <button class="icon-btn" @onclick='() => Navigate("/agents")' title="Agents">&#x1F916;</button>
-            <button class="icon-btn" @onclick='() => Navigate("/memory")' title="Memory">&#x1F9E0;</button>
-            <div class="icon-divider"></div>
-            <button class="icon-btn" @onclick='() => Navigate("/projects")' title="Projects">&#x1F4C1;</button>
-            <button class="icon-btn" @onclick='() => Navigate("/workspaces")' title="Workspaces">&#x1F3E2;</button>
-            <button class="icon-btn" @onclick='() => Navigate("/multi-agent")' title="Multi-Agent">&#x1F465;</button>
-            <button class="icon-btn" @onclick='() => Navigate("/integrations")' title="Integrations">&#x1F50C;</button>
-            <div class="sidebar-collapsed-bottom">
-                <div class="user-avatar-small" title="@_userName">@_userInitial</div>
+    <aside class="rail-secondary">
+        <RailNav Selected="@_selectedGroup" OnSelect="OnGroupSelected" />
+
+        <div class="rail-secondary-body">
+            @switch (_selectedGroup)
+            {
+                case "chat":
+                    <Sidebar OnNavigate="Navigate" />
+                    break;
+                case "knowledge":
+                    <KnowledgePanel OnNavigate="Navigate" />
+                    break;
+                case "agents":
+                    <AgentsPanel OnNavigate="Navigate" />
+                    break;
+                case "workspace":
+                    <WorkspacePanel OnNavigate="Navigate" />
+                    break;
+                case "connect":
+                    <ConnectPanel OnNavigate="Navigate" />
+                    break;
+                case "governance":
+                    <GovernancePanel OnNavigate="Navigate" />
+                    break;
+            }
+        </div>
+
+        <div class="rail-footer">
+            <div class="rail-footer-user">
+                <div class="rail-footer-avatar">@_userInitial</div>
+                <div class="rail-footer-info">
+                    <div class="rail-footer-name">@_userName</div>
+                    <div class="rail-footer-sub">Personal workspace</div>
+                </div>
             </div>
-        </nav>
-    }
-    else
-    {
-        <Sidebar IsCollapsed="_isCollapsed"
-                 OnToggleCollapse="ToggleSidebar"
-                 OnNavigate="Navigate" />
-    }
+            <button class="rail-footer-settings" title="Settings"
+                    @onclick='() => Navigate("/settings")'>&#9881;</button>
+        </div>
+    </aside>
 
     <main class="content-area">
         @Body
@@ -43,14 +53,15 @@
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
-    private bool _isCollapsed;
-    private string _userName = Environment.UserName;
-    private string _userInitial = Environment.UserName.Length > 0
-        ? Environment.UserName[..1].ToUpperInvariant() : "U";
+    private string _selectedGroup = "chat";
     private CommandPalette? _palette;
     private DotNetObjectReference<MainLayout>? _dotNetRef;
 
-    private void ToggleSidebar() => _isCollapsed = !_isCollapsed;
+    private readonly string _userName = Environment.UserName;
+    private readonly string _userInitial = Environment.UserName.Length > 0
+        ? Environment.UserName[..1].ToUpperInvariant() : "U";
+
+    private void OnGroupSelected(string group) => _selectedGroup = group;
 
     private void Navigate(string url)
     {

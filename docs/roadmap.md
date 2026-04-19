@@ -6742,3 +6742,58 @@ their workspace and have it appear in the registry automatically.
 - [ ] Template authoring guide published under `docs/document-templates.md`
       so non-developers can author a template end-to-end
 
+## Phase 75 — Documents Surface Re-evaluation
+
+### Why
+
+Phase 66 shipped a dedicated **Documents** page (Web + Desktop) that lets users
+browse templates, fill in fields, and generate documents through a standalone
+UI surface. That came out of the package/template work, but the original intent
+behind document templates was simpler: **give chats and agents a clean way to
+turn structured data into deliverable artifacts** (PDF, Word, Excel) on demand.
+
+Sitting with the experience after the Phase 69 nav redesign, the standalone
+Documents UI feels heavier than the original goal. Templates may be more
+valuable as **invisible infrastructure** — discoverable to the agent layer via
+`DocumentListPackages` / `DocumentFromTemplate`, surfaced in chat as artifact
+cards (Phase 66.5), but not necessarily a top-level human-driven surface of
+their own.
+
+This phase is a **review-and-decide**, not a rewrite. We use the surface for a
+while, then take an honest look.
+
+### Questions to answer
+
+1. Who actually opens the Documents page in normal use, and what do they do
+   there that they couldn't do in chat with `"generate a closing disclosure
+   for ..."`?
+2. Does the form-fill UX add real value, or does it just duplicate what an
+   agent could collect via conversation?
+3. Are document **packages** (multi-template bundles) a chat-driven or
+   browse-driven feature in practice?
+4. If the standalone UI is removed, what's the discoverability story for
+   "what templates exist" — a `/templates` slash command, an agent intro,
+   or something else?
+5. Is the Knowledge → Documents nav slot the right home if we keep it, or
+   does it belong under a different group?
+
+### Possible outcomes
+
+- **Keep as-is** — usage data shows the standalone UI earns its keep.
+- **Demote to a lightweight picker** — replace the full page with a slim
+  template-browser inside chat (slash command or `/` mention), and remove the
+  dedicated nav entry.
+- **Remove the surface entirely** — templates remain a runtime capability
+  consumed by agents and the chat artifact card, with no first-class human
+  UI. Authoring (Phase 74 markdown templates) handles the human side.
+
+### Acceptance criteria
+
+- [ ] 2–4 weeks of real usage observed (sessions opened, templates rendered,
+      packages run) before deciding
+- [ ] Decision documented in `docs/engine-status.md` with rationale
+- [ ] If outcome is "demote" or "remove": migration plan + removal PR;
+      `DocumentArtifactCard` remains the chat-side surface
+- [ ] If outcome is "keep": short polish pass to address the most common
+      friction observed during the review window
+

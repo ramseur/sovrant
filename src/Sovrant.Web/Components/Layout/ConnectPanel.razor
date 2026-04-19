@@ -1,0 +1,9 @@
+@*  Phase 69 — Connect group secondary panel.  *@
+
+<div class="rail-secondary-header">Connect</div>
+<NavButton Href="/integrations" Icon="&#x1F50C;" Label="Integrations" OnClick="OnNavigate" />
+<NavButton Href="/automations" Icon="&#x26A1;" Label="Automations" OnClick="OnNavigate" />
+
+@code {
+    [Parameter] public EventCallback<string> OnNavigate { get; set; }
+}

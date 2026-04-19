@@ -14,35 +14,35 @@
 
             <!-- Tab bar -->
             <StackPanel Orientation="Horizontal" Spacing="4">
-                <Button Content="Providers"
-                        Command="{Binding SelectTabCommand}" CommandParameter="0"
-                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
-                        Background="{DynamicResource BrandPrimary}"
-                        Foreground="White"
-                        IsVisible="{Binding IsProvidersTab}" />
-                <Button Content="Providers"
-                        Command="{Binding SelectTabCommand}" CommandParameter="0"
-                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
-                        Background="{DynamicResource SurfaceCard}"
-                        Foreground="{DynamicResource TextSecondary}"
-                        IsVisible="{Binding !IsProvidersTab}" />
-
                 <Button Content="General"
-                        Command="{Binding SelectTabCommand}" CommandParameter="1"
+                        Command="{Binding SelectTabCommand}" CommandParameter="0"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
                         Background="{DynamicResource BrandPrimary}"
                         Foreground="White"
                         IsVisible="{Binding IsGeneralTab}" />
                 <Button Content="General"
-                        Command="{Binding SelectTabCommand}" CommandParameter="1"
+                        Command="{Binding SelectTabCommand}" CommandParameter="0"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
                         Background="{DynamicResource SurfaceCard}"
                         Foreground="{DynamicResource TextSecondary}"
                         IsVisible="{Binding !IsGeneralTab}" />
+
+                <Button Content="Providers"
+                        Command="{Binding SelectTabCommand}" CommandParameter="1"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource BrandPrimary}"
+                        Foreground="White"
+                        IsVisible="{Binding IsProvidersTab}" />
+                <Button Content="Providers"
+                        Command="{Binding SelectTabCommand}" CommandParameter="1"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource SurfaceCard}"
+                        Foreground="{DynamicResource TextSecondary}"
+                        IsVisible="{Binding !IsProvidersTab}" />
             </StackPanel>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- TAB 0: Providers                                -->
+            <!-- TAB 1: Providers                                -->
             <!-- ═══════════════════════════════════════════════ -->
             <StackPanel Spacing="20" IsVisible="{Binding IsProvidersTab}">
 
@@ -158,7 +158,7 @@
             </StackPanel>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- TAB 1: General                                  -->
+            <!-- TAB 0: General                                  -->
             <!-- ═══════════════════════════════════════════════ -->
             <StackPanel Spacing="20" IsVisible="{Binding IsGeneralTab}">
 

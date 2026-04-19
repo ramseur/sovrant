@@ -6,55 +6,13 @@
              Background="{DynamicResource SidebarBackground}">
 
     <DockPanel>
-        <!-- Bottom: User profile -->
-        <Border DockPanel.Dock="Bottom"
-                Padding="12,10"
-                BorderThickness="0,1,0,0"
-                BorderBrush="{DynamicResource SurfaceBorder}">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <Border Width="28" Height="28" CornerRadius="14"
-                        Background="{DynamicResource BrandPrimary}">
-                    <TextBlock Text="{Binding UserInitial}" FontSize="12" FontWeight="SemiBold"
-                               Foreground="White"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
-                </Border>
-                <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="{Binding CurrentUserName}" FontSize="11"
-                               Foreground="{DynamicResource TextPrimary}" />
-                    <TextBlock Text="Personal workspace" FontSize="9"
-                               Foreground="{DynamicResource TextSecondary}" />
-                </StackPanel>
-            </StackPanel>
-        </Border>
-
-        <!-- Main sidebar content -->
+        <!-- Phase 69: shared sidebar footer (in MainWindow) owns the user info; Chat panel just renders chat tools. -->
         <ScrollViewer>
             <StackPanel Margin="10,10,10,4">
-                <!-- Logo row: icon + name + collapse button -->
-                <DockPanel Margin="2,0,2,10">
-                    <Button DockPanel.Dock="Right"
-                            Content="◫"
-                            Command="{Binding ToggleCollapseCommand}"
-                            Padding="4,2"
-                            FontSize="14"
-                            Background="Transparent"
-                            Foreground="{DynamicResource TextSecondary}"
-                            CornerRadius="4"
-                            VerticalAlignment="Center"
-                            ToolTip.Tip="Collapse sidebar" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Border Width="26" Height="26" CornerRadius="6"
-                                Background="{DynamicResource BrandPrimary}">
-                            <TextBlock Text="⚡" FontSize="13"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center" />
-                        </Border>
-                        <TextBlock Text="Sovrant" FontSize="17" FontWeight="Bold"
-                                   Foreground="{DynamicResource TextPrimary}"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
-                </DockPanel>
+                <!-- Phase 69: rail owns the Sovrant logo + collapse; Chat panel just shows the chat tools. -->
+                <TextBlock Text="CHAT" FontSize="11" FontWeight="Bold"
+                           Foreground="{DynamicResource TextMuted}"
+                           Margin="2,2,0,10" />
 
                 <!-- + New Chat button (full width) -->
                 <Button Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).NewChatCommand}"
@@ -232,95 +190,6 @@
                         </StackPanel>
                     </StackPanel>
                 </Border>
-
-                <!-- Primary nav -->
-                <Button Content="💬  Chat"
-                        Command="{Binding NavigateCommand}" CommandParameter="Chat"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,5" Margin="0,1" CornerRadius="6" FontSize="13"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="⚙  Settings"
-                        Command="{Binding NavigateCommand}" CommandParameter="Settings"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,5" Margin="0,1" CornerRadius="6" FontSize="13"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="🔧  Diagnostics"
-                        Command="{Binding NavigateCommand}" CommandParameter="Diagnostics"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,5" Margin="0,1" CornerRadius="6" FontSize="13"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-
-                <!-- Knowledge section -->
-                <TextBlock Text="KNOWLEDGE" FontSize="9" FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextSecondary}"
-                           Margin="4,10,0,4" />
-
-                <Button Content="📄  Artifacts"
-                        Command="{Binding NavigateCommand}" CommandParameter="Artifacts"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="📝  Documents"
-                        Command="{Binding NavigateCommand}" CommandParameter="Documents"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="🛠  Tools"
-                        Command="{Binding NavigateCommand}" CommandParameter="Tools"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="📜  Skills"
-                        Command="{Binding NavigateCommand}" CommandParameter="Skills"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="🤖  Agents"
-                        Command="{Binding NavigateCommand}" CommandParameter="Agents"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="🧠  Memory"
-                        Command="{Binding NavigateCommand}" CommandParameter="Memory"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-
-                <!-- Orchestration section -->
-                <TextBlock Text="ORCHESTRATION" FontSize="9" FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextSecondary}"
-                           Margin="4,10,0,4" />
-
-                <Button Content="📁  Projects"
-                        Command="{Binding NavigateCommand}" CommandParameter="Projects"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="🏢  Workspaces"
-                        Command="{Binding NavigateCommand}" CommandParameter="Workspaces"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="👥  Multi-Agent"
-                        Command="{Binding NavigateCommand}" CommandParameter="MultiAgent"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="🔌  Integrations"
-                        Command="{Binding NavigateCommand}" CommandParameter="Integrations"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="⚡  Automations"
-                        Command="{Binding NavigateCommand}" CommandParameter="Automations"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <Button Content="🛡  Governance"
-                        Command="{Binding NavigateCommand}" CommandParameter="Governance"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="10,4" Margin="0,1" CornerRadius="6" FontSize="12"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
 
                 <!-- Recent conversations -->
                 <TextBlock Text="RECENT" FontSize="9" FontWeight="SemiBold"

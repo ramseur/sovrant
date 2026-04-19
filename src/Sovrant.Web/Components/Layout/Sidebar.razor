@@ -9,13 +9,12 @@
 
 <aside class="sidebar">
     <div class="sidebar-scroll">
-        <!-- Logo row -->
+        <!-- Logo row (Phase 69: rail owns collapse; this is the Chat secondary panel) -->
         <div class="sidebar-header">
             <div class="logo-row">
                 <div class="logo-icon">&#9889;</div>
                 <span class="logo-text">Sovrant</span>
             </div>
-            <button class="icon-btn-sm" @onclick="OnToggleCollapse" title="Collapse sidebar">&#9707;</button>
         </div>
 
         <!-- New Chat -->
@@ -107,29 +106,6 @@
             </div>
         </div>
 
-        <!-- Primary nav -->
-        <NavButton Href="/" Icon="&#x1F4AC;" Label="Chat" OnClick="OnNavigate" />
-        <NavButton Href="/settings" Icon="&#9881;" Label="Settings" OnClick="OnNavigate" />
-        <NavButton Href="/diagnostics" Icon="&#x1F527;" Label="Diagnostics" OnClick="OnNavigate" />
-
-        <!-- Knowledge section -->
-        <div class="nav-section-header">KNOWLEDGE</div>
-        <NavButton Href="/artifacts" Icon="&#x1F4C4;" Label="Artifacts" OnClick="OnNavigate" />
-        <NavButton Href="/documents" Icon="&#x1F4DD;" Label="Documents" OnClick="OnNavigate" />
-        <NavButton Href="/tools" Icon="&#x1F6E0;" Label="Tools" OnClick="OnNavigate" />
-        <NavButton Href="/skills" Icon="&#x1F4DC;" Label="Skills" OnClick="OnNavigate" />
-        <NavButton Href="/agents" Icon="&#x1F916;" Label="Agents" OnClick="OnNavigate" />
-        <NavButton Href="/memory" Icon="&#x1F9E0;" Label="Memory" OnClick="OnNavigate" />
-
-        <!-- Orchestration section -->
-        <div class="nav-section-header">ORCHESTRATION</div>
-        <NavButton Href="/projects" Icon="&#x1F4C1;" Label="Projects" OnClick="OnNavigate" />
-        <NavButton Href="/workspaces" Icon="&#x1F3E2;" Label="Workspaces" OnClick="OnNavigate" />
-        <NavButton Href="/multi-agent" Icon="&#x1F465;" Label="Multi-Agent" OnClick="OnNavigate" />
-        <NavButton Href="/integrations" Icon="&#x1F50C;" Label="Integrations" OnClick="OnNavigate" />
-        <NavButton Href="/automations" Icon="&#x26A1;" Label="Automations" OnClick="OnNavigate" />
-        <NavButton Href="/governance" Icon="&#x1F6E1;" Label="Governance" OnClick="OnNavigate" />
-
         <!-- Recent conversations -->
         <div class="nav-section-header">RECENT</div>
         @if (_filteredSessions.Count == 0)
@@ -147,20 +123,9 @@
             </div>
         }
     </div>
-
-    <!-- Bottom: User profile -->
-    <div class="sidebar-footer">
-        <div class="user-avatar">@_userInitial</div>
-        <div class="user-info">
-            <div class="user-name">@_userName</div>
-            <div class="user-workspace">Personal workspace</div>
-        </div>
-    </div>
 </aside>
 
 @code {
-    [Parameter] public bool IsCollapsed { get; set; }
-    [Parameter] public EventCallback OnToggleCollapse { get; set; }
     [Parameter] public EventCallback<string> OnNavigate { get; set; }
 
     [Inject] private SovrantConfig Config { get; set; } = default!;
@@ -204,9 +169,6 @@
     };
     private bool _isConnected;
     private string _connectionStatus = "Connected";
-    private string _userName = Environment.UserName;
-    private string _userInitial = Environment.UserName.Length > 0
-        ? Environment.UserName[..1].ToUpperInvariant() : "U";
 
     private string _selectedWorkspaceId = string.Empty;
     private string _selectedProjectId = string.Empty;
