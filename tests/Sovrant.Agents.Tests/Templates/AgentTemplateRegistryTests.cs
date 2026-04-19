@@ -210,6 +210,34 @@ public sealed class AgentTemplateRegistryTests
         Assert.Null(ex);
     }
 
+    [Fact]
+    public void LoadUserTemplates_IsSafe_UnderConcurrentCallers()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"sovrant_test_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            for (var i = 0; i < 24; i++)
+            {
+                File.WriteAllText(Path.Combine(dir, $"agent-{i}.md"),
+                    $"---\nname: agent-{i}\nrole: General\nrecommended_level: Standard\n---\nAgent {i}.");
+            }
+
+            var registry = CreateRegistry();
+            var countBefore = registry.All.Count;
+
+            Parallel.For(0, 8, _ => registry.LoadUserTemplates(dir));
+
+            Assert.Equal(countBefore + 24, registry.All.Count);
+            for (var i = 0; i < 24; i++)
+                Assert.NotNull(registry.TryGet($"agent-{i}"));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     // ── Model resolution ─────────────────────────────────────────────────────
 
     [Fact]

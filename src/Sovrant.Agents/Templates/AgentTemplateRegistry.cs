@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Sovrant.Agents.Models;
@@ -11,7 +12,7 @@ namespace Sovrant.Agents.Templates;
 /// </summary>
 public sealed partial class AgentTemplateRegistry
 {
-    private readonly Dictionary<string, AgentTemplate> _templates;
+    private readonly ConcurrentDictionary<string, AgentTemplate> _templates;
     private readonly ILogger<AgentTemplateRegistry> _logger;
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to load user template from '{Path}': {Error}")]
@@ -27,7 +28,7 @@ public sealed partial class AgentTemplateRegistry
     {
         _logger = logger;
 
-        _templates = new Dictionary<string, AgentTemplate>(StringComparer.OrdinalIgnoreCase);
+        _templates = new ConcurrentDictionary<string, AgentTemplate>(StringComparer.OrdinalIgnoreCase);
 
         // Tier 1 (lowest priority): built-in templates from the install directory
         var assemblyDir = Path.GetDirectoryName(typeof(AgentTemplateRegistry).Assembly.Location) ?? ".";
@@ -52,7 +53,7 @@ public sealed partial class AgentTemplateRegistry
     }
 
     /// <summary>All templates currently registered (built-in + user-defined).</summary>
-    public IReadOnlyCollection<AgentTemplate> All => _templates.Values;
+    public IReadOnlyCollection<AgentTemplate> All => _templates.Values.ToArray();
 
     /// <summary>Returns the template with the given name, or <see langword="null"/> if not found.</summary>
     public AgentTemplate? TryGet(string name)

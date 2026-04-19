@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Sovrant.Api.Types;
 
@@ -6,7 +7,7 @@ namespace Sovrant.Runtime.Tools;
 /// <summary>An in-memory <see cref="IToolRegistry"/> backed by a concurrent dictionary.</summary>
 public sealed class InMemoryToolRegistry : IToolRegistry
 {
-    private readonly Dictionary<string, (ToolDefinition Definition, Func<JsonElement, CancellationToken, Task<string>> Handler)>
+    private readonly ConcurrentDictionary<string, (ToolDefinition Definition, Func<JsonElement, CancellationToken, Task<string>> Handler)>
         _tools = new(StringComparer.Ordinal);
 
     /// <inheritdoc/>

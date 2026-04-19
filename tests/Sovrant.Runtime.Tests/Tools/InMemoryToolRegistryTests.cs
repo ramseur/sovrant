@@ -51,4 +51,20 @@ public sealed class InMemoryToolRegistryTests
         Assert.Single(defs);
         Assert.Equal("dup", defs[0].Name);
     }
+
+    [Fact]
+    public void Register_IsSafe_UnderConcurrentWriters()
+    {
+        var registry = new InMemoryToolRegistry();
+        const int writers = 16;
+        const int perWriter = 64;
+
+        Parallel.For(0, writers, w =>
+        {
+            for (var i = 0; i < perWriter; i++)
+                registry.Register(MakeDefinition($"tool_{w}_{i}"), (_, _) => Task.FromResult("ok"));
+        });
+
+        Assert.Equal(writers * perWriter, registry.GetDefinitions().Count);
+    }
 }
