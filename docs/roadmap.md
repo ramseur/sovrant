@@ -4105,7 +4105,7 @@ A thin **`ModelCapabilities`** layer that answers three questions per model id: 
 
 ---
 
-## Phase 55 — Cost Tracking, Budgets & Dashboard via OpenRouter (Consolidated from Phases 39 + 55)
+## Phase 55 — Cost Tracking, Budgets & Dashboard via OpenRouter (Consolidated from Phases 39 + 55) ✅
 
 **Depends on:** Phase 10 (token usage tracking — already complete)
 **External dependency:** Requires live access to OpenRouter's `GET https://openrouter.ai/api/v1/models` endpoint for model pricing data. This is a free, unauthenticated API but it is a third-party service — if OpenRouter is unreachable, cost estimation degrades to zero-cost fallback. Users routing through OpenRouter also use `GET /api/v1/generation/:id` for actual charged costs.
