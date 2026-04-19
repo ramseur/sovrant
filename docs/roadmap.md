@@ -6191,3 +6191,286 @@ The agent doesn't just fill forms — it reasons about document generation:
 - [ ] Healthcare templates flag PHI handling through Trust Boundary
 - [ ] Legal templates include AI-generated disclaimer
 - [ ] All existing tests continue to pass
+
+---
+
+## Phase 67 — Autonomous Agent Modes (Swarm Autonomy & Alternate Claws)
+
+### Why
+
+Today Sovrant's autonomous capability lives primarily in the Claw integration
+(OpenClaw via Phase 50, Hermes via Phase 60). For long-running unsupervised
+missions we need **at least one alternate autonomous backend** so users are not
+locked to a single external dependency, and so the **Swarm** subsystem can be
+driven in an autonomous mode without an external Claw process.
+
+### Scope
+
+- **Swarm autonomous mode** — extend `SwarmCoordinator` so a swarm can accept a
+  high-level goal and self-plan/re-plan across agents without an external Claw,
+  reusing `LlmMissionPlanner` + `ParallelMissionExecutor`. Gated on the Phase 58
+  Trust Boundary (sanitization, ethics, intent verification).
+- **Alternate autonomous providers** — add a pluggable `IAutonomousDriver`
+  abstraction so OpenClaw, Hermes, Swarm-autonomous, and future providers
+  (e.g. SWE-agent, OpenHands, AutoGen studio, crewAI) are swappable per
+  mission/workspace.
+- **Provider selection** — config + CLI flag + per-mission override. Registry
+  reports per-provider capabilities (tool support, model family, cost tier).
+- **Shared mission contract** — single `MissionSpec` / `MissionEvent` schema
+  already used by Phase 51 extended to cover all drivers, so missions are
+  observable and auditable regardless of provider.
+
+### Acceptance Criteria
+
+- [ ] `IAutonomousDriver` abstraction with OpenClaw, Hermes, and
+      Swarm-autonomous implementations
+- [ ] Swarm can run a mission to completion with no external Claw
+- [ ] Missions emit the same event journal regardless of driver
+- [ ] Driver selectable at mission-create time (CLI, API, Web, Desktop)
+- [ ] Trust Boundary sanitization + ethics + intent checks apply to all drivers
+- [ ] Integration tests exercise Swarm-autonomous driver end-to-end
+
+---
+
+## Phase 68 — Foundations Hardening
+
+### Why
+
+After 66 phases, the engine has grown fast. Before shipping more surface area,
+we should pay down foundation-level debt: DI consistency, error shape, logging
+taxonomy, cancellation propagation, async disposal, thread-safety of shared
+singletons, startup cost, and test layering. This is an internal quality pass,
+not a feature phase — the output is a measurably-tighter engine.
+
+### Scope
+
+- **DI audit pass 2** — building on Phase 63, verify lifetimes, captive
+  dependencies, and proper `IAsyncDisposable` across every singleton/scope.
+- **Error shape unification** — single `SovrantException` hierarchy with error
+  codes; map to consistent HTTP/JSON-RPC responses; audit `catch (Exception)`
+  sites.
+- **Cancellation propagation** — every public async method takes and honors a
+  `CancellationToken`; ensure tool executors propagate cancellation to LLM
+  calls and subprocesses.
+- **Logging taxonomy** — unify `EventId` registry, scope fields
+  (workspace/project/session/run/mission), and redaction rules.
+- **Startup profiling** — measure cold-start cost of CLI, Desktop, Web, MCP;
+  remove unnecessary reflection/scan work on the hot path.
+- **Thread-safety sweep** — identify shared mutable state in
+  coordinators/registries; convert to immutable or properly guarded.
+- **Test layering** — separate unit/integration/e2e tiers; reduce overall
+  suite runtime; clarify which projects block CI.
+
+### Acceptance Criteria
+
+- [ ] All public async methods take `CancellationToken` and honor it
+- [ ] Single exception hierarchy; all tools return errors through it
+- [ ] Cold-start latency dashboarded and reduced from baseline
+- [ ] Zero shared-mutable-state hot paths without documented synchronization
+- [ ] Logging scope taxonomy documented and enforced by an analyzer or test
+- [ ] Test tiers wall-clocked and under target budgets
+
+---
+
+## Phase 69 — Desktop & Web UI Polish
+
+### Why
+
+The Avalonia desktop and Blazor web frontends are functional but feel
+utility-grade next to the class of apps they're expected to compete with
+(Cursor, Claude Desktop, Linear, Raycast). This phase is a deliberate UI
+polish pass — not new features, but the visual, interactional, and
+performance quality of the existing surface.
+
+### Scope
+
+- **Design system** — shared tokens (color, type, space, motion) consumed by
+  Avalonia `ResourceDictionary` and Blazor CSS custom properties. Dark + light.
+- **Conversation surface** — message grouping, tool-call cards with
+  expand/collapse, inline artifact previews (image, PDF, code diff),
+  streaming cursor, keyboard-first navigation.
+- **Empty, loading, error states** — every screen has deliberate copy and art;
+  no silent failures.
+- **Command palette** — Raycast-style palette in both desktop and web for
+  skills, tools, sessions, workspaces.
+- **Artifact gallery** — unified view of documents, images, videos generated in
+  the current run / session, with download + re-open.
+- **Performance** — virtualize long conversations; tighten SignalR reconnect
+  UX; eliminate layout jank during streaming.
+- **Accessibility** — keyboard traversal, screen-reader labels, contrast
+  targets.
+
+### Acceptance Criteria
+
+- [ ] Shared design-token source consumed by both frontends
+- [ ] Every screen has loading / empty / error states with written copy
+- [ ] Tool-call cards render with consistent affordances in desktop + web
+- [ ] Command palette reaches skills, tools, sessions, workspaces
+- [ ] Artifact gallery present in both frontends
+- [ ] Conversation virtualized; no measurable jank on 500-message sessions
+- [ ] WCAG 2.1 AA target met on critical flows
+
+---
+
+## Phase 70 — CLI UX Overhaul
+
+### Why
+
+The CLI REPL is the original delivery mode and still the most-used surface for
+power users. It should set the bar, not lag behind the GUIs. Today's UX is
+adequate but terse — we want the CLI to feel as carefully considered as the
+desktop app, while staying keyboard-native and scriptable.
+
+### Scope
+
+- **Rich rendering** — Markdown, tables, code fences with syntax highlighting;
+  tool-call blocks with consistent structure; inline artifact links that the
+  terminal can resolve (OSC 8 hyperlinks, or path + copy-to-clipboard).
+- **Prompt shell** — multi-line input, history, search (Ctrl+R), slash-command
+  autocomplete, skill picker, session picker, workspace switcher.
+- **Status line** — persistent bottom line showing workspace/project/session,
+  active model, token usage, cost so far — matching Claude Code's statusline.
+- **Progress affordances** — per-turn progress, per-tool spinners, cancellable
+  tool calls, streaming token counter.
+- **Output modes** — `--plain`, `--json`, `--ndjson`, `--ci` flags with stable
+  contracts for scripting.
+- **Session UX** — `:` commands to list/switch/fork sessions, rename, pin,
+  delete; rich `/help` with examples.
+- **Theming** — respects `NO_COLOR`, 256-color + truecolor, per-theme token
+  set shared with desktop/web where it makes sense.
+
+### Acceptance Criteria
+
+- [ ] Markdown, tables, syntax-highlighted code all render in the terminal
+- [ ] Persistent status line with workspace/model/cost
+- [ ] Slash-command autocomplete + history search
+- [ ] Scriptable `--json` / `--ndjson` outputs with documented schema
+- [ ] `NO_COLOR` honored; truecolor detected when available
+- [ ] New CLI walkthrough in docs with screenshots/asciinema
+
+---
+
+## Phase 71 — Industry-Standard Feature Audit
+
+### Why
+
+We need an honest, written comparison between Sovrant and the feature bar set
+by leading agentic coding and workflow platforms (Claude Code, Cursor,
+Cline, Aider, OpenHands, Copilot Workspace, Devin, crewAI, Zed). The goal is
+to catalogue every feature we have vs. what the market expects, and produce a
+prioritized gap list.
+
+### Scope
+
+- **Feature catalogue** — export a structured inventory of every Sovrant
+  capability (tool, delivery mode, integration, agent behavior, storage
+  backend, security control).
+- **Comparator set** — define 6–10 competitive products and their published
+  feature sets.
+- **Scoring rubric** — per feature: parity (we have it), partial, missing,
+  and quality score (1–5) vs best-in-class.
+- **Gap report** — markdown + spreadsheet under `docs/audits/phase-71/`,
+  grouped by subsystem; each gap has an owner and suggested phase target.
+- **Security / compliance lane** — explicit pass for SOC 2-adjacent controls,
+  tenant isolation, prompt injection defenses, data retention, audit logging.
+- **Output feeds the next phase** — gap items become phase candidates.
+
+### Acceptance Criteria
+
+- [ ] Feature inventory generated from code + docs (scripted where possible)
+- [ ] Comparator matrix checked into `docs/audits/phase-71/`
+- [ ] Prioritized gap list with owners and proposed phases
+- [ ] Security/compliance lane covered in its own section
+- [ ] Review sign-off from user recorded in the audit doc
+
+---
+
+## Phase 72 — Internal Quality Audit: "Where Can We Be Better?"
+
+### Why
+
+Separate from the market-comparison audit, we need an **internal** audit that
+asks: *of the features we already have, which are weakest on their own
+merits?* This is the pass where we look at features that shipped quickly,
+areas users keep complaining about, flaky tests, high-churn modules, and
+surfaces that feel half-finished.
+
+### Scope
+
+- **Signal gathering** — user feedback (memory notes, past conversations),
+  GitHub issues (if applicable), test flake rate, code churn, coverage gaps,
+  performance hotspots, error telemetry.
+- **Per-subsystem deep-reads** — one short write-up per subsystem: what's
+  good, what's weak, what would 10× quality look like.
+- **Prioritization** — effort × user impact × strategic importance; produces
+  a ranked list of improvements.
+- **Quick wins lane** — improvements achievable in ≤1 day each, batched for
+  immediate execution after the audit.
+- **Bigger bets** — larger improvements become their own future phases.
+
+### Acceptance Criteria
+
+- [ ] Per-subsystem audit notes under `docs/audits/phase-72/`
+- [ ] Signal summary (feedback, churn, flake, coverage, perf, errors) attached
+- [ ] Prioritized backlog with effort × impact × strategy scoring
+- [ ] Quick-wins batch identified and scheduled
+- [ ] Bigger bets converted into proposed future phases in this document
+
+---
+
+## Phase 73 — Code Creation: Project Scaffolding & App Generation
+
+### Why
+
+Sovrant can already edit existing projects, but *creating* an app from zero —
+scaffolding layout, wiring dependencies, hooking up CI, generating a working
+dev loop — is still coarse. This phase turns Sovrant into a first-class
+generator for full working projects in the languages we already support via
+LSP, starting with the ones users ask for most (Node.js and C#), and covering
+the rest of the LSP-supported surface.
+
+### Scope
+
+- **Scaffolding templates per language** — structured generators (not just
+  string templates) that produce a runnable project with build, lint, test,
+  and a README. Parallel to Phase 66's document templates: an
+  `IProjectTemplate` registry selected by language + project kind.
+- **First-class lanes (Node.js, C#)** — highest-fidelity scaffolds:
+  - Node.js: CLI app, Express API, Next.js app, npm library, monorepo
+    (pnpm workspace), all with TypeScript option, ESLint/Prettier, Vitest.
+  - C# / .NET: console app, ASP.NET Core web API, Blazor app, class library,
+    worker service, xUnit tests, analyzers enabled.
+- **Remaining LSP languages** — Python (pyproject + uv/poetry choice, pytest,
+  ruff), Go (modules + testing), Rust (Cargo + clippy + test), Java (Maven or
+  Gradle + JUnit), Kotlin, Ruby, Swift, C/C++ (CMake), Lua, Zig. Fidelity
+  scales by language popularity.
+- **Wiring steps** — after scaffold: `git init`, install deps, run the first
+  build/test, open the project in the user's editor or in the desktop/web
+  preview. Each step is optional and cancellable.
+- **Multi-component projects** — a single prompt ("build me a Next.js app
+  with a .NET API backend") produces a solution with both projects,
+  cross-linked (API client generation, shared env files, README diagram).
+- **Agent integration** — a `CodeCreateTool` that takes a natural-language
+  brief, picks a template, collects missing inputs (name, framework
+  choices), and executes the scaffold inside a workspace artifact scope.
+- **Trust Boundary** — generated projects pass through Phase 58 sanitization
+  so dependency choices cannot be prompt-injected to malicious packages;
+  dependency manifests are validated against known-good registries.
+
+### Acceptance Criteria
+
+- [ ] `IProjectTemplate` abstraction + registry with language + kind selection
+- [ ] Node.js lane: CLI, Express API, Next.js, library, pnpm monorepo — each
+      produces a project that builds and runs the first test on a clean box
+- [ ] C# / .NET lane: console, web API, Blazor, library, worker — each
+      produces a project that builds and runs the first test on a clean box
+- [ ] Scaffolds exist for Python, Go, Rust, Java at parity or higher fidelity
+- [ ] Lower-priority LSP languages (Kotlin, Ruby, Swift, C/C++, Lua, Zig)
+      have at least a minimal "hello + test" scaffold
+- [ ] `CodeCreateTool` routes natural-language briefs to the right template
+      and collects missing fields via conversation
+- [ ] Multi-component generation (frontend + backend in one solution) works
+      end-to-end with cross-links
+- [ ] Dependency manifest validation integrated with Trust Boundary
+- [ ] CLI / Desktop / Web all surface a "Create project" entry point
+- [ ] Golden-path tests per language verify scaffold → build → test pipeline
