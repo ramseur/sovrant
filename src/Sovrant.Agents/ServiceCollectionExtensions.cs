@@ -59,6 +59,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISwarmOrchestrator>(sp => sp.GetRequiredService<SwarmOrchestrator>());
         services.AddSingleton<SwarmQualityGate>();
 
+        // Autonomous-driver layer (Phase 67) — registered alongside the LLM
+        // driver from Sovrant.Runtime so DriverRegistry resolves either by name.
+        services.AddSingleton<Sovrant.Runtime.Missions.IAutonomousDriver, SwarmAutonomousDriver>();
+
         // Unified agent orchestrator (Phase 52)
         services.AddSingleton<IAgentOrchestrator, AgentOrchestrator>();
 
