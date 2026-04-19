@@ -143,6 +143,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITool, DocumentGenerateTool>();
         services.AddSingleton<ITool, DocumentFromTemplateTool>();
         services.AddSingleton<ITool, DocumentListTemplatesTool>();
+        services.AddSingleton<ITool, DocumentSuggestTemplateTool>();
 
         // Quality / verification tools
         services.AddSingleton<ITool, VerifyTool>();

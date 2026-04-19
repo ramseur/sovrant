@@ -26,7 +26,80 @@ internal static class DocumentCommand
         root.Add(BuildList(buildServices));
         root.Add(BuildFields(buildServices));
         root.Add(BuildRender(buildServices));
+        root.Add(BuildSuggest(buildServices));
         return root;
+    }
+
+    private static Command BuildSuggest(Func<ParseResult, ServiceProvider> buildServices)
+    {
+        var promptArg = new Argument<string>("prompt")
+        { Description = "Natural-language request, e.g. \"draft me an NDA between Acme and Globex\"." };
+        var industryOpt = new Option<string?>("--industry")
+        { Description = "Narrow candidates to a specific industry before ranking." };
+        var limitOpt = new Option<int>("--limit")
+        { Description = "Maximum number of matches to return (default 5).", DefaultValueFactory = _ => 5 };
+        var jsonOpt = new Option<bool>("--json")
+        { Description = "Emit machine-readable JSON instead of a table." };
+
+        var cmd = new Command("suggest", "Route a natural-language request to the best-matching template(s).");
+        cmd.Add(promptArg);
+        cmd.Add(industryOpt);
+        cmd.Add(limitOpt);
+        cmd.Add(jsonOpt);
+
+        cmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+        {
+            await using var sp = buildServices(pr);
+            var registry = sp.GetRequiredService<ITemplateRegistry>();
+
+            var prompt = pr.GetValue(promptArg) ?? string.Empty;
+            var industry = pr.GetValue(industryOpt);
+            var limit = pr.GetValue(limitOpt);
+
+            var candidates = string.IsNullOrWhiteSpace(industry)
+                ? (IEnumerable<IDocumentTemplate>)registry.All
+                : registry.Find(industry, null);
+
+            var matches = TemplateMatcher.Rank(candidates, prompt, limit);
+
+            if (pr.GetValue(jsonOpt))
+            {
+                var payload = matches.Select(m => new
+                {
+                    id = m.Template.Id,
+                    name = m.Template.Name,
+                    industry = m.Template.Industry,
+                    score = m.Score,
+                    matched_terms = m.MatchedTerms,
+                    required_fields = m.Template.Fields.Where(f => f.Required).Select(f => f.Name).ToArray(),
+                });
+                Console.WriteLine(JsonSerializer.Serialize(payload, s_jsonOpts));
+                return;
+            }
+
+            if (matches.Count == 0)
+            {
+                AnsiConsole.MarkupLine("[yellow]No templates matched that prompt.[/] Try [bold]sovrant document list[/] to browse.");
+                return;
+            }
+
+            var table = new Table()
+                .Title($"[bold]Top {matches.Count} match(es) for:[/] {Markup.Escape(prompt)}")
+                .AddColumns("Score", "Id", "Name", "Required fields", "Matched terms");
+            foreach (var m in matches)
+            {
+                var required = string.Join(", ", m.Template.Fields.Where(f => f.Required).Select(f => f.Name));
+                table.AddRow(
+                    m.Score.ToString(CultureInfo.InvariantCulture),
+                    Markup.Escape(m.Template.Id),
+                    Markup.Escape(m.Template.Name),
+                    Markup.Escape(string.IsNullOrEmpty(required) ? "(none)" : required),
+                    Markup.Escape(string.Join(", ", m.MatchedTerms)));
+            }
+            AnsiConsole.Write(table);
+        });
+
+        return cmd;
     }
 
     private static Command BuildList(Func<ParseResult, ServiceProvider> buildServices)
