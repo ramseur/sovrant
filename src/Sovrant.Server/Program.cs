@@ -61,8 +61,8 @@ builder.Services.AddSingleton<ILogger>(sp =>
 // Tools.
 builder.Services.AddSovrantTools();
 
-// Multi-agent system.
-builder.Services.AddMultiAgentSystem();
+// Orchestration system.
+builder.Services.AddOrchestrationSystem();
 
 // MCP server over HTTP/SSE transport (opt-in via SOVRANT_MCP_HTTP=true).
 var mcpHttpEnabled = string.Equals(

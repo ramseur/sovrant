@@ -7,7 +7,7 @@ namespace Sovrant.Agents.Shared;
 /// <summary>
 /// Shared, thread-safe scratch space for agents collaborating on a task. Holds named
 /// variables, the current working directory, and any state that needs to be visible
-/// across agent boundaries within a single multi-agent run.
+/// across agent boundaries within a single orchestration run.
 /// </summary>
 public sealed partial class WorkspaceContext
 {
@@ -15,7 +15,7 @@ public sealed partial class WorkspaceContext
         new(StringComparer.Ordinal);
 
     /// <summary>
-    /// The working directory for the current multi-agent run.
+    /// The working directory for the current orchestration run.
     /// Defaults to <see cref="Directory.GetCurrentDirectory()"/> at construction time.
     /// </summary>
     public string WorkingDirectory { get; init; } = Directory.GetCurrentDirectory();

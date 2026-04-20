@@ -7,31 +7,31 @@ using Sovrant.Agents.Shared;
 namespace Sovrant.Agents.Config;
 
 /// <summary>
-/// Creates the <see cref="IMultiAgentSystem"/> selected by <see cref="AgentSystemConfig"/>.
-/// Used as a DI factory so the rest of the system depends only on <see cref="IMultiAgentSystem"/>
+/// Creates the <see cref="IOrchestrationSystem"/> selected by <see cref="AgentSystemConfig"/>.
+/// Used as a DI factory so the rest of the system depends only on <see cref="IOrchestrationSystem"/>
 /// and never on the concrete backend.
 /// </summary>
 public static class AgentSystemFactory
 {
     /// <summary>
-    /// Instantiates and returns the <see cref="IMultiAgentSystem"/> specified by
+    /// Instantiates and returns the <see cref="IOrchestrationSystem"/> specified by
     /// <paramref name="config"/>. All dependencies are resolved from <paramref name="services"/>.
     /// </summary>
-    public static IMultiAgentSystem Create(AgentSystemConfig config, IServiceProvider services)
+    public static IOrchestrationSystem Create(AgentSystemConfig config, IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(services);
 
         if (config.UseIsolatedAgents)
         {
-            return new ProcessBasedMultiAgentSystem(
+            return new ProcessBasedOrchestrationSystem(
                 config,
-                services.GetRequiredService<ILogger<ProcessBasedMultiAgentSystem>>());
+                services.GetRequiredService<ILogger<ProcessBasedOrchestrationSystem>>());
         }
 
-        return new InProcessMultiAgentSystem(
-            services.GetRequiredService<MultiAgentCoordinator>(),
+        return new InProcessOrchestrationSystem(
+            services.GetRequiredService<OrchestrationCoordinator>(),
             services.GetRequiredService<WorkspaceContext>(),
-            services.GetRequiredService<ILogger<InProcessMultiAgentSystem>>());
+            services.GetRequiredService<ILogger<InProcessOrchestrationSystem>>());
     }
 }

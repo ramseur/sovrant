@@ -15,7 +15,7 @@
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
             <Button Content="🎼  Orchestration"
-                    Command="{Binding NavigateCommand}" CommandParameter="MultiAgent"
+                    Command="{Binding NavigateCommand}" CommandParameter="Orchestration"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="Transparent" Foreground="{DynamicResource TextPrimary}" />

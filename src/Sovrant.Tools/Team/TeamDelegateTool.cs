@@ -9,7 +9,7 @@ namespace Sovrant.Tools.Team;
 
 /// <summary>
 /// Delegates a task to a team member agent. Creates the agent on first delegation
-/// (lazy initialization), dispatches the task through <see cref="IMultiAgentSystem"/>,
+/// (lazy initialization), dispatches the task through <see cref="IOrchestrationSystem"/>,
 /// and returns the result.
 /// </summary>
 public sealed class TeamDelegateTool : ITool
@@ -22,13 +22,13 @@ public sealed class TeamDelegateTool : ITool
     };
 
     private readonly ITeamRegistry _registry;
-    private readonly IMultiAgentSystem _agentSystem;
+    private readonly IOrchestrationSystem _agentSystem;
     private readonly Func<TeamMemberInfo, IAgent> _agentFactory;
     private readonly ConcurrentDictionary<string, byte> _initialized = new(StringComparer.Ordinal);
 
     public TeamDelegateTool(
         ITeamRegistry registry,
-        IMultiAgentSystem agentSystem,
+        IOrchestrationSystem agentSystem,
         Func<TeamMemberInfo, IAgent> agentFactory)
     {
         _registry = registry;

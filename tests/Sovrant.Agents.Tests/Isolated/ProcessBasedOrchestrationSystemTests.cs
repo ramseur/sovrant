@@ -7,18 +7,18 @@ using Sovrant.Agents.Models;
 
 namespace Sovrant.Agents.Tests.Isolated;
 
-public sealed class ProcessBasedMultiAgentSystemTests : IDisposable
+public sealed class ProcessBasedOrchestrationSystemTests : IDisposable
 {
     private static bool IsWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
     private static string ShellCommand => IsWindows ? "cmd.exe" : "/bin/sh";
     private static string EchoArgs(string text) => IsWindows ? $"/c echo {text}" : $"-c \"echo {text}\"";
 
     private readonly AgentSystemConfig _config = new() { TaskTimeoutSeconds = 5 };
-    private readonly ProcessBasedMultiAgentSystem _system;
+    private readonly ProcessBasedOrchestrationSystem _system;
 
-    public ProcessBasedMultiAgentSystemTests()
+    public ProcessBasedOrchestrationSystemTests()
     {
-        _system = new ProcessBasedMultiAgentSystem(_config, NullLogger<ProcessBasedMultiAgentSystem>.Instance);
+        _system = new ProcessBasedOrchestrationSystem(_config, NullLogger<ProcessBasedOrchestrationSystem>.Instance);
     }
 
     public void Dispose() => _system.Dispose();

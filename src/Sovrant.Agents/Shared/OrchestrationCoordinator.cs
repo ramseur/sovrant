@@ -4,61 +4,54 @@ using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Config;
 using Sovrant.Agents.Models;
 
-namespace Sovrant.Agents.Isolated;
+namespace Sovrant.Agents.Shared;
 
 /// <summary>
-/// Multi-agent backend that spawns a separate process per agent. Agents communicate via
-/// stdin/stdout and output is streamed incrementally. Tool-use messages are parsed in the
-/// same format as the original OpenClaude process-based agent protocol.
-/// <para>
-/// This is the default backend. Activate via <c>AGENT_MODE=isolated</c> (or by omitting
-/// <c>AGENT_MODE</c> entirely) or
-/// <see cref="AgentSystemConfig.UseIsolatedAgents"/> = <see langword="true"/>.
-/// </para>
+/// Routes tasks to registered agents and manages the task lifecycle for
+/// <see cref="InProcessOrchestrationSystem"/>. Each task gets its own linked
+/// <see cref="CancellationTokenSource"/> so individual tasks can be cancelled
+/// without affecting others.
 /// </summary>
-public sealed partial class ProcessBasedMultiAgentSystem : IMultiAgentSystem, IDisposable
+public sealed partial class OrchestrationCoordinator : IDisposable
 {
-    private readonly Dictionary<string, ProcessAgent> _agents =
+    private readonly ConcurrentDictionary<string, IAgent> _agents =
         new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _taskCts =
         new(StringComparer.Ordinal);
+    private readonly SemaphoreSlim _semaphore;
     private readonly AgentSystemConfig _config;
-    private readonly ILogger<ProcessBasedMultiAgentSystem> _logger;
-    private volatile bool _disposed;
+    private readonly ILogger<OrchestrationCoordinator> _logger;
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Dispatching task '{TaskId}' to process agent '{AgentName}'")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Dispatching task '{TaskId}' to agent '{AgentName}'")]
     private static partial void LogDispatch(ILogger logger, string taskId, string agentName);
 
-    public ProcessBasedMultiAgentSystem(AgentSystemConfig config, ILogger<ProcessBasedMultiAgentSystem> logger)
+    public OrchestrationCoordinator(AgentSystemConfig config, ILogger<OrchestrationCoordinator> logger)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(logger);
         _config = config;
         _logger = logger;
+        _semaphore = new SemaphoreSlim(config.MaxConcurrentAgents, config.MaxConcurrentAgents);
     }
 
-    /// <inheritdoc/>
-    /// <exception cref="ArgumentException">
-    /// Thrown when <paramref name="agent"/> is not a <see cref="ProcessAgent"/>.
-    /// </exception>
-    public void RegisterAgent(IAgent agent)
+    /// <summary>Registers an agent so it can receive dispatched tasks.</summary>
+    public void AddAgent(IAgent agent)
     {
         ArgumentNullException.ThrowIfNull(agent);
-        if (agent is not ProcessAgent processAgent)
-            throw new ArgumentException(
-                $"{nameof(ProcessBasedMultiAgentSystem)} only accepts {nameof(ProcessAgent)} instances.",
-                nameof(agent));
-        _agents[agent.Name] = processAgent;
+        _agents[agent.Name] = agent;
     }
 
-    /// <inheritdoc/>
-    public async Task<AgentResult> RunTaskAsync(AgentTask task, CancellationToken ct = default)
+    /// <summary>
+    /// Dispatches <paramref name="task"/> to the target agent and returns its result.
+    /// If <see cref="AgentTask.AssignedAgentName"/> is set, that agent is used; otherwise
+    /// the coordinator falls back to the first registered agent.
+    /// </summary>
+    public async Task<AgentResult> DispatchAsync(AgentTask task, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(task);
-        ObjectDisposedException.ThrowIf(_disposed, this);
 
         // Resolve target agent
-        ProcessAgent? agent = null;
+        IAgent? agent = null;
         if (task.AssignedAgentName is not null)
         {
             if (!_agents.TryGetValue(task.AssignedAgentName, out agent))
@@ -66,6 +59,7 @@ public sealed partial class ProcessBasedMultiAgentSystem : IMultiAgentSystem, ID
         }
         else
         {
+            // Fall back to first registered agent
             agent = _agents.Values.FirstOrDefault();
             if (agent is null)
                 return AgentResult.Fail(task.Id, "No agents registered.");
@@ -79,8 +73,16 @@ public sealed partial class ProcessBasedMultiAgentSystem : IMultiAgentSystem, ID
         _taskCts[task.Id] = linkedCts;
         try
         {
-            LogDispatch(_logger, task.Id, agent.Name);
-            return await agent.HandleAsync(task, linkedCts.Token).ConfigureAwait(false);
+            await _semaphore.WaitAsync(linkedCts.Token).ConfigureAwait(false);
+            try
+            {
+                LogDispatch(_logger, task.Id, agent.Name);
+                return await agent.HandleAsync(task, linkedCts.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                _semaphore.Release();
+            }
         }
         catch (OperationCanceledException)
         {
@@ -96,29 +98,21 @@ public sealed partial class ProcessBasedMultiAgentSystem : IMultiAgentSystem, ID
         }
     }
 
-    /// <inheritdoc/>
-    public void CancelTask(string taskId)
+    /// <summary>Cancels an in-flight task by its identifier. No-op if not found.</summary>
+    public void Cancel(string taskId)
     {
         ArgumentNullException.ThrowIfNull(taskId);
         if (_taskCts.TryGetValue(taskId, out var cts))
             cts.Cancel();
     }
 
-    /// <inheritdoc/>
+    /// <summary>Cancels all in-flight tasks.</summary>
     public async Task ShutdownAsync(CancellationToken ct = default)
     {
         foreach (var cts in _taskCts.Values)
             await cts.CancelAsync().ConfigureAwait(false);
-
-        // In-flight process agents will be killed by their linked CTS cancellation.
     }
 
     /// <inheritdoc/>
-    public void Dispose()
-    {
-        _disposed = true;
-        foreach (var cts in _taskCts.Values)
-            cts.Dispose();
-        _taskCts.Clear();
-    }
+    public void Dispose() => _semaphore.Dispose();
 }

@@ -6,7 +6,7 @@ namespace Sovrant.Agents.Shared;
 
 /// <summary>
 /// Base class for in-process agents. Subclasses override <see cref="HandleAsync"/> to
-/// provide role-specific behaviour. The <see cref="MultiAgentCoordinator"/> calls
+/// provide role-specific behaviour. The <see cref="OrchestrationCoordinator"/> calls
 /// <see cref="HandleAsync"/> directly for each dispatched task.
 /// </summary>
 public abstract class BaseAgent : IAgent
@@ -29,7 +29,7 @@ public abstract class BaseAgent : IAgent
     /// <inheritdoc/>
     public string Name { get; }
 
-    /// <summary>The functional role of this agent within a multi-agent team.</summary>
+    /// <summary>The functional role of this agent within an orchestrated team.</summary>
     public AgentRole Role { get; }
 
     /// <inheritdoc/>

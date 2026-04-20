@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-04-13
 
-Sovrant ships **two distinct multi-agent systems** that share the same agent factory (`SovrantAgentFactory`) and template registry (`AgentTemplateRegistry`) underneath but solve very different problems and live at very different levels of the stack.
+Sovrant ships **two distinct orchestration systems** that share the same agent factory (`SovrantAgentFactory`) and template registry (`AgentTemplateRegistry`) underneath but solve very different problems and live at very different levels of the stack.
 
 This document explains what each one is, where the value comes from, where the overlap is uncomfortable, and how they might converge in the future.
 
@@ -23,7 +23,7 @@ This document explains what each one is, where the value comes from, where the o
 | **Swarm engine** | `src/Sovrant.Agents/Swarm/` (~1,493 LOC across 15 files) |
 | **Swarm CLI** | `src/Sovrant.Cli/Program.cs` (`swarm` subcommand) |
 | **Swarm HTTP** | `src/Sovrant.Server/Routes/SwarmRoutes.cs` (`/v1/swarm/*`) |
-| **Shared infrastructure** | `SovrantAgentFactory`, `AgentTemplateRegistry`, `IMultiAgentSystem` — used by both |
+| **Shared infrastructure** | `SovrantAgentFactory`, `AgentTemplateRegistry`, `IOrchestrationSystem` — used by both |
 
 `SwarmOrchestrator`'s constructor takes an `ITeamRegistry` so swarm-spawned agents *can* be registered as team members for tracking, but in normal use the two stay in their own lanes.
 
@@ -54,7 +54,7 @@ This document explains what each one is, where the value comes from, where the o
 ### Team's value-add
 1. **Conversational delegation.** The model can say "spin up a security reviewer with these tools and ask it to look at this diff," all inside its tool-use loop. Swarm cannot do that — there is no `Swarm` tool that creates persistent specialists.
 2. **Persistent specialists.** You can build a "code reviewer" once at the start of a session and call back to it 10 turns later with new context. Swarm tears everything down at the end of every run.
-3. **Full HTTP API** (Phase 52). Teams are first-class HTTP citizens — `POST/GET/DELETE /v1/teams/*`, member management, and `POST /v1/teams/{id}/runs` for starting multi-agent runs. `TeamPublish` lets swarm workers be published as reusable team members.
+3. **Full HTTP API** (Phase 52). Teams are first-class HTTP citizens — `POST/GET/DELETE /v1/teams/*`, member management, and `POST /v1/teams/{id}/runs` for starting orchestration runs. `TeamPublish` lets swarm workers be published as reusable team members.
 4. **No DAG ceremony.** When you just want one sub-agent to look at one thing, you do not need wave scheduling or file locks.
 
 ### Swarm's value-add

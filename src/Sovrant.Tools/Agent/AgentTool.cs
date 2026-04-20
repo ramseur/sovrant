@@ -54,7 +54,7 @@ public sealed class AgentTool : ITool
 
                 var factory = _services.GetService<SovrantAgentFactory>();
                 if (factory is null)
-                    return "Error: SovrantAgentFactory is not registered. Ensure AddMultiAgentSystem() was called.";
+                    return "Error: SovrantAgentFactory is not registered. Ensure AddOrchestrationSystem() was called.";
 
                 var modelOverride = input.TryGetProperty("model", out var mEl) ? mEl.GetString() : null;
                 var agent = factory.Create(template, modelOverride: modelOverride);

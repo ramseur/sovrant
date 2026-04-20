@@ -9,7 +9,7 @@ using Sovrant.Agents.Teams;
 
 namespace Sovrant.Desktop.ViewModels;
 
-public partial class MultiAgentViewModel : ViewModelBase
+public partial class OrchestrationViewModel : ViewModelBase
 {
     private readonly ITeamRegistry _teamRegistry;
 
@@ -49,7 +49,7 @@ public partial class MultiAgentViewModel : ViewModelBase
         WriteIndented = true,
     };
 
-    public MultiAgentViewModel(ITeamRegistry teamRegistry)
+    public OrchestrationViewModel(ITeamRegistry teamRegistry)
     {
         _teamRegistry = teamRegistry;
         LoadAll();

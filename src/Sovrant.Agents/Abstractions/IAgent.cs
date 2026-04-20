@@ -3,7 +3,7 @@ using Sovrant.Agents.Models;
 namespace Sovrant.Agents.Abstractions;
 
 /// <summary>
-/// An agent that handles tasks in a multi-agent system. Both isolated (process-based) and
+/// An agent that handles tasks in an orchestration system. Both isolated (process-based) and
 /// shared (in-process) backends implement this interface.
 /// </summary>
 public interface IAgent

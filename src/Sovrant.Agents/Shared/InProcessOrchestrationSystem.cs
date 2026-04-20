@@ -5,26 +5,26 @@ using Sovrant.Agents.Models;
 namespace Sovrant.Agents.Shared;
 
 /// <summary>
-/// Multi-agent backend that runs agents as in-memory objects connected by async message
-/// channels. Tasks are routed by <see cref="MultiAgentCoordinator"/>. All agents share a
+/// Orchestration backend that runs agents as in-memory objects connected by async message
+/// channels. Tasks are routed by <see cref="OrchestrationCoordinator"/>. All agents share a
 /// <see cref="WorkspaceContext"/> for inter-agent state.
 /// <para>
 /// Activate via <c>AGENT_MODE=shared</c> or
 /// <see cref="Config.AgentSystemConfig.UseIsolatedAgents"/> = <see langword="false"/>.
 /// </para>
 /// </summary>
-public sealed class InProcessMultiAgentSystem : IMultiAgentSystem, IAsyncDisposable
+public sealed class InProcessOrchestrationSystem : IOrchestrationSystem, IAsyncDisposable
 {
-    private readonly MultiAgentCoordinator _coordinator;
-    private readonly ILogger<InProcessMultiAgentSystem> _logger;
+    private readonly OrchestrationCoordinator _coordinator;
+    private readonly ILogger<InProcessOrchestrationSystem> _logger;
 
     /// <summary>The shared workspace visible to all registered agents.</summary>
     public WorkspaceContext Workspace { get; }
 
-    public InProcessMultiAgentSystem(
-        MultiAgentCoordinator coordinator,
+    public InProcessOrchestrationSystem(
+        OrchestrationCoordinator coordinator,
         WorkspaceContext workspace,
-        ILogger<InProcessMultiAgentSystem> logger)
+        ILogger<InProcessOrchestrationSystem> logger)
     {
         ArgumentNullException.ThrowIfNull(coordinator);
         ArgumentNullException.ThrowIfNull(workspace);

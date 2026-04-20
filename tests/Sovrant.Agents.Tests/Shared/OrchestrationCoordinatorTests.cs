@@ -6,14 +6,14 @@ using Sovrant.Agents.Shared;
 
 namespace Sovrant.Agents.Tests.Shared;
 
-public sealed class MultiAgentCoordinatorTests : IDisposable
+public sealed class OrchestrationCoordinatorTests : IDisposable
 {
     private readonly AgentSystemConfig _config = new() { MaxConcurrentAgents = 2, TaskTimeoutSeconds = 5 };
-    private readonly MultiAgentCoordinator _coordinator;
+    private readonly OrchestrationCoordinator _coordinator;
 
-    public MultiAgentCoordinatorTests()
+    public OrchestrationCoordinatorTests()
     {
-        _coordinator = new MultiAgentCoordinator(_config, NullLogger<MultiAgentCoordinator>.Instance);
+        _coordinator = new OrchestrationCoordinator(_config, NullLogger<OrchestrationCoordinator>.Instance);
     }
 
     public void Dispose() => _coordinator.Dispose();
@@ -67,7 +67,7 @@ public sealed class MultiAgentCoordinatorTests : IDisposable
     public async Task DispatchAsync_Timeout_Returns_Fail()
     {
         var config = new AgentSystemConfig { TaskTimeoutSeconds = 1 };
-        using var coordinator = new MultiAgentCoordinator(config, NullLogger<MultiAgentCoordinator>.Instance);
+        using var coordinator = new OrchestrationCoordinator(config, NullLogger<OrchestrationCoordinator>.Instance);
 
         var slowAgent = new SlowAgent("slow", delay: TimeSpan.FromSeconds(10));
         coordinator.AddAgent(slowAgent);
@@ -114,7 +114,7 @@ public sealed class MultiAgentCoordinatorTests : IDisposable
     public async Task MaxConcurrentAgents_Enforces_Limit()
     {
         var config = new AgentSystemConfig { MaxConcurrentAgents = 1, TaskTimeoutSeconds = 10 };
-        using var coordinator = new MultiAgentCoordinator(config, NullLogger<MultiAgentCoordinator>.Instance);
+        using var coordinator = new OrchestrationCoordinator(config, NullLogger<OrchestrationCoordinator>.Instance);
 
         var trackingAgent = new TrackingAgent("track");
         coordinator.AddAgent(trackingAgent);

@@ -2054,7 +2054,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .gov-text-danger { color: var(--status-fail); }
 .gov-text-warn { color: var(--status-warn); }
 
-/* ===== Multi-Agent ===== */
+/* ===== Orchestration ===== */
 .ma-counts {
     display: flex;
     gap: 16px;

@@ -12,7 +12,7 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 
 **Runtime:** .NET 10 / C# 14
 **License:** [see LICENSE]
-**Status:** 50 tools. 25 agent templates. 32 built-in skills. 96 server endpoints + SignalR hub. Multi-agent team orchestration. Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 1,587 tests passing.
+**Status:** 50 tools. 25 agent templates. 32 built-in skills. 96 server endpoints + SignalR hub. Team orchestration. Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 1,587 tests passing.
 
 ---
 
@@ -200,7 +200,7 @@ sovrant router status
 
 ### 50 Built-in Tools
 
-Agents autonomously use tools for file operations, shell execution, web access, task management, plan/worktree mode, notebook editing, MCP resource access, LSP code intelligence, code verification, skill execution, multi-agent delegation, team orchestration, swarm orchestration, and mission management. Up to 20 tool rounds per turn with automatic retries.
+Agents autonomously use tools for file operations, shell execution, web access, task management, plan/worktree mode, notebook editing, MCP resource access, LSP code intelligence, code verification, skill execution, agent delegation, team orchestration, swarm orchestration, and mission management. Up to 20 tool rounds per turn with automatic retries.
 
 ### 25 Specialized Agent Templates
 
@@ -210,7 +210,7 @@ Define reusable agent roles as `.md` files with YAML frontmatter — each specif
 
 Skills are single `.md` files — YAML frontmatter (name, trigger, agents, tools) plus a markdown body with steps and instructions. 32 built-in skills across 7 domains: research (5), writing (5), business (5), project management (4), coding (7), media (3), and agent infrastructure (3). Invoke via `/trigger` slash commands or programmatically. Create new skills at runtime with `SkillCreate`.
 
-### Multi-Agent Team Orchestration
+### Team Orchestration
 
 Create persistent named agents with specific roles, custom system prompts, and tool restrictions. Teams persist to SQLite across restarts with full workspace/project scoping. Manage teams from within the agentic loop (LLM tool calls), via the HTTP API (`/v1/teams/*`, `/v1/runs/*`), or from the desktop/web UI. Run teams with optional parallelism and file-level locking. Publish swarm workers as reusable team members.
 
@@ -308,7 +308,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
                 │           │  ├── 25 agent templates            │
                 │           │  └── FilteredToolRegistry          │
                 │           │                                   │
-                │           │  IMultiAgentSystem                 │
+                │           │  IOrchestrationSystem              │
                 │           │  ├── Isolated (process-per-agent)  │
                 │           │  └── Shared (in-process async)    │
                 │           │                                   │
@@ -341,7 +341,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 | `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, native messages API. SmartRouter with health/latency/cost scoring. Intent-aware model routing. |
 | `Sovrant.Tools` | All 50 tool implementations. 32 built-in skill `.md` files. |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/clear`, `/session`, `/memory`, etc.). |
-| `Sovrant.Agents` | Multi-agent orchestration: team registry (SQLite-backed), agent factory, dual backends (isolated + shared), 25 agent templates, swarm orchestrator, unified run ledger, inter-agent coordination (PM agents + mailbox). |
+| `Sovrant.Agents` | Orchestration: team registry (SQLite-backed), agent factory, dual backends (isolated + shared), 25 agent templates, swarm orchestrator, unified run ledger, inter-agent coordination (PM agents + mailbox). |
 | `Sovrant.McpServer` | MCP server mode: exposes all tools and resources via stdio transport for IDE integration. |
 | `Sovrant.Lsp` | Language Server Protocol client: JSON-RPC over stdio, manages language server lifecycle, 5 LSP tools. |
 | `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient` with 79 endpoint methods, SSE streaming, React `useChat()` hook, 75+ TypeScript interfaces. |
@@ -416,7 +416,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 
 ## Agent System
 
-Sovrant provides a layered multi-agent capability: ad-hoc sub-agents for quick delegation, reusable agent templates for purpose-built roles, persistent teams for structured orchestration, and swarm for parallel task execution.
+Sovrant provides a layered orchestration capability: ad-hoc sub-agents for quick delegation, reusable agent templates for purpose-built roles, persistent teams for structured orchestration, and swarm for parallel task execution.
 
 ### Ad-hoc Sub-Agents (`Agent` tool)
 
@@ -450,7 +450,7 @@ Each template specifies a `recommended_level` that maps to a model string via `M
 
 ### Persistent Teams
 
-Teams provide structured multi-agent orchestration with persistent, named agents. Teams are stored in SQLite and survive process restarts with full workspace and project scoping.
+Teams provide structured orchestration with persistent, named agents. Teams are stored in SQLite and survive process restarts with full workspace and project scoping.
 
 **Create and use teams from the agentic loop:**
 
@@ -654,7 +654,7 @@ The Avalonia-based desktop app provides a full GUI for interacting with the Sovr
 - Dark and light theme toggle
 - Sidebar navigation with workspace/project context selectors
 - Settings with provider profiles (add, activate, delete), live model switching
-- 15 management pages: Chat, Settings, Diagnostics, Artifacts, Tools, Skills, Agents, Memory, Projects, Workspaces, Multi-Agent, Integrations, Automations, Governance, Setup
+- 15 management pages: Chat, Settings, Diagnostics, Artifacts, Tools, Skills, Agents, Memory, Projects, Workspaces, Orchestration, Integrations, Automations, Governance, Setup
 - First-run setup wizard for provider configuration
 - Session history with search
 

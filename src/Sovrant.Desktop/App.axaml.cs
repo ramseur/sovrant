@@ -90,7 +90,7 @@ public partial class App : Application
 
         services.AddSovrantRuntime(config);
         services.AddSovrantTools();
-        services.AddMultiAgentSystem();
+        services.AddOrchestrationSystem();
         services.AddSovrantCommands();
         services.AddHttpClient("ProviderProbe", client =>
         {
@@ -128,7 +128,7 @@ public partial class App : Application
         services.AddTransient<WorkspacesViewModel>();
         services.AddTransient<AgentsViewModel>();
         services.AddTransient<AutomationsViewModel>();
-        services.AddTransient<MultiAgentViewModel>();
+        services.AddTransient<OrchestrationViewModel>();
         services.AddTransient<ActivityViewModel>();
         services.AddSingleton<CommandPaletteViewModel>();
 

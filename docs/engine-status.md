@@ -40,8 +40,8 @@
 | Phase 7.5 Tier 1 tools | ✅ Implemented | TaskUpdate, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree (27 tools total) |
 | Phase 7.5 Tier 2 tools | ✅ Implemented | Skill, ToolSearch, ListMcpResources, ReadMcpResource + custom project slash commands + `/memory` command (31 tools total) |
 | Phase 7.6 memory files | ✅ Implemented | `~/.sovrant/memory.md` + `.sovrant/memory.md` injected into system prompt at session start |
-| Phase 17.5 agent scaffolding | ✅ Implemented | `Sovrant.Agents` project: `IAgent`, `IMultiAgentSystem`, dual backends (isolated + shared), `AGENT_MODE` config switch, `SovrantAgentFactory`, `AgentPrompts`, `FilteredToolRegistry`. Wired into CLI and Server DI via `AddMultiAgentSystem()`. |
-| Phase 18+19 multi-agent teams | ✅ Implemented | `ITeamRegistry` + `InMemoryTeamRegistry`, 4 team tools (`TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`), `MultiAgentCoordinator` (semaphore concurrency, linked CTS + timeout), `ProcessAgent` (stdin/stdout, process tree kill), `SovrantAgent` (runtime-backed), 6 role-specific `AgentPrompts`. 58 tests in `Sovrant.Agents.Tests`. |
+| Phase 17.5 agent scaffolding | ✅ Implemented | `Sovrant.Agents` project: `IAgent`, `IOrchestrationSystem`, dual backends (isolated + shared), `AGENT_MODE` config switch, `SovrantAgentFactory`, `AgentPrompts`, `FilteredToolRegistry`. Wired into CLI and Server DI via `AddOrchestrationSystem()`. |
+| Phase 18+19 orchestrated teams | ✅ Implemented | `ITeamRegistry` + `InMemoryTeamRegistry`, 4 team tools (`TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`), `OrchestrationCoordinator` (semaphore concurrency, linked CTS + timeout), `ProcessAgent` (stdin/stdout, process tree kill), `SovrantAgent` (runtime-backed), 6 role-specific `AgentPrompts`. 58 tests in `Sovrant.Agents.Tests`. |
 | Eval framework (Phase 27) | ✅ Implemented | 3 grader types (code, model, human), pass@1 + pass@k metrics, JSON eval definitions in `.sovrant/evals/`, trend tracking via `EvalResultStore`, `/eval` command, 3 server endpoints. 62 tests. |
 | Swarm orchestrator (Phase 28) | ✅ Implemented | Auto-decomposition via LLM, Kahn's topological sort for wave assignment, wave-by-wave parallel execution (`SemaphoreSlim`), pessimistic file locking, token budget enforcement, per-task retry + timeout, optional quality gate, JSONL session recording, team bridge (different orchestrations use different teams). OFF by default. `SwarmTool` + `SwarmStatusTool`, `/swarm` command, 4 server endpoints (SSE streaming). 62 tests. |
 | OpenAI Responses API provider | ✅ Implemented + tested | `OpenAiResponsesProvider` routes through `POST /v1/responses` when `LLM_WEB_SEARCH=true`. Injects `web_search_preview`, suppresses `WebSearch` function tool, full multi-turn agentic loop support. |
@@ -73,7 +73,7 @@
 | ~~`EnterPlanMode` / `ExitPlanMode` are global in server mode~~ | ✅ Fixed — `SessionConfig` overlay makes plan mode per-session via `AsyncLocal`. `PUT /v1/sessions/{id}/config` for explicit overrides. |
 | ~~No provider retry on 429 / 5xx~~ | ✅ Fixed — 3 attempts with 1s/2s/4s backoff on retryable errors in `ConversationRuntime`. |
 | ~~`AgentTool` has no recursion depth limit~~ | ✅ Fixed — `AsyncLocal<int>` counter; rejects at depth ≥ 5. |
-| ~~`Sovrant.Agents` not wired into CLI or Server~~ | ✅ Fixed — `AddMultiAgentSystem()` called in both CLI and Server `Program.cs`. Team tools registered. `AgentTool` uses direct `ConversationRuntime` (by design — lightweight ad-hoc). |
+| ~~`Sovrant.Agents` not wired into CLI or Server~~ | ✅ Fixed — `AddOrchestrationSystem()` called in both CLI and Server `Program.cs`. Team tools registered. `AgentTool` uses direct `ConversationRuntime` (by design — lightweight ad-hoc). |
 
 ### Phase 8 — Structured Async Logging ✅
 
@@ -216,7 +216,7 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 | `TeamCreate` | ⬜ Not tested | Implemented; creates named agent with role, custom prompt, optional tool restrictions and model override |
 | `TeamDelete` | ⬜ Not tested | Implemented; cancels agent tasks and removes from registry |
 | `TeamStatus` | ⬜ Not tested | Implemented; returns JSON array of all team members with lifecycle state |
-| `TeamDelegate` | ⬜ Not tested | Implemented; delegates prompt to a team member via `IMultiAgentSystem`, tracks status/output/errors |
+| `TeamDelegate` | ⬜ Not tested | Implemented; delegates prompt to a team member via `IOrchestrationSystem`, tracks status/output/errors |
 
 ### Plan mode tools *(Phase 7.5 Tier 1)*
 
@@ -280,7 +280,7 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 | `OLLAMA_BASE_URL` | No | Enables the local Ollama provider (default when set: `http://localhost:11434/v1`) |
 | `ROUTER_MODE` | No | `Smart` (default) or `Fixed`. Overrides `Router:Mode` in config. |
 | `ROUTER_STRATEGY` | No | `Balanced` (default), `Latency`, or `Cost`. Overrides `Router:Strategy` in config. |
-| `AGENT_MODE` | No | `isolated` (default, process-per-agent stdio) or `shared` (in-process async channels). Controls the `IMultiAgentSystem` backend used by team tools. |
+| `AGENT_MODE` | No | `isolated` (default, process-per-agent stdio) or `shared` (in-process async channels). Controls the `IOrchestrationSystem` backend used by team tools. |
 | `SOVRANT_MCP_TOKEN` | No | Required bearer token for MCP server mode. If set, callers must pass `--token <value>` matching this. Unset = no auth. |
 | `SOVRANT_MCP_TOOLS` | No | Comma-separated allow-list of tool names to expose via MCP server. Unset = all tools. `chat` always passes. |
 | `LLM_WEB_SEARCH` | No | Set to `true` to use the model's native web search capability (e.g. OpenAI `web_search_preview`). No external API key needed. |
@@ -368,7 +368,7 @@ The following tools are implemented but have not been manually tested end-to-end
 | `WebSearch` | Requires `BRAVE_API_KEY` or `FIRECRAWL_API_KEY` |
 | `TaskCreate` / `TaskGet` / `TaskList` / `TaskOutput` / `TaskStop` / `TaskUpdate` | Background task management suite |
 | `Agent` | Spawns isolated `ConversationRuntime`; recursion depth limited to 5 |
-| `TeamCreate` / `TeamDelete` / `TeamStatus` / `TeamDelegate` | Team orchestration tools — require `IMultiAgentSystem` (wired in DI) |
+| `TeamCreate` / `TeamDelete` / `TeamStatus` / `TeamDelegate` | Team orchestration tools — require `IOrchestrationSystem` (wired in DI) |
 | `EnterPlanMode` / `ExitPlanMode` | Global in server mode until Phase 9.5 |
 | `EnterWorktree` / `ExitWorktree` | Requires git repo with at least one commit |
 | `Skill` / `ToolSearch` | Requires `.sovrant/skills/` dir or registered tools |

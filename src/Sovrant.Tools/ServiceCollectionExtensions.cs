@@ -118,12 +118,12 @@ public static class ServiceCollectionExtensions
             var factory = sp.GetRequiredService<Sovrant.Agents.Shared.SovrantAgentFactory>();
 
             // SovrantAgentFactory always creates in-process SovrantAgent instances,
-            // so team delegation must use InProcessMultiAgentSystem regardless of
+            // so team delegation must use InProcessOrchestrationSystem regardless of
             // the global AGENT_MODE setting (which may be ProcessBased).
-            var coordinator = sp.GetRequiredService<Sovrant.Agents.Shared.MultiAgentCoordinator>();
+            var coordinator = sp.GetRequiredService<Sovrant.Agents.Shared.OrchestrationCoordinator>();
             var workspace = sp.GetRequiredService<Sovrant.Agents.Shared.WorkspaceContext>();
-            var logger = sp.GetRequiredService<ILogger<Sovrant.Agents.Shared.InProcessMultiAgentSystem>>();
-            var agentSystem = new Sovrant.Agents.Shared.InProcessMultiAgentSystem(coordinator, workspace, logger);
+            var logger = sp.GetRequiredService<ILogger<Sovrant.Agents.Shared.InProcessOrchestrationSystem>>();
+            var agentSystem = new Sovrant.Agents.Shared.InProcessOrchestrationSystem(coordinator, workspace, logger);
 
             return new TeamDelegateTool(registry, agentSystem, member => factory.Create(member));
         });

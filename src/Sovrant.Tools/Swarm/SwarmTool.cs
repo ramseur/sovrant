@@ -142,7 +142,7 @@ public sealed class SwarmTool : ITool
             "type": "object",
             "properties": {
                 "prompt":  {"type": "string",  "description": "The complex task to decompose and execute via the swarm."},
-                "team":    {"type": "string",  "description": "Optional team name/ID. When set, swarm workers are resolved from this multi-agent team before falling back to templates."},
+                "team":    {"type": "string",  "description": "Optional team name/ID. When set, swarm workers are resolved from this orchestrated team before falling back to templates."},
                 "dry_run": {"type": "boolean", "description": "If true, only decompose and show the plan without executing."}
             },
             "required": ["prompt"]

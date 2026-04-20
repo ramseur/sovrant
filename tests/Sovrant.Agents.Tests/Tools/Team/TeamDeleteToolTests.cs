@@ -12,7 +12,7 @@ public sealed class TeamDeleteToolTests
     public async Task ExecuteAsync_Deletes_Existing_Member()
     {
         var registry = new InMemoryTeamRegistry();
-        var system = new FakeMultiAgentSystem();
+        var system = new FakeOrchestrationSystem();
         var tool = new TeamDeleteTool(registry, system);
 
         var member = new TeamMemberInfo
@@ -35,7 +35,7 @@ public sealed class TeamDeleteToolTests
     public async Task ExecuteAsync_Unknown_Member_Returns_Error()
     {
         var registry = new InMemoryTeamRegistry();
-        var system = new FakeMultiAgentSystem();
+        var system = new FakeOrchestrationSystem();
         var tool = new TeamDeleteTool(registry, system);
 
         var input = JsonDocument.Parse("""{"member_id":"nonexistent"}""").RootElement;
@@ -48,7 +48,7 @@ public sealed class TeamDeleteToolTests
     public async Task ExecuteAsync_Missing_MemberId_Returns_Error()
     {
         var registry = new InMemoryTeamRegistry();
-        var system = new FakeMultiAgentSystem();
+        var system = new FakeOrchestrationSystem();
         var tool = new TeamDeleteTool(registry, system);
 
         var input = JsonDocument.Parse("{}").RootElement;
@@ -57,7 +57,7 @@ public sealed class TeamDeleteToolTests
         Assert.Contains("Error", result, StringComparison.Ordinal);
     }
 
-    private sealed class FakeMultiAgentSystem : IMultiAgentSystem
+    private sealed class FakeOrchestrationSystem : IOrchestrationSystem
     {
         public void RegisterAgent(IAgent agent) { }
         public Task<AgentResult> RunTaskAsync(AgentTask task, CancellationToken ct = default) =>

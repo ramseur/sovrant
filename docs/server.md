@@ -36,7 +36,7 @@ The server binds to `http://127.0.0.1:5200` by default.
 | `OLLAMA_BASE_URL` | No | — | Enables the local Ollama provider when set (e.g. `http://localhost:11434/v1`) |
 | `ROUTER_MODE` | No | `Smart` | `Smart` (latency/cost scoring) or `Fixed` (always first provider) |
 | `ROUTER_STRATEGY` | No | `Balanced` | `Balanced`, `Latency`, or `Cost` |
-| `AGENT_MODE` | No | `isolated` | `isolated` (process-per-agent stdio, default) or `shared` (in-process async). Controls which `IMultiAgentSystem` backend is used by team tools (`TeamCreate`, `TeamDelegate`, etc.). |
+| `AGENT_MODE` | No | `isolated` | `isolated` (process-per-agent stdio, default) or `shared` (in-process async). Controls which `IOrchestrationSystem` backend is used by team tools (`TeamCreate`, `TeamDelegate`, etc.). |
 | `LLM_WEB_SEARCH` | No | `false` | Set to `true` to route through OpenAI Responses API with `web_search_preview`. No Brave/FireCrawl key required. |
 | `BRAVE_API_KEY` | No | — | Enables `WebSearch` via Brave Search API |
 | `FIRECRAWL_API_KEY` | No | — | Enables `WebSearch` via FireCrawl (fallback if `BRAVE_API_KEY` not set) |
@@ -502,7 +502,7 @@ Starts a swarm orchestration. Returns an SSE stream of swarm events (plan creati
 ```
 
 - `prompt` (required) — the task to decompose and execute
-- `team` (optional) — multi-agent team whose members should be used as swarm workers
+- `team` (optional) — orchestrated team whose members should be used as swarm workers
 - `dry_run` (optional) — if `true`, only decompose and return the plan without executing
 
 ### Swarm Status — `GET /v1/swarm/{id}`

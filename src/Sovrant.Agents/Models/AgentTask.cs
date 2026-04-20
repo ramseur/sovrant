@@ -1,6 +1,6 @@
 namespace Sovrant.Agents.Models;
 
-/// <summary>Represents a unit of work routed through the multi-agent system.</summary>
+/// <summary>Represents a unit of work routed through the orchestration system.</summary>
 /// <param name="Id">Unique identifier for this task (caller-assigned or auto-generated).</param>
 /// <param name="Prompt">The natural-language instruction or goal for the agent.</param>
 /// <param name="AssignedAgentName">

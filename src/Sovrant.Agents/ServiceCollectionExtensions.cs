@@ -11,19 +11,19 @@ using Sovrant.Agents.Templates;
 namespace Sovrant.Agents;
 
 /// <summary>
-/// Extension methods for registering the multi-agent system with the DI container.
+/// Extension methods for registering the orchestration system with the DI container.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers <see cref="IMultiAgentSystem"/> and its supporting services.
+    /// Registers <see cref="IOrchestrationSystem"/> and its supporting services.
     /// The active backend is determined by <paramref name="config"/> (or by reading
     /// <c>AGENT_MODE</c> from the environment when <paramref name="config"/> is <see langword="null"/>).
     /// <para>
-    /// Usage: <c>services.AddMultiAgentSystem()</c> — picks up <c>AGENT_MODE</c> automatically.
+    /// Usage: <c>services.AddOrchestrationSystem()</c> — picks up <c>AGENT_MODE</c> automatically.
     /// </para>
     /// </summary>
-    public static IServiceCollection AddMultiAgentSystem(
+    public static IServiceCollection AddOrchestrationSystem(
         this IServiceCollection services,
         AgentSystemConfig? config = null)
     {
@@ -34,11 +34,11 @@ public static class ServiceCollectionExtensions
 
         // Always register shared-backend singletons; the factory only constructs them
         // when UseIsolatedAgents == false.
-        services.AddSingleton<MultiAgentCoordinator>();
+        services.AddSingleton<OrchestrationCoordinator>();
         services.AddSingleton<WorkspaceContext>();
 
         // The factory resolves the correct backend at first resolution.
-        services.AddSingleton<IMultiAgentSystem>(sp =>
+        services.AddSingleton<IOrchestrationSystem>(sp =>
             AgentSystemFactory.Create(resolvedConfig, sp));
 
         // Template registry and agent factory

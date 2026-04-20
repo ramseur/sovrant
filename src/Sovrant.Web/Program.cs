@@ -70,7 +70,7 @@ public static class Program
             // Core runtime — same as Desktop's App.axaml.cs BuildApp()
             builder.Services.AddSovrantRuntime(config);
             builder.Services.AddSovrantTools();
-            builder.Services.AddMultiAgentSystem();
+            builder.Services.AddOrchestrationSystem();
             builder.Services.AddSovrantCommands();
             builder.Services.AddHttpClient("ProviderProbe", client =>
             {

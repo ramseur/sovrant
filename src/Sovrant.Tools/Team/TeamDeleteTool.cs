@@ -14,9 +14,9 @@ public sealed class TeamDeleteTool : ITool
     };
 
     private readonly ITeamRegistry _registry;
-    private readonly IMultiAgentSystem _agentSystem;
+    private readonly IOrchestrationSystem _agentSystem;
 
-    public TeamDeleteTool(ITeamRegistry registry, IMultiAgentSystem agentSystem)
+    public TeamDeleteTool(ITeamRegistry registry, IOrchestrationSystem agentSystem)
     {
         _registry = registry;
         _agentSystem = agentSystem;

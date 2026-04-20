@@ -3,7 +3,7 @@ using Sovrant.Agents.Models;
 namespace Sovrant.Agents.Teams;
 
 /// <summary>
-/// Describes a member of a multi-agent team. Tracks identity, configuration,
+/// Describes a member of an orchestrated team. Tracks identity, configuration,
 /// and mutable lifecycle state.
 /// </summary>
 public sealed class TeamMemberInfo

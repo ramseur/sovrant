@@ -53,8 +53,8 @@
         <DataTemplate DataType="vm:AutomationsViewModel">
             <views:AutomationsView />
         </DataTemplate>
-        <DataTemplate DataType="vm:MultiAgentViewModel">
-            <views:MultiAgentView />
+        <DataTemplate DataType="vm:OrchestrationViewModel">
+            <views:OrchestrationView />
         </DataTemplate>
         <DataTemplate DataType="vm:ActivityViewModel">
             <views:ActivityView />

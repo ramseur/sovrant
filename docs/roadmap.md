@@ -46,9 +46,9 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Layer | Status | Notes |
 |---|---|---|
 | Ad-hoc sub-agent (`AgentTool`) | ✅ Working | Spawns a fresh `ConversationRuntime`, runs one isolated turn, returns text. Recursion depth ≤ 5. |
-| Multi-agent interfaces (`IAgent`, `IMultiAgentSystem`) | ✅ Complete | Both isolated and shared backends implement the same interface. |
-| Shared backend (`MultiAgentCoordinator`) | ✅ Complete | Semaphore-based concurrency control, linked CTS with timeout, proper shutdown drain. |
-| Isolated backend (`ProcessBasedMultiAgentSystem`) | ✅ Complete | Process spawn, stdin/stdout JSON, process tree kill on cancel. |
+| Orchestration interfaces (`IAgent`, `IOrchestrationSystem`) | ✅ Complete | Both isolated and shared backends implement the same interface. |
+| Shared backend (`OrchestrationCoordinator`) | ✅ Complete | Semaphore-based concurrency control, linked CTS with timeout, proper shutdown drain. |
+| Isolated backend (`ProcessBasedOrchestrationSystem`) | ✅ Complete | Process spawn, stdin/stdout JSON, process tree kill on cancel. |
 | `SovrantAgent` + `SovrantAgentFactory` | ✅ Complete | Runtime-backed agents with role-specific system prompts and optional tool filtering. |
 | Config switch (`AGENT_MODE`) | ✅ Working | `isolated` (default, process-per-agent) or `shared` (in-process). |
 | Team tools | ✅ Complete | `TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`, `TeamRun`, `TeamPublish`. SQLite-backed teams with workspace/project scoping. |
@@ -75,7 +75,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | 16 | Dynamic MCP tool proxy (`MCPTool`) |
 | 17 | MCP OAuth authentication (`McpAuthTool`) |
 | 18 | Dual agent architecture scaffolding |
-| 19+20 | Multi-agent backend + team tools (58 tests) |
+| 19+20 | Orchestration backend + team tools (58 tests) |
 | 21 | Hook lifecycle system |
 | 22 | Specialized agent definitions (role templates + model routing) |
 | 23 | Template externalisation (built-ins as markdown files) |
@@ -835,53 +835,53 @@ At cloud scale, users will want to connect MCP servers that front OAuth-protecte
 **Source:** Dual Agent Architecture design document (2026-04-04).
 **Status:** ✅ Complete — scaffolding done, full execution implemented in Phase 20.
 
-**Goal:** Introduce two interchangeable multi-agent backends behind a shared `IMultiAgentSystem` interface so the rest of the system never depends on a specific implementation. Whichever architecture proves superior in practice can be promoted as the default without touching consumers.
+**Goal:** Introduce two interchangeable orchestration backends behind a shared `IOrchestrationSystem` interface so the rest of the system never depends on a specific implementation. Whichever architecture proves superior in practice can be promoted as the default without touching consumers.
 
 #### Why two backends
 
-Multi-agent coordination is an unsettled space. Process-per-agent (spawning a child process for each agent) matches the original OpenClaude approach and is easy to reason about in isolation. In-process async channels are lighter, faster, and compose naturally with the existing `ConversationRuntime` model. Both are viable; the winner is not yet clear. The interface abstraction preserves both options with zero coupling.
+Orchestration coordination is an unsettled space. Process-per-agent (spawning a child process for each agent) matches the original OpenClaude approach and is easy to reason about in isolation. In-process async channels are lighter, faster, and compose naturally with the existing `ConversationRuntime` model. Both are viable; the winner is not yet clear. The interface abstraction preserves both options with zero coupling.
 
 #### Project: `Sovrant.Agents`
 
-Depends on `Sovrant.Runtime` (for `IConversationRuntime`, `IToolRegistry`, `FilteredToolRegistry`). Consumers reference it for the `IMultiAgentSystem` interface and register via `services.AddMultiAgentSystem()`.
+Depends on `Sovrant.Runtime` (for `IConversationRuntime`, `IToolRegistry`, `FilteredToolRegistry`). Consumers reference it for the `IOrchestrationSystem` interface and register via `services.AddOrchestrationSystem()`.
 
 ```
 src/Sovrant.Agents/
   Abstractions/
     IAgent.cs                          ← interface: Name + HandleAsync
-    IMultiAgentSystem.cs               ← interface: RegisterAgent, RunTaskAsync, CancelTask, ShutdownAsync
+    IOrchestrationSystem.cs               ← interface: RegisterAgent, RunTaskAsync, CancelTask, ShutdownAsync
   Models/
     AgentTask.cs                       ← record: Id, Prompt, AssignedAgentName, Metadata, CreatedAt
     AgentResult.cs                     ← record: TaskId, Success, Output, Error; Ok/Fail factories
     AgentRole.cs                       ← enum: General, Planner, Coder, Reviewer, Executor, Supervisor
   Isolated/
     ProcessAgent.cs                    ← IAgent backed by ProcessStartInfo; stdin/stdout stdio
-    ProcessBasedMultiAgentSystem.cs    ← spawns ProcessAgent per task; AGENT_MODE=isolated
+    ProcessBasedOrchestrationSystem.cs    ← spawns ProcessAgent per task; AGENT_MODE=isolated
   Shared/
     BaseAgent.cs                       ← abstract IAgent with Channel<AgentTask> inbox + RunLoopAsync
-    MultiAgentCoordinator.cs           ← routes tasks; per-task CTS; shutdown drain
-    InProcessMultiAgentSystem.cs       ← wraps coordinator + WorkspaceContext; AGENT_MODE=shared (default)
+    OrchestrationCoordinator.cs           ← routes tasks; per-task CTS; shutdown drain
+    InProcessOrchestrationSystem.cs       ← wraps coordinator + WorkspaceContext; AGENT_MODE=shared (default)
     WorkspaceContext.cs                ← thread-safe ConcurrentDictionary scratch space for a run
   Config/
     AgentSystemConfig.cs               ← UseIsolatedAgents bool; MaxConcurrentAgents; TaskTimeoutSeconds
-    AgentSystemFactory.cs              ← static Create(config, services) → IMultiAgentSystem
-  ServiceCollectionExtensions.cs       ← AddMultiAgentSystem(config?) reads AGENT_MODE env var
+    AgentSystemFactory.cs              ← static Create(config, services) → IOrchestrationSystem
+  ServiceCollectionExtensions.cs       ← AddOrchestrationSystem(config?) reads AGENT_MODE env var
 ```
 
 #### Configuration switch
 
 | Mechanism | Effect |
 |---|---|
-| `AGENT_MODE=isolated` | `ProcessBasedMultiAgentSystem` (process-per-agent) |
-| `AGENT_MODE=shared` or unset | `InProcessMultiAgentSystem` (shared, in-process) |
+| `AGENT_MODE=isolated` | `ProcessBasedOrchestrationSystem` (process-per-agent) |
+| `AGENT_MODE=shared` or unset | `InProcessOrchestrationSystem` (shared, in-process) |
 | `AgentSystemConfig.UseIsolatedAgents = true` | Isolated (default), programmatic override |
 
 #### Fully implemented (Phase 20)
 
 - `ProcessAgent.HandleAsync` — process spawn, stdin write, stdout/stderr read, cancellation kills process tree
-- `ProcessBasedMultiAgentSystem.RunTaskAsync` — agent resolution, linked CTS, timeout handling
-- `MultiAgentCoordinator.DispatchAsync` — agent selection by name/first-registered, semaphore-based concurrency control, linked CTS with timeout, proper cleanup
-- `MultiAgentCoordinator.ShutdownAsync` — awaiting all `BaseAgent.RunLoopAsync` tasks
+- `ProcessBasedOrchestrationSystem.RunTaskAsync` — agent resolution, linked CTS, timeout handling
+- `OrchestrationCoordinator.DispatchAsync` — agent selection by name/first-registered, semaphore-based concurrency control, linked CTS with timeout, proper cleanup
+- `OrchestrationCoordinator.ShutdownAsync` — awaiting all `BaseAgent.RunLoopAsync` tasks
 - `SovrantAgent` — `BaseAgent` subclass backed by `IConversationRuntime`, collects `TextChunk` events
 - `SovrantAgentFactory` — creates `SovrantAgent` from `TeamMemberInfo` with role-specific prompts and tool filtering
 - `AgentPrompts` — role-specific system prompts for each `AgentRole`
@@ -895,12 +895,12 @@ src/Sovrant.Agents/
 - `BaseAgent` — channel construction, `EnqueueAsync`, `RunLoopAsync`, `Complete`
 - `AgentSystemConfig.FromEnvironment()` — reads `AGENT_MODE`
 - `AgentSystemFactory.Create` — correct backend selection
-- `ServiceCollectionExtensions.AddMultiAgentSystem` — DI wiring (includes `ITeamRegistry` and `SovrantAgentFactory`)
+- `ServiceCollectionExtensions.AddOrchestrationSystem` — DI wiring (includes `ITeamRegistry` and `SovrantAgentFactory`)
 - All interfaces and model records
 
 ---
 
-### Phase 19 — Multi-Agent Teams (`TeamCreateTool` / `TeamDeleteTool`) ✅
+### Phase 19 — Orchestrated Teams (`TeamCreateTool` / `TeamDeleteTool`) ✅
 
 **Depends on:** Phase 18 (`Sovrant.Agents` scaffolding — already done)
 
@@ -944,17 +944,17 @@ Supervisor Agent (ConversationRuntime)
 
 ### Phase 20 — Dual Agent Architecture: Full Implementation ✅
 
-**Depends on:** Phase 18 (scaffolding), Phase 19 (team tools that will consume `IMultiAgentSystem`)
+**Depends on:** Phase 18 (scaffolding), Phase 19 (team tools that will consume `IOrchestrationSystem`)
 **Status:** ✅ Complete — both backends implemented, team tools wired, 58 tests passing.
 
-**Goal:** Complete the two multi-agent backends stubbed in Phase 18. At this point the `TeamCreateTool` / `TeamDeleteTool` from Phase 19 will be wired to `IMultiAgentSystem` and the choice of isolated vs. shared backend becomes a runtime configuration decision.
+**Goal:** Complete the two orchestration backends stubbed in Phase 18. At this point the `TeamCreateTool` / `TeamDeleteTool` from Phase 19 will be wired to `IOrchestrationSystem` and the choice of isolated vs. shared backend becomes a runtime configuration decision.
 
-#### Option A completion: `ProcessBasedMultiAgentSystem`
+#### Option A completion: `ProcessBasedOrchestrationSystem`
 
 1. `ProcessAgent.HandleAsync` — spawn child process from `ProcessStartInfo`; write task JSON to stdin; stream stdout line by line; parse structured tool-use blocks (same format as original OpenClaude); propagate `CancellationToken` via `Process.Kill()`
-2. `ProcessBasedMultiAgentSystem.RunTaskAsync` — resolve target agent; create linked CTS; stream result incrementally; record CTS for `CancelTask`
+2. `ProcessBasedOrchestrationSystem.RunTaskAsync` — resolve target agent; create linked CTS; stream result incrementally; record CTS for `CancelTask`
 
-#### Option B completion: `MultiAgentCoordinator.DispatchAsync`
+#### Option B completion: `OrchestrationCoordinator.DispatchAsync`
 
 1. Resolve target agent by `AgentTask.AssignedAgentName` or by `AgentRole` (planner → coder → reviewer pipeline)
 2. For `BaseAgent` subtypes: enqueue via `EnqueueAsync`, pair with a `TaskCompletionSource<AgentResult>` registered by `RunLoopAsync`
@@ -965,9 +965,9 @@ Supervisor Agent (ConversationRuntime)
 #### Implementation Plan
 
 1. Implement `ProcessAgent.HandleAsync` with stdin/stdout pipes and tool-use message parser
-2. Implement `ProcessBasedMultiAgentSystem.RunTaskAsync` with full lifecycle management
-3. Implement `MultiAgentCoordinator.DispatchAsync` and update `ShutdownAsync`
-4. Wire `TeamCreateTool` to use `IMultiAgentSystem.RunTaskAsync` (replaces ad-hoc `ConversationRuntime` spawning in Phase 19)
+2. Implement `ProcessBasedOrchestrationSystem.RunTaskAsync` with full lifecycle management
+3. Implement `OrchestrationCoordinator.DispatchAsync` and update `ShutdownAsync`
+4. Wire `TeamCreateTool` to use `IOrchestrationSystem.RunTaskAsync` (replaces ad-hoc `ConversationRuntime` spawning in Phase 19)
 5. Add integration tests: isolated backend with a mock echo process; shared backend with a test `BaseAgent` subclass
 
 ---
@@ -1043,7 +1043,7 @@ Three enforcement levels configurable via `SOVRANT_HOOK_PROFILE`:
 ### Phase 22 — Specialized Agent Definitions (Role Templates + Model Routing) ✅
 
 **Inspired by:** everything-claude-code (38 specialized agents with tool restrictions and model selection)
-**Depends on:** Phase 19+20 (multi-agent team tools — already complete)
+**Depends on:** Phase 19+20 (orchestrated team tools — already complete)
 
 **Goal:** Define a library of **24 specialized agent role templates** spanning coding, research, communication, operations, and creative work — each with a structured methodology, constrained tool access, and a **recommended capability level** (high/standard/fast). Templates specify what capability a task *needs*, not which vendor model to use — admins and users choose the actual model and API key. These templates are loaded by `TeamCreate` and `AgentTool` to spawn purpose-built sub-agents. Sovrant is a general-purpose agentic platform — coding is one vertical, not the entire product.
 
@@ -1681,9 +1681,9 @@ Evals stored in `.sovrant/evals/`:
 > **Status: ✅ Complete** — 17 new files, 62 new tests, 0 warnings. OFF by default; foundation for frontend-driven orchestration.
 
 **Inspired by:** [claude-swarm](https://github.com/affaan-m/claude-swarm) (parallel task decomposition with dependency DAGs, file locking, budget enforcement, quality gate)
-**Depends on:** Phase 19+20 (multi-agent team tools), Phase 22 (agent templates), Phase 55 (cost tracking — optional)
+**Depends on:** Phase 19+20 (orchestrated team tools), Phase 22 (agent templates), Phase 55 (cost tracking — optional)
 
-**Goal:** Add a **swarm orchestration layer** on top of Sovrant's existing multi-agent infrastructure. A user gives a single complex prompt; a high-capability model automatically decomposes it into a dependency graph of 2-8 subtasks; subtasks execute in parallel waves respecting dependencies, with file-level conflict prevention, budget enforcement, and a quality gate review phase. The swarm uses whatever models the admin/user has configured — decomposition and quality gates use the "high" level model, workers use the "standard" level (all provider-agnostic via Phase 22's model resolution). Available via CLI (`sovrant swarm "task"`), the `SwarmTool` for programmatic use, and `POST /v1/swarm` for frontend integration.
+**Goal:** Add a **swarm orchestration layer** on top of Sovrant's existing orchestration infrastructure. A user gives a single complex prompt; a high-capability model automatically decomposes it into a dependency graph of 2-8 subtasks; subtasks execute in parallel waves respecting dependencies, with file-level conflict prevention, budget enforcement, and a quality gate review phase. The swarm uses whatever models the admin/user has configured — decomposition and quality gates use the "high" level model, workers use the "standard" level (all provider-agnostic via Phase 22's model resolution). Available via CLI (`sovrant swarm "task"`), the `SwarmTool` for programmatic use, and `POST /v1/swarm` for frontend integration.
 
 #### What Sovrant already has vs. what this adds
 
@@ -2866,7 +2866,7 @@ Today every test starts from a fresh empty SQLite file. The migration runner is 
 
 #### Architecture — Embedded Runtime with GUI Shell
 
-The desktop app references `Sovrant.Runtime`, `Sovrant.Tools`, `Sovrant.Commands`, and `Sovrant.Agents` directly as project references — the same way `Sovrant.Cli` does. The runtime runs in-process: `AddSovrantRuntime()`, `AddSovrantTools()`, `AddMultiAgentSystem()`, and `AddSovrantCommands()` wire up DI exactly as they do in the CLI. No HTTP layer, no server process, no network roundtrip.
+The desktop app references `Sovrant.Runtime`, `Sovrant.Tools`, `Sovrant.Commands`, and `Sovrant.Agents` directly as project references — the same way `Sovrant.Cli` does. The runtime runs in-process: `AddSovrantRuntime()`, `AddSovrantTools()`, `AddOrchestrationSystem()`, and `AddSovrantCommands()` wire up DI exactly as they do in the CLI. No HTTP layer, no server process, no network roundtrip.
 
 ```
 ┌───────────────────────────────────────────────┐
@@ -2905,7 +2905,7 @@ A later phase adds an integrated terminal panel within the desktop app (similar 
 
 | # | Item | Description |
 |---|---|---|
-| 1 | Project scaffolding | Create `src/Sovrant.Desktop/` as an Avalonia MVVM app targeting .NET 10. Project-reference `Sovrant.Runtime`, `Sovrant.Tools`, `Sovrant.Commands`, `Sovrant.Agents`. Wire up DI with `AddSovrantRuntime()`, `AddSovrantTools()`, `AddMultiAgentSystem()`, `AddSovrantCommands()` in `App.axaml.cs`. Single-process, no external dependencies. |
+| 1 | Project scaffolding | Create `src/Sovrant.Desktop/` as an Avalonia MVVM app targeting .NET 10. Project-reference `Sovrant.Runtime`, `Sovrant.Tools`, `Sovrant.Commands`, `Sovrant.Agents`. Wire up DI with `AddSovrantRuntime()`, `AddSovrantTools()`, `AddOrchestrationSystem()`, `AddSovrantCommands()` in `App.axaml.cs`. Single-process, no external dependencies. |
 | 2 | Design system | Port the web frontend's visual language to Avalonia: color palette (teal accents, dark/light themes), typography, spacing, iconography. Create `Styles/` with reusable control templates and theme resources. |
 | 3 | Chat view | Main conversation panel consuming `IAsyncEnumerable<RuntimeEvent>` directly. Markdown rendering, code block syntax highlighting, auto-scroll. `TextChunk` events append to the current message; `TurnComplete` finalizes it. Match the web frontend's message layout and turn separation. |
 | 4 | Inline diff view | Render `ToolUseRequested` events for Edit/Write tools as side-by-side or unified diffs with red/green coloring. Inline Allow/Deny buttons wired to `IToolConfirmationHandler`. |
@@ -3294,7 +3294,7 @@ export SEARXNG_MIN_INTERVAL_MS=500   # optional, default 0
 
 ## Phase 50 — OpenClaw Integration & Federated Swarms Over a Routed Bus
 
-**Depends on:** Phase 16 (Dynamic MCP Tool Proxy), Phase 29 (Swarm Orchestrator), Phase 35 (Workspaces), Phase 37.5 (Swarm event store), Phase 19+20 (Multi-agent teams)
+**Depends on:** Phase 16 (Dynamic MCP Tool Proxy), Phase 29 (Swarm Orchestrator), Phase 35 (Workspaces), Phase 37.5 (Swarm event store), Phase 19+20 (Orchestrated teams)
 
 **Goal:** Make [OpenClaw](https://docs.openclaw.ai/) the **routed message bus** for federated Sovrant swarms. Sovrant swarms (running Sovrant's own workers — not OpenClaw workers, because OpenClaw isn't a coding agent) post events, findings, and approval requests into OpenClaw routes; other swarms and human operators on Discord / Telegram / WhatsApp / Slack / Signal / iMessage / Matrix subscribe to those routes and respond. Three federation modes (`silo`, `federated`, `manager-led`) map onto OpenClaw's routing primitives so multiple swarms can run side-by-side either fully isolated, sharing a common channel, or reporting up to a manager. As a free side-effect, every running swarm becomes reachable from a phone.
 
@@ -3703,16 +3703,16 @@ I. Wire `LlmExecutor` into `SmartRouter` so per-step model tier actually changes
 - Replacing existing PM tools (GitHub Issues, Linear, Jira). The export is one-way and intentionally minimal — the goal is *legibility*, not vendor lock-in.
 - Building a cost model. Live dollar-per-token pricing is Phase 55's job (OpenRouter-backed). Phase 51 only *consumes* the `ICostModel` interface.
 - Inventing a new agent runtime. Missions sit on top of the existing Phase 19/20/22/24/29 stack; this phase adds the *loop and the ledger*, not a new executor.
-- Long-horizon multi-agent negotiation between *missions* (one mission contracting work to another). Sub-missions spawn synchronously via `MissionTool`; cross-mission negotiation is a later phase if there's demand.
+- Long-horizon orchestration negotiation between *missions* (one mission contracting work to another). Sub-missions spawn synchronously via `MissionTool`; cross-mission negotiation is a later phase if there's demand.
 - True open-ended autonomy with no human surface. Every mission has at least one escalation pathway; "autonomous" mode just means the threshold is high, not absent.
 
 ---
 
 ## Phase 52 ✅ — Unified Agent Orchestration: One Team-or-Swarm Abstraction in the Database
 
-**Depends on:** Phase 19+20 (multi-agent teams), Phase 22 (agent templates), Phase 29 (Swarm orchestrator), Phase 32 (persistence), Phase 35 (workspaces), Phase 36 (projects), Phase 37 (users), **Phase 37.5 (swarm sessions in the DB — the prerequisite that makes this phase possible)**
+**Depends on:** Phase 19+20 (orchestrated teams), Phase 22 (agent templates), Phase 29 (Swarm orchestrator), Phase 32 (persistence), Phase 35 (workspaces), Phase 36 (projects), Phase 37 (users), **Phase 37.5 (swarm sessions in the DB — the prerequisite that makes this phase possible)**
 
-**Goal:** Collapse Sovrant's two parallel multi-agent systems — **Team** (LLM-driven, conversational, persistent personas, in-memory only) and **Swarm** (user-driven, ephemeral, parallel, file-locked, DAG-decomposed) — into a **single orchestration abstraction** with one persistent home in the SQLite database. After this phase, "team" is no longer a separate concept from "swarm"; it is one of three ways to compose a swarm. All members, runs, plans, locks, and events live in the same tables, queryable per user / workspace / project, surviving restarts and exportable like every other persisted entity.
+**Goal:** Collapse Sovrant's two parallel orchestration systems — **Team** (LLM-driven, conversational, persistent personas, in-memory only) and **Swarm** (user-driven, ephemeral, parallel, file-locked, DAG-decomposed) — into a **single orchestration abstraction** with one persistent home in the SQLite database. After this phase, "team" is no longer a separate concept from "swarm"; it is one of three ways to compose a swarm. All members, runs, plans, locks, and events live in the same tables, queryable per user / workspace / project, surviving restarts and exportable like every other persisted entity.
 
 This is the unification that `docs/agent-systems.md` previewed at the bottom of the doc as a "possible future". Phase 37.5 is what makes it possible: once swarm events live in the database, the rest of the agent state (team members, agent runs, conversation links) can join them in the same store under the same backup, query, and scoping story.
 
@@ -3750,7 +3750,7 @@ After this phase there is **one** persisted concept — call it an `AgentEnsembl
 
 - **One member registry.** A new `SqliteTeamRegistry : ITeamRegistry` replaces `InMemoryTeamRegistry`. Members live in a `team_members` table keyed by `(workspace_id, project_id, team_id, member_id)`. Created via `TeamCreate` in conversation **or** via the server API **or** by a swarm decomposer that elects to publish its ephemeral workers as a named team.
 - **One run ledger.** A new `agent_runs` table records every agentic execution — single-shot tool delegation (today's `TeamDelegate`), wave step (today's swarm worker), or mission step (Phase 51) — with foreign keys to the team that ran it, the user who triggered it, the workspace/project, and the parent run if it was spawned by another agent.
-- **One event store.** Phase 37.5's `swarm_events` table generalises to `agent_events` (or stays named `swarm_events` with a `kind` column added — TBD by the migration). Both single-agent delegations and multi-agent waves stream into the same event stream.
+- **One event store.** Phase 37.5's `swarm_events` table generalises to `agent_events` (or stays named `swarm_events` with a `kind` column added — TBD by the migration). Both single-agent delegations and orchestration waves stream into the same event stream.
 - **Three creation modes for an orchestration**, all going through the same `AgentOrchestrator`:
   1. **One pre-existing team.** Caller hands the orchestrator a `team_id`; the orchestrator runs the work using *only* members of that team (single delegation, parallel wave, or DAG — same engine, different surface). This is "use the team I already built." The LLM can do this from a conversation tool (`TeamRun`), the user can do it from the CLI (`sovrant team run <team_id> "<task>"`), and the API can do it (`POST /v1/teams/{id}/runs`).
   2. **Multiple pre-existing teams (composition).** Caller hands the orchestrator a list of `team_id`s — e.g. `[security-reviewers, perf-team, frontend]` — plus a task. The decomposer routes each step to the most appropriate team based on member capabilities (template + tool whitelist + recommended model tier). This is "use these specialised teams together."
@@ -4313,7 +4313,7 @@ All screens from the desktop app are replicated with equivalent functionality:
 | Projects | Project management (when backend ready) |
 | Workspaces | Workspace management (when backend ready) |
 | Automations | Automation workflows (when backend ready) |
-| Multi-Agent | Team orchestration UI (when backend ready) |
+| Orchestration | Team orchestration UI (when backend ready) |
 
 ### Theming
 
@@ -4936,7 +4936,7 @@ User sees progress, results, and reasoning at every step
 **Depends on:** Phase 16 (Dynamic MCP Tool Proxy), Phase 50 (OpenClaw integration — establishes the `IFederationBus` abstraction this phase implements a second backend for)
 **Difficulty:** Medium
 
-**Goal:** Add [Hermes Agent](https://github.com/NousResearch/hermes-agent) (by Nous Research) as a second federation bus provider alongside OpenClaw. Hermes Agent is an open-source, self-improving AI agent framework that ships an **MCP server mode** (`hermes mcp serve`) and an **OpenAI-compatible API**. Where OpenClaw is a routing gateway bridging messaging platforms to agents, Hermes is a full agent execution engine with its own planning loop, skill learning, and multi-agent coordination. Together they give Sovrant two complementary federation options: OpenClaw for human-reachable chat-channel routing, Hermes for agent-to-agent delegation with adaptive skill acquisition.
+**Goal:** Add [Hermes Agent](https://github.com/NousResearch/hermes-agent) (by Nous Research) as a second federation bus provider alongside OpenClaw. Hermes Agent is an open-source, self-improving AI agent framework that ships an **MCP server mode** (`hermes mcp serve`) and an **OpenAI-compatible API**. Where OpenClaw is a routing gateway bridging messaging platforms to agents, Hermes is a full agent execution engine with its own planning loop, skill learning, and orchestration. Together they give Sovrant two complementary federation options: OpenClaw for human-reachable chat-channel routing, Hermes for agent-to-agent delegation with adaptive skill acquisition.
 
 #### What Hermes Agent is
 
@@ -4959,7 +4959,7 @@ Hermes Agent (MIT license, Python, ~65K GitHub stars) is a self-improving agent 
 | **Role** | Message routing gateway | Agent execution engine |
 | **Strength** | Bridges 8+ messaging platforms (Discord, Slack, Telegram, WhatsApp, Signal, iMessage, Matrix) — every swarm becomes reachable from a phone | Self-improving skills, deep agent-to-agent delegation, adaptive planning |
 | **Integration surface** | 9 MCP tools (conversations, messages, events, permissions) | MCP server mode + OpenAI-compatible HTTP API |
-| **Multi-agent model** | Route-based pub/sub — agents publish events, operators subscribe from chat channels | Subagent delegation (L0), proposed DAG workflows (L1), shared scratchpad (L2), live dialogue (L3) |
+| **Orchestration model** | Route-based pub/sub — agents publish events, operators subscribe from chat channels | Subagent delegation (L0), proposed DAG workflows (L1), shared scratchpad (L2), live dialogue (L3) |
 | **When to use** | Human-in-the-loop, cross-platform notifications, approval routing | Agent-to-agent task delegation where the remote agent has specialised skills or domain knowledge |
 
 **They are complementary, not competing.** A Sovrant swarm could use OpenClaw for human approval routing while delegating specialised subtasks to a Hermes agent that has learned domain-specific skills.
@@ -5251,7 +5251,7 @@ Chat.razor doesn't change — it already consumes `IAsyncEnumerable<RuntimeEvent
 | SmartRouter crashes on WSL DNS failure | ✅ Falls back to configured providers when all fail startup ping |
 | Provider has no retry on 429/5xx | ✅ Phase 5 — 3 attempts with 1s/2s/4s backoff |
 | `EnterPlanMode`/`ExitPlanMode` are global in server mode | ✅ Phase 10 — session-scoped `SessionConfig` overlay |
-| `Sovrant.Agents` not wired into CLI or Server | ✅ Phase 19+20 — `AddMultiAgentSystem()` called in both hosts |
+| `Sovrant.Agents` not wired into CLI or Server | ✅ Phase 19+20 — `AddOrchestrationSystem()` called in both hosts |
 
 ---
 
@@ -5452,7 +5452,7 @@ Stored per-workspace in user settings. Injected into system prompt by `Conversat
 | Artifact backend hardcoded to "local" | `Runtime/ServiceCollectionExtensions.cs:216` — env var switch with only one case | Cannot plug cloud storage (S3, Azure Blob) without editing the composition root |
 | LSP client created directly in manager | `Lsp/LspClientManager.cs:53` — `new LspClient(config, logger)` | Cannot inject mock/remote LSP clients; blocks testing and remote language server support |
 | Agent template loading from filesystem only | `Agents/Templates/AgentTemplateRegistry.cs:82` — `File.ReadAllText(path)` | Cannot load templates from database, cloud, or version control |
-| `InProcessMultiAgentSystem` hardcoded in tool factory | `Tools/ServiceCollectionExtensions.cs:122` | Team delegation tool locked to in-process agents; blocks distributed agent execution |
+| `InProcessOrchestrationSystem` hardcoded in tool factory | `Tools/ServiceCollectionExtensions.cs:122` | Team delegation tool locked to in-process agents; blocks distributed agent execution |
 
 #### Tier 3 — Fix for Testability (Nice to Have)
 
@@ -5473,7 +5473,7 @@ Stored per-workspace in user settings. Injected into system prompt by `Conversat
 - **Runtime** — `IConversationRuntime` registered as transient (correct for per-session state)
 - **Commands** — All slash commands implement `ISlashCommand`
 - **Tools** — All tools implement `ITool`, registered via `IToolRegistry`
-- **Agent system** — `IMultiAgentSystem`, `ITeamRegistry`, `ISwarmDecomposer`, `IAgentOrchestrator` all interface-backed
+- **Agent system** — `IOrchestrationSystem`, `ITeamRegistry`, `ISwarmDecomposer`, `IAgentOrchestrator` all interface-backed
 - **Composition roots** — Clean separation in `ServiceCollectionExtensions.cs` per assembly
 - **No service locator anti-pattern** — `IServiceProvider.GetService` only in factory methods inside composition roots
 

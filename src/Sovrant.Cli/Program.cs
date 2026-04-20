@@ -827,7 +827,7 @@ ServiceProvider BuildServices(ParseResult pr)
 
     services.AddSovrantRuntime(config);
     services.AddSovrantTools();
-    services.AddMultiAgentSystem();
+    services.AddOrchestrationSystem();
     services.AddSovrantCommands();
 
     if (ciMode)

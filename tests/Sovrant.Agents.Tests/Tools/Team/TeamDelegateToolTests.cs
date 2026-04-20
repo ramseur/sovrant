@@ -14,7 +14,7 @@ public sealed class TeamDelegateToolTests
     public async Task ExecuteAsync_Unknown_Member_Returns_Error()
     {
         var registry = new InMemoryTeamRegistry();
-        var system = new FakeMultiAgentSystem();
+        var system = new FakeOrchestrationSystem();
         var tool = new TeamDelegateTool(registry, system, FakeFactory);
 
         var input = JsonDocument.Parse("""{"member_id":"nonexistent","prompt":"test"}""").RootElement;
@@ -28,7 +28,7 @@ public sealed class TeamDelegateToolTests
     public async Task ExecuteAsync_Missing_MemberId_Returns_Error()
     {
         var registry = new InMemoryTeamRegistry();
-        var system = new FakeMultiAgentSystem();
+        var system = new FakeOrchestrationSystem();
         var tool = new TeamDelegateTool(registry, system, FakeFactory);
 
         var input = JsonDocument.Parse("""{"prompt":"test"}""").RootElement;
@@ -41,7 +41,7 @@ public sealed class TeamDelegateToolTests
     public async Task ExecuteAsync_Missing_Prompt_Returns_Error()
     {
         var registry = new InMemoryTeamRegistry();
-        var system = new FakeMultiAgentSystem();
+        var system = new FakeOrchestrationSystem();
         var tool = new TeamDelegateTool(registry, system, FakeFactory);
 
         registry.RegisterMember(new TeamMemberInfo
@@ -59,7 +59,7 @@ public sealed class TeamDelegateToolTests
     public async Task ExecuteAsync_Successful_Delegation_Updates_Status()
     {
         var registry = new InMemoryTeamRegistry();
-        var system = new FakeMultiAgentSystem { Output = "Agent says hello." };
+        var system = new FakeOrchestrationSystem { Output = "Agent says hello." };
         var tool = new TeamDelegateTool(registry, system, FakeFactory);
 
         var member = new TeamMemberInfo
@@ -80,7 +80,7 @@ public sealed class TeamDelegateToolTests
     public async Task ExecuteAsync_Failed_Delegation_Updates_Status()
     {
         var registry = new InMemoryTeamRegistry();
-        var system = new FakeMultiAgentSystem { Error = "Provider crashed" };
+        var system = new FakeOrchestrationSystem { Error = "Provider crashed" };
         var tool = new TeamDelegateTool(registry, system, FakeFactory);
 
         var member = new TeamMemberInfo
@@ -102,7 +102,7 @@ public sealed class TeamDelegateToolTests
     {
         var registry = new InMemoryTeamRegistry();
         var registerCount = 0;
-        var system = new FakeMultiAgentSystem { Output = "ok", OnRegister = () => registerCount++ };
+        var system = new FakeOrchestrationSystem { Output = "ok", OnRegister = () => registerCount++ };
         var tool = new TeamDelegateTool(registry, system, FakeFactory);
 
         var member = new TeamMemberInfo
@@ -118,7 +118,7 @@ public sealed class TeamDelegateToolTests
         Assert.Equal(1, registerCount);
     }
 
-    private sealed class FakeMultiAgentSystem : IMultiAgentSystem
+    private sealed class FakeOrchestrationSystem : IOrchestrationSystem
     {
         public string? Output { get; init; }
         public string? Error { get; init; }

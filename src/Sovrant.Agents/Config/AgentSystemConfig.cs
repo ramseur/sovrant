@@ -1,30 +1,30 @@
 namespace Sovrant.Agents.Config;
 
 /// <summary>
-/// Configuration for the multi-agent system.
+/// Configuration for the orchestration system.
 /// <para>
 /// The simplest way to switch backends is the <c>AGENT_MODE</c> environment variable:
 /// <list type="bullet">
-///   <item><c>AGENT_MODE=isolated</c> (or unset) — uses <see cref="Isolated.ProcessBasedMultiAgentSystem"/> (default)</item>
-///   <item><c>AGENT_MODE=shared</c> — uses <see cref="Shared.InProcessMultiAgentSystem"/></item>
+///   <item><c>AGENT_MODE=isolated</c> (or unset) — uses <see cref="Isolated.ProcessBasedOrchestrationSystem"/> (default)</item>
+///   <item><c>AGENT_MODE=shared</c> — uses <see cref="Shared.InProcessOrchestrationSystem"/></item>
 /// </list>
 /// Alternatively, set <see cref="UseIsolatedAgents"/> programmatically before calling
-/// <c>services.AddMultiAgentSystem(config)</c>.
+/// <c>services.AddOrchestrationSystem(config)</c>.
 /// </para>
 /// </summary>
 public sealed class AgentSystemConfig
 {
     /// <summary>
-    /// When <see langword="true"/> (default), uses <see cref="Isolated.ProcessBasedMultiAgentSystem"/>
+    /// When <see langword="true"/> (default), uses <see cref="Isolated.ProcessBasedOrchestrationSystem"/>
     /// (process-per-agent, stdin/stdout) for full process-level isolation. When
-    /// <see langword="false"/>, uses <see cref="Shared.InProcessMultiAgentSystem"/>
+    /// <see langword="false"/>, uses <see cref="Shared.InProcessOrchestrationSystem"/>
     /// (in-process async channels, shared memory).
     /// </summary>
     public bool UseIsolatedAgents { get; init; } = true;
 
     /// <summary>
     /// Maximum number of agents that can execute tasks simultaneously in a single
-    /// multi-agent run. Default: 5.
+    /// orchestration run. Default: 5.
     /// </summary>
     public int MaxConcurrentAgents { get; init; } = 5;
 

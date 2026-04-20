@@ -95,9 +95,9 @@
 
 ## 2. HIGH Issues
 
-### 2.1 CancellationTokenSource Leak — MultiAgentCoordinator
+### 2.1 CancellationTokenSource Leak — OrchestrationCoordinator
 **Layer:** Agents
-**File:** `src/Sovrant.Agents/Shared/MultiAgentCoordinator.cs:69-98`
+**File:** `src/Sovrant.Agents/Shared/OrchestrationCoordinator.cs:69-98`
 **Problem:** `linkedCts` (from `CreateLinkedTokenSource`) is stored in `_taskCts` but never explicitly disposed. `TryRemove` doesn't call `Dispose()`.
 **Fix:**
 ```csharp
@@ -107,15 +107,15 @@ finally {
 }
 ```
 
-### 2.2 CancellationTokenSource Leak — ProcessBasedMultiAgentSystem
+### 2.2 CancellationTokenSource Leak — ProcessBasedOrchestrationSystem
 **Layer:** Agents
-**File:** `src/Sovrant.Agents/Isolated/ProcessBasedMultiAgentSystem.cs:114-119`
+**File:** `src/Sovrant.Agents/Isolated/ProcessBasedOrchestrationSystem.cs:114-119`
 **Problem:** Race condition between `Dispose()` iterating `_taskCts` and `RunTaskAsync()` adding new entries.
 **Fix:** Add locking or use a disposed flag to reject new tasks during shutdown.
 
-### 2.3 Unsafe Dictionary — MultiAgentCoordinator
+### 2.3 Unsafe Dictionary — OrchestrationCoordinator
 **Layer:** Agents
-**File:** `src/Sovrant.Agents/Shared/MultiAgentCoordinator.cs:17-18,42`
+**File:** `src/Sovrant.Agents/Shared/OrchestrationCoordinator.cs:17-18,42`
 **Problem:** `_agents` is a plain `Dictionary<string, IAgent>` without synchronization. Concurrent `AddAgent()` and `DispatchAsync()` calls cause `InvalidOperationException`.
 **Fix:** Use `ConcurrentDictionary<string, IAgent>`.
 
@@ -127,8 +127,8 @@ finally {
 
 ### 2.5 Coordinator Not Disposed
 **Layer:** Agents
-**File:** `src/Sovrant.Agents/Shared/InProcessMultiAgentSystem.cs:17`
-**Problem:** `DisposeAsync()` calls `ShutdownAsync()` but never disposes the `MultiAgentCoordinator` (which owns a `SemaphoreSlim`).
+**File:** `src/Sovrant.Agents/Shared/InProcessOrchestrationSystem.cs:17`
+**Problem:** `DisposeAsync()` calls `ShutdownAsync()` but never disposes the `OrchestrationCoordinator` (which owns a `SemaphoreSlim`).
 **Fix:** Call `_coordinator?.Dispose()` in `DisposeAsync()`.
 
 ### 2.6 ProcessAgent — No ProcessStartInfo Validation
@@ -304,8 +304,8 @@ finally {
 | # | File | Issue |
 |---|------|-------|
 | M36 | `WorkspaceContext.cs:10-36` | No agent isolation — all agents share same workspace key space |
-| M37 | `MultiAgentCoordinator.cs:70-86` | Semaphore held for entire `HandleAsync` duration — starves other agents |
-| M38 | `MultiAgentCoordinator.cs:113-136` | `ShutdownAsync` iterates `_taskCts.Values` without snapshot — concurrent modification |
+| M37 | `OrchestrationCoordinator.cs:70-86` | Semaphore held for entire `HandleAsync` duration — starves other agents |
+| M38 | `OrchestrationCoordinator.cs:113-136` | `ShutdownAsync` iterates `_taskCts.Values` without snapshot — concurrent modification |
 | M39 | `TeamMemberInfo.cs:20-22` | Mutable `Status`/`LastOutput`/`LastError` without thread safety |
 | M40 | `TeamMemberInfo.cs:11-17` | No input validation on `Id`, `Name`, `SystemPrompt` |
 | M41 | `BaseAgent.cs:60-66` | Unhandled exception in `RunLoopAsync` kills agent silently |
@@ -484,7 +484,7 @@ finally {
 
 | Assembly | Line Coverage | Notes |
 |----------|-------------|-------|
-| **Sovrant.Agents** | **59.6%** | Best covered — MultiAgentCoordinator 91%, InMemoryTeamRegistry 100%, AgentPrompts 100% |
+| **Sovrant.Agents** | **59.6%** | Best covered — OrchestrationCoordinator 91%, InMemoryTeamRegistry 100%, AgentPrompts 100% |
 | **Sovrant.Runtime** | **48.6%** | RuntimeSessionPool 99%, SovrantConfig 92%, FilteredToolRegistry 100%; gaps in logging, MCP, prompt builder |
 | **Sovrant.Commands** | **41.1%** | SlashCommandDispatcher 83%, TokenUsageTracker 100%; HelpCommand, MemoryCommand, SessionCommand at 0% |
 | **Sovrant.Api** | **33.0%** | FormatConverter 89%, ProviderInfo 93%; Responses API types and Ollama provider uncovered |
@@ -504,7 +504,7 @@ finally {
 
 ### Well-Covered Areas
 
-- **MultiAgentCoordinator** — 91.4% (Phase 19 core)
+- **OrchestrationCoordinator** — 91.4% (Phase 19 core)
 - **RuntimeSessionPool** — 98.7%
 - **SovrantConfig** — 91.6%
 - **FormatConverter** — 89.2%

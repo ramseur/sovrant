@@ -1,6 +1,6 @@
 namespace Sovrant.Agents.Models;
 
-/// <summary>Describes the functional role of an agent within a multi-agent team.</summary>
+/// <summary>Describes the functional role of an agent within an orchestrated team.</summary>
 public enum AgentRole
 {
     /// <summary>No specific role. Agent handles general-purpose tasks.</summary>

@@ -2,8 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
-             x:Class="Sovrant.Desktop.Views.MultiAgentView"
-             x:DataType="vm:MultiAgentViewModel"
+             x:Class="Sovrant.Desktop.Views.OrchestrationView"
+             x:DataType="vm:OrchestrationViewModel"
              Background="{DynamicResource SurfaceBackground}">
 
     <DockPanel>
@@ -80,7 +80,7 @@
                                         <StackPanel Spacing="8">
                                             <DockPanel>
                                                 <Button DockPanel.Dock="Right" Content="Delete"
-                                                        Command="{Binding $parent[ItemsControl].((vm:MultiAgentViewModel)DataContext).RemoveTeamCommand}"
+                                                        Command="{Binding $parent[ItemsControl].((vm:OrchestrationViewModel)DataContext).RemoveTeamCommand}"
                                                         CommandParameter="{Binding}"
                                                         Padding="6,2" CornerRadius="4" FontSize="10"
                                                         Background="#44F44336" Foreground="{DynamicResource StatusFail}"
@@ -97,7 +97,7 @@
                                             <ItemsControl ItemsSource="{Binding Members}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate DataType="vm:TeamMemberItemViewModel">
-                                                        <Button Command="{Binding $parent[UserControl].((vm:MultiAgentViewModel)DataContext).SelectMemberCommand}"
+                                                        <Button Command="{Binding $parent[UserControl].((vm:OrchestrationViewModel)DataContext).SelectMemberCommand}"
                                                                 CommandParameter="{Binding}"
                                                                 HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                                                                 Padding="0" Margin="0,2"
@@ -175,7 +175,7 @@
             <ScrollViewer IsVisible="{Binding IsSwarmTab}">
                 <StackPanel MaxWidth="640" Spacing="20" Margin="0,4,0,0">
 
-                    <TextBlock Text="Configure how swarm orchestration handles multi-agent task decomposition and execution."
+                    <TextBlock Text="Configure how swarm orchestration handles task decomposition and execution."
                                FontSize="13" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" />
 
                     <Border Padding="14,14" CornerRadius="8"
