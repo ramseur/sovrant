@@ -54,6 +54,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     [LoggerMessage(Level = LogLevel.Warning, Message = "Tool call loop detected: '{ToolName}' called {Count} times consecutively for session '{SessionId}' — breaking loop")]
     private static partial void LogToolCallLoop(ILogger logger, string toolName, int count, string sessionId);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Aborting turn: tool '{ToolName}' failed with identical input twice in session {SessionId} — treating as deterministic failure")]
+    private static partial void LogInternalErrorRepeat(ILogger logger, string toolName, string sessionId);
+
     [LoggerMessage(Level = LogLevel.Debug, Message = "Tool dispatched: tool={ToolName}")]
     private static partial void LogToolDispatched(ILogger logger, string toolName);
 
@@ -174,6 +177,13 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
         var round = 0;
         var consecutiveToolCalls = new Dictionary<string, int>(StringComparer.Ordinal);
+        // Tracks (toolName|inputHash) → count for error results. If the same tool
+        // is invoked with identical inputs and errors twice, we abort — it's a
+        // deterministic failure the LLM cannot fix by retrying.
+        var repeatedErrorCalls = new Dictionary<string, int>(StringComparer.Ordinal);
+        var deterministicFailureDetected = false;
+        string? deterministicFailureTool = null;
+        string? deterministicFailureMessage = null;
         while (round < MaxToolRounds)
         {
             using var turnScope = _logger.BeginScope(
@@ -425,6 +435,34 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 await AppendSessionEntryAsync("tool_result", execResult.Output, ct,
                     toolName: tu.Name, toolUseId: tu.Id, isError: execResult.IsError)
                     .ConfigureAwait(false);
+
+                // Deterministic-failure detector: same tool + same input + error twice in a turn.
+                // Covers infra bugs (NOT NULL constraint, etc.) the LLM cannot retry its way out of.
+                if (execResult.IsError)
+                {
+                    var inputHash = tu.Input.ToString().GetHashCode(StringComparison.Ordinal);
+                    var key = $"{tu.Name}|{inputHash:X8}";
+                    repeatedErrorCalls.TryGetValue(key, out var failCount);
+                    repeatedErrorCalls[key] = failCount + 1;
+
+                    var isInternal = execResult.Output.StartsWith("[INTERNAL_ERROR]", StringComparison.Ordinal);
+                    if (failCount + 1 >= 2 || isInternal && failCount + 1 >= 1)
+                    {
+                        LogInternalErrorRepeat(_logger, tu.Name, SessionId);
+                        deterministicFailureDetected = true;
+                        deterministicFailureTool = tu.Name;
+                        deterministicFailureMessage = execResult.Output;
+                    }
+                }
+            }
+
+            if (deterministicFailureDetected)
+            {
+                var raw = deterministicFailureMessage ?? string.Empty;
+                var summary = raw.Length > 400 ? raw[..399] + "…" : raw;
+                yield return new RuntimeEvent.RuntimeError(
+                    $"Aborted: tool '{deterministicFailureTool}' failed deterministically. {summary}");
+                yield break;
             }
 
             // Append ONE tool-result InputContentBlock per tool call so the LLM receives correctly

@@ -6893,3 +6893,68 @@ no per-user home. When Phase 76 study completes, the follow-on should:
   backend (team) are drop-in compatible.
 
 
+## Phase 77 — Project Isolation With Full Feature Parity
+
+### Why
+
+Workspaces today are the real top-level partition — they scope artifacts,
+teams, sessions, and (post-Phase 64) cloud backends. Projects exist as a
+nested label under a workspace, but most features treat them as a
+secondary filter, not a first-class isolation boundary:
+
+- Artifact layout is `{workspace}/{project}/{run}/` but URL ACLs and
+  the planned remote backends key on the workspace only.
+- Teams carry a nullable `project_id` but registry listing defaults to
+  workspace scope; members from one project can be seen from another.
+- Sessions, knowledge pages (Phase 54), and document templates have no
+  hard project boundary — they are workspace-scoped and filtered in UI.
+
+For teams working on unrelated client engagements inside the same
+workspace, this is the wrong default. A user who switches the active
+project should not see teams, artifacts, sessions, or secrets from a
+sibling project unless they explicitly escalate to workspace scope.
+
+### Goals
+
+- **Project = isolation boundary** with the same feature surface as a
+  workspace: artifacts, teams, sessions, knowledge pages, skill
+  registry, document templates, and provider/model overrides.
+- **Workspace = org / tenant**; project ≈ "dedicated room" inside it.
+- UI context switch (project dropdown) instantly re-scopes every list
+  in sidebar, Artifacts, Documents, Team, Knowledge — no stray cross-
+  project items.
+- Tools that accept workspace/project context (TeamCreate, SkillCreate,
+  ArtifactWrite) default to the active project and never silently fall
+  back to workspace scope.
+
+### Study questions
+
+- Do we migrate the existing `project_id`-nullable rows to a mandatory
+  `project_id` (auto-assigning a `default` project per workspace), or
+  keep nullable for "workspace-wide" items?
+- Does every feature need *both* project-scoped and workspace-scoped
+  variants (e.g. a workspace-wide knowledge page shared across all
+  projects), or is project-only the cleaner default with explicit
+  "share up" escalation?
+- Remote backends (S3, Google Docs, Box from Phase 64): do project
+  boundaries map to subfolders, prefixes, or separate buckets?
+- How does project isolation compose with Phase 58 trust boundary —
+  does an ethics verdict apply at workspace or project scope?
+
+### Acceptance
+
+- [ ] Switching the active project refreshes all sidebar lists with
+      project-scoped items only (Artifacts, Team, Sessions, Knowledge,
+      Documents)
+- [ ] `TeamCreate` tool scopes the ensured default team to the current
+      workspace + project (not just workspace)
+- [ ] Artifact URL resolver rejects `{workspace}/{other_project}/*`
+      access when the active project is `{project_a}`
+- [ ] Knowledge pages created in project A do not surface in project B
+- [ ] Desktop and Web both honor the project switch identically — no
+      shell-specific fallbacks
+- [ ] Documented migration path for existing installs with nullable
+      `project_id` rows (backfill to `default` or preserve as workspace-
+      wide — explicit choice recorded in `docs/engine-status.md`)
+
+

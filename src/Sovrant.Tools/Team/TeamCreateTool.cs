@@ -1,8 +1,10 @@
 using System.Text.Json;
 using Sovrant.Agents.Models;
+using Sovrant.Agents.Shared;
 using Sovrant.Agents.Teams;
 using Sovrant.Agents.Templates;
 using Sovrant.Api.Types;
+using Sovrant.Runtime.Artifacts;
 
 namespace Sovrant.Tools.Team;
 
@@ -13,16 +15,25 @@ public sealed class TeamCreateTool : ITool
     {
         Description =
             "Creates a new team member agent. Specify a name, role, and system prompt. " +
+            "Members are grouped under a team — pass the same 'team_name' on multiple " +
+            "calls to add members to the same team (defaults to 'default'). " +
             "Optionally restrict the tools the agent can use. Returns the member ID.",
     };
 
     private readonly ITeamRegistry _registry;
     private readonly AgentTemplateRegistry? _templates;
+    private readonly WorkspaceContext? _workspace;
 
     public TeamCreateTool(ITeamRegistry registry, AgentTemplateRegistry? templates = null)
+        : this(registry, workspace: null, templates)
+    {
+    }
+
+    public TeamCreateTool(ITeamRegistry registry, WorkspaceContext? workspace, AgentTemplateRegistry? templates = null)
     {
         _registry = registry;
         _templates = templates;
+        _workspace = workspace;
     }
 
     public ToolDefinition Definition => s_definition;
@@ -32,6 +43,11 @@ public sealed class TeamCreateTool : ITool
         var name = input.GetStringProp("name");
         if (string.IsNullOrWhiteSpace(name))
             return Task.FromResult("Error: 'name' is required.");
+
+        var teamName = GetStringOrNull(input, "team_name") ?? "default";
+        var workspaceId = _workspace?.ArtifactScope?.WorkspaceId ?? ArtifactScope.DefaultWorkspaceId;
+        var projectId = _workspace?.ArtifactScope?.ProjectId ?? ArtifactScope.DefaultProjectId;
+        var teamId = EnsureTeam(workspaceId, projectId, teamName);
 
         // Optional template — provides defaults for prompt, tools, and model level.
         var templateName = GetStringOrNull(input, "template");
@@ -67,6 +83,9 @@ public sealed class TeamCreateTool : ITool
         var member = new TeamMemberInfo
         {
             Id = Guid.NewGuid().ToString("N"),
+            TeamId = teamId,
+            WorkspaceId = workspaceId,
+            ProjectId = projectId,
             Name = name,
             Role = role,
             SystemPrompt = prompt,
@@ -79,6 +98,7 @@ public sealed class TeamCreateTool : ITool
         var result = JsonSerializer.Serialize(new
         {
             member_id = member.Id,
+            team_id = teamId,
             name = member.Name,
             role = member.Role.ToString(),
             status = "created",
@@ -87,6 +107,40 @@ public sealed class TeamCreateTool : ITool
         return Task.FromResult(result);
     }
 
+    /// <summary>
+    /// Finds an existing team with the given name in the workspace/project scope,
+    /// or creates one. Returns the team ID. If the registry doesn't support teams
+    /// (in-memory test registry), returns a synthetic ID — the member can still
+    /// be registered without a persisted team.
+    /// </summary>
+    private string EnsureTeam(string workspaceId, string projectId, string teamName)
+    {
+        try
+        {
+            var existing = _registry.ListTeams(workspaceId)
+                .FirstOrDefault(t =>
+                    string.Equals(t.Name, teamName, StringComparison.Ordinal) &&
+                    string.Equals(t.ProjectId ?? string.Empty, projectId, StringComparison.Ordinal));
+            if (existing is not null)
+                return existing.Id;
+
+            var team = new TeamInfo(
+                Id: $"team-{Guid.NewGuid():N}",
+                WorkspaceId: workspaceId,
+                ProjectId: projectId,
+                Name: teamName,
+                Description: teamName == "default" ? "Default team for this workspace/project." : null,
+                Origin: "tool-created",
+                CreatedBy: "system",
+                CreatedAt: DateTimeOffset.UtcNow);
+            _registry.CreateTeam(team);
+            return team.Id;
+        }
+        catch (NotSupportedException)
+        {
+            return $"team-{Guid.NewGuid():N}";
+        }
+    }
 
     private static string? GetStringOrNull(JsonElement el, string prop) =>
         el.TryGetProperty(prop, out var v) ? v.GetString() : null;
@@ -96,6 +150,7 @@ public sealed class TeamCreateTool : ITool
             "type": "object",
             "properties": {
                 "name":          {"type": "string", "description": "Unique name for the team member."},
+                "team_name":     {"type": "string", "description": "Team to add this member to. Reuse the same value across calls to build a multi-member team. Defaults to 'default'."},
                 "template":      {"type": "string", "description": "Optional built-in template name (e.g. 'security-reviewer'). Provides default prompt and tools."},
                 "role":          {"type": "string", "description": "Agent role: general, planner, coder, reviewer, executor, supervisor.", "default": "general"},
                 "prompt":        {"type": "string", "description": "System prompt / instructions. Required unless a template is specified."},

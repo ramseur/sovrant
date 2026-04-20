@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -159,6 +160,19 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
             LogToolException(_logger, toolName, ex);
             LogExecutionComplete(_logger, toolName, sw.ElapsedMilliseconds, true);
             return new ToolExecutionResult(false, $"Access denied: {ex.Message}", IsError: true);
+        }
+        catch (DbException ex)
+        {
+            // Infrastructure failure — not something the LLM can retry its way out of.
+            // The INTERNAL_ERROR prefix lets the turn loop detect and abort after one repeat.
+            sw.Stop();
+            LogToolException(_logger, toolName, ex);
+            LogExecutionComplete(_logger, toolName, sw.ElapsedMilliseconds, true);
+            return new ToolExecutionResult(false,
+                $"[INTERNAL_ERROR] {ex.GetType().Name}: {ex.Message}. " +
+                "This is an internal system error; do not retry this tool with the same inputs. " +
+                "Report the failure to the user.",
+                IsError: true);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
