@@ -1,8 +1,9 @@
 @*  Phase 69 — Agents group secondary panel.  *@
 
 <div class="rail-secondary-header">Agents</div>
-<NavButton Href="/agents" Icon="&#x1F916;" Label="Agents" OnClick="OnNavigate" />
-<NavButton Href="/multi-agent" Icon="&#x1F465;" Label="Multi-Agent" OnClick="OnNavigate" />
+<NavButton Href="/agents" Icon="&#x1F916;" Label="Agent Templates" OnClick="OnNavigate" />
+<NavButton Href="/multi-agent" Icon="&#x1F3BC;" Label="Orchestration" OnClick="OnNavigate" />
+<NavButton Href="/activity" Icon="&#x1F4CA;" Label="Activity" OnClick="OnNavigate" />
 
 @code {
     [Parameter] public EventCallback<string> OnNavigate { get; set; }

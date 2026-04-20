@@ -103,6 +103,7 @@ public partial class MainViewModel : ViewModelBase
             "Agents" => _services.GetRequiredService<AgentsViewModel>(),
             "Automations" => _services.GetRequiredService<AutomationsViewModel>(),
             "MultiAgent" => _services.GetRequiredService<MultiAgentViewModel>(),
+            "Activity" => _services.GetRequiredService<ActivityViewModel>(),
             _ => CurrentPage,
         };
     }

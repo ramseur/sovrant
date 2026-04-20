@@ -14,10 +14,10 @@
                         Padding="12,6" CornerRadius="6"
                         Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
                 <StackPanel>
-                    <TextBlock Text="Multi-Agent" FontSize="24" FontWeight="Bold"
+                    <TextBlock Text="Orchestration" FontSize="24" FontWeight="Bold"
                                Foreground="{DynamicResource TextPrimary}" />
                     <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
-                               Text="Manage teams, swarms, claws, and autonomous agent systems" />
+                               Text="Orchestrate a single agent, a team, a swarm of teams, a claw, or autonomous systems" />
                 </StackPanel>
             </DockPanel>
             <TextBlock Text="{Binding StatusMessage}" FontSize="11"

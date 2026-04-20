@@ -9,13 +9,18 @@
             <TextBlock Text="AGENTS" FontSize="11" FontWeight="Bold"
                        Foreground="{DynamicResource TextMuted}"
                        Margin="6,4,0,10" />
-            <Button Content="🤖  Agents"
+            <Button Content="🤖  Agent Templates"
                     Command="{Binding NavigateCommand}" CommandParameter="Agents"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-            <Button Content="👥  Multi-Agent"
+            <Button Content="🎼  Orchestration"
                     Command="{Binding NavigateCommand}" CommandParameter="MultiAgent"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="📊  Activity"
+                    Command="{Binding NavigateCommand}" CommandParameter="Activity"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="Transparent" Foreground="{DynamicResource TextPrimary}" />

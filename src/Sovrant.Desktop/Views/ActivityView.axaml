@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.ActivityView"
+             x:DataType="vm:ActivityViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="4">
+            <TextBlock Text="Activity" FontSize="24" FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimary}" />
+            <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                       Text="Live view of every agent — what's running, what's waiting, what's stuck" />
+        </StackPanel>
+
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
+            <TextBlock Text="📊" FontSize="48" HorizontalAlignment="Center" />
+            <TextBlock Text="Coming soon" FontSize="22" FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimary}"
+                       HorizontalAlignment="Center" />
+            <Border Padding="12,5" CornerRadius="12"
+                    Background="{DynamicResource BrandPrimary}"
+                    HorizontalAlignment="Center">
+                <TextBlock Text="PHASE 77+" FontSize="12" FontWeight="Bold" Foreground="White" />
+            </Border>
+            <TextBlock FontSize="14"
+                       Foreground="{DynamicResource TextSecondary}"
+                       TextWrapping="Wrap"
+                       MaxWidth="480"
+                       TextAlignment="Center"
+                       HorizontalAlignment="Center"
+                       Text="A unified control surface to see what every agent is doing right now — active runs, tool calls in flight, pending confirmations, and recent completions across all orchestrations." />
+        </StackPanel>
+    </DockPanel>
+</UserControl>

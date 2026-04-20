@@ -129,6 +129,7 @@ public partial class App : Application
         services.AddTransient<AgentsViewModel>();
         services.AddTransient<AutomationsViewModel>();
         services.AddTransient<MultiAgentViewModel>();
+        services.AddTransient<ActivityViewModel>();
         services.AddSingleton<CommandPaletteViewModel>();
 
         _serviceProvider = services.BuildServiceProvider();

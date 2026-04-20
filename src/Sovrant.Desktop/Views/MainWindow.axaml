@@ -56,6 +56,9 @@
         <DataTemplate DataType="vm:MultiAgentViewModel">
             <views:MultiAgentView />
         </DataTemplate>
+        <DataTemplate DataType="vm:ActivityViewModel">
+            <views:ActivityView />
+        </DataTemplate>
         <DataTemplate DataType="vm:PlaceholderViewModel">
             <views:PlaceholderView />
         </DataTemplate>
