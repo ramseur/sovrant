@@ -9,26 +9,15 @@
             <h1>Orchestration</h1>
             <div class="master-header-right">
                 <span class="item-count">@_filtered.Count</span>
-                <button class="btn-sm btn-outline" title="Swarm configuration"
+                <button class="btn-sm btn-outline" title="Swarm defaults"
                         @onclick="ToggleSwarmConfig">&#x2699;</button>
-                <button class="btn-sm btn-primary" title="New orchestration"
+                <button class="btn-sm btn-primary" title="New team"
                         @onclick="HintNew">+ New</button>
             </div>
         </div>
 
-        <div class="orch-filter-row">
-            @foreach (var chip in _chips)
-            {
-                <button class="orch-chip @(chip.Key == _activeFilter ? "active" : "")"
-                        @onclick="() => SetFilter(chip.Key)">
-                    @chip.Label
-                    <span class="orch-chip-count">@ChipCount(chip.Key)</span>
-                </button>
-            }
-        </div>
-
         <div class="master-search">
-            <input type="text" placeholder="Search orchestrations..."
+            <input type="text" placeholder="Search teams..."
                    @bind="_search" @bind:event="oninput" @bind:after="ApplyFilter" />
         </div>
 
@@ -44,8 +33,8 @@
                     <button class="master-item @(ReferenceEquals(item, _selected) && !_showSwarmConfig ? "active" : "")"
                             @onclick="() => Select(item)">
                         <div class="item-title">
-                            <span class="orch-shape-badge shape-@item.Shape.ToString().ToLowerInvariant()">
-                                @ShapeIcon(item.Shape) @item.Shape
+                            <span class="orch-shape-badge shape-@item.Mode.ToString().ToLowerInvariant()">
+                                @ModeIcon(item.Mode) @item.Mode
                             </span>
                             <span>@item.Name</span>
                         </div>
@@ -67,10 +56,10 @@
             <div class="detail-content">
                 <div class="orch-detail-header">
                     <div>
-                        <span class="orch-shape-badge shape-swarm">&#x1F41D; Swarm</span>
-                        <h2>Swarm Configuration</h2>
+                        <span class="orch-shape-badge shape-swarm">&#x1F41D; Defaults</span>
+                        <h2>Swarm Defaults</h2>
                         <p class="text-secondary" style="margin:4px 0 0;">
-                            Global settings for how swarm orchestration decomposes and executes tasks.
+                            Default run settings inherited by new teams. Per-team overrides land with Phase 78.
                         </p>
                     </div>
                     <button class="btn-sm btn-outline" @onclick="ToggleSwarmConfig">Close</button>
@@ -125,8 +114,8 @@
                 </div>
 
                 <button class="btn-primary" style="max-width:200px;margin-top:12px;"
-                        @onclick="SaveSwarmConfig">Save Configuration</button>
-                <p class="text-muted text-sm">Configuration saved to .sovrant/swarm.json</p>
+                        @onclick="SaveSwarmConfig">Save Defaults</button>
+                <p class="text-muted text-sm">Defaults saved to .sovrant/swarm.json</p>
             </div>
         }
         else if (_selected is not null)
@@ -134,8 +123,8 @@
             <div class="detail-content">
                 <div class="orch-detail-header">
                     <div>
-                        <span class="orch-shape-badge shape-@_selected.Shape.ToString().ToLowerInvariant()">
-                            @ShapeIcon(_selected.Shape) @_selected.Shape
+                        <span class="orch-shape-badge shape-@_selected.Mode.ToString().ToLowerInvariant()">
+                            @ModeIcon(_selected.Mode) @_selected.Mode
                         </span>
                         <h2>@_selected.Name</h2>
                         @if (!string.IsNullOrEmpty(_selected.Description))
@@ -143,97 +132,44 @@
                             <p class="text-secondary" style="margin:4px 0 0;">@_selected.Description</p>
                         }
                     </div>
-                    @if (_selected.TeamId is { } teamId)
-                    {
-                        <button class="btn-sm btn-danger" @onclick="() => RemoveTeam(teamId)">Delete</button>
-                    }
+                    <button class="btn-sm btn-danger" @onclick="() => RemoveTeam(_selected.TeamId)">Delete</button>
                 </div>
 
-                @if (_selected.Shape is OrchShape.Single or OrchShape.Team)
-                {
-                    <div class="orch-detail-section">
-                        <h3>Members</h3>
-                        @if (_selected.Members.Count == 0)
+                <div class="orch-detail-section">
+                    <h3>Members</h3>
+                    @if (_selected.Members.Count == 0)
+                    {
+                        <p class="text-muted text-sm">No members.</p>
+                    }
+                    else
+                    {
+                        @foreach (var m in _selected.Members)
                         {
-                            <p class="text-muted text-sm">No members.</p>
-                        }
-                        else
-                        {
-                            @foreach (var m in _selected.Members)
-                            {
-                                <div class="ma-member-card">
-                                    <div class="ma-member-info">
-                                        <div>
-                                            <span class="ma-member-name">@m.Name</span>
-                                            <span class="ma-role-badge">@m.Role</span>
-                                        </div>
-                                        <div class="ma-member-meta">
-                                            @if (!string.IsNullOrEmpty(m.Model))
-                                            {
-                                                <span>@m.Model</span>
-                                            }
-                                            <span>@m.ToolsSummary</span>
-                                        </div>
+                            <div class="ma-member-card">
+                                <div class="ma-member-info">
+                                    <div>
+                                        <span class="ma-member-name">@m.Name</span>
+                                        <span class="ma-role-badge">@m.Role</span>
                                     </div>
-                                    <button class="btn-sm btn-danger" @onclick="() => RemoveMember(m.Id)">X</button>
+                                    <div class="ma-member-meta">
+                                        @if (!string.IsNullOrEmpty(m.Model))
+                                        {
+                                            <span>@m.Model</span>
+                                        }
+                                        <span>@m.ToolsSummary</span>
+                                    </div>
                                 </div>
-                            }
+                                <button class="btn-sm btn-danger" @onclick="() => RemoveMember(m.Id)">X</button>
+                            </div>
                         }
-                    </div>
-                }
-                else if (_selected.Shape == OrchShape.Swarm)
-                {
-                    <div class="orch-detail-section">
-                        <h3>Configuration</h3>
-                        <div class="gov-card">
-                            <div class="gov-field-row">
-                                <span>Status</span>
-                                <span>@(_swarmEnabled ? "Enabled" : "Disabled")</span>
-                            </div>
-                            <div class="gov-field-row">
-                                <span>Max Concurrent Agents</span>
-                                <span>@_swarmMaxConcurrent</span>
-                            </div>
-                            <div class="gov-field-row">
-                                <span>Token Budget</span>
-                                <span>@_swarmMaxTokenBudget.ToString("N0")</span>
-                            </div>
-                            <div class="gov-field-row">
-                                <span>Task Timeout</span>
-                                <span>@_swarmTimeout s</span>
-                            </div>
-                            <div class="gov-field-row">
-                                <span>Permissions</span>
-                                <span>@_swarmPermissions</span>
-                            </div>
-                            <div class="gov-field-row">
-                                <span>Quality Gate</span>
-                                <span>@(_swarmQualityGate ? "On" : "Off")</span>
-                            </div>
-                        </div>
-                        <button class="btn-sm btn-outline" style="margin-top:12px;"
-                                @onclick="ToggleSwarmConfig">Edit configuration</button>
-                    </div>
-                }
-                else
-                {
-                    <div class="orch-detail-section">
-                        <div class="claws-placeholder">
-                            <div class="claws-icon">@ShapeIcon(_selected.Shape)</div>
-                            <h2>@_selected.Shape</h2>
-                            <p class="text-secondary">
-                                @ShapeDescription(_selected.Shape)
-                            </p>
-                            <span class="claws-coming-soon">COMING SOON</span>
-                        </div>
-                    </div>
-                }
+                    }
+                </div>
             </div>
         }
         else
         {
             <div class="detail-empty">
-                <span class="text-muted">Select an orchestration to view details</span>
+                <span class="text-muted">Select a team to view details</span>
             </div>
         }
     </div>
@@ -242,28 +178,15 @@
 @code {
     [Inject] private ITeamRegistry TeamRegistry { get; set; } = default!;
 
-    private enum OrchShape { Single, Team, Swarm, Claw, Autonomous }
+    private enum RunMode { Solo, Sequential, Swarm }
 
-    private sealed record Chip(string Key, string Label);
-
-    private static readonly Chip[] _chips =
-    {
-        new("all", "All"),
-        new("single", "Single"),
-        new("team", "Team"),
-        new("swarm", "Swarm"),
-        new("claw", "Claw"),
-        new("autonomous", "Autonomous"),
-    };
-
-    private string _activeFilter = "all";
     private string _search = string.Empty;
     private string _status = string.Empty;
     private bool _showSwarmConfig;
 
-    private List<OrchItem> _all = [];
-    private List<OrchItem> _filtered = [];
-    private OrchItem? _selected;
+    private List<TeamItem> _all = [];
+    private List<TeamItem> _filtered = [];
+    private TeamItem? _selected;
 
     private bool _swarmEnabled;
     private bool _swarmQualityGate = true;
@@ -280,94 +203,52 @@
 
     private void LoadAll()
     {
-        var items = new List<OrchItem>();
+        var items = new List<TeamItem>();
 
-        var teams = TeamRegistry.ListTeams();
-        var allMembers = TeamRegistry.GetAllMembers().ToList();
-        var assigned = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var t in teams)
+        foreach (var t in TeamRegistry.ListTeams())
         {
             var members = TeamRegistry.GetTeamMembers(t.Id).Select(ToView).ToList();
-            foreach (var m in members) assigned.Add(m.Id);
-
-            var shape = members.Count <= 1 ? OrchShape.Single : OrchShape.Team;
-            items.Add(new OrchItem
+            var mode = members.Count switch
             {
-                Shape = shape,
+                <= 1 => RunMode.Solo,
+                _ => _swarmEnabled ? RunMode.Swarm : RunMode.Sequential,
+            };
+
+            items.Add(new TeamItem
+            {
                 TeamId = t.Id,
                 Name = t.Name,
                 Description = t.Description ?? string.Empty,
-                Subtitle = SubtitleFor(shape, members.Count),
+                Subtitle = members.Count == 1 ? "1 agent" : $"{members.Count} agents",
                 Members = members,
+                Mode = mode,
             });
         }
-
-        var unassigned = allMembers.Where(m => !assigned.Contains(m.Id)).Select(ToView).ToList();
-        foreach (var m in unassigned)
-        {
-            items.Add(new OrchItem
-            {
-                Shape = OrchShape.Single,
-                TeamId = null,
-                Name = m.Name,
-                Description = $"Unassigned {m.Role.ToLowerInvariant()}",
-                Subtitle = m.Model is { Length: > 0 } mm ? mm : "No team",
-                Members = [m],
-            });
-        }
-
-        items.Add(new OrchItem
-        {
-            Shape = OrchShape.Swarm,
-            TeamId = null,
-            Name = "Swarm Orchestrator",
-            Description = _swarmEnabled ? "Parallel agent execution" : "Disabled",
-            Subtitle = _swarmEnabled
-                ? $"Max {_swarmMaxConcurrent} concurrent · {_swarmPermissions}"
-                : "Swarm disabled",
-            Members = [],
-        });
 
         _all = items;
         if (_selected is not null)
         {
-            _selected = _all.FirstOrDefault(i =>
-                i.Shape == _selected.Shape && i.TeamId == _selected.TeamId && i.Name == _selected.Name);
+            _selected = _all.FirstOrDefault(i => i.TeamId == _selected.TeamId);
         }
         ApplyFilter();
     }
 
     private void ApplyFilter()
     {
-        IEnumerable<OrchItem> q = _all;
-        if (_activeFilter != "all")
-            q = q.Where(i => i.Shape.ToString().Equals(_activeFilter, StringComparison.OrdinalIgnoreCase));
-
-        if (!string.IsNullOrWhiteSpace(_search))
+        if (string.IsNullOrWhiteSpace(_search))
         {
-            var s = _search.Trim();
-            q = q.Where(i =>
-                i.Name.Contains(s, StringComparison.OrdinalIgnoreCase) ||
-                i.Description.Contains(s, StringComparison.OrdinalIgnoreCase));
+            _filtered = _all;
+            return;
         }
 
-        _filtered = q.ToList();
+        var s = _search.Trim();
+        _filtered = _all.Where(i =>
+            i.Name.Contains(s, StringComparison.OrdinalIgnoreCase) ||
+            i.Description.Contains(s, StringComparison.OrdinalIgnoreCase)
+        ).ToList();
     }
 
-    private void SetFilter(string key)
-    {
-        _activeFilter = key;
-        ApplyFilter();
-    }
-
-    private int ChipCount(string key)
-    {
-        if (key == "all") return _all.Count;
-        return _all.Count(i => i.Shape.ToString().Equals(key, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private void Select(OrchItem item)
+    private void Select(TeamItem item)
     {
         _showSwarmConfig = false;
         _selected = item;
@@ -381,7 +262,7 @@
 
     private void HintNew()
     {
-        _status = "New orchestration picker coming soon. Use /team create in chat to add a team.";
+        _status = "New team picker coming soon. Use /team create in chat to add a team.";
     }
 
     private void RemoveTeam(string id)
@@ -426,7 +307,7 @@
             };
             var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(path, json);
-            _status = "Swarm config saved.";
+            _status = "Swarm defaults saved.";
             LoadAll();
         }
         catch (Exception ex) { _status = $"Save failed: {ex.Message}"; }
@@ -448,51 +329,27 @@
         return $"{string.Join(", ", tools.Take(3))} +{tools.Count - 3} more";
     }
 
-    private static string SubtitleFor(OrchShape shape, int memberCount) => shape switch
+    private static string ModeIcon(RunMode mode) => mode switch
     {
-        OrchShape.Single => memberCount == 1 ? "1 agent" : "Empty",
-        OrchShape.Team => $"{memberCount} agents",
+        RunMode.Solo => "\U0001F464",
+        RunMode.Sequential => "\U0001F465",
+        RunMode.Swarm => "\U0001F41D",
         _ => string.Empty,
     };
 
-    private static string ShapeIcon(OrchShape shape) => shape switch
-    {
-        OrchShape.Single => "\U0001F464",
-        OrchShape.Team => "\U0001F465",
-        OrchShape.Swarm => "\U0001F41D",
-        OrchShape.Claw => "\U0001F99E",
-        OrchShape.Autonomous => "\U0001F916",
-        _ => string.Empty,
-    };
+    private string EmptyMessage() =>
+        string.IsNullOrWhiteSpace(_search)
+            ? "No teams yet. Use /team create in chat to set one up."
+            : "No matches.";
 
-    private static string ShapeDescription(OrchShape shape) => shape switch
+    private sealed class TeamItem
     {
-        OrchShape.Claw =>
-            "Autonomous agent frameworks like Open Claw and Hermes that connect via MCP integrations. " +
-            "Configure an MCP server on the Integrations page to bring one online.",
-        OrchShape.Autonomous =>
-            "Self-directed agent systems that plan, act, and loop without turn-by-turn instruction. " +
-            "Register one to appear here for monitoring and control.",
-        _ => string.Empty,
-    };
-
-    private string EmptyMessage() => _activeFilter switch
-    {
-        "claw" => "No claws registered. Connect one via Integrations → MCP.",
-        "autonomous" => "No autonomous systems registered yet.",
-        "team" => "No teams yet. Use /team create in chat to set one up.",
-        "single" => "No single-agent orchestrations.",
-        _ => string.IsNullOrWhiteSpace(_search) ? "No orchestrations yet." : "No matches.",
-    };
-
-    private sealed class OrchItem
-    {
-        public OrchShape Shape { get; init; }
-        public string? TeamId { get; init; }
+        public string TeamId { get; init; } = string.Empty;
         public string Name { get; init; } = string.Empty;
         public string Description { get; init; } = string.Empty;
         public string Subtitle { get; init; } = string.Empty;
         public List<MemberView> Members { get; init; } = [];
+        public RunMode Mode { get; init; }
     }
 
     private sealed class MemberView

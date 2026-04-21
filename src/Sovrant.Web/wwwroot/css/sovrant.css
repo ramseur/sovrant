@@ -2210,11 +2210,9 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     vertical-align: middle;
 }
 
-.shape-single { background: rgba(109, 82, 198, 0.18); color: #b9a6ff; }
-.shape-team { background: rgba(76, 175, 80, 0.18); color: #8ed69a; }
+.shape-solo { background: rgba(109, 82, 198, 0.18); color: #b9a6ff; }
+.shape-sequential { background: rgba(76, 175, 80, 0.18); color: #8ed69a; }
 .shape-swarm { background: rgba(255, 152, 0, 0.18); color: #ffc078; }
-.shape-claw { background: rgba(0, 188, 212, 0.18); color: #7de0ef; }
-.shape-autonomous { background: rgba(244, 67, 54, 0.18); color: #f39890; }
 
 .orch-detail-header {
     display: flex;

@@ -134,6 +134,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Video generation — fal.ai, Kling AI, and pluggable provider support for text-to-video, image-to-video | Phase 65 | Medium |
 | Document generation — PDFs, Word, Excel, PowerPoint, presentations + industry templates (real estate, healthcare, legal, finance) | Phase 66 | Medium–High |
 | Teams parity with Swarm — parallelism, file-lock safety, quality gate, and optional decomposition for team runs (other frameworks treat parallel execution as the default team behavior) | Phase 78 | High |
+| Agent Templates: Run action, run history, and sub-agent markdown file format — moves single-agent invocation out of Orchestration and onto the Templates page | Phase 79 | Medium–High |
 
 ---
 
@@ -7021,6 +7022,34 @@ downgrade on throughput, safety, or quality.
   team-scoped runs. The global Swarm Config becomes a *default* that
   new teams inherit.
 
+### Phased delivery
+
+This phase ships in two paths; the first can land well before the
+migration work.
+
+- **Path 1 — UI-first bridge (pre-Phase 78).** Collapse the
+  Orchestration taxonomy to a single shape: **Team**. Drop the
+  synthetic "Swarm Orchestrator" list entry and the Claw/Autonomous
+  placeholders — Swarm becomes a run mode on a team, and autonomy is
+  a driver wrapping a team (Phase 67), not a peer shape here. Each
+  team row shows a run-mode pill (`solo` / `sequential` / `swarm`).
+  Per-team settings pane reads/writes the shared `.sovrant/swarm.json`
+  as a stand-in until real per-team config exists. Single-agent
+  invocation moves to the Agent Templates page via sub-agent
+  markdown files (Phase 79). Zero migration risk; validates the
+  model in real use.
+- **Path 2 — Backend migration + dispatch (the rest of this phase).**
+  Add `RunMode` + swarm columns to `TeamInfo` via a new SQLite
+  migration; `TeamRun` / `TeamDelegate` dispatch by the team's mode
+  (sequential loops stay; swarm mode calls through to the shared
+  executor with file locks + decomposition + quality gate). The
+  global `.sovrant/swarm.json` becomes a default template inherited
+  by new teams at creation time.
+
+Path 1 unblocks usability testing without locking in a schema.
+Path 2 is where parallelism, file locks, and quality gate actually
+become team behaviors at runtime.
+
 ### Study questions
 
 - Should the shared executor live in `Sovrant.Agents/Shared/` as
@@ -7065,5 +7094,76 @@ downgrade on throughput, safety, or quality.
 - [ ] Docs updated: `docs/agent-systems.md` describes Team and Swarm
       as two profiles of one execution substrate rather than separate
       engines
+
+---
+
+## Phase 79 — Agent Templates: Run, Run History & Sub-Agent Markdown Files
+
+### Why
+
+Once Orchestration collapses to "Team only" (Phase 78 path 1), the
+single-agent invocation use case — *"fire this prompt at the
+underwriting agent"* — needs a real home. Today there's no clean
+surface for that: Chat is multi-turn and router-driven, Orchestration
+is for multi-member coordination, and the Agent Templates page is
+a passive catalog. The best fit is the Agent Templates page itself,
+upgraded from catalog to *callable specialists*.
+
+This also lets us align with the established sub-agent pattern used
+by Claude Code and other agentic CLIs: a sub-agent is a markdown
+file with YAML frontmatter (`name`, `description`, `tools`, `model`)
+and a system prompt body. Sovrant already externalizes built-in
+templates as markdown (Phase 23), so the file format is a small
+formalization of what exists, not a new concept.
+
+### Goals
+
+- **Sub-agent markdown format** — standardize `.sovrant/agents/*.md`
+  with YAML frontmatter (`name`, `description`, `tools`, `model`,
+  `role`) and a prompt body. Workspace-scoped by default with
+  user/project overrides following the existing template-resolution
+  order.
+- **Run action on Agent Templates** — each template (or sub-agent)
+  row gains a Run button that opens a detail pane with a prompt box,
+  optional model/tool overrides, and a Run trigger. Fires the agent
+  via the existing `AgentTool` / `SovrantAgentFactory` plumbing and
+  streams output back.
+- **Run history** — per-template history of recent runs (timestamp,
+  prompt, summary, outcome, cost) stored alongside `agent_runs`
+  ledger entries so the existing Activity page picks them up.
+- **Chat command parity** — `/agent run <name> <prompt>` works from
+  chat for power users, executing the same pathway.
+- **Unassigned-team-member migration** — existing
+  `TeamMemberInfo` rows not associated with any team are promoted
+  during the first run of this phase into `.sovrant/agents/*.md`
+  files (or silently retained in the DB with a UI nudge to export).
+
+### Study questions
+
+- Do sub-agent markdown files replace `agent_templates` table rows
+  entirely, or do the DB rows and MD files coexist (DB for
+  built-ins, files for user-authored)?
+- Where does the Run prompt box live — embedded in the existing
+  Agent Templates list detail pane, or a dedicated "Run agent"
+  modal? Modal might compose better with mission-launch later.
+- Should sub-agent runs default to mission-driven (persistable,
+  resumable) or ephemeral (one-shot, returns text)? Ephemeral is
+  simpler; mission-driven matches the "autonomy wraps any worker"
+  story from Phase 67.
+
+### Acceptance Criteria
+
+- [ ] `.sovrant/agents/*.md` format documented with frontmatter
+      schema and example files shipped for 2–3 built-in roles
+- [ ] Agent Templates page gains a Run affordance: prompt box, Run
+      button, streaming output, per-template run history
+- [ ] `/agent run <name> <prompt>` chat command invokes the same
+      execution pathway
+- [ ] Run history entries land in `agent_runs` with a source tag
+      that the Activity page filters on
+- [ ] Unassigned team members surface in Agent Templates (or a
+      sub-agents section) with an "Export as markdown" action
+- [ ] Orchestration page no longer references single agents —
+      users directed to Agent Templates for solo work
 
 
