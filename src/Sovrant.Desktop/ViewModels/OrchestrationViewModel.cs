@@ -1,6 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -9,28 +7,22 @@ using Sovrant.Agents.Teams;
 
 namespace Sovrant.Desktop.ViewModels;
 
+public enum TeamRunMode { Solo, Sequential, Swarm }
+
 public partial class OrchestrationViewModel : ViewModelBase
 {
     private readonly ITeamRegistry _teamRegistry;
 
-    // --- Header ---
     [ObservableProperty] private int _teamCount;
-    [ObservableProperty] private int _memberCount;
     [ObservableProperty] private string _statusMessage = string.Empty;
+    [ObservableProperty] private TeamItemViewModel? _selectedTeam;
+    [ObservableProperty] private bool _showSwarmConfig;
 
-    // --- Tab selection ---
-    [ObservableProperty] private int _selectedTab; // 0=Teams, 1=Swarm, 2=Claws
-    public bool IsTeamsTab => SelectedTab == 0;
-    public bool IsSwarmTab => SelectedTab == 1;
-    public bool IsClawsTab => SelectedTab == 2;
+    public bool HasSelection => SelectedTeam is not null && !ShowSwarmConfig;
+    public bool HasNoSelection => SelectedTeam is null && !ShowSwarmConfig;
 
-    // --- Teams tab ---
-    [ObservableProperty] private TeamMemberItemViewModel? _selectedMember;
-    [ObservableProperty] private string _detailMarkdown = string.Empty;
+    public ObservableCollection<TeamItemViewModel> Teams { get; } = [];
 
-    public ObservableCollection<TeamGroupViewModel> Teams { get; } = [];
-
-    // --- Swarm tab ---
     [ObservableProperty] private bool _swarmEnabled;
     [ObservableProperty] private int _maxConcurrent;
     [ObservableProperty] private int _maxTokenBudget;
@@ -52,28 +44,45 @@ public partial class OrchestrationViewModel : ViewModelBase
     public OrchestrationViewModel(ITeamRegistry teamRegistry)
     {
         _teamRegistry = teamRegistry;
-        LoadAll();
         LoadSwarmConfig();
+        LoadAll();
     }
 
     [RelayCommand]
     private void Refresh()
     {
-        LoadAll();
         LoadSwarmConfig();
+        LoadAll();
     }
 
     [RelayCommand]
-    private void SelectTab(string tab)
+    private void SelectTeam(TeamItemViewModel team)
     {
-        if (int.TryParse(tab, out var index))
-            SelectedTab = index;
+        ShowSwarmConfig = false;
+        SelectedTeam = team;
     }
 
-    // ─── Teams ────────────────────────────────────────
+    [RelayCommand]
+    private void ToggleSwarmConfig()
+    {
+        ShowSwarmConfig = !ShowSwarmConfig;
+        if (ShowSwarmConfig) SelectedTeam = null;
+    }
 
     [RelayCommand]
-    private void SelectMember(TeamMemberItemViewModel member) => SelectedMember = member;
+    private void HintNew()
+    {
+        StatusMessage = "New team picker coming soon. Use /team create in chat to add a team.";
+    }
+
+    [RelayCommand]
+    private void RemoveTeam(TeamItemViewModel team)
+    {
+        _teamRegistry.RemoveTeam(team.TeamId);
+        StatusMessage = $"Removed team '{team.Name}'.";
+        SelectedTeam = null;
+        LoadAll();
+    }
 
     [RelayCommand]
     private void RemoveMember(TeamMemberItemViewModel member)
@@ -81,163 +90,78 @@ public partial class OrchestrationViewModel : ViewModelBase
         _teamRegistry.RemoveMember(member.Id);
         StatusMessage = $"Removed member '{member.Name}'.";
         LoadAll();
-        if (SelectedMember == member) SelectedMember = null;
     }
 
-    [RelayCommand]
-    private void RemoveTeam(TeamGroupViewModel team)
+    partial void OnSelectedTeamChanged(TeamItemViewModel? value)
     {
-        _teamRegistry.RemoveTeam(team.TeamId);
-        StatusMessage = $"Removed team '{team.TeamName}'.";
-        LoadAll();
-        SelectedMember = null;
+        OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(HasNoSelection));
     }
 
-    partial void OnSelectedTabChanged(int value)
+    partial void OnShowSwarmConfigChanged(bool value)
     {
-        OnPropertyChanged(nameof(IsTeamsTab));
-        OnPropertyChanged(nameof(IsSwarmTab));
-        OnPropertyChanged(nameof(IsClawsTab));
-    }
-
-    partial void OnSelectedMemberChanged(TeamMemberItemViewModel? value)
-    {
-        DetailMarkdown = value is null ? string.Empty : BuildMemberMarkdown(value);
+        OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(HasNoSelection));
     }
 
     private void LoadAll()
     {
+        var previousTeamId = SelectedTeam?.TeamId;
         Teams.Clear();
 
-        var teams = _teamRegistry.ListTeams();
-        var allMembers = _teamRegistry.GetAllMembers();
-
-        // Group members by team
-        var teamGroups = new Dictionary<string, List<TeamMemberInfo>>(StringComparer.Ordinal);
-        var unassigned = new List<TeamMemberInfo>();
-
-        foreach (var m in allMembers)
+        foreach (var t in _teamRegistry.ListTeams())
         {
-            if (!string.IsNullOrEmpty(m.TeamId))
+            var members = _teamRegistry.GetTeamMembers(t.Id).ToList();
+            var mode = members.Count switch
             {
-                if (!teamGroups.TryGetValue(m.TeamId, out var list))
-                {
-                    list = [];
-                    teamGroups[m.TeamId] = list;
-                }
-                list.Add(m);
-            }
-            else
-            {
-                unassigned.Add(m);
-            }
-        }
+                <= 1 => TeamRunMode.Solo,
+                _ => SwarmEnabled ? TeamRunMode.Swarm : TeamRunMode.Sequential,
+            };
 
-        // Add team groups
-        foreach (var team in teams)
-        {
-            var members = teamGroups.TryGetValue(team.Id, out var list) ? list : [];
-            var group = new TeamGroupViewModel
+            var item = new TeamItemViewModel
             {
-                TeamId = team.Id,
-                TeamName = team.Name,
-                TeamDescription = team.Description ?? string.Empty,
+                TeamId = t.Id,
+                Name = t.Name,
+                Description = t.Description ?? string.Empty,
+                Subtitle = members.Count == 1 ? "1 agent" : $"{members.Count} agents",
+                Mode = mode,
+                ModeLabel = mode.ToString(),
             };
 
             foreach (var m in members)
-                group.Members.Add(ToViewModel(m));
+                item.Members.Add(ToViewModel(m));
 
-            Teams.Add(group);
+            Teams.Add(item);
         }
 
-        // Add unassigned members
-        if (unassigned.Count > 0)
-        {
-            var group = new TeamGroupViewModel
-            {
-                TeamId = string.Empty,
-                TeamName = "Unassigned Members",
-                TeamDescription = "Members not assigned to any team",
-            };
+        TeamCount = Teams.Count;
 
-            foreach (var m in unassigned)
-                group.Members.Add(ToViewModel(m));
-
-            Teams.Add(group);
-        }
-
-        TeamCount = teams.Count;
-        MemberCount = allMembers.Count;
+        if (previousTeamId is not null)
+            SelectedTeam = Teams.FirstOrDefault(x => x.TeamId == previousTeamId);
     }
 
-    private static TeamMemberItemViewModel ToViewModel(TeamMemberInfo m)
+    private static TeamMemberItemViewModel ToViewModel(TeamMemberInfo m) => new()
     {
-        var item = new TeamMemberItemViewModel
-        {
-            Id = m.Id,
-            Name = m.Name,
-            Role = m.Role.ToString(),
-            TemplateName = m.Template ?? string.Empty,
-            Model = m.Model ?? string.Empty,
-            SystemPrompt = m.SystemPrompt,
-            ToolCount = m.AllowedTools?.Count ?? 0,
-            AllowedTools = m.AllowedTools ?? [],
-            CreatedAt = m.CreatedAt,
-        };
-        item.Markdown = BuildMemberMarkdown(item);
-        return item;
-    }
+        Id = m.Id,
+        Name = m.Name,
+        Role = m.Role.ToString(),
+        Model = m.Model ?? string.Empty,
+        ToolsSummary = BuildToolsSummary(m.AllowedTools),
+    };
 
-    private static string BuildMemberMarkdown(TeamMemberItemViewModel member)
+    private static string BuildToolsSummary(IReadOnlyList<string>? tools)
     {
-        var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"# {member.Name}");
-        sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"**Role:** {member.Role}");
-        sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"**ID:** {member.Id}");
-        sb.AppendLine();
-
-        if (!string.IsNullOrEmpty(member.TemplateName))
-        {
-            sb.AppendLine(CultureInfo.InvariantCulture, $"**Template:** {member.TemplateName}");
-            sb.AppendLine();
-        }
-
-        if (!string.IsNullOrEmpty(member.Model))
-        {
-            sb.AppendLine(CultureInfo.InvariantCulture, $"**Model:** {member.Model}");
-            sb.AppendLine();
-        }
-
-        sb.AppendLine(CultureInfo.InvariantCulture, $"**Created:** {member.CreatedAt:yyyy-MM-dd HH:mm}");
-        sb.AppendLine();
-
-        if (member.AllowedTools.Count > 0)
-        {
-            sb.AppendLine(CultureInfo.InvariantCulture, $"**Tools ({member.AllowedTools.Count}):** {string.Join(", ", member.AllowedTools)}");
-            sb.AppendLine();
-        }
-
-        if (!string.IsNullOrWhiteSpace(member.SystemPrompt))
-        {
-            sb.AppendLine("---");
-            sb.AppendLine();
-            sb.AppendLine("## System Prompt");
-            sb.AppendLine();
-            sb.Append(AgentsViewModel.SanitizeForMarkdown(member.SystemPrompt));
-        }
-
-        return sb.ToString();
+        if (tools is null || tools.Count == 0) return "All tools";
+        if (tools.Count <= 3) return string.Join(", ", tools);
+        return $"{string.Join(", ", tools.Take(3))} +{tools.Count - 3} more";
     }
-
-    // ─── Swarm Config ─────────────────────────────────
 
     [RelayCommand]
     private void ToggleSwarm()
     {
         SwarmEnabled = !SwarmEnabled;
         SaveSwarmConfig();
+        LoadAll();
     }
 
     [RelayCommand]
@@ -251,7 +175,8 @@ public partial class OrchestrationViewModel : ViewModelBase
     private void SaveSwarm()
     {
         SaveSwarmConfig();
-        StatusMessage = "Swarm configuration saved.";
+        StatusMessage = "Swarm defaults saved.";
+        LoadAll();
     }
 
     private void LoadSwarmConfig()
@@ -297,11 +222,14 @@ public partial class OrchestrationViewModel : ViewModelBase
     }
 }
 
-public partial class TeamGroupViewModel : ViewModelBase
+public partial class TeamItemViewModel : ViewModelBase
 {
     [ObservableProperty] private string _teamId = string.Empty;
-    [ObservableProperty] private string _teamName = string.Empty;
-    [ObservableProperty] private string _teamDescription = string.Empty;
+    [ObservableProperty] private string _name = string.Empty;
+    [ObservableProperty] private string _description = string.Empty;
+    [ObservableProperty] private string _subtitle = string.Empty;
+    [ObservableProperty] private TeamRunMode _mode;
+    [ObservableProperty] private string _modeLabel = string.Empty;
 
     public ObservableCollection<TeamMemberItemViewModel> Members { get; } = [];
 }
@@ -311,12 +239,6 @@ public partial class TeamMemberItemViewModel : ViewModelBase
     [ObservableProperty] private string _id = string.Empty;
     [ObservableProperty] private string _name = string.Empty;
     [ObservableProperty] private string _role = string.Empty;
-    [ObservableProperty] private string _templateName = string.Empty;
     [ObservableProperty] private string _model = string.Empty;
-    [ObservableProperty] private int _toolCount;
-    [ObservableProperty] private DateTimeOffset _createdAt;
-
-    public string SystemPrompt { get; init; } = string.Empty;
-    public IReadOnlyList<string> AllowedTools { get; init; } = [];
-    public string Markdown { get; set; } = string.Empty;
+    [ObservableProperty] private string _toolsSummary = string.Empty;
 }
