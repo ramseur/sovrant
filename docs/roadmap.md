@@ -133,6 +133,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | ~~Remote server mode for web frontend — SignalR streaming, auth, `AddSovrantClient()` abstraction~~ | Phase 61 ✅ | High |
 | Video generation — fal.ai, Kling AI, and pluggable provider support for text-to-video, image-to-video | Phase 65 | Medium |
 | Document generation — PDFs, Word, Excel, PowerPoint, presentations + industry templates (real estate, healthcare, legal, finance) | Phase 66 | Medium–High |
+| Teams parity with Swarm — parallelism, file-lock safety, quality gate, and optional decomposition for team runs (other frameworks treat parallel execution as the default team behavior) | Phase 78 | High |
 
 ---
 
@@ -6956,5 +6957,113 @@ sibling project unless they explicitly escalate to workspace scope.
 - [ ] Documented migration path for existing installs with nullable
       `project_id` rows (backfill to `default` or preserve as workspace-
       wide — explicit choice recorded in `docs/engine-status.md`)
+
+---
+
+## Phase 78 — Teams Parity With Swarm Capabilities (Parallelism, File Safety, Quality Gate, Decomposition)
+
+### Why
+
+Today, Teams are a passive roster — `ITeamRegistry` holds `TeamInfo` +
+`TeamMemberInfo` records and `TeamRun` / `TeamDelegate` walk through
+members sequentially. All of the interesting execution machinery lives
+only in Swarm: **parallelism** (wave-based DAG scheduling with
+`MaxConcurrent` semaphores), `SwarmFileLockManager` that prevents
+concurrent writes to the same file, `SwarmQualityGate` that scores
+combined output and can trigger a retry, and `ISwarmDecomposer` that
+turns a single prompt into a task graph.
+
+That's a mismatch with how other agentic frameworks (AutoGen, CrewAI,
+LangGraph) present teams — in those systems, spawning a team **is**
+spawning parallel agents by default. A user who picks "Team" in our
+UI reasonably expects the same: several members working at once on
+their slice, not one-at-a-time delegation.
+
+Beyond parallelism, the runtime safeguards also matter. If two team
+members edit `src/auth.ts` in the same run, the last write wins
+silently. A team's aggregate output is never reviewed. And if a
+prompt is bigger than any one member can handle, the team has no way
+to split it — the user has to reach for Swarm, which requires a
+different mental model.
+
+The distinction in the UI (Team = who, Swarm = how) is real, but the
+floor for "who" should be higher. Teams should inherit parallel
+execution plus the runtime safeguards so picking a Team isn't a
+downgrade on throughput, safety, or quality.
+
+### Goals
+
+- **Parallel execution by default** — a team run should fan out to
+  all members (or all members whose role matches the task) at once,
+  gated by a per-team `MaxConcurrent` semaphore. Sequential delegation
+  stays available as an explicit mode but is no longer the default.
+- **File safety for parallel team runs** — acquire file locks per
+  team-member task, same mechanism as Swarm, so concurrent members
+  can't stomp each other's writes. Reuse `SwarmFileLockManager` or
+  factor it into a shared `IFileLockManager` in `Sovrant.Agents/Shared/`.
+- **Quality gate for teams** — optional post-run review of combined
+  team output using the existing `SwarmQualityGate`, with per-team
+  enable/disable and threshold config. Failing runs can trigger a
+  retry pass on the flagged members.
+- **Decomposition for teams** — when a user gives a team a task that
+  clearly spans multiple members' roles, invoke `ISwarmDecomposer`
+  to produce a role-aware task graph, then dispatch to team members
+  by role match (leveraging existing `EnsembleSelector` logic).
+  This makes Team execution feel continuous with Swarm rather than a
+  degenerate case.
+- **Unified config surface** — per-team settings (not global) for
+  run mode (parallel / sequential), `MaxConcurrent`, file-lock
+  behavior, quality gate enable + threshold, decomposition on/off.
+  Stored on `TeamInfo` (new columns via a migration) so each team
+  carries its own run profile.
+- **UI exposure** — the Orchestration detail pane for a Team shows
+  these settings inline; no separate "Swarm Config" drawer needed for
+  team-scoped runs. The global Swarm Config becomes a *default* that
+  new teams inherit.
+
+### Study questions
+
+- Should the shared executor live in `Sovrant.Agents/Shared/` as
+  `OrchestrationCoordinator` extensions, or do Team and Swarm become
+  two wrappers over a single `IAgentExecutor` that owns locks + gate +
+  decomposition? The latter reduces duplication but risks over-
+  abstracting if Claw/Autonomous need very different semantics.
+- Does decomposition for a Team respect role whitelists (only
+  delegate tasks to members whose role matches), or can it spawn
+  ephemeral workers when a role is missing? Both have tradeoffs —
+  strict respects the user's curation, permissive matches Swarm's
+  current flexibility.
+- Quality-gate cost: each run adds one LLM call. Should it be
+  off-by-default on Teams (explicit opt-in per team) or on-by-default
+  with a small model (e.g. a local/free tier) to keep cost invisible?
+- Backwards compatibility for existing teams without the new
+  columns — default values at migration time, or a one-shot
+  admin flow to review/confirm per-team settings?
+
+### Acceptance Criteria
+
+- [ ] Team runs fan out to matching members in parallel by default,
+      gated by per-team `MaxConcurrent`; sequential remains available
+      as an opt-in mode (integration test proving ordering semantics
+      of each mode)
+- [ ] `TeamInfo` gains `RunMode`, `MaxConcurrent`, `FileLocksEnabled`,
+      `QualityGateEnabled`, `QualityGateThreshold`, `DecompositionMode`
+      columns via a new migration
+- [ ] `SwarmFileLockManager` refactored into `IFileLockManager` and
+      consumed by both Swarm and Team execution paths
+- [ ] Team runs acquire file locks per member task; concurrent
+      writes to the same file are serialized (integration test
+      proving it)
+- [ ] Team runs optionally pass through `SwarmQualityGate`; failing
+      verdict triggers one configurable retry pass
+- [ ] Team runs optionally invoke `ISwarmDecomposer` when the prompt
+      scope exceeds any single member's role — result is a task graph
+      dispatched via `EnsembleSelector`
+- [ ] Orchestration detail pane (Web + Desktop) edits per-team
+      settings inline; global Swarm Config remains as the default
+      template new teams inherit
+- [ ] Docs updated: `docs/agent-systems.md` describes Team and Swarm
+      as two profiles of one execution substrate rather than separate
+      engines
 
 

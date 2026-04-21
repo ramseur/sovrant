@@ -2160,6 +2160,85 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     letter-spacing: 0.5px;
 }
 
+/* ===== Orchestration unified view ===== */
+.orch-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 0 16px 10px;
+}
+
+.orch-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--surface-border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.orch-chip:hover { color: var(--text-primary); background: var(--surface-hover); }
+.orch-chip.active {
+    color: white;
+    background: var(--brand-primary);
+    border-color: var(--brand-primary);
+}
+
+.orch-chip-count {
+    font-size: 10px;
+    opacity: 0.8;
+}
+
+.orch-shape-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    background: var(--surface-hover);
+    color: var(--text-secondary);
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+.shape-single { background: rgba(109, 82, 198, 0.18); color: #b9a6ff; }
+.shape-team { background: rgba(76, 175, 80, 0.18); color: #8ed69a; }
+.shape-swarm { background: rgba(255, 152, 0, 0.18); color: #ffc078; }
+.shape-claw { background: rgba(0, 188, 212, 0.18); color: #7de0ef; }
+.shape-autonomous { background: rgba(244, 67, 54, 0.18); color: #f39890; }
+
+.orch-detail-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.orch-detail-header h2 { margin: 6px 0 0; }
+
+.orch-detail-section {
+    margin-top: 20px;
+}
+
+.orch-detail-section h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
 /* ===== Scrollbars ===== */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
