@@ -19,7 +19,7 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
     private readonly SovrantAgentFactory _factory;
     private readonly AgentTemplateRegistry _templates;
     private readonly ITeamRegistry _teamRegistry;
-    private readonly SwarmFileLockManager _fileLockManager;
+    private readonly IFileLockManager _fileLockManager;
     private readonly SwarmStateTracker _stateTracker;
     private readonly SwarmSession _session;
     private readonly IToolRegistry _toolRegistry;
@@ -54,7 +54,7 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
         SovrantAgentFactory factory,
         AgentTemplateRegistry templates,
         ITeamRegistry teamRegistry,
-        SwarmFileLockManager fileLockManager,
+        IFileLockManager fileLockManager,
         SwarmStateTracker stateTracker,
         SwarmSession session,
         IToolRegistry toolRegistry,

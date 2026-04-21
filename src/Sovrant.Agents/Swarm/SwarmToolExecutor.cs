@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Sovrant.Agents.Shared;
 using Sovrant.Runtime.Tools;
 
 namespace Sovrant.Agents.Swarm;
@@ -6,7 +7,7 @@ namespace Sovrant.Agents.Swarm;
 /// <summary>
 /// Decorator around <see cref="IToolExecutor"/> that enforces file-level locking
 /// during swarm execution. Write-oriented tools (<c>WriteFile</c>, <c>EditFile</c>,
-/// <c>NotebookEdit</c>) are checked against the <see cref="SwarmFileLockManager"/>
+/// <c>NotebookEdit</c>) are checked against the <see cref="IFileLockManager"/>
 /// before execution. If the target file is locked by another task the write is blocked.
 /// If it's unlocked the executor auto-acquires a lock on behalf of the current task.
 /// <para>
@@ -25,14 +26,14 @@ internal sealed class SwarmToolExecutor : IToolExecutor
     };
 
     private readonly IToolExecutor _inner;
-    private readonly ISwarmFileLockManager _lockManager;
+    private readonly IFileLockManager _lockManager;
     private readonly string _taskId;
     private readonly bool _bypassConfirmation;
     private readonly IToolRegistry? _registry;
 
     public SwarmToolExecutor(
         IToolExecutor inner,
-        ISwarmFileLockManager lockManager,
+        IFileLockManager lockManager,
         string taskId,
         bool bypassConfirmation = false,
         IToolRegistry? registry = null)

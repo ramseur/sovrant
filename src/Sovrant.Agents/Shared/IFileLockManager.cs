@@ -1,7 +1,10 @@
-namespace Sovrant.Agents.Swarm;
+namespace Sovrant.Agents.Shared;
 
-/// <summary>Pessimistic file-level locking for swarm execution.</summary>
-public interface ISwarmFileLockManager
+/// <summary>
+/// Pessimistic file-level locking for concurrent agent execution.
+/// Shared between Swarm and Team run paths so parallel members can't stomp each other's writes.
+/// </summary>
+public interface IFileLockManager
 {
     /// <summary>Attempts to acquire a lock on <paramref name="filePath"/> for <paramref name="taskId"/>.</summary>
     bool TryAcquire(string filePath, string taskId);
@@ -15,7 +18,7 @@ public interface ISwarmFileLockManager
     /// <summary>Releases all locks held by <paramref name="taskId"/>.</summary>
     void ReleaseAll(string taskId);
 
-    /// <summary>Releases all locks (used when swarm completes).</summary>
+    /// <summary>Releases all locks (used when a run completes).</summary>
     void Clear();
 
     /// <summary>Returns a snapshot of all current locks.</summary>
