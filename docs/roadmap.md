@@ -114,7 +114,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 
 ### Still pending
 
-> **Last audited:** 2026-04-16. 45 phases complete, 9 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61. Everything below is *not yet shipped*.
+> **Last audited:** 2026-04-21. 46 phases complete, 8 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61. Everything below is *not yet shipped*.
 
 | Gap | Phase | Priority |
 |---|---|---|
@@ -132,7 +132,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Hermes Agent integration via MCP — alternative claw/federation bus provider with self-improving skills | Phase 60 | Medium |
 | ~~Remote server mode for web frontend — SignalR streaming, auth, `AddSovrantClient()` abstraction~~ | Phase 61 ✅ | High |
 | Video generation — fal.ai, Kling AI, and pluggable provider support for text-to-video, image-to-video | Phase 65 | Medium |
-| Document generation — PDFs, Word, Excel, PowerPoint, presentations + industry templates (real estate, healthcare, legal, finance) | Phase 66 | Medium–High |
+| ~~Document generation — PDFs, Word, Excel, PowerPoint, presentations + industry templates (real estate, healthcare, legal, finance)~~ | Phase 66 ✅ | Medium–High |
 | Teams parity with Swarm — parallelism, file-lock safety, quality gate, and optional decomposition for team runs (other frameworks treat parallel execution as the default team behavior) | Phase 78 | High |
 | Agents page (renamed from Agent Templates): single-agent definition + run — author agents via markdown files, edit them in-app, reference them by name from the standard agenting loop, and launch chat sessions (or one-shot if self-contained) with run history | Phase 79 | Medium–High |
 
@@ -5905,7 +5905,7 @@ Settings page (Desktop + Web) gets a "Video Providers" section similar to the ex
 
 ---
 
-## Phase 66 — Document Generation (PDFs, Office Suite & Industry Templates)
+## Phase 66 — Document Generation (PDFs, Office Suite & Industry Templates) ✅
 
 **Depends on:** Phase 53 (artifact storage), Phase 58 (trust boundary — for PII/PHI handling in healthcare docs)
 
