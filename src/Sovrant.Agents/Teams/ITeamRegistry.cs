@@ -33,4 +33,7 @@ public interface ITeamRegistry
 
     /// <summary>Returns members belonging to a specific team.</summary>
     IReadOnlyList<TeamMemberInfo> GetTeamMembers(string teamId) => [];
+
+    /// <summary>Updates the run profile (mode, concurrency, safeguards) for a team. Returns true if found and updated.</summary>
+    bool UpdateTeamRunProfile(string teamId, TeamRunProfile profile) => false;
 }

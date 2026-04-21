@@ -28,8 +28,11 @@ internal sealed class SqliteTeamRegistry : ITeamRegistry
         using var conn = _connectionFactory.CreateConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO teams (team_id, workspace_id, project_id, name, description, origin, created_by, created_at)
-            VALUES ($id, $ws, $proj, $name, $desc, $origin, $createdBy, $createdAt)
+            INSERT INTO teams (team_id, workspace_id, project_id, name, description, origin, created_by, created_at,
+                               run_mode, max_concurrent, file_locks_enabled, quality_gate_enabled,
+                               quality_gate_threshold, decomposition_mode)
+            VALUES ($id, $ws, $proj, $name, $desc, $origin, $createdBy, $createdAt,
+                    $runMode, $maxConcurrent, $locks, $gate, $gateThreshold, $decomp)
             """;
         cmd.Parameters.AddWithValue("$id", team.Id);
         cmd.Parameters.AddWithValue("$ws", team.WorkspaceId);
@@ -39,9 +42,42 @@ internal sealed class SqliteTeamRegistry : ITeamRegistry
         cmd.Parameters.AddWithValue("$origin", team.Origin);
         cmd.Parameters.AddWithValue("$createdBy", team.CreatedBy);
         cmd.Parameters.AddWithValue("$createdAt", team.CreatedAt.ToString("o", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$runMode", RunModeToString(team.RunMode));
+        cmd.Parameters.AddWithValue("$maxConcurrent", team.MaxConcurrent);
+        cmd.Parameters.AddWithValue("$locks", team.FileLocksEnabled ? 1 : 0);
+        cmd.Parameters.AddWithValue("$gate", team.QualityGateEnabled ? 1 : 0);
+        cmd.Parameters.AddWithValue("$gateThreshold", team.QualityGateThreshold);
+        cmd.Parameters.AddWithValue("$decomp", DecompositionToString(team.DecompositionMode));
         cmd.ExecuteNonQuery();
 
         return team.Id;
+    }
+
+    public bool UpdateTeamRunProfile(string teamId, TeamRunProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(teamId);
+        ArgumentNullException.ThrowIfNull(profile);
+
+        using var conn = _connectionFactory.CreateConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            UPDATE teams
+               SET run_mode = $runMode,
+                   max_concurrent = $maxConcurrent,
+                   file_locks_enabled = $locks,
+                   quality_gate_enabled = $gate,
+                   quality_gate_threshold = $gateThreshold,
+                   decomposition_mode = $decomp
+             WHERE team_id = $id
+            """;
+        cmd.Parameters.AddWithValue("$id", teamId);
+        cmd.Parameters.AddWithValue("$runMode", RunModeToString(profile.RunMode));
+        cmd.Parameters.AddWithValue("$maxConcurrent", profile.MaxConcurrent);
+        cmd.Parameters.AddWithValue("$locks", profile.FileLocksEnabled ? 1 : 0);
+        cmd.Parameters.AddWithValue("$gate", profile.QualityGateEnabled ? 1 : 0);
+        cmd.Parameters.AddWithValue("$gateThreshold", profile.QualityGateThreshold);
+        cmd.Parameters.AddWithValue("$decomp", DecompositionToString(profile.DecompositionMode));
+        return cmd.ExecuteNonQuery() > 0;
     }
 
     public TeamInfo? GetTeam(string teamId)
@@ -50,7 +86,7 @@ internal sealed class SqliteTeamRegistry : ITeamRegistry
 
         using var conn = _connectionFactory.CreateConnection();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT team_id, workspace_id, project_id, name, description, origin, created_by, created_at FROM teams WHERE team_id = $id";
+        cmd.CommandText = TeamSelectColumns + " FROM teams WHERE team_id = $id";
         cmd.Parameters.AddWithValue("$id", teamId);
         using var r = cmd.ExecuteReader();
         return r.Read() ? ReadTeam(r) : null;
@@ -63,12 +99,12 @@ internal sealed class SqliteTeamRegistry : ITeamRegistry
 
         if (workspaceId is not null)
         {
-            cmd.CommandText = "SELECT team_id, workspace_id, project_id, name, description, origin, created_by, created_at FROM teams WHERE workspace_id = $ws ORDER BY created_at DESC";
+            cmd.CommandText = TeamSelectColumns + " FROM teams WHERE workspace_id = $ws ORDER BY created_at DESC";
             cmd.Parameters.AddWithValue("$ws", workspaceId);
         }
         else
         {
-            cmd.CommandText = "SELECT team_id, workspace_id, project_id, name, description, origin, created_by, created_at FROM teams ORDER BY created_at DESC";
+            cmd.CommandText = TeamSelectColumns + " FROM teams ORDER BY created_at DESC";
         }
 
         using var r = cmd.ExecuteReader();
@@ -191,6 +227,11 @@ internal sealed class SqliteTeamRegistry : ITeamRegistry
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
+    private const string TeamSelectColumns =
+        "SELECT team_id, workspace_id, project_id, name, description, origin, created_by, created_at, " +
+        "run_mode, max_concurrent, file_locks_enabled, quality_gate_enabled, " +
+        "quality_gate_threshold, decomposition_mode";
+
     private static TeamInfo ReadTeam(Microsoft.Data.Sqlite.SqliteDataReader r) => new(
         Id: r.GetString(0),
         WorkspaceId: r.GetString(1),
@@ -199,7 +240,43 @@ internal sealed class SqliteTeamRegistry : ITeamRegistry
         Description: r.IsDBNull(4) ? null : r.GetString(4),
         Origin: r.GetString(5),
         CreatedBy: r.GetString(6),
-        CreatedAt: DateTimeOffset.Parse(r.GetString(7), CultureInfo.InvariantCulture));
+        CreatedAt: DateTimeOffset.Parse(r.GetString(7), CultureInfo.InvariantCulture))
+    {
+        RunMode = ParseRunMode(r.GetString(8)),
+        MaxConcurrent = r.GetInt32(9),
+        FileLocksEnabled = r.GetInt32(10) != 0,
+        QualityGateEnabled = r.GetInt32(11) != 0,
+        QualityGateThreshold = r.GetInt32(12),
+        DecompositionMode = ParseDecomposition(r.GetString(13)),
+    };
+
+    private static TeamRunMode ParseRunMode(string value) => value switch
+    {
+        "parallel" => TeamRunMode.Parallel,
+        "swarm" => TeamRunMode.Swarm,
+        _ => TeamRunMode.Sequential,
+    };
+
+    private static string RunModeToString(TeamRunMode mode) => mode switch
+    {
+        TeamRunMode.Parallel => "parallel",
+        TeamRunMode.Swarm => "swarm",
+        _ => "sequential",
+    };
+
+    private static TeamDecompositionMode ParseDecomposition(string value) => value switch
+    {
+        "role-aware" => TeamDecompositionMode.RoleAware,
+        "open" => TeamDecompositionMode.Open,
+        _ => TeamDecompositionMode.Off,
+    };
+
+    private static string DecompositionToString(TeamDecompositionMode mode) => mode switch
+    {
+        TeamDecompositionMode.RoleAware => "role-aware",
+        TeamDecompositionMode.Open => "open",
+        _ => "off",
+    };
 
     private static TeamMemberInfo ReadMember(Microsoft.Data.Sqlite.SqliteDataReader r)
     {

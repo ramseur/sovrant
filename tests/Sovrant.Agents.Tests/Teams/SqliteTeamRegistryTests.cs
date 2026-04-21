@@ -210,4 +210,80 @@ public sealed class SqliteTeamRegistryTests : IAsyncDisposable
         Assert.Single(members);
         Assert.Equal("survivor", members[0].Name);
     }
+
+    // ── Run profile (Phase 78 Path 2) ───────────────────────────────────
+
+    [Fact]
+    public void CreateTeam_DefaultRunProfile_IsPessimistic()
+    {
+        var team = MakeTeam();
+        _registry.CreateTeam(team);
+
+        var got = _registry.GetTeam(team.Id);
+        Assert.NotNull(got);
+        Assert.Equal(TeamRunMode.Sequential, got.RunMode);
+        Assert.Equal(1, got.MaxConcurrent);
+        Assert.False(got.FileLocksEnabled);
+        Assert.False(got.QualityGateEnabled);
+        Assert.Equal(7, got.QualityGateThreshold);
+        Assert.Equal(TeamDecompositionMode.Off, got.DecompositionMode);
+    }
+
+    [Fact]
+    public void CreateTeam_PersistsExplicitRunProfile()
+    {
+        var team = MakeTeam() with
+        {
+            RunMode = TeamRunMode.Swarm,
+            MaxConcurrent = 4,
+            FileLocksEnabled = true,
+            QualityGateEnabled = true,
+            QualityGateThreshold = 8,
+            DecompositionMode = TeamDecompositionMode.RoleAware,
+        };
+        _registry.CreateTeam(team);
+
+        var got = _registry.GetTeam(team.Id);
+        Assert.NotNull(got);
+        Assert.Equal(TeamRunMode.Swarm, got.RunMode);
+        Assert.Equal(4, got.MaxConcurrent);
+        Assert.True(got.FileLocksEnabled);
+        Assert.True(got.QualityGateEnabled);
+        Assert.Equal(8, got.QualityGateThreshold);
+        Assert.Equal(TeamDecompositionMode.RoleAware, got.DecompositionMode);
+    }
+
+    [Fact]
+    public void UpdateTeamRunProfile_MutatesPersistedFields()
+    {
+        var team = MakeTeam();
+        _registry.CreateTeam(team);
+
+        var profile = new TeamRunProfile(
+            RunMode: TeamRunMode.Parallel,
+            MaxConcurrent: 3,
+            FileLocksEnabled: true,
+            QualityGateEnabled: false,
+            QualityGateThreshold: 6,
+            DecompositionMode: TeamDecompositionMode.Open);
+
+        Assert.True(_registry.UpdateTeamRunProfile(team.Id, profile));
+
+        var got = _registry.GetTeam(team.Id);
+        Assert.NotNull(got);
+        Assert.Equal(TeamRunMode.Parallel, got.RunMode);
+        Assert.Equal(3, got.MaxConcurrent);
+        Assert.True(got.FileLocksEnabled);
+        Assert.False(got.QualityGateEnabled);
+        Assert.Equal(6, got.QualityGateThreshold);
+        Assert.Equal(TeamDecompositionMode.Open, got.DecompositionMode);
+    }
+
+    [Fact]
+    public void UpdateTeamRunProfile_Unknown_ReturnsFalse()
+    {
+        var profile = new TeamRunProfile(
+            TeamRunMode.Sequential, 1, false, false, 7, TeamDecompositionMode.Off);
+        Assert.False(_registry.UpdateTeamRunProfile("nonexistent", profile));
+    }
 }
