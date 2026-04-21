@@ -134,7 +134,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Video generation — fal.ai, Kling AI, and pluggable provider support for text-to-video, image-to-video | Phase 65 | Medium |
 | Document generation — PDFs, Word, Excel, PowerPoint, presentations + industry templates (real estate, healthcare, legal, finance) | Phase 66 | Medium–High |
 | Teams parity with Swarm — parallelism, file-lock safety, quality gate, and optional decomposition for team runs (other frameworks treat parallel execution as the default team behavior) | Phase 78 | High |
-| Agent Templates: Run action, run history, and sub-agent markdown file format — moves single-agent invocation out of Orchestration and onto the Templates page | Phase 79 | Medium–High |
+| Agents page (renamed from Agent Templates): single-agent definition + run — author agents via markdown files, edit them in-app, reference them by name from the standard agenting loop, and launch chat sessions (or one-shot if self-contained) with run history | Phase 79 | Medium–High |
 
 ---
 
@@ -7097,73 +7097,113 @@ become team behaviors at runtime.
 
 ---
 
-## Phase 79 — Agent Templates: Run, Run History & Sub-Agent Markdown Files
+## Phase 79 — Agents: Single-Agent Definition, Reference & Run
 
 ### Why
 
-Once Orchestration collapses to "Team only" (Phase 78 path 1), the
-single-agent invocation use case — *"fire this prompt at the
-underwriting agent"* — needs a real home. Today there's no clean
-surface for that: Chat is multi-turn and router-driven, Orchestration
-is for multi-member coordination, and the Agent Templates page is
-a passive catalog. The best fit is the Agent Templates page itself,
-upgraded from catalog to *callable specialists*.
+Now that Orchestration collapses to teams-only (Phase 78 path 1), the
+single-agent use case — *"define an underwriting agent, then talk to
+it (or just hand it a task)"* — needs its own home. With the editor,
+by-name reference, and run features below, the current "Agent
+Templates" page stops being a passive catalog and becomes the place
+where users **define**, **edit**, **reference**, and **run**
+individual specialists. At that point the page is simply **Agents**;
+"Template" was the right name when rows were read-only seeds, and
+it's the wrong name once rows are first-class callable agents.
 
-This also lets us align with the established sub-agent pattern used
-by Claude Code and other agentic CLIs: a sub-agent is a markdown
-file with YAML frontmatter (`name`, `description`, `tools`, `model`)
-and a system prompt body. Sovrant already externalizes built-in
-templates as markdown (Phase 23), so the file format is a small
-formalization of what exists, not a new concept.
+The definition format is markdown with YAML frontmatter, matching the
+established sub-agent pattern (Claude Code et al.): `name`,
+`description`, `tools`, `model`, `role` in the frontmatter; system
+prompt in the body. Sovrant already externalizes built-in templates
+as markdown (Phase 23), so this is a small formalization plus an
+in-app editor — not a new concept.
+
+Two invocation modes, same definition:
+
+1. **By reference from the agenting loop.** When the router / main
+   chat loop encounters `@agent-name` (or a `/agent run <name>` style
+   call), it resolves to the named markdown agent and runs that turn
+   under the agent's system prompt, model, and tool scope.
+2. **Dedicated chat session.** Clicking Run on an agent opens a
+   chat scoped to that specialist. Conversational if the user wants
+   back-and-forth; one-shot if the first message is self-contained.
+   Same pathway, no explicit mode switch.
 
 ### Goals
 
-- **Sub-agent markdown format** — standardize `.sovrant/agents/*.md`
+- **Agent markdown format** — standardize `.sovrant/agents/*.md`
   with YAML frontmatter (`name`, `description`, `tools`, `model`,
   `role`) and a prompt body. Workspace-scoped by default with
   user/project overrides following the existing template-resolution
   order.
-- **Run action on Agent Templates** — each template (or sub-agent)
-  row gains a Run button that opens a detail pane with a prompt box,
-  optional model/tool overrides, and a Run trigger. Fires the agent
-  via the existing `AgentTool` / `SovrantAgentFactory` plumbing and
-  streams output back.
-- **Run history** — per-template history of recent runs (timestamp,
-  prompt, summary, outcome, cost) stored alongside `agent_runs`
-  ledger entries so the existing Activity page picks them up.
-- **Chat command parity** — `/agent run <name> <prompt>` works from
-  chat for power users, executing the same pathway.
-- **Unassigned-team-member migration** — existing
-  `TeamMemberInfo` rows not associated with any team are promoted
-  during the first run of this phase into `.sovrant/agents/*.md`
-  files (or silently retained in the DB with a UI nudge to export).
+- **In-app editor** — the Agents detail pane becomes a markdown
+  editor: frontmatter fields surfaced as structured inputs (name,
+  description, model picker, tool picker) with the system prompt as
+  a freeform textarea. Save writes the `.md` file; the file is the
+  source of truth.
+- **Create from scratch or clone** — "+ New agent" seeds a blank
+  frontmatter + prompt template; "Clone" duplicates an existing
+  agent as a starting point.
+- **Reference by name from the agenting loop** — the standard router
+  honors `@name` / named-agent calls by loading that agent's
+  definition for the turn. Edits to the markdown take effect
+  immediately on next resolution (no restart, no rebuild).
+- **Run action opens a chat session** — clicking Run spawns a chat
+  pane scoped to that agent. Conversational by default; if the first
+  user message is self-sufficient, the agent completes and hands
+  back a result.
+- **Run history** — per-agent history of recent sessions and
+  by-name invocations (timestamp, opening prompt, summary, outcome,
+  cost) stored alongside `agent_runs` ledger entries so Activity
+  picks them up. Clicking a history row reopens the session
+  read-only (or forks it).
+- **Chat command parity** — `/agent run <name> [prompt]` works from
+  chat for power users: opens a session if no prompt, fires one-shot
+  if prompt given.
+- **Page rename** — "Agent Templates" → "Agents" across nav,
+  routing, and copy. Redirect `/agent-templates` → `/agents`.
+- **Unassigned-team-member migration** — existing `TeamMemberInfo`
+  rows not associated with any team are promoted on first run into
+  `.sovrant/agents/*.md` files (or retained in the DB with a UI
+  nudge to export).
 
 ### Study questions
 
 - Do sub-agent markdown files replace `agent_templates` table rows
-  entirely, or do the DB rows and MD files coexist (DB for
-  built-ins, files for user-authored)?
-- Where does the Run prompt box live — embedded in the existing
-  Agent Templates list detail pane, or a dedicated "Run agent"
-  modal? Modal might compose better with mission-launch later.
-- Should sub-agent runs default to mission-driven (persistable,
-  resumable) or ephemeral (one-shot, returns text)? Ephemeral is
-  simpler; mission-driven matches the "autonomy wraps any worker"
-  story from Phase 67.
+  entirely, or coexist (DB for built-ins, files for user-authored)?
+- Does the per-agent chat session share UI with the main Chat page
+  (filtered view), or does it live embedded in the Agents detail
+  pane? Embedded keeps context, shared UI keeps features in sync.
+- How does the router surface ambiguity when an `@name` matches
+  nothing or multiple agents? Fail closed with a suggestion list, or
+  fall back to the default LLM with a warning?
+- How is tool selection surfaced in the editor — checkbox list of
+  registered tools, or a free-form YAML list? Checkboxes are
+  friendlier but drift from the markdown-as-source-of-truth model.
+- Should agent sessions default to mission-driven (persistable,
+  resumable) or ephemeral (one-shot / discarded on close)?
+  Ephemeral is simpler; mission-driven matches Phase 67's autonomy
+  story and makes run history reopen-able.
 
 ### Acceptance Criteria
 
 - [ ] `.sovrant/agents/*.md` format documented with frontmatter
       schema and example files shipped for 2–3 built-in roles
-- [ ] Agent Templates page gains a Run affordance: prompt box, Run
-      button, streaming output, per-template run history
-- [ ] `/agent run <name> <prompt>` chat command invokes the same
-      execution pathway
-- [ ] Run history entries land in `agent_runs` with a source tag
-      that the Activity page filters on
-- [ ] Unassigned team members surface in Agent Templates (or a
-      sub-agents section) with an "Export as markdown" action
+- [ ] Agents page has a markdown-backed editor: create, edit, clone,
+      delete an agent; changes round-trip to the file
+- [ ] `@agent-name` references in the main chat loop resolve to the
+      named agent's definition and run under its prompt/model/tools
+- [ ] Run button opens a chat session bound to the agent; one-shot
+      completion works when the first message is self-sufficient
+- [ ] Per-agent run history visible on the detail pane; entries
+      also surface on the Activity page
+- [ ] `/agent run <name> [prompt]` chat command invokes the same
+      pathway (session if no prompt, one-shot if prompt given)
+- [ ] Nav rail and routing renamed from "Agent Templates" to
+      "Agents"; old path redirects
+- [ ] Unassigned team members surface in Agents with an "Export as
+      markdown" action
 - [ ] Orchestration page no longer references single agents —
-      users directed to Agent Templates for solo work
+      users directed to Agents for solo work
 
 
