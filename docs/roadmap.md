@@ -135,6 +135,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | ~~Document generation — PDFs, Word, Excel, PowerPoint, presentations + industry templates (real estate, healthcare, legal, finance)~~ | Phase 66 ✅ | Medium–High |
 | Teams parity with Swarm — parallelism, file-lock safety, quality gate, and optional decomposition for team runs (other frameworks treat parallel execution as the default team behavior) | Phase 78 | High |
 | Agents page (renamed from Agent Templates): single-agent definition + run — author agents via markdown files, edit them in-app, reference them by name from the standard agenting loop, and launch chat sessions (or one-shot if self-contained) with run history | Phase 79 | Medium–High |
+| Composio MCP integration — first-class platform awareness for Composio's MCP catalog (250+ apps), in-app browse/enable, managed OAuth via Composio connections, per-user/workspace credential scoping, still routed through Sovrant's `MCPTool` proxy and permission model | Phase 80 | Medium |
 
 ---
 
@@ -7205,5 +7206,235 @@ Two invocation modes, same definition:
       markdown" action
 - [ ] Orchestration page no longer references single agents —
       users directed to Agents for solo work
+
+---
+
+## Phase 80 — Composio MCP Integration (Platform-Aware App Catalog, Managed OAuth, Sovrant-Standard Tool Proxy)
+
+**Depends on:** Phase 15 (MCP server mode), Phase 16 (dynamic MCP tool proxy — `MCPTool`), Phase 17 (MCP OAuth — `McpAuthTool`), Phase 35–38 (workspaces, projects, users, per-user tokens)
+**Difficulty:** Medium
+
+### Why
+
+Sovrant can **already** connect to Composio today — add a remote MCP
+entry in `.sovrant/mcp.json`, run the OAuth flow via `McpAuthTool`,
+and the tools surface through Phase 16's `MCPTool` proxy. That works,
+but it treats Composio like any other opaque MCP endpoint. The user
+has to know which servers exist, paste URLs, and manage auth out of
+band.
+
+This phase makes the platform **Composio-aware** — the same way
+Phase 48/55 made it **OpenRouter-aware**. OpenRouter is still just an
+OpenAI-compatible provider under the hood, but Sovrant knows about
+its model catalog, pricing metadata, and routing quirks as a
+first-class thing. Composio gets the equivalent treatment: Sovrant
+understands that Composio is a *registry of MCP servers* (GitHub,
+Gmail, Slack, Linear, Notion, Jira, HubSpot, Calendar, etc. — 250+
+apps), knows how to browse it, knows how its managed-OAuth
+"connections" model works, and surfaces the whole thing in the UI so
+the user never has to hand-edit `mcp.json`.
+
+Crucially, Composio's tools still flow through **our** standards:
+the existing `MCPTool` proxy, scoped credentials from Phase 38, the
+workspace/project/user hierarchy from Phases 35–37, and the intent-
+and permission-aware runtime. Composio is a *source* of MCP servers,
+not a replacement for our tool architecture.
+
+### Goals
+
+- **Composio catalog discovery** — query Composio's app/server
+  registry at startup (and on demand) and cache a normalized catalog
+  of available apps: name, category, description, icon URL, tool
+  count, auth type (OAuth / API key / no-auth).
+- **Browse & enable in-app** — a "Composio Apps" page (Desktop +
+  Web) lists the catalog, supports search and category filters, and
+  has an **Enable** action per app that writes a managed entry to
+  the scoped `mcp.json` without the user touching JSON.
+- **Managed OAuth via Composio connections** — for apps that need
+  OAuth, kick off Composio's connection flow (the user authorizes
+  once with GitHub/Gmail/etc. through Composio's hosted UI), store
+  the returned connection ID in our existing credential store,
+  scoped to user/workspace/project following Phase 38 precedence.
+- **Per-user / per-workspace credential scoping** — two users in the
+  same workspace can each have their own Gmail connection; a
+  workspace can share a read-only GitHub connection. The scope
+  follows the same precedence rules as `X-LLM-Api-Key` today
+  (request > session > user > workspace > project > global).
+- **Sovrant-standard tool proxy** — Composio tools register through
+  Phase 16's `MCPTool` with `composio_<app>_<tool>` naming. They
+  respect permission mode, hooks, rate limits, cost tracking, and
+  every other runtime rail that applies to all tools. Composio is
+  invisible to the agent loop except for the namespace prefix.
+- **Tool-level enablement (not just server-level)** — Composio
+  servers can expose hundreds of tools. Enabling "Gmail" should not
+  dump 30 tools into the registry. The Composio Apps page lets the
+  user pick which tools to enable per app; the rest stay latent.
+  Default selection is a curated subset per app.
+- **Intent-aware routing hint** — `IntentClassifier` (Phase 48)
+  already tags `tool_heavy`; when a turn's intent implies a specific
+  Composio app (e.g. "send an email" → Gmail), surface the relevant
+  tools first in the tool list so the model picks them without
+  sifting through the whole catalog.
+- **Budget & quota awareness** — Composio's free tier has call
+  quotas; paid tiers have tool-call pricing. Read the account's
+  current quota/usage from Composio's API on startup and on
+  `/v1/composio/status`; feed per-call cost estimates into Phase
+  55's `ICostModel` so `BudgetEnforcer` can gate Composio calls
+  the same way it gates model calls.
+- **Connection health surface** — a Composio Apps page shows each
+  enabled app's connection status (connected / needs re-auth /
+  error / rate-limited) and a **Reconnect** action that kicks off
+  the OAuth flow again.
+- **Config UI for Composio credentials** — in the setup wizard and
+  Settings page, "Connect Composio" asks for the Composio API key
+  once. Stored in our credential store, not in `mcp.json`.
+
+### Non-goals
+
+- Replacing `McpAuthTool` or the MCP tool proxy. Composio rides on
+  top of the existing MCP infrastructure.
+- Proxying Composio tools through a Sovrant-owned server. Composio
+  remains the OAuth broker and upstream executor.
+- Building a generic "MCP app store" UI. This phase is Composio-
+  specific because that catalog is the one the user actually wants.
+  A generic MCP server marketplace can be a later phase if demand
+  exists.
+- Writing tools back to Composio's registry. We only consume.
+
+### Architecture
+
+```
+src/Sovrant.Integrations/Composio/
+  IComposioClient.cs               ← HTTP client for Composio API (catalog, connections, quotas)
+  ComposioClient.cs                ← concrete impl
+  ComposioCatalogCache.cs          ← cached app/tool catalog, refresh on demand
+  ComposioConnectionStore.cs       ← maps Composio connection IDs to our user/workspace/project scope
+  ComposioMcpProvisioner.cs        ← on Enable, writes managed mcp.json entry + registers with MCP registry
+  ComposioCostModelAdapter.cs      ← surfaces Composio quota/pricing into Phase 55's ICostModel
+
+src/Sovrant.Api/Endpoints/
+  ComposioEndpoints.cs             ← /v1/composio/catalog, /v1/composio/connections, /v1/composio/apps/{app}/enable, /v1/composio/status
+
+src/Sovrant.Desktop/Views/ComposioAppsPage.axaml
+src/Sovrant.Web/Pages/ComposioApps.razor
+```
+
+### Key design decisions
+
+- **Composio entries in `mcp.json` are marked as managed.** A
+  `"source": "composio"` field plus a `composioAppId` identifies
+  entries written by the provisioner. Manual edits to those entries
+  get overwritten on re-provision; users hand-edit at their own
+  risk and a UI warning flags manual drift.
+- **Connections live in our credential store, not in `mcp.json`.**
+  The managed entry references a connection by ID; the runtime
+  resolves the ID to a Composio session token at request time,
+  scoped by the current user/workspace. This is how we avoid
+  leaking connection tokens into the file that might end up in git.
+- **Tool enablement is stored per scope** in a new
+  `composio_tool_enablement` table (`scope_type`, `scope_id`,
+  `app_id`, `tool_name`, `enabled`). Falls back to the curated
+  per-app default when no row exists.
+- **Catalog refresh is debounced.** Fetch on startup, cache for 24h
+  by default, manual refresh via `POST /v1/composio/catalog/refresh`
+  and a button in the UI.
+- **Composio API key is per-user**, not per-workspace by default —
+  matches how users think about their own Composio account. A
+  workspace-level override lets teams share a single Composio
+  account when they want to.
+
+### API surface
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/v1/composio/catalog` | GET | Normalized catalog (apps + tools). Supports `?category=`, `?q=`, `?enabled=true`. |
+| `/v1/composio/catalog/refresh` | POST | Force-refresh the catalog from Composio. |
+| `/v1/composio/connections` | GET | Current user's/workspace's Composio connections with status. |
+| `/v1/composio/apps/{app}/enable` | POST | Write managed `mcp.json` entry, register MCP server, optionally kick off OAuth. Body: `{ tools?: string[], scope?: "user"|"workspace"|"project" }`. |
+| `/v1/composio/apps/{app}/disable` | POST | Remove managed entry and unregister from MCP registry. |
+| `/v1/composio/apps/{app}/reconnect` | POST | Re-initiate OAuth for an app whose connection expired. |
+| `/v1/composio/status` | GET | Composio account info, quota, enabled apps, connection health. |
+
+### CLI surface
+
+- `sovrant composio login` — prompts for Composio API key, stores it.
+- `sovrant composio apps` — table of enabled apps with status.
+- `sovrant composio enable <app>` — enable an app non-interactively.
+- `sovrant composio browse [--category=<cat>] [--search=<q>]` — catalog browse in terminal.
+- `sovrant composio status` — quota, usage, connection health.
+
+### Implementation plan
+
+1. Add `Sovrant.Integrations.Composio` project. Implement
+   `IComposioClient` with methods: `ListAppsAsync`,
+   `GetAppAsync(appId)`, `ListConnectionsAsync`,
+   `CreateConnectionAsync(appId, authData)`,
+   `GetQuotaAsync`, `ExecuteToolAsync` (for direct-mode fallback).
+2. Implement `ComposioCatalogCache` — SQLite-backed (new
+   `composio_app_catalog` table), 24h TTL, manual refresh hook.
+3. Implement `ComposioConnectionStore` — links Composio connection
+   IDs to `(user_id, workspace_id?, project_id?)` rows in a new
+   `composio_connections` table. Resolution follows Phase 38
+   precedence.
+4. Implement `ComposioMcpProvisioner` — on `Enable`, write a
+   managed entry to the scope's `mcp.json` (or insert into a new
+   `mcp_servers` table if we've migrated MCP config to SQL by
+   then), call `McpClientRegistry.RegisterAsync`, and trigger tool
+   discovery. Tool names get the `composio_<app>_<tool>` prefix so
+   they don't collide with other MCP servers.
+5. Implement `ComposioCostModelAdapter` — registers as a secondary
+   `ICostModel` source keyed by tool name prefix; `BudgetEnforcer`
+   gates Composio calls against the same per-project/per-session
+   budgets it already enforces for model calls.
+6. Add `Sovrant.Api.Endpoints.ComposioEndpoints` and wire the
+   routes listed above. Bearer-auth protected via Phase 38.
+7. Add the Desktop + Web Composio Apps page (shared view model,
+   two renderers, consistent with how other pages are built).
+   Search, category filter, enable/disable, per-tool toggles,
+   connection status, reconnect action.
+8. Extend the setup wizard with a "Connect Composio (optional)"
+   step that captures the API key and offers to enable a curated
+   starter set (GitHub, Gmail, Slack, Calendar, Linear).
+9. New migration `V017__composio_tables.sql` — adds
+   `composio_connections`, `composio_tool_enablement`, and
+   `composio_app_catalog` tables.
+10. CLI commands above, under `sovrant composio`.
+11. Tests:
+    - `ComposioClient` against a mock HTTP handler covering
+      catalog, connections, quota, reauth flows.
+    - `ComposioCatalogCache` TTL + manual refresh.
+    - `ComposioConnectionStore` scope resolution mirrors Phase 38
+      precedence (dedicated parametric tests).
+    - `ComposioMcpProvisioner` enable → `mcp.json` entry written →
+      MCP registry gains tools → disable → reverse.
+    - `ComposioCostModelAdapter` routes tool-name-prefixed calls
+      through Composio pricing; budget enforcer blocks over-quota.
+    - API endpoint tests for the full CRUD surface.
+    - Integration test gated behind `COMPOSIO_E2E=1`: real API key
+      → enable GitHub app → OAuth stub → invoke `composio_github_list_repos` →
+      observe result.
+
+### Acceptance criteria
+
+- `dotnet build` exits 0
+- Composio catalog loads and displays ≥ 100 apps in Desktop + Web
+- Enabling an app writes an `mcp.json` entry marked `"source":
+  "composio"` and its tools appear in `/v1/tools` prefixed
+  `composio_<app>_`
+- OAuth flow for a managed app completes end-to-end; connection ID
+  stored in `composio_connections`, scoped per Phase 38 precedence
+- A second user in the same workspace has an independent Gmail
+  connection without seeing the first user's tokens
+- Tool-level enablement works: enabling Gmail with only `send_email`
+  and `list_messages` keeps the rest latent
+- `BudgetEnforcer` halts a Composio-heavy run when the project
+  budget is exhausted, emitting the same `RuntimeEvent.BudgetExceeded`
+  it already emits for model calls
+- `sovrant composio status` shows account, quota, usage, enabled apps
+  with connection health
+- Disabling an app removes its entry and its tools disappear from
+  the registry without restarting the runtime
+- Manual edits to a managed entry surface a UI warning on next
+  refresh but do not crash the runtime
 
 
