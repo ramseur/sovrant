@@ -99,8 +99,21 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
 
         try
         {
+            // ── Load team run profile (if this run is team-scoped) ──────
+            var teamProfile = teamId is not null ? _teamRegistry.GetTeam(teamId) : null;
+
             // ── Resolve plan ────────────────────────────────────────────
-            var shouldDecompose = request.Decompose ?? (request.Plan is null);
+            // Decomposition precedence: explicit request > team profile > engine default.
+            bool shouldDecompose;
+            if (request.Decompose.HasValue)
+                shouldDecompose = request.Decompose.Value;
+            else if (request.Plan is not null)
+                shouldDecompose = false;
+            else if (teamProfile is not null)
+                shouldDecompose = teamProfile.DecompositionMode != TeamDecompositionMode.Off;
+            else
+                shouldDecompose = true;
+
             SwarmPlan plan;
 
             if (request.Plan is not null)
@@ -138,14 +151,30 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
             }
 
             // ── Build effective config ──────────────────────────────────
+            // Precedence for each flag: explicit request > team profile > engine/global default.
             var isSingleTask = plan.Tasks.Count <= 1;
+
+            var maxConcurrent = request.MaxParallel
+                ?? (teamProfile is not null
+                    ? (teamProfile.RunMode == TeamRunMode.Sequential ? 1 : teamProfile.MaxConcurrent)
+                    : (isSingleTask ? 1 : _swarmConfig.MaxConcurrent));
+
+            var qualityGate = request.QualityGate
+                ?? teamProfile?.QualityGateEnabled
+                ?? !isSingleTask;
+
+            var lockFiles = request.LockFiles
+                ?? teamProfile?.FileLocksEnabled
+                ?? _swarmConfig.FileLocksEnabled;
+
             var effectiveConfig = new SwarmConfig
             {
                 Enabled = true,
-                MaxConcurrent = request.MaxParallel ?? (isSingleTask ? 1 : _swarmConfig.MaxConcurrent),
+                MaxConcurrent = maxConcurrent,
                 MaxTokenBudget = _swarmConfig.MaxTokenBudget,
                 MaxRetries = _swarmConfig.MaxRetries,
-                QualityGateEnabled = request.QualityGate ?? !isSingleTask,
+                QualityGateEnabled = qualityGate,
+                FileLocksEnabled = lockFiles,
                 TaskTimeoutSeconds = _swarmConfig.TaskTimeoutSeconds,
                 Permissions = request.Permissions,
             };

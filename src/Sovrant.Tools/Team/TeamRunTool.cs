@@ -45,9 +45,19 @@ public sealed class TeamRunTool : ITool
         if (team is null)
             return $"Error: team '{teamId}' not found.";
 
-        var parallel = input.TryGetProperty("parallel", out var pEl) && pEl.GetBoolean();
-        var lockFiles = input.TryGetProperty("lock_files", out var lfEl) && lfEl.GetBoolean();
-        var qualityGate = input.TryGetProperty("quality_gate", out var qgEl) && qgEl.GetBoolean();
+        // All tool-level flags are nullable overrides. When omitted, the team's
+        // persisted run profile (Phase 78 Path 2) takes effect via AgentOrchestrator.
+        bool? parallel = input.TryGetProperty("parallel", out var pEl) ? pEl.GetBoolean() : null;
+        bool? lockFiles = input.TryGetProperty("lock_files", out var lfEl) ? lfEl.GetBoolean() : null;
+        bool? qualityGate = input.TryGetProperty("quality_gate", out var qgEl) ? qgEl.GetBoolean() : null;
+        bool? decompose = input.TryGetProperty("decompose", out var dEl) ? dEl.GetBoolean() : null;
+
+        int? maxParallel = parallel switch
+        {
+            true => null,     // hand off to team profile / global default
+            false => 1,       // explicit sequential
+            null => null,     // no override — team profile decides
+        };
 
         var request = new EnsembleRunRequest
         {
@@ -56,10 +66,10 @@ public sealed class TeamRunTool : ITool
             WorkspaceId = team.WorkspaceId,
             ProjectId = team.ProjectId,
             UserId = team.CreatedBy,
-            Decompose = false,
+            Decompose = decompose,
             LockFiles = lockFiles,
             QualityGate = qualityGate,
-            MaxParallel = parallel ? null : 1,
+            MaxParallel = maxParallel,
         };
 
         var result = await _orchestrator.RunAsync(request, ct).ConfigureAwait(false);
@@ -79,9 +89,10 @@ public sealed class TeamRunTool : ITool
             "properties": {
                 "team_id":      {"type": "string", "description": "ID of the team to run."},
                 "task":         {"type": "string", "description": "The task to execute."},
-                "parallel":     {"type": "boolean", "description": "Enable parallel execution (default: false)."},
-                "lock_files":   {"type": "boolean", "description": "Enable file locking (default: false)."},
-                "quality_gate": {"type": "boolean", "description": "Enable quality gate (default: false)."}
+                "parallel":     {"type": "boolean", "description": "Override parallel execution. Omit to honor the team's run profile."},
+                "lock_files":   {"type": "boolean", "description": "Override file locking. Omit to honor the team's run profile."},
+                "quality_gate": {"type": "boolean", "description": "Override quality gate. Omit to honor the team's run profile."},
+                "decompose":    {"type": "boolean", "description": "Override prompt decomposition. Omit to honor the team's run profile."}
             },
             "required": ["team_id", "task"]
         }

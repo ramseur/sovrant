@@ -28,6 +28,10 @@ public sealed class SwarmConfig
     [JsonPropertyName("quality_gate")]
     public bool QualityGateEnabled { get; init; } = true;
 
+    /// <summary>Whether to acquire per-file locks during parallel execution. Defaults to <c>true</c>.</summary>
+    [JsonPropertyName("file_locks_enabled")]
+    public bool FileLocksEnabled { get; init; } = true;
+
     /// <summary>Recommended model level for the decomposer agent.</summary>
     [JsonPropertyName("decomposer_level")]
     public string DecomposerLevel { get; init; } = "High";

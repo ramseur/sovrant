@@ -249,24 +249,27 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
     {
         var agentName = ResolveAgentName(node, config);
 
-        // Acquire file locks
-        foreach (var file in node.FilesToModify)
+        // Acquire file locks (skipped when disabled on this run's config).
+        if (config.FileLocksEnabled)
         {
-            if (_fileLockManager.IsLockedByOther(file, node.Id))
+            foreach (var file in node.FilesToModify)
             {
-                var holderTaskId = _fileLockManager.GetHolder(file) ?? "unknown";
-                // Look up the holder's agent name from the plan.
-                var holderNode = plan.Tasks.FirstOrDefault(t => t.Id == holderTaskId);
-                var holderAgentName = holderNode is not null ? ResolveAgentName(holderNode, config) : holderTaskId;
+                if (_fileLockManager.IsLockedByOther(file, node.Id))
+                {
+                    var holderTaskId = _fileLockManager.GetHolder(file) ?? "unknown";
+                    // Look up the holder's agent name from the plan.
+                    var holderNode = plan.Tasks.FirstOrDefault(t => t.Id == holderTaskId);
+                    var holderAgentName = holderNode is not null ? ResolveAgentName(holderNode, config) : holderTaskId;
 
-                LogFileConflict(_logger, node.Id, file, holderTaskId);
-                await EmitAsync(new SwarmEvent.FileConflict(plan.Id, node.Id, agentName, file, holderTaskId, holderAgentName), onEvent, swarmContext, ct).ConfigureAwait(false);
+                    LogFileConflict(_logger, node.Id, file, holderTaskId);
+                    await EmitAsync(new SwarmEvent.FileConflict(plan.Id, node.Id, agentName, file, holderTaskId, holderAgentName), onEvent, swarmContext, ct).ConfigureAwait(false);
 
-                node.Status = SwarmTaskStatus.Blocked;
-                node.Error = $"File '{file}' locked by task '{holderTaskId}'.";
-                return;
+                    node.Status = SwarmTaskStatus.Blocked;
+                    node.Error = $"File '{file}' locked by task '{holderTaskId}'.";
+                    return;
+                }
+                _fileLockManager.TryAcquire(file, node.Id);
             }
-            _fileLockManager.TryAcquire(file, node.Id);
         }
         node.Status = SwarmTaskStatus.Running;
         LogTaskStart(_logger, node.Id, agentName);
