@@ -133,6 +133,18 @@ public sealed class PowerPointGenerator : DocumentGeneratorBase
     private static string InlinesToString(IReadOnlyList<MarkdownRun> runs) =>
         string.Concat(runs.Select(r => r.Text));
 
+    // Standard 4:3 slide is 9144000 × 6858000 EMU. Anchor the title in the
+    // upper band and give the body the remainder so Google Slides renders
+    // content instead of rejecting the file for missing geometry.
+    private const long TitleOffsetX = 685800L;
+    private const long TitleOffsetY = 457200L;
+    private const long TitleWidth = 7772400L;
+    private const long TitleHeight = 1143000L;
+    private const long BodyOffsetX = 685800L;
+    private const long BodyOffsetY = 1600200L;
+    private const long BodyWidth = 7772400L;
+    private const long BodyHeight = 4525963L;
+
     private static SlidePart CreateSlidePart(PresentationPart presentationPart, SlideLayoutPart layoutPart, SlideContent content)
     {
         var slidePart = presentationPart.AddNewPart<SlidePart>();
@@ -142,7 +154,11 @@ public sealed class PowerPointGenerator : DocumentGeneratorBase
                 new P.NonVisualDrawingProperties { Id = 2U, Name = "Title" },
                 new P.NonVisualShapeDrawingProperties(new ShapeLocks { NoGrouping = true }),
                 new ApplicationNonVisualDrawingProperties(new PlaceholderShape { Type = PlaceholderValues.Title })),
-            new P.ShapeProperties(),
+            new P.ShapeProperties(
+                new Transform2D(
+                    new A.Offset { X = TitleOffsetX, Y = TitleOffsetY },
+                    new A.Extents { Cx = TitleWidth, Cy = TitleHeight }),
+                new PresetGeometry(new AdjustValueList()) { Preset = ShapeTypeValues.Rectangle }),
             new P.TextBody(
                 new BodyProperties(),
                 new ListStyle(),
@@ -157,7 +173,11 @@ public sealed class PowerPointGenerator : DocumentGeneratorBase
                         new P.NonVisualDrawingProperties { Id = 1U, Name = string.Empty },
                         new P.NonVisualGroupShapeDrawingProperties(),
                         new ApplicationNonVisualDrawingProperties()),
-                    new GroupShapeProperties(new TransformGroup()),
+                    new GroupShapeProperties(new TransformGroup(
+                        new A.Offset { X = 0L, Y = 0L },
+                        new A.Extents { Cx = 9144000L, Cy = 6858000L },
+                        new ChildOffset { X = 0L, Y = 0L },
+                        new ChildExtents { Cx = 9144000L, Cy = 6858000L })),
                     titleShape,
                     bodyShape)),
             new ColorMapOverride(new MasterColorMapping()));
@@ -189,7 +209,11 @@ public sealed class PowerPointGenerator : DocumentGeneratorBase
                 new P.NonVisualDrawingProperties { Id = 3U, Name = "Content" },
                 new P.NonVisualShapeDrawingProperties(new ShapeLocks { NoGrouping = true }),
                 new ApplicationNonVisualDrawingProperties(new PlaceholderShape { Index = 1U })),
-            new P.ShapeProperties(),
+            new P.ShapeProperties(
+                new Transform2D(
+                    new A.Offset { X = BodyOffsetX, Y = BodyOffsetY },
+                    new A.Extents { Cx = BodyWidth, Cy = BodyHeight }),
+                new PresetGeometry(new AdjustValueList()) { Preset = ShapeTypeValues.Rectangle }),
             textBody);
     }
 

@@ -1,8 +1,10 @@
 using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Presentation;
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Runtime.Artifacts;
 using Sovrant.Runtime.Documents;
 using Sovrant.Runtime.Documents.Generators;
+using A = DocumentFormat.OpenXml.Drawing;
 
 namespace Sovrant.Runtime.Documents.Tests;
 
@@ -66,6 +68,29 @@ public class OpenXmlRoundTripTests : IDisposable
         using var pptx = PresentationDocument.Open(copy, isEditable: false);
         Assert.NotNull(pptx.PresentationPart);
         Assert.Equal(2, pptx.PresentationPart!.SlideParts.Count());
+
+        // Google Slides rejects shapes without Transform2D geometry.
+        // Every slide shape must declare Offset + Extents so the file
+        // opens everywhere, not just in lenient PowerPoint.
+        foreach (var slidePart in pptx.PresentationPart.SlideParts)
+        {
+            var shapes = slidePart.Slide.Descendants<Shape>().ToList();
+            Assert.NotEmpty(shapes);
+            foreach (var shape in shapes)
+            {
+                var xfrm = shape.ShapeProperties?.Transform2D;
+                Assert.NotNull(xfrm);
+                Assert.NotNull(xfrm!.Offset);
+                Assert.NotNull(xfrm.Extents);
+                Assert.True(xfrm.Extents!.Cx > 0);
+                Assert.True(xfrm.Extents.Cy > 0);
+            }
+
+            var groupXfrm = slidePart.Slide.CommonSlideData?.ShapeTree?.GroupShapeProperties?.TransformGroup;
+            Assert.NotNull(groupXfrm);
+            Assert.NotNull(groupXfrm!.Offset);
+            Assert.NotNull(groupXfrm.Extents);
+        }
     }
 
     private static DocumentRequest BuildRequest(DocumentFormat format, string body, string fileName) => new()
