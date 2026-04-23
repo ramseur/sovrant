@@ -143,6 +143,78 @@ public sealed class AgentOrchestratorTeamProfileTests
     }
 
     [Fact]
+    public async Task TeamProfile_FileLocksDisabled_PropagatesToSwarmConfig()
+    {
+        var registry = new FakeTeamRegistry();
+        var team = new TeamInfo(
+            Id: "team-nolock-1",
+            WorkspaceId: "ws-1",
+            ProjectId: null,
+            Name: "nolock-team",
+            Description: null,
+            Origin: "user",
+            CreatedBy: "alice",
+            CreatedAt: DateTimeOffset.UtcNow)
+        {
+            RunMode = TeamRunMode.Parallel,
+            MaxConcurrent = 2,
+            FileLocksEnabled = false,      // explicitly disabled on the team
+            DecompositionMode = TeamDecompositionMode.Off,
+        };
+        registry.CreateTeam(team);
+
+        var capturing = new CapturingSwarmOrchestrator();
+        var orchestrator = BuildOrchestrator(registry, capturing, new StubDecomposer(),
+            new SwarmConfig { Enabled = true, FileLocksEnabled = true }); // global default would say TRUE
+
+        await orchestrator.RunAsync(new EnsembleRunRequest
+        {
+            Goal = "parallel without locks",
+            TeamId = team.Id,
+            WorkspaceId = "ws-1",
+            UserId = "alice",
+        });
+
+        Assert.NotNull(capturing.LastConfig);
+        // Team profile wins over global default.
+        Assert.False(capturing.LastConfig!.FileLocksEnabled);
+    }
+
+    [Fact]
+    public async Task RequestLockFiles_Override_BeatsTeamFileLocks()
+    {
+        var registry = new FakeTeamRegistry();
+        var team = new TeamInfo(
+            Id: "team-lockov-1",
+            WorkspaceId: "ws-1",
+            ProjectId: null,
+            Name: "lockov-team",
+            Description: null,
+            Origin: "user",
+            CreatedBy: "alice",
+            CreatedAt: DateTimeOffset.UtcNow)
+        {
+            FileLocksEnabled = true,  // team says yes
+        };
+        registry.CreateTeam(team);
+
+        var capturing = new CapturingSwarmOrchestrator();
+        var orchestrator = BuildOrchestrator(registry, capturing, new StubDecomposer());
+
+        await orchestrator.RunAsync(new EnsembleRunRequest
+        {
+            Goal = "caller overrides",
+            TeamId = team.Id,
+            WorkspaceId = "ws-1",
+            UserId = "alice",
+            LockFiles = false,        // caller says no
+        });
+
+        Assert.NotNull(capturing.LastConfig);
+        Assert.False(capturing.LastConfig!.FileLocksEnabled);
+    }
+
+    [Fact]
     public async Task NoTeamId_FallsBackToGlobalSwarmConfigDefaults()
     {
         var registry = new FakeTeamRegistry();
