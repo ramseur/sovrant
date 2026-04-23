@@ -27,7 +27,12 @@ public sealed class SwarmTaskNode
     public IList<string> FilesToModify { get; init; } = [];
 
     /// <summary>Agent template name to use for this task (e.g. "coder", "security-reviewer").</summary>
-    public string? AgentTemplate { get; init; }
+    /// <remarks>
+    /// Writable so role-aware team decomposition (Phase 78 Path 2 commit 6)
+    /// can rewrite a decomposer's suggested template to the actual team
+    /// member's name after <c>EnsembleSelector</c> picks the best-fit member.
+    /// </remarks>
+    public string? AgentTemplate { get; set; }
 
     /// <summary>Optional tool whitelist for the agent.</summary>
     public IList<string>? AllowedTools { get; init; }

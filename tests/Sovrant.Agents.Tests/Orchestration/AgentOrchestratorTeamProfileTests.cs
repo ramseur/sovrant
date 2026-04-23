@@ -362,6 +362,162 @@ public sealed class AgentOrchestratorTeamProfileTests
         Assert.Equal(9, capturing.LastConfig!.QualityGateThreshold);
     }
 
+    [Fact]
+    public async Task RoleAwareDecomposition_RewritesAgentTemplate_ToMatchedMemberName()
+    {
+        // Phase 78 Path 2 commit 6 — RoleAware decomposition must route
+        // each decomposed task to the best-fit team member by overwriting
+        // the decomposer's suggested template with the member's Name.
+        // SwarmOrchestrator's team-member lookup keys on Name, so this
+        // is what actually lands the work on the right person.
+        var registry = new FakeTeamRegistry();
+        var team = new TeamInfo(
+            Id: "team-roleaware",
+            WorkspaceId: "ws-1",
+            ProjectId: null,
+            Name: "role-team",
+            Description: null,
+            Origin: "user",
+            CreatedBy: "alice",
+            CreatedAt: DateTimeOffset.UtcNow)
+        {
+            DecompositionMode = TeamDecompositionMode.RoleAware,
+        };
+        registry.CreateTeam(team);
+
+        registry.RegisterMember(new TeamMemberInfo
+        {
+            Id = "m-reviewer",
+            TeamId = team.Id,
+            WorkspaceId = "ws-1",
+            Name = "senior-reviewer",
+            Role = Sovrant.Agents.Models.AgentRole.Reviewer,
+            Template = "reviewer",
+            SystemPrompt = "review code",
+            CreatedBy = "alice",
+        });
+        registry.RegisterMember(new TeamMemberInfo
+        {
+            Id = "m-coder",
+            TeamId = team.Id,
+            WorkspaceId = "ws-1",
+            Name = "senior-coder",
+            Role = Sovrant.Agents.Models.AgentRole.Coder,
+            Template = "coder",
+            SystemPrompt = "write code",
+            CreatedBy = "alice",
+        });
+
+        var capturing = new CapturingSwarmOrchestrator();
+        // Decomposer suggests generic template names; role-aware dispatch
+        // must rewrite these to the matched member names.
+        var decomposer = new TemplatingDecomposer(
+            ("t1", "code-module", "coder"),
+            ("t2", "review-module", "reviewer"));
+        var orchestrator = BuildOrchestrator(registry, capturing, decomposer);
+
+        await orchestrator.RunAsync(new EnsembleRunRequest
+        {
+            Goal = "ship feature",
+            TeamId = team.Id,
+            WorkspaceId = "ws-1",
+            UserId = "alice",
+        });
+
+        Assert.NotNull(capturing.LastPlan);
+        var byId = capturing.LastPlan!.Tasks.ToDictionary(t => t.Id);
+        Assert.Equal("senior-coder", byId["t1"].AgentTemplate);
+        Assert.Equal("senior-reviewer", byId["t2"].AgentTemplate);
+    }
+
+    [Fact]
+    public async Task OpenDecomposition_DoesNotRewriteAgentTemplate()
+    {
+        // DecompositionMode.Open decomposes but does NOT constrain to
+        // the team roster — the suggested template survives so ephemeral
+        // or built-in workers can pick it up.
+        var registry = new FakeTeamRegistry();
+        var team = new TeamInfo(
+            Id: "team-open",
+            WorkspaceId: "ws-1",
+            ProjectId: null,
+            Name: "open-team",
+            Description: null,
+            Origin: "user",
+            CreatedBy: "alice",
+            CreatedAt: DateTimeOffset.UtcNow)
+        {
+            DecompositionMode = TeamDecompositionMode.Open,
+        };
+        registry.CreateTeam(team);
+
+        registry.RegisterMember(new TeamMemberInfo
+        {
+            Id = "m-coder",
+            TeamId = team.Id,
+            WorkspaceId = "ws-1",
+            Name = "senior-coder",
+            Role = Sovrant.Agents.Models.AgentRole.Coder,
+            Template = "coder",
+            SystemPrompt = "write code",
+            CreatedBy = "alice",
+        });
+
+        var capturing = new CapturingSwarmOrchestrator();
+        var decomposer = new TemplatingDecomposer(("t1", "code-module", "coder"));
+        var orchestrator = BuildOrchestrator(registry, capturing, decomposer);
+
+        await orchestrator.RunAsync(new EnsembleRunRequest
+        {
+            Goal = "ship feature",
+            TeamId = team.Id,
+            WorkspaceId = "ws-1",
+            UserId = "alice",
+        });
+
+        Assert.NotNull(capturing.LastPlan);
+        // Original template name survives — no role-aware rewrite.
+        Assert.Equal("coder", capturing.LastPlan!.Tasks.Single().AgentTemplate);
+    }
+
+    [Fact]
+    public async Task RoleAwareDecomposition_WithEmptyRoster_LeavesAgentTemplateUntouched()
+    {
+        // If the team has no members yet, EnsembleSelector can't match
+        // anyone. The run should still execute — the decomposer's suggested
+        // template flows through untouched so ephemeral workers spawn.
+        var registry = new FakeTeamRegistry();
+        var team = new TeamInfo(
+            Id: "team-empty-roster",
+            WorkspaceId: "ws-1",
+            ProjectId: null,
+            Name: "empty-roster",
+            Description: null,
+            Origin: "user",
+            CreatedBy: "alice",
+            CreatedAt: DateTimeOffset.UtcNow)
+        {
+            DecompositionMode = TeamDecompositionMode.RoleAware,
+        };
+        registry.CreateTeam(team);
+        // Intentionally no members registered.
+
+        var capturing = new CapturingSwarmOrchestrator();
+        var decomposer = new TemplatingDecomposer(("t1", "code-module", "coder"));
+        var orchestrator = BuildOrchestrator(registry, capturing, decomposer);
+
+        await orchestrator.RunAsync(new EnsembleRunRequest
+        {
+            Goal = "ship feature",
+            TeamId = team.Id,
+            WorkspaceId = "ws-1",
+            UserId = "alice",
+        });
+
+        Assert.NotNull(capturing.LastPlan);
+        Assert.Equal("coder", capturing.LastPlan!.Tasks.Single().AgentTemplate);
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────
 
     private static AgentOrchestrator BuildOrchestrator(
@@ -455,6 +611,34 @@ public sealed class AgentOrchestratorTeamProfileTests
                 WaveCount = 1,
             });
         }
+    }
+
+    /// <summary>Decomposer that emits tasks with caller-specified templates, so role-aware dispatch can be observed.</summary>
+    private sealed class TemplatingDecomposer : ISwarmDecomposer
+    {
+        private readonly (string Id, string Description, string Template)[] _tasks;
+
+        public TemplatingDecomposer(params (string Id, string Description, string Template)[] tasks)
+        {
+            _tasks = tasks;
+        }
+
+        public Task<SwarmPlan> DecomposeAsync(string prompt, SwarmConfig config, CancellationToken ct = default) =>
+            Task.FromResult(new SwarmPlan
+            {
+                Id = $"plan-{Guid.NewGuid():N}",
+                OriginalPrompt = prompt,
+                Tasks = _tasks
+                    .Select(t => new SwarmTaskNode
+                    {
+                        Id = t.Id,
+                        Description = t.Description,
+                        AgentTemplate = t.Template,
+                        Wave = 0,
+                    })
+                    .ToList<SwarmTaskNode>(),
+                WaveCount = 1,
+            });
     }
 
     private sealed class FakeAgentRunStore : IAgentRunStore

@@ -131,6 +131,25 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
             {
                 plan = await _decomposer.DecomposeAsync(request.Goal, _swarmConfig, ct).ConfigureAwait(false);
                 plan.TeamId = teamId;
+
+                // Phase 78 Path 2 commit 6 — role-aware dispatch.
+                // The decomposer suggests agent templates from its own catalog,
+                // but a RoleAware team wants each decomposed task routed to the
+                // best-fit team member by role/template/tool overlap. Overwrite
+                // the suggested template with the matched member's Name so the
+                // SwarmOrchestrator's team-member lookup (which keys on Name)
+                // resolves to the right person.
+                if (teamId is not null &&
+                    teamProfile?.DecompositionMode == TeamDecompositionMode.RoleAware)
+                {
+                    var assignments = EnsembleSelector.SelectMembers(
+                        plan.Tasks.ToList(), [teamId], _teamRegistry);
+                    foreach (var node in plan.Tasks)
+                    {
+                        if (assignments.TryGetValue(node.Id, out var member) && member is not null)
+                            node.AgentTemplate = member.Name;
+                    }
+                }
             }
             else
             {
