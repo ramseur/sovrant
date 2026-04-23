@@ -30,4 +30,7 @@
     <SolidColorBrush x:Key="InputBackground" Color="#2A2A2A" />
     <SolidColorBrush x:Key="InputBorder" Color="#3A3A3A" />
 
+    <!-- Markdown -->
+    <SolidColorBrush x:Key="CodeBlockBackground" Color="#111111" />
+
 </ResourceDictionary>

@@ -83,7 +83,14 @@ public class SafeMarkdownPresenter : ContentControl
             RenderMarkdownAsync();
     }
 
-    private static Control? RenderBlock(Block block)
+    private IBrush ThemeBrush(string resourceKey, string fallbackHex)
+    {
+        if (this.TryFindResource(resourceKey, out var val) && val is IBrush brush)
+            return brush;
+        return new SolidColorBrush(Color.Parse(fallbackHex));
+    }
+
+    private Control? RenderBlock(Block block)
     {
         switch (block)
         {
@@ -100,7 +107,7 @@ public class SafeMarkdownPresenter : ContentControl
                     FontSize = fontSize,
                     FontWeight = FontWeight.Bold,
                     TextWrapping = TextWrapping.Wrap,
-                    Foreground = GetBrush("#FFFFFF"),
+                    Foreground = ThemeBrush("TextPrimary", "#E0E0E0"),
                     Margin = new Thickness(0, 4, 0, 2),
                 };
                 SetInlines(headerTb, heading.Inline);
@@ -111,7 +118,7 @@ public class SafeMarkdownPresenter : ContentControl
                 {
                     FontSize = 14,
                     TextWrapping = TextWrapping.Wrap,
-                    Foreground = GetBrush("#E0E0E0"),
+                    Foreground = ThemeBrush("TextPrimary", "#E0E0E0"),
                     Margin = new Thickness(0, 2, 0, 2),
                 };
                 SetInlines(paraTb, paragraph.Inline);
@@ -132,7 +139,7 @@ public class SafeMarkdownPresenter : ContentControl
                 return new Border
                 {
                     Height = 1,
-                    Background = GetBrush("#3A3A3A"),
+                    Background = ThemeBrush("SurfaceBorder", "#3A3A3A"),
                     Margin = new Thickness(0, 8),
                 };
 
@@ -145,7 +152,7 @@ public class SafeMarkdownPresenter : ContentControl
                 }
                 return new Border
                 {
-                    BorderBrush = GetBrush("#6D52C6"),
+                    BorderBrush = ThemeBrush("BrandPrimary", "#6D52C6"),
                     BorderThickness = new Thickness(3, 0, 0, 0),
                     Padding = new Thickness(12, 4, 0, 4),
                     Child = quotePanel,
@@ -157,7 +164,7 @@ public class SafeMarkdownPresenter : ContentControl
         }
     }
 
-    private static Border CreateCodeBlock(string code, string? language)
+    private Border CreateCodeBlock(string code, string? language)
     {
         var panel = new StackPanel();
 
@@ -170,7 +177,7 @@ public class SafeMarkdownPresenter : ContentControl
             {
                 Text = language,
                 FontSize = 11,
-                Foreground = GetBrush("#999999"),
+                Foreground = ThemeBrush("TextSecondary", "#999999"),
                 VerticalAlignment = VerticalAlignment.Center,
             });
         }
@@ -180,8 +187,8 @@ public class SafeMarkdownPresenter : ContentControl
             Content = "Copy",
             FontSize = 10,
             Padding = new Thickness(8, 2),
-            Background = GetBrush("#2A2A2A"),
-            Foreground = GetBrush("#AAAAAA"),
+            Background = ThemeBrush("SurfaceHover", "#2A2A2A"),
+            Foreground = ThemeBrush("TextSecondary", "#AAAAAA"),
             BorderThickness = new Thickness(0),
             CornerRadius = new CornerRadius(4),
             Cursor = new Cursor(StandardCursorType.Hand),
@@ -211,14 +218,16 @@ public class SafeMarkdownPresenter : ContentControl
             Text = code,
             FontFamily = new FontFamily("Consolas,Menlo,monospace"),
             FontSize = 12,
-            Foreground = GetBrush("#E0E0E0"),
+            Foreground = ThemeBrush("TextPrimary", "#E0E0E0"),
             TextWrapping = TextWrapping.NoWrap,
             Padding = new Thickness(12, 8),
         });
 
         return new Border
         {
-            Background = GetBrush("#111111"),
+            Background = ThemeBrush("CodeBlockBackground", "#111111"),
+            BorderBrush = ThemeBrush("SurfaceBorder", "#3A3A3A"),
+            BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
             Margin = new Thickness(0, 4),
             Child = new ScrollViewer
@@ -230,7 +239,7 @@ public class SafeMarkdownPresenter : ContentControl
         };
     }
 
-    private static Border RenderList(ListBlock list)
+    private Border RenderList(ListBlock list)
     {
         var panel = new StackPanel { Spacing = 2, Margin = new Thickness(0, 4) };
         int index = 1;
@@ -246,7 +255,7 @@ public class SafeMarkdownPresenter : ContentControl
             {
                 Text = bullet,
                 FontSize = 14,
-                Foreground = GetBrush("#999999"),
+                Foreground = ThemeBrush("TextSecondary", "#999999"),
                 Width = list.IsOrdered ? 20 : 12,
                 TextAlignment = TextAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
@@ -269,7 +278,7 @@ public class SafeMarkdownPresenter : ContentControl
         };
     }
 
-    private static void SetInlines(SelectableTextBlock tb, ContainerInline? inlines)
+    private void SetInlines(SelectableTextBlock tb, ContainerInline? inlines)
     {
         if (inlines is null)
         {
@@ -287,7 +296,7 @@ public class SafeMarkdownPresenter : ContentControl
         tb.Inlines = avInlines;
     }
 
-    private static void AddInline(Avalonia.Controls.Documents.InlineCollection inlines, Inline inline)
+    private void AddInline(Avalonia.Controls.Documents.InlineCollection inlines, Inline inline)
     {
         switch (inline)
         {
@@ -319,8 +328,8 @@ public class SafeMarkdownPresenter : ContentControl
                 var codeRun = new Avalonia.Controls.Documents.Run(code.Content)
                 {
                     FontFamily = new FontFamily("Consolas,Menlo,monospace"),
-                    Background = GetBrush("#2A2A2A"),
-                    Foreground = GetBrush("#E0E0E0"),
+                    Background = ThemeBrush("SurfaceHover", "#2A2A2A"),
+                    Foreground = ThemeBrush("TextPrimary", "#E0E0E0"),
                 };
                 inlines.Add(codeRun);
                 break;
@@ -337,7 +346,7 @@ public class SafeMarkdownPresenter : ContentControl
                     {
                         inlines.Add(new Avalonia.Controls.Documents.Run(linkText.Content.ToString())
                         {
-                            Foreground = GetBrush("#6D52C6"),
+                            Foreground = ThemeBrush("BrandPrimary", "#6D52C6"),
                         });
                     }
                     else
@@ -374,13 +383,11 @@ public class SafeMarkdownPresenter : ContentControl
         return sb.ToString();
     }
 
-    private static SolidColorBrush GetBrush(string hex) => new(Color.Parse(hex));
-
-    private static SelectableTextBlock CreateFallback(string text) => new()
+    private SelectableTextBlock CreateFallback(string text) => new()
     {
         Text = text,
         TextWrapping = TextWrapping.Wrap,
         FontSize = 14,
-        Foreground = GetBrush("#E0E0E0"),
+        Foreground = ThemeBrush("TextPrimary", "#E0E0E0"),
     };
 }

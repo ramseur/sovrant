@@ -87,7 +87,14 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         {
             if (entry.Role is "user" or "assistant")
             {
-                Messages.Add(new MessageViewModel { Role = entry.Role, Text = entry.Content, IsComplete = true });
+                Messages.Add(new MessageViewModel
+                {
+                    Role = entry.Role,
+                    Text = entry.Content,
+                    IsComplete = true,
+                    ModelName = entry.Role == "assistant" ? entry.Model : null,
+                    ProviderName = entry.Role == "assistant" ? entry.Provider : null,
+                });
             }
         }
 

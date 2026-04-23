@@ -54,9 +54,9 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
         // Insert the entry.
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO session_entries (session_id, entry_uid, timestamp, role, content, model,
+            INSERT INTO session_entries (session_id, entry_uid, timestamp, role, content, model, provider,
                                          input_tokens, output_tokens, tool_name, tool_use_id, is_error)
-            VALUES ($sid, $uid, $ts, $role, $content, $model, $in, $out, $tool, $tuid, $err)
+            VALUES ($sid, $uid, $ts, $role, $content, $model, $provider, $in, $out, $tool, $tuid, $err)
             """;
         cmd.Parameters.AddWithValue("$sid", sessionId);
         cmd.Parameters.AddWithValue("$uid", entry.Id);
@@ -64,6 +64,7 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
         cmd.Parameters.AddWithValue("$role", entry.Role);
         cmd.Parameters.AddWithValue("$content", entry.Content);
         cmd.Parameters.AddWithValue("$model", (object?)entry.Model ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$provider", (object?)entry.Provider ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$in", entry.InputTokens);
         cmd.Parameters.AddWithValue("$out", entry.OutputTokens);
         cmd.Parameters.AddWithValue("$tool", (object?)entry.ToolName ?? DBNull.Value);
@@ -93,7 +94,7 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            SELECT entry_uid, timestamp, role, content, model, input_tokens, output_tokens,
+            SELECT entry_uid, timestamp, role, content, model, provider, input_tokens, output_tokens,
                    tool_name, tool_use_id, is_error
             FROM session_entries
             WHERE session_id = $sid
@@ -112,11 +113,12 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
                 Content: reader.GetString(3))
             {
                 Model = await reader.IsDBNullAsync(4, ct).ConfigureAwait(false) ? null : reader.GetString(4),
-                InputTokens = reader.GetInt32(5),
-                OutputTokens = reader.GetInt32(6),
-                ToolName = await reader.IsDBNullAsync(7, ct).ConfigureAwait(false) ? null : reader.GetString(7),
-                ToolUseId = await reader.IsDBNullAsync(8, ct).ConfigureAwait(false) ? null : reader.GetString(8),
-                IsError = reader.GetInt32(9) != 0,
+                Provider = await reader.IsDBNullAsync(5, ct).ConfigureAwait(false) ? null : reader.GetString(5),
+                InputTokens = reader.GetInt32(6),
+                OutputTokens = reader.GetInt32(7),
+                ToolName = await reader.IsDBNullAsync(8, ct).ConfigureAwait(false) ? null : reader.GetString(8),
+                ToolUseId = await reader.IsDBNullAsync(9, ct).ConfigureAwait(false) ? null : reader.GetString(9),
+                IsError = reader.GetInt32(10) != 0,
             });
         }
 

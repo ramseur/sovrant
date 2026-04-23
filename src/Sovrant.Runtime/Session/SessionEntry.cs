@@ -14,6 +14,11 @@ public sealed record SessionEntry(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Model { get; init; }
 
+    /// <summary>The provider that served this entry (e.g. "OpenRouter"), if applicable.</summary>
+    [JsonPropertyName("provider")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Provider { get; init; }
+
     /// <summary>Input tokens consumed, if applicable.</summary>
     [JsonPropertyName("input_tokens")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]

@@ -308,6 +308,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             {
                 await AppendSessionEntryAsync("assistant", assistantText,
                     ct, model: _config.Model,
+                    provider: FriendlyProviderName(resolvedProvider),
                     inputTokens: accumulated.InputTokens,
                     outputTokens: accumulated.OutputTokens)
                     .ConfigureAwait(false);
@@ -737,6 +738,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         string content,
         CancellationToken ct,
         string? model = null,
+        string? provider = null,
         int inputTokens = 0,
         int outputTokens = 0,
         string? toolName = null,
@@ -750,6 +752,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             Content: content)
         {
             Model = model,
+            Provider = provider,
             InputTokens = inputTokens,
             OutputTokens = outputTokens,
             ToolName = toolName,
