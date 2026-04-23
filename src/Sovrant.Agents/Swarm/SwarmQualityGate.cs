@@ -10,7 +10,7 @@ namespace Sovrant.Agents.Swarm;
 /// Post-execution quality gate that reviews combined swarm output
 /// and returns a <see cref="QualityVerdict"/>.
 /// </summary>
-public sealed partial class SwarmQualityGate
+public sealed partial class SwarmQualityGate : ISwarmQualityGate
 {
     private static readonly JsonSerializerOptions s_jsonOptions = new()
     {

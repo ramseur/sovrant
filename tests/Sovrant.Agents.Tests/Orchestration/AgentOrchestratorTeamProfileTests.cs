@@ -241,31 +241,172 @@ public sealed class AgentOrchestratorTeamProfileTests
         Assert.False(capturing.LastConfig.FileLocksEnabled);
     }
 
+    [Fact]
+    public async Task QualityGate_Passes_WhenScoreMeetsThreshold_NoRetry()
+    {
+        var registry = new FakeTeamRegistry();
+        var team = new TeamInfo(
+            Id: "team-qg-pass",
+            WorkspaceId: "ws-1",
+            ProjectId: null,
+            Name: "qg-pass",
+            Description: null,
+            Origin: "user",
+            CreatedBy: "alice",
+            CreatedAt: DateTimeOffset.UtcNow)
+        {
+            QualityGateEnabled = true,
+            QualityGateThreshold = 7,
+            DecompositionMode = TeamDecompositionMode.Off,
+        };
+        registry.CreateTeam(team);
+
+        var capturing = new CapturingSwarmOrchestrator();
+        var gate = new FakeSwarmQualityGate(new QualityVerdict(9, "pass", "good"));
+        var orchestrator = BuildOrchestrator(registry, capturing, new StubDecomposer(), qualityGate: gate);
+
+        var result = await orchestrator.RunAsync(new EnsembleRunRequest
+        {
+            Goal = "gate-pass",
+            TeamId = team.Id,
+            WorkspaceId = "ws-1",
+            UserId = "alice",
+        });
+
+        Assert.Equal(1, capturing.ExecuteCallCount);
+        Assert.Equal(1, gate.CallCount);
+        Assert.NotNull(result.SwarmResult.QualityGate);
+        Assert.Equal(9, result.SwarmResult.QualityGate!.Score);
+    }
+
+    [Fact]
+    public async Task QualityGate_BelowThreshold_TriggersOneRetry_SecondVerdictWins()
+    {
+        var registry = new FakeTeamRegistry();
+        var team = new TeamInfo(
+            Id: "team-qg-retry",
+            WorkspaceId: "ws-1",
+            ProjectId: null,
+            Name: "qg-retry",
+            Description: null,
+            Origin: "user",
+            CreatedBy: "alice",
+            CreatedAt: DateTimeOffset.UtcNow)
+        {
+            QualityGateEnabled = true,
+            QualityGateThreshold = 7,
+            DecompositionMode = TeamDecompositionMode.Off,
+        };
+        registry.CreateTeam(team);
+
+        var capturing = new CapturingSwarmOrchestrator();
+        var gate = new FakeSwarmQualityGate(
+            new QualityVerdict(4, "needs_revision", "try again"),
+            new QualityVerdict(9, "pass", "much better"));
+        var orchestrator = BuildOrchestrator(registry, capturing, new StubDecomposer(), qualityGate: gate);
+
+        var result = await orchestrator.RunAsync(new EnsembleRunRequest
+        {
+            Goal = "gate-retry",
+            TeamId = team.Id,
+            WorkspaceId = "ws-1",
+            UserId = "alice",
+        });
+
+        // First execute + retry execute.
+        Assert.Equal(2, capturing.ExecuteCallCount);
+        Assert.Equal(2, gate.CallCount);
+        Assert.NotNull(result.SwarmResult.QualityGate);
+        // Second verdict is the authoritative one.
+        Assert.Equal(9, result.SwarmResult.QualityGate!.Score);
+    }
+
+    [Fact]
+    public async Task QualityGate_ThresholdComesFromTeamProfile()
+    {
+        var registry = new FakeTeamRegistry();
+        var team = new TeamInfo(
+            Id: "team-qg-threshold",
+            WorkspaceId: "ws-1",
+            ProjectId: null,
+            Name: "qg-threshold",
+            Description: null,
+            Origin: "user",
+            CreatedBy: "alice",
+            CreatedAt: DateTimeOffset.UtcNow)
+        {
+            QualityGateEnabled = true,
+            // Team demands a higher bar than the global default of 7.
+            QualityGateThreshold = 9,
+            DecompositionMode = TeamDecompositionMode.Off,
+        };
+        registry.CreateTeam(team);
+
+        var capturing = new CapturingSwarmOrchestrator();
+        // Score 8 passes global (>=7) but fails the team's stricter 9 bar.
+        var gate = new FakeSwarmQualityGate(
+            new QualityVerdict(8, "needs_revision", "close"),
+            new QualityVerdict(10, "pass", "now perfect"));
+        var orchestrator = BuildOrchestrator(registry, capturing, new StubDecomposer(), qualityGate: gate);
+
+        await orchestrator.RunAsync(new EnsembleRunRequest
+        {
+            Goal = "strict threshold",
+            TeamId = team.Id,
+            WorkspaceId = "ws-1",
+            UserId = "alice",
+        });
+
+        // Team profile threshold must have propagated, forcing a retry at score 8.
+        Assert.Equal(2, capturing.ExecuteCallCount);
+        Assert.Equal(9, capturing.LastConfig!.QualityGateThreshold);
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────
 
     private static AgentOrchestrator BuildOrchestrator(
         ITeamRegistry registry,
         ISwarmOrchestrator swarmOrchestrator,
         ISwarmDecomposer decomposer,
-        SwarmConfig? swarmConfig = null)
+        SwarmConfig? swarmConfig = null,
+        ISwarmQualityGate? qualityGate = null)
     {
-        var services = new ServiceCollection().BuildServiceProvider();
-        var factory = new SovrantAgentFactory(services, NullLoggerFactory.Instance);
-        var qualityGate = new SwarmQualityGate(factory, NullLogger<SwarmQualityGate>.Instance);
+        var gate = qualityGate ?? new FakeSwarmQualityGate(new QualityVerdict(10, "pass", "ok"));
         return new AgentOrchestrator(
             swarmOrchestrator,
             decomposer,
             registry,
             new FakeAgentRunStore(),
-            qualityGate,
+            gate,
             swarmConfig ?? new SwarmConfig { Enabled = true },
             NullLogger<AgentOrchestrator>.Instance);
+    }
+
+    private sealed class FakeSwarmQualityGate : ISwarmQualityGate
+    {
+        private readonly Queue<QualityVerdict> _verdicts;
+        private readonly QualityVerdict _fallback;
+
+        public FakeSwarmQualityGate(params QualityVerdict[] verdicts)
+        {
+            _verdicts = new Queue<QualityVerdict>(verdicts);
+            _fallback = verdicts.Length > 0 ? verdicts[^1] : new QualityVerdict(10, "pass", string.Empty);
+        }
+
+        public int CallCount { get; private set; }
+
+        public Task<QualityVerdict> ReviewAsync(string swarmId, string originalPrompt, string combinedOutput, CancellationToken ct = default)
+        {
+            CallCount++;
+            return Task.FromResult(_verdicts.Count > 0 ? _verdicts.Dequeue() : _fallback);
+        }
     }
 
     private sealed class CapturingSwarmOrchestrator : ISwarmOrchestrator
     {
         public SwarmConfig? LastConfig { get; private set; }
         public SwarmPlan? LastPlan { get; private set; }
+        public int ExecuteCallCount { get; private set; }
 
         public Task<SwarmResult> ExecuteAsync(
             SwarmPlan plan,
@@ -276,6 +417,7 @@ public sealed class AgentOrchestratorTeamProfileTests
         {
             LastPlan = plan;
             LastConfig = config;
+            ExecuteCallCount++;
             // Mark each task as completed so status resolves to Completed.
             foreach (var task in plan.Tasks)
             {

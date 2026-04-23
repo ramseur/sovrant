@@ -37,7 +37,7 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
     private readonly ISwarmDecomposer _decomposer;
     private readonly ITeamRegistry _teamRegistry;
     private readonly IAgentRunStore _runStore;
-    private readonly SwarmQualityGate _qualityGate;
+    private readonly ISwarmQualityGate _qualityGate;
     private readonly SwarmConfig _swarmConfig;
     private readonly IPMCoordinator? _pmCoordinator;
     private readonly ILogger<AgentOrchestrator> _logger;
@@ -47,7 +47,7 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
         ISwarmDecomposer decomposer,
         ITeamRegistry teamRegistry,
         IAgentRunStore runStore,
-        SwarmQualityGate qualityGate,
+        ISwarmQualityGate qualityGate,
         SwarmConfig swarmConfig,
         ILogger<AgentOrchestrator> logger,
         IPMCoordinator? pmCoordinator = null)
@@ -167,6 +167,8 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
                 ?? teamProfile?.FileLocksEnabled
                 ?? _swarmConfig.FileLocksEnabled;
 
+            var qualityGateThreshold = teamProfile?.QualityGateThreshold ?? _swarmConfig.QualityGateThreshold;
+
             var effectiveConfig = new SwarmConfig
             {
                 Enabled = true,
@@ -174,6 +176,7 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
                 MaxTokenBudget = _swarmConfig.MaxTokenBudget,
                 MaxRetries = _swarmConfig.MaxRetries,
                 QualityGateEnabled = qualityGate,
+                QualityGateThreshold = qualityGateThreshold,
                 FileLocksEnabled = lockFiles,
                 TaskTimeoutSeconds = _swarmConfig.TaskTimeoutSeconds,
                 Permissions = request.Permissions,
@@ -187,6 +190,18 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
             // ── Execute via SwarmOrchestrator ────────────────────────────
             var result = await _swarmOrchestrator.ExecuteAsync(
                 plan, effectiveConfig, request.OnEvent, swarmContext, ct).ConfigureAwait(false);
+
+            // ── Quality-gate review + one-shot retry ────────────────────
+            // Phase 78 Path 2 — if the effective config opts into the gate
+            // and the run actually produced output, we ask the reviewer for
+            // a verdict. A sub-threshold score triggers exactly one retry:
+            // tasks are reset to Pending, ExecuteAsync runs again, and the
+            // second verdict becomes the authoritative one.
+            if (effectiveConfig.QualityGateEnabled && result.Status == SwarmStatus.Completed)
+            {
+                result = await RunQualityGateAsync(
+                    plan, effectiveConfig, request, swarmContext, result, runId, ct).ConfigureAwait(false);
+            }
 
             // ── Phase 57: Inter-group coordination via PM agents ────────
             if (request.EnableCoordination == true && _pmCoordinator is not null && teamId is not null)
@@ -235,6 +250,57 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
             await _runStore.UpdateStatusAsync(runId, "failed", ct: ct).ConfigureAwait(false);
             throw;
         }
+    }
+
+    private async Task<SwarmResult> RunQualityGateAsync(
+        SwarmPlan plan,
+        SwarmConfig config,
+        EnsembleRunRequest request,
+        SwarmExecutionContext swarmContext,
+        SwarmResult initialResult,
+        string runId,
+        CancellationToken ct)
+    {
+        request.OnEvent?.Invoke(new SwarmEvent.QualityGateStarted(runId));
+
+        var verdict = await _qualityGate.ReviewAsync(
+            runId, request.Goal, initialResult.CombinedOutput, ct).ConfigureAwait(false);
+
+        request.OnEvent?.Invoke(new SwarmEvent.QualityGateCompleted(runId, verdict));
+
+        if (verdict.Score >= config.QualityGateThreshold)
+        {
+            initialResult.QualityGate = verdict;
+            return initialResult;
+        }
+
+        // Sub-threshold: reset tasks and re-execute once.
+        foreach (var node in plan.Tasks)
+        {
+            node.Status = SwarmTaskStatus.Pending;
+            node.Output = null;
+            node.Error = null;
+            node.RetryCount = 0;
+        }
+
+        var retryResult = await _swarmOrchestrator.ExecuteAsync(
+            plan, config, request.OnEvent, swarmContext, ct).ConfigureAwait(false);
+
+        if (retryResult.Status != SwarmStatus.Completed)
+        {
+            retryResult.QualityGate = verdict;
+            return retryResult;
+        }
+
+        request.OnEvent?.Invoke(new SwarmEvent.QualityGateStarted(runId));
+
+        var secondVerdict = await _qualityGate.ReviewAsync(
+            runId, request.Goal, retryResult.CombinedOutput, ct).ConfigureAwait(false);
+
+        request.OnEvent?.Invoke(new SwarmEvent.QualityGateCompleted(runId, secondVerdict));
+
+        retryResult.QualityGate = secondVerdict;
+        return retryResult;
     }
 
     private static string ResolveMode(EnsembleRunRequest request)

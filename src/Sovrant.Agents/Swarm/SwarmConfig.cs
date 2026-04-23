@@ -28,6 +28,10 @@ public sealed class SwarmConfig
     [JsonPropertyName("quality_gate")]
     public bool QualityGateEnabled { get; init; } = true;
 
+    /// <summary>Minimum score (0–10) required for the quality gate to pass without triggering a retry. Default 7.</summary>
+    [JsonPropertyName("quality_gate_threshold")]
+    public int QualityGateThreshold { get; init; } = 7;
+
     /// <summary>Whether to acquire per-file locks during parallel execution. Defaults to <c>true</c>.</summary>
     [JsonPropertyName("file_locks_enabled")]
     public bool FileLocksEnabled { get; init; } = true;
