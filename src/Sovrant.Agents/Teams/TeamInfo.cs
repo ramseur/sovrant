@@ -31,10 +31,16 @@ public sealed record TeamInfo(
     DateTimeOffset CreatedAt)
 {
     /// <summary>Execution profile for this team's runs.</summary>
-    public TeamRunMode RunMode { get; init; } = TeamRunMode.Sequential;
+    /// <remarks>
+    /// Phase 78 Path 2 commit 7 — new teams default to <see cref="TeamRunMode.Parallel"/>
+    /// so picking "Team" in the UI isn't a throughput downgrade vs. Swarm. Existing
+    /// persisted teams keep whatever was written at V015 migration time (sequential
+    /// for pre-V015 rows). Sequential remains available as an explicit opt-in.
+    /// </remarks>
+    public TeamRunMode RunMode { get; init; } = TeamRunMode.Parallel;
 
     /// <summary>Upper bound on concurrent member execution. Ignored when <see cref="RunMode"/> is <see cref="TeamRunMode.Sequential"/>.</summary>
-    public int MaxConcurrent { get; init; } = 1;
+    public int MaxConcurrent { get; init; } = 4;
 
     /// <summary>When true, parallel member tasks acquire per-file locks to serialize writes.</summary>
     public bool FileLocksEnabled { get; init; }

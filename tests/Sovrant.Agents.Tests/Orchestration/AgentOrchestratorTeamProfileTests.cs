@@ -363,6 +363,44 @@ public sealed class AgentOrchestratorTeamProfileTests
     }
 
     [Fact]
+    public async Task NewTeam_DefaultsToParallel_WithGlobalMaxConcurrent()
+    {
+        // Phase 78 Path 2 commit 7 — picking Team must not be a throughput
+        // downgrade vs. Swarm. A fresh team created without explicit init
+        // values runs parallel by default, at the same concurrency as the
+        // global SwarmConfig default.
+        var registry = new FakeTeamRegistry();
+        var team = new TeamInfo(
+            Id: "team-new-default",
+            WorkspaceId: "ws-1",
+            ProjectId: null,
+            Name: "fresh-team",
+            Description: null,
+            Origin: "user",
+            CreatedBy: "alice",
+            CreatedAt: DateTimeOffset.UtcNow);
+        // No RunMode / MaxConcurrent overrides — record defaults must apply.
+        Assert.Equal(TeamRunMode.Parallel, team.RunMode);
+        Assert.Equal(4, team.MaxConcurrent);
+        registry.CreateTeam(team);
+
+        var capturing = new CapturingSwarmOrchestrator();
+        var orchestrator = BuildOrchestrator(registry, capturing, new StubDecomposer());
+
+        await orchestrator.RunAsync(new EnsembleRunRequest
+        {
+            Goal = "default team run",
+            TeamId = team.Id,
+            WorkspaceId = "ws-1",
+            UserId = "alice",
+        });
+
+        Assert.NotNull(capturing.LastConfig);
+        // Parallel + default MaxConcurrent=4 must reach the swarm orchestrator.
+        Assert.Equal(4, capturing.LastConfig!.MaxConcurrent);
+    }
+
+    [Fact]
     public async Task RoleAwareDecomposition_RewritesAgentTemplate_ToMatchedMemberName()
     {
         // Phase 78 Path 2 commit 6 — RoleAware decomposition must route

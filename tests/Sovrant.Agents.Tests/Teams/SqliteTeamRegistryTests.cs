@@ -214,15 +214,18 @@ public sealed class SqliteTeamRegistryTests : IAsyncDisposable
     // ── Run profile (Phase 78 Path 2) ───────────────────────────────────
 
     [Fact]
-    public void CreateTeam_DefaultRunProfile_IsPessimistic()
+    public void CreateTeam_DefaultRunProfile_IsParallel()
     {
+        // Phase 78 Path 2 commit 7 — new teams default to parallel
+        // execution so picking Team isn't a throughput downgrade vs. Swarm.
+        // Safety rails (file locks, quality gate) remain opt-in.
         var team = MakeTeam();
         _registry.CreateTeam(team);
 
         var got = _registry.GetTeam(team.Id);
         Assert.NotNull(got);
-        Assert.Equal(TeamRunMode.Sequential, got.RunMode);
-        Assert.Equal(1, got.MaxConcurrent);
+        Assert.Equal(TeamRunMode.Parallel, got.RunMode);
+        Assert.Equal(4, got.MaxConcurrent);
         Assert.False(got.FileLocksEnabled);
         Assert.False(got.QualityGateEnabled);
         Assert.Equal(7, got.QualityGateThreshold);
