@@ -131,6 +131,91 @@
                                 </StackPanel>
                             </DockPanel>
 
+                            <TextBlock Text="Run Profile" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+
+                            <Border Padding="14,14" CornerRadius="8"
+                                    Background="{DynamicResource SurfaceBackground}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                <StackPanel Spacing="12">
+                                    <DockPanel>
+                                        <ComboBox DockPanel.Dock="Right" Width="140"
+                                                  ItemsSource="{Binding $parent[UserControl].((vm:OrchestrationViewModel)DataContext).RunModeOptions}"
+                                                  SelectedItem="{Binding RunModeName}"
+                                                  FontSize="12" />
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="Run Mode"
+                                                       Foreground="{DynamicResource TextPrimary}" />
+                                            <TextBlock Text="Sequential, Parallel, or Swarm"
+                                                       FontSize="10" Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+                                    </DockPanel>
+
+                                    <DockPanel>
+                                        <NumericUpDown DockPanel.Dock="Right" Width="120"
+                                                       Value="{Binding MaxConcurrent}"
+                                                       Minimum="1" Maximum="16" Increment="1"
+                                                       FormatString="0" FontSize="12" />
+                                        <TextBlock Text="Max Concurrent"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+
+                                    <DockPanel>
+                                        <CheckBox DockPanel.Dock="Right"
+                                                  IsChecked="{Binding FileLocksEnabled}" />
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="File Locks"
+                                                       Foreground="{DynamicResource TextPrimary}" />
+                                            <TextBlock Text="Serialize concurrent writes to the same file"
+                                                       FontSize="10" Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+                                    </DockPanel>
+
+                                    <DockPanel>
+                                        <CheckBox DockPanel.Dock="Right"
+                                                  IsChecked="{Binding QualityGateEnabled}" />
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="Quality Gate"
+                                                       Foreground="{DynamicResource TextPrimary}" />
+                                            <TextBlock Text="Post-run review + optional retry"
+                                                       FontSize="10" Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+                                    </DockPanel>
+
+                                    <DockPanel IsVisible="{Binding QualityGateEnabled}">
+                                        <NumericUpDown DockPanel.Dock="Right" Width="120"
+                                                       Value="{Binding QualityGateThreshold}"
+                                                       Minimum="0" Maximum="10" Increment="1"
+                                                       FormatString="0" FontSize="12" />
+                                        <TextBlock Text="Quality Threshold (0–10)"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+
+                                    <DockPanel>
+                                        <ComboBox DockPanel.Dock="Right" Width="140"
+                                                  ItemsSource="{Binding $parent[UserControl].((vm:OrchestrationViewModel)DataContext).DecompositionModeOptions}"
+                                                  SelectedItem="{Binding DecompositionModeName}"
+                                                  FontSize="12" />
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="Decomposition"
+                                                       Foreground="{DynamicResource TextPrimary}" />
+                                            <TextBlock Text="Off, RoleAware, or Open"
+                                                       FontSize="10" Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+                                    </DockPanel>
+
+                                    <Button Content="Save Profile"
+                                            Command="{Binding $parent[UserControl].((vm:OrchestrationViewModel)DataContext).SaveTeamProfileCommand}"
+                                            CommandParameter="{Binding}"
+                                            HorizontalAlignment="Left"
+                                            Padding="14,6" CornerRadius="6"
+                                            Background="{DynamicResource BrandPrimary}"
+                                            Foreground="White" FontWeight="SemiBold" />
+                                </StackPanel>
+                            </Border>
+
                             <TextBlock Text="Members" FontSize="14" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextPrimary}" />
 

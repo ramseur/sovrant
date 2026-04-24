@@ -7,8 +7,6 @@ using Sovrant.Agents.Teams;
 
 namespace Sovrant.Desktop.ViewModels;
 
-public enum TeamRunMode { Solo, Sequential, Swarm }
-
 public partial class OrchestrationViewModel : ViewModelBase
 {
     private readonly ITeamRegistry _teamRegistry;
@@ -22,6 +20,12 @@ public partial class OrchestrationViewModel : ViewModelBase
     public bool HasNoSelection => SelectedTeam is null && !ShowSwarmConfig;
 
     public ObservableCollection<TeamItemViewModel> Teams { get; } = [];
+
+    public IReadOnlyList<string> RunModeOptions { get; } =
+        [nameof(TeamRunMode.Sequential), nameof(TeamRunMode.Parallel), nameof(TeamRunMode.Swarm)];
+
+    public IReadOnlyList<string> DecompositionModeOptions { get; } =
+        [nameof(TeamDecompositionMode.Off), nameof(TeamDecompositionMode.RoleAware), nameof(TeamDecompositionMode.Open)];
 
     [ObservableProperty] private bool _swarmEnabled;
     [ObservableProperty] private int _maxConcurrent;
@@ -92,6 +96,40 @@ public partial class OrchestrationViewModel : ViewModelBase
         LoadAll();
     }
 
+    [RelayCommand]
+    private void SaveTeamProfile(TeamItemViewModel team)
+    {
+        if (!Enum.TryParse<TeamRunMode>(team.RunModeName, ignoreCase: true, out var runMode))
+        {
+            StatusMessage = $"Unknown run mode '{team.RunModeName}'.";
+            return;
+        }
+
+        if (!Enum.TryParse<TeamDecompositionMode>(team.DecompositionModeName, ignoreCase: true, out var decompositionMode))
+        {
+            StatusMessage = $"Unknown decomposition mode '{team.DecompositionModeName}'.";
+            return;
+        }
+
+        var profile = new TeamRunProfile(
+            runMode,
+            team.MaxConcurrent,
+            team.FileLocksEnabled,
+            team.QualityGateEnabled,
+            team.QualityGateThreshold,
+            decompositionMode);
+
+        if (_teamRegistry.UpdateTeamRunProfile(team.TeamId, profile))
+        {
+            StatusMessage = $"Saved run profile for '{team.Name}'.";
+            LoadAll();
+        }
+        else
+        {
+            StatusMessage = $"Could not save '{team.Name}' — team not found.";
+        }
+    }
+
     partial void OnSelectedTeamChanged(TeamItemViewModel? value)
     {
         OnPropertyChanged(nameof(HasSelection));
@@ -112,11 +150,6 @@ public partial class OrchestrationViewModel : ViewModelBase
         foreach (var t in _teamRegistry.ListTeams())
         {
             var members = _teamRegistry.GetTeamMembers(t.Id).ToList();
-            var mode = members.Count switch
-            {
-                <= 1 => TeamRunMode.Solo,
-                _ => SwarmEnabled ? TeamRunMode.Swarm : TeamRunMode.Sequential,
-            };
 
             var item = new TeamItemViewModel
             {
@@ -124,8 +157,13 @@ public partial class OrchestrationViewModel : ViewModelBase
                 Name = t.Name,
                 Description = t.Description ?? string.Empty,
                 Subtitle = members.Count == 1 ? "1 agent" : $"{members.Count} agents",
-                Mode = mode,
-                ModeLabel = mode.ToString(),
+                RunModeName = t.RunMode.ToString(),
+                ModeLabel = t.RunMode.ToString(),
+                MaxConcurrent = t.MaxConcurrent,
+                FileLocksEnabled = t.FileLocksEnabled,
+                QualityGateEnabled = t.QualityGateEnabled,
+                QualityGateThreshold = t.QualityGateThreshold,
+                DecompositionModeName = t.DecompositionMode.ToString(),
             };
 
             foreach (var m in members)
@@ -228,8 +266,13 @@ public partial class TeamItemViewModel : ViewModelBase
     [ObservableProperty] private string _name = string.Empty;
     [ObservableProperty] private string _description = string.Empty;
     [ObservableProperty] private string _subtitle = string.Empty;
-    [ObservableProperty] private TeamRunMode _mode;
+    [ObservableProperty] private string _runModeName = nameof(TeamRunMode.Parallel);
     [ObservableProperty] private string _modeLabel = string.Empty;
+    [ObservableProperty] private int _maxConcurrent = 4;
+    [ObservableProperty] private bool _fileLocksEnabled;
+    [ObservableProperty] private bool _qualityGateEnabled;
+    [ObservableProperty] private int _qualityGateThreshold = 7;
+    [ObservableProperty] private string _decompositionModeName = nameof(TeamDecompositionMode.Off);
 
     public ObservableCollection<TeamMemberItemViewModel> Members { get; } = [];
 }
