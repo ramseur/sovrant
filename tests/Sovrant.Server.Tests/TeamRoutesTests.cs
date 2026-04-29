@@ -111,6 +111,92 @@ public sealed class TeamRoutesTests : IClassFixture<SovrantWebAppFactory>
     }
 
     [Fact]
+    public async Task UpdateTeamProfile_PersistsAllFields()
+    {
+        var created = await PostJsonAsync("/v1/teams", new { name = "profile-persist", workspace_id = "ws-1", created_by = "alice" });
+        var teamId = created.GetProperty("id").GetString()!;
+
+        var req = Auth(HttpMethod.Put, $"/v1/teams/{teamId}/profile");
+        req.Content = JsonContent.Create(new
+        {
+            run_mode = "sequential",
+            max_concurrent = 1,
+            file_locks_enabled = true,
+            quality_gate_enabled = true,
+            quality_gate_threshold = 9,
+            decomposition_mode = "roleAware",
+        });
+        var resp = await _client.SendAsync(req);
+        resp.EnsureSuccessStatusCode();
+
+        // Echoed team in response reflects new profile.
+        // Enum values are camelCase on the wire (route uses JsonStringEnumConverter with CamelCase).
+        var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        var team = doc.RootElement.GetProperty("team");
+        Assert.Equal("sequential", team.GetProperty("run_mode").GetString());
+        Assert.Equal(1, team.GetProperty("max_concurrent").GetInt32());
+        Assert.True(team.GetProperty("file_locks_enabled").GetBoolean());
+        Assert.True(team.GetProperty("quality_gate_enabled").GetBoolean());
+        Assert.Equal(9, team.GetProperty("quality_gate_threshold").GetInt32());
+        Assert.Equal("roleAware", team.GetProperty("decomposition_mode").GetString());
+
+        // Subsequent GET returns the same persisted values.
+        var getReq = Auth(HttpMethod.Get, $"/v1/teams/{teamId}");
+        var getResp = await _client.SendAsync(getReq);
+        getResp.EnsureSuccessStatusCode();
+        var getDoc = JsonDocument.Parse(await getResp.Content.ReadAsStringAsync());
+        var persisted = getDoc.RootElement.GetProperty("team");
+        Assert.Equal("sequential", persisted.GetProperty("run_mode").GetString());
+        Assert.Equal(9, persisted.GetProperty("quality_gate_threshold").GetInt32());
+    }
+
+    [Fact]
+    public async Task UpdateTeamProfile_PartialUpdate_LeavesOmittedFieldsUnchanged()
+    {
+        // Set the team to a known non-default state first.
+        var created = await PostJsonAsync("/v1/teams", new { name = "profile-partial", workspace_id = "ws-1", created_by = "alice" });
+        var teamId = created.GetProperty("id").GetString()!;
+
+        var initial = Auth(HttpMethod.Put, $"/v1/teams/{teamId}/profile");
+        initial.Content = JsonContent.Create(new { run_mode = "sequential", max_concurrent = 3, quality_gate_threshold = 8 });
+        (await _client.SendAsync(initial)).EnsureSuccessStatusCode();
+
+        // Partial update touches only file_locks_enabled.
+        var partial = Auth(HttpMethod.Put, $"/v1/teams/{teamId}/profile");
+        partial.Content = JsonContent.Create(new { file_locks_enabled = true });
+        var partialResp = await _client.SendAsync(partial);
+        partialResp.EnsureSuccessStatusCode();
+
+        var doc = JsonDocument.Parse(await partialResp.Content.ReadAsStringAsync());
+        var team = doc.RootElement.GetProperty("team");
+        Assert.True(team.GetProperty("file_locks_enabled").GetBoolean());
+        Assert.Equal("sequential", team.GetProperty("run_mode").GetString());
+        Assert.Equal(3, team.GetProperty("max_concurrent").GetInt32());
+        Assert.Equal(8, team.GetProperty("quality_gate_threshold").GetInt32());
+    }
+
+    [Fact]
+    public async Task UpdateTeamProfile_Unknown_Returns404()
+    {
+        var req = Auth(HttpMethod.Put, "/v1/teams/nonexistent/profile");
+        req.Content = JsonContent.Create(new { run_mode = "parallel" });
+        var resp = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateTeamProfile_InvalidRunMode_Returns400()
+    {
+        var created = await PostJsonAsync("/v1/teams", new { name = "profile-invalid", workspace_id = "ws-1", created_by = "alice" });
+        var teamId = created.GetProperty("id").GetString()!;
+
+        var req = Auth(HttpMethod.Put, $"/v1/teams/{teamId}/profile");
+        req.Content = JsonContent.Create(new { run_mode = "turbo" });
+        var resp = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    [Fact]
     public async Task ListRuns_ReturnsEmptyByDefault()
     {
         var req = Auth(HttpMethod.Get, "/v1/runs");

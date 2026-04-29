@@ -14,6 +14,7 @@ namespace Sovrant.Server.Routes;
 ///   <item><c>GET /v1/teams</c> — list teams</item>
 ///   <item><c>GET /v1/teams/{id}</c> — get team + members</item>
 ///   <item><c>DELETE /v1/teams/{id}</c> — delete a team</item>
+///   <item><c>PUT /v1/teams/{id}/profile</c> — update run profile (RunMode, MaxConcurrent, locks, quality gate, decomposition)</item>
 ///   <item><c>POST /v1/teams/{id}/members</c> — add a member</item>
 ///   <item><c>GET /v1/teams/{id}/members</c> — list members</item>
 ///   <item><c>POST /v1/teams/{id}/runs</c> — start a run against a team</item>
@@ -72,6 +73,47 @@ internal static class TeamRoutes
             return registry.RemoveTeam(id)
                 ? Results.Ok(new { deleted = true })
                 : Results.NotFound(new { error = $"team '{id}' not found" });
+        });
+
+        // ── Team run profile ────────────────────────────────────────────
+        // Phase 78 Path 2 commit 9 — exposes ITeamRegistry.UpdateTeamRunProfile
+        // over HTTP so the inline editor on the Orchestration page can save
+        // when the Web frontend runs in remote mode (SOVRANT_RUNTIME_MODE=remote).
+        // PATCH-style: any field omitted is left unchanged.
+        app.MapPut("/v1/teams/{id}/profile", (string id, UpdateTeamProfileRequest req, ITeamRegistry registry) =>
+        {
+            var team = registry.GetTeam(id);
+            if (team is null) return Results.NotFound(new { error = $"team '{id}' not found" });
+
+            var runMode = team.RunMode;
+            if (req.RunMode is not null)
+            {
+                if (!Enum.TryParse<TeamRunMode>(req.RunMode, ignoreCase: true, out var parsed))
+                    return Results.BadRequest(new { error = $"invalid run_mode '{req.RunMode}'" });
+                runMode = parsed;
+            }
+
+            var decompMode = team.DecompositionMode;
+            if (req.DecompositionMode is not null)
+            {
+                if (!Enum.TryParse<TeamDecompositionMode>(req.DecompositionMode, ignoreCase: true, out var parsed))
+                    return Results.BadRequest(new { error = $"invalid decomposition_mode '{req.DecompositionMode}'" });
+                decompMode = parsed;
+            }
+
+            var profile = new TeamRunProfile(
+                RunMode: runMode,
+                MaxConcurrent: req.MaxConcurrent ?? team.MaxConcurrent,
+                FileLocksEnabled: req.FileLocksEnabled ?? team.FileLocksEnabled,
+                QualityGateEnabled: req.QualityGateEnabled ?? team.QualityGateEnabled,
+                QualityGateThreshold: req.QualityGateThreshold ?? team.QualityGateThreshold,
+                DecompositionMode: decompMode);
+
+            if (!registry.UpdateTeamRunProfile(id, profile))
+                return Results.NotFound(new { error = $"team '{id}' not found" });
+
+            var updated = registry.GetTeam(id);
+            return Results.Json(new { team = updated }, s_jsonOptions);
         });
 
         // ── Team members ────────────────────────────────────────────────
@@ -202,4 +244,20 @@ internal static class TeamRoutes
         bool? LockFiles = null,
         bool? QualityGate = null,
         int? MaxParallel = null);
+
+    /// <summary>
+    /// Phase 78 Path 2 commit 9 — partial update for a team's run profile.
+    /// Any field omitted (left null) keeps its current value. Enum fields
+    /// are case-insensitive strings; invalid values produce a 400.
+    /// JsonPropertyName attributes explicitly bind snake_case inputs so the
+    /// request format matches the snake_case response format the rest of the
+    /// route file produces.
+    /// </summary>
+    public sealed record UpdateTeamProfileRequest(
+        [property: JsonPropertyName("run_mode")] string? RunMode = null,
+        [property: JsonPropertyName("max_concurrent")] int? MaxConcurrent = null,
+        [property: JsonPropertyName("file_locks_enabled")] bool? FileLocksEnabled = null,
+        [property: JsonPropertyName("quality_gate_enabled")] bool? QualityGateEnabled = null,
+        [property: JsonPropertyName("quality_gate_threshold")] int? QualityGateThreshold = null,
+        [property: JsonPropertyName("decomposition_mode")] string? DecompositionMode = null);
 }
