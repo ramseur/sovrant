@@ -798,7 +798,9 @@ The server keeps one `ConversationRuntime` alive per `session_id` in an in-memor
 
 ### Agent Memory
 
-Sovrant reads two memory files at the start of every session and prepends their contents to the system prompt:
+Sovrant has two parallel memory systems: **file-based memory** (injected into the system prompt today) and **database-backed memory** (workspace + project, exposed over the API).
+
+**File memory** — read at the start of every session and prepended to the system prompt:
 
 | File | Scope |
 |---|---|
@@ -806,6 +808,15 @@ Sovrant reads two memory files at the start of every session and prepends their 
 | `.sovrant/memory.md` | Project — architecture notes, conventions |
 
 Use `/memory` (or `/mem`) in the REPL to view or create these files.
+
+**Database memory** — persisted in SQLite and managed via the API (Web/Desktop UI surfaces both):
+
+| Scope | Storage | API |
+|---|---|---|
+| Workspace | `workspace_memory` table (layered entries with confidence scores) | `GET/POST/DELETE /v1/workspaces/{id}/memory` |
+| Project | Same table, scoped by `project_id`; reads merge project-scoped + workspace-level entries | `GET /v1/projects/{id}/memory` (writes go through the workspace endpoint with `project_id`) |
+
+> **Note:** Database-backed memory is not yet injected into the system prompt automatically — see Phase 81 in the roadmap. Today it is read/written via the API and UI; it will be merged into the prompt builder in a future phase so workspace and project memory reach the LLM the same way file memory does.
 
 ### Database Management
 

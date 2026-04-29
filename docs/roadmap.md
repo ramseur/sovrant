@@ -136,6 +136,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Teams parity with Swarm — parallelism, file-lock safety, quality gate, and optional decomposition for team runs (other frameworks treat parallel execution as the default team behavior) | Phase 78 | High |
 | Agents page (renamed from Agent Templates): single-agent definition + run — author agents via markdown files, edit them in-app, reference them by name from the standard agenting loop, and launch chat sessions (or one-shot if self-contained) with run history | Phase 79 | Medium–High |
 | Composio MCP integration — first-class platform awareness for Composio's MCP catalog (250+ apps), in-app browse/enable, managed OAuth via Composio connections, per-user/workspace credential scoping, still routed through Sovrant's `MCPTool` proxy and permission model | Phase 80 | Medium |
+| Unified memory — wire workspace + project memory rows into `ConversationRuntime.BuildSystemPrompt()` so DB-backed entries actually reach the LLM (today only file-based `~/.sovrant/memory.md` and `.sovrant/memory.md` are injected) | Phase 81 | Medium–High |
 
 ---
 
@@ -7436,5 +7437,78 @@ src/Sovrant.Web/Pages/ComposioApps.razor
   the registry without restarting the runtime
 - Manual edits to a managed entry surface a UI warning on next
   refresh but do not crash the runtime
+
+## Phase 81 — Unified Memory: Wire Workspace & Project Memory Into the System Prompt
+
+**Depends on:** Phase 27 (multi-layered memory), Phase 35 (workspaces — memory storage), Phase 36 (projects — memory inheritance)
+**Difficulty:** Small
+
+### Why
+
+Today Sovrant has two parallel memory systems that don't meet:
+
+1. **File-based memory** — `~/.sovrant/memory.md` and `.sovrant/memory.md`. Read by `ConversationRuntime.BuildSystemPrompt()` via `AppendMemoryFile()` and prepended to the system prompt every turn. The `/memory` slash command edits these files. **This is the only memory the LLM actually sees.**
+2. **Database-backed memory** — `workspace_memory` table with `WorkspaceMemoryEntry` (layer + confidence + project scope). Exposed over `GET/POST/DELETE /v1/workspaces/{id}/memory` and `GET /v1/projects/{id}/memory` (the project endpoint merges project-scoped rows with workspace-level rows). Surfaced in the Workspaces and Projects pages of Desktop and Web. **Persists state but never reaches the LLM.**
+
+The result: a user can save a workspace memory entry through the UI, see it round-trip through the API, and observe that the agent's behavior never changes. The DB entries are dead weight in the system prompt today. This phase closes that loop.
+
+### Goals
+
+- **Inject DB-backed memory into `BuildSystemPrompt()`** alongside the existing file-based memory. Workspace memory first (broader scope), then project memory (more specific). File memory remains the highest-precedence layer because it's still the documented contract for `~/.sovrant/memory.md`.
+- **Resolve scope from runtime state** — `ConversationRuntime` already reads `SOVRANT_WORKSPACE_ID` and `SOVRANT_PROJECT_ID` for artifact scoping (lines 796–799). Reuse the same resolution to fetch matching memory rows.
+- **Preserve confidence scoring** — entries with `confidence < threshold` (configurable, default 0.3 — matches the Phase 27 prune threshold) are skipped during injection so low-signal data doesn't flood the prompt.
+- **Update `/memory` to surface DB entries** — `/memory` and `/mem` should list both file-based and DB-backed memory and let the user edit either. Today they only operate on the files.
+- **Token budgeting** — cap injected DB memory at a configurable size (default ~2 KB per scope) to avoid burning the context window when a workspace has hundreds of entries. Sort by `created_at desc` after the confidence filter.
+- **Don't break embedded mode** — the runtime already takes `IWorkspaceService` and `IProjectService` via DI in `Sovrant.Web` embedded mode and `Sovrant.Cli`; thread the same services into `ConversationRuntime` rather than reaching into the SQLite store directly.
+
+### Non-goals
+
+- **Migrating file-based memory into the database.** The two systems coexist intentionally — files are git-trackable per project; DB rows are user/workspace-scoped and edited via UI. A unification phase can come later if the duplication becomes confusing.
+- **Inventing new memory layers.** Phase 27 already defined the `MemoryLayer` enum (instruction, fact, preference, etc.). This phase wires the existing rows into the prompt; it does not add new types.
+- **Real-time memory updates mid-session.** The system prompt is built once at construction. New memory rows added during a session won't affect that session — they'll show up on the next session start. Hot-reload is a follow-up if there's demand.
+
+### Architecture
+
+```
+src/Sovrant.Runtime/Conversation/ConversationRuntime.cs
+  BuildSystemPrompt()                 ← extend to call new MemoryInjector
+  AppendMemoryFile()                  ← unchanged
+
+src/Sovrant.Runtime/Memory/
+  IMemoryInjector.cs                  ← NEW: GetSystemPromptMemoryAsync(scope, ct)
+  DbMemoryInjector.cs                 ← NEW: queries IWorkspaceService + IProjectService,
+                                          applies confidence threshold + token cap,
+                                          formats as a single block per scope
+
+src/Sovrant.Commands/Commands/MemoryCommand.cs
+  HandleAsync()                       ← extend to also list DB rows for current scope
+  EditDbEntry()                       ← NEW: wraps API call to add/update DB entries
+```
+
+### Implementation plan
+
+1. Add `IMemoryInjector` interface and `DbMemoryInjector` concrete in `Sovrant.Runtime/Memory/`. Inject `IWorkspaceService`, `IProjectService`, and an `IMemoryInjectorOptions` (confidence threshold, max bytes per scope).
+2. Register `IMemoryInjector` in `Sovrant.Runtime`'s DI extension (`AddSovrantRuntime`). For the `Sovrant.Web` remote-mode path (`AddSovrantClient`), register a thin HTTP-backed implementation that calls the existing memory endpoints.
+3. Extend `ConversationRuntime` constructor signature to accept `IMemoryInjector?` (optional — null falls back to today's behavior). Resolve via `IServiceProvider` so existing call sites that use the parameterless constructor keep working.
+4. In `BuildSystemPrompt()`, after the artifact guidance block but before file memory, emit the DB-backed memory blocks. Order: workspace memory → project memory → global file memory → project file memory. Each block clearly labeled so the model knows the scope.
+5. Update `MemoryCommand` (`/memory`, `/mem`) to print DB entries for the current workspace + project below the file content, and accept a `--db` flag for adding a DB row instead of editing the file.
+6. Add a `SOVRANT_MEMORY_INJECT_DB` env var defaulting to `true`. Off-switch for users who want pre-Phase-81 behavior temporarily.
+7. Tests:
+   - `DbMemoryInjector` returns workspace + project rows above threshold, sorted, capped.
+   - `BuildSystemPrompt` includes DB memory when injector is present and skips it cleanly when injector is null.
+   - End-to-end: save a workspace memory entry via `POST /v1/workspaces/{id}/memory`, start a session in that workspace, verify the entry appears in the system prompt (assertable via a debug endpoint that returns the assembled prompt).
+   - `/memory` lists both file and DB entries for the current scope.
+   - Regression: existing file-only memory tests still pass unchanged.
+
+### Acceptance criteria
+
+- `dotnet build` exits 0 and the full test suite passes
+- A workspace memory entry saved through `POST /v1/workspaces/{id}/memory` appears verbatim in the system prompt of the next session started in that workspace
+- A project-scoped entry appears for sessions in that project but not for sessions in other projects of the same workspace
+- Entries with confidence below the threshold are excluded
+- `/memory` shows both file content and DB rows, labeled by source
+- `SOVRANT_MEMORY_INJECT_DB=false` reverts to file-only behavior
+- The Workspaces and Projects pages in Desktop and Web continue to work unchanged
+- README's Agent Memory section accurately describes the unified behavior once shipped
 
 
