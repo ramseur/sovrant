@@ -726,13 +726,21 @@ See [`docs/frontend-integration.md`](docs/frontend-integration.md) for proxy set
 
 ## MCP Server Mode
 
-Sovrant can run as an MCP (Model Context Protocol) server, exposing all 56 tools and resources via stdio transport. This lets MCP-aware IDEs use Sovrant as a tool backend — no extension required.
+Sovrant can run as an MCP (Model Context Protocol) server over two transports, both backed by the same handlers in `Sovrant.Mcp`:
+
+- **stdio** — `sovrant mcp-server` subcommand. The IDE spawns Sovrant as a child process and pipes JSON-RPC over stdin/stdout. Best for local IDE integration (VS Code, Cursor, Windsurf, Claude Code).
+- **HTTP/SSE** — `Sovrant.Server` exposes `/mcp` when `SOVRANT_MCP_HTTP=true`. Best for remote/multi-tenant access; reuses the server's bearer-token auth.
 
 ```bash
+# stdio (local)
 dotnet run --project src/Sovrant.Cli -- mcp-server
+
+# HTTP/SSE (remote)
+SOVRANT_MCP_HTTP=true dotnet run --project src/Sovrant.Server
+# → MCP endpoint at http://localhost:5200/mcp
 ```
 
-**Supported IDEs:** VS Code (GitHub Copilot), Cursor, Windsurf, Claude Code.
+**Supported IDEs (stdio):** VS Code (GitHub Copilot), Cursor, Windsurf, Claude Code.
 
 Add to your IDE's MCP config (example for VS Code):
 

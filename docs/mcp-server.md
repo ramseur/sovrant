@@ -1,12 +1,19 @@
 # MCP Server Mode
 
-Sovrant can run as an **MCP (Model Context Protocol) server**, allowing MCP-aware IDEs and agents to use it as a tool provider. This is separate from the HTTP server — MCP uses **stdio transport** (JSON-RPC 2.0 over stdin/stdout pipes), so there are zero port conflicts with `Sovrant.Server` on port 5200.
+Sovrant can run as an **MCP (Model Context Protocol) server**, allowing MCP-aware IDEs and agents to use it as a tool provider. Two transports are supported, both backed by the same handlers in the `Sovrant.Mcp` library:
+
+| Transport | Entry point | Best for |
+|---|---|---|
+| **stdio** (JSON-RPC over stdin/stdout) | `sovrant mcp-server` subcommand | Local IDE integration — IDE spawns Sovrant as a child process |
+| **HTTP/SSE** | `Sovrant.Server` with `SOVRANT_MCP_HTTP=true`, exposed at `/mcp` | Remote / multi-tenant access; reuses the server's bearer-token auth |
+
+Both transports expose the same tools, resources, prompts, and completions.
 
 ---
 
-## Activation
+## stdio transport
 
-MCP server mode is **opt-in only** — it never runs unless you explicitly launch it:
+Opt-in only — never runs unless explicitly launched:
 
 ```bash
 export LLM_API_KEY="sk-..."
@@ -22,6 +29,19 @@ dotnet run --project src/Sovrant.Cli -- mcp-server
 The process blocks on stdin, waiting for JSON-RPC messages from the connected IDE. It exits when stdin closes (IDE disconnects).
 
 **No performance overhead:** When not using `mcp-server`, no MCP services are registered, no code paths execute, and no resources are consumed.
+
+## HTTP/SSE transport
+
+Run `Sovrant.Server` (port 5200 by default) with `SOVRANT_MCP_HTTP=true`:
+
+```bash
+export SOVRANT_MCP_HTTP=true
+export SOVRANT_TOKEN="your-server-bearer-token"
+dotnet run --project src/Sovrant.Server
+# → MCP endpoint live at http://localhost:5200/mcp
+```
+
+Clients connect to `http://<host>:<port>/mcp` over HTTP/SSE and authenticate using the server's standard bearer token (`Authorization: Bearer $SOVRANT_TOKEN`) — `SOVRANT_MCP_TOKEN` only applies to the stdio path. When `SOVRANT_MCP_HTTP=false` (the default), the `/mcp` endpoint is not registered.
 
 ---
 
@@ -167,9 +187,12 @@ Tool names are **case-sensitive** — use the exact names as shown above.
 
 ## Authentication
 
-MCP uses stdio (pipes), not HTTP — so there are no `Authorization` headers. Authentication works as a **startup gate**: the server validates the token before accepting any JSON-RPC messages.
+Auth differs by transport:
 
-### How to enable
+- **stdio:** no HTTP, no `Authorization` headers. The token is checked once as a **startup gate** — the process exits before accepting any JSON-RPC messages if the token is missing or wrong. Configured via `SOVRANT_MCP_TOKEN` + `--token`.
+- **HTTP/SSE:** uses the standard `Sovrant.Server` bearer auth — clients send `Authorization: Bearer $SOVRANT_TOKEN` on every request. `SOVRANT_MCP_TOKEN` is **not** consulted on this path.
+
+### How to enable (stdio)
 
 **Step 1 — set the required token on the server side:**
 ```bash
@@ -225,20 +248,22 @@ Errors go to **stderr** so they don't corrupt the stdout JSON-RPC transport. The
 |---|---|---|
 | `LLM_API_KEY` | Yes | API key for the LLM provider |
 | `LLM_BASE_URL` | No | Provider base URL (default: OpenAI) |
-| `SOVRANT_MCP_TOKEN` | No | Required bearer token. If set, callers must pass `--token <value>` matching this. Unset = no auth required. |
-| `SOVRANT_MCP_TOOLS` | No | Comma-separated allow-list of tool names. Unset = all tools. |
+| `SOVRANT_MCP_TOKEN` | No | **stdio only.** Required bearer token. If set, callers must pass `--token <value>` matching this. Unset = no auth required. |
+| `SOVRANT_MCP_HTTP` | No | **HTTP/SSE only.** Set to `true` on `Sovrant.Server` to enable the `/mcp` endpoint. Default: `false`. |
+| `SOVRANT_TOKEN` | No | **HTTP/SSE only.** Bearer token enforced by `Sovrant.Server` for all requests, including `/mcp`. |
+| `SOVRANT_MCP_TOOLS` | No | Comma-separated allow-list of tool names. Applies to both transports. Unset = all tools. |
 
-All standard Sovrant environment variables (`ROUTER_MODE`, `ROUTER_STRATEGY`, `LLM_WEB_SEARCH`, etc.) are respected.
+All standard Sovrant environment variables (`ROUTER_MODE`, `ROUTER_STRATEGY`, `SOVRANT_WEB_SEARCH`, etc.) are respected.
 
 ---
 
 ## Security
 
-- **Token authentication** — `SOVRANT_MCP_TOKEN` + `--token` provides startup-time auth. Mismatches exit the process before any JSON-RPC exchange.
-- **Permission mode** is forced to `DontAsk` — all tool executions are auto-approved. MCP server mode is non-interactive; there is no console to prompt.
-- **Console logging is suppressed** — stdout is the JSON-RPC transport. Logs go to file only (`~/.sovrant/logs/`).
-- **No HTTP exposure** — MCP runs over stdio pipes. The process is only accessible to the parent process (IDE) that spawned it.
-- Use `SOVRANT_MCP_TOOLS` to restrict which tools are exposed if you want to limit what the IDE can do.
+- **Token authentication** — stdio uses `SOVRANT_MCP_TOKEN` + `--token` as a startup gate; HTTP/SSE uses the server's `SOVRANT_TOKEN` bearer header per request.
+- **Permission mode** is forced to `DontAsk` on the stdio path — all tool executions are auto-approved because there is no console to prompt. The HTTP path inherits the server's configured permission policy.
+- **Console logging is suppressed (stdio only)** — stdout is the JSON-RPC transport on stdio, so logs go to file only (`~/.sovrant/logs/`). The HTTP path uses normal server logging.
+- **Network exposure** — stdio is only accessible to the parent process that spawned it. HTTP/SSE binds wherever `Sovrant.Server` is configured to listen; restrict access at the network or reverse-proxy layer if exposing beyond localhost.
+- Use `SOVRANT_MCP_TOOLS` to restrict which tools are exposed if you want to limit what clients can do.
 
 ---
 
@@ -311,11 +336,15 @@ Tokens are stored AES-256-GCM encrypted in `~/.sovrant/credentials/`. The master
 
 ## How It Works
 
-1. The IDE starts `sovrant mcp-server` as a child process.
-2. Sovrant registers all tools from `IToolRegistry` and exposes them as MCP tools via the `ModelContextProtocol` library.
-3. The IDE sends JSON-RPC requests over stdin (`tools/list`, `tools/call`, `resources/list`, `resources/read`).
-4. Sovrant processes each request and writes JSON-RPC responses to stdout.
-5. Tool calls are dispatched to the same handlers used by the CLI and HTTP server.
-6. The `chat` tool creates a transient `ConversationRuntime` and runs a full agentic turn — the IDE gets the agent's complete response including any tool use.
+The shared protocol library is `Sovrant.Mcp` — `McpServerSetup.AddSovrantMcpHandlers()` registers `tools/list`, `tools/call`, `resources/list`, `resources/read`, prompts, completions, logging, and resource subscriptions on whatever transport is hosting it. Tool calls are dispatched through `IToolRegistry`, the same registry used by the CLI and HTTP server — there is no separate tool implementation.
 
-The MCP server uses the same `Sovrant.Runtime` and `Sovrant.Tools` infrastructure as the CLI and HTTP server. There is no separate tool implementation — everything is bridged through `IToolRegistry`.
+**stdio path:**
+1. The IDE starts `sovrant mcp-server` as a child process.
+2. The CLI registers `Sovrant.Mcp` handlers with `WithStdioServerTransport()`.
+3. JSON-RPC requests arrive on stdin; responses are written to stdout.
+
+**HTTP/SSE path (`SOVRANT_MCP_HTTP=true` on `Sovrant.Server`):**
+1. `Sovrant.Server` registers the same `Sovrant.Mcp` handlers with `WithHttpTransport()` and maps them at `/mcp`.
+2. Clients send JSON-RPC over HTTP/SSE, authenticating with `Authorization: Bearer $SOVRANT_TOKEN`.
+
+The synthetic `chat` tool (available on both transports) creates a transient `ConversationRuntime` and runs a full agentic turn — the caller gets the agent's complete response including any tool use.
