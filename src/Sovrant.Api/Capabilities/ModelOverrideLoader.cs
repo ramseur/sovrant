@@ -175,6 +175,7 @@ public sealed partial class ModelOverrideLoader
             "structured_output" => existing with { StructuredOutput = boolVal },
             "thinking_mode" => existing with { ThinkingMode = boolVal },
             "ollama_template_workaround" => existing with { OllamaTemplateWorkaround = boolVal },
+            "supports_native_web_search" => existing with { SupportsNativeWebSearch = boolVal },
             "family" => existing with { Family = value },
             _ => null,
         };

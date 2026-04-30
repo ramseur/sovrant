@@ -41,6 +41,80 @@
       },
       "reason": "Same Ollama workaround as gemma4:* but with explicit ollama/ prefix.",
       "expires": "2026-07-01"
+    },
+
+    {
+      "pattern": "gpt-4o*",
+      "capabilities": { "supports_native_web_search": true, "family": "gpt-4o" },
+      "reason": "OpenAI Responses API web_search_preview tool is supported on the gpt-4o family."
+    },
+    {
+      "pattern": "gpt-4-turbo*",
+      "capabilities": { "supports_native_web_search": true, "family": "gpt-4" },
+      "reason": "OpenAI Responses API web_search_preview tool is supported on gpt-4-turbo."
+    },
+    {
+      "pattern": "gpt-4.1*",
+      "capabilities": { "supports_native_web_search": true, "family": "gpt-4.1" },
+      "reason": "OpenAI Responses API web_search_preview tool is supported on the gpt-4.1 family."
+    },
+    {
+      "pattern": "o1*",
+      "capabilities": { "supports_native_web_search": true, "family": "o1" },
+      "reason": "OpenAI Responses API web_search_preview tool is supported on the o1 reasoning family."
+    },
+    {
+      "pattern": "o3*",
+      "capabilities": { "supports_native_web_search": true, "family": "o3" },
+      "reason": "OpenAI Responses API web_search_preview tool is supported on the o3 reasoning family."
+    },
+    {
+      "pattern": "o4*",
+      "capabilities": { "supports_native_web_search": true, "family": "o4" },
+      "reason": "OpenAI Responses API web_search_preview tool is supported on the o4 reasoning family."
+    },
+
+    {
+      "pattern": "claude-3-5-sonnet*",
+      "capabilities": { "supports_native_web_search": true, "family": "claude-3.5" },
+      "reason": "Anthropic web_search_20250305 server tool is supported on Claude 3.5 Sonnet."
+    },
+    {
+      "pattern": "claude-3-7-sonnet*",
+      "capabilities": { "supports_native_web_search": true, "family": "claude-3.7" },
+      "reason": "Anthropic web_search_20250305 server tool is supported on Claude 3.7 Sonnet."
+    },
+    {
+      "pattern": "claude-sonnet-4*",
+      "capabilities": { "supports_native_web_search": true, "family": "claude-4" },
+      "reason": "Anthropic web_search_20250305 server tool is supported on Claude Sonnet 4.x."
+    },
+    {
+      "pattern": "claude-opus-4*",
+      "capabilities": { "supports_native_web_search": true, "family": "claude-4" },
+      "reason": "Anthropic web_search_20250305 server tool is supported on Claude Opus 4.x."
+    },
+    {
+      "pattern": "claude-haiku-4*",
+      "capabilities": { "supports_native_web_search": true, "family": "claude-4" },
+      "reason": "Anthropic web_search_20250305 server tool is supported on Claude Haiku 4.x."
+    },
+
+    {
+      "pattern": "gemini-1.5*",
+      "capabilities": { "supports_native_web_search": true, "family": "gemini-1.5" },
+      "reason": "Gemini supports grounding via tools:[{google_search:{}}] (or googleSearchRetrieval on older models). Reachable today through the OpenAI-compatible shim at generativelanguage.googleapis.com/v1beta/openai."
+    },
+    {
+      "pattern": "gemini-2*",
+      "capabilities": { "supports_native_web_search": true, "family": "gemini-2" },
+      "reason": "Gemini 2.x supports grounding via tools:[{google_search:{}}]."
+    },
+
+    {
+      "pattern": "*:online",
+      "capabilities": { "supports_native_web_search": true },
+      "reason": "OpenRouter :online suffix activates web search via their plugins:[{id:'web'}] mechanism for any underlying model."
     }
   ],
 

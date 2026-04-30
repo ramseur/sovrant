@@ -31,6 +31,18 @@ public sealed record ModelCapabilities
     public bool OllamaTemplateWorkaround { get; init; }
 
     /// <summary>
+    /// When <see langword="true"/>, the model can perform web search natively
+    /// when given a provider-specific tool block. Examples:
+    /// OpenAI <c>web_search_preview</c> (Responses API),
+    /// OpenRouter <c>plugins:[{id:"web"}]</c> or <c>:online</c> suffix,
+    /// Gemini <c>tools:[{google_search:{}}]</c>,
+    /// Anthropic <c>web_search_20250305</c> server tool.
+    /// Used by the <c>WebSearchOptions</c> resolver to gate native injection.
+    /// </summary>
+    [JsonPropertyName("supports_native_web_search")]
+    public bool SupportsNativeWebSearch { get; init; }
+
+    /// <summary>
     /// Canonical model family (e.g. "gemma-4", "gpt-4", "claude-4").
     /// Used by the cost layer and alias normalizer to group variants.
     /// </summary>
