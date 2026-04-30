@@ -4,6 +4,8 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Sovrant.Api.Auth;
+using Sovrant.Api.Capabilities;
+using Sovrant.Api.Config;
 using Sovrant.Api.Errors;
 using Sovrant.Api.OpenAi;
 using Sovrant.Api.Types;
@@ -21,6 +23,10 @@ public sealed class OpenAiResponsesProvider : ILlmProvider
     private readonly HttpClient _http;
     private readonly IAuthProvider _auth;
     private readonly ILogger _logger;
+    private readonly WebSearchOptions? _webSearch;
+    private readonly IModelCapabilityRegistry? _capabilities;
+    private readonly bool _hasBraveKey;
+    private readonly bool _hasFirecrawlKey;
 
     private static readonly Action<ILogger, Exception?> _logHttpError =
         LoggerMessage.Define(LogLevel.Error, new EventId(1, "HttpError"), "HTTP error calling OpenAI Responses API.");
@@ -36,6 +42,21 @@ public sealed class OpenAiResponsesProvider : ILlmProvider
     /// <param name="auth">Authentication provider.</param>
     /// <param name="logger">Logger.</param>
     public OpenAiResponsesProvider(HttpClient http, IAuthProvider auth, ILogger logger)
+        : this(http, auth, logger, webSearch: null, capabilities: null, credentials: null) { }
+
+    /// <summary>
+    /// Initializes a new instance with the dependencies required for the
+    /// centralised <see cref="NativeWebSearchInjector"/> decision. When any
+    /// of the optional arguments is <see langword="null"/> the provider
+    /// preserves the legacy "always inject web_search_preview" behaviour.
+    /// </summary>
+    public OpenAiResponsesProvider(
+        HttpClient http,
+        IAuthProvider auth,
+        ILogger logger,
+        WebSearchOptions? webSearch,
+        IModelCapabilityRegistry? capabilities,
+        CredentialConfig? credentials)
     {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(auth);
@@ -43,6 +64,10 @@ public sealed class OpenAiResponsesProvider : ILlmProvider
         _http = http;
         _auth = auth;
         _logger = logger;
+        _webSearch = webSearch;
+        _capabilities = capabilities;
+        _hasBraveKey = !string.IsNullOrWhiteSpace(credentials?.BraveApiKey);
+        _hasFirecrawlKey = !string.IsNullOrWhiteSpace(credentials?.FirecrawlApiKey);
     }
 
     /// <inheritdoc/>
@@ -57,7 +82,7 @@ public sealed class OpenAiResponsesProvider : ILlmProvider
         ArgumentNullException.ThrowIfNull(req);
         try
         {
-            var responsesReq = ResponsesFormatConverter.ToResponses(req with { Stream = false });
+            var responsesReq = ResponsesFormatConverter.ToResponses(req with { Stream = false }, ResolvePlan(req.Model));
             using var httpReq = await BuildRequestAsync(responsesReq, ct).ConfigureAwait(false);
             using var response = await _http.SendAsync(httpReq, ct).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
@@ -85,7 +110,7 @@ public sealed class OpenAiResponsesProvider : ILlmProvider
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var responsesReq = ResponsesFormatConverter.ToResponses(req with { Stream = true });
+        var responsesReq = ResponsesFormatConverter.ToResponses(req with { Stream = true }, ResolvePlan(req.Model));
         using var httpReq = await BuildRequestAsync(responsesReq, ct).ConfigureAwait(false);
         using var response = await _http.SendAsync(httpReq, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
@@ -206,6 +231,18 @@ public sealed class OpenAiResponsesProvider : ILlmProvider
                 yield return new StreamEvent.MessageStop();
             }
         }
+    }
+
+    /// <summary>
+    /// Resolves the per-request plan via the centralised injector. Returns
+    /// <see langword="null"/> when the optional dependencies aren't wired,
+    /// which lets <see cref="ResponsesFormatConverter"/> fall back to the
+    /// legacy "always inject web_search_preview" behaviour.
+    /// </summary>
+    private NativeWebSearchPlan? ResolvePlan(string model)
+    {
+        if (_webSearch is null) return null;
+        return NativeWebSearchInjector.Plan(model, _webSearch, _capabilities, _hasBraveKey, _hasFirecrawlKey);
     }
 
     private async Task<HttpRequestMessage> BuildRequestAsync(OpenAiResponsesRequest req, CancellationToken ct)

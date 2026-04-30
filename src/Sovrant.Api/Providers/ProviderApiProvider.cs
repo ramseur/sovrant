@@ -2,9 +2,13 @@ using System.Net.ServerSentEvents;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Sovrant.Api.Auth;
+using Sovrant.Api.Capabilities;
+using Sovrant.Api.Config;
 using Sovrant.Api.Errors;
+using Sovrant.Api.OpenAi;
 using Sovrant.Api.Types;
 
 namespace Sovrant.Api.Providers;
@@ -15,6 +19,10 @@ public sealed class ProviderApiProvider : ILlmProvider
     private readonly HttpClient _http;
     private readonly IAuthProvider _auth;
     private readonly ILogger<ProviderApiProvider> _logger;
+    private readonly WebSearchOptions? _webSearch;
+    private readonly IModelCapabilityRegistry? _capabilities;
+    private readonly bool _hasBraveKey;
+    private readonly bool _hasFirecrawlKey;
 
     private static readonly Action<ILogger, Exception?> _logHttpError =
         LoggerMessage.Define(LogLevel.Error, new EventId(1, "HttpError"), "HTTP error calling provider API.");
@@ -30,6 +38,22 @@ public sealed class ProviderApiProvider : ILlmProvider
     /// <param name="auth">The authentication provider.</param>
     /// <param name="logger">The logger.</param>
     public ProviderApiProvider(HttpClient http, IAuthProvider auth, ILogger<ProviderApiProvider> logger)
+        : this(http, auth, logger, webSearch: null, capabilities: null, credentials: null) { }
+
+    /// <summary>
+    /// Initializes a new instance with the dependencies required for the
+    /// centralised <see cref="NativeWebSearchInjector"/> decision. When
+    /// <paramref name="webSearch"/> is <see langword="null"/> Anthropic's
+    /// <c>web_search_20250305</c> server tool is never injected — the
+    /// legacy behaviour.
+    /// </summary>
+    public ProviderApiProvider(
+        HttpClient http,
+        IAuthProvider auth,
+        ILogger<ProviderApiProvider> logger,
+        WebSearchOptions? webSearch,
+        IModelCapabilityRegistry? capabilities,
+        CredentialConfig? credentials)
     {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(auth);
@@ -37,6 +61,10 @@ public sealed class ProviderApiProvider : ILlmProvider
         _http = http;
         _auth = auth;
         _logger = logger;
+        _webSearch = webSearch;
+        _capabilities = capabilities;
+        _hasBraveKey = !string.IsNullOrWhiteSpace(credentials?.BraveApiKey);
+        _hasFirecrawlKey = !string.IsNullOrWhiteSpace(credentials?.FirecrawlApiKey);
     }
 
     /// <inheritdoc/>
@@ -100,7 +128,25 @@ public sealed class ProviderApiProvider : ILlmProvider
     private async Task<HttpRequestMessage> BuildRequestAsync(MessagesRequest req, CancellationToken ct)
     {
         var apiKey = await _auth.GetAuthHeaderAsync(ct).ConfigureAwait(false);
-        var json = JsonSerializer.Serialize(req, SovrantJsonContext.Default.MessagesRequest);
+        var plan = ResolvePlan(req.Model);
+
+        // When the plan suppresses the WebSearch function tool, drop it from the
+        // outgoing tools list before serialisation so the model can't reach for it.
+        var requestForWire = req;
+        if (plan?.SuppressFunctionTool == true && req.Tools is { Count: > 0 } tools)
+        {
+            var filtered = tools.Where(t => !string.Equals(t.Name, "WebSearch", StringComparison.Ordinal)).ToList();
+            requestForWire = req with { Tools = filtered.Count > 0 ? filtered : null };
+        }
+
+        var json = JsonSerializer.Serialize(requestForWire, SovrantJsonContext.Default.MessagesRequest);
+
+        // When native injection is requested, merge Anthropic's web_search_20250305
+        // server tool into the tools array. Anthropic's server tools have a `type`
+        // marker that ToolDefinition can't carry, so we patch the JSON tree directly.
+        if (plan?.InjectNative == true)
+            json = AddAnthropicWebSearchServerTool(json);
+
         var httpReq = new HttpRequestMessage(HttpMethod.Post, "/v1/messages")
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")
@@ -108,6 +154,48 @@ public sealed class ProviderApiProvider : ILlmProvider
         httpReq.Headers.Add("x-api-key", apiKey);
         httpReq.Headers.Add("anthropic-version", "2023-06-01");
         return httpReq;
+    }
+
+    /// <summary>
+    /// Resolves the per-request plan. Returns <see langword="null"/> when
+    /// the optional dependencies aren't wired so the legacy behaviour of
+    /// not injecting any server tools is preserved.
+    /// </summary>
+    private NativeWebSearchPlan? ResolvePlan(string model)
+    {
+        if (_webSearch is null) return null;
+        return NativeWebSearchInjector.Plan(model, _webSearch, _capabilities, _hasBraveKey, _hasFirecrawlKey);
+    }
+
+    /// <summary>
+    /// Appends <c>{ "type": "web_search_20250305", "name": "web_search" }</c>
+    /// to the request's <c>tools</c> array, creating the array when absent.
+    /// Returns the original JSON unchanged on parse failure.
+    /// </summary>
+    internal static string AddAnthropicWebSearchServerTool(string json)
+    {
+        try
+        {
+            var node = JsonNode.Parse(json);
+            if (node is not JsonObject root) return json;
+
+            var serverTool = new JsonObject
+            {
+                ["type"] = "web_search_20250305",
+                ["name"] = "web_search",
+            };
+
+            if (root["tools"] is JsonArray arr)
+                arr.Add(serverTool);
+            else
+                root["tools"] = new JsonArray(serverTool);
+
+            return root.ToJsonString();
+        }
+        catch (JsonException)
+        {
+            return json;
+        }
     }
 
     private static async Task<ApiError> ParseErrorAsync(HttpResponseMessage response, CancellationToken ct)

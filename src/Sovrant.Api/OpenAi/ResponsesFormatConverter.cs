@@ -6,8 +6,22 @@ namespace Sovrant.Api.OpenAi;
 /// <summary>Converts between Sovrant's internal message types and the OpenAI Responses API format.</summary>
 internal static class ResponsesFormatConverter
 {
-    /// <summary>Converts a <see cref="MessagesRequest"/> to an <see cref="OpenAiResponsesRequest"/>.</summary>
-    public static OpenAiResponsesRequest ToResponses(MessagesRequest req)
+    /// <summary>
+    /// Converts a <see cref="MessagesRequest"/> to an <see cref="OpenAiResponsesRequest"/>.
+    /// Equivalent to <c>ToResponses(req, plan: null)</c> with the plan defaulting to
+    /// "inject native, suppress function tool" — preserving the historical behaviour
+    /// of the Responses API provider.
+    /// </summary>
+    public static OpenAiResponsesRequest ToResponses(MessagesRequest req) =>
+        ToResponses(req, plan: null);
+
+    /// <summary>
+    /// Converts a <see cref="MessagesRequest"/> to an <see cref="OpenAiResponsesRequest"/>,
+    /// applying the given <see cref="NativeWebSearchPlan"/>. When <paramref name="plan"/>
+    /// is <see langword="null"/>, the legacy "always inject web_search_preview" behaviour
+    /// is used so existing tests and callers remain stable.
+    /// </summary>
+    public static OpenAiResponsesRequest ToResponses(MessagesRequest req, NativeWebSearchPlan? plan)
     {
         ArgumentNullException.ThrowIfNull(req);
 
@@ -15,23 +29,27 @@ internal static class ResponsesFormatConverter
         foreach (var msg in req.Messages)
             ConvertInputMessage(msg, input);
 
-        // Include function tools (excluding WebSearch — web_search_preview replaces it)
-        // then append the native web_search_preview built-in tool.
+        // Default (no plan) preserves legacy behavior: inject native, suppress WebSearch fn tool.
+        bool injectNative = plan?.InjectNative ?? true;
+        bool suppressFn = plan?.SuppressFunctionTool ?? true;
+
         var tools = new List<OpenAiResponsesTool>();
         if (req.Tools is { Count: > 0 })
         {
             foreach (var t in req.Tools)
             {
-                if (!string.Equals(t.Name, "WebSearch", StringComparison.Ordinal))
-                    tools.Add(new OpenAiResponsesTool("function", t.Name, t.Description, t.InputSchema));
+                if (suppressFn && string.Equals(t.Name, "WebSearch", StringComparison.Ordinal))
+                    continue;
+                tools.Add(new OpenAiResponsesTool("function", t.Name, t.Description, t.InputSchema));
             }
         }
-        tools.Add(new OpenAiResponsesTool("web_search_preview"));
+        if (injectNative)
+            tools.Add(new OpenAiResponsesTool("web_search_preview"));
 
         return new OpenAiResponsesRequest(req.Model, input)
         {
             Instructions = req.System,
-            Tools = tools,
+            Tools = tools.Count > 0 ? tools : null,
             Stream = req.Stream,
             MaxOutputTokens = req.MaxTokens > 0 ? req.MaxTokens : null
         };

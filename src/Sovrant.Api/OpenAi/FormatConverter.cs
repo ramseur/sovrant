@@ -8,7 +8,18 @@ namespace Sovrant.Api.OpenAi;
 internal static class FormatConverter
 {
     /// <summary>Converts a <see cref="MessagesRequest"/> to an <see cref="OpenAiChatRequest"/>.</summary>
-    public static OpenAiChatRequest ToOpenAi(MessagesRequest req)
+    public static OpenAiChatRequest ToOpenAi(MessagesRequest req) =>
+        ToOpenAi(req, plan: null, dialect: OpenAiDialect.Other);
+
+    /// <summary>
+    /// Converts a <see cref="MessagesRequest"/> to an <see cref="OpenAiChatRequest"/>,
+    /// applying the given <see cref="NativeWebSearchPlan"/>. When the plan calls for
+    /// native injection on an OpenRouter dialect, the OpenRouter <c>plugins</c> field
+    /// is populated; the <c>WebSearch</c> function tool is dropped when the plan
+    /// suppresses it. For any other dialect the plan only affects function-tool
+    /// suppression — no native server tool is emitted on the chat-completions wire.
+    /// </summary>
+    public static OpenAiChatRequest ToOpenAi(MessagesRequest req, NativeWebSearchPlan? plan, OpenAiDialect dialect)
     {
         ArgumentNullException.ThrowIfNull(req);
         var messages = new List<OpenAiMessage>();
@@ -21,13 +32,21 @@ internal static class FormatConverter
             ConvertInputMessage(msg, messages);
         }
 
-        IReadOnlyList<OpenAiTool>? tools = null;
+        List<OpenAiTool>? tools = null;
         if (req.Tools is { Count: > 0 })
         {
-            tools = req.Tools
+            var filtered = plan?.SuppressFunctionTool == true
+                ? req.Tools.Where(t => !string.Equals(t.Name, "WebSearch", StringComparison.Ordinal))
+                : req.Tools;
+            tools = filtered
                 .Select(t => new OpenAiTool("function", new OpenAiToolFunction(t.Name, t.Description, t.InputSchema)))
                 .ToList();
+            if (tools.Count == 0) tools = null;
         }
+
+        IReadOnlyList<OpenAiPlugin>? plugins = null;
+        if (plan is { InjectNative: true } && dialect == OpenAiDialect.OpenRouter)
+            plugins = [new OpenAiPlugin("web")];
 
         // OpenAI reasoning models (o1, o3, o4) require max_completion_tokens and reject max_tokens.
         // All other providers use max_tokens for backward compatibility.
@@ -40,7 +59,8 @@ internal static class FormatConverter
             Tools = tools,
             ToolChoice = tools is { Count: > 0 } ? "auto" : null,
             Stream = req.Stream,
-            StreamOptions = req.Stream ? new OpenAiStreamOptions(true) : null
+            StreamOptions = req.Stream ? new OpenAiStreamOptions(true) : null,
+            Plugins = plugins,
         };
     }
 

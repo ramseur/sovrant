@@ -76,4 +76,44 @@ public sealed class ProviderApiProviderTests
         Assert.Equal("provider-api", provider.Name);
         Assert.Contains("api.example.com", provider.BaseUrl.ToString(), StringComparison.Ordinal);
     }
+
+    // ── Native server-tool injection (Anthropic web_search_20250305) ───────
+
+    [Fact]
+    public void AddAnthropicWebSearchServerTool_NoExistingTools_CreatesArrayWithServerTool()
+    {
+        var json = """{"model":"claude-opus-4-7","max_tokens":1024,"messages":[]}""";
+
+        var patched = ProviderApiProvider.AddAnthropicWebSearchServerTool(json);
+
+        using var doc = System.Text.Json.JsonDocument.Parse(patched);
+        var tools = doc.RootElement.GetProperty("tools");
+        Assert.Equal(1, tools.GetArrayLength());
+        Assert.Equal("web_search_20250305", tools[0].GetProperty("type").GetString());
+        Assert.Equal("web_search", tools[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public void AddAnthropicWebSearchServerTool_ExistingTools_AppendsToArray()
+    {
+        var json = """{"model":"claude-opus-4-7","max_tokens":1024,"messages":[],"tools":[{"name":"Bash","description":"d","input_schema":{}}]}""";
+
+        var patched = ProviderApiProvider.AddAnthropicWebSearchServerTool(json);
+
+        using var doc = System.Text.Json.JsonDocument.Parse(patched);
+        var tools = doc.RootElement.GetProperty("tools");
+        Assert.Equal(2, tools.GetArrayLength());
+        Assert.Equal("Bash", tools[0].GetProperty("name").GetString());
+        Assert.Equal("web_search_20250305", tools[1].GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public void AddAnthropicWebSearchServerTool_MalformedJson_ReturnsInputUnchanged()
+    {
+        var bad = "not json";
+
+        var patched = ProviderApiProvider.AddAnthropicWebSearchServerTool(bad);
+
+        Assert.Equal(bad, patched);
+    }
 }

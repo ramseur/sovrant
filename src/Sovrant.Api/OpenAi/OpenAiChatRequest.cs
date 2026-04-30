@@ -36,7 +36,19 @@ internal sealed record OpenAiChatRequest(
     [JsonPropertyName("stream_options")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public OpenAiStreamOptions? StreamOptions { get; init; }
+
+    /// <summary>
+    /// OpenRouter-only — top-level <c>plugins</c> array. Set to
+    /// <c>[{ "id": "web" }]</c> to enable OpenRouter's native web search.
+    /// Ignored by other OpenAI-compat backends; serialised only when set.
+    /// </summary>
+    [JsonPropertyName("plugins")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<OpenAiPlugin>? Plugins { get; init; }
 }
+
+internal sealed record OpenAiPlugin(
+    [property: JsonPropertyName("id")] string Id);
 
 internal sealed record OpenAiMessage(
     [property: JsonPropertyName("role")] string Role,

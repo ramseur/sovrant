@@ -4,6 +4,8 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Sovrant.Api.Auth;
+using Sovrant.Api.Capabilities;
+using Sovrant.Api.Config;
 using Sovrant.Api.Errors;
 using Sovrant.Api.OpenAi;
 using Sovrant.Api.Types;
@@ -16,6 +18,10 @@ public class OpenAiCompatProvider : ILlmProvider
     private readonly HttpClient _http;
     private readonly IAuthProvider _auth;
     private readonly ILogger _logger;
+    private readonly WebSearchOptions? _webSearch;
+    private readonly IModelCapabilityRegistry? _capabilities;
+    private readonly bool _hasBraveKey;
+    private readonly bool _hasFirecrawlKey;
 
     private static readonly Action<ILogger, Exception?> _logHttpError =
         LoggerMessage.Define(LogLevel.Error, new EventId(1, "HttpError"), "HTTP error calling OpenAI-compat provider.");
@@ -31,6 +37,21 @@ public class OpenAiCompatProvider : ILlmProvider
     /// <param name="auth">The authentication provider.</param>
     /// <param name="logger">The logger.</param>
     public OpenAiCompatProvider(HttpClient http, IAuthProvider auth, ILogger logger)
+        : this(http, auth, logger, webSearch: null, capabilities: null, credentials: null) { }
+
+    /// <summary>
+    /// Initializes a new instance with the dependencies required for the
+    /// centralised <see cref="NativeWebSearchInjector"/> decision. When any
+    /// of the optional arguments is <see langword="null"/> native injection
+    /// is disabled and the provider behaves like the legacy ctor.
+    /// </summary>
+    public OpenAiCompatProvider(
+        HttpClient http,
+        IAuthProvider auth,
+        ILogger logger,
+        WebSearchOptions? webSearch,
+        IModelCapabilityRegistry? capabilities,
+        CredentialConfig? credentials)
     {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(auth);
@@ -38,6 +59,10 @@ public class OpenAiCompatProvider : ILlmProvider
         _http = http;
         _auth = auth;
         _logger = logger;
+        _webSearch = webSearch;
+        _capabilities = capabilities;
+        _hasBraveKey = !string.IsNullOrWhiteSpace(credentials?.BraveApiKey);
+        _hasFirecrawlKey = !string.IsNullOrWhiteSpace(credentials?.FirecrawlApiKey);
     }
 
     /// <inheritdoc/>
@@ -52,7 +77,8 @@ public class OpenAiCompatProvider : ILlmProvider
         ArgumentNullException.ThrowIfNull(req);
         try
         {
-            var openAiReq = FormatConverter.ToOpenAi(req with { Stream = false });
+            var (plan, dialect) = ResolvePlanAndDialect(req.Model);
+            var openAiReq = FormatConverter.ToOpenAi(req with { Stream = false }, plan, dialect);
             using var httpReq = await BuildRequestAsync(openAiReq, ct).ConfigureAwait(false);
             using var response = await _http.SendAsync(httpReq, ct).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
@@ -82,7 +108,8 @@ public class OpenAiCompatProvider : ILlmProvider
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(req);
-        var openAiReq = FormatConverter.ToOpenAi(req with { Stream = true });
+        var (plan, dialect) = ResolvePlanAndDialect(req.Model);
+        var openAiReq = FormatConverter.ToOpenAi(req with { Stream = true }, plan, dialect);
         using var httpReq = await BuildRequestAsync(openAiReq, ct).ConfigureAwait(false);
         using var response = await _http.SendAsync(httpReq, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
@@ -235,6 +262,22 @@ public class OpenAiCompatProvider : ILlmProvider
     /// <summary>Returns true when the base URL points to OpenAI's official API (not OpenRouter, etc.).</summary>
     private static bool IsDirectOpenAi(string baseUrl) =>
         baseUrl.Contains("api.openai.com", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Resolves the per-request <see cref="NativeWebSearchPlan"/> and
+    /// <see cref="OpenAiDialect"/> using the centralised injector. Returns
+    /// <c>(null, Other)</c> when the required dependencies are absent so
+    /// the legacy code path remains intact.
+    /// </summary>
+    private (NativeWebSearchPlan? Plan, OpenAiDialect Dialect) ResolvePlanAndDialect(string model)
+    {
+        if (_webSearch is null) return (null, OpenAiDialect.Other);
+
+        var effectiveBase = (_auth is IBaseUrlOverride { BaseUrl: { } ov } ? ov : _http.BaseAddress)?.ToString() ?? string.Empty;
+        var dialect = OpenAiDialectResolver.Resolve(effectiveBase);
+        var plan = NativeWebSearchInjector.Plan(model, _webSearch, _capabilities, _hasBraveKey, _hasFirecrawlKey);
+        return (plan, dialect);
+    }
 
     private static async Task<ApiError> ParseErrorAsync(HttpResponseMessage response, CancellationToken ct)
     {

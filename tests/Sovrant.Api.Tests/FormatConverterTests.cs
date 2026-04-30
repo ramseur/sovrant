@@ -116,4 +116,83 @@ public sealed class FormatConverterTests
         Assert.Equal("tc_1", block.Id);
         Assert.Equal("bash", block.Name);
     }
+
+    // ── Plan-aware tool assembly ───────────────────────────────────────────
+
+    private static JsonElement EmptySchema => JsonDocument.Parse("{}").RootElement;
+
+    [Fact]
+    public void ToOpenAi_OpenRouterDialect_PlanInjectsNative_SetsWebPlugin()
+    {
+        var req = new MessagesRequest("gpt-4o", 1024, [InputMessage.UserText("hi")]);
+        var plan = new NativeWebSearchPlan(InjectNative: true, SuppressFunctionTool: true, Reason: "test");
+
+        var result = FormatConverter.ToOpenAi(req, plan, OpenAiDialect.OpenRouter);
+
+        Assert.NotNull(result.Plugins);
+        Assert.Single(result.Plugins!);
+        Assert.Equal("web", result.Plugins![0].Id);
+    }
+
+    [Fact]
+    public void ToOpenAi_NonOpenRouterDialect_PlanInjectsNative_NoPlugin()
+    {
+        var req = new MessagesRequest("gpt-4o", 1024, [InputMessage.UserText("hi")]);
+        var plan = new NativeWebSearchPlan(InjectNative: true, SuppressFunctionTool: true, Reason: "test");
+
+        var result = FormatConverter.ToOpenAi(req, plan, OpenAiDialect.OpenAi);
+
+        Assert.Null(result.Plugins);
+    }
+
+    [Fact]
+    public void ToOpenAi_PlanSuppressesFunctionTool_DropsWebSearchToolFromList()
+    {
+        var req = new MessagesRequest("gpt-4o", 1024, [InputMessage.UserText("hi")])
+        {
+            Tools =
+            [
+                new ToolDefinition("WebSearch", EmptySchema),
+                new ToolDefinition("Bash", EmptySchema),
+            ],
+        };
+        var plan = new NativeWebSearchPlan(InjectNative: true, SuppressFunctionTool: true, Reason: "test");
+
+        var result = FormatConverter.ToOpenAi(req, plan, OpenAiDialect.OpenAi);
+
+        Assert.NotNull(result.Tools);
+        Assert.Single(result.Tools!);
+        Assert.Equal("Bash", result.Tools![0].Function!.Name);
+    }
+
+    [Fact]
+    public void ToOpenAi_PlanDoesNotSuppress_KeepsWebSearchToolInList()
+    {
+        var req = new MessagesRequest("gpt-4o", 1024, [InputMessage.UserText("hi")])
+        {
+            Tools = [new ToolDefinition("WebSearch", EmptySchema)],
+        };
+        var plan = new NativeWebSearchPlan(InjectNative: false, SuppressFunctionTool: false, Reason: "brave");
+
+        var result = FormatConverter.ToOpenAi(req, plan, OpenAiDialect.Other);
+
+        Assert.NotNull(result.Tools);
+        Assert.Single(result.Tools!);
+        Assert.Equal("WebSearch", result.Tools![0].Function!.Name);
+    }
+
+    [Fact]
+    public void ToOpenAi_NoPlan_PreservesLegacyBehavior_NoPluginNoSuppression()
+    {
+        var req = new MessagesRequest("gpt-4o", 1024, [InputMessage.UserText("hi")])
+        {
+            Tools = [new ToolDefinition("WebSearch", EmptySchema)],
+        };
+
+        var result = FormatConverter.ToOpenAi(req);
+
+        Assert.Null(result.Plugins);
+        Assert.NotNull(result.Tools);
+        Assert.Single(result.Tools!);
+    }
 }

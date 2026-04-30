@@ -93,6 +93,11 @@ public static class ServiceCollectionExtensions
         }
         services.AddHttpClient("SmartRouterPing");
 
+        // Pass the credentials snapshot as a singleton so providers can ask
+        // the centralised NativeWebSearchInjector whether Brave / FireCrawl
+        // keys are present without poking environment variables themselves.
+        services.AddSingleton(credentials);
+
         services.AddSingleton<ISmartRouter>(sp =>
         {
             ILlmProvider primaryProvider = webSearchEnabled
