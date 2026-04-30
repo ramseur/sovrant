@@ -58,3 +58,9 @@ nunit-*.xml
 # Code coverage
 coverage-results/
 coverage-report/
+
+# Local environment files (secrets). Keep .env.example committed.
+.env
+.env.local
+.env.*.local
+.envrc
