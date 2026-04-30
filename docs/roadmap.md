@@ -7547,3 +7547,69 @@ src/Sovrant.Commands/Commands/MemoryCommand.cs
 - README's Agent Memory section accurately describes the unified behavior once shipped
 
 
+
+
+---
+
+## Phase 82 — Web Search Architecture Overhaul ✅
+
+### Why
+
+Web search shipped as three uncoordinated paths: a `WebSearchTool` (Brave →
+FireCrawl → LLM fallback chain gated by a static toggle), an unconditional
+`web_search_preview` injection inside the OpenAI Responses provider, and a
+silent assumption that every chat-completions provider supported the same
+thing. Users could not pick a backend without restarting; capability was
+inferred from the provider, not the model; the OpenAI-shim providers (Groq,
+Ollama, etc.) attempted native search and failed at runtime.
+
+### Scope
+
+Delivered as five sequenced PRs on `sovrant-openc-dotnet-port`:
+
+- **PR 1 — Capability flag.** `ModelCapabilities.SupportsNativeWebSearch` plus
+  per-deployment overrides on top of the existing `IModelCapabilityRegistry`.
+  Models advertise whether they can run native search; consumers stop guessing.
+- **PR 2 — Resolver + persisted setting.** `WebSearchOptions.Resolve` reads a
+  single backend selector from `SOVRANT_WEB_SEARCH`, the layered settings
+  files, or the legacy `LLM_WEB_SEARCH=true` (with a deprecation warning), and
+  exposes a per-session override on `SovrantConfig.WebSearchOverride`.
+- **PR 3 — Centralised injection.** `NativeWebSearchInjector.Plan(...)` is the
+  single decision point shared by `FormatConverter`, `ResponsesFormatConverter`,
+  and `ProviderApiProvider`. `OpenAiDialectResolver` routes the OpenRouter
+  `plugins:[{id:"web"}]` field correctly without breaking the OpenAI-shim path.
+  Anthropic native search is merged in via JSON-tree patching of the request.
+- **PR 4 — Tool refactor + Settings UI.** `WebSearchTool` switches on the
+  resolved backend instead of a static fallback chain; the `/websearch` slash
+  command grows to accept backend names; the Web (Blazor) and Desktop
+  (Avalonia) Settings pages get a backend dropdown wired into the existing
+  auto-save flow with a "model may not support native" warning surfaced from
+  the capability registry.
+- **PR 5 — Documentation.** `docs/web-search.md` (full matrix), `.env.example`
+  (new `SOVRANT_WEB_SEARCH=auto`), README env-table refresh, and this roadmap
+  entry.
+
+### Deferred
+
+- **Gemini native `generateContent` endpoint.** The current OpenAI-shim path
+  (`generativelanguage.googleapis.com/v1beta/openai`) does not surface
+  `tools:[{google_search:{}}]`. A native Gemini provider that hits the
+  non-shim endpoint is tracked separately and not part of this phase.
+- **SearXNG provider** (Phase 49 — already on the roadmap). The selector
+  reserves `searxng-future` so existing configs do not silently break when
+  the value is parsed before that lands; until Phase 49, it resolves like
+  `auto`.
+
+### Acceptance Criteria
+
+- [x] One backend selector resolves identically for the function tool and
+      every provider native injection path
+- [x] OpenAI-shim providers no longer attempt native search by default
+- [x] `/websearch <backend>` overrides for the current session without
+      stomping the saved default
+- [x] Web + Desktop Settings show the active backend, persist changes, and
+      hot-swap without a restart
+- [x] Native + unsupported model surfaces a warning instead of silent failure
+- [x] `LLM_WEB_SEARCH=true` continues to work with a deprecation warning
+- [x] All web-search related tests pass; no behaviour regression in the
+      existing `OpenAiResponsesProvider` path

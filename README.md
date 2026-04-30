@@ -371,7 +371,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 `Bash` *(WSL required on Windows)* · `PowerShell` · `REPL` *(Python, Node, Ruby, Perl)*
 
 ### Web
-`WebFetch` · `WebSearch` *(requires `BRAVE_API_KEY` or `FIRECRAWL_API_KEY`, or set `LLM_WEB_SEARCH=true` for OpenAI native search)*
+`WebFetch` · `WebSearch` *(backend selected by `SOVRANT_WEB_SEARCH` — `auto` / `brave` / `firecrawl` / `native` / `off` — or per-session via `/websearch`; see [docs/web-search.md](docs/web-search.md))*
 
 ### Task Management
 `TodoWrite` · `TaskCreate` · `TaskGet` · `TaskList` · `TaskOutput` · `TaskStop` · `TaskUpdate`
@@ -864,7 +864,8 @@ Place a markdown file at `.sovrant/commands/{name}.md`. Invoking `/{name}` in th
 | `SOVRANT_COMPACT_THRESHOLD` | No | Token count that triggers context auto-compaction (default: `80000`). `0` to disable. |
 | `SOVRANT_FREE_MODELS_ONLY` | No | `true` to restrict routing to free/zero-cost models only |
 | `SOVRANT_INTENT_ROUTING` | No | `true` (default) or `false` — enables/disables intent-aware model routing |
-| `LLM_WEB_SEARCH` | No | `true` to use OpenAI's Responses API with `web_search_preview` |
+| `SOVRANT_WEB_SEARCH` | No | Backend selector: `auto` (default), `brave`, `firecrawl`, `native`, `off`. See [docs/web-search.md](docs/web-search.md). |
+| `LLM_WEB_SEARCH` | No | Deprecated alias — `true` is treated as `SOVRANT_WEB_SEARCH=native` and emits a warning |
 | `BRAVE_API_KEY` | No | Enables WebSearch via Brave Search API |
 | `FIRECRAWL_API_KEY` | No | Enables WebSearch via FireCrawl |
 | `SOVRANT_DB_PATH` | No | SQLite database path (default: `~/.sovrant/data/sovrant.db`) |
