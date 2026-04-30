@@ -129,10 +129,15 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITokenUsageStore>(sp =>
             new SqliteTokenUsageStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
-        // Memory system (Phase 25) — SQLite-backed.
+        // Memory system (Phase 25 + Phase 81) — SQLite-backed multi-layered memory plus
+        // user-saved workspace_memory rows merged at injection time.
         services.AddSingleton<IMemoryStore>(sp =>
             new SqliteMemoryStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
-        services.AddSingleton<MemoryInjector>();
+        services.AddSingleton<MemoryInjector>(sp =>
+            new MemoryInjector(
+                sp.GetRequiredService<IMemoryStore>(),
+                sp.GetRequiredService<ILogger<MemoryInjector>>(),
+                sp.GetService<IWorkspaceService>()));
         services.AddSingleton<SessionEndMemoryHandler>();
 
         // Workspace service (Phase 35)

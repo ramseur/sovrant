@@ -143,12 +143,17 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         }
 
         // Inject multi-layered memory (session summaries, learned patterns, instincts)
+        // plus user-saved workspace_memory entries scoped to the active workspace/project (Phase 81).
         if (_memoryInjector is not null)
         {
             try
             {
                 var project = Directory.GetCurrentDirectory();
-                var memorySection = await _memoryInjector.BuildMemorySectionAsync(project, ct).ConfigureAwait(false);
+                var workspaceId = Environment.GetEnvironmentVariable("SOVRANT_WORKSPACE_ID");
+                var projectId = Environment.GetEnvironmentVariable("SOVRANT_PROJECT_ID");
+                var memorySection = await _memoryInjector
+                    .BuildMemorySectionAsync(project, workspaceId, projectId, ct)
+                    .ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(memorySection))
                     _systemPrompt += memorySection;
             }

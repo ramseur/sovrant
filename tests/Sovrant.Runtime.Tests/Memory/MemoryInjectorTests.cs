@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Runtime.Memory;
 using Sovrant.Runtime.Storage;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime.Tests.Memory;
 
@@ -9,6 +10,7 @@ public sealed class MemoryInjectorTests : IAsyncDisposable
     private readonly string _dbPath;
     private readonly SqliteStorageProvider _provider;
     private readonly SqliteMemoryStore _store;
+    private readonly SqliteWorkspaceStore _workspaceStore;
     private readonly MemoryInjector _injector;
 
     public MemoryInjectorTests()
@@ -17,7 +19,8 @@ public sealed class MemoryInjectorTests : IAsyncDisposable
         _provider = new SqliteStorageProvider(NullLogger<SqliteStorageProvider>.Instance, _dbPath);
         _provider.InitializeAsync().GetAwaiter().GetResult();
         _store = new SqliteMemoryStore((ISqliteConnectionFactory)_provider);
-        _injector = new MemoryInjector(_store, NullLogger<MemoryInjector>.Instance);
+        _workspaceStore = new SqliteWorkspaceStore((ISqliteConnectionFactory)_provider);
+        _injector = new MemoryInjector(_store, NullLogger<MemoryInjector>.Instance, _workspaceStore);
     }
 
     public async ValueTask DisposeAsync()
@@ -157,5 +160,81 @@ public sealed class MemoryInjectorTests : IAsyncDisposable
         Assert.Contains("Recent sessions", result);
         Assert.Contains("Learned patterns", result);
         Assert.Contains("Behavioral instincts", result);
+    }
+
+    [Fact]
+    public async Task BuildMemorySection_IncludesWorkspaceMemory_FilteredByProject()
+    {
+        var defaultUserId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
+            ?? Environment.UserName;
+        var ws = await _workspaceStore.GetPersonalAsync(defaultUserId);
+        Assert.NotNull(ws);
+
+        // Workspace-wide entry — always visible.
+        await _workspaceStore.SaveMemoryAsync(new WorkspaceMemoryEntry
+        {
+            MemoryId = "m-wide",
+            WorkspaceId = ws.WorkspaceId,
+            Layer = "pattern",
+            Content = "always run dotnet format before commit",
+            ProjectId = null,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        });
+
+        // Project-scoped entry for the active project.
+        await _workspaceStore.SaveMemoryAsync(new WorkspaceMemoryEntry
+        {
+            MemoryId = "m-active",
+            WorkspaceId = ws.WorkspaceId,
+            Layer = "instinct",
+            Content = "skip integration tests in CI for active project",
+            ProjectId = "proj-active",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        });
+
+        // Project-scoped entry for a different project — must be filtered out.
+        await _workspaceStore.SaveMemoryAsync(new WorkspaceMemoryEntry
+        {
+            MemoryId = "m-other",
+            WorkspaceId = ws.WorkspaceId,
+            Layer = "pattern",
+            Content = "should not appear for active project",
+            ProjectId = "proj-other",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        });
+
+        var result = await _injector.BuildMemorySectionAsync("/proj", ws.WorkspaceId, "proj-active");
+
+        Assert.Contains("Workspace memory (user-saved)", result);
+        Assert.Contains("always run dotnet format", result);
+        Assert.Contains("skip integration tests in CI for active project", result);
+        Assert.DoesNotContain("should not appear for active project", result);
+    }
+
+    [Fact]
+    public async Task BuildMemorySection_OmitsWorkspaceSection_WhenNoWorkspaceId()
+    {
+        var defaultUserId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
+            ?? Environment.UserName;
+        var ws = await _workspaceStore.GetPersonalAsync(defaultUserId);
+        Assert.NotNull(ws);
+        await _workspaceStore.SaveMemoryAsync(new WorkspaceMemoryEntry
+        {
+            MemoryId = "m1",
+            WorkspaceId = ws.WorkspaceId,
+            Layer = "pattern",
+            Content = "should not surface without workspace context",
+            ProjectId = null,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        });
+
+        var result = await _injector.BuildMemorySectionAsync("/proj");
+
+        Assert.DoesNotContain("Workspace memory (user-saved)", result);
+        Assert.DoesNotContain("should not surface without workspace context", result);
     }
 }
