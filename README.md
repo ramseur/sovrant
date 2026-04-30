@@ -12,7 +12,7 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 
 **Runtime:** .NET 10 / C# 14
 **License:** [see LICENSE]
-**Status:** 50 tools. 25 agent templates. 32 built-in skills. 96 server endpoints + SignalR hub. Team orchestration. Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 1,587 tests passing.
+**Status:** 50 tools. 25 agent templates. 32 built-in skills. 96 server endpoints + SignalR hub. Team orchestration (with run profiles — Phase 78 Path 2). Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 1,492 tests passing across 10 projects.
 
 ---
 
@@ -277,7 +277,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
     │  └── MCP client (tool registration)                        │
     │                                                            │
     │  IRuntimeSessionPool  (one runtime per session_id)         │
-    │  IStorageProvider  (SQLite, 14 migrations, 36 tables)      │
+    │  IStorageProvider  (SQLite, 16 migrations, 36 tables)      │
     └───────────┬──────────────────┬─────────────────────────────┘
                 │                  │
     ┌───────────▼────────┐  ┌──────▼──────────────────────────┐
@@ -337,14 +337,14 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 | `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus management APIs. 96 endpoints + SignalR hub. |
 | `Sovrant.Desktop` | Avalonia desktop app — full GUI with streaming chat, tool use, settings, and management pages. |
 | `Sovrant.Web` | Blazor Server web app — browser-based UI with embedded or remote runtime. Port 5100. Dual-mode: `SOVRANT_RUNTIME_MODE=embedded` (default) or `remote` (connects to Sovrant.Server via SignalR). |
-| `Sovrant.Runtime` | Core agentic loop, mission engine, planner/executor, SQLite persistence (14 migrations, 36 tables), permission system, tool executor, MCP client, cost tracking. |
+| `Sovrant.Runtime` | Core agentic loop, mission engine, planner/executor, SQLite persistence (16 migrations V001–V016, 36 tables, 61 indexes), permission system, tool executor, MCP client, cost tracking. |
 | `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, native messages API. SmartRouter with health/latency/cost scoring. Intent-aware model routing. |
 | `Sovrant.Tools` | All 50 tool implementations. 32 built-in skill `.md` files. |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/clear`, `/session`, `/memory`, etc.). |
 | `Sovrant.Agents` | Orchestration: team registry (SQLite-backed), agent factory, dual backends (isolated + shared), 25 agent templates, swarm orchestrator, unified run ledger, inter-agent coordination (PM agents + mailbox). |
 | `Sovrant.McpServer` | MCP server mode: exposes all tools and resources via stdio transport for IDE integration. |
 | `Sovrant.Lsp` | Language Server Protocol client: JSON-RPC over stdio, manages language server lifecycle, 5 LSP tools. |
-| `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient` with 79 endpoint methods, SSE streaming, React `useChat()` hook, 75+ TypeScript interfaces. |
+| `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient` covering the 96-endpoint server (incl. `updateTeamProfile` for Phase 78 Path 2), SSE streaming, React `useChat()` hook, 75+ TypeScript interfaces. |
 
 ### Key Design Decisions
 
@@ -628,7 +628,7 @@ The server exposes an OpenAI-compatible chat completions endpoint plus comprehen
 | **Workspaces** | 17 endpoints | Workspace CRUD, members, invites, config, memory, usage |
 | **Projects** | 15 endpoints | Project CRUD within workspaces, members, config, archive |
 | **Users** | 9 endpoints | User management, profiles, usage, audit |
-| **Teams** | 9 endpoints | Team CRUD, members, runs |
+| **Teams** | 10 endpoints | Team CRUD, members, runs, run profile (Phase 78 Path 2 — `PUT /v1/teams/{id}/profile`) |
 | **Missions** | 6 endpoints | Mission CRUD, run, events, export |
 | **Swarm** | 4 endpoints | Start swarm, status, events, session history |
 | **Engine** | 4 endpoints | Runtime trace, in-flight runs, recovery |
@@ -688,7 +688,7 @@ dotnet run --project src/Sovrant.Web
 
 The TypeScript/JavaScript SDK (`sdk/js`) provides a typed client for building custom frontends against the Sovrant server.
 
-- **`SovrantClient`** — 79 endpoint methods covering chat, sessions, users, workspaces, projects, teams, missions, swarm, engine, evals, artifacts, and registries
+- **`SovrantClient`** — covers the 96-endpoint server: chat, sessions, users, workspaces, projects, teams (incl. `updateTeamProfile`), missions, swarm, engine, evals, artifacts, and registries
 - **SSE streaming** — real-time token-by-token responses with `streamChat()`
 - **React `useChat()` hook** — drop-in conversational UI component
 - **75+ TypeScript interfaces** — full type coverage for all request/response shapes
@@ -782,7 +782,7 @@ Any language server that speaks LSP over stdio can be plugged in.
 
 All durable state is stored in a single SQLite database at `~/.sovrant/data/sovrant.db`. The database is created automatically on first run — no installer or manual setup required.
 
-**14 migrations, 36 application tables, 61 indexes.** Covers sessions (with FTS5 full-text search), agent memory, audit logs, credentials (AES-256-GCM encrypted), token usage, workspaces, projects, users, swarm events, runtime traces, missions, teams, agent runs, and inter-agent coordination.
+**16 migrations (V001–V016), 36 application tables, 61 indexes.** Covers sessions (with FTS5 full-text search and titles), agent memory, audit logs, credentials (AES-256-GCM encrypted), token usage, workspaces, projects, users, swarm events, runtime traces, missions, teams (with run profiles — Phase 78 Path 2), agent runs, and inter-agent coordination.
 
 ### Session Persistence
 
@@ -972,20 +972,21 @@ Replace `-r linux-x64` with `-r win-x64` for Windows deployments.
 ## Tests
 
 ```bash
-dotnet test Sovrant.slnx   # 1,587 tests across 9 projects
+dotnet test Sovrant.slnx   # 1,492 tests across 10 projects
 ```
 
 | Project | Tests |
 |---|---|
-| `Sovrant.Api.Tests` | 146 |
-| `Sovrant.Runtime.Tests` | 769 |
-| `Sovrant.Server.Tests` | 160 |
-| `Sovrant.McpServer.Tests` | 34 |
-| `Sovrant.Lsp.Tests` | 26 |
-| `Sovrant.Tools.Tests` | 193 |
+| `Sovrant.Runtime.Tests` | 668 |
+| `Sovrant.Agents.Tests` | 197 |
+| `Sovrant.Tools.Tests` | 190 |
+| `Sovrant.Server.Tests` | 133 |
+| `Sovrant.Api.Tests` | 104 |
+| `Sovrant.Runtime.Documents.Tests` | 84 |
 | `Sovrant.Commands.Tests` | 56 |
-| `Sovrant.Agents.Tests` | 199 |
-| `Sovrant.Integration.Tests` | 4 |
+| `Sovrant.McpServer.Tests` | 34 |
+| `Sovrant.Lsp.Tests` | 25 |
+| `Sovrant.Integration.Tests` | 1 |
 
 All tests use isolated in-memory SQLite databases. No external services or API keys required.
 
@@ -997,7 +998,7 @@ All tests use isolated in-memory SQLite databases. No external services or API k
 |---|---|
 | [`docs/server.md`](docs/server.md) | Full server API reference — all 96 endpoints + SignalR hub, auth, CORS, streaming format, cost tracking, remote mode |
 | [`docs/frontend-integration.md`](docs/frontend-integration.md) | SDK reference, proxy setup, browser SSE, multi-tenant LLM keys, React hook, remote mode (dual-mode web frontend) |
-| [`docs/persistence.md`](docs/persistence.md) | SQLite schema reference — 14 migrations, 36 tables, domain stores, security model |
+| [`docs/persistence.md`](docs/persistence.md) | SQLite schema reference — 16 migrations (V001–V016), 36 tables, 61 indexes, domain stores, security model |
 | [`docs/agent-systems.md`](docs/agent-systems.md) | Team vs Swarm deep dive — architecture, value analysis, unified orchestration, inter-agent coordination |
 | [`docs/mcp-server.md`](docs/mcp-server.md) | MCP server mode — IDE config, available tools/resources, OAuth, env vars |
 | [`docs/webhooks.md`](docs/webhooks.md) | Webhook endpoint, Slack bot setup, Teams/Discord integration guides |
