@@ -222,7 +222,8 @@ public sealed class SmartRouterTests
         var info = new ProviderInfo(provider, "/v1/models", 0.001);
         var pingHttp = new HttpClient(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonOk("{}")));
         var router = new SmartRouter([info], RouterMode.Smart, RouterStrategy.Balanced,
-            pingHttp, NullLogger<SmartRouter>.Instance, registry, tierResolver);
+            pingHttp, NullLogger<SmartRouter>.Instance, registry, tierResolver,
+            new RoutingConfig { IntentRouting = true });
 
         // "what is X" matches the Explain intent → standard tier
         var req = new MessagesRequest("gpt-4o", 100, [InputMessage.UserText("what is 2+2?")]);
@@ -256,7 +257,8 @@ public sealed class SmartRouterTests
         var info = new ProviderInfo(provider, "/v1/models", 0.001);
         var pingHttp = new HttpClient(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonOk("{}")));
         var router = new SmartRouter([info], RouterMode.Smart, RouterStrategy.Balanced,
-            pingHttp, NullLogger<SmartRouter>.Instance, registry, tierResolver);
+            pingHttp, NullLogger<SmartRouter>.Instance, registry, tierResolver,
+            new RoutingConfig { IntentRouting = true });
 
         var req = new MessagesRequest("gpt-4o", 100,
             [InputMessage.UserText("refactor this module into smaller classes")]);
@@ -305,6 +307,7 @@ public sealed class SmartRouterTests
         var tierResolver = new ModelTierResolver(registry, NullLogger<ModelTierResolver>.Instance);
         var config = new RoutingConfig
         {
+            IntentRouting = true,
             CustomRules = [new CustomRoutingRule { Pattern = "security|CVE", Tier = ModelTier.High }],
         };
 
