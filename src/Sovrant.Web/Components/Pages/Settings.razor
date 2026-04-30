@@ -1,5 +1,7 @@
 @page "/settings"
 @using Microsoft.Extensions.DependencyInjection
+@using Sovrant.Api.Capabilities
+@using Sovrant.Api.Config
 @using Sovrant.Api.Routing
 @using Sovrant.Runtime.Config
 @using Sovrant.Runtime.Permissions
@@ -113,6 +115,29 @@
                 </label>
             </div>
 
+            <h2>Web Search</h2>
+            <div class="form-field">
+                <label>Backend</label>
+                <select @bind="_webSearchBackend" @bind:after="OnWebSearchBackendChanged">
+                    <option value="Auto">Auto — prefer Brave > Firecrawl > native</option>
+                    <option value="Brave">Brave Search@(_braveKeySet ? "" : " (no key)")</option>
+                    <option value="Firecrawl">FireCrawl@(_firecrawlKeySet ? "" : " (no key)")</option>
+                    <option value="Native">Native (model's built-in search)</option>
+                    <option value="Off">Off</option>
+                </select>
+                <span class="text-muted text-sm">
+                    @if (_webSearchBackend == "Native" && !_modelSupportsNative)
+                    {
+                        <strong style="color: var(--color-warning, #d97706)">Warning:</strong>
+                        @($" '{Config.Model}' may not support native web search; the request may fail or fall back silently.")
+                    }
+                    else
+                    {
+                        <text>Selects which backend powers the WebSearch tool. Native delegates to the model's built-in search.</text>
+                    }
+                </span>
+            </div>
+
             <h2>Permissions</h2>
             <div class="form-field">
                 <label>Permission Mode</label>
@@ -159,6 +184,8 @@
     [Inject] private IServiceProvider Services { get; set; } = default!;
 
     private ISmartRouter? _router;
+    private WebSearchOptions? _webSearchOptions;
+    private IModelCapabilityRegistry? _capabilities;
     private int _selectedTab;
     private string _selectedProvider = "OpenAI";
     private string _apiKey = string.Empty;
@@ -170,6 +197,10 @@
     private string _statusMessage = string.Empty;
     private string _newProfileName = string.Empty;
     private bool _intentRoutingEnabled;
+    private string _webSearchBackend = "Auto";
+    private bool _braveKeySet;
+    private bool _firecrawlKeySet;
+    private bool _modelSupportsNative;
     private List<ProviderProfile> _savedProfiles = [];
 
     private CancellationTokenSource? _autoSaveCts;
@@ -206,14 +237,40 @@
     protected override async Task OnInitializedAsync()
     {
         _router = Services.GetService<ISmartRouter>();
+        _webSearchOptions = Services.GetService<WebSearchOptions>();
+        _capabilities = Services.GetService<IModelCapabilityRegistry>();
         _maxOutputTokens = Config.MaxTokens;
         _apiKey = Config.ApiKey ?? string.Empty;
         _baseUrl = Config.BaseUrl?.ToString() ?? string.Empty;
         _permissionMode = PermissionModeAccessor.Mode.ToString();
         _intentRoutingEnabled = _router?.IntentRoutingEnabled ?? false;
+        _webSearchBackend = (Config.WebSearchOverride ?? _webSearchOptions?.Backend ?? WebSearchBackend.Auto).ToString();
+        _braveKeySet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BRAVE_API_KEY"));
+        _firecrawlKeySet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FIRECRAWL_API_KEY"));
+        RefreshNativeSupportFlag();
         _selectedProvider = InferProvider();
         LoadProfiles();
         await Task.CompletedTask;
+    }
+
+    private void RefreshNativeSupportFlag()
+    {
+        var caps = _capabilities?.GetCapabilities(Config.Model);
+        _modelSupportsNative = caps?.SupportsNativeWebSearch ?? false;
+    }
+
+    private void OnWebSearchBackendChanged()
+    {
+        RefreshNativeSupportFlag();
+        if (Enum.TryParse<WebSearchBackend>(_webSearchBackend, out var backend))
+        {
+            // Hot-swap both the global default and the per-session override
+            // so the change takes effect immediately across providers and
+            // the WebSearchTool itself.
+            if (_webSearchOptions is not null) _webSearchOptions.Backend = backend;
+            Config.WebSearchOverride = backend;
+        }
+        ScheduleAutoSave();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -354,6 +411,7 @@
             existing["MaxTokens"] = _maxOutputTokens;
             existing["PermissionMode"] = _permissionMode;
             existing["IntentRouting"] = _intentRoutingEnabled;
+            existing["WebSearch"] = _webSearchBackend;
             if (!string.IsNullOrWhiteSpace(_apiKey)) existing["ApiKey"] = _apiKey;
             if (!string.IsNullOrWhiteSpace(_baseUrl)) existing["BaseUrl"] = _baseUrl; else existing.Remove("BaseUrl");
 

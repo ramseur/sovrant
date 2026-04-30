@@ -11,27 +11,24 @@ using Sovrant.Runtime.Config;
 namespace Sovrant.Tools.Extended;
 
 /// <summary>
-/// Searches the web. Priority: Brave Search → FireCrawl → LLM-native search.
-/// When no search API key is set, falls back to the LLM's own web search
-/// capabilities (e.g. OpenAI's <c>web_search_preview</c>) or general knowledge.
+/// Searches the web. Backend selected by <see cref="WebSearchOptions.Backend"/>
+/// (resolved once at startup) with a per-session override available via
+/// <see cref="SovrantConfig.WebSearchOverride"/>. When the active backend is
+/// <see cref="WebSearchBackend.Native"/> this tool returns guidance only —
+/// the model itself runs the search via its native server tool injected by
+/// the provider layer.
 /// </summary>
 public sealed class WebSearchTool : ITool
 {
     private const string BraveEndpoint = "https://api.search.brave.com/res/v1/web/search";
     private const string FirecrawlEndpoint = "https://api.firecrawl.dev/v1/search";
 
-    /// <summary>
-    /// Whether the LLM fallback for web search is enabled. On by default.
-    /// Toggle via <c>/websearch enable</c> or <c>/websearch disable</c>.
-    /// </summary>
-    public static bool LlmFallbackEnabled { get; set; } = true;
-
     private static readonly ToolDefinition s_definition = new("WebSearch", CreateSchema())
     {
         Description =
             "Searches the web and returns a list of results with titles, URLs, and snippets. " +
-            "Supports Brave Search (BRAVE_API_KEY), FireCrawl (FIRECRAWL_API_KEY), or " +
-            "falls back to the LLM's native web search / knowledge when no API key is set. " +
+            "Backend is selected by SOVRANT_WEB_SEARCH (auto, brave, firecrawl, native, off) " +
+            "and may be overridden per session with /websearch <backend>. " +
             "Use count to control the number of results (default 5, max 20).",
     };
 
@@ -39,13 +36,20 @@ public sealed class WebSearchTool : ITool
     private readonly CredentialConfig? _credentials;
     private readonly ISmartRouter? _router;
     private readonly SovrantConfig? _config;
+    private readonly WebSearchOptions? _webSearchOptions;
 
-    public WebSearchTool(IHttpClientFactory httpClientFactory, CredentialConfig? credentials = null, ISmartRouter? router = null, SovrantConfig? config = null)
+    public WebSearchTool(
+        IHttpClientFactory httpClientFactory,
+        CredentialConfig? credentials = null,
+        ISmartRouter? router = null,
+        SovrantConfig? config = null,
+        WebSearchOptions? webSearchOptions = null)
     {
         _httpClientFactory = httpClientFactory;
         _credentials = credentials;
         _router = router;
         _config = config;
+        _webSearchOptions = webSearchOptions;
     }
 
     public ToolDefinition Definition => s_definition;
@@ -60,19 +64,45 @@ public sealed class WebSearchTool : ITool
 
         var braveKey = _credentials?.BraveApiKey ?? Environment.GetEnvironmentVariable("BRAVE_API_KEY");
         var firecrawlKey = _credentials?.FirecrawlApiKey ?? Environment.GetEnvironmentVariable("FIRECRAWL_API_KEY");
+        var hasBrave = !string.IsNullOrWhiteSpace(braveKey);
+        var hasFirecrawl = !string.IsNullOrWhiteSpace(firecrawlKey);
 
-        if (!string.IsNullOrWhiteSpace(braveKey))
-            return await SearchBraveAsync(query, count, braveKey, ct).ConfigureAwait(false);
+        var backend = ResolveBackend();
 
-        if (!string.IsNullOrWhiteSpace(firecrawlKey))
-            return await SearchFirecrawlAsync(query, count, firecrawlKey, ct).ConfigureAwait(false);
+        return backend switch
+        {
+            WebSearchBackend.Off =>
+                "Web search is disabled. Run /websearch auto (or brave / firecrawl / native) to re-enable.",
 
-        // Fall back to LLM-native search (e.g. OpenAI web_search_preview or general knowledge).
-        if (LlmFallbackEnabled && _router is not null && _config is not null)
-            return await SearchViaLlmAsync(query, count, ct).ConfigureAwait(false);
+            WebSearchBackend.Brave => hasBrave
+                ? await SearchBraveAsync(query, count, braveKey!, ct).ConfigureAwait(false)
+                : "Error: Brave backend selected but BRAVE_API_KEY is not set.",
 
-        return "Error: no search backend available. Set BRAVE_API_KEY or FIRECRAWL_API_KEY, or run /websearch enable to use LLM-based search.";
+            WebSearchBackend.Firecrawl => hasFirecrawl
+                ? await SearchFirecrawlAsync(query, count, firecrawlKey!, ct).ConfigureAwait(false)
+                : "Error: Firecrawl backend selected but FIRECRAWL_API_KEY is not set.",
+
+            WebSearchBackend.Native =>
+                "Native web search is active — the model handles search through its provider's " +
+                "server tool (no function-tool result is returned here). If you need explicit " +
+                "results, switch to Brave or Firecrawl with /websearch <backend>.",
+
+            // Auto / SearxngFuture: prefer paid keys, then native via the LLM.
+            _ => hasBrave
+                ? await SearchBraveAsync(query, count, braveKey!, ct).ConfigureAwait(false)
+                : hasFirecrawl
+                    ? await SearchFirecrawlAsync(query, count, firecrawlKey!, ct).ConfigureAwait(false)
+                    : (_router is not null && _config is not null
+                        ? await SearchViaLlmAsync(query, count, ct).ConfigureAwait(false)
+                        : "Error: no search backend available. Set BRAVE_API_KEY or FIRECRAWL_API_KEY, "
+                          + "or run /websearch native to delegate to the model's built-in web search."),
+        };
     }
+
+    private WebSearchBackend ResolveBackend() =>
+        _config?.WebSearchOverride
+        ?? _webSearchOptions?.Backend
+        ?? WebSearchBackend.Auto;
 
     private async Task<string> SearchBraveAsync(string query, int count, string apiKey, CancellationToken ct)
     {

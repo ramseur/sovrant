@@ -61,7 +61,7 @@ public sealed class SovrantConfig
     /// <c>/websearch</c> slash command so a one-off change doesn't stomp
     /// the saved default.
     /// </summary>
-    public WebSearchBackend? WebSearchOverride { get; init; }
+    public WebSearchBackend? WebSearchOverride { get; set; }
 
     /// <summary>MCP server configurations keyed by server name.</summary>
     public IReadOnlyDictionary<string, McpServerConfig> McpServers { get; init; } =

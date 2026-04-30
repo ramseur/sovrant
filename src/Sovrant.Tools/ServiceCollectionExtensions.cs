@@ -66,7 +66,8 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<IHttpClientFactory>(),
                 sp.GetService<Sovrant.Api.Config.CredentialConfig>(),
                 sp.GetService<Sovrant.Api.Routing.ISmartRouter>(),
-                sp.GetService<Sovrant.Runtime.Config.SovrantConfig>()));
+                sp.GetService<Sovrant.Runtime.Config.SovrantConfig>(),
+                sp.GetService<Sovrant.Api.Config.WebSearchOptions>()));
         services.AddSingleton<ITool, NotebookEditTool>();
         services.AddSingleton<ITool, ReplTool>();
         services.AddSingleton<ITool, PowerShellTool>();

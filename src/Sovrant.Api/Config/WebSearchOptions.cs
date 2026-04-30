@@ -57,8 +57,13 @@ internal static partial class WebSearchOptionsLog
 /// </summary>
 public sealed class WebSearchOptions
 {
-    /// <summary>The chosen backend.</summary>
-    public WebSearchBackend Backend { get; init; } = WebSearchBackend.Auto;
+    /// <summary>
+    /// The chosen backend. Mutable so the Settings UI can hot-swap the value
+    /// at runtime without rebuilding DI; new requests pick up the change on
+    /// their next call into <see cref="NativeWebSearchInjector"/> and
+    /// <c>WebSearchTool</c>.
+    /// </summary>
+    public WebSearchBackend Backend { get; set; } = WebSearchBackend.Auto;
 
     /// <summary>
     /// True when the legacy <c>LLM_WEB_SEARCH=true</c> env var was the
@@ -86,8 +91,10 @@ public sealed class WebSearchOptions
         if (TryParseBackend(envValue, out var fromEnv))
             return new WebSearchOptions { Backend = fromEnv };
 
-        // 2. Configuration key: WebSearch:Backend
-        var configValue = configuration["WebSearch:Backend"];
+        // 2. Configuration key: WebSearch:Backend (nested) or WebSearch (flat).
+        // The Settings UIs persist it as a flat string ("WebSearch": "Auto") so
+        // we accept both shapes; the nested form remains documented and stable.
+        var configValue = configuration["WebSearch:Backend"] ?? configuration["WebSearch"];
         if (TryParseBackend(configValue, out var fromConfig))
             return new WebSearchOptions { Backend = fromConfig };
 

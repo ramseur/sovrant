@@ -212,6 +212,24 @@
                     </DockPanel>
                 </Border>
 
+                <!-- Web Search section -->
+                <TextBlock Text="Web Search" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}"
+                           Margin="0,4,0,0" />
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Backend" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <ComboBox ItemsSource="{Binding WebSearchBackends}"
+                              SelectedItem="{Binding WebSearchBackend}"
+                              HorizontalAlignment="Stretch"
+                              CornerRadius="8"
+                              Padding="12,8" />
+                    <TextBlock Text="{Binding WebSearchStatus}"
+                               FontSize="11" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextMuted}" />
+                </StackPanel>
+
                 <!-- Permissions section -->
                 <TextBlock Text="Permissions" FontSize="16" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimary}"

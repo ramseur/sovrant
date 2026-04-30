@@ -6,6 +6,8 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Api.Capabilities;
+using Sovrant.Api.Config;
 using Sovrant.Api.Routing;
 using Sovrant.Desktop.Adapters;
 using Sovrant.Runtime.Config;
@@ -23,6 +25,8 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly MutableAuthProvider _authProvider;
     private readonly IHttpClientFactory _httpFactory;
     private readonly ISmartRouter? _router;
+    private readonly WebSearchOptions? _webSearchOptions;
+    private readonly IModelCapabilityRegistry? _capabilities;
     private CancellationTokenSource? _autoSaveCts;
     private bool _initialized;
     private bool _suppressAutoSave;
@@ -101,6 +105,12 @@ public partial class SettingsViewModel : ViewModelBase
     private bool _intentRoutingEnabled;
 
     [ObservableProperty]
+    private WebSearchBackend _webSearchBackend = WebSearchBackend.Auto;
+
+    [ObservableProperty]
+    private string _webSearchStatus = string.Empty;
+
+    [ObservableProperty]
     private string _statusMessage = string.Empty;
 
     [ObservableProperty]
@@ -117,7 +127,9 @@ public partial class SettingsViewModel : ViewModelBase
 
     public SettingsViewModel(SovrantConfig config, IPermissionModeAccessor permissionModeAccessor,
         SidebarViewModel sidebar, MutableAuthProvider authProvider, IHttpClientFactory httpFactory,
-        ISmartRouter? router = null)
+        ISmartRouter? router = null,
+        WebSearchOptions? webSearchOptions = null,
+        IModelCapabilityRegistry? capabilities = null)
     {
         _config = config;
         _permissionModeAccessor = permissionModeAccessor;
@@ -125,6 +137,8 @@ public partial class SettingsViewModel : ViewModelBase
         _authProvider = authProvider;
         _httpFactory = httpFactory;
         _router = router;
+        _webSearchOptions = webSearchOptions;
+        _capabilities = capabilities;
 
         // Load current values from runtime config.
         _modelName = config.Model;
@@ -133,12 +147,58 @@ public partial class SettingsViewModel : ViewModelBase
         _baseUrl = config.BaseUrl?.ToString() ?? string.Empty;
         _permissionMode = permissionModeAccessor.Mode;
         _intentRoutingEnabled = router?.IntentRoutingEnabled ?? false;
+        _webSearchBackend = config.WebSearchOverride ?? webSearchOptions?.Backend ?? WebSearchBackend.Auto;
         _selectedProvider = InferProvider(config);
 
         LoadProfiles();
         _ = LoadModelsForProviderAsync(_selectedProvider);
+        UpdateWebSearchStatus();
 
         _initialized = true;
+    }
+
+    private void UpdateWebSearchStatus()
+    {
+        var braveSet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BRAVE_API_KEY"));
+        var firecrawlSet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FIRECRAWL_API_KEY"));
+
+        if (WebSearchBackend == WebSearchBackend.Native)
+        {
+            var caps = _capabilities?.GetCapabilities(_config.Model);
+            if (caps?.SupportsNativeWebSearch != true)
+            {
+                WebSearchStatus = $"Warning: '{_config.Model}' may not support native web search.";
+                return;
+            }
+        }
+        if (WebSearchBackend == WebSearchBackend.Brave && !braveSet)
+        {
+            WebSearchStatus = "Brave selected but BRAVE_API_KEY is not set.";
+            return;
+        }
+        if (WebSearchBackend == WebSearchBackend.Firecrawl && !firecrawlSet)
+        {
+            WebSearchStatus = "Firecrawl selected but FIRECRAWL_API_KEY is not set.";
+            return;
+        }
+
+        WebSearchStatus = WebSearchBackend switch
+        {
+            WebSearchBackend.Auto => "Auto: prefer Brave > Firecrawl > native.",
+            WebSearchBackend.Brave => "Using Brave Search.",
+            WebSearchBackend.Firecrawl => "Using FireCrawl.",
+            WebSearchBackend.Native => "Delegating to the model's built-in web search.",
+            WebSearchBackend.Off => "Web search disabled.",
+            _ => string.Empty,
+        };
+    }
+
+    partial void OnWebSearchBackendChanged(WebSearchBackend value)
+    {
+        if (_webSearchOptions is not null) _webSearchOptions.Backend = value;
+        _config.WebSearchOverride = value;
+        UpdateWebSearchStatus();
+        ScheduleAutoSave();
     }
 
     public bool IsGeneralTab => SelectedTab == 0;
@@ -495,6 +555,7 @@ public partial class SettingsViewModel : ViewModelBase
             existing["MaxTokens"] = MaxOutputTokens;
             existing["PermissionMode"] = PermissionMode.ToString();
             existing["IntentRouting"] = IntentRoutingEnabled;
+            existing["WebSearch"] = WebSearchBackend.ToString();
 
             if (!string.IsNullOrWhiteSpace(ApiKey))
                 existing["ApiKey"] = ApiKey;
@@ -631,6 +692,15 @@ public partial class SettingsViewModel : ViewModelBase
         PermissionMode.Default,
         PermissionMode.AcceptEdits,
         PermissionMode.BypassPermissions,
+    ];
+
+    public IReadOnlyList<WebSearchBackend> WebSearchBackends { get; } =
+    [
+        WebSearchBackend.Auto,
+        WebSearchBackend.Brave,
+        WebSearchBackend.Firecrawl,
+        WebSearchBackend.Native,
+        WebSearchBackend.Off,
     ];
 }
 
