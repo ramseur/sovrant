@@ -23,6 +23,21 @@
         <div class="status-message">@_status</div>
     }
 
+    @if (!string.IsNullOrEmpty(_loadError))
+    {
+        <div class="page-error-banner" role="alert">
+            <span>&#9888;</span>
+            <span style="flex:1;">@_loadError</span>
+            <button class="btn-sm" @onclick="LoadAsync">Retry</button>
+        </div>
+    }
+
+    @if (_isLoading)
+    {
+        <p class="text-secondary" style="margin: 24px 0;">Loading workspaces…</p>
+    }
+    else
+    {
     <div class="memory-list">
         @if (_workspaces.Count == 0)
         {
@@ -48,6 +63,7 @@
             </div>
         }
     </div>
+    }
 </div>
 
 @code {
@@ -57,6 +73,8 @@
     private static string UserId => Sovrant.Web.Program.SovrantUserId;
     private string _newName = string.Empty;
     private string _status = string.Empty;
+    private bool _isLoading = true;
+    private string _loadError = string.Empty;
     private List<WorkspaceItem> _workspaces = [];
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -69,12 +87,25 @@
 
     private async Task LoadAsync()
     {
-        var list = await WorkspaceService.ListForUserAsync(UserId);
-        _workspaces = list.Select(w => new WorkspaceItem
+        _isLoading = true;
+        _loadError = string.Empty;
+        try
         {
-            Id = w.WorkspaceId, Name = w.Name, Slug = w.Slug,
-            Type = w.Type.ToString(), CreatedAt = w.CreatedAt,
-        }).ToList();
+            var list = await WorkspaceService.ListForUserAsync(UserId);
+            _workspaces = list.Select(w => new WorkspaceItem
+            {
+                Id = w.WorkspaceId, Name = w.Name, Slug = w.Slug,
+                Type = w.Type.ToString(), CreatedAt = w.CreatedAt,
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Failed to load workspaces: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
     }
 
     private async Task CreateAsync()

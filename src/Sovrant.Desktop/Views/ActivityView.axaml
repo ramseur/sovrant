@@ -6,30 +6,134 @@
              Background="{DynamicResource SurfaceBackground}">
 
     <DockPanel>
-        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="4">
-            <TextBlock Text="Activity" FontSize="24" FontWeight="Bold"
-                       Foreground="{DynamicResource TextPrimary}" />
-            <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
-                       Text="Live view of every agent — what's running, what's waiting, what's stuck" />
+        <!-- Header -->
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="8">
+            <DockPanel>
+                <Button DockPanel.Dock="Right"
+                        Content="Refresh"
+                        Command="{Binding RefreshCommand}"
+                        Padding="12,6" CornerRadius="6"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
+                <StackPanel>
+                    <TextBlock Text="Activity" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                               Text="Recent agent sessions — what ran, how it went, what it touched" />
+                </StackPanel>
+            </DockPanel>
+            <TextBlock Text="{Binding StatusMessage}"
+                       FontSize="11"
+                       Foreground="{DynamicResource StatusFail}"
+                       IsVisible="{Binding HasError}"
+                       TextWrapping="Wrap" />
         </StackPanel>
 
-        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
-            <TextBlock Text="📊" FontSize="48" HorizontalAlignment="Center" />
-            <TextBlock Text="Coming soon" FontSize="22" FontWeight="Bold"
-                       Foreground="{DynamicResource TextPrimary}"
-                       HorizontalAlignment="Center" />
-            <Border Padding="12,5" CornerRadius="12"
-                    Background="{DynamicResource BrandPrimary}"
-                    HorizontalAlignment="Center">
-                <TextBlock Text="PHASE 77+" FontSize="12" FontWeight="Bold" Foreground="White" />
-            </Border>
-            <TextBlock FontSize="14"
-                       Foreground="{DynamicResource TextSecondary}"
-                       TextWrapping="Wrap"
-                       MaxWidth="480"
-                       TextAlignment="Center"
-                       HorizontalAlignment="Center"
-                       Text="A unified control surface to see what every agent is doing right now — active runs, tool calls in flight, pending confirmations, and recent completions across all orchestrations." />
-        </StackPanel>
+        <!-- Content -->
+        <ScrollViewer Margin="32,12,32,24">
+            <Grid>
+                <!-- Loading -->
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Spacing="8" IsVisible="{Binding IsLoading}">
+                    <TextBlock Text="Loading sessions…"
+                               FontSize="13"
+                               Foreground="{DynamicResource TextMuted}"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+
+                <!-- Empty -->
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Spacing="12" Margin="0,40">
+                    <StackPanel.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="!IsLoading" />
+                            <Binding Path="!Sessions.Count" />
+                            <Binding Path="!HasError" />
+                        </MultiBinding>
+                    </StackPanel.IsVisible>
+                    <TextBlock Text="No activity yet"
+                               FontSize="16" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimary}"
+                               HorizontalAlignment="Center" />
+                    <TextBlock FontSize="13"
+                               Foreground="{DynamicResource TextSecondary}"
+                               TextWrapping="Wrap" MaxWidth="420"
+                               TextAlignment="Center"
+                               Text="Start a chat session and your activity history will appear here once the session ends." />
+                </StackPanel>
+
+                <!-- List -->
+                <ItemsControl ItemsSource="{Binding Sessions}"
+                              IsVisible="{Binding Sessions.Count}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:ActivityItemViewModel">
+                            <Border Margin="0,4" Padding="14,12" CornerRadius="8"
+                                    Background="{DynamicResource SurfaceCard}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1">
+                                <StackPanel Spacing="6">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right"
+                                                   Text="{Binding StartedAt, StringFormat='{}{0:MMM d, HH:mm}'}"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextMuted}" />
+                                        <Border Padding="6,2" CornerRadius="4"
+                                                Background="{DynamicResource BrandPrimary}"
+                                                HorizontalAlignment="Left"
+                                                Margin="0,0,8,0">
+                                            <TextBlock Text="{Binding Outcome}"
+                                                       FontSize="10" FontWeight="Bold"
+                                                       Foreground="White" />
+                                        </Border>
+                                        <TextBlock Text="{Binding SessionId}"
+                                                   FontSize="11"
+                                                   FontFamily="Consolas,Menlo,monospace"
+                                                   Foreground="{DynamicResource TextSecondary}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </DockPanel>
+                                    <TextBlock Text="{Binding FirstTask}"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextPrimary}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="16">
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}">
+                                            <Run Text="Duration: " />
+                                            <Run Text="{Binding Duration}" />
+                                        </TextBlock>
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}">
+                                            <Run Text="Turns: " />
+                                            <Run Text="{Binding TurnCount}" />
+                                        </TextBlock>
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}"
+                                                   IsVisible="{Binding TotalTokens}">
+                                            <Run Text="Tokens: " />
+                                            <Run Text="{Binding TotalTokens}" />
+                                        </TextBlock>
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource StatusFail}"
+                                                   IsVisible="{Binding ErrorCount}">
+                                            <Run Text="Errors: " />
+                                            <Run Text="{Binding ErrorCount}" />
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <TextBlock FontSize="11" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextMuted}"
+                                               IsVisible="{Binding ToolsUsed, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                        <Run Text="Tools: " />
+                                        <Run Text="{Binding ToolsUsed}" />
+                                    </TextBlock>
+                                    <TextBlock FontSize="11" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextMuted}"
+                                               IsVisible="{Binding FilesModified, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                        <Run Text="Files: " />
+                                        <Run Text="{Binding FilesModified}" />
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </ScrollViewer>
     </DockPanel>
 </UserControl>

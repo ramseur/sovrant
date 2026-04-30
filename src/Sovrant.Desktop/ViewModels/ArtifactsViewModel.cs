@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -137,9 +136,6 @@ public partial class ArtifactsViewModel : ViewModelBase
                 if (content.Length > 20000)
                     content = content[..20000] + "\n\n*... (truncated at 20,000 chars)*";
 
-                // Sanitize to avoid MarkdownScrollViewer crashes on code fences/backticks
-                content = SanitizeForMarkdown(content);
-
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     IsMarkdownPreview = true;
@@ -205,19 +201,6 @@ public partial class ArtifactsViewModel : ViewModelBase
             IsMarkdownPreview = false;
             DetailText = sb.ToString();
         });
-    }
-
-    /// <summary>
-    /// Strips code fences and inline backticks that crash MarkdownScrollViewer,
-    /// while preserving headings, bold, bullets, and other safe markdown.
-    /// </summary>
-    private static string SanitizeForMarkdown(string text)
-    {
-        // Remove code fence lines (```lang or ```)
-        var result = Regex.Replace(text, @"^```\w*\s*$", "", RegexOptions.Multiline);
-        // Remove inline backticks
-        result = result.Replace("`", "", StringComparison.Ordinal);
-        return result;
     }
 
     private void ApplyFilter()

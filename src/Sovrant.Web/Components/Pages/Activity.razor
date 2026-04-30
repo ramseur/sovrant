@@ -1,19 +1,111 @@
 @page "/activity"
+@using Sovrant.Runtime.Memory
 
 <div class="settings-page">
     <div class="diag-header">
         <div>
             <h1>Activity</h1>
-            <p class="text-secondary" style="margin:0;">Live view of every agent — what's running, what's waiting, what's stuck</p>
+            <p class="text-secondary" style="margin:0;">Recent agent sessions — what ran, how it went, what it touched</p>
         </div>
+        <button class="btn-secondary" @onclick="LoadAsync">Refresh</button>
     </div>
 
-    <div class="empty-state" style="margin-top: 32px; text-align: center; padding: 48px 24px;">
-        <div style="font-size: 48px; margin-bottom: 16px;">&#x1F4CA;</div>
-        <h2 style="margin: 0 0 8px 0;">Coming soon</h2>
-        <p class="text-secondary" style="max-width: 480px; margin: 0 auto;">
-            A unified control surface to see what every agent is doing right now — active runs, tool calls in flight,
-            pending confirmations, and recent completions across all orchestrations.
-        </p>
-    </div>
+    @if (_isLoading)
+    {
+        <div class="empty-state" style="margin-top: 32px; text-align: center; padding: 48px 24px;">
+            <p class="text-secondary">Loading sessions…</p>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="status-message" style="background: var(--status-fail-bg, rgba(244,67,54,0.1)); color: var(--status-fail); padding: 12px; border-radius: 6px; margin-top: 16px;">
+            @_error
+        </div>
+    }
+    else if (_summaries.Count == 0)
+    {
+        <div class="empty-state" style="margin-top: 32px; text-align: center; padding: 48px 24px;">
+            <h2 style="margin: 0 0 8px 0;">No activity yet</h2>
+            <p class="text-secondary" style="max-width: 480px; margin: 0 auto;">
+                Start a chat session and your activity history will appear here once the session ends.
+            </p>
+        </div>
+    }
+    else
+    {
+        <div class="memory-list" style="margin-top: 16px;">
+            @foreach (var s in _summaries)
+            {
+                <div class="memory-card">
+                    <div class="memory-content">
+                        <div class="memory-meta" style="margin-bottom: 6px;">
+                            <span class="outcome-badge @s.Outcome.ToString().ToLowerInvariant()">@s.Outcome</span>
+                            <span class="text-muted text-sm" style="font-family: var(--font-mono, monospace);">@s.SessionId[..Math.Min(12, s.SessionId.Length)]</span>
+                            <span class="text-muted text-sm">@s.StartedAt.LocalDateTime.ToString("MMM d, HH:mm")</span>
+                        </div>
+                        <div class="memory-text" style="font-weight: 600;">
+                            @(s.Tasks.Count > 0 ? s.Tasks[0] : "(no task recorded)")
+                        </div>
+                        <div class="memory-meta" style="margin-top: 6px;">
+                            <span class="text-muted text-sm">Duration: @FormatDuration(s.EndedAt - s.StartedAt)</span>
+                            <span class="text-muted text-sm">Turns: @s.TurnCount</span>
+                            @if (s.TotalInputTokens + s.TotalOutputTokens > 0)
+                            {
+                                <span class="text-muted text-sm">Tokens: @(s.TotalInputTokens + s.TotalOutputTokens)</span>
+                            }
+                            @if (s.ErrorCount > 0)
+                            {
+                                <span class="text-sm" style="color: var(--status-fail);">Errors: @s.ErrorCount</span>
+                            }
+                        </div>
+                        @if (s.ToolsUsed.Count > 0)
+                        {
+                            <div class="text-muted text-sm" style="margin-top: 4px;">Tools: @string.Join(", ", s.ToolsUsed)</div>
+                        }
+                        @if (s.FilesModified.Count > 0)
+                        {
+                            <div class="text-muted text-sm" style="margin-top: 2px;">Files: @string.Join(", ", s.FilesModified)</div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
 </div>
+
+@code {
+    [Inject] private IMemoryStore MemoryStore { get; set; } = default!;
+
+    private bool _isLoading = true;
+    private string _error = string.Empty;
+    private List<SessionSummary> _summaries = [];
+
+    private static readonly string Project = Directory.GetCurrentDirectory();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _error = string.Empty;
+        try
+        {
+            _summaries = (await MemoryStore.LoadSummariesAsync(Project, maxCount: 50)).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load activity: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private static string FormatDuration(TimeSpan ts)
+    {
+        if (ts.TotalSeconds < 60) return $"{ts.TotalSeconds:F0}s";
+        if (ts.TotalMinutes < 60) return $"{ts.Minutes}m {ts.Seconds}s";
+        return $"{(int)ts.TotalHours}h {ts.Minutes}m";
+    }
+}

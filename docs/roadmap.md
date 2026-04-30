@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-29 (Phase 78 Path 2 complete through commit 10 — 47 phases shipped, 9 pending)
+**Last updated:** 2026-04-30 (Phase 81 unified memory shipped — 49 phases shipped, 7 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -11,7 +11,7 @@ This document tracks planned features, architectural decisions, and the reasonin
 
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
-- **50 tools** across 12 categories (file, shell, web, task, agent, team, mission, swarm, coordination, artifact, document, MCP, LSP, skills)
+- **56 tools** across 17 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, missions, artifacts, documents, quality, swarm, coordination, LSP)
 - **1,492 tests** across 10 projects, 0 failures
 - **96 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
@@ -34,7 +34,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 - Context auto-compaction at configurable token threshold
 - Security hardening: BashTool 256 KB cap + env stripping, WebFetch SSRF protection, provider retry 3×
 - Webhook integration (Slack, Teams, Discord, custom)
-- Frontend SDK (TypeScript, 79 endpoint methods, SSE streaming, React hook)
+- Frontend SDK (TypeScript, ~97 endpoint methods, SSE streaming, React hook)
 - MCP server mode (stdio JSON-RPC 2.0) + dynamic MCP tool proxy + MCP OAuth
 - LSP integration (5 tools, 18 languages)
 - CI/CD integration (`--ci` flag, GitHub Actions action, GitLab CI template)
@@ -114,7 +114,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 
 ### Still pending
 
-> **Last audited:** 2026-04-29. 47 phases complete, 9 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61; Phase 78 Path 2 active (commits 1–10 shipped). Everything below is *not yet shipped*.
+> **Last audited:** 2026-04-30. 49 phases complete, 7 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61; Phase 78 Path 2 shipped through commit 10; Phase 81 unified memory shipped (workspace_memory rows now flow through `MemoryInjector` into the system prompt). Everything below is *not yet shipped*.
 
 | Gap | Phase | Priority |
 |---|---|---|
@@ -133,10 +133,45 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | ~~Remote server mode for web frontend — SignalR streaming, auth, `AddSovrantClient()` abstraction~~ | Phase 61 ✅ | High |
 | Video generation — fal.ai, Kling AI, and pluggable provider support for text-to-video, image-to-video | Phase 65 | Medium |
 | ~~Document generation — PDFs, Word, Excel, PowerPoint, presentations + industry templates (real estate, healthcare, legal, finance)~~ | Phase 66 ✅ | Medium–High |
-| Teams parity with Swarm — parallelism, file-lock safety, quality gate, and optional decomposition for team runs (Path 1 ✅ done, Path 2 in progress through commit 10: V015 migration shipped, `PUT /v1/teams/{id}/profile` endpoint live, integration tests landed) | Phase 78 | High |
+| ~~Teams parity with Swarm — parallelism, file-lock safety, quality gate, and optional decomposition for team runs (Path 1 + Path 2 commits 1–10 shipped: V015 migration, `PUT /v1/teams/{id}/profile`, parallel/swarm run modes, decomposition, quality gate, integration tests)~~ | Phase 78 ✅ | High |
 | Agents page (renamed from Agent Templates): single-agent definition + run — author agents via markdown files, edit them in-app, reference them by name from the standard agenting loop, and launch chat sessions (or one-shot if self-contained) with run history | Phase 79 | Medium–High |
 | Composio MCP integration — first-class platform awareness for Composio's MCP catalog (250+ apps), in-app browse/enable, managed OAuth via Composio connections, per-user/workspace credential scoping, still routed through Sovrant's `MCPTool` proxy and permission model | Phase 80 | Medium |
-| Unified memory — wire workspace + project memory rows into `ConversationRuntime.BuildSystemPrompt()` so DB-backed entries actually reach the LLM (today only file-based `~/.sovrant/memory.md` and `.sovrant/memory.md` are injected) | Phase 81 | Medium–High |
+| ~~Unified memory — wire user-saved `workspace_memory` rows into `ConversationRuntime.BuildSystemPrompt()` so memory saved via the workspace UI/API actually reaches the LLM~~ | Phase 81 ✅ | High |
+
+### v1.0 release polish (in progress)
+
+A focused subset of Phase 69 / Phase 70 acceptance work that must land
+before the public release. Tracked here rather than reopening the parent
+phases — the rest of those phases stays deferred to v1.1.
+
+- [x] **Activity pages — wire to real data** (Desktop + Web). Replaced the
+  "Coming soon" placeholders in `ActivityView.axaml` and `Activity.razor`
+  with a session-history list backed by `IMemoryStore.LoadSummariesAsync`
+  (outcome, duration, turns, tokens, tools, files). Includes
+  loading / empty / error states.
+- [x] **Standardize Desktop markdown rendering on `SafeMarkdownPresenter`**.
+  Swapped 7 views (Agents, Artifacts, Integrations, Projects, Skills, Tools,
+  Workspaces) from `MarkdownScrollViewer` to `SafeMarkdownPresenter` and
+  removed the `SanitizeForMarkdown` workaround that stripped code fences
+  and backticks. Code blocks now render properly across the whole app.
+- [x] **Web Chat error handling**. Stream/SSE errors already routed to
+  `ChatMessageModel.SetError` (catch in `SendToRuntimeAsync` + `RuntimeError`
+  event); added a top-level `.chat-error-banner` for page-level failures
+  not tied to a single message (session load failure, runtime warmup,
+  slash-command catalog load) and wrapped `LoadSessionAsync` in a
+  try/catch that surfaces through it.
+- [x] **Phase 69 subset — empty/loading/error states on async list pages**:
+  added `_isLoading` + `_loadError` + `.page-error-banner` (with Retry)
+  pattern to Web `Memory.razor`, `Workspaces.razor`, `Projects.razor`,
+  `Artifacts.razor`. Sync in-memory pages (Agents, Skills, Tools,
+  Documents) skipped — they render instantly. New `.page-error-banner`
+  CSS class in `sovrant.css` for reuse.
+- [x] **Phase 70 subset — CLI polish**: `NO_COLOR` env var honored at
+  startup (also new global `--no-color` flag), `--json` flag added to
+  `sovrant status` (existing `sovrant document` subcommands already had
+  `--json`; `sovrant prompt --ci` already emits JSON for automation).
+  Streaming chat-output markdown rendering deferred — raw streaming
+  text remains acceptable for v1.0.
 
 ---
 
@@ -150,8 +185,8 @@ The engine is fully functional across five delivery modes with enterprise multi-
 
 | Category | Count | Tools |
 |---|---|---|
-| Implemented ✅ | 31 | Read, Write, Edit, Glob, Grep, LS, Bash, PowerShell, REPL, WebFetch, WebSearch, TaskCreate/Get/List/Output/Stop/Update, TodoWrite, Agent, AskUserQuestion, Sleep, NotebookEdit, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree, Skill, ToolSearch, ListMcpResources, ReadMcpResource |
-| Missing — port ⬜ | 3 | ScheduleCron, ConfigTool, LSP |
+| Implemented ✅ | 32 | Read, Write, Edit, Glob, Grep, LS, Bash, PowerShell, REPL, WebFetch, WebSearch, TaskCreate/Get/List/Output/Stop/Update, TodoWrite, Agent, AskUserQuestion, Sleep, NotebookEdit, EnterPlanMode, ExitPlanMode, EnterWorktree, ExitWorktree, Skill, ToolSearch, ListMcpResources, ReadMcpResource, LSP (Phase 11) |
+| Missing — port ⬜ | 2 | ScheduleCron, ConfigTool |
 | Cloud — future phases ☁️ | 3 | MCPTool (Phase 13), McpAuthTool (Phase 14), TeamCreate/Delete (Phase 15) |
 | Not portable ❌ | 10 | RemoteTrigger, SendMessage, WorkflowTool, BriefTool, SuggestBackgroundPR, VerifyPlanExecution, SyntheticOutput, Tungsten |
 
@@ -208,7 +243,7 @@ Language Server Protocol integration: hover type info, go-to-definition, find-re
 6. ~~`ListMcpResources` / `ReadMcpResource` — `McpClientRegistry` + two tools in `Sovrant.Tools/Mcp/`~~ ✅ Done
 7. ~~`ToolSearch` — injects `IToolRegistry`, filters `GetDefinitions()` by keyword~~ ✅ Done
 8. ~~`SkillTool` — reads `.sovrant/skills/{name}.md` from disk~~ ✅ Done
-9. `ScheduleCron` / `ConfigTool` / `LSPTool` — deferred; document as future work
+9. ~~`LSPTool`~~ ✅ Shipped in Phase 11 (5 tools: Hover, Definition, References, Diagnostics, Rename across 18 languages); `ScheduleCron` / `ConfigTool` — deferred
 
 ---
 
@@ -254,8 +289,8 @@ Fix: detect the `usage` field on the final OpenAI SSE chunk and capture `prompt_
 
 1. ~~Agent memory files — extend `BuildSystemPrompt()` in `ConversationRuntime`; add `/memory` slash command~~ ✅ Done — `AppendMemoryFile()` helper reads both files; `/memory` and `/mem` commands registered; `InjectAsUserMessage` on `SlashCommandResult` wired into REPL
 2. ~~Token count fix — update `CollectStreamEventsAsync` to capture OpenAI `usage` field from final SSE chunk~~ ✅ Done — `OpenAiCompatProvider` removed `yield break` on `finish_reason`; continues loop to capture trailing usage chunk; `ConversationRuntime` captures `InputTokens` from `MessageDelta`
-3. Context auto-compaction ⬜ — add compaction logic to `RunTurnAsync`; add `SOVRANT_COMPACT_THRESHOLD` config; persist compaction events to JSONL
-4. Expose token counts in REPL status line and `GET /v1/sessions/{id}` response ⬜
+3. ~~Context auto-compaction — add compaction logic to `RunTurnAsync`; add `SOVRANT_COMPACT_THRESHOLD` config~~ ✅ Done — `MaybeCompactHistoryAsync()` wired into the agentic loop in `ConversationRuntime`; reads `SovrantConfig.CompactThreshold` (default 80,000 tokens)
+4. ~~Expose token counts in REPL status line and `GET /v1/sessions/{id}` response~~ ✅ Done — REPL renders from `RuntimeEvent.TurnComplete { InputTokens, OutputTokens }`; `SessionDetailDto` includes `total_input_tokens`/`total_output_tokens` plus per-message tokens
 
 ---
 
@@ -7073,27 +7108,27 @@ become team behaviors at runtime.
 
 ### Acceptance Criteria
 
-- [ ] Team runs fan out to matching members in parallel by default,
+- [x] Team runs fan out to matching members in parallel by default,
       gated by per-team `MaxConcurrent`; sequential remains available
       as an opt-in mode (integration test proving ordering semantics
       of each mode)
-- [ ] `TeamInfo` gains `RunMode`, `MaxConcurrent`, `FileLocksEnabled`,
+- [x] `TeamInfo` gains `RunMode`, `MaxConcurrent`, `FileLocksEnabled`,
       `QualityGateEnabled`, `QualityGateThreshold`, `DecompositionMode`
-      columns via a new migration
-- [ ] `SwarmFileLockManager` refactored into `IFileLockManager` and
+      columns via a new migration (V015)
+- [x] `SwarmFileLockManager` refactored into `IFileLockManager` and
       consumed by both Swarm and Team execution paths
-- [ ] Team runs acquire file locks per member task; concurrent
+- [x] Team runs acquire file locks per member task; concurrent
       writes to the same file are serialized (integration test
       proving it)
-- [ ] Team runs optionally pass through `SwarmQualityGate`; failing
+- [x] Team runs optionally pass through `SwarmQualityGate`; failing
       verdict triggers one configurable retry pass
-- [ ] Team runs optionally invoke `ISwarmDecomposer` when the prompt
+- [x] Team runs optionally invoke `ISwarmDecomposer` when the prompt
       scope exceeds any single member's role — result is a task graph
       dispatched via `EnsembleSelector`
-- [ ] Orchestration detail pane (Web + Desktop) edits per-team
+- [x] Orchestration detail pane (Web + Desktop) edits per-team
       settings inline; global Swarm Config remains as the default
       template new teams inherit
-- [ ] Docs updated: `docs/agent-systems.md` describes Team and Swarm
+- [x] Docs updated: `docs/agent-systems.md` describes Team and Swarm
       as two profiles of one execution substrate rather than separate
       engines
 

@@ -658,6 +658,32 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .breadcrumb-sep { color: var(--text-muted); }
 .breadcrumb-project { font-weight: 600; color: var(--text-primary); }
 
+/* Page-level error banner shown above the message list. */
+.chat-error-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    margin: 8px 24px 0 24px;
+    border-radius: 6px;
+    background: var(--status-fail-bg, rgba(244, 67, 54, 0.1));
+    color: var(--status-fail, #d93025);
+    border: 1px solid var(--status-fail, #d93025);
+    font-size: 13px;
+}
+.chat-error-banner-icon { font-size: 16px; }
+.chat-error-banner-text { flex: 1; }
+.chat-error-banner-close {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+}
+.chat-error-banner-close:hover { opacity: 0.7; }
+
 .chat-messages {
     flex: 1;
     overflow-y: auto;
@@ -1445,6 +1471,20 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     background: rgba(109, 82, 198, 0.15);
     color: var(--brand-primary);
     font-size: 12px;
+}
+
+/* Page-level error banner used by list pages when a load fails. */
+.page-error-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    margin: 12px 0;
+    border-radius: 6px;
+    background: var(--status-fail-bg, rgba(244, 67, 54, 0.1));
+    border: 1px solid var(--status-fail, #d93025);
+    color: var(--status-fail, #d93025);
+    font-size: 13px;
 }
 
 /* Text helpers */

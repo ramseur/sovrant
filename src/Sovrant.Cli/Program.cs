@@ -18,6 +18,16 @@ using Spectre.Console;
 using System.CommandLine;
 using System.Text.Json;
 
+// ── NO_COLOR honoring ─────────────────────────────────────────────────────────
+// https://no-color.org/ — when NO_COLOR is set (any value), suppress ANSI color.
+// --no-color flag is also handled below as a global option.
+if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NO_COLOR")) ||
+    Array.Exists(args, a => a == "--no-color"))
+{
+    AnsiConsole.Profile.Capabilities.ColorSystem = ColorSystem.NoColors;
+    AnsiConsole.Profile.Capabilities.Ansi = false;
+}
+
 // ── Global options ────────────────────────────────────────────────────────────
 var modelOpt = new Option<string?>("--model")
     { Description = "Override the active LLM model." };
@@ -33,6 +43,8 @@ var ciOpt = new Option<bool>("--ci")
     { Description = "CI mode: machine-readable JSON output, CI permission policy, non-zero exit on error." };
 var dbPathOpt = new Option<string?>("--db-path")
     { Description = "Override the SQLite database path (also settable via SOVRANT_DB_PATH env var)." };
+var noColorOpt = new Option<bool>("--no-color")
+    { Description = "Disable ANSI color output (also honored via the NO_COLOR env var)." };
 
 // ── Root command ──────────────────────────────────────────────────────────────
 var root = new RootCommand("Sovrant — multi-provider agentic AI assistant.");
@@ -43,15 +55,23 @@ root.Add(sessionOpt);
 root.Add(noStreamOpt);
 root.Add(ciOpt);
 root.Add(dbPathOpt);
+root.Add(noColorOpt);
 
 // ── 'status' subcommand ───────────────────────────────────────────────────────
+var statusJsonOpt = new Option<bool>("--json")
+    { Description = "Emit machine-readable JSON instead of a formatted table." };
 var statusCmd = new Command("status", "Show provider health and routing statistics.");
+statusCmd.Add(statusJsonOpt);
 statusCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
 {
     await using var sp = BuildServices(pr);
     var router = sp.GetRequiredService<ISmartRouter>();
     await router.InitializeAsync(ct).ConfigureAwait(false);
-    PrintStatus(router.GetStatus());
+    var statuses = router.GetStatus();
+    if (pr.GetValue(statusJsonOpt))
+        PrintStatusJson(statuses);
+    else
+        PrintStatus(statuses);
 });
 root.Add(statusCmd);
 
@@ -1273,6 +1293,20 @@ void PrintStatus(IReadOnlyList<ProviderStatus> statuses)
     }
 
     AnsiConsole.Write(table);
+}
+
+void PrintStatusJson(IReadOnlyList<ProviderStatus> statuses)
+{
+    var rows = statuses.Select(s => new
+    {
+        name = s.Name,
+        healthy = s.Healthy,
+        latency_ms = s.RequestCount > 0 ? (double?)s.LatencyMs : null,
+        request_count = s.RequestCount,
+        error_count = s.ErrorCount,
+        score = s.Score,
+    }).ToArray();
+    Console.WriteLine(JsonSerializer.Serialize(rows, CiJsonOptions.Instance));
 }
 
 // ── CI output types ──────────────────────────────────────────────────────────

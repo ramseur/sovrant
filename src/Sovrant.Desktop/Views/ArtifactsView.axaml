@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
-             xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.ArtifactsView"
              x:DataType="vm:ArtifactsViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -115,8 +115,8 @@
                         IsVisible="{Binding !!SelectedArtifact}">
                     <Panel>
                         <!-- Markdown preview for .md files -->
-                        <md:MarkdownScrollViewer Markdown="{Binding DetailText}"
-                                                 IsVisible="{Binding IsMarkdownPreview}" />
+                        <ctrl:SafeMarkdownPresenter Markdown="{Binding DetailText}"
+                                                    IsVisible="{Binding IsMarkdownPreview}" />
                         <!-- Plain text preview for other files -->
                         <ScrollViewer IsVisible="{Binding !IsMarkdownPreview}">
                             <SelectableTextBlock Text="{Binding DetailText}"

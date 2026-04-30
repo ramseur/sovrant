@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
-             xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.WorkspacesView"
              x:DataType="vm:WorkspacesViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -113,7 +113,7 @@
                         <ContentControl Content="{Binding SelectedWorkspace}">
                             <ContentControl.ContentTemplate>
                                 <DataTemplate DataType="vm:WorkspaceItemViewModel">
-                                    <md:MarkdownScrollViewer Markdown="{Binding Markdown}" />
+                                    <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
                                 </DataTemplate>
                             </ContentControl.ContentTemplate>
                         </ContentControl>

@@ -12,7 +12,7 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 
 **Runtime:** .NET 10 / C# 14
 **License:** [see LICENSE]
-**Status:** 50 tools. 25 agent templates. 32 built-in skills. 96 server endpoints + SignalR hub. Team orchestration (with run profiles — Phase 78 Path 2). Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 1,492 tests passing across 10 projects.
+**Status:** 56 tools. 25 agent templates. 32 built-in skills. 96 server endpoints + SignalR hub. Team orchestration (with run profiles — Phase 78 Path 2). Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 1,492 tests passing across 10 projects.
 
 ---
 
@@ -281,7 +281,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
     └───────────┬──────────────────┬─────────────────────────────┘
                 │                  │
     ┌───────────▼────────┐  ┌──────▼──────────────────────────┐
-    │  Sovrant.Api       │  │  Sovrant.Tools (50 tools)        │
+    │  Sovrant.Api       │  │  Sovrant.Tools (56 tools)        │
     │                    │  │                                  │
     │  SmartRouter       │  │  File:  Read Write Edit          │
     │  ├── OpenAI        │  │         Glob Grep LS             │
@@ -362,7 +362,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 
 ## Tools
 
-50 tools available. All run inside the agentic loop with automatic retries up to 20 tool rounds per turn.
+56 tools available. All run inside the agentic loop with automatic retries up to 20 tool rounds per turn.
 
 ### File
 `Read` · `Write` · `Edit` · `Glob` · `Grep` · `LS`
@@ -726,7 +726,7 @@ See [`docs/frontend-integration.md`](docs/frontend-integration.md) for proxy set
 
 ## MCP Server Mode
 
-Sovrant can run as an MCP (Model Context Protocol) server, exposing all 50 tools and resources via stdio transport. This lets MCP-aware IDEs use Sovrant as a tool backend — no extension required.
+Sovrant can run as an MCP (Model Context Protocol) server, exposing all 56 tools and resources via stdio transport. This lets MCP-aware IDEs use Sovrant as a tool backend — no extension required.
 
 ```bash
 dotnet run --project src/Sovrant.Cli -- mcp-server

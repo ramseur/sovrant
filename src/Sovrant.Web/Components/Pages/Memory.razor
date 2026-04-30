@@ -21,7 +21,20 @@
         <div class="status-message">@_status</div>
     }
 
-    @if (_tab == 0)
+    @if (!string.IsNullOrEmpty(_loadError))
+    {
+        <div class="page-error-banner" role="alert">
+            <span>&#9888;</span>
+            <span style="flex:1;">@_loadError</span>
+            <button class="btn-sm" @onclick="LoadAllAsync">Retry</button>
+        </div>
+    }
+
+    @if (_isLoading)
+    {
+        <p class="text-secondary" style="margin: 24px 0;">Loading memory…</p>
+    }
+    else if (_tab == 0)
     {
         <div class="memory-list">
             @if (_patterns.Count == 0)
@@ -103,6 +116,8 @@
 
     private int _tab;
     private string _status = string.Empty;
+    private bool _isLoading = true;
+    private string _loadError = string.Empty;
     private List<LearnedPattern> _patterns = [];
     private List<Instinct> _instincts = [];
     private List<SessionSummary> _summaries = [];
@@ -113,9 +128,22 @@
 
     private async Task LoadAllAsync()
     {
-        _patterns = (await MemoryStore.LoadPatternsAsync(Project)).ToList();
-        _instincts = (await MemoryStore.LoadInstinctsAsync()).ToList();
-        _summaries = (await MemoryStore.LoadSummariesAsync(Project, maxCount: 20)).ToList();
+        _isLoading = true;
+        _loadError = string.Empty;
+        try
+        {
+            _patterns = (await MemoryStore.LoadPatternsAsync(Project)).ToList();
+            _instincts = (await MemoryStore.LoadInstinctsAsync()).ToList();
+            _summaries = (await MemoryStore.LoadSummariesAsync(Project, maxCount: 20)).ToList();
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Failed to load memory: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
     }
 
     private async Task DeletePattern(LearnedPattern pattern)

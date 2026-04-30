@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Agents.Templates;
@@ -116,24 +115,10 @@ public partial class AgentsViewModel : ViewModelBase
             sb.AppendLine();
             sb.AppendLine("## System Prompt");
             sb.AppendLine();
-            // Strip code fences which crash MarkdownScrollViewer
-            sb.Append(SanitizeForMarkdown(agent.SystemPrompt));
+            sb.Append(agent.SystemPrompt);
         }
 
         return sb.ToString();
-    }
-
-    /// <summary>
-    /// Strips code fences and inline backticks that crash MarkdownScrollViewer,
-    /// while preserving headings, bold, bullets, and other safe markdown.
-    /// </summary>
-    internal static string SanitizeForMarkdown(string text)
-    {
-        // Remove code fence lines (```lang or ```)
-        var result = Regex.Replace(text, @"^```\w*\s*$", "", RegexOptions.Multiline);
-        // Remove inline backticks
-        result = result.Replace("`", "", StringComparison.Ordinal);
-        return result;
     }
 }
 

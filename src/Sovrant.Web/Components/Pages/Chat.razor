@@ -20,6 +20,17 @@
         }
     </div>
 
+    <!-- Page-level error banner (shown for failures not tied to a single message,
+         e.g. session load, runtime init, slash-command load). -->
+    @if (!string.IsNullOrEmpty(_pageError))
+    {
+        <div class="chat-error-banner" role="alert">
+            <span class="chat-error-banner-icon">&#9888;</span>
+            <span class="chat-error-banner-text">@_pageError</span>
+            <button class="chat-error-banner-close" @onclick="DismissPageError" aria-label="Dismiss">&times;</button>
+        </div>
+    }
+
     <!-- Messages area -->
     <div class="chat-messages" id="chat-messages">
         @if (_messages.Count == 0 && !_isSending)
@@ -103,6 +114,7 @@
     private CancellationTokenSource? _sendCts;
     private int _tokenCount;
     private decimal _sessionCost;
+    private string _pageError = string.Empty;
     private string _sessionId = $"session-{Guid.NewGuid():N}";
     private string _workspaceName => ActiveContext.WorkspaceName;
     private string _projectName => ActiveContext.ProjectName;
@@ -161,21 +173,40 @@
 
     private async Task LoadSessionAsync(string sessionId)
     {
-        await Sovrant.Web.Program.RuntimeReady.Task;
-        var entries = await SessionStore.LoadAsync(sessionId);
-        foreach (var entry in entries)
+        try
         {
-            if (entry.Role is "user" or "assistant")
+            await Sovrant.Web.Program.RuntimeReady.Task;
+            var entries = await SessionStore.LoadAsync(sessionId);
+            foreach (var entry in entries)
             {
-                _messages.Add(new ChatMessageModel
+                if (entry.Role is "user" or "assistant")
                 {
-                    Role = entry.Role,
-                    Text = entry.Content,
-                    IsComplete = true,
-                });
+                    _messages.Add(new ChatMessageModel
+                    {
+                        Role = entry.Role,
+                        Text = entry.Content,
+                        IsComplete = true,
+                    });
+                }
             }
+            await InvokeAsync(StateHasChanged);
         }
-        await InvokeAsync(StateHasChanged);
+        catch (Exception ex)
+        {
+            ShowPageError($"Couldn't load session: {ex.Message}");
+        }
+    }
+
+    private void ShowPageError(string message)
+    {
+        _pageError = message;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void DismissPageError()
+    {
+        _pageError = string.Empty;
+        StateHasChanged();
     }
 
     private void OnConfirmationRequested(ConfirmationRequest request)

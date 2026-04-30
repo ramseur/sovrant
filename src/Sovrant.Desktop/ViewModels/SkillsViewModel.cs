@@ -119,7 +119,7 @@ public partial class SkillsViewModel : ViewModelBase
             sb.AppendLine();
             sb.AppendLine("## Workflow");
             sb.AppendLine();
-            sb.Append(AgentsViewModel.SanitizeForMarkdown(skill.Body));
+            sb.Append(skill.Body);
         }
 
         return sb.ToString();

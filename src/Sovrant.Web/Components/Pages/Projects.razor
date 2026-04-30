@@ -24,10 +24,25 @@
         <div class="status-message">@_status</div>
     }
 
+    @if (!string.IsNullOrEmpty(_loadError))
+    {
+        <div class="page-error-banner" role="alert">
+            <span>&#9888;</span>
+            <span style="flex:1;">@_loadError</span>
+            <button class="btn-sm" @onclick="LoadAsync">Retry</button>
+        </div>
+    }
+
     <div class="master-search" style="padding:0;">
         <input type="text" placeholder="Search projects..." @bind="_search" @bind:event="oninput" @bind:after="ApplyFilter" />
     </div>
 
+    @if (_isLoading)
+    {
+        <p class="text-secondary" style="margin: 24px 0;">Loading projects…</p>
+    }
+    else
+    {
     <div class="memory-list">
         @if (_filtered.Count == 0)
         {
@@ -67,6 +82,7 @@
             </div>
         }
     </div>
+    }
 </div>
 
 @code {
@@ -77,6 +93,8 @@
     private string _newName = string.Empty;
     private string _search = string.Empty;
     private string _status = string.Empty;
+    private bool _isLoading = true;
+    private string _loadError = string.Empty;
     private List<ProjectItem> _all = [];
     private List<ProjectItem> _filtered = [];
 
@@ -105,14 +123,27 @@
 
     private async Task LoadAsync()
     {
-        var list = await ProjectService.ListAsync(WorkspaceId, includeArchived: true);
-        _all = list.Select(p => new ProjectItem
+        _isLoading = true;
+        _loadError = string.Empty;
+        try
         {
-            Id = p.ProjectId, Name = p.Name, Slug = p.Slug,
-            Description = p.Description, CreatedAt = p.CreatedAt,
-            IsArchived = p.ArchivedAt.HasValue,
-        }).OrderByDescending(p => p.CreatedAt).ToList();
-        ApplyFilter();
+            var list = await ProjectService.ListAsync(WorkspaceId, includeArchived: true);
+            _all = list.Select(p => new ProjectItem
+            {
+                Id = p.ProjectId, Name = p.Name, Slug = p.Slug,
+                Description = p.Description, CreatedAt = p.CreatedAt,
+                IsArchived = p.ArchivedAt.HasValue,
+            }).OrderByDescending(p => p.CreatedAt).ToList();
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Failed to load projects: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
     }
 
     private async Task CreateAsync()

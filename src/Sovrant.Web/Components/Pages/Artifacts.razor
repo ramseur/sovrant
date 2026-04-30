@@ -2,6 +2,15 @@
 @using Sovrant.Runtime.Artifacts
 @using Markdig
 
+@if (!string.IsNullOrEmpty(_loadError))
+{
+    <div class="page-error-banner" role="alert">
+        <span>&#9888;</span>
+        <span style="flex:1;">@_loadError</span>
+        <button class="btn-sm" @onclick="LoadAsync">Retry</button>
+    </div>
+}
+
 <MasterDetailLayout TItem="ArtifactItem"
                     Title="Artifacts"
                     ItemCount="@_filtered.Count"
@@ -79,66 +88,79 @@
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
+    private string _loadError = string.Empty;
+
     private Task LoadAsync()
     {
-        // Scan the entire artifact root to find artifacts across ALL workspaces
-        var root = (ArtifactStore as LocalArtifactStore)?.Root;
-        if (root is null || !Directory.Exists(root))
+        _loadError = string.Empty;
+
+        try
         {
-            _all = [];
-            ApplyFilter();
-            return Task.CompletedTask;
-        }
-
-        var items = new List<ArtifactItem>();
-        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
-        {
-            var fileName = System.IO.Path.GetFileName(file);
-            if (string.Equals(fileName, "_manifest.json", StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            var relativePath = System.IO.Path.GetRelativePath(root, file).Replace('\\', '/');
-            var info = new FileInfo(file);
-            var ext = System.IO.Path.GetExtension(file);
-
-            // Parse workspace/project/run from path: {workspace}/{project}/{run}/{rest}
-            var segments = relativePath.Split('/');
-            var workspaceId = segments.Length > 0 ? segments[0] : "";
-            var projectId = segments.Length > 1 ? segments[1] : "";
-            var runId = segments.Length > 2 ? segments[2] : "";
-            var artifactPath = segments.Length > 3
-                ? string.Join('/', segments[3..])
-                : fileName;
-
-            var accessUrl = string.Empty;
-            if (!string.IsNullOrEmpty(workspaceId) && !string.IsNullOrEmpty(projectId) && !string.IsNullOrEmpty(runId))
+            // Scan the entire artifact root to find artifacts across ALL workspaces
+            var root = (ArtifactStore as LocalArtifactStore)?.Root;
+            if (root is null || !Directory.Exists(root))
             {
-                var escapedTail = string.Join('/', artifactPath.Split('/').Select(Uri.EscapeDataString));
-                accessUrl = $"/artifacts/{Uri.EscapeDataString(workspaceId)}/{Uri.EscapeDataString(projectId)}/{Uri.EscapeDataString(runId)}/{escapedTail}";
+                _all = [];
+                ApplyFilter();
+                return Task.CompletedTask;
             }
 
-            items.Add(new ArtifactItem
+            var items = new List<ArtifactItem>();
+            foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
             {
-                FullDiskPath = file,
-                RelativePath = relativePath,
-                Path = artifactPath,
-                FileName = fileName,
-                Extension = ext,
-                SizeBytes = info.Length,
-                SizeDisplay = FormatSize(info.Length),
-                ContentType = GuessMime(ext),
-                LastModified = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
-                WorkspaceId = workspaceId,
-                ProjectId = projectId,
-                RunId = runId,
-                IsMarkdown = ext.Equals(".md", StringComparison.OrdinalIgnoreCase),
-                IsPdf = ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase),
-                AccessUrl = accessUrl,
-            });
-        }
+                var fileName = System.IO.Path.GetFileName(file);
+                if (string.Equals(fileName, "_manifest.json", StringComparison.OrdinalIgnoreCase))
+                    continue;
 
-        _all = items.OrderByDescending(a => a.LastModified).ToList();
-        ApplyFilter();
+                var relativePath = System.IO.Path.GetRelativePath(root, file).Replace('\\', '/');
+                var info = new FileInfo(file);
+                var ext = System.IO.Path.GetExtension(file);
+
+                // Parse workspace/project/run from path: {workspace}/{project}/{run}/{rest}
+                var segments = relativePath.Split('/');
+                var workspaceId = segments.Length > 0 ? segments[0] : "";
+                var projectId = segments.Length > 1 ? segments[1] : "";
+                var runId = segments.Length > 2 ? segments[2] : "";
+                var artifactPath = segments.Length > 3
+                    ? string.Join('/', segments[3..])
+                    : fileName;
+
+                var accessUrl = string.Empty;
+                if (!string.IsNullOrEmpty(workspaceId) && !string.IsNullOrEmpty(projectId) && !string.IsNullOrEmpty(runId))
+                {
+                    var escapedTail = string.Join('/', artifactPath.Split('/').Select(Uri.EscapeDataString));
+                    accessUrl = $"/artifacts/{Uri.EscapeDataString(workspaceId)}/{Uri.EscapeDataString(projectId)}/{Uri.EscapeDataString(runId)}/{escapedTail}";
+                }
+
+                items.Add(new ArtifactItem
+                {
+                    FullDiskPath = file,
+                    RelativePath = relativePath,
+                    Path = artifactPath,
+                    FileName = fileName,
+                    Extension = ext,
+                    SizeBytes = info.Length,
+                    SizeDisplay = FormatSize(info.Length),
+                    ContentType = GuessMime(ext),
+                    LastModified = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
+                    WorkspaceId = workspaceId,
+                    ProjectId = projectId,
+                    RunId = runId,
+                    IsMarkdown = ext.Equals(".md", StringComparison.OrdinalIgnoreCase),
+                    IsPdf = ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase),
+                    AccessUrl = accessUrl,
+                });
+            }
+
+            _all = items.OrderByDescending(a => a.LastModified).ToList();
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Failed to load artifacts: {ex.Message}";
+            _all = [];
+            ApplyFilter();
+        }
         return Task.CompletedTask;
     }
 
