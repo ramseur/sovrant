@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Sovrant.Api.Capabilities;
+using Sovrant.Api.Config;
 using Sovrant.Api.Providers;
 using Sovrant.Api.Types;
 
@@ -14,8 +15,7 @@ public sealed class SmartRouter : ISmartRouter, IAsyncDisposable, IDisposable
 {
     private readonly IReadOnlyList<ProviderInfo> _providers;
     private readonly Dictionary<string, ProviderInfo> _providersByName;
-    private readonly RouterMode _mode;
-    private readonly RouterStrategy _strategy;
+    private readonly RouterOptions _options;
     private readonly HttpClient _httpClient;
     private readonly ILogger<SmartRouter> _logger;
     private readonly IModelCapabilityRegistry? _capabilityRegistry;
@@ -50,8 +50,11 @@ public sealed class SmartRouter : ISmartRouter, IAsyncDisposable, IDisposable
 
     /// <summary>Initializes a new instance of <see cref="SmartRouter"/>.</summary>
     /// <param name="providers">The list of providers to manage.</param>
-    /// <param name="mode">The routing mode.</param>
-    /// <param name="strategy">The scoring strategy.</param>
+    /// <param name="options">
+    /// Live-mutable router options. The router reads <see cref="RouterOptions.Mode"/>
+    /// and <see cref="RouterOptions.Strategy"/> on each routing decision so the Settings
+    /// UI can hot-swap values without rebuilding DI.
+    /// </param>
     /// <param name="httpClient">HTTP client used for health-check pings.</param>
     /// <param name="logger">The logger.</param>
     /// <param name="capabilityRegistry">
@@ -62,8 +65,7 @@ public sealed class SmartRouter : ISmartRouter, IAsyncDisposable, IDisposable
     /// </param>
     public SmartRouter(
         IReadOnlyList<ProviderInfo> providers,
-        RouterMode mode,
-        RouterStrategy strategy,
+        RouterOptions options,
         HttpClient httpClient,
         ILogger<SmartRouter> logger,
         IModelCapabilityRegistry? capabilityRegistry = null,
@@ -71,12 +73,12 @@ public sealed class SmartRouter : ISmartRouter, IAsyncDisposable, IDisposable
         RoutingConfig? routingConfig = null)
     {
         ArgumentNullException.ThrowIfNull(providers);
+        ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(logger);
         _providers = providers;
         _providersByName = providers.ToDictionary(p => p.Provider.Name, StringComparer.OrdinalIgnoreCase);
-        _mode = mode;
-        _strategy = strategy;
+        _options = options;
         _httpClient = httpClient;
         _logger = logger;
         _capabilityRegistry = capabilityRegistry;
@@ -243,11 +245,15 @@ public sealed class SmartRouter : ISmartRouter, IAsyncDisposable, IDisposable
             _logAllUnhealthyFallback(_logger, null);
             available = _providers.ToList();
         }
-        var selected = _mode == RouterMode.Fixed
+        // Read live-mutable values once per call so a Settings-UI swap is picked up
+        // by the very next request without rebuilding DI.
+        var mode = _options.Mode;
+        var strategy = _options.Strategy;
+        var selected = mode == RouterMode.Fixed
             ? available[0]
-            : available.MinBy(p => p.Score(_strategy))!;
+            : available.MinBy(p => p.Score(strategy))!;
 
-        _logRouting(_logger, selected.Provider.Name, _strategy.ToString(), null);
+        _logRouting(_logger, selected.Provider.Name, strategy.ToString(), null);
         return selected.Provider;
     }
 
@@ -278,8 +284,10 @@ public sealed class SmartRouter : ISmartRouter, IAsyncDisposable, IDisposable
     }
 
     /// <inheritdoc/>
-    public IReadOnlyList<ProviderStatus> GetStatus() =>
-        _providers.Select(p => new ProviderStatus(
+    public IReadOnlyList<ProviderStatus> GetStatus()
+    {
+        var strategy = _options.Strategy;
+        return _providers.Select(p => new ProviderStatus(
             p.Provider.Name,
             p.Healthy,
             Math.Round(p.AvgLatencyMs, 1),
@@ -288,9 +296,10 @@ public sealed class SmartRouter : ISmartRouter, IAsyncDisposable, IDisposable
             p.ErrorCount,
             p.ErrorRate.ToString("P1", System.Globalization.CultureInfo.InvariantCulture),
             p.Healthy
-                ? Math.Round(p.Score(_strategy), 3).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                ? Math.Round(p.Score(strategy), 3).ToString(System.Globalization.CultureInfo.InvariantCulture)
                 : "N/A"
         )).ToList();
+    }
 
     private async Task PingAsync(ProviderInfo info, CancellationToken ct)
     {

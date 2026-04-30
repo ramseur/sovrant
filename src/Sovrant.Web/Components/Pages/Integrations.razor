@@ -1,7 +1,6 @@
 @page "/integrations"
 @using Sovrant.Runtime.Config
 @using Sovrant.Runtime.Mcp
-@using System.Text.Json
 
 <div class="settings-page">
     <div class="diag-header">
@@ -34,7 +33,7 @@
     <div class="memory-list">
         @if (_servers.Count == 0)
         {
-            <p class="text-secondary">No MCP servers configured. Add one above or edit ~/.sovrant/settings.json.</p>
+            <p class="text-secondary">No MCP servers configured. Add one above.</p>
         }
         @foreach (var s in _servers)
         {
@@ -74,7 +73,7 @@
 </div>
 
 @code {
-    [Inject] private SovrantConfig Config { get; set; } = default!;
+    [Inject] private IMcpServerStore ServerStore { get; set; } = default!;
     [Inject] private McpClientRegistry McpRegistry { get; set; } = default!;
 
     private string _newName = string.Empty;
@@ -83,21 +82,13 @@
     private string _status = string.Empty;
     private List<ServerView> _servers = [];
 
-    private static readonly string SettingsPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".sovrant", "settings.json");
-
-    private static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        WriteIndented = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-    };
-
     protected override async Task OnInitializedAsync() => await LoadServersAsync().ConfigureAwait(false);
 
     private async Task LoadServersAsync()
     {
         var servers = new List<ServerView>();
-        foreach (var kv in Config.McpServers)
+        var stored = await ServerStore.GetAllAsync().ConfigureAwait(false);
+        foreach (var kv in stored)
         {
             var isConnected = McpRegistry.Clients.ContainsKey(kv.Key);
             var toolCount = 0;
@@ -137,25 +128,16 @@
                 ? Array.Empty<string>()
                 : _newArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-            Dictionary<string, object?> existing = [];
-            if (File.Exists(SettingsPath))
-                existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(await File.ReadAllTextAsync(SettingsPath)) ?? [];
-
-            var mcpServers = new Dictionary<string, object>(StringComparer.Ordinal);
-            if (existing.TryGetValue("McpServers", out var val) && val is JsonElement el)
+            await ServerStore.UpsertAsync(_newName.Trim(), new McpServerConfig
             {
-                foreach (var prop in el.EnumerateObject())
-                    mcpServers[prop.Name] = prop.Value;
-            }
-
-            mcpServers[_newName.Trim()] = new { command = _newCommand.Trim(), args };
-            existing["McpServers"] = mcpServers;
-
-            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
-            await File.WriteAllTextAsync(SettingsPath, JsonSerializer.Serialize(existing, JsonOpts));
+                Command = _newCommand.Trim(),
+                Args = args,
+                Env = new Dictionary<string, string>(StringComparer.Ordinal),
+            }).ConfigureAwait(false);
 
             _status = $"Server '{_newName}' added. Restart to connect.";
             _newName = _newCommand = _newArgs = string.Empty;
+            await LoadServersAsync().ConfigureAwait(false);
         }
         catch (Exception ex) { _status = $"Failed: {ex.Message}"; }
     }
@@ -164,19 +146,7 @@
     {
         try
         {
-            if (!File.Exists(SettingsPath)) return;
-            var existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(await File.ReadAllTextAsync(SettingsPath)) ?? [];
-            if (existing.TryGetValue("McpServers", out var val) && val is JsonElement el)
-            {
-                var mcpServers = new Dictionary<string, object>(StringComparer.Ordinal);
-                foreach (var prop in el.EnumerateObject())
-                {
-                    if (!prop.Name.Equals(name, StringComparison.Ordinal))
-                        mcpServers[prop.Name] = prop.Value;
-                }
-                existing["McpServers"] = mcpServers;
-                await File.WriteAllTextAsync(SettingsPath, JsonSerializer.Serialize(existing, JsonOpts));
-            }
+            await ServerStore.DeleteAsync(name).ConfigureAwait(false);
             _servers.RemoveAll(s => s.Name == name);
             _status = $"Server '{name}' removed. Restart to apply.";
         }

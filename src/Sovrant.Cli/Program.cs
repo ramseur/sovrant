@@ -231,11 +231,8 @@ mcpCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
         Model = model ?? config.Model,
         MaxTokens = config.MaxTokens,
         PermissionMode = PermissionMode.DontAsk,
-        RouterMode = config.RouterMode,
-        RouterStrategy = config.RouterStrategy,
         BaseUrl = config.BaseUrl,
         ApiKey = config.ApiKey,
-        McpServers = config.McpServers,
         CompactThreshold = config.CompactThreshold,
     };
 
@@ -819,12 +816,9 @@ ServiceProvider BuildServices(ParseResult pr)
             Model = model ?? config.Model,
             MaxTokens = config.MaxTokens,
             PermissionMode = pm,
-            RouterMode = config.RouterMode,
-            RouterStrategy = config.RouterStrategy,
             BaseUrl = config.BaseUrl,
             ApiKey = config.ApiKey,
             DbPath = dbPath ?? config.DbPath,
-            McpServers = config.McpServers,
         };
     }
 

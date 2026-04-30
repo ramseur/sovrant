@@ -1,19 +1,32 @@
 using Sovrant.Api.Auth;
-using Sovrant.Server.ServerConfig;
+using Sovrant.Runtime.Mcp;
 
 namespace Sovrant.Server.Auth;
 
 /// <summary>
-/// An <see cref="IAuthProvider"/> that reads the LLM API key from <see cref="MutableServerConfig"/>,
-/// allowing the key to be updated at runtime without restarting the server.
+/// An <see cref="IAuthProvider"/> that reads the LLM API key from the encrypted
+/// <see cref="ICredentialStore"/> under the well-known key
+/// <see cref="LlmApiKeyCredentialKey"/>. The decrypted value is cached in memory
+/// after first load so the hot path doesn't hit disk per LLM call.
 /// </summary>
 internal sealed class MutableApiKeyAuthProvider : IAuthProvider
 {
-    private readonly MutableServerConfig _config;
+    /// <summary>Storage key used by the server to persist the LLM API key.</summary>
+    public const string LlmApiKeyCredentialKey = "llm:api_key";
 
-    public MutableApiKeyAuthProvider(MutableServerConfig config) => _config = config;
+    private readonly ICredentialStore _store;
+    private volatile string? _cached;
+
+    public MutableApiKeyAuthProvider(ICredentialStore store) => _store = store;
 
     /// <inheritdoc/>
-    public ValueTask<string> GetAuthHeaderAsync(CancellationToken ct) =>
-        ValueTask.FromResult(_config.LlmApiKey);
+    public async ValueTask<string> GetAuthHeaderAsync(CancellationToken ct)
+    {
+        if (_cached is not null)
+            return _cached;
+
+        var value = await _store.RetrieveAsync(LlmApiKeyCredentialKey, ct).ConfigureAwait(false) ?? string.Empty;
+        _cached = value;
+        return value;
+    }
 }

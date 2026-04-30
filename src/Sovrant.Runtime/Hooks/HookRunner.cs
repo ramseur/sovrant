@@ -1,15 +1,13 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
 namespace Sovrant.Runtime.Hooks;
 
 /// <summary>
-/// Loads hook definitions from <c>~/.sovrant/hooks.json</c> and <c>.sovrant/hooks.json</c>,
-/// and fires matching hooks at agent lifecycle events.
+/// Loads hook definitions from <see cref="IHookStore"/> and fires matching
+/// hooks at agent lifecycle events.
 /// </summary>
 /// <remarks>
 /// Profile is controlled by <c>SOVRANT_HOOK_PROFILE</c> (minimal / standard / strict; default: standard).
@@ -19,20 +17,15 @@ public sealed partial class HookRunner : IHookRunner
 {
     internal enum HookProfile { Minimal, Standard, Strict }
 
-    private static readonly JsonSerializerOptions s_jsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        Converters = { new JsonStringEnumConverter() },
-    };
-
-    private readonly IReadOnlyList<HookConfig> _hooks;
+    private volatile IReadOnlyList<HookConfig> _hooks;
+    private readonly IHookStore? _store;
     private readonly HookProfile _profile;
     private readonly IReadOnlySet<string> _disabled;
     private readonly ILogger<HookRunner> _logger;
     private readonly Func<string, int, CancellationToken, Task<int>> _processRunner;
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to load hooks from '{Path}': {Error}")]
-    private static partial void LogLoadError(ILogger logger, string path, string error);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to load hooks from store: {Error}")]
+    private static partial void LogLoadError(ILogger logger, string error);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Hook fired: event={Event}, command={Command}")]
     private static partial void LogHookFired(ILogger logger, HookEvent @event, string command);
@@ -46,9 +39,12 @@ public sealed partial class HookRunner : IHookRunner
     [LoggerMessage(Level = LogLevel.Warning, Message = "Hook execution error: command={Command}, error={Error}")]
     private static partial void LogHookError(ILogger logger, string command, string error);
 
-    /// <summary>Production constructor — reads hook config from disk and profile/disabled from environment.</summary>
-    public HookRunner(ILogger<HookRunner> logger)
-        : this(LoadHooksFromDisk(logger), ResolveProfile(), ResolveDisabled(), logger, null) { }
+    /// <summary>Production constructor — loads enabled hooks from <see cref="IHookStore"/>.</summary>
+    public HookRunner(IHookStore store, ILogger<HookRunner> logger)
+        : this(LoadHooksFromStore(store, logger), ResolveProfile(), ResolveDisabled(), logger, null)
+    {
+        _store = store;
+    }
 
     /// <summary>Testable constructor — accepts pre-built config and an optional mock process runner.</summary>
     internal HookRunner(
@@ -63,6 +59,24 @@ public sealed partial class HookRunner : IHookRunner
         _disabled = disabled;
         _logger = logger;
         _processRunner = processRunner ?? ExecuteProcessAsync;
+    }
+
+    /// <summary>
+    /// Reloads enabled hooks from the store. Called by the Web/Desktop UI after
+    /// hooks are added, edited, or deleted so the running engine picks up the
+    /// change without a restart.
+    /// </summary>
+    public async Task ReloadAsync(CancellationToken ct = default)
+    {
+        if (_store is null) return;
+        try
+        {
+            _hooks = await _store.GetEnabledAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        {
+            LogLoadError(_logger, ex.Message);
+        }
     }
 
     /// <inheritdoc />
@@ -215,34 +229,20 @@ public sealed partial class HookRunner : IHookRunner
         }
     }
 
-    private static List<HookConfig> LoadHooksFromDisk(ILogger logger)
+    private static IReadOnlyList<HookConfig> LoadHooksFromStore(IHookStore store, ILogger logger)
     {
-        var result = new List<HookConfig>();
-
-        var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        string[] paths =
-        [
-            Path.Combine(userHome, ".sovrant", "hooks.json"),
-            Path.Combine(".sovrant", "hooks.json"),
-        ];
-
-        foreach (var path in paths)
+        ArgumentNullException.ThrowIfNull(store);
+        try
         {
-            if (!File.Exists(path)) continue;
-            try
-            {
-                var json = File.ReadAllText(path);
-                var config = JsonSerializer.Deserialize<HooksConfig>(json, s_jsonOptions);
-                if (config?.Hooks is { Count: > 0 } hooks)
-                    result.AddRange(hooks);
-            }
-            catch (Exception ex) when (ex is JsonException or IOException)
-            {
-                LogLoadError(logger, path, ex.Message);
-            }
+            // Sync at construction is acceptable: hooks are config, loaded once,
+            // and the SQLite read is a single indexed scan over a small table.
+            return store.GetEnabledAsync().GetAwaiter().GetResult();
         }
-
-        return result;
+        catch (Exception ex) when (ex is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        {
+            LogLoadError(logger, ex.Message);
+            return [];
+        }
     }
 
     internal static HookProfile ResolveProfile() =>

@@ -1,13 +1,20 @@
 using Sovrant.Runtime.Conversation;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Server;
 
 /// <summary>
 /// Background service that periodically evicts idle sessions from the <see cref="IRuntimeSessionPool"/>
 /// based on TTL and max-sessions cap. Runs every 5 minutes.
+///
+/// TTL and cap are loaded from the global <c>workspace_settings</c> row;
+/// env vars <c>SOVRANT_SESSION_TTL_SECONDS</c> / <c>SOVRANT_MAX_SESSIONS</c>
+/// still win when set.
 /// </summary>
 internal sealed partial class SessionEvictionService : BackgroundService
 {
+    private const int DefaultTtlSeconds = 3600;
+    private const int DefaultMaxSessions = 500;
     private static readonly TimeSpan SweepInterval = TimeSpan.FromMinutes(5);
 
     private readonly IRuntimeSessionPool _pool;
@@ -25,20 +32,18 @@ internal sealed partial class SessionEvictionService : BackgroundService
 
     public SessionEvictionService(
         IRuntimeSessionPool pool,
+        IWorkspaceSettingsStore settings,
         ILogger<SessionEvictionService> logger)
     {
         _pool = pool;
         _logger = logger;
 
-        _ttl = TimeSpan.FromSeconds(
-            int.TryParse(Environment.GetEnvironmentVariable("SOVRANT_SESSION_TTL_SECONDS"), out var ttl)
-                ? ttl
-                : 3600);
+        var ttlSeconds = ResolveInt(settings, WorkspaceSettingsKeys.SessionTtlSeconds,
+            "SOVRANT_SESSION_TTL_SECONDS", DefaultTtlSeconds);
+        _ttl = TimeSpan.FromSeconds(ttlSeconds);
 
-        _maxSessions = int.TryParse(
-            Environment.GetEnvironmentVariable("SOVRANT_MAX_SESSIONS"), out var max)
-            ? max
-            : 500;
+        _maxSessions = ResolveInt(settings, WorkspaceSettingsKeys.MaxSessions,
+            "SOVRANT_MAX_SESSIONS", DefaultMaxSessions);
     }
 
     /// <summary>The configured session TTL.</summary>
@@ -61,5 +66,17 @@ internal sealed partial class SessionEvictionService : BackgroundService
             else
                 LogNoEviction(_logger, _pool.ActiveCount);
         }
+    }
+
+    private static int ResolveInt(IWorkspaceSettingsStore settings, string settingsKey, string envVar, int fallback)
+    {
+        if (int.TryParse(Environment.GetEnvironmentVariable(envVar), out var fromEnv))
+            return fromEnv;
+
+        var fromDb = settings.GetGlobalAsync(settingsKey).GetAwaiter().GetResult();
+        if (int.TryParse(fromDb, out var parsed))
+            return parsed;
+
+        return fallback;
     }
 }

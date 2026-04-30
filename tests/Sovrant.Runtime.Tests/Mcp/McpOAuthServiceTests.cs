@@ -7,32 +7,30 @@ namespace Sovrant.Runtime.Tests.Mcp;
 /// <summary>Tests for <see cref="McpOAuthService"/> — no network calls, no real MCP processes.</summary>
 public sealed class McpOAuthServiceTests
 {
-    private static SovrantConfig ConfigWithOAuth(
+    private static InMemoryMcpServerStore StoreWithOAuth(
         string serverName = "github",
-        string? tokenEnvVar = "GITHUB_TOKEN") =>
-        new()
+        string? tokenEnvVar = "GITHUB_TOKEN")
+    {
+        var store = new InMemoryMcpServerStore();
+        store.Servers[serverName] = new McpServerConfig
         {
-            McpServers = new Dictionary<string, McpServerConfig>(StringComparer.Ordinal)
+            Command = "echo",
+            OAuthConfig = new McpOAuthConfig
             {
-                [serverName] = new McpServerConfig
-                {
-                    Command = "echo",
-                    OAuthConfig = new McpOAuthConfig
-                    {
-                        ClientId = "test-client-id",
-                        AuthorizationUrl = new Uri("https://github.com/login/oauth/authorize"),
-                        TokenUrl = new Uri("https://github.com/login/oauth/access_token"),
-                        Scopes = ["repo", "read:org"],
-                        TokenEnvVar = tokenEnvVar ?? string.Empty,
-                        RedirectUri = new Uri("http://localhost:5200/v1/mcp/auth/callback"),
-                    },
-                },
+                ClientId = "test-client-id",
+                AuthorizationUrl = new Uri("https://github.com/login/oauth/authorize"),
+                TokenUrl = new Uri("https://github.com/login/oauth/access_token"),
+                Scopes = ["repo", "read:org"],
+                TokenEnvVar = tokenEnvVar ?? string.Empty,
+                RedirectUri = new Uri("http://localhost:5200/v1/mcp/auth/callback"),
             },
         };
+        return store;
+    }
 
-    private static McpOAuthService CreateService(SovrantConfig? config = null) =>
+    private static McpOAuthService CreateService(IMcpServerStore? store = null) =>
         new(
-            config ?? ConfigWithOAuth(),
+            store ?? StoreWithOAuth(),
             new InMemoryCredentialStore(),
             null!,   // McpToolRegistrar — not needed for URL-generation tests
             new StubHttpClientFactory(),
@@ -116,14 +114,9 @@ public sealed class McpOAuthServiceTests
     [Fact]
     public async Task GenerateAuthorizationUrl_NoOAuthConfig_Throws()
     {
-        var config = new SovrantConfig
-        {
-            McpServers = new Dictionary<string, McpServerConfig>(StringComparer.Ordinal)
-            {
-                ["bare"] = new McpServerConfig { Command = "echo" },
-            },
-        };
-        var svc = CreateService(config);
+        var store = new InMemoryMcpServerStore();
+        store.Servers["bare"] = new McpServerConfig { Command = "echo" };
+        var svc = CreateService(store);
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => svc.GenerateAuthorizationUrlAsync("bare"));
     }
@@ -139,6 +132,30 @@ public sealed class McpOAuthServiceTests
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>In-memory IMcpServerStore for tests.</summary>
+    private sealed class InMemoryMcpServerStore : IMcpServerStore
+    {
+        public Dictionary<string, McpServerConfig> Servers { get; } = new(StringComparer.Ordinal);
+
+        public Task<IReadOnlyDictionary<string, McpServerConfig>> GetAllAsync(CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyDictionary<string, McpServerConfig>>(Servers);
+
+        public Task<McpServerConfig?> GetAsync(string name, CancellationToken ct = default) =>
+            Task.FromResult(Servers.TryGetValue(name, out var c) ? c : null);
+
+        public Task UpsertAsync(string name, McpServerConfig config, CancellationToken ct = default)
+        {
+            Servers[name] = config;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(string name, CancellationToken ct = default)
+        {
+            Servers.Remove(name);
+            return Task.CompletedTask;
+        }
+    }
 
     /// <summary>In-memory ICredentialStore for tests — never touches disk.</summary>
     private sealed class InMemoryCredentialStore : ICredentialStore

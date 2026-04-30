@@ -1,5 +1,4 @@
 using Sovrant.Api.Config;
-using Sovrant.Api.Routing;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.TrustBoundary;
 
@@ -16,12 +15,6 @@ public sealed class SovrantConfig
 
     /// <summary>Controls how the runtime handles potentially destructive tool invocations.</summary>
     public PermissionMode PermissionMode { get; set; } = PermissionMode.Default;
-
-    /// <summary>Controls whether the router uses smart multi-provider routing or a fixed provider.</summary>
-    public RouterMode RouterMode { get; init; } = RouterMode.Smart;
-
-    /// <summary>The scoring strategy used when routing to the optimal provider.</summary>
-    public RouterStrategy RouterStrategy { get; init; } = RouterStrategy.Balanced;
 
     /// <summary>Optional base URL override for the LLM API.</summary>
     public Uri? BaseUrl { get; set; }
@@ -63,17 +56,6 @@ public sealed class SovrantConfig
     /// </summary>
     public WebSearchBackend? WebSearchOverride { get; set; }
 
-    /// <summary>MCP server configurations keyed by server name.</summary>
-    public IReadOnlyDictionary<string, McpServerConfig> McpServers { get; init; } =
-        new Dictionary<string, McpServerConfig>(StringComparer.Ordinal);
-
-    /// <summary>
-    /// LSP (Language Server Protocol) server configurations keyed by language identifier.
-    /// Example: <c>{ "csharp": { "command": "omnisharp", "args": ["--languageserver"] } }</c>
-    /// </summary>
-    public IReadOnlyDictionary<string, LspServerConfigEntry> LspServers { get; init; } =
-        new Dictionary<string, LspServerConfigEntry>(StringComparer.OrdinalIgnoreCase);
-
     /// <summary>
     /// Returns a copy of this config with <see cref="Model"/> replaced by <paramref name="model"/>.
     /// All other properties are preserved.
@@ -83,32 +65,14 @@ public sealed class SovrantConfig
         Model = model,
         MaxTokens = MaxTokens,
         PermissionMode = PermissionMode,
-        RouterMode = RouterMode,
-        RouterStrategy = RouterStrategy,
         BaseUrl = BaseUrl,
         ApiKey = ApiKey,
         DbPath = DbPath,
         CompactThreshold = CompactThreshold,
         ModelLevels = ModelLevels,
         TrustBoundary = TrustBoundary,
-        McpServers = McpServers,
-        LspServers = LspServers,
         WebSearchOverride = WebSearchOverride,
     };
-}
-
-/// <summary>Configuration for a single LSP server in settings.json.</summary>
-public sealed class LspServerConfigEntry
-{
-    /// <summary>The command to launch the language server.</summary>
-    public string Command { get; init; } = string.Empty;
-
-    /// <summary>Command-line arguments.</summary>
-    public IReadOnlyList<string> Args { get; init; } = [];
-
-    /// <summary>Additional environment variables for the process.</summary>
-    public IReadOnlyDictionary<string, string> Env { get; init; } =
-        new Dictionary<string, string>(StringComparer.Ordinal);
 }
 
 /// <summary>Configuration for a single MCP server.</summary>
@@ -139,11 +103,6 @@ public sealed class McpOAuthConfig
 {
     /// <summary>The OAuth client ID registered with the authorization server.</summary>
     public string ClientId { get; init; } = string.Empty;
-
-    /// <summary>
-    /// The OAuth client secret. Leave empty for public clients (PKCE-only flows).
-    /// </summary>
-    public string ClientSecret { get; init; } = string.Empty;
 
     /// <summary>The authorization endpoint URL — where users are redirected to log in.</summary>
     public Uri? AuthorizationUrl { get; init; }

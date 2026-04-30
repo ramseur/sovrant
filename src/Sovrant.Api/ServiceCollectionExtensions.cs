@@ -44,13 +44,9 @@ public static class ServiceCollectionExtensions
             || (Environment.GetEnvironmentVariable("SOVRANT_WEB_SEARCH")?.Trim()
                 .Equals("native", StringComparison.OrdinalIgnoreCase) ?? false);
 
-        var routerMode = Enum.TryParse<RouterMode>(
-            Environment.GetEnvironmentVariable("ROUTER_MODE") ?? configuration["Router:Mode"], true,
-            out var rm) ? rm : RouterMode.Smart;
-
-        var routerStrategy = Enum.TryParse<RouterStrategy>(
-            Environment.GetEnvironmentVariable("ROUTER_STRATEGY") ?? configuration["Router:Strategy"], true,
-            out var rs) ? rs : RouterStrategy.Balanced;
+        // Live-mutable router options (Phase 70+). Singleton so the Settings UI can
+        // hot-swap Mode / Strategy at runtime; SmartRouter consults this on each route.
+        services.AddSingleton(_ => RouterOptions.Resolve(configuration));
 
         services.AddSingleton<IAuthProvider>(new ApiKeyAuthProvider(apiKey));
 
@@ -123,7 +119,8 @@ public static class ServiceCollectionExtensions
             var capRegistry = sp.GetService<IModelCapabilityRegistry>();
             var tierResolver = sp.GetService<IModelTierResolver>();
             var routingConfig = sp.GetService<RoutingConfig>();
-            return new SmartRouter(providers, routerMode, routerStrategy, pingClient, logger,
+            var routerOptions = sp.GetRequiredService<RouterOptions>();
+            return new SmartRouter(providers, routerOptions, pingClient, logger,
                 capRegistry, tierResolver, routingConfig);
         });
 

@@ -65,7 +65,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IPermissionPolicy>(cliPolicy);
         services.AddSingleton<IPermissionModeAccessor>(cliPolicy);
 
-        // Hook runner — loads hooks.json from disk on first construction.
+        // Hook runner — loads enabled hooks from IHookStore at construction.
+        services.AddSingleton<IHookStore>(sp =>
+            new SqliteHookStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
         services.AddSingleton<IHookRunner, HookRunner>();
 
         // Audit store — SQLite primary, optional JSONL dual-write.
@@ -143,6 +145,11 @@ public static class ServiceCollectionExtensions
         // Workspace service (Phase 35)
         services.AddSingleton<IWorkspaceService>(sp =>
             new SqliteWorkspaceStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+
+        // Workspace settings store — budgets, session caps, and other
+        // runtime-mutable knobs that previously lived in env vars only.
+        services.AddSingleton<IWorkspaceSettingsStore>(sp =>
+            new SqliteWorkspaceSettingsStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
         // Project service (Phase 36)
         services.AddSingleton<IProjectService>(sp =>
@@ -250,6 +257,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<McpToolRegistrar>();
         services.AddSingleton<ICredentialStore>(sp =>
             new SqliteCredentialStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+        // MCP/LSP server-entry stores (V019) — metadata only; secrets live in
+        // ICredentialStore under "mcp.{name}.client_secret" / "access_token".
+        services.AddSingleton<IMcpServerStore>(sp =>
+            new SqliteMcpServerStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+        services.AddSingleton<ILspServerStore>(sp =>
+            new SqliteLspServerStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
         services.AddHttpClient("McpOAuth", client =>
         {
             client.Timeout = TimeSpan.FromSeconds(30);
@@ -320,11 +333,12 @@ public static class ServiceCollectionExtensions
         var importer = services.GetRequiredService<LegacyArtifactImporter>();
         await importer.ImportIfNeededAsync(ct).ConfigureAwait(false);
 
-        var config = services.GetRequiredService<SovrantConfig>();
-        if (config.McpServers.Count == 0)
+        var mcpStore = services.GetRequiredService<IMcpServerStore>();
+        var mcpServers = await mcpStore.GetAllAsync(ct).ConfigureAwait(false);
+        if (mcpServers.Count == 0)
             return;
 
         var registrar = services.GetRequiredService<McpToolRegistrar>();
-        await registrar.RegisterAllAsync(config.McpServers, ct).ConfigureAwait(false);
+        await registrar.RegisterAllAsync(mcpServers, ct).ConfigureAwait(false);
     }
 }

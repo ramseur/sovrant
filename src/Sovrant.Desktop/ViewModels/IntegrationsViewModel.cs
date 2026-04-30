@@ -1,8 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -13,7 +11,7 @@ namespace Sovrant.Desktop.ViewModels;
 
 public partial class IntegrationsViewModel : ViewModelBase
 {
-    private readonly SovrantConfig _config;
+    private readonly IMcpServerStore _serverStore;
     private readonly McpClientRegistry _clientRegistry;
 
     [ObservableProperty]
@@ -45,25 +43,15 @@ public partial class IntegrationsViewModel : ViewModelBase
 
     public ObservableCollection<McpServerItem> FilteredServers { get; } = [];
 
-    private static readonly string SettingsPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".sovrant", "settings.json");
-
-    private static readonly JsonSerializerOptions SerializerOptions = new()
+    public IntegrationsViewModel(IMcpServerStore serverStore, McpClientRegistry clientRegistry)
     {
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
-
-    public IntegrationsViewModel(SovrantConfig config, McpClientRegistry clientRegistry)
-    {
-        _config = config;
+        _serverStore = serverStore;
         _clientRegistry = clientRegistry;
-        LoadServers();
+        _ = LoadServersAsync();
     }
 
     [RelayCommand]
-    private void Refresh() => LoadServers();
+    private Task Refresh() => LoadServersAsync();
 
     [RelayCommand]
     private void SelectServer(McpServerItem server) => SelectedServer = server;
@@ -80,7 +68,7 @@ public partial class IntegrationsViewModel : ViewModelBase
             return;
         }
 
-        if (_config.McpServers.ContainsKey(name))
+        if (await _serverStore.GetAsync(name).ConfigureAwait(true) is not null)
         {
             StatusMessage = $"Server '{name}' already exists.";
             return;
@@ -88,50 +76,22 @@ public partial class IntegrationsViewModel : ViewModelBase
 
         try
         {
-            // Read existing settings
-            Dictionary<string, object?> existing = [];
-            if (File.Exists(SettingsPath))
-            {
-                var json = await File.ReadAllTextAsync(SettingsPath);
-                existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(json) ?? [];
-            }
-
-            // Build new server entry
             var args = string.IsNullOrWhiteSpace(NewServerArgs)
                 ? []
                 : NewServerArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-            var serverEntry = new Dictionary<string, object?>
+            await _serverStore.UpsertAsync(name, new McpServerConfig
             {
-                ["command"] = command,
-                ["args"] = args,
-            };
-
-            // Get or create McpServers section
-            Dictionary<string, object?> mcpServers;
-            if (existing.TryGetValue("McpServers", out var existingServers) && existingServers is JsonElement je)
-            {
-                mcpServers = JsonSerializer.Deserialize<Dictionary<string, object?>>(je.GetRawText()) ?? [];
-            }
-            else
-            {
-                mcpServers = [];
-            }
-
-            mcpServers[name] = serverEntry;
-            existing["McpServers"] = mcpServers;
-
-            var dir = Path.GetDirectoryName(SettingsPath)!;
-            Directory.CreateDirectory(dir);
-            var output = JsonSerializer.Serialize(existing, SerializerOptions);
-            await File.WriteAllTextAsync(SettingsPath, output);
+                Command = command,
+                Args = args,
+                Env = new Dictionary<string, string>(StringComparer.Ordinal),
+            }).ConfigureAwait(true);
 
             StatusMessage = $"Server '{name}' added. Restart to connect.";
             NewServerName = string.Empty;
             NewServerCommand = string.Empty;
             NewServerArgs = string.Empty;
 
-            // Add to local list immediately
             _allServers.Add(new McpServerItem
             {
                 Name = name,
@@ -154,21 +114,7 @@ public partial class IntegrationsViewModel : ViewModelBase
     {
         try
         {
-            // Read existing settings
-            if (!File.Exists(SettingsPath)) return;
-
-            var json = await File.ReadAllTextAsync(SettingsPath);
-            var existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(json) ?? [];
-
-            if (existing.TryGetValue("McpServers", out var existingServers) && existingServers is JsonElement je)
-            {
-                var mcpServers = JsonSerializer.Deserialize<Dictionary<string, object?>>(je.GetRawText()) ?? [];
-                mcpServers.Remove(server.Name);
-                existing["McpServers"] = mcpServers;
-
-                var output = JsonSerializer.Serialize(existing, SerializerOptions);
-                await File.WriteAllTextAsync(SettingsPath, output);
-            }
+            await _serverStore.DeleteAsync(server.Name).ConfigureAwait(true);
 
             _allServers.RemoveAll(s => s.Name == server.Name);
             TotalCount = _allServers.Count;
@@ -185,11 +131,12 @@ public partial class IntegrationsViewModel : ViewModelBase
         }
     }
 
-    private void LoadServers()
+    private async Task LoadServersAsync()
     {
         _allServers.Clear();
 
-        foreach (var (name, server) in _config.McpServers.OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
+        var servers = await _serverStore.GetAllAsync().ConfigureAwait(true);
+        foreach (var (name, server) in servers.OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
         {
             var isConnected = _clientRegistry.Clients.ContainsKey(name);
 

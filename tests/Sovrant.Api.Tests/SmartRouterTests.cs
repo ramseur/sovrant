@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Api.Auth;
 using Sovrant.Api.Capabilities;
+using Sovrant.Api.Config;
 using Sovrant.Api.Providers;
 using Sovrant.Api.Routing;
 using Sovrant.Api.Types;
@@ -25,7 +26,8 @@ public sealed class SmartRouterTests
         RouterStrategy strategy = RouterStrategy.Balanced)
     {
         var pingHttp = new HttpClient(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonOk("{}")));
-        return new SmartRouter(providers, mode, strategy, pingHttp, NullLogger<SmartRouter>.Instance);
+        var options = new RouterOptions { Mode = mode, Strategy = strategy };
+        return new SmartRouter(providers, options, pingHttp, NullLogger<SmartRouter>.Instance);
     }
 
     [Fact]
@@ -42,6 +44,37 @@ public sealed class SmartRouterTests
 
         var selected = await router.RouteAsync(req);
         Assert.Equal("fast", selected.Name);
+    }
+
+    [Fact]
+    public async Task RouteAsync_RespectsLiveOptionsMutation()
+    {
+        // Verifies the router consults RouterOptions on every routing decision so a
+        // Settings-UI swap takes effect for the next request without rebuilding DI.
+        var fast = CreateProvider("fast", "https://fast.example.com");
+        var slow = CreateProvider("slow", "https://slow.example.com");
+        var fastInfo = new ProviderInfo(fast, "/v1/models", 0.001) { AvgLatencyMs = 100 };
+        var slowInfo = new ProviderInfo(slow, "/v1/models", 0.001) { AvgLatencyMs = 900 };
+
+        var pingHttp = new HttpClient(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonOk("{}")));
+        var options = new RouterOptions { Mode = RouterMode.Smart, Strategy = RouterStrategy.Latency };
+        var router = new SmartRouter([fastInfo, slowInfo], options, pingHttp,
+            NullLogger<SmartRouter>.Instance);
+
+        var req = new MessagesRequest("gpt-4o", 100, [InputMessage.UserText("Hi")]);
+
+        // Smart/Latency picks fast.
+        Assert.Equal("fast", (await router.RouteAsync(req)).Name);
+
+        // Flip to Fixed at runtime — first provider wins regardless of latency.
+        options.Mode = RouterMode.Fixed;
+        Assert.Equal("fast", (await router.RouteAsync(req)).Name); // still first
+
+        // Reorder by mutating strategy back; both providers remain so first stays "fast".
+        options.Mode = RouterMode.Smart;
+        options.Strategy = RouterStrategy.Cost;
+        // Both have equal cost; with equal scores .MinBy keeps the first ordered, fast.
+        Assert.Equal("fast", (await router.RouteAsync(req)).Name);
     }
 
     [Fact]
@@ -182,7 +215,7 @@ public sealed class SmartRouterTests
         var provider = CreateProvider("p1", "https://p1.example.com");
         var info = new ProviderInfo(provider, "/v1/models", 0.001);
         var pingHttp = new HttpClient(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonOk("{}")));
-        var router = new SmartRouter([info], RouterMode.Smart, RouterStrategy.Balanced,
+        var router = new SmartRouter([info], new RouterOptions(),
             pingHttp, NullLogger<SmartRouter>.Instance, registry);
 
         var req = new MessagesRequest("gemma4:27b", 100, [InputMessage.UserText("Hi")]);
@@ -221,7 +254,7 @@ public sealed class SmartRouterTests
         var provider = CreateProvider("p1", "https://p1.example.com");
         var info = new ProviderInfo(provider, "/v1/models", 0.001);
         var pingHttp = new HttpClient(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonOk("{}")));
-        var router = new SmartRouter([info], RouterMode.Smart, RouterStrategy.Balanced,
+        var router = new SmartRouter([info], new RouterOptions(),
             pingHttp, NullLogger<SmartRouter>.Instance, registry, tierResolver,
             new RoutingConfig { IntentRouting = true });
 
@@ -256,7 +289,7 @@ public sealed class SmartRouterTests
         var provider = CreateProvider("p1", "https://p1.example.com");
         var info = new ProviderInfo(provider, "/v1/models", 0.001);
         var pingHttp = new HttpClient(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonOk("{}")));
-        var router = new SmartRouter([info], RouterMode.Smart, RouterStrategy.Balanced,
+        var router = new SmartRouter([info], new RouterOptions(),
             pingHttp, NullLogger<SmartRouter>.Instance, registry, tierResolver,
             new RoutingConfig { IntentRouting = true });
 
@@ -276,7 +309,7 @@ public sealed class SmartRouterTests
         var info = new ProviderInfo(provider, "/v1/models", 0.001);
         var pingHttp = new HttpClient(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonOk("{}")));
         var config = new RoutingConfig { IntentRouting = false };
-        var router = new SmartRouter([info], RouterMode.Smart, RouterStrategy.Balanced,
+        var router = new SmartRouter([info], new RouterOptions(),
             pingHttp, NullLogger<SmartRouter>.Instance, routingConfig: config);
 
         var req = new MessagesRequest("gpt-4o", 100, [InputMessage.UserText("refactor everything")]);
@@ -314,7 +347,7 @@ public sealed class SmartRouterTests
         var provider = CreateProvider("p1", "https://p1.example.com");
         var info = new ProviderInfo(provider, "/v1/models", 0.001);
         var pingHttp = new HttpClient(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonOk("{}")));
-        var router = new SmartRouter([info], RouterMode.Smart, RouterStrategy.Balanced,
+        var router = new SmartRouter([info], new RouterOptions(),
             pingHttp, NullLogger<SmartRouter>.Instance, registry, tierResolver, config);
 
         // "hello" would normally be Conversation/fast, but the CVE rule overrides

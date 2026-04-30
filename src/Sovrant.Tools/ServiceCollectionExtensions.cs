@@ -159,12 +159,26 @@ public static class ServiceCollectionExtensions
         // Coordination tools (Phase 57)
         services.AddSingleton<ITool, CoordinationStatusTool>();
 
-        // LSP tools — only registered if ILspClientManager is available
+        // LSP tools — language-server entries are loaded from ILspServerStore
+        // (the lsp_servers table in V019), not settings.json. Reads tolerate
+        // a missing table because the DI resolve can happen before
+        // InitializeRuntimeAsync runs migrations (e.g. when a test resolves
+        // the tool registry to introspect routes).
         services.AddSingleton<ILspClientManager>(sp =>
         {
-            var config = sp.GetRequiredService<SovrantConfig>();
+            var store = sp.GetRequiredService<Sovrant.Runtime.Mcp.ILspServerStore>();
             var loggerFactory = sp.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>();
-            var configs = config.LspServers.Select(kvp => new LspServerConfig
+            IReadOnlyDictionary<string, Sovrant.Runtime.Mcp.LspServerEntry> entries;
+            try
+            {
+                entries = store.GetAllAsync().GetAwaiter().GetResult();
+            }
+            catch (Microsoft.Data.Sqlite.SqliteException)
+            {
+                // lsp_servers table not yet created — DB hasn't been migrated.
+                entries = new Dictionary<string, Sovrant.Runtime.Mcp.LspServerEntry>(StringComparer.OrdinalIgnoreCase);
+            }
+            var configs = entries.Select(kvp => new LspServerConfig
             {
                 Language = kvp.Key,
                 Command = kvp.Value.Command,

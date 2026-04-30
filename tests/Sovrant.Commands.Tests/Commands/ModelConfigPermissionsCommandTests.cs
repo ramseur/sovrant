@@ -1,5 +1,7 @@
+using Sovrant.Api.Config;
 using Sovrant.Commands.Commands;
 using Sovrant.Runtime.Config;
+using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Permissions;
 
 namespace Sovrant.Commands.Tests.Commands;
@@ -12,6 +14,22 @@ public sealed class ModelConfigPermissionsCommandTests
         MaxTokens = 4096,
         PermissionMode = PermissionMode.Default,
     };
+
+    private sealed class EmptyMcpServerStore : IMcpServerStore
+    {
+        public Task<IReadOnlyDictionary<string, McpServerConfig>> GetAllAsync(CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyDictionary<string, McpServerConfig>>(
+                new Dictionary<string, McpServerConfig>(StringComparer.Ordinal));
+
+        public Task<McpServerConfig?> GetAsync(string name, CancellationToken ct = default) =>
+            Task.FromResult<McpServerConfig?>(null);
+
+        public Task UpsertAsync(string name, McpServerConfig config, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task DeleteAsync(string name, CancellationToken ct = default) =>
+            Task.CompletedTask;
+    }
 
     // ── ModelCommand ───────────────────────────────────────────────────────────
 
@@ -36,7 +54,7 @@ public sealed class ModelConfigPermissionsCommandTests
     [Fact]
     public async Task Config_ShowsAllFields()
     {
-        var cmd = new ConfigCommand(DefaultConfig());
+        var cmd = new ConfigCommand(DefaultConfig(), new EmptyMcpServerStore(), new RouterOptions());
         var result = await cmd.ExecuteAsync(string.Empty);
         Assert.NotNull(result.Output);
         Assert.Contains("test-model-7", result.Output, StringComparison.Ordinal);

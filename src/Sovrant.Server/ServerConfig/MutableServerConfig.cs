@@ -4,21 +4,21 @@ namespace Sovrant.Server.ServerConfig;
 
 /// <summary>
 /// Thread-safe mutable runtime configuration for the server.
-/// Holds the live values for model, API key, permission mode, and provider pin —
+/// Holds the live values for model, base URL, permission mode, and pinned provider —
 /// all of which can be updated at runtime via <c>PUT /v1/config</c>.
+/// The LLM API key is intentionally NOT here: it lives in the encrypted credential
+/// store (<see cref="Runtime.Mcp.ICredentialStore"/>) and is never exposed over HTTP.
 /// </summary>
 public sealed class MutableServerConfig
 {
     private volatile string _model;
-    private volatile string _llmApiKey;
     private volatile string _llmBaseUrl;
     private volatile string? _pinnedProvider;
     private volatile int _permissionModeInt; // PermissionMode enum stored as int for volatile
 
-    public MutableServerConfig(string model, string llmApiKey, string llmBaseUrl, PermissionMode permissionMode)
+    public MutableServerConfig(string model, string llmBaseUrl, PermissionMode permissionMode)
     {
         _model = model;
-        _llmApiKey = llmApiKey;
         _llmBaseUrl = llmBaseUrl;
         _permissionModeInt = (int)permissionMode;
     }
@@ -28,13 +28,6 @@ public sealed class MutableServerConfig
     {
         get => _model;
         set => _model = value;
-    }
-
-    /// <summary>The API key used to authenticate with the LLM provider.</summary>
-    public string LlmApiKey
-    {
-        get => _llmApiKey;
-        set => _llmApiKey = value;
     }
 
     /// <summary>The base URL of the LLM provider. Changing this requires a server restart.</summary>

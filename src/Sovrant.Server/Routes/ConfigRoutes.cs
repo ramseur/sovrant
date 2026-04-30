@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using Microsoft.Extensions.Logging;
 using Sovrant.Api.Routing;
 using Sovrant.Runtime.Caching;
 using Sovrant.Runtime.Permissions;
@@ -46,7 +45,6 @@ internal static class ConfigRoutes
         MutableServerConfig config,
         ISmartRouter router,
         CacheInvalidator cacheInvalidator,
-        ILogger<MutableServerConfig> logger,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
@@ -56,14 +54,6 @@ internal static class ConfigRoutes
             if (!InputValidation.IsValidModelName(req.Model))
                 return Results.BadRequest(new { error = "Invalid model name." });
             config.Model = req.Model;
-        }
-
-        if (req.ApiKey is not null)
-        {
-            if (string.IsNullOrWhiteSpace(req.ApiKey))
-                return Results.BadRequest(new { error = "api_key must not be empty." });
-            logger.LogWarning("API key changed via PUT /v1/config (key redacted).");
-            config.LlmApiKey = req.ApiKey;
         }
 
         if (req.BaseUrl is not null)
@@ -126,10 +116,6 @@ internal sealed class ConfigUpdateRequest
 {
     [JsonPropertyName("model")]
     public string? Model { get; init; }
-
-    /// <summary>Write-only: sets the LLM API key. Never returned in GET responses.</summary>
-    [JsonPropertyName("api_key")]
-    public string? ApiKey { get; init; }
 
     [JsonPropertyName("base_url")]
     public string? BaseUrl { get; init; }

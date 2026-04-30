@@ -15,6 +15,7 @@ internal static class StatusRoutes
             ISmartRouter router,
             MutableServerConfig config,
             IRuntimeSessionPool sessionPool,
+            IEnumerable<IHostedService> hostedServices,
             ICacheProvider cache,
             HttpContext ctx,
             CancellationToken ct) =>
@@ -40,11 +41,9 @@ internal static class StatusRoutes
                 })
                 .ToList();
 
-            // Read eviction service config from env vars (same defaults as SessionEvictionService).
-            var ttlSeconds = int.TryParse(
-                Environment.GetEnvironmentVariable("SOVRANT_SESSION_TTL_SECONDS"), out var t) ? t : 3600;
-            var maxSessions = int.TryParse(
-                Environment.GetEnvironmentVariable("SOVRANT_MAX_SESSIONS"), out var m) ? m : 500;
+            // SessionEvictionService is the single source of truth for the
+            // resolved TTL/cap values (env-var > workspace_settings > default).
+            var eviction = hostedServices.OfType<SessionEvictionService>().FirstOrDefault();
 
             var response = new StatusResponse
             {
@@ -53,8 +52,8 @@ internal static class StatusRoutes
                 PermissionMode = config.PermissionMode.ToString().ToLowerInvariant(),
                 PinnedProvider = config.PinnedProvider,
                 ActiveSessions = sessionPool.ActiveCount,
-                MaxSessions = maxSessions,
-                SessionTtlSeconds = ttlSeconds,
+                MaxSessions = eviction?.MaxSessions ?? 500,
+                SessionTtlSeconds = (int)(eviction?.Ttl.TotalSeconds ?? 3600),
             };
 
             await cache.SetAsync("status:current", response, CacheTtl.Status, ct).ConfigureAwait(false);

@@ -37,9 +37,9 @@ builder.WebHost.ConfigureKestrel(o =>
 builder.Services.AddLogging(b => b.AddSovrantLogging());
 
 // Mutable runtime config — single source of truth for live config changes.
+// LlmApiKey lives in the encrypted credential store, not here.
 var mutableConfig = new MutableServerConfig(
     model: sovrantConfig.Model,
-    llmApiKey: credentials.LlmApiKey,
     llmBaseUrl: credentials.LlmBaseUrl,
     permissionMode: PermissionMode.DontAsk);   // server default: never prompt
 
@@ -188,6 +188,17 @@ app.Services.GetRequiredService<ToolRegistrar>().RegisterAll();
 
 // Connect MCP servers if configured.
 await app.Services.InitializeRuntimeAsync().ConfigureAwait(false);
+
+// Seed the encrypted credential store with the LLM API key from env if no value
+// is persisted yet. This preserves the env-var bootstrap path while keeping the
+// secret out of MutableServerConfig and the HTTP surface.
+if (!string.IsNullOrEmpty(credentials.LlmApiKey))
+{
+    var credentialStore = app.Services.GetRequiredService<Sovrant.Runtime.Mcp.ICredentialStore>();
+    var existing = await credentialStore.RetrieveAsync(MutableApiKeyAuthProvider.LlmApiKeyCredentialKey).ConfigureAwait(false);
+    if (string.IsNullOrEmpty(existing))
+        await credentialStore.StoreAsync(MutableApiKeyAuthProvider.LlmApiKeyCredentialKey, credentials.LlmApiKey).ConfigureAwait(false);
+}
 
 // Routes.
 ChatRoutes.Map(app);

@@ -26,7 +26,7 @@ public sealed partial class McpOAuthService
 {
     private static readonly TimeSpan StateExpiry = TimeSpan.FromMinutes(10);
 
-    private readonly SovrantConfig _config;
+    private readonly IMcpServerStore _serverStore;
     private readonly ICredentialStore _credentialStore;
     private readonly McpToolRegistrar _toolRegistrar;
     private readonly ILogger<McpOAuthService> _logger;
@@ -52,13 +52,13 @@ public sealed partial class McpOAuthService
     private static partial void LogUnknownState(ILogger logger, string state);
 
     public McpOAuthService(
-        SovrantConfig config,
+        IMcpServerStore serverStore,
         ICredentialStore credentialStore,
         McpToolRegistrar toolRegistrar,
         IHttpClientFactory httpFactory,
         ILogger<McpOAuthService> logger)
     {
-        _config = config;
+        _serverStore = serverStore;
         _credentialStore = credentialStore;
         _toolRegistrar = toolRegistrar;
         _httpFactory = httpFactory;
@@ -70,17 +70,17 @@ public sealed partial class McpOAuthService
     /// <summary>
     /// Generates an OAuth 2.0 Authorization Code + PKCE authorization URL for the named MCP server.
     /// </summary>
-    /// <param name="serverName">The key in <see cref="SovrantConfig.McpServers"/> to authorize.</param>
+    /// <param name="serverName">The MCP server name in <see cref="IMcpServerStore"/>.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The authorization URL the user must visit.</returns>
-    /// <exception cref="KeyNotFoundException">The server is not in the config.</exception>
+    /// <exception cref="KeyNotFoundException">The server is not in the store.</exception>
     /// <exception cref="InvalidOperationException">The server has no OAuth configuration.</exception>
-    public Task<string> GenerateAuthorizationUrlAsync(string serverName, CancellationToken ct = default)
+    public async Task<string> GenerateAuthorizationUrlAsync(string serverName, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(serverName);
 
-        if (!_config.McpServers.TryGetValue(serverName, out var serverConfig))
-            throw new KeyNotFoundException($"MCP server '{serverName}' is not configured.");
+        var serverConfig = await _serverStore.GetAsync(serverName, ct).ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"MCP server '{serverName}' is not configured.");
 
         var oauth = serverConfig.OAuthConfig;
         if (oauth?.AuthorizationUrl is null)
@@ -121,7 +121,7 @@ public sealed partial class McpOAuthService
         }
 
         LogOAuthInitiated(_logger, serverName, state[..8] + "…");
-        return Task.FromResult(authUrl);
+        return authUrl;
     }
 
     /// <summary>
@@ -154,16 +154,22 @@ public sealed partial class McpOAuthService
             _pendingStates.Remove(state);
         }
 
-        if (!_config.McpServers.TryGetValue(serverName, out var serverConfig))
-            throw new KeyNotFoundException($"MCP server '{serverName}' is not configured.");
+        var serverConfig = await _serverStore.GetAsync(serverName, ct).ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"MCP server '{serverName}' is not configured.");
 
         var oauth = serverConfig.OAuthConfig!;
         var redirectUri = oauth.RedirectUri
             ?? new Uri($"http://localhost:{_serverPort}/v1/mcp/auth/callback");
 
+        // Client secret (if any) lives encrypted in the credential store, not the
+        // server-config record. Confidential clients store it under
+        // "mcp.{name}.client_secret"; PKCE-only public clients omit it entirely.
+        var clientSecret = await _credentialStore.RetrieveAsync(
+            $"mcp.{serverName}.client_secret", ct).ConfigureAwait(false);
+
         // Exchange code for token at the token endpoint.
         var tokenResponse = await ExchangeCodeForTokenAsync(
-            oauth, code, codeVerifier, redirectUri, ct).ConfigureAwait(false);
+            oauth, code, codeVerifier, redirectUri, clientSecret, ct).ConfigureAwait(false);
 
         // Persist the token (AES-GCM encrypted).
         await _credentialStore.StoreAsync(
@@ -228,6 +234,7 @@ public sealed partial class McpOAuthService
         string code,
         string codeVerifier,
         Uri redirectUri,
+        string? clientSecret,
         CancellationToken ct)
     {
         var formFields = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -239,8 +246,8 @@ public sealed partial class McpOAuthService
             ["code_verifier"] = codeVerifier,
         };
 
-        if (!string.IsNullOrWhiteSpace(oauth.ClientSecret))
-            formFields["client_secret"] = oauth.ClientSecret;
+        if (!string.IsNullOrWhiteSpace(clientSecret))
+            formFields["client_secret"] = clientSecret;
 
         using var http = _httpFactory.CreateClient("McpOAuth");
         using var formContent = new FormUrlEncodedContent(formFields);

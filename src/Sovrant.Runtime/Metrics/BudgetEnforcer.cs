@@ -1,12 +1,16 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime.Metrics;
 
 /// <summary>
 /// Enforces per-session and per-project cost budgets.
 /// Warns at 80% spend, blocks new turns at 100%.
-/// Budgets are configured via env vars: <c>SOVRANT_SESSION_BUDGET_USD</c> and <c>SOVRANT_PROJECT_BUDGET_USD</c>.
+/// Budgets are persisted in the <c>workspace_settings</c> table (global row);
+/// env vars <c>SOVRANT_SESSION_BUDGET_USD</c> / <c>SOVRANT_PROJECT_BUDGET_USD</c>
+/// still win when set.
 /// </summary>
 public sealed partial class BudgetEnforcer
 {
@@ -33,13 +37,26 @@ public sealed partial class BudgetEnforcer
     [LoggerMessage(Level = LogLevel.Error, Message = "Project budget of ${Budget:F2} exceeded (${Spent:F4} spent) — blocking")]
     private static partial void LogProjectBudgetExceeded(ILogger logger, decimal budget, decimal spent);
 
-    public BudgetEnforcer(ILogger<BudgetEnforcer> logger, decimal? sessionBudgetUsd = null, decimal? projectBudgetUsd = null)
+    /// <summary>
+    /// DI ctor — pulls persisted defaults from <see cref="IWorkspaceSettingsStore"/>'s
+    /// global row. Env vars override the persisted values when set.
+    /// </summary>
+    public BudgetEnforcer(ILogger<BudgetEnforcer> logger, IWorkspaceSettingsStore settings)
+        : this(
+            logger,
+            sessionBudgetUsd: ResolveDecimal(settings ?? throw new ArgumentNullException(nameof(settings)),
+                WorkspaceSettingsKeys.SessionBudgetUsd, "SOVRANT_SESSION_BUDGET_USD"),
+            projectBudgetUsd: ResolveDecimal(settings,
+                WorkspaceSettingsKeys.ProjectBudgetUsd, "SOVRANT_PROJECT_BUDGET_USD"))
+    {
+    }
+
+    /// <summary>Test/explicit ctor — bypass the settings store. Internal so DI never picks it.</summary>
+    internal BudgetEnforcer(ILogger<BudgetEnforcer> logger, decimal? sessionBudgetUsd = null, decimal? projectBudgetUsd = null)
     {
         _logger = logger;
-
-        // Env vars override constructor params
-        _sessionBudgetUsd = TryParseEnv("SOVRANT_SESSION_BUDGET_USD") ?? sessionBudgetUsd;
-        _projectBudgetUsd = TryParseEnv("SOVRANT_PROJECT_BUDGET_USD") ?? projectBudgetUsd;
+        _sessionBudgetUsd = sessionBudgetUsd;
+        _projectBudgetUsd = projectBudgetUsd;
     }
 
     /// <summary>Whether any budget cap is configured.</summary>
@@ -137,13 +154,19 @@ public sealed partial class BudgetEnforcer
         return BudgetStatus.Ok;
     }
 
-    private static decimal? TryParseEnv(string name)
+    private static decimal? ResolveDecimal(IWorkspaceSettingsStore settings, string settingsKey, string envVar)
     {
-        var value = Environment.GetEnvironmentVariable(name);
-        return value is not null && decimal.TryParse(value, System.Globalization.NumberStyles.Number,
-            System.Globalization.CultureInfo.InvariantCulture, out var result)
-            ? result : null;
+        // Env var wins.
+        var fromEnv = TryParseDecimal(Environment.GetEnvironmentVariable(envVar));
+        if (fromEnv.HasValue) return fromEnv;
+
+        var fromDb = settings.GetGlobalAsync(settingsKey).GetAwaiter().GetResult();
+        return TryParseDecimal(fromDb);
     }
+
+    private static decimal? TryParseDecimal(string? value) =>
+        value is not null && decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var result)
+            ? result : null;
 }
 
 /// <summary>Result of a budget check.</summary>
