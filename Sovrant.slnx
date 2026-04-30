@@ -8,7 +8,7 @@
     <Project Path="src/Sovrant.Server/Sovrant.Server.csproj" />
     <Project Path="src/Sovrant.Lsp/Sovrant.Lsp.csproj" />
     <Project Path="src/Sovrant.Tools/Sovrant.Tools.csproj" />
-    <Project Path="src/Sovrant.McpServer/Sovrant.McpServer.csproj" />
+    <Project Path="src/Sovrant.Mcp/Sovrant.Mcp.csproj" />
     <Project Path="src/Sovrant.Agents/Sovrant.Agents.csproj" />
     <Project Path="src/Sovrant.Desktop/Sovrant.Desktop.csproj" />
     <Project Path="src/Sovrant.Web/Sovrant.Web.csproj" />
@@ -23,6 +23,6 @@
     <Project Path="tests/Sovrant.Lsp.Tests/Sovrant.Lsp.Tests.csproj" />
     <Project Path="tests/Sovrant.Server.Tests/Sovrant.Server.Tests.csproj" />
     <Project Path="tests/Sovrant.Tools.Tests/Sovrant.Tools.Tests.csproj" />
-    <Project Path="tests/Sovrant.McpServer.Tests/Sovrant.McpServer.Tests.csproj" />
+    <Project Path="tests/Sovrant.Mcp.Tests/Sovrant.Mcp.Tests.csproj" />
   </Folder>
 </Solution>

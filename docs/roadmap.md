@@ -817,8 +817,8 @@ An `ILspClient` service manages the lifecycle of one or more language server pro
 - **Tests:** `McpProtocolFeatureTests.cs` (4 tests for subscription ref counting).
 
 **Files added:**
-- `src/Sovrant.McpServer/` — `McpServerSetup.cs`, `ChatToolHandler.cs`, `ToolFilter.cs`
-- `tests/Sovrant.McpServer.Tests/` — `ToolBridgeTests.cs`, `ToolFilterTests.cs`, `ChatToolHandlerTests.cs`, `McpProtocolFeatureTests.cs`
+- `src/Sovrant.Mcp/` — `McpServerSetup.cs`, `ChatToolHandler.cs`, `ToolFilter.cs`
+- `tests/Sovrant.Mcp.Tests/` — `ToolBridgeTests.cs`, `ToolFilterTests.cs`, `ChatToolHandlerTests.cs`, `McpProtocolFeatureTests.cs`
 - `docs/mcp-server.md` — full documentation with IDE config examples
 
 ---

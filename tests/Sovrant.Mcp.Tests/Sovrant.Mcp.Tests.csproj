@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Sovrant.McpServer\Sovrant.McpServer.csproj" />
+    <ProjectReference Include="..\..\src\Sovrant.Mcp\Sovrant.Mcp.csproj" />
   </ItemGroup>
 
 </Project>

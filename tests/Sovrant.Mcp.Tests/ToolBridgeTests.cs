@@ -2,7 +2,7 @@ using System.Text.Json;
 using Sovrant.Api.Types;
 using Sovrant.Runtime.Tools;
 
-namespace Sovrant.McpServer.Tests;
+namespace Sovrant.Mcp.Tests;
 
 public sealed class ToolBridgeTests
 {

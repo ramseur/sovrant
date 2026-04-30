@@ -488,7 +488,7 @@ finally {
 | **Sovrant.Runtime** | **48.6%** | RuntimeSessionPool 99%, SovrantConfig 92%, FilteredToolRegistry 100%; gaps in logging, MCP, prompt builder |
 | **Sovrant.Commands** | **41.1%** | SlashCommandDispatcher 83%, TokenUsageTracker 100%; HelpCommand, MemoryCommand, SessionCommand at 0% |
 | **Sovrant.Api** | **33.0%** | FormatConverter 89%, ProviderInfo 93%; Responses API types and Ollama provider uncovered |
-| **Sovrant.McpServer** | **31.6%** | ToolFilter 100%, McpTokenValidator 100%; McpServerSetup 8% |
+| **Sovrant.Mcp** | **31.6%** | ToolFilter 100%, McpTokenValidator 100%; McpServerSetup 8% |
 | **Sovrant.Tools** | **25.4%** | ProcessExecutor 82%, TeamDelegateTool 72%; 18 tools at 0% (Glob, Grep, WebFetch, REPL, PowerShell, etc.) |
 | **Sovrant.Lsp** | **19.3%** | LspClientManager 63%; LspClient 11%, JsonRpc transport 0% |
 | **Sovrant.Server** | **3.9%** | Only webhook classes covered (100%); all routes, middleware, auth at 0% |
@@ -532,7 +532,7 @@ finally {
 
 ### 8.1 MCP Server Exposes All Sessions — Missing Owner Filtering
 **Layer:** MCP Server
-**File:** `src/Sovrant.McpServer/McpServerSetup.cs:155,179`
+**File:** `src/Sovrant.Mcp/McpServerSetup.cs:155,179`
 **Problem:** `store.ListAsync(ownerUserId: null, ct)` and `store.LoadAsync(sessionId, ownerUserId: null, ct)` pass `null` for the owner filter. Any authenticated MCP client can read every user's conversation history, tool outputs, and sensitive data.
 **Fix:** Extract user identity from MCP client connection context and pass it as `ownerUserId`. If MCP protocol doesn't provide user context, require an explicit owner claim in the MCP token and validate it.
 
@@ -744,13 +744,13 @@ foreach (var key in keysToRemove) _fileLocks.TryRemove(key, out _);
 
 ### 9.16 MCP Server Incomplete Exception Handling
 **Layer:** MCP Server
-**File:** `src/Sovrant.McpServer/McpServerSetup.cs:97-118`
+**File:** `src/Sovrant.Mcp/McpServerSetup.cs:97-118`
 **Problem:** Only `InvalidOperationException`, `IOException`, and `JsonException` are caught. Any other exception (`NullReferenceException`, `TimeoutException`, `ArgumentException`) crashes the MCP server process.
 **Fix:** Add a catch-all `catch (Exception ex)` that returns an error result and logs.
 
 ### 9.17 MCP Config Resource Exposes Internal Configuration
 **Layer:** MCP Server
-**File:** `src/Sovrant.McpServer/McpServerSetup.cs:122-143`
+**File:** `src/Sovrant.Mcp/McpServerSetup.cs:122-143`
 **Problem:** `sovrant://config` resource exposes the full `SovrantConfig` (model selection, provider URLs, permission modes, pinned providers) to any MCP client with token access.
 **Fix:** Either remove the config resource or gate it behind admin authorization.
 

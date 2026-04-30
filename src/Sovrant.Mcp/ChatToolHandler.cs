@@ -5,7 +5,7 @@ using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Sovrant.Runtime.Conversation;
 
-namespace Sovrant.McpServer;
+namespace Sovrant.Mcp;
 
 /// <summary>
 /// Handles the synthetic <c>chat</c> MCP tool that runs a full Sovrant agentic turn

@@ -7,7 +7,7 @@ using ModelContextProtocol.Server;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Tools;
 
-namespace Sovrant.McpServer;
+namespace Sovrant.Mcp;
 
 /// <summary>DI registration for Sovrant's MCP server mode (stdio transport).</summary>
 public static class McpServerSetup
@@ -149,7 +149,7 @@ public static class McpServerSetup
             };
         }
 
-        var logger = services.GetService<ILoggerFactory>()?.CreateLogger("Sovrant.McpServer");
+        var logger = services.GetService<ILoggerFactory>()?.CreateLogger("Sovrant.Mcp");
 
         try
         {
@@ -509,7 +509,7 @@ public static class McpServerSetup
         SetLevelRequestParams requestParams)
     {
         var level = requestParams.Level;
-        var logger = services.GetService<ILoggerFactory>()?.CreateLogger("Sovrant.McpServer");
+        var logger = services.GetService<ILoggerFactory>()?.CreateLogger("Sovrant.Mcp");
         if (logger is not null)
             s_logLoggingLevel(logger, level.ToString(), null);
 

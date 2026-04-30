@@ -12,7 +12,7 @@ using Sovrant.Runtime.Storage;
 using Sovrant.Agents;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
-using Sovrant.McpServer;
+using Sovrant.Mcp;
 using Microsoft.Extensions.Hosting;
 using Spectre.Console;
 using System.CommandLine;

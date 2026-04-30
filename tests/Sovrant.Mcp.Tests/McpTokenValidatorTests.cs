@@ -1,4 +1,4 @@
-namespace Sovrant.McpServer.Tests;
+namespace Sovrant.Mcp.Tests;
 
 public sealed class McpTokenValidatorTests
 {

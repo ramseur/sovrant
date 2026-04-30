@@ -48,7 +48,7 @@ opencode supports 75+ LLM providers through a unified AI SDK abstraction layer a
 
 Sovrant is a clean-room C# / .NET 10 reimplementation of an agentic AI engine, inspired by the architecture and feature set of OpenClaude (the community fork of Claude Code). **No Anthropic source code was copied, translated, or incorporated** — the project uses OpenClaude only as a functional reference for capability parity. Every line of Sovrant is original C# 14 code written from scratch in a completely different language and runtime.
 
-Five delivery modes: a CLI REPL for interactive developer use, `Sovrant.Server` (ASP.NET Core HTTP server with 95 OpenAI-compatible endpoints), `Sovrant.Desktop` (Avalonia GUI for Windows/macOS/Linux), `Sovrant.Web` (Blazor Server browser UI), and `Sovrant.McpServer` (MCP server for IDE integration via stdio).
+Five delivery modes: a CLI REPL for interactive developer use, `Sovrant.Server` (ASP.NET Core HTTP server with 95 OpenAI-compatible endpoints), `Sovrant.Desktop` (Avalonia GUI for Windows/macOS/Linux), `Sovrant.Web` (Blazor Server browser UI), and `Sovrant.Mcp` (shared MCP protocol handlers — stdio via the CLI's `mcp-server` subcommand, HTTP/SSE via `Sovrant.Server`).
 
 The SmartRouter routes each LLM call across configured providers (OpenAI-compatible, Ollama, native messages API) based on latency, cost, and health scores, with intent-aware model tier routing. 50 tools cover file operations, shell execution (Bash, PowerShell, REPL), web access, task management, notebook editing, LSP code intelligence, sub-agents, plan/worktree mode, team orchestration, swarm orchestration, mission management, skill execution, MCP resources, and quality verification. 24 agent templates and 32 built-in skills ship with the engine. Session state persists in SQLite with FTS5 full-text search. Orchestration team orchestration (SQLite-backed teams with two agent backends: isolated process-per-agent and shared in-process), a swarm auto-decomposition engine with DAG execution, file locking, and quality gates, and a mission engine for long-lived goal-driven execution are fully operational. A TypeScript/JavaScript SDK covers all 79 server endpoints with SSE streaming and a React `useChat()` hook.
 
@@ -214,7 +214,7 @@ The following features exist in one or more competitors but are not yet in Sovra
 | Custom project slash commands | ✅ `.sovrant/commands/{name}.md` |
 | Agent memory files | ✅ `~/.sovrant/memory.md` + `.sovrant/memory.md` |
 | LSP integration | ✅ 5 tools, 18 languages |
-| MCP server mode | ✅ `Sovrant.McpServer` (stdio transport) |
+| MCP server mode | ✅ `Sovrant.Mcp` (stdio + HTTP/SSE transports) |
 | Orchestration teams | ✅ Teams + Swarm, two backends |
 | Desktop app | ✅ Avalonia (15 pages, setup wizard) |
 | Web UI | ✅ Blazor Server (15 pages) |

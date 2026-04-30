@@ -1,7 +1,7 @@
 using System.Reflection;
 using ModelContextProtocol.Protocol;
 
-namespace Sovrant.McpServer.Tests;
+namespace Sovrant.Mcp.Tests;
 
 /// <summary>Tests for MCP protocol features: prompts, completions, logging, resource subscriptions.</summary>
 public sealed class McpProtocolFeatureTests

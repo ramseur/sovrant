@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Sovrant.McpServer.Tests" />
+    <InternalsVisibleTo Include="Sovrant.Mcp.Tests" />
   </ItemGroup>
 
   <ItemGroup>

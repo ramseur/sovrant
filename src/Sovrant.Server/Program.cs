@@ -12,7 +12,7 @@ using Sovrant.Server.Routes;
 using Sovrant.Server.ServerConfig;
 using Sovrant.Server.Webhooks;
 using Sovrant.Runtime.Logging;
-using Sovrant.McpServer;
+using Sovrant.Mcp;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
 

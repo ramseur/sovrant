@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Sovrant.McpServer.Tests;
+namespace Sovrant.Mcp.Tests;
 
 public sealed class ChatToolHandlerTests
 {

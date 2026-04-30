@@ -1,4 +1,4 @@
-namespace Sovrant.McpServer;
+namespace Sovrant.Mcp;
 
 /// <summary>
 /// Filters which Sovrant tools are exposed via MCP based on the

@@ -342,7 +342,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 | `Sovrant.Tools` | All 50 tool implementations. 32 built-in skill `.md` files. |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/clear`, `/session`, `/memory`, etc.). |
 | `Sovrant.Agents` | Orchestration: team registry (SQLite-backed), agent factory, dual backends (isolated + shared), 25 agent templates, swarm orchestrator, unified run ledger, inter-agent coordination (PM agents + mailbox). |
-| `Sovrant.McpServer` | MCP server mode: exposes all tools and resources via stdio transport for IDE integration. |
+| `Sovrant.Mcp` | Shared MCP protocol handlers (tools/list, tools/call, resources, prompts, completions). Consumed by both the CLI's `mcp-server` stdio subcommand and `Sovrant.Server`'s HTTP/SSE MCP transport. |
 | `Sovrant.Lsp` | Language Server Protocol client: JSON-RPC over stdio, manages language server lifecycle, 5 LSP tools. |
 | `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient` covering the 96-endpoint server (incl. `updateTeamProfile` for Phase 78 Path 2), SSE streaming, React `useChat()` hook, 75+ TypeScript interfaces. |
 
@@ -985,7 +985,7 @@ dotnet test Sovrant.slnx   # 1,492 tests across 10 projects
 | `Sovrant.Api.Tests` | 104 |
 | `Sovrant.Runtime.Documents.Tests` | 84 |
 | `Sovrant.Commands.Tests` | 56 |
-| `Sovrant.McpServer.Tests` | 34 |
+| `Sovrant.Mcp.Tests` | 34 |
 | `Sovrant.Lsp.Tests` | 25 |
 | `Sovrant.Integration.Tests` | 1 |
 

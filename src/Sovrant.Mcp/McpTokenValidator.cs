@@ -1,4 +1,4 @@
-namespace Sovrant.McpServer;
+namespace Sovrant.Mcp;
 
 /// <summary>
 /// Validates the bearer token for MCP server mode.
