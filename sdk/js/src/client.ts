@@ -2,6 +2,7 @@ import { parseSSEStream } from "./sse.js";
 import type {
   AddProjectMemberRequest,
   AddTeamMemberRequest,
+  AddTeamMemberResponse,
   AddWorkspaceMemberRequest,
   AgentRun,
   AgentRunFilter,
@@ -15,12 +16,15 @@ import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
   ChatMessage,
+  CostDisabled,
+  CostSummary,
   CreateInviteRequest,
   CreateMissionRequest,
   CreateProjectRequest,
   CreateTeamRequest,
   CreateUserRequest,
   CreateWorkspaceRequest,
+  EvalReportSummary,
   EvalRunRequest,
   EvalRunResponse,
   EvalSuite,
@@ -31,6 +35,7 @@ import type {
   ModelsResponse,
   Project,
   ProjectMember,
+  ProjectUsage,
   RuntimeTraceEntry,
   SaveMemoryRequest,
   ServerConfig,
@@ -43,8 +48,11 @@ import type {
   SovrantClientOptions,
   StatusResponse,
   StreamCallbacks,
+  SwarmEvent,
   SwarmResult,
   SwarmRunRequest,
+  SwarmSseEvent,
+  SwarmStreamCallbacks,
   Team,
   TeamMember,
   TeamRunRequest,
@@ -56,14 +64,17 @@ import type {
   UpdateWorkspaceRequest,
   UsageInfo,
   UsageSummary,
+  UserAuditEvent,
   UserListFilter,
   UserProfile,
+  UserUsage,
   WebhookRequest,
   WebhookResponse,
   Workspace,
   WorkspaceInvite,
   WorkspaceMember,
   WorkspaceMemoryEntry,
+  WorkspaceUsage,
 } from "./types.js";
 
 const DEFAULT_MAX_RETRIES = 3;
@@ -329,10 +340,10 @@ export class SovrantClient {
     );
   }
 
-  /** Export a session as markdown. */
+  /** Export a session as markdown or JSON. */
   async exportSession(
     sessionId: string,
-    format: "markdown" = "markdown"
+    format: "markdown" | "json" = "markdown"
   ): Promise<string> {
     if (!ALLOWED_EXPORT_FORMATS.includes(format)) {
       throw new Error(
@@ -351,6 +362,26 @@ export class SovrantClient {
   async getUsage(): Promise<UsageSummary> {
     const res = await this.fetchWithRetry("/v1/usage");
     return (await res.json()) as UsageSummary;
+  }
+
+  // ── Cost ──────────────────────────────────────────────────────────────
+
+  /**
+   * Get the cost dashboard summary from GET /v1/cost.
+   *
+   * Returns a {@link CostSummary} with token totals, estimated USD spend,
+   * per-session and per-model breakdowns. If the cost dashboard is disabled
+   * server-side, returns a {@link CostDisabled} object instead — discriminate
+   * via the `enabled` field.
+   */
+  async getCost(options?: {
+    range?: "daily" | "weekly" | "monthly" | "all";
+  }): Promise<CostSummary | CostDisabled> {
+    const params = new URLSearchParams();
+    if (options?.range) params.set("range", options.range);
+    const qs = params.toString();
+    const res = await this.fetchWithRetry(`/v1/cost${qs ? `?${qs}` : ""}`);
+    return (await res.json()) as CostSummary | CostDisabled;
   }
 
   // ── Health ────────────────────────────────────────────────────────────
@@ -462,11 +493,11 @@ export class SovrantClient {
     });
   }
 
-  /** List sessions owned by a user (admin or self). */
+  /** List session IDs owned by a user (admin or self). */
   async listUserSessions(
     userId: string,
     options?: { limit?: number; offset?: number }
-  ): Promise<{ sessions: unknown[]; count: number }> {
+  ): Promise<{ sessions: string[]; count: number }> {
     const params = new URLSearchParams();
     if (options?.limit !== undefined) params.set("limit", String(options.limit));
     if (options?.offset !== undefined) params.set("offset", String(options.offset));
@@ -474,14 +505,14 @@ export class SovrantClient {
     const res = await this.fetchWithRetry(
       `/v1/users/${encodeURIComponent(userId)}/sessions${qs ? `?${qs}` : ""}`
     );
-    return (await res.json()) as { sessions: unknown[]; count: number };
+    return (await res.json()) as { sessions: string[]; count: number };
   }
 
   /** Get usage stats for a user (admin or self). */
   async getUserUsage(
     userId: string,
     options?: { model?: string; from?: string; to?: string }
-  ): Promise<unknown> {
+  ): Promise<UserUsage> {
     const params = new URLSearchParams();
     if (options?.model) params.set("model", options.model);
     if (options?.from) params.set("from", options.from);
@@ -490,21 +521,21 @@ export class SovrantClient {
     const res = await this.fetchWithRetry(
       `/v1/users/${encodeURIComponent(userId)}/usage${qs ? `?${qs}` : ""}`
     );
-    return res.json();
+    return (await res.json()) as UserUsage;
   }
 
   /** Get audit log for a user (admin or self). */
   async getUserAudit(
     userId: string,
     options?: { limit?: number }
-  ): Promise<{ events: unknown[]; count: number }> {
+  ): Promise<{ events: UserAuditEvent[]; count: number }> {
     const params = new URLSearchParams();
     if (options?.limit !== undefined) params.set("limit", String(options.limit));
     const qs = params.toString();
     const res = await this.fetchWithRetry(
       `/v1/users/${encodeURIComponent(userId)}/audit${qs ? `?${qs}` : ""}`
     );
-    return (await res.json()) as { events: unknown[]; count: number };
+    return (await res.json()) as { events: UserAuditEvent[]; count: number };
   }
 
   // ── Workspaces ────────────────────────────────────────────────────────
@@ -608,9 +639,9 @@ export class SovrantClient {
   }
 
   /** Get workspace usage stats. */
-  async getWorkspaceUsage(workspaceId: string): Promise<unknown> {
+  async getWorkspaceUsage(workspaceId: string): Promise<WorkspaceUsage> {
     const res = await this.fetchWithRetry(`/v1/workspaces/${encodeURIComponent(workspaceId)}/usage`);
-    return res.json();
+    return (await res.json()) as WorkspaceUsage;
   }
 
   /** List workspace memory entries. */
@@ -739,26 +770,26 @@ export class SovrantClient {
     });
   }
 
-  /** List sessions in a project. */
-  async listProjectSessions(projectId: string): Promise<{ sessions: unknown[] }> {
+  /** List session IDs in a project. */
+  async listProjectSessions(projectId: string): Promise<{ sessions: string[] }> {
     const res = await this.fetchWithRetry(`/v1/projects/${encodeURIComponent(projectId)}/sessions`);
-    return (await res.json()) as { sessions: unknown[] };
+    return (await res.json()) as { sessions: string[] };
   }
 
   /** Get project usage stats. */
-  async getProjectUsage(projectId: string): Promise<unknown> {
+  async getProjectUsage(projectId: string): Promise<ProjectUsage> {
     const res = await this.fetchWithRetry(`/v1/projects/${encodeURIComponent(projectId)}/usage`);
-    return res.json();
+    return (await res.json()) as ProjectUsage;
   }
 
   /** Get project memory entries. */
   async getProjectMemory(
     projectId: string,
     layer?: string
-  ): Promise<{ memory: unknown[] }> {
+  ): Promise<{ memory: WorkspaceMemoryEntry[] }> {
     const qs = layer ? `?layer=${encodeURIComponent(layer)}` : "";
     const res = await this.fetchWithRetry(`/v1/projects/${encodeURIComponent(projectId)}/memory${qs}`);
-    return (await res.json()) as { memory: unknown[] };
+    return (await res.json()) as { memory: WorkspaceMemoryEntry[] };
   }
 
   // ── Teams ─────────────────────────────────────────────────────────────
@@ -793,12 +824,12 @@ export class SovrantClient {
   }
 
   /** Add a member to a team. */
-  async addTeamMember(teamId: string, request: AddTeamMemberRequest): Promise<{ member_id: string; name: string }> {
+  async addTeamMember(teamId: string, request: AddTeamMemberRequest): Promise<AddTeamMemberResponse> {
     const res = await this.fetchWithRetry(`/v1/teams/${encodeURIComponent(teamId)}/members`, {
       method: "POST",
       body: JSON.stringify(request),
     });
-    return (await res.json()) as { member_id: string; name: string };
+    return (await res.json()) as AddTeamMemberResponse;
   }
 
   /** List members of a team. */
@@ -910,6 +941,46 @@ export class SovrantClient {
 
   // ── Swarm ─────────────────────────────────────────────────────────────
 
+  /**
+   * Run a swarm and stream events via SSE (POST /v1/swarm).
+   *
+   * The server emits SSE messages of the form `event: <type>\ndata: <json>`.
+   * This method parses both fields and dispatches them through
+   * {@link SwarmStreamCallbacks}. The `event` field for swarm events is the
+   * C# record type name (e.g. `"PlanCreated"`, `"TaskStarted"`); the special
+   * events `"plan"` (dry runs), `"result"` (final swarm result), and
+   * `"error"` are also emitted.
+   *
+   * NOTE: This SSE wire format uses PascalCase property names because the
+   * server serialises swarm events with no naming policy. The shape of the
+   * `data` payload mirrors {@link SwarmEvent} / {@link SwarmResult} but with
+   * the property casing flipped to PascalCase.
+   */
+  async runSwarm(
+    request: SwarmRunRequest,
+    callbacks: SwarmStreamCallbacks
+  ): Promise<void> {
+    const res = await this.fetchWithRetry("/v1/swarm", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    try {
+      for await (const evt of parseTaggedSseStream(res)) {
+        try { await callbacks.onEvent?.(evt); } catch { /* callback error — non-fatal */ }
+        if (evt.event === "result") {
+          try { await callbacks.onResult?.(evt.data); } catch { /* non-fatal */ }
+        } else if (evt.event === "error") {
+          try { await callbacks.onServerError?.(evt.data); } catch { /* non-fatal */ }
+        }
+      }
+      await callbacks.onComplete?.();
+    } catch (err) {
+      await callbacks.onError?.(
+        err instanceof Error ? err : new Error(String(err))
+      );
+    }
+  }
+
   /** Get swarm result by ID. */
   async getSwarm(swarmId: string): Promise<SwarmResult> {
     const res = await this.fetchWithRetry(`/v1/swarm/${encodeURIComponent(swarmId)}`);
@@ -917,9 +988,9 @@ export class SovrantClient {
   }
 
   /** Replay events for a swarm session. */
-  async getSwarmEvents(swarmId: string): Promise<unknown[]> {
+  async getSwarmEvents(swarmId: string): Promise<SwarmEvent[]> {
     const res = await this.fetchWithRetry(`/v1/swarm/${encodeURIComponent(swarmId)}/events`);
-    return (await res.json()) as unknown[];
+    return (await res.json()) as SwarmEvent[];
   }
 
   /** List swarm sessions with optional filters. */
@@ -974,9 +1045,9 @@ export class SovrantClient {
   }
 
   /** Get eval history for a suite. */
-  async getEvalHistory(suiteName: string): Promise<unknown> {
+  async getEvalHistory(suiteName: string): Promise<EvalReportSummary[]> {
     const res = await this.fetchWithRetry(`/v1/evals/${encodeURIComponent(suiteName)}/history`);
-    return res.json();
+    return (await res.json()) as EvalReportSummary[];
   }
 
   /** Run an eval suite. */
@@ -999,6 +1070,33 @@ export class SovrantClient {
     const qs = params.toString();
     const res = await this.fetchWithRetry(`/v1/artifacts${qs ? `?${qs}` : ""}`);
     return (await res.json()) as { artifacts: ArtifactEntry[]; count: number };
+  }
+
+  /**
+   * Download a single artifact file as a fetch {@link Response}.
+   *
+   * The body is a binary stream (or text, depending on content type). Use
+   * `await res.arrayBuffer()`, `await res.blob()`, or `await res.text()` to
+   * consume it. The `Content-Type` and `Content-Disposition` headers from
+   * the server are preserved on the returned response.
+   */
+  async getArtifact(
+    runId: string,
+    path: string,
+    scope?: { workspace_id?: string; project_id?: string }
+  ): Promise<Response> {
+    const params = new URLSearchParams();
+    if (scope?.workspace_id) params.set("workspace_id", scope.workspace_id);
+    if (scope?.project_id) params.set("project_id", scope.project_id);
+    const qs = params.toString();
+    // Encode each path segment but keep the slashes for the catch-all route.
+    const encodedPath = path
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/");
+    return this.fetchWithRetry(
+      `/v1/artifacts/${encodeURIComponent(runId)}/${encodedPath}${qs ? `?${qs}` : ""}`
+    );
   }
 
   /** Delete all artifacts for a run. */
@@ -1205,6 +1303,77 @@ export class SovrantTimeoutError extends Error {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
+
+/** Maximum SSE buffer size for tagged streams (1 MB). */
+const TAGGED_SSE_MAX_BUFFER = 1 * 1024 * 1024;
+
+/** Per-read timeout for tagged SSE streams (5 minutes). */
+const TAGGED_SSE_READ_TIMEOUT_MS = 5 * 60 * 1000;
+
+/**
+ * Parse an SSE stream that uses both `event:` and `data:` lines (e.g. swarm).
+ * Yields an object per fully-formed event with the event type and parsed JSON.
+ * Stops on `data: [DONE]`.
+ */
+async function* parseTaggedSseStream(
+  response: Response
+): AsyncGenerator<SwarmSseEvent> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("Response body is not readable.");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const readPromise = reader.read();
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("SSE read timed out")), TAGGED_SSE_READ_TIMEOUT_MS)
+      );
+      const { done, value } = await Promise.race([readPromise, timeout]);
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      if (buffer.length > TAGGED_SSE_MAX_BUFFER) {
+        throw new Error(
+          `SSE buffer exceeded maximum size of ${TAGGED_SSE_MAX_BUFFER} bytes.`
+        );
+      }
+
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() ?? "";
+
+      for (const part of parts) {
+        let eventType = "message";
+        let dataLine: string | undefined;
+        for (const rawLine of part.split("\n")) {
+          const line = rawLine.trimEnd();
+          if (line.startsWith("event: ")) {
+            eventType = line.slice("event: ".length).trim();
+          } else if (line.startsWith("data: ")) {
+            dataLine = (dataLine ?? "") + line.slice("data: ".length);
+          }
+        }
+        if (dataLine === undefined) continue;
+        if (dataLine === "[DONE]") return;
+        try {
+          const parsed = JSON.parse(dataLine, (key, value) => {
+            if (key === "__proto__" || key === "constructor" || key === "prototype") {
+              return undefined;
+            }
+            return value as unknown;
+          }) as unknown;
+          yield { event: eventType, data: parsed };
+        } catch {
+          // Skip malformed event silently.
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
 
 /** Exponential backoff with jitter to prevent thundering herd. */
 function retryDelay(attempt: number): number {

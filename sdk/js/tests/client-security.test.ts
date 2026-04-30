@@ -230,10 +230,15 @@ describe("SovrantClient — exportSession format validation", () => {
     ).rejects.toThrow(/Invalid export format/);
   });
 
+  it("allows 'json' format", async () => {
+    await client.exportSession("sess-1", "json");
+    expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+
   it("rejects arbitrary format strings", async () => {
     await expect(
       // @ts-expect-error — testing runtime guard
-      client.exportSession("sess-1", "json")
+      client.exportSession("sess-1", "html")
     ).rejects.toThrow(/Invalid export format/);
   });
 

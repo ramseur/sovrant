@@ -432,14 +432,18 @@ export interface Team {
 /**
  * Request body for PUT /v1/teams/:id/profile (Phase 78 Path 2).
  * PATCH-style: any field omitted (or set to null) keeps its current value.
+ *
+ * The server parses enum values case-insensitively, so the documented
+ * canonical values are listed in the union but any case variant is accepted
+ * (the `& string` widening reflects this without losing autocomplete).
  */
 export interface UpdateTeamProfileRequest {
-  run_mode?: "sequential" | "parallel" | "swarm";
+  run_mode?: "sequential" | "parallel" | "swarm" | (string & {});
   max_concurrent?: number;
   file_locks_enabled?: boolean;
   quality_gate_enabled?: boolean;
   quality_gate_threshold?: number;
-  decomposition_mode?: "off" | "roleAware" | "open";
+  decomposition_mode?: "off" | "roleAware" | "open" | (string & {});
 }
 
 /** Request body for POST /v1/teams. */
@@ -472,6 +476,12 @@ export interface AddTeamMemberRequest {
   template?: string;
   system_prompt?: string;
   created_by?: string;
+}
+
+/** Response from POST /v1/teams/:id/members. */
+export interface AddTeamMemberResponse {
+  member_id: string;
+  name: string;
 }
 
 /** Request body for POST /v1/teams/:id/runs. */
@@ -561,13 +571,289 @@ export interface SwarmRunRequest {
   budget?: number;
 }
 
-/** Swarm result from GET /v1/swarm/:id. */
+/**
+ * Numeric SwarmStatus codes, matching the C# enum order on the wire.
+ * `Results.Ok` returns enums as numbers because the server has no global
+ * JsonStringEnumConverter registered.
+ */
+export const SwarmStatus = {
+  Planning: 0,
+  Executing: 1,
+  QualityReview: 2,
+  Completed: 3,
+  Failed: 4,
+  Cancelled: 5,
+} as const;
+export type SwarmStatusCode = (typeof SwarmStatus)[keyof typeof SwarmStatus];
+
+/** Quality gate verdict from post-execution review. */
+export interface QualityVerdict {
+  score: number;
+  verdict: string;
+  feedback: string;
+}
+
+/**
+ * Numeric SwarmTaskStatus codes, matching the C# enum order on the wire.
+ * `Results.Ok` returns enums as numbers because the server has no global
+ * JsonStringEnumConverter registered.
+ */
+export const SwarmTaskStatus = {
+  Pending: 0,
+  Blocked: 1,
+  Running: 2,
+  Completed: 3,
+  Failed: 4,
+  Cancelled: 5,
+} as const;
+export type SwarmTaskStatusCode = (typeof SwarmTaskStatus)[keyof typeof SwarmTaskStatus];
+
+/** A single task node within a swarm plan. */
+export interface SwarmTaskNode {
+  id: string;
+  description: string;
+  dependencies: string[];
+  filesToModify: string[];
+  agentTemplate?: string;
+  allowedTools?: string[];
+  wave: number;
+  status: SwarmTaskStatusCode;
+  output?: string;
+  error?: string;
+  tokensUsed: number;
+  retryCount: number;
+}
+
+/**
+ * Swarm result from GET /v1/swarm/:id.
+ * Wire format: camelCase (ASP.NET `Results.Ok` web defaults), numeric enum
+ * for `status`.
+ */
 export interface SwarmResult {
-  swarm_id: string;
-  status: string;
-  combined_output: string;
-  total_tokens_used: number;
-  quality_gate?: Record<string, unknown>;
+  swarmId: string;
+  status: SwarmStatusCode;
+  tasks: SwarmTaskNode[];
+  totalTokensUsed: number;
+  duration: string;
+  qualityGate?: QualityVerdict;
+  combinedOutput: string;
+}
+
+/**
+ * Discriminated union of swarm events as returned by GET /v1/swarm/:id/events.
+ * Wire format: camelCase (Results.Ok). The discriminator is implicit — events
+ * are distinguished by which fields they carry. The `event` field is
+ * synthesised by the SDK only for SSE callbacks (see {@link SwarmSseEvent}).
+ *
+ * NOTE: The same logical events emitted via SSE on POST /v1/swarm use a
+ * different (PascalCase) wire format because that endpoint serialises events
+ * with no explicit naming policy. Use {@link SwarmSseEvent} for that path.
+ */
+export type SwarmEvent =
+  | SwarmEventPlanCreated
+  | SwarmEventTaskStarted
+  | SwarmEventTaskCompleted
+  | SwarmEventTaskFailed
+  | SwarmEventFileConflict
+  | SwarmEventBudgetExceeded
+  | SwarmEventQualityGateStarted
+  | SwarmEventQualityGateCompleted
+  | SwarmEventSwarmCompleted
+  | SwarmEventWaveCompleted
+  | SwarmEventCoordinationReceived
+  | SwarmEventCoordinationSent;
+
+interface SwarmEventBase {
+  swarmId: string;
+  timestamp: string;
+}
+
+export interface SwarmEventPlanCreated extends SwarmEventBase {
+  taskCount: number;
+  waveCount: number;
+}
+export interface SwarmEventTaskStarted extends SwarmEventBase {
+  taskId: string;
+  agentName: string;
+  taskDescription: string;
+  wave: number;
+}
+export interface SwarmEventTaskCompleted extends SwarmEventBase {
+  taskId: string;
+  agentName: string;
+  taskDescription: string;
+  output: string;
+  tokensUsed: number;
+}
+export interface SwarmEventTaskFailed extends SwarmEventBase {
+  taskId: string;
+  agentName: string;
+  taskDescription: string;
+  error: string;
+  retryCount: number;
+}
+export interface SwarmEventFileConflict extends SwarmEventBase {
+  taskId: string;
+  agentName: string;
+  filePath: string;
+  heldByTaskId: string;
+  heldByAgentName: string;
+}
+export interface SwarmEventBudgetExceeded extends SwarmEventBase {
+  used: number;
+  limit: number;
+}
+export type SwarmEventQualityGateStarted = SwarmEventBase;
+export interface SwarmEventQualityGateCompleted extends SwarmEventBase {
+  verdict: QualityVerdict;
+}
+export interface SwarmEventSwarmCompleted extends SwarmEventBase {
+  finalStatus: SwarmStatusCode;
+  totalTokens: number;
+  durationSeconds: number;
+}
+export interface SwarmEventWaveCompleted extends SwarmEventBase {
+  wave: number;
+  completedTasks: number;
+  failedTasks: number;
+}
+export interface SwarmEventCoordinationReceived extends SwarmEventBase {
+  sourceGroupId: string;
+  eventType: string;
+  summary: string;
+}
+export interface SwarmEventCoordinationSent extends SwarmEventBase {
+  targetGroupId: string;
+  eventType: string;
+  summary: string;
+}
+
+/**
+ * SSE event payload from POST /v1/swarm. The `event` field is the SSE event
+ * type (e.g. `"TaskStarted"`, `"plan"`, `"result"`, `"error"`); `data` is the
+ * raw JSON parsed from the SSE `data:` line.
+ *
+ * The `data` shape for swarm event types is the same fields as the
+ * corresponding {@link SwarmEvent} variant but with PascalCase property names,
+ * because the server emits those events via a serializer with no naming
+ * policy. For `event === "result"`, `data` is a {@link SwarmResult} also in
+ * PascalCase. We keep `data` typed as `unknown` so callers can narrow it to
+ * the shape they expect for their server build.
+ */
+export interface SwarmSseEvent {
+  event: string;
+  data: unknown;
+}
+
+/** Callbacks for {@link SovrantClient.runSwarm}. */
+export interface SwarmStreamCallbacks {
+  /** Called for every SSE event emitted by the server. */
+  onEvent?: (event: SwarmSseEvent) => void | Promise<void>;
+  /** Called once when the final `result` event arrives. */
+  onResult?: (data: unknown) => void | Promise<void>;
+  /** Called when the server emits an `error` event. */
+  onServerError?: (data: unknown) => void | Promise<void>;
+  /** Called on transport-level errors (network, parse, abort). */
+  onError?: (error: Error) => void | Promise<void>;
+  /** Called when the stream completes with `[DONE]`. */
+  onComplete?: () => void | Promise<void>;
+}
+
+// ── Cost ─────────────────────────────────────────────────────────────────
+
+/** Per-session cost row in {@link CostSummary.bySessions}. */
+export interface SessionCostSummary {
+  sessionId: string;
+  estimatedUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  turnCount: number;
+}
+
+/** Per-model cost row in {@link CostSummary.byModels}. */
+export interface ModelCostSummary {
+  model: string;
+  estimatedUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  turnCount: number;
+}
+
+/**
+ * Cost summary returned by GET /v1/cost.
+ * Wire format: camelCase (Results.Ok web defaults).
+ */
+export interface CostSummary {
+  range: string;
+  totalEstimatedUsd: number;
+  totalActualUsd?: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  turnCount: number;
+  sessionBudgetUsd?: number;
+  projectBudgetUsd?: number;
+  projectSpendUsd?: number;
+  bySessions: SessionCostSummary[];
+  byModels: ModelCostSummary[];
+}
+
+/** Returned by GET /v1/cost when the cost dashboard is disabled. */
+export interface CostDisabled {
+  enabled: false;
+  message: string;
+}
+
+// ── Per-user / per-workspace / per-project usage ─────────────────────────
+
+/** Per-model token usage row inside {@link UserUsage.by_model}. */
+export interface UserUsageByModel {
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+}
+
+/** GET /v1/users/:id/usage — wire format snake_case via JsonPropertyName. */
+export interface UserUsage {
+  user_id: string;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_cost_usd: number;
+  session_count: number;
+  by_model: UserUsageByModel[];
+}
+
+/**
+ * GET /v1/workspaces/:id/usage — wire format camelCase
+ * (no JsonPropertyName attributes; serialised by Results.Ok web defaults).
+ */
+export interface WorkspaceUsage {
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCostUsd: number;
+  sessionCount: number;
+}
+
+/** GET /v1/projects/:id/usage — wire format snake_case via JsonPropertyName. */
+export interface ProjectUsage {
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_cost_usd: number;
+  session_count: number;
+}
+
+/** GET /v1/users/:id/audit — single audit event row. Wire format snake_case. */
+export interface UserAuditEvent {
+  id: string;
+  timestamp: string;
+  session_id?: string;
+  workspace_id?: string;
+  project_id?: string;
+  phase: string;
+  tool?: string;
+  action: string;
+  rule?: string;
+  reason?: string;
 }
 
 // ── Engine ───────────────────────────────────────────────────────────────
@@ -622,6 +908,21 @@ export interface EvalResultDetail {
   average_score?: number;
   duration_seconds: number;
   skipped: boolean;
+}
+
+/**
+ * Historical eval report summary from GET /v1/evals/:suite/history.
+ * Wire format: snake_case via JsonPropertyName.
+ */
+export interface EvalReportSummary {
+  suite_name: string;
+  started_at: string;
+  duration_seconds: number;
+  pass_rate: number;
+  pass_at_1_rate: number;
+  total_passed: number;
+  total_failed: number;
+  total_skipped: number;
 }
 
 // ── Artifacts ────────────────────────────────────────────────────────────
