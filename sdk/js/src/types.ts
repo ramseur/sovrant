@@ -420,6 +420,26 @@ export interface Team {
   origin: string;
   created_by: string;
   created_at: string;
+  /** Phase 78 Path 2 — per-team run profile. */
+  run_mode?: "sequential" | "parallel" | "swarm";
+  max_concurrent?: number;
+  file_locks_enabled?: boolean;
+  quality_gate_enabled?: boolean;
+  quality_gate_threshold?: number;
+  decomposition_mode?: "off" | "roleAware" | "open";
+}
+
+/**
+ * Request body for PUT /v1/teams/:id/profile (Phase 78 Path 2).
+ * PATCH-style: any field omitted (or set to null) keeps its current value.
+ */
+export interface UpdateTeamProfileRequest {
+  run_mode?: "sequential" | "parallel" | "swarm";
+  max_concurrent?: number;
+  file_locks_enabled?: boolean;
+  quality_gate_enabled?: boolean;
+  quality_gate_threshold?: number;
+  decomposition_mode?: "off" | "roleAware" | "open";
 }
 
 /** Request body for POST /v1/teams. */

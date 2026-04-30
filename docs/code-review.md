@@ -1,9 +1,9 @@
 # Sovrant Code Review
 
-**Date:** 2026-04-05 (Round 1) · 2026-04-12 (Round 2 — deep review) · 2026-04-14 (Round 3 — UX gap analysis)
+**Date:** 2026-04-05 (Round 1) · 2026-04-12 (Round 2 — deep review) · 2026-04-14 (Round 3 — UX gap analysis) · 2026-04-29 (counts refreshed)
 **Scope:** Full codebase — Runtime, Providers, Server, Tools (50), Agents, CLI, Desktop, Web, LSP, MCP, TypeScript SDK
-**Build:** 1,584 tests passing, 0 warnings
-**Tag:** v1.3.0
+**Build:** 1,492 tests passing, 0 warnings (10 test projects)
+**Tag:** v1.3.0+ (Phase 78 Path 2 in progress)
 
 ---
 
@@ -930,7 +930,7 @@ foreach (var key in keysToRemove) _fileLocks.TryRemove(key, out _);
 
 **Scope:** Full UX audit of CLI, Desktop (Avalonia), and Web (Blazor) against Claude Code, Cursor, Windsurf, opencode, Aider, and Continue.dev.
 **Method:** Codebase exploration of streaming paths, tool execution, session management, configuration, rendering, and developer workflow integration.
-**Baseline:** v1.3.0 (50 tools, 96 endpoints + SignalR hub, 1,584 tests, 5 delivery modes)
+**Baseline:** v1.3.0+ (50 tools, 96 endpoints + SignalR hub, 1,492 tests, 5 delivery modes, V001–V016 migrations)
 
 ### Strengths (at or above parity)
 

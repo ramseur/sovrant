@@ -824,6 +824,32 @@ Returns the team record and its members.
 
 ### Delete Team — `DELETE /v1/teams/{id}`
 
+### Update Team Run Profile — `PUT /v1/teams/{id}/profile` *(Phase 78 Path 2)*
+
+Partial update for the per-team run profile. Any field omitted (or set to `null`) keeps its current value. Enum fields are case-insensitive strings; invalid values return 400. Field names use `snake_case` to match the rest of the route file.
+
+```json
+{
+  "run_mode": "parallel",
+  "max_concurrent": 4,
+  "file_locks_enabled": true,
+  "quality_gate_enabled": true,
+  "quality_gate_threshold": 8,
+  "decomposition_mode": "roleAware"
+}
+```
+
+| Field | Type | Allowed values |
+|---|---|---|
+| `run_mode` | string | `sequential`, `parallel`, `swarm` |
+| `max_concurrent` | int | ≥ 1 |
+| `file_locks_enabled` | bool | — |
+| `quality_gate_enabled` | bool | — |
+| `quality_gate_threshold` | int | 0–10 |
+| `decomposition_mode` | string | `off`, `roleAware`, `open` |
+
+Returns `{ "team": { ...full updated team... } }`. Returns 404 if the team does not exist. Used by the inline run-profile editor on the Orchestration page in both embedded and remote modes.
+
 ### Add Member — `POST /v1/teams/{id}/members`
 
 ```json
@@ -857,6 +883,25 @@ Agent runs are recorded for teams, swarms, and missions.
 ### List Runs — `GET /v1/runs`
 
 Query params: `workspaceId`, `userId`, `teamId`, `kind`, `status`, `limit`.
+
+---
+
+## Webhook Endpoint
+
+`POST /v1/webhook` is the entry point for inbound events from third-party systems (Slack, Teams, Discord, custom). The endpoint normalizes payloads into a Sovrant turn and returns the agent's response. See [`docs/webhooks.md`](webhooks.md) for the full integration guide, signature verification, and provider-specific payload shapes.
+
+```json
+{
+  "source": "slack",
+  "user_id": "U123",
+  "thread_id": "T456",
+  "message": "list open PRs",
+  "callback_url": "https://hooks.slack.com/...",
+  "model": "claude-sonnet-4-6"
+}
+```
+
+Response: `{ "text": "...", "tool_calls": [...], "errors": [] }`.
 
 ---
 

@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-19 (50 tools, 96 server endpoints + SignalR hub, 1,584+ tests, JS SDK covering 79 endpoints)
+**Last updated:** 2026-04-29 (50 tools, 96 server endpoints + SignalR hub, 1,492 tests across 10 projects, JS SDK covering the 96-endpoint server, V001–V016 migrations)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -27,13 +27,13 @@
 | LSP integration (`Sovrant.Lsp`) | ✅ Implemented | `ILspClient` / `LspClient` — JSON-RPC 2.0 over stdio, Content-Length framing. `LspClientManager` maps file extensions to language servers. 5 tools: LspHover, LspDefinition, LspReferences, LspDiagnostics, LspRename. Config via `lsp_servers` in `SovrantConfig`. |
 | CI/CD integration | ✅ Implemented | `--ci` flag on CLI: JSON output, non-zero exit on error, `CiPermissionPolicy`, `CiUserInputProvider`. GitHub Actions composite action. GitLab CI template in docs. |
 | Webhook integration | ✅ Implemented | `POST /v1/webhook` — generic endpoint for Slack, Teams, Discord, custom. Sync or async (callback URL). `WebhookCallbackService` for background delivery. Slack bot at `integrations/slack/`. |
-| Frontend SDK | ✅ Implemented | `sdk/js/` — TypeScript `SovrantClient` (79 endpoint methods), SSE parser, React `useChat()` hook, 75+ type definitions |
+| Frontend SDK | ✅ Implemented | `sdk/js/` — TypeScript `SovrantClient` covering the 96-endpoint server (incl. `updateTeamProfile` for Phase 78 Path 2), SSE parser, React `useChat()` hook, 75+ type definitions |
 | Structured diff view | ✅ Implemented | `DiffRenderer` in CLI — color unified diffs for edit/write tools in REPL |
 | Session export | ✅ Implemented | `GET /v1/sessions/{id}/export` — markdown rendering of full session history |
 | MCP server mode | ✅ Implemented | `sovrant mcp-server` — stdio transport (JSON-RPC 2.0). Bridges all `IToolRegistry` tools + synthetic `chat` tool + session/config resources to MCP protocol. Zero overlap with HTTP server. Bearer token auth via `SOVRANT_MCP_TOKEN` + `--token`. |
 | Dynamic MCP Tool Proxy (`MCPTool`) | ✅ Implemented | Calls any tool on any connected MCP server dynamically at execution time — no static registration needed. Optional `server` param; searches all clients when omitted. |
-| SQLite persistence layer | ✅ Implemented | `IStorageProvider` + `SqliteStorageProvider` + 13 versioned migrations (38 tables, 52 indexes). Stores: sessions, memory, audit, credentials, token usage, workspaces, projects, teams, missions, swarm events, coordination events. See [persistence.md](persistence.md). |
-| Unit test suite | ✅ 1,584 passing | Api(146) + Runtime(769) + Server(160) + Lsp(26) + Tools(193) + Commands(56) + McpServer(34) + Agents(199) + Integration(4) |
+| SQLite persistence layer | ✅ Implemented | `IStorageProvider` + `SqliteStorageProvider` + 16 versioned migrations V001–V016 (36 tables, 61 indexes). Stores: sessions (+ titles, entry provider), memory, audit, credentials, token usage, workspaces, projects, teams (+ run profile), missions, swarm events, coordination events. See [persistence.md](persistence.md). |
+| Unit test suite | ✅ 1,492 passing | Runtime(668) + Agents(197) + Tools(190) + Server(133) + Api(104) + Runtime.Documents(84) + Commands(56) + McpServer(34) + Lsp(25) + Integration(1) — 10 projects |
 | Cost tracking (Phase 55) | ✅ Implemented | `ICostModel`, `OpenRouterCostModel`, `BudgetEnforcer`, `CostMetricsLogger` (JSONL), `/cost` CLI command, `GET /v1/cost` API, cost display in Desktop + Web, `RuntimeEvent.TurnCost`. |
 | Inter-agent coordination (Phase 57) | ✅ Implemented | `GroupMailbox`, `PMCoordinator`, `LlmPMAgent`, `CoordinationStatusTool`. SQLite V013 migration (`coordination_events`, `group_pm_assignments`). Enables team-to-team and swarm-to-swarm coordination through leader/PM agents. |
 | Remote server mode (Phase 61) | ✅ Implemented | SignalR `ChatHub` at `/hubs/chat`, `RuntimeEventDto` shared DTO, `AddSovrantClient()` DI extension. Web frontend can run in embedded mode (in-process) or remote mode (connecting to Sovrant.Server via SignalR). Controlled by `SOVRANT_RUNTIME_MODE=embedded\|remote`. |
@@ -49,6 +49,7 @@
 | Document generation (Phase 66) | ✅ Implemented | `IDocumentGenerator` + 6 generators (Markdown / PDFsharp / MigraDoc structured PDF / OpenXml Word / ClosedXML Excel / OpenXml PowerPoint) and a registry. 44 industry templates across 7 verticals (business, finance, legal, real-estate, healthcare, education, construction). Agent tools: `DocumentGenerate`, `DocumentFromTemplate`, `DocumentListTemplates`, `DocumentSuggestTemplate`, `DocumentPackage`, `DocumentListPackages`. `IDocumentTrustGate` (default `HealthcarePhiTrustGate`) refuses healthcare templates without explicit PHI consent. In-chat document cards in Web (`DocumentArtifactCard.razor`, with PDF iframe preview) and Desktop (`DocumentArtifactViewModel`, with Open + Reveal). Workspace-scoped user templates deferred to Phase 74. 84 tests. |
 | Autonomous-driver layer (Phase 67) | ✅ Implemented | `IAutonomousDriver` + `DriverCapabilities` + `DriverRegistry` seam in `Sovrant.Runtime/Missions/`. `LlmAutonomousDriver` (name: `"llm"`) wraps `IMissionExecutor`; `SwarmAutonomousDriver` (name: `"swarm"`) decomposes + orchestrates and projects `SwarmEvent`s onto `mission_events` under a stable `swarm_*` type vocabulary. `LlmMissionExecutor` remains the default mission execution path — the driver layer is additive. |
 | Foundations hardening (Phase 68) | ✅ Partial | `SovrantException` base in `Sovrant.Api.Errors` — `ApiError`, `MacroExpansionException`, `TemplateValidationException`, `MigrationDriftException` re-parented. DI-singleton registries (`InMemoryToolRegistry`, `AgentTemplateRegistry`) moved to `ConcurrentDictionary` with concurrent-writer tests. Full-source audit confirmed every public async method in `Sovrant.Runtime` already takes `CancellationToken`. DI sweep, logging taxonomy, cold-start profiling, broader catch-site audit remain. |
+| Team run profiles (Phase 78 Path 2) | 🟡 In progress (commits 1–10 shipped) | V015 migration adds `run_mode`, `max_concurrent`, `file_locks_enabled`, `quality_gate_enabled`, `quality_gate_threshold`, `decomposition_mode` to `teams`. `PUT /v1/teams/{id}/profile` endpoint with PATCH-style partial updates and snake_case JSON binding. `TeamRunner` honours the profile (sequential vs parallel execution, concurrency cap, file-lock arbitration, quality gate threshold, decomposition mode). SDK exposes `updateTeamProfile()`. Remaining commits 11+: UI surfaces, swarm-mode parity, quality-gate grader, telemetry. |
 
 ### Known issues fixed during testing
 

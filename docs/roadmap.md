@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-16 (Phase 61 complete — 45 phases shipped, 9 pending)
+**Last updated:** 2026-04-29 (Phase 78 Path 2 complete through commit 10 — 47 phases shipped, 9 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -11,12 +11,12 @@ This document tracks planned features, architectural decisions, and the reasonin
 
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
-- **50 tools** across 11 categories (file, shell, web, task, agent, team, mission, swarm, artifact, MCP, LSP)
-- **1,587 tests** across 9 projects, 0 failures
-- **96 server endpoints** (chat, sessions, config, status, models, usage, cost, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
+- **50 tools** across 12 categories (file, shell, web, task, agent, team, mission, swarm, coordination, artifact, document, MCP, LSP, skills)
+- **1,492 tests** across 10 projects, 0 failures
+- **96 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
-- SQLite persistence layer with 14 versioned migrations (V001–V014), 36 tables, 61 indexes (Phase 32 + 42.5 + 51 + 52 + coordination_mailbox + session_titles)
+- SQLite persistence layer with 16 versioned migrations (V001–V016), 36 tables, 61 indexes (Phase 32 + 42.5 + 51 + 52 + 57 + 78 + session_titles + session_entry_provider)
 - Mission engine with durable goals, re-planning, acceptance gates, and event journal (Phase 51 ✅)
 - Unified agent orchestration: SQLite-backed teams + swarm + agent run ledger (Phase 52 ✅)
 - Scoped artifact storage with workspace-first layout (Phase 53 ✅)
@@ -114,7 +114,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 
 ### Still pending
 
-> **Last audited:** 2026-04-21. 46 phases complete, 8 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61. Everything below is *not yet shipped*.
+> **Last audited:** 2026-04-29. 47 phases complete, 9 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61; Phase 78 Path 2 active (commits 1–10 shipped). Everything below is *not yet shipped*.
 
 | Gap | Phase | Priority |
 |---|---|---|
@@ -133,7 +133,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | ~~Remote server mode for web frontend — SignalR streaming, auth, `AddSovrantClient()` abstraction~~ | Phase 61 ✅ | High |
 | Video generation — fal.ai, Kling AI, and pluggable provider support for text-to-video, image-to-video | Phase 65 | Medium |
 | ~~Document generation — PDFs, Word, Excel, PowerPoint, presentations + industry templates (real estate, healthcare, legal, finance)~~ | Phase 66 ✅ | Medium–High |
-| Teams parity with Swarm — parallelism, file-lock safety, quality gate, and optional decomposition for team runs (other frameworks treat parallel execution as the default team behavior) | Phase 78 | High |
+| Teams parity with Swarm — parallelism, file-lock safety, quality gate, and optional decomposition for team runs (Path 1 ✅ done, Path 2 in progress through commit 10: V015 migration shipped, `PUT /v1/teams/{id}/profile` endpoint live, integration tests landed) | Phase 78 | High |
 | Agents page (renamed from Agent Templates): single-agent definition + run — author agents via markdown files, edit them in-app, reference them by name from the standard agenting loop, and launch chat sessions (or one-shot if self-contained) with run history | Phase 79 | Medium–High |
 | Composio MCP integration — first-class platform awareness for Composio's MCP catalog (250+ apps), in-app browse/enable, managed OAuth via Composio connections, per-user/workspace credential scoping, still routed through Sovrant's `MCPTool` proxy and permission model | Phase 80 | Medium |
 | Unified memory — wire workspace + project memory rows into `ConversationRuntime.BuildSystemPrompt()` so DB-backed entries actually reach the LLM (today only file-based `~/.sovrant/memory.md` and `.sovrant/memory.md` are injected) | Phase 81 | Medium–High |

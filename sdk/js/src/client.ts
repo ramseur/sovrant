@@ -51,6 +51,7 @@ import type {
   TeamRunResponse,
   ToolDefinition,
   UpdateProjectRequest,
+  UpdateTeamProfileRequest,
   UpdateUserRequest,
   UpdateWorkspaceRequest,
   UsageInfo,
@@ -813,6 +814,18 @@ export class SovrantClient {
       body: JSON.stringify(request),
     });
     return (await res.json()) as TeamRunResponse;
+  }
+
+  /**
+   * Update a team's run profile (Phase 78 Path 2).
+   * PATCH-style: any field omitted (or set to null) keeps its current value.
+   */
+  async updateTeamProfile(teamId: string, request: UpdateTeamProfileRequest): Promise<{ team: Team }> {
+    const res = await this.fetchWithRetry(`/v1/teams/${encodeURIComponent(teamId)}/profile`, {
+      method: "PUT",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as { team: Team };
   }
 
   // ── Runs ──────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 # Sovrant — Competitor Analysis
 
-**Last updated:** 2026-04-12 (50 tools, desktop app, web app, MCP server, mission engine, SDK covering 79 endpoints)
+**Last updated:** 2026-04-29 (50 tools, 25 agent templates, desktop app, web app, MCP server, mission engine, SDK covering the 96-endpoint server)
 **Products analysed:** Claude Code · OpenClaude · opencode (SST) · Sovrant
 
 ---
@@ -12,7 +12,7 @@ The agentic coding tool space has four meaningful reference points as of 2026:
 - **Claude Code** — the proprietary, Anthropic-backed gold standard. Deep Claude model integration, enterprise-grade safety tooling, and the widest IDE/CI coverage. Hard vendor lock-in and a closed codebase.
 - **OpenClaude** — a community fork derived from Claude Code source code that was accidentally leaked in March 2026. Full tool parity with Claude Code, genuine multi-provider support. Legally precarious; subject to ongoing DMCA takedowns.
 - **opencode (SST)** — a clean-room, MIT-licensed open source coding agent with 95K+ GitHub stars and 600K+ downloads. TypeScript/Bun, SQLite persistence, 75+ LLM providers, multi-interface (TUI + desktop + VS Code + web + remote server). The strongest open source competitor.
-- **Sovrant** — a clean-room C# / .NET 10 reimplementation inspired by the architecture of OpenClaude. **No Anthropic source code was copied or incorporated** — every line is original C#. Five delivery modes: CLI REPL, OpenAI-compatible HTTP server (95 endpoints), Avalonia desktop app (Windows/macOS/Linux), Blazor Server web app, and MCP server for IDE integration. SmartRouter with intent-aware model routing. 50 tools. 24 agent templates. 32 built-in skills. Team orchestration, swarm auto-decomposition, mission engine, SQLite persistence with FTS5, eval framework, LSP integration, and a TypeScript SDK covering all 79 server endpoints.
+- **Sovrant** — a clean-room C# / .NET 10 reimplementation inspired by the architecture of OpenClaude. **No Anthropic source code was copied or incorporated** — every line is original C#. Five delivery modes: CLI REPL, OpenAI-compatible HTTP server (96 endpoints), Avalonia desktop app (Windows/macOS/Linux), Blazor Server web app, and MCP server for IDE integration. SmartRouter with intent-aware model routing. 50 tools. 24 agent templates. 32 built-in skills. Team orchestration, swarm auto-decomposition, mission engine, SQLite persistence with FTS5, eval framework, LSP integration, and a TypeScript SDK covering all 79 server endpoints.
 
 **Sovrant's unique position:** the only option that is natively .NET, provides five independent frontends (CLI, server, desktop, web, MCP), has built-in orchestration with two backends, and ships enterprise multi-tenant infrastructure (per-user credentials, session TTL, rate limiting, workspace/project scoping). Unlike OpenClaude, Sovrant carries no Anthropic IP — it is a clean-room reimplementation in a different language and runtime, with no code derivation. Unlike opencode, it ships a mission engine, swarm orchestrator, and enterprise multi-tenant primitives out of the box.
 
@@ -63,7 +63,7 @@ The SmartRouter routes each LLM call across configured providers (OpenAI-compati
 | **LLM providers** | Anthropic only | 200+ via OpenAI compat | 75+ providers | OpenAI-compat + Ollama + native messages API |
 | **Provider routing** | None (single) | None (single active) | Manual per-session switch | SmartRouter (auto, scored) + intent-aware tier routing |
 | **CLI REPL** | ✅ | ✅ | ✅ (TUI) | ✅ |
-| **HTTP server** | ❌ | ❌ | ✅ (SSE backend) | ✅ OpenAI-compatible (95 endpoints) |
+| **HTTP server** | ❌ | ❌ | ✅ (SSE backend) | ✅ OpenAI-compatible (96 endpoints) |
 | **IDE extension** | ✅ VS Code + JetBrains | ❌ | ✅ VS Code (beta) | ✅ MCP server mode (any MCP IDE) |
 | **Desktop app** | ❌ | ❌ | ✅ Tauri (beta) | ✅ Avalonia (Win/Mac/Linux, 15 pages) |
 | **Web UI** | ✅ claude.ai/code | ❌ | ✅ (beta) | ✅ Blazor Server (15 pages) |
@@ -87,9 +87,9 @@ The SmartRouter routes each LLM call across configured providers (OpenAI-compati
 | **Slack integration** | ✅ | ❌ | ❌ | ✅ Webhook endpoint |
 | **Context auto-compaction** | ✅ | ✅ (inherited) | ✅ | ✅ Configurable threshold |
 | **Eval framework** | ❌ | ❌ | ❌ | ✅ 3 grader types, pass@k |
-| **Agent templates** | ❌ | ❌ | ❌ | ✅ 24 built-in |
+| **Agent templates** | ❌ | ❌ | ❌ | ✅ 25 built-in |
 | **Built-in skills** | ❌ | ❌ | ❌ | ✅ 32 across 7 domains |
-| **Frontend SDK** | ❌ | ❌ | ❌ | ✅ TypeScript (79 endpoints) |
+| **Frontend SDK** | ❌ | ❌ | ❌ | ✅ TypeScript (96-endpoint coverage) |
 | **Cross-platform** | Mac / Linux / Windows | Mac / Linux / Windows | Mac / Linux / Windows | Windows / Linux / macOS |
 | **No Node/Python/Go dep** | ❌ (Node) | ❌ (Bun) | ❌ (Bun + Go) | ✅ |
 | **Legal status** | Proprietary ✅ | Contested ⚠️ | Clean MIT ✅ | Clean-room reimplementation ✅ |
@@ -178,14 +178,14 @@ Both exploit Claude Code's trust model around project files and hooks. Sovrant's
 
 ### Where Sovrant wins today
 
-1. **Five independent frontends** — CLI, HTTP server (95 endpoints), desktop app (Avalonia), web app (Blazor), and MCP server. No competitor ships more than three.
+1. **Five independent frontends** — CLI, HTTP server (96 endpoints), desktop app (Avalonia), web app (Blazor), and MCP server. No competitor ships more than three.
 2. **SmartRouter + intent-aware routing** — multi-provider routing with health/latency/cost scoring plus automatic model tier selection per intent class. Unique in the field.
 3. **50 tools with LSP** — highest tool count, with 5 LSP tools (18 languages), swarm orchestration, mission management, quality gates, and skill system.
 4. **Orchestration orchestration + missions** — Teams (SQLite-backed, two agent backends) + Swarm (auto-decomposition with DAG execution) + Missions (long-lived goal-driven execution). Claude Code has teams behind feature flags; no other competitor has anything comparable.
 5. **Enterprise multi-tenant** — per-request LLM keys, API token issuance, session TTL/LRU, rate limiting, usage tracking, workspace/project scoping, audit log. All shipped, not roadmap.
 6. **Native .NET** — zero runtime dependency for .NET shops; natural fit for Windows-first or Azure-first environments.
 7. **Clean legal posture** — clean-room C# reimplementation with no Anthropic code copied. Different language, different runtime, no code-derivation IP risk.
-8. **TypeScript SDK** — typed client covering all 79 server endpoints with SSE streaming and React hook. No competitor exposes an SDK for their API.
+8. **TypeScript SDK** — typed client covering the 96-endpoint server with SSE streaming and React hook. No competitor exposes an SDK for their API.
 9. **Eval framework** — 3 grader types, pass@k metrics, trend tracking. No competitor ships a built-in eval system.
 
 ### Where Sovrant needs to close the gap
@@ -218,7 +218,7 @@ The following features exist in one or more competitors but are not yet in Sovra
 | Orchestration teams | ✅ Teams + Swarm, two backends |
 | Desktop app | ✅ Avalonia (15 pages, setup wizard) |
 | Web UI | ✅ Blazor Server (15 pages) |
-| Frontend SDK | ✅ TypeScript SDK (79 endpoints, SSE, React hook) |
+| Frontend SDK | ✅ TypeScript SDK (covers the 96-endpoint server, SSE, React hook) |
 | Multi-tenant credentials | ✅ `X-LLM-Api-Key` per-request header |
 | Per-user auth tokens | ✅ `POST /v1/users/me/tokens` |
 | Session TTL / eviction | ✅ `SOVRANT_SESSION_TTL_SECONDS` + LRU |
@@ -297,7 +297,7 @@ The following features exist in one or more competitors but are not yet in Sovra
 | **Best for multi-user teams** | ✅ (managed) | ❌ | ❌ | ✅ (shipped) |
 | **Best for enterprise deploy** | ✅ (Anthropic SaaS) | ❌ | ❌ | ✅ (self-hosted, shipped) |
 | **Best provider flexibility** | ❌ | ✅ | ✅ | ✅ + SmartRouter + intent routing |
-| **Best tool/agent ecosystem** | ✅ | ✅ (inherited) | ❌ | ✅ (50 tools, 24 templates, 32 skills) |
+| **Best tool/agent ecosystem** | ✅ | ✅ (inherited) | ❌ | ✅ (50 tools, 25 templates, 32 skills) |
 | **Best orchestration** | Partial (feature flag) | Partial (inherited) | ❌ | ✅ (Teams + Swarm) |
 | **Best legal posture** | ✅ | ❌ | ✅ | ✅ |
 | **Best .NET / Windows fit** | ❌ | ❌ | ❌ | ✅ |

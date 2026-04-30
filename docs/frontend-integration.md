@@ -362,14 +362,35 @@ await client.addProjectMember(projectId, { user_id: userId });
 ### Teams and Runs
 
 ```ts
+// Lifecycle
 const team = await client.createTeam({ name: "reviewers" });
+const { teams } = await client.listTeams({ workspace_id: wsId });
+const detail = await client.getTeam(teamId);                    // returns { team, members }
+await client.deleteTeam(teamId);
+
+// Members
 await client.addTeamMember(teamId, { name: "alice", role: "reviewer" });
+const { members } = await client.listTeamMembers(teamId);
+
+// Phase 78 Path 2 — per-team run profile (PATCH-style; omitted fields keep current value)
+await client.updateTeamProfile(teamId, {
+  run_mode: "parallel",
+  max_concurrent: 4,
+  file_locks_enabled: true,
+  quality_gate_enabled: true,
+  quality_gate_threshold: 8,
+  decomposition_mode: "roleAware",
+});
+
+// Run
 const result = await client.runTeam(teamId, { goal: "Review auth module" });
 
-// Runs
+// Runs ledger
 const run = await client.getRun(runId);
 const { runs } = await client.listRuns({ status: "completed" });
 ```
+
+> **Note:** Field names use `snake_case` on the wire to match the server. `run_mode` accepts `sequential` / `parallel` / `swarm`; `decomposition_mode` accepts `off` / `roleAware` / `open`. Invalid values return 400.
 
 ### Missions
 

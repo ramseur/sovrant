@@ -65,6 +65,7 @@ export type {
   AddTeamMemberRequest,
   TeamRunRequest,
   TeamRunResponse,
+  UpdateTeamProfileRequest,
   AgentRun,
   AgentRunFilter,
   // Missions
