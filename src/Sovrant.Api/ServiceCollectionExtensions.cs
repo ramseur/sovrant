@@ -31,7 +31,18 @@ public static class ServiceCollectionExtensions
         var providerApiUrl = credentials.ProviderBaseUrl;
         var hasProviderApi = credentials.HasProviderApi;
         var ollamaUrl = credentials.OllamaBaseUrl;
-        var webSearchEnabled = credentials.WebSearchEnabled;
+
+        // Web search backend selection (Phase 70). Registered as singleton so providers
+        // and the WebSearchTool can consult the same resolved value. Until PR 3 lands,
+        // OpenAiResponsesProvider continues to be selected by the legacy
+        // CredentialConfig.WebSearchEnabled flag for back-compat — both the legacy
+        // env var and the new SOVRANT_WEB_SEARCH=native feed into that flag below.
+        services.AddSingleton(sp => WebSearchOptions.Resolve(
+            configuration, sp.GetService<ILogger<WebSearchOptions>>()));
+
+        var webSearchEnabled = credentials.WebSearchEnabled
+            || (Environment.GetEnvironmentVariable("SOVRANT_WEB_SEARCH")?.Trim()
+                .Equals("native", StringComparison.OrdinalIgnoreCase) ?? false);
 
         var routerMode = Enum.TryParse<RouterMode>(
             Environment.GetEnvironmentVariable("ROUTER_MODE") ?? configuration["Router:Mode"], true,

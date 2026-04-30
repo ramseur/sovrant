@@ -1,3 +1,4 @@
+using Sovrant.Api.Config;
 using Sovrant.Api.Routing;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.TrustBoundary;
@@ -53,6 +54,15 @@ public sealed class SovrantConfig
     /// <summary>Trust boundary configuration (sanitization, ethical harness, intent verification).</summary>
     public TrustBoundaryConfig TrustBoundary { get; init; } = new();
 
+    /// <summary>
+    /// Per-session override of the web-search backend. When set, takes
+    /// precedence over the globally resolved <c>WebSearchOptions</c> for
+    /// the session that owns this config copy. Used by the
+    /// <c>/websearch</c> slash command so a one-off change doesn't stomp
+    /// the saved default.
+    /// </summary>
+    public WebSearchBackend? WebSearchOverride { get; init; }
+
     /// <summary>MCP server configurations keyed by server name.</summary>
     public IReadOnlyDictionary<string, McpServerConfig> McpServers { get; init; } =
         new Dictionary<string, McpServerConfig>(StringComparer.Ordinal);
@@ -83,6 +93,7 @@ public sealed class SovrantConfig
         TrustBoundary = TrustBoundary,
         McpServers = McpServers,
         LspServers = LspServers,
+        WebSearchOverride = WebSearchOverride,
     };
 }
 
