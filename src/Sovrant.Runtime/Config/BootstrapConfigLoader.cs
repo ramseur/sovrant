@@ -11,15 +11,24 @@ namespace Sovrant.Runtime.Config;
 ///   <item>Environment variables (<c>SOVRANT_DB_PATH</c>, <c>SOVRANT_LOG_FILE</c>,
 ///     <c>SOVRANT_ARTIFACTS_ROOT</c>, <c>SOVRANT_KEYSTORE_PATH</c>, <c>SOVRANT_TOKEN</c>)</item>
 ///   <item><c>--config &lt;path&gt;</c> file (a user-pointed JSON file)</item>
-///   <item>Project file: <c>./.sovrant/sovrant.config.json</c></item>
-///   <item>User file: <c>~/.sovrant/sovrant.config.json</c></item>
+///   <item>Project file: <c>./.sovrant/sovrant.config</c> (legacy <c>.json</c> still accepted)</item>
+///   <item>User file: <c>~/.sovrant/sovrant.config</c> (legacy <c>.json</c> still accepted)</item>
 ///   <item>Built-in defaults (resolved lazily by each consumer)</item>
 /// </list>
+/// <para>
+/// Phase 88-E renamed the canonical filename from <c>sovrant.config.json</c>
+/// to <c>sovrant.config</c> (still JSON internally — the bare name signals
+/// "this is <em>the</em> config file" and reinforces the rule that no
+/// other JSON files belong in <c>~/.sovrant/</c>). The legacy
+/// <c>sovrant.config.json</c> name is still honoured if present, so
+/// existing installs keep working until the user renames.
+/// </para>
 /// </summary>
 public static class BootstrapConfigLoader
 {
-    private const string ProjectConfigPath = ".sovrant/sovrant.config.json";
-    private const string UserConfigFileName = "sovrant.config.json";
+    private const string ProjectDir = ".sovrant";
+    private const string PrimaryConfigName = "sovrant.config";
+    private const string LegacyConfigName = "sovrant.config.json";
 
     private static readonly JsonSerializerOptions s_jsonOptions = new()
     {
@@ -52,14 +61,41 @@ public static class BootstrapConfigLoader
         };
     }
 
-    /// <summary>The resolved path to the user-level config file (not guaranteed to exist).</summary>
-    public static string UserFilePath() => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".sovrant", UserConfigFileName);
+    /// <summary>
+    /// The resolved path to the user-level config file (not guaranteed to
+    /// exist). Returns the new <c>sovrant.config</c> path if it exists, or
+    /// the legacy <c>sovrant.config.json</c> path if only that exists,
+    /// otherwise the new path (so callers writing the file land on the
+    /// canonical name).
+    /// </summary>
+    public static string UserFilePath()
+    {
+        var baseDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ProjectDir);
+        return PreferPrimaryOrLegacy(baseDir);
+    }
 
     /// <summary>The resolved path to the project-level config file (not guaranteed to exist).</summary>
-    public static string ProjectFilePath() => Path.Combine(
-        Directory.GetCurrentDirectory(), ProjectConfigPath);
+    public static string ProjectFilePath()
+    {
+        var baseDir = Path.Combine(Directory.GetCurrentDirectory(), ProjectDir);
+        return PreferPrimaryOrLegacy(baseDir);
+    }
+
+    /// <summary>
+    /// Returns the canonical path under <paramref name="baseDir"/>: the
+    /// primary <c>sovrant.config</c> if it exists, else the legacy
+    /// <c>sovrant.config.json</c> if it exists, else the primary path.
+    /// </summary>
+    private static string PreferPrimaryOrLegacy(string baseDir)
+    {
+        var primary = Path.Combine(baseDir, PrimaryConfigName);
+        if (File.Exists(primary))
+            return primary;
+        var legacy = Path.Combine(baseDir, LegacyConfigName);
+        return File.Exists(legacy) ? legacy : primary;
+    }
 
     private static BootstrapConfig LoadFile(string path)
     {

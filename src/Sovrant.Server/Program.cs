@@ -149,7 +149,7 @@ if (string.IsNullOrEmpty(bootstrapConfig.ServerToken))
 {
     throw new InvalidOperationException(
         "A server bearer token is required. Set it via SOVRANT_TOKEN, " +
-        "the \"serverToken\" field of sovrant.config.json, or --config <path>. " +
+        "the \"serverToken\" field of sovrant.config, or --config <path>. " +
         "Clients must supply this token to authenticate requests.");
 }
 
