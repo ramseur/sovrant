@@ -885,6 +885,78 @@ dbCmd.Add(dbResetCmd);
 
 root.Add(dbCmd);
 
+// ── 'uninstall' — wipe Sovrant state for fresh-install testing ───────────────
+var uninstallYesOpt = new Option<bool>("--yes")
+    { Description = "Skip the confirmation prompt (for scripting)." };
+var uninstallIncludeProjectOpt = new Option<bool>("--include-project")
+    { Description = "Also delete the project-level .sovrant/ directory in the current working directory." };
+var uninstallCmd = new Command("uninstall",
+    "Delete all on-disk Sovrant state (~/.sovrant/) so the next launch starts from scratch. Use --include-project to also remove the project-level .sovrant/ directory.");
+uninstallCmd.Add(uninstallYesOpt);
+uninstallCmd.Add(uninstallIncludeProjectOpt);
+uninstallCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    var userDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".sovrant");
+    var projectDir = Path.Combine(Directory.GetCurrentDirectory(), ".sovrant");
+    var includeProject = pr.GetValue(uninstallIncludeProjectOpt);
+
+    var targets = new List<string>();
+    if (Directory.Exists(userDir)) targets.Add(userDir);
+    if (includeProject && Directory.Exists(projectDir) &&
+        !string.Equals(Path.GetFullPath(projectDir), Path.GetFullPath(userDir), StringComparison.OrdinalIgnoreCase))
+    {
+        targets.Add(projectDir);
+    }
+
+    if (targets.Count == 0)
+    {
+        AnsiConsole.MarkupLine("[grey]Nothing to remove. No Sovrant state directories found.[/]");
+        return;
+    }
+
+    AnsiConsole.MarkupLine("[yellow bold]This will permanently delete:[/]");
+    foreach (var t in targets)
+        AnsiConsole.MarkupLine($"  • {Markup.Escape(t)}");
+    AnsiConsole.WriteLine();
+    AnsiConsole.MarkupLine("[grey]Includes the SQLite database (sessions, memory, audit), keystore, logs, and any saved profiles.[/]");
+    AnsiConsole.WriteLine();
+
+    if (!pr.GetValue(uninstallYesOpt))
+    {
+        if (!await AnsiConsole.ConfirmAsync("Proceed?", defaultValue: false, ct).ConfigureAwait(false))
+        {
+            AnsiConsole.MarkupLine("[grey]Cancelled.[/]");
+            return;
+        }
+    }
+
+    var removed = 0;
+    foreach (var t in targets)
+    {
+        try
+        {
+            Directory.Delete(t, recursive: true);
+            AnsiConsole.MarkupLine($"[green]\u2713[/] Removed {Markup.Escape(t)}");
+            removed++;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AnsiConsole.MarkupLine($"[red]\u2717[/] Failed to remove {Markup.Escape(t)}: {Markup.Escape(ex.Message)}");
+            AnsiConsole.MarkupLine("[grey]  Tip: close any running Sovrant processes (Desktop, Web, Server) and try again.[/]");
+            Environment.ExitCode = 1;
+        }
+    }
+
+    if (removed > 0)
+    {
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[green bold]Uninstall complete.[/] The next launch will run the first-run setup wizard.");
+    }
+});
+root.Add(uninstallCmd);
+
 // ── 'document' subcommand group ──────────────────────────────────────────────
 root.Add(DocumentCommand.Build(BuildServices));
 

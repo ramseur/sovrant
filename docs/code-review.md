@@ -1,9 +1,26 @@
 # Sovrant Code Review
 
-**Date:** 2026-04-05 (Round 1) · 2026-04-12 (Round 2 — deep review) · 2026-04-14 (Round 3 — UX gap analysis) · 2026-04-29 (counts refreshed)
-**Scope:** Full codebase — Runtime, Providers, Server, Tools (50), Agents, CLI, Desktop, Web, LSP, MCP, TypeScript SDK
-**Build:** 1,492 tests passing, 0 warnings (10 test projects)
-**Tag:** v1.3.0+ (Phase 78 Path 2 in progress)
+**Status as of 2026-05-02:** Frozen historical reference. Latest tag: `v0.9.0` (Phase 90 — Public Release Readiness shipped). The findings below were the action list that drove Phases A–K (Round 1/2 fixes) plus the Round 3 UX gap analysis. Everything originally scoped here has been resolved or explicitly deferred — see [roadmap.md](roadmap.md) for current status.
+
+**Original review timeline:** 2026-04-05 (Round 1) · 2026-04-12 (Round 2 — deep review) · 2026-04-14 (Round 3 — UX gap analysis) · 2026-04-29 (counts refreshed)
+**Original scope:** Full codebase — Runtime, Providers, Server, Tools, Agents, CLI, Desktop, Web, LSP, MCP, TypeScript SDK
+**Build at time of review:** 1,492 tests passing, 0 warnings (10 test projects). Current build: **1,911 tests passing, 0 failures** post-Phase-90.
+
+---
+
+## Phase 90 Update — What Changed Since This Review
+
+Since this document was last refreshed (2026-04-29), Phase 90 (Public Release Readiness) shipped on 2026-05-02 (commit `21ea01b`, tag `v0.9.0`). The following items in this review are now resolved or no longer apply:
+
+- **All Round 1/2 CRITICAL and HIGH findings** are fixed (Phases A–K, 2026-04-05 → 2026-04-29).
+- **Round 3 UX gaps** — `/agents` "Run now" via `AdHocAgentRunner`; Activity drill-down with master/detail per-turn breakdown; sortable parameter tables on Tools page; sortable headers on Skills page; consistent empty/loading states across Web pages; inline-style cleanup migrated into `sovrant.css`.
+- **Command Center cockpit** (Phase 89 MVP folded into Phase 90 Track B) — new `/command` page on Web and Desktop unifies missions, team runs, agent runs, and sessions in one read-only live grid. Now the default homepage on both surfaces.
+- **Plaintext API keys** — Phase 88 Track G deferred; Phase 90 Track G shipped the migration. Provider profiles now reference `credential_id` only; existing plaintext keys move to the encrypted keystore on first launch.
+- **Hardcoded phase numbers in user-facing UI** — purged. `OrchestrationView.axaml` line 283 placeholder removed.
+- **Automations.razor** — deleted in Phase 90 Track F. References to it in this document are stale; the architectural decision is that workflow automation comes via MCP-connected platforms (n8n, Zapier, Make), surfaced through Integrations.
+- **Repositioning** — README rewritten around BSL 1.1 / source-available framing; "command center for agents and agent activity" is the primary value prop.
+
+For anything below dated before the timeline above and still marked as open: re-evaluate against the current code or the [roadmap.md](roadmap.md) Phase 90 acceptance-criteria list (all checked) before treating it as a live finding. The line-number citations in particular have drifted as the codebase evolved.
 
 ---
 

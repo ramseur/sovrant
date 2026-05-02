@@ -445,6 +445,20 @@ const { templates } = await client.listAgentTemplates();
 const template = await client.getAgentTemplate("security-auditor");
 ```
 
+### Command Center (Phase 89/90)
+
+```ts
+// Aggregated state of every active mission, team run, agent run, and session
+// for the current user. Powers the /command page in Web and Desktop.
+const state = await client.getCommandCenterState();
+// { active_missions, active_team_runs, active_agent_runs, active_sessions, rows, generated_at }
+
+// Optional: scope to a specific owner (admin tokens only).
+const peerState = await client.getCommandCenterState({ owner_user_id: "user-123" });
+```
+
+The cockpit polls this endpoint every ~2 seconds. Each row carries a `detail_route` pointing at an existing detail surface (`/activity?...`, `/orchestration/teams/{id}`, mission detail) — the cockpit never duplicates UIs, it composes them.
+
 ### Usage Tracking
 
 ```ts
@@ -917,6 +931,8 @@ import type {
 ---
 
 ## Remote Mode — Dual-Mode Web Frontend (Phase 61)
+
+`Sovrant.Web` is the official Blazor Server frontend. After Phase 90 the homepage is the Command Center cockpit (`/command`) — the first-run wizard at `/setup` redirects there on completion. `Sovrant.Desktop` (Avalonia) ships the same experience with `CommandCenterView` as the default startup view (`MainViewModel` initializes `CurrentPage = CommandCenterViewModel`).
 
 `Sovrant.Web` supports two runtime modes, controlled by the `SOVRANT_RUNTIME_MODE` environment variable:
 

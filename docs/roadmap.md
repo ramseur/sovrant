@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-05-02 (Phase 87 artifacts + Phase 88 settings shipped; Phase 89 Command Center MVP and Phase 90 Public Release Readiness queued — 51 phases shipped, 15 pending)
+**Last updated:** 2026-05-02 (Phase 90 Public Release Readiness shipped — Command Center on `/command`, repositioning, polish, plaintext-key fix; tagged `v0.9.0` — 53 phases shipped, 13 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -12,11 +12,12 @@ This document tracks planned features, architectural decisions, and the reasonin
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
 - **56 tools** across 17 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, missions, artifacts, documents, quality, swarm, coordination, LSP)
-- **1,492 tests** across 10 projects, 0 failures
-- **96 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
+- **1,911 tests** across 10 projects, 0 failures
+- **97 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
-- SQLite persistence layer with 16 versioned migrations (V001–V016), 36 tables, 61 indexes (Phase 32 + 42.5 + 51 + 52 + 57 + 78 + session_titles + session_entry_provider)
+- SQLite persistence layer with 22 versioned migrations (V001–V022) — adds hooks, workspace settings, MCP/LSP servers, user preferences, provider profiles, workspace identity unification on top of the Phase 32/42.5/51/52/57/78 foundation
+- **Command Center cockpit** at `/command` on Web and Desktop — read-only live grid aggregating active missions, team runs, agent runs, and sessions with click-through to existing detail pages (Phase 89/90 ✅)
 - Mission engine with durable goals, re-planning, acceptance gates, and event journal (Phase 51 ✅)
 - Unified agent orchestration: SQLite-backed teams + swarm + agent run ledger (Phase 52 ✅)
 - Scoped artifact storage with workspace-first layout (Phase 53 ✅)
@@ -8870,7 +8871,7 @@ already runs.
 
 ## Phase 90 — Public Release Readiness: Command Center, Polish & Repositioning
 
-**Status:** In progress (added 2026-05-02 as the umbrella for everything gating a public flip-the-switch decision).
+**Status:** ✅ Shipped 2026-05-02 (commit `21ea01b`, tag `v0.9.0`). Tracks A–I all landed; full solution test pass at 1,911 / 0 failed.
 **Depends on:** Phases 78 (teams), 79 (agents), 87 (artifacts), 88 (settings — partially shipped, plaintext-key fix is in this phase). Pulls Phase 89 MVP scope forward as Track B.
 **Difficulty:** Low–Medium. No new runtime engines; this is the "make it shippable" phase. The hardest item is Phase 89 MVP, and that scope is bounded to a read-only live grid.
 
@@ -8917,17 +8918,17 @@ This phase is the bounded fix-list. Nothing here is a new feature for its own sa
 
 ### Acceptance criteria
 
-- [ ] `README.md:3` says "source-available" (or equivalent), not "open-source"; license language matches LICENSE
-- [ ] README headline frames Sovrant as a command center for agents and agent activity
-- [ ] Command Center page (`/command`) renders on Web and Desktop and shows live activity from a fresh chat turn within ~2s
-- [ ] `/agents` allows running a template; the run appears in Command Center within ~2s
-- [ ] Clicking an Activity row drills into per-turn detail (tool calls, tokens, governance)
-- [ ] No "Coming Soon" pages reachable from Web nav
-- [ ] No hardcoded phase numbers visible in user-facing UI text
-- [ ] Provider profiles never write `api_key` plaintext to disk; existing plaintext keys migrate to keystore on first launch
-- [ ] Every documented CLI command succeeds on a clean install
-- [ ] Fresh-install Web wizard → completes → lands on Command Center; same on Desktop
-- [ ] Full solution test pass; no regressions in 1,587 tests
+- [x] `README.md:3` says "source-available" (or equivalent), not "open-source"; license language matches LICENSE
+- [x] README headline frames Sovrant as a command center for agents and agent activity
+- [x] Command Center page (`/command`) renders on Web and Desktop and shows live activity from a fresh chat turn within ~2s
+- [x] `/agents` allows running a template; the run appears in Command Center within ~2s
+- [x] Clicking an Activity row drills into per-turn detail (tool calls, tokens, governance)
+- [x] No "Coming Soon" pages reachable from Web nav
+- [x] No hardcoded phase numbers visible in user-facing UI text
+- [x] Provider profiles never write `api_key` plaintext to disk; existing plaintext keys migrate to keystore on first launch
+- [x] Every documented CLI command succeeds on a clean install
+- [x] Fresh-install Web wizard → completes → lands on Command Center; same on Desktop
+- [x] Full solution test pass; no regressions (1,911 passed, 0 failed, 3 skipped)
 
 ### Deferred to Phase 89-Phase-2 (post-release)
 

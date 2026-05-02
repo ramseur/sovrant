@@ -4,7 +4,7 @@
 
 Sovrant is a clean-room C# reimplementation inspired by the architecture and feature set of [OpenClaude](https://github.com/Gitlawb/openclaude) (the community fork of Anthropic's Claude Code). **No Anthropic source code was copied, translated, or incorporated.** Every line of Sovrant is original C# / .NET 10 code written from scratch — the project uses OpenClaude only as a functional reference for what an agentic coding tool should be able to do, not as a source of code.
 
-Sovrant is a single-operator cockpit for running, steering, and observing autonomous AI agents — and a team substrate (96 endpoints, SignalR hub, role-based members, run profiles) for when you grow. It is not limited to coding — Sovrant powers chat interfaces, research workflows, business process automation, content creation, project management, and any task that benefits from tool-augmented, session-persistent AI.
+Sovrant is a single-operator cockpit for running, steering, and observing autonomous AI agents — and a team substrate (97 endpoints, SignalR hub, role-based members, run profiles) for when you grow. It is not limited to coding — Sovrant powers chat interfaces, research workflows, business process automation, content creation, project management, and any task that benefits from tool-augmented, session-persistent AI.
 
 The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **desktop application** (Windows/macOS/Linux), a **web application** (Blazor Server), an **MCP server** for IDE embedding, or via **webhooks** from Slack, Teams, Discord, and custom systems. Agents read and write files, execute shell commands, search the web, call tools autonomously, delegate to sub-agents, and maintain full conversation history across sessions — all with configurable permission controls.
 
@@ -12,13 +12,14 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 
 **Runtime:** .NET 10 / C# 14
 **License:** Business Source License 1.1 — source-available, converts to Apache 2.0 on 2030-04-29. See [LICENSE](LICENSE).
-**Status:** 56 tools. 25 agent templates. 32 built-in skills. 96 server endpoints + SignalR hub. Team orchestration (with run profiles — Phase 78 Path 2). Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 1,492 tests passing across 10 projects.
+**Status:** 56 tools. 25 agent templates. 32 built-in skills. 97 server endpoints + SignalR hub. Command Center cockpit (Web + Desktop). Team orchestration with per-team run profiles. Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 1,911 tests passing across 10 projects.
 
 ---
 
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [Command Center](#command-center)
 - [Key Features](#key-features)
 - [Architecture](#architecture)
 - [Tools](#tools)
@@ -189,6 +190,31 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
 
 ---
 
+## Command Center
+
+The Command Center (`/command`) is the homepage for Web and Desktop — a single live grid that answers *"what is Sovrant doing for me right now?"* It aggregates every active mission, team run, agent run, and conversation session into one read-only cockpit, with click-through to the existing detail pages (Activity, Orchestration, Mission detail).
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ Command Center                                            ⟳ live · 2s │
+├──────────────────────────────────────────────────────────────────────┤
+│ KIND       TITLE                       STATUS    STARTED   COST       │
+│ 🎯 mission Refactor the auth module    Running   12m ago   $0.42      │
+│ 👥 team    Code review sweep           Running   3m ago    $0.08      │
+│ 🤖 agent   security-auditor:OWASP scan Running   <1m ago   $0.01      │
+│ 💬 session user-123                    Idle      2h ago    $1.17      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+- **Live** — polled every 2 seconds; new activity appears within ~2s of a tool call, message, or run start.
+- **Read-only by design (v1).** Click a row to drill into the detail page that already exists for it. Pause/resume/cancel and in-cockpit run-spawning are explicitly deferred to a later phase to keep the cockpit honest about what it can do today.
+- **Backed by one endpoint:** `GET /v1/command-center/state` aggregates from `agent_runs`, the mission engine, `team_runs`, and the session pool.
+- **First-run lands here.** A clean install completes the setup wizard and lands the user on Command Center, not on a blank chat — the empty state explains how to start activity.
+
+See [`docs/server.md`](docs/server.md) for the endpoint contract and [`docs/frontend-integration.md`](docs/frontend-integration.md) for the SDK call.
+
+---
+
 ## Key Features
 
 ### Provider-Agnostic LLM Routing
@@ -220,9 +246,9 @@ sovrant router models
 sovrant router status
 ```
 
-### 50 Built-in Tools
+### 56 Built-in Tools
 
-Agents autonomously use tools for file operations, shell execution, web access, task management, plan/worktree mode, notebook editing, MCP resource access, LSP code intelligence, code verification, skill execution, agent delegation, team orchestration, swarm orchestration, and mission management. Up to 20 tool rounds per turn with automatic retries.
+Agents autonomously use tools for file operations, shell execution, web access, task management, plan/worktree mode, notebook editing, MCP resource access, LSP code intelligence, code verification, skill execution, agent delegation, team orchestration, swarm orchestration, mission management, artifact retrieval, and document generation. Up to 20 tool rounds per turn with automatic retries.
 
 ### 25 Specialized Agent Templates
 
@@ -282,12 +308,12 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
     ┌─────────────────▼──────────────────────────────────────────┐
     │  Sovrant.Runtime                                           │
     │                                                            │
-    │  Mission Engine (Phase 51)                                 │
+    │  Mission Engine                                            │
     │  ├── IMissionStore (SQLite)                                │
     │  ├── LlmMissionPlanner → RuntimePlan                       │
     │  └── ParallelMissionExecutor                               │
     │                                                            │
-    │  Engine Layer (Phase 51)                                   │
+    │  Engine Layer                                              │
     │  ├── IPlanner → LlmPlanner (plan/re-plan)                  │
     │  ├── IExecutor → LlmExecutor (crash-safe trace)            │
     │  └── IStepRunner → LlmStepRunner (tool dispatch)           │
@@ -299,7 +325,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
     │  └── MCP client (tool registration)                        │
     │                                                            │
     │  IRuntimeSessionPool  (one runtime per session_id)         │
-    │  IStorageProvider  (SQLite, 16 migrations, 36 tables)      │
+    │  IStorageProvider  (SQLite, 22 migrations, 41+ tables)     │
     └───────────┬──────────────────┬─────────────────────────────┘
                 │                  │
     ┌───────────▼────────┐  ┌──────▼──────────────────────────┐
@@ -321,7 +347,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
     └───────────┬────────┘  ┌──────────▼───────────────────────┐
                 │           │  Sovrant.Agents                   │
                 │           │                                   │
-                │           │  Unified Orchestration (Phase 52) │
+                │           │  Unified Orchestration            │
                 │           │  ├── SqliteTeamRegistry (DB)      │
                 │           │  ├── AgentOrchestrator             │
                 │           │  └── AgentRunStore (run ledger)   │
@@ -356,17 +382,17 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 | Project | Description |
 |---|---|
 | `Sovrant.Cli` | Interactive REPL and one-shot `prompt` CLI. Entry point for local use. |
-| `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus management APIs. 96 endpoints + SignalR hub. |
+| `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus management APIs. 97 endpoints + SignalR hub. |
 | `Sovrant.Desktop` | Avalonia desktop app — full GUI with streaming chat, tool use, settings, and management pages. |
 | `Sovrant.Web` | Blazor Server web app — browser-based UI with embedded or remote runtime. Port 5100. Dual-mode: `SOVRANT_RUNTIME_MODE=embedded` (default) or `remote` (connects to Sovrant.Server via SignalR). |
-| `Sovrant.Runtime` | Core agentic loop, mission engine, planner/executor, SQLite persistence (16 migrations V001–V016, 36 tables, 61 indexes), permission system, tool executor, MCP client, cost tracking. |
+| `Sovrant.Runtime` | Core agentic loop, mission engine, planner/executor, SQLite persistence (22 migrations V001–V022), permission system, tool executor, MCP client, cost tracking. |
 | `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, native messages API. SmartRouter with health/latency/cost scoring. Intent-aware model routing. |
-| `Sovrant.Tools` | All 50 tool implementations. 32 built-in skill `.md` files. |
+| `Sovrant.Tools` | All 56 tool implementations. 32 built-in skill `.md` files. |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/clear`, `/session`, `/memory`, etc.). |
 | `Sovrant.Agents` | Orchestration: team registry (SQLite-backed), agent factory, dual backends (isolated + shared), 25 agent templates, swarm orchestrator, unified run ledger, inter-agent coordination (PM agents + mailbox). |
 | `Sovrant.Mcp` | Shared MCP protocol handlers (tools/list, tools/call, resources, prompts, completions). Consumed by both the CLI's `mcp-server` stdio subcommand and `Sovrant.Server`'s HTTP/SSE MCP transport. |
 | `Sovrant.Lsp` | Language Server Protocol client: JSON-RPC over stdio, manages language server lifecycle, 5 LSP tools. |
-| `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient` covering the 96-endpoint server (incl. `updateTeamProfile` for Phase 78 Path 2), SSE streaming, React `useChat()` hook, 75+ TypeScript interfaces. |
+| `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient` covering the 97-endpoint server (incl. `getCommandCenterState` and `updateTeamProfile`), SSE streaming, React `useChat()` hook, 75+ TypeScript interfaces. |
 
 ### Key Design Decisions
 
@@ -641,16 +667,17 @@ The `SmartRouter` pings all configured providers on startup, scores them by late
 
 ## Server API
 
-The server exposes an OpenAI-compatible chat completions endpoint plus comprehensive management APIs. 96 endpoints + SignalR hub across 22 route groups:
+The server exposes an OpenAI-compatible chat completions endpoint plus comprehensive management APIs. 97 endpoints + SignalR hub across 23 route groups:
 
 | Group | Endpoints | Description |
 |---|---|---|
 | **Chat** | `POST /v1/chat/completions` | OpenAI-compatible chat with streaming (SSE) support |
+| **Command Center** | `GET /v1/command-center/state` | Live aggregated cockpit state (active missions, team runs, agent runs, sessions) |
 | **Sessions** | 7 endpoints | CRUD, config, export, message history |
 | **Workspaces** | 17 endpoints | Workspace CRUD, members, invites, config, memory, usage |
 | **Projects** | 15 endpoints | Project CRUD within workspaces, members, config, archive |
 | **Users** | 9 endpoints | User management, profiles, usage, audit |
-| **Teams** | 10 endpoints | Team CRUD, members, runs, run profile (Phase 78 Path 2 — `PUT /v1/teams/{id}/profile`) |
+| **Teams** | 10 endpoints | Team CRUD, members, runs, per-team run profile (`PUT /v1/teams/{id}/profile`) |
 | **Missions** | 6 endpoints | Mission CRUD, run, events, export |
 | **Swarm** | 4 endpoints | Start swarm, status, events, session history |
 | **Engine** | 4 endpoints | Runtime trace, in-flight runs, recovery |
@@ -676,8 +703,8 @@ The Avalonia-based desktop app provides a full GUI for interacting with the Sovr
 - Dark and light theme toggle
 - Sidebar navigation with workspace/project context selectors
 - Settings with provider profiles (add, activate, delete), live model switching
-- 15 management pages: Chat, Settings, Diagnostics, Artifacts, Tools, Skills, Agents, Memory, Projects, Workspaces, Orchestration, Integrations, Automations, Governance, Setup
-- First-run setup wizard for provider configuration
+- Management pages: Command Center, Chat, Settings, Diagnostics, Artifacts, Documents, Tools, Skills, Agents, Memory, Projects, Workspaces, Orchestration, Integrations, Activity, Governance, Trust Boundary, Setup
+- First-run setup wizard lands on Command Center on completion
 - Session history with search
 
 ```bash
@@ -693,7 +720,7 @@ The Blazor Server web app provides a browser-based UI with the full runtime embe
 - Streaming chat with real-time token rendering
 - Tool use blocks with inline Allow/Deny confirmation
 - Dark/light theme with CSS custom properties
-- All 15 pages matching the desktop feature set
+- 18 pages matching the desktop feature set, including the live Command Center cockpit as the homepage
 - Workspace and project management with context switching
 - Provider profile management with live model switching
 
@@ -710,7 +737,7 @@ dotnet run --project src/Sovrant.Web
 
 The TypeScript/JavaScript SDK (`sdk/js`) provides a typed client for building custom frontends against the Sovrant server.
 
-- **`SovrantClient`** — covers the 96-endpoint server: chat, sessions, users, workspaces, projects, teams (incl. `updateTeamProfile`), missions, swarm, engine, evals, artifacts, and registries
+- **`SovrantClient`** — covers the 97-endpoint server: chat, command center, sessions, users, workspaces, projects, teams (incl. `updateTeamProfile`), missions, swarm, engine, evals, artifacts, and registries
 - **SSE streaming** — real-time token-by-token responses with `streamChat()`
 - **React `useChat()` hook** — drop-in conversational UI component
 - **75+ TypeScript interfaces** — full type coverage for all request/response shapes
@@ -812,7 +839,7 @@ Any language server that speaks LSP over stdio can be plugged in.
 
 All durable state is stored in a single SQLite database at `~/.sovrant/data/sovrant.db`. The database is created automatically on first run — no installer or manual setup required.
 
-**16 migrations (V001–V016), 36 application tables, 61 indexes.** Covers sessions (with FTS5 full-text search and titles), agent memory, audit logs, credentials (AES-256-GCM encrypted), token usage, workspaces, projects, users, swarm events, runtime traces, missions, teams (with run profiles — Phase 78 Path 2), agent runs, and inter-agent coordination.
+**22 migrations (V001–V022).** Covers sessions (with FTS5 full-text search and titles), agent memory, audit logs, credentials (AES-256-GCM encrypted), token usage, workspaces, projects, users, swarm events, runtime traces, missions, teams (with per-team run profiles), agent runs, inter-agent coordination, hooks, workspace settings, MCP/LSP server registry, user preferences, provider profiles (encrypted API keys via the keystore), and unified workspace identity.
 
 ### Session Persistence
 
@@ -920,12 +947,11 @@ API-key variables marked **(stored)** below can alternatively be saved with `sov
 
 | Path | Purpose |
 |---|---|
-| `~/.sovrant/data/sovrant.db` | SQLite database (sessions, memory, audit, credentials, teams, missions, etc.) |
-| `~/.sovrant/settings.json` | User settings (model, provider, API key, permissions) |
-| `~/.sovrant/providers.json` | Saved provider profiles (desktop/web) |
+| `~/.sovrant/data/sovrant.db` | SQLite database (sessions, memory, audit, credentials, teams, missions, provider profiles, etc.) |
+| `~/.sovrant/settings.json` | User settings (model, default provider, permissions) |
 | `~/.sovrant/governance.json` | Governance config (blocked commands, protected files, secrets) |
 | `~/.sovrant/logs/` | Rolling application log files |
-| `~/.sovrant/credentials/.keystore` | AES-256-GCM master key (auto-generated). Decrypts the `credentials` table in the SQLite DB where `auth set` writes API keys. Override path via `SOVRANT_KEYSTORE_PATH` or `keystorePath` in `sovrant.config.json`. |
+| `~/.sovrant/credentials/.keystore` | AES-256-GCM master key (auto-generated). Decrypts the `credentials` table and provider profile API keys in SQLite. Override path via `SOVRANT_KEYSTORE_PATH` or `keystorePath` in `sovrant.config`. |
 | `~/.sovrant/memory.md` | Global memory (human-edited, injected into system prompt) |
 | `.sovrant/memory.md` | Project memory (human-edited, injected into system prompt) |
 | `.sovrant/settings.json` | Project-level settings overrides |
@@ -1005,21 +1031,10 @@ Replace `-r linux-x64` with `-r win-x64` for Windows deployments.
 ## Tests
 
 ```bash
-dotnet test Sovrant.slnx   # 1,492 tests across 10 projects
+dotnet test Sovrant.slnx   # 1,911 tests across 10 projects
 ```
 
-| Project | Tests |
-|---|---|
-| `Sovrant.Runtime.Tests` | 668 |
-| `Sovrant.Agents.Tests` | 197 |
-| `Sovrant.Tools.Tests` | 190 |
-| `Sovrant.Server.Tests` | 133 |
-| `Sovrant.Api.Tests` | 104 |
-| `Sovrant.Runtime.Documents.Tests` | 84 |
-| `Sovrant.Commands.Tests` | 56 |
-| `Sovrant.Mcp.Tests` | 34 |
-| `Sovrant.Lsp.Tests` | 25 |
-| `Sovrant.Integration.Tests` | 1 |
+Test projects: `Sovrant.Runtime.Tests`, `Sovrant.Agents.Tests`, `Sovrant.Tools.Tests`, `Sovrant.Server.Tests`, `Sovrant.Api.Tests`, `Sovrant.Runtime.Documents.Tests`, `Sovrant.Commands.Tests`, `Sovrant.Mcp.Tests`, `Sovrant.Lsp.Tests`, `Sovrant.Integration.Tests`.
 
 All tests use isolated in-memory SQLite databases. No external services or API keys required.
 
@@ -1029,9 +1044,9 @@ All tests use isolated in-memory SQLite databases. No external services or API k
 
 | Document | Contents |
 |---|---|
-| [`docs/server.md`](docs/server.md) | Full server API reference — all 96 endpoints + SignalR hub, auth, CORS, streaming format, cost tracking, remote mode |
+| [`docs/server.md`](docs/server.md) | Full server API reference — all 97 endpoints + SignalR hub, Command Center, auth, CORS, streaming format, cost tracking, remote mode |
 | [`docs/frontend-integration.md`](docs/frontend-integration.md) | SDK reference, proxy setup, browser SSE, multi-tenant LLM keys, React hook, remote mode (dual-mode web frontend) |
-| [`docs/persistence.md`](docs/persistence.md) | SQLite schema reference — 16 migrations (V001–V016), 36 tables, 61 indexes, domain stores, security model |
+| [`docs/persistence.md`](docs/persistence.md) | SQLite schema reference — 22 migrations (V001–V022), domain stores, security model, keystore integration |
 | [`docs/agent-systems.md`](docs/agent-systems.md) | Team vs Swarm deep dive — architecture, value analysis, unified orchestration, inter-agent coordination |
 | [`docs/mcp-server.md`](docs/mcp-server.md) | MCP server mode — IDE config, available tools/resources, OAuth, env vars |
 | [`docs/webhooks.md`](docs/webhooks.md) | Webhook endpoint, Slack bot setup, Teams/Discord integration guides |

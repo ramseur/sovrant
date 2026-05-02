@@ -1,6 +1,6 @@
 # Sovrant — Persistence Layer
 
-**Phases 32, 35, 36, 37, 37.5, 42.5, 51, 52, 55, 57, 78** | **Last updated:** 2026-04-29
+**Phases 32, 35, 36, 37, 37.5, 42.5, 51, 52, 55, 57, 78, 87, 88, 90** | **Last updated:** 2026-05-02
 
 This document describes how Sovrant stores durable operational data. All persistent state (sessions, memory, audit, credentials, token usage, workspaces, projects, users) is managed by a SQLite database. Flat-file stores (JSONL, JSON) remain available as a dual-write option during migration, but they are now considered legacy and will be consolidated as part of Phase 42.5.
 
@@ -72,6 +72,12 @@ Migrations are embedded SQL resources named `V{NNN}__{description}.sql` inside t
 | V014 | `V014__session_titles.sql` | Adds `sessions.title` column for nameable conversations (auto-generated from the first user message when not explicitly set via `/rename`). Adds `ix_sessions_title` partial index where `title IS NOT NULL`. |
 | V015 | `V015__teams_run_profile.sql` | Phase 78 Path 2 — per-team run profile. Adds six columns to `teams`: `run_mode` (`sequential`/`parallel`/`swarm`, default `sequential`), `max_concurrent` (default 1), `file_locks_enabled` (default 0), `quality_gate_enabled` (default 0), `quality_gate_threshold` (0–10, default 7), `decomposition_mode` (`off`/`role-aware`/`open`, default `off`). Pessimistic defaults preserve single-member-at-a-time semantics for pre-existing teams; new teams inherit from `.sovrant/swarm.json`. |
 | V016 | `V016__session_entry_provider.sql` | Adds `session_entries.provider` column so loaded chats can render "Provider · Model" on assistant bubbles (parity with live streaming). |
+| V017 | `V017__hooks.sql` | `hooks` table — one row per hook definition; replaces `.sovrant/hooks.json`. Web/Desktop UI is the canonical edit surface. |
+| V018 | `V018__workspace_settings.sql` | `workspace_settings` table — workspace-scoped budgets, session TTL/cap, and runtime-mutable knobs that previously lived in env vars only. Convention: `workspace_id = ''` means "global / server default". |
+| V019 | `V019__mcp_lsp_servers.sql` | `mcp_servers` and `lsp_servers` tables — MCP and LSP server entries previously read from `settings.json`. Metadata-only; secrets (OAuth `client_secret`, access tokens) remain in the encrypted credential store. |
+| V020 | `V020__user_preferences.sql` | Phase 88-A — `user_preferences` table. Replaces `~/.sovrant/settings.json` fields (`Model`, `BaseUrl`, `Provider`, `MaxTokens`, `PermissionMode`, `IntentRouting`, `WebSearch`, …). Thin TEXT key/value store with last-write-wins. |
+| V021 | `V021__provider_profiles.sql` | Phase 88-B — `provider_profiles` table. One row per saved provider configuration (OpenAI, OpenRouter, Anthropic, Ollama, …). API keys are **never** stored here — only a `credential_id` reference into the encrypted `ICredentialStore`. Phase 90-G plaintext-key migration completes this: any pre-existing plaintext keys move to the keystore on first launch. |
+| V022 | `V022__workspace_identity_unification.sql` | Phase 87 Track D — workspace identity unification. Pre-Phase-87 callers wrote artifacts and DB rows under the bare sentinel `personal`; this migration normalizes those rows to the canonical `ws-personal-{user_id}` form minted by `SqliteWorkspaceStore.CreatePersonalWorkspaceAsync`. |
 
 All V006/V007 statements are **additive** (`CREATE TABLE`, `CREATE INDEX IF NOT EXISTS`), so a database created at V005 or earlier upgrades cleanly on next boot — no manual intervention. V008 then backfills any orphan rows from those upgraded databases, and V009 backfills any empty-string `user_id` rows left over from the pre-Phase-38 seeding flow.
 
@@ -183,7 +189,7 @@ If the DB probe fails (disk full, permissions change, corrupt file), `db.status`
 
 ## Database Inventory (authoritative)
 
-The list below is generated from the migration scripts in `src/Sovrant.Runtime/Storage/Migrations/V0*.sql` and was cross-checked against a live `~/.sovrant/data/sovrant.db` on 2026-04-29 after all migrations V001–V016 had been applied. After all 16 migrations apply, a fresh database contains **36 application tables** + **1 metadata table** (`schema_version`) + **1 FTS5 virtual table** + **5 FTS5 internal shadow tables** = **43 objects in `sqlite_master`**, plus **61 indexes** (`ix_sessions_title` added in V014) and **3 triggers**. V008, V009, V015, and V016 ship no new tables — V008/V009 are data backfills, V015 adds six columns to `teams`, V016 adds one column to `session_entries`.
+The list below is generated from the migration scripts in `src/Sovrant.Runtime/Storage/Migrations/V0*.sql`. The current schema spans 22 migrations (V001–V022). V008, V009, V015, V016, and V022 ship no new application tables — V008/V009/V022 are data backfills/normalizations, V015 adds columns to `teams`, V016 adds a column to `session_entries`. The remaining migrations (V017–V021) add the hooks, workspace settings, MCP/LSP server registry, user preferences, and provider profile tables that completed the move of all on-disk JSON config to SQLite (per the "one disk config file" convention — only `sovrant.config` remains on disk).
 
 ### Tables by purpose
 
@@ -574,7 +580,7 @@ The following concerns were surfaced during the Phase 37 audit of the SQLite lay
 
 ## Testing
 
-The persistence layer is exercised by **1,584 tests** across 9 test projects (all green as of 2026-04-13). Storage-focused suites include:
+The persistence layer is exercised by the full solution test suite (**1,911 tests** across 10 projects, all green as of 2026-05-02). Storage-focused suites include:
 
 | Test Class | Validates |
 |---|---|

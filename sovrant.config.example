@@ -1,0 +1,31 @@
+{
+  "_comment_purpose": "Sovrant bootstrap configuration. Persists a small set of paths so you don't have to set them in every shell. ALL FIELDS ARE OPTIONAL — leave a field unset (or null) to keep the built-in default. The file is JSON internally; the bare 'sovrant.config' filename is a deliberate convention reminding you that this is the *only* JSON file Sovrant reads from disk (everything else lives in the SQLite DB or the keystore).",
+
+  "_comment_locations": [
+    "Project-scoped: ./.sovrant/sovrant.config (committed alongside the workspace)",
+    "User-scoped:    ~/.sovrant/sovrant.config (your personal default for all workspaces)",
+    "Custom path:    pass --config <path> on the command line"
+  ],
+
+  "_comment_precedence": "CLI flags > environment variables > --config file > project file > user file > built-in defaults",
+
+  "_comment_what_NOT_to_put_here": [
+    "API keys / secrets — store in the keystore via `sovrant auth set <name>` or set the matching LLM_API_KEY env var. Never put plaintext keys in this file.",
+    "Per-session model, provider, permission mode — managed via the Desktop/Web Settings UI, persisted in the DB.",
+    "Anything not listed below — those fields are read from the env or the DB, not from this file."
+  ],
+
+  "_comment_fields": {
+    "dbPath":        "Override SQLite database path. Default: ~/.sovrant/data/sovrant.db",
+    "logFile":       "Override rolling log file path. Default: ~/.sovrant/logs/sovrant-{Date}.log",
+    "artifactsRoot": "Override artifacts directory. Default: ~/.sovrant/artifacts",
+    "keystorePath":  "Override keystore master-key file. Default: ~/.sovrant/credentials/.keystore",
+    "serverToken":   "Static bearer token for Sovrant.Server (also settable via SOVRANT_TOKEN env)."
+  },
+
+  "dbPath": null,
+  "logFile": null,
+  "artifactsRoot": null,
+  "keystorePath": null,
+  "serverToken": null
+}

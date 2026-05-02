@@ -1005,6 +1005,43 @@ Returns the template including system prompt.
 
 ---
 
+## Command Center — `GET /v1/command-center/state` (Phase 89/90)
+
+Aggregates everything currently in flight for the Command Center cockpit (Web `/command`, Desktop `CommandCenterView`). Read-only — no write controls in the MVP scope.
+
+**Query parameters**
+
+| Parameter | Required | Description |
+|---|---|---|
+| `owner_user_id` | No | Filter to a single owner. Defaults to the authenticated user. Admin tokens may pass any user. |
+
+**Response**
+
+```json
+{
+  "active_missions": 1,
+  "active_team_runs": 0,
+  "active_agent_runs": 2,
+  "active_sessions": 3,
+  "rows": [
+    {
+      "kind": "agent-run",
+      "title": "research-agent",
+      "status": "running",
+      "preview": "gathering sources...",
+      "last_activity": "2026-05-02T18:24:11Z",
+      "cost_usd": 0.0124,
+      "detail_route": "/activity?run=run-abc"
+    }
+  ],
+  "generated_at": "2026-05-02T18:24:13Z"
+}
+```
+
+The cockpit polls this endpoint every 2 seconds (SignalR push deferred — see Phase 89-Phase-2). `rows` are sorted by `last_activity` descending. Each row points at an existing detail surface via `detail_route` so the Command Center never duplicates UIs.
+
+---
+
 ## Cost Tracking — `GET /v1/cost` (Phase 55)
 
 Returns cost tracking data from the OpenRouter pricing model. Query param: `range` (`daily`, `weekly`, `monthly`, `all`; default `daily`).

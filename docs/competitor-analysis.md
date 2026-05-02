@@ -1,6 +1,6 @@
 # Sovrant — Competitor Analysis
 
-**Last updated:** 2026-04-29 (50 tools, 25 agent templates, desktop app, web app, MCP server, mission engine, SDK covering the 96-endpoint server)
+**Last updated:** 2026-05-02 (56 tools, 25 agent templates, Command Center cockpit, desktop app, web app, MCP server, mission engine, SDK covering the 97-endpoint server, BSL 1.1 published)
 **Products analysed:** Claude Code · OpenClaude · opencode (SST) · Sovrant
 
 ---
@@ -12,7 +12,7 @@ The agentic coding tool space has four meaningful reference points as of 2026:
 - **Claude Code** — the proprietary, Anthropic-backed gold standard. Deep Claude model integration, enterprise-grade safety tooling, and the widest IDE/CI coverage. Hard vendor lock-in and a closed codebase.
 - **OpenClaude** — a community fork derived from Claude Code source code that was accidentally leaked in March 2026. Full tool parity with Claude Code, genuine multi-provider support. Legally precarious; subject to ongoing DMCA takedowns.
 - **opencode (SST)** — a clean-room, MIT-licensed open source coding agent with 95K+ GitHub stars and 600K+ downloads. TypeScript/Bun, SQLite persistence, 75+ LLM providers, multi-interface (TUI + desktop + VS Code + web + remote server). The strongest open source competitor.
-- **Sovrant** — a clean-room C# / .NET 10 reimplementation inspired by the architecture of OpenClaude. **No Anthropic source code was copied or incorporated** — every line is original C#. Five delivery modes: CLI REPL, OpenAI-compatible HTTP server (96 endpoints), Avalonia desktop app (Windows/macOS/Linux), Blazor Server web app, and MCP server for IDE integration. SmartRouter with intent-aware model routing. 50 tools. 24 agent templates. 32 built-in skills. Team orchestration, swarm auto-decomposition, mission engine, SQLite persistence with FTS5, eval framework, LSP integration, and a TypeScript SDK covering all 79 server endpoints.
+- **Sovrant** — a clean-room C# / .NET 10 reimplementation inspired by the architecture of OpenClaude. **No Anthropic source code was copied or incorporated** — every line is original C#. Source-available under BSL 1.1 with a four-year Apache 2.0 conversion (2030-04-29). Five delivery modes: CLI REPL, OpenAI-compatible HTTP server (97 endpoints), Avalonia desktop app (Windows/macOS/Linux), Blazor Server web app, and MCP server for IDE integration. SmartRouter with intent-aware model routing. 56 tools. 25 agent templates. 32 built-in skills. **Command Center cockpit** at `/command` aggregating active missions, team runs, agent runs, and sessions in one read-only live grid. Team orchestration, swarm auto-decomposition, mission engine, SQLite persistence with FTS5, eval framework, LSP integration, and a TypeScript SDK covering all 97 server endpoints.
 
 **Sovrant's unique position:** the only option that is natively .NET, provides five independent frontends (CLI, server, desktop, web, MCP), has built-in orchestration with two backends, and ships enterprise multi-tenant infrastructure (per-user credentials, session TTL, rate limiting, workspace/project scoping). Unlike OpenClaude, Sovrant carries no Anthropic IP — it is a clean-room reimplementation in a different language and runtime, with no code derivation. Unlike opencode, it ships a mission engine, swarm orchestrator, and enterprise multi-tenant primitives out of the box.
 
@@ -48,9 +48,9 @@ opencode supports 75+ LLM providers through a unified AI SDK abstraction layer a
 
 Sovrant is a clean-room C# / .NET 10 reimplementation of an agentic AI engine, inspired by the architecture and feature set of OpenClaude (the community fork of Claude Code). **No Anthropic source code was copied, translated, or incorporated** — the project uses OpenClaude only as a functional reference for capability parity. Every line of Sovrant is original C# 14 code written from scratch in a completely different language and runtime.
 
-Five delivery modes: a CLI REPL for interactive developer use, `Sovrant.Server` (ASP.NET Core HTTP server with 95 OpenAI-compatible endpoints), `Sovrant.Desktop` (Avalonia GUI for Windows/macOS/Linux), `Sovrant.Web` (Blazor Server browser UI), and `Sovrant.Mcp` (shared MCP protocol handlers — stdio via the CLI's `mcp-server` subcommand, HTTP/SSE via `Sovrant.Server`).
+Five delivery modes: a CLI REPL for interactive developer use, `Sovrant.Server` (ASP.NET Core HTTP server with 97 OpenAI-compatible endpoints), `Sovrant.Desktop` (Avalonia GUI for Windows/macOS/Linux), `Sovrant.Web` (Blazor Server browser UI), and `Sovrant.Mcp` (shared MCP protocol handlers — stdio via the CLI's `mcp-server` subcommand, HTTP/SSE via `Sovrant.Server`).
 
-The SmartRouter routes each LLM call across configured providers (OpenAI-compatible, Ollama, native messages API) based on latency, cost, and health scores, with intent-aware model tier routing. 50 tools cover file operations, shell execution (Bash, PowerShell, REPL), web access, task management, notebook editing, LSP code intelligence, sub-agents, plan/worktree mode, team orchestration, swarm orchestration, mission management, skill execution, MCP resources, and quality verification. 24 agent templates and 32 built-in skills ship with the engine. Session state persists in SQLite with FTS5 full-text search. Orchestration team orchestration (SQLite-backed teams with two agent backends: isolated process-per-agent and shared in-process), a swarm auto-decomposition engine with DAG execution, file locking, and quality gates, and a mission engine for long-lived goal-driven execution are fully operational. A TypeScript/JavaScript SDK covers all 79 server endpoints with SSE streaming and a React `useChat()` hook.
+The SmartRouter routes each LLM call across configured providers (OpenAI-compatible, Ollama, native messages API) based on latency, cost, and health scores, with intent-aware model tier routing. 56 tools cover file operations, shell execution (Bash, PowerShell, REPL), web access, task management, notebook editing, LSP code intelligence, sub-agents, plan/worktree mode, team orchestration, swarm orchestration, mission management, skill execution, document generation, MCP resources, and quality verification. 25 agent templates and 32 built-in skills ship with the engine. Session state persists in SQLite (22 versioned migrations) with FTS5 full-text search. The Command Center cockpit (`/command` on Web and Desktop, default homepage post-Phase-90) gives the operator a single live view of every active mission, team run, agent run, and session — no more bouncing between Agents, Orchestration, Activity, and Chat. SQLite-backed team orchestration (two backends: isolated process-per-agent and shared in-process), a swarm auto-decomposition engine with DAG execution, file locking, and quality gates, and a mission engine for long-lived goal-driven execution are fully operational. A TypeScript/JavaScript SDK covers all 97 server endpoints with SSE streaming and a React `useChat()` hook.
 
 ---
 
@@ -58,19 +58,19 @@ The SmartRouter routes each LLM call across configured providers (OpenAI-compati
 
 | Dimension | Claude Code | OpenClaude | opencode | Sovrant |
 |---|---|---|---|---|
-| **Licence** | Proprietary | MIT (contested) | MIT | Not yet published |
+| **Licence** | Proprietary | MIT (contested) | MIT | BSL 1.1 → Apache 2.0 (2030-04-29) |
 | **Language / runtime** | TypeScript / Node.js | TypeScript / Bun | TypeScript / Bun | C# / .NET 10 |
 | **LLM providers** | Anthropic only | 200+ via OpenAI compat | 75+ providers | OpenAI-compat + Ollama + native messages API |
 | **Provider routing** | None (single) | None (single active) | Manual per-session switch | SmartRouter (auto, scored) + intent-aware tier routing |
 | **CLI REPL** | ✅ | ✅ | ✅ (TUI) | ✅ |
-| **HTTP server** | ❌ | ❌ | ✅ (SSE backend) | ✅ OpenAI-compatible (96 endpoints) |
+| **HTTP server** | ❌ | ❌ | ✅ (SSE backend) | ✅ OpenAI-compatible (97 endpoints) |
 | **IDE extension** | ✅ VS Code + JetBrains | ❌ | ✅ VS Code (beta) | ✅ MCP server mode (any MCP IDE) |
 | **Desktop app** | ❌ | ❌ | ✅ Tauri (beta) | ✅ Avalonia (Win/Mac/Linux, 15 pages) |
 | **Web UI** | ✅ claude.ai/code | ❌ | ✅ (beta) | ✅ Blazor Server (15 pages) |
 | **Remote server mode** | ❌ | ❌ | ✅ | ✅ |
 | **Session persistence** | Managed cloud | None | SQLite | ✅ SQLite + FTS5 |
 | **Session resumption** | ✅ | ❌ | ✅ | ✅ |
-| **Tool count** | ~40 | ~40 (inherited) | 20+ | 50 |
+| **Tool count** | ~40 | ~40 (inherited) | 20+ | 56 |
 | **LSP integration** | ❌ | ❌ | ✅ 20+ languages | ✅ 18 languages |
 | **MCP client** | ✅ | ✅ (inherited) | ✅ stdio + HTTP | ✅ |
 | **MCP server mode** | ❌ | ❌ | ❌ | ✅ (stdio transport) |
@@ -192,8 +192,7 @@ Both exploit Claude Code's trust model around project files and hooks. Sovrant's
 
 | Gap | Competitor ahead | Status |
 |---|---|---|
-| Community scale | opencode (95K stars) | Requires public launch + OSS strategy |
-| Licensing published | opencode (MIT) | Action item |
+| Community scale | opencode (95K stars) | Public launch tagged `v0.9.0` (2026-05-02); awaiting smoke test then flip-the-switch |
 | IDE extension (native) | Claude Code (VS Code + JetBrains) | MCP server mode covers MCP-aware IDEs; native extension is future |
 | Voice mode | Claude Code | Future |
 

@@ -68,7 +68,7 @@ In `--ci` mode, Sovrant uses `CiPermissionPolicy` instead of the normal mode-bas
 
 The CI runner owns the checkout, so file and shell operations are safe. Unknown destructive operations are denied as a safety net.
 
-> **Phase 59 — Graduated Tool Tiers:** All 50 tools are classified into four tiers (Safe, Moderate, Dangerous, Escalation) via `GraduatedToolTiers`. The `CiPermissionPolicy` allows Safe, Moderate, and Dangerous tools (Bash/PowerShell are expected in CI). Escalation-tier tools (Agent, Team, Swarm, Mission) are denied by default in CI — they spawn sub-processes or long-running orchestrations not suitable for headless CI runs. The Trust Boundary (Phase 58) is active in CI mode: PII/corporate data sanitization applies to all outbound LLM calls, and the ethical harness blocks harmful content generation.
+> **Graduated Tool Tiers:** All 56 tools are classified into four tiers (Safe, Moderate, Dangerous, Escalation) via `GraduatedToolTiers`. The `CiPermissionPolicy` allows Safe, Moderate, and Dangerous tools (Bash/PowerShell are expected in CI). Escalation-tier tools (Agent, Team, Swarm, Mission) are denied by default in CI — they spawn sub-processes or long-running orchestrations not suitable for headless CI runs. The Trust Boundary is active in CI mode: PII/corporate data sanitization applies to all outbound LLM calls, and the ethical harness blocks harmful content generation.
 
 > **Tip:** For read-only CI runs (e.g. code review), combine `--ci` with `--permission-mode plan` to block all write operations.
 

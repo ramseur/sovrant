@@ -155,7 +155,9 @@
 | 121 | OLLAMA_BASE_URL | `CredentialConfig.cs` | D | Operator override |
 | 122 | LLM_WEB_SEARCH | `CredentialConfig.cs` (deprecated) | D | Legacy; migrate to `SOVRANT_WEB_SEARCH` |
 
-## Open Questions
+## Resolved Items (historical — all complete by Phase 90)
+
+The following items were tracked as open during Phase 87/88 and have all shipped:
 
 1. **MCP/LSP server entries** (rows 13, 14, 83, 84): ✅ DONE (V019) — `mcp_servers` and `lsp_servers` tables; `IMcpServerStore` + `ILspServerStore`. `SovrantConfig.McpServers` / `LspServers` removed entirely.
 2. **`RouterMode` / `RouterStrategy`** (rows 4, 5, 115, 116): ✅ DONE — extracted into a singleton `RouterOptions` (`Sovrant.Api.Config`) with mutable `Mode`/`Strategy` setters. `SmartRouter` reads from the singleton on every routing decision so the Settings UI can hot-swap values without rebuilding DI. Removed from `SovrantConfig`.
@@ -172,17 +174,19 @@
 - **C (encrypted credential store):** 9 — provider API keys, OAuth secrets, bearer tokens
 - **D (env-var only):** 26 — port, rate limit, runtime mode, USER_ID, NO_COLOR, ROUTER_MODE, deployment topology
 
-## Bucket-A Consolidation Plan ✅ DONE (renamed in Phase 88: `sovrant.config.json` → `sovrant.config`)
+## Bucket-A Consolidation Plan ✅ DONE
 
 Bucket-A items must be available *before* SQLite opens, so they live in a single
 physical JSON file rather than the DB. They're now consolidated into
 `BootstrapConfig` / `BootstrapConfigLoader` and a single user-facing JSON file
-`sovrant.config.json`. Previously scattered across `SovrantConfig.DbPath`,
+`sovrant.config` (bare basename — JSON contents, no `.json` extension; the
+extension was dropped in Phase 88 to make this file the canonical "the only
+on-disk config" marker). Previously scattered across `SovrantConfig.DbPath`,
 env vars (`SOVRANT_LOG_FILE`, `SOVRANT_ARTIFACTS_ROOT`, `SOVRANT_TOKEN`,
 `SOVRANT_DB_PATH`), an embedded `IConfiguration` key (`Server:Token`), and
 hardcoded paths (credential store keystore).
 
-### Target file: `sovrant.config.json`
+### Target file: `sovrant.config`
 
 One typed, layered config holding only the bootstrap-critical paths and the
 server bootstrap token. Loaded by a new `BootstrapConfigLoader` before the DI
@@ -190,8 +194,8 @@ container builds. Layers (highest precedence first):
 
 1. CLI flags (`--db-path`, `--config`)
 2. Environment variables (existing names retained for 12-factor parity)
-3. Project file: `./.sovrant/sovrant.config.json` (workspace override)
-4. User file: `~/.sovrant/sovrant.config.json` (user default)
+3. Project file: `./.sovrant/sovrant.config` (workspace override)
+4. User file: `~/.sovrant/sovrant.config` (user default)
 5. Built-in defaults
 
 ### Fields
@@ -221,7 +225,7 @@ between machines or onto a mounted secret volume.
 - `AesGcmCredentialStore` keystore path — accepts a path parameter; default
   behaviour preserved when `keystorePath` is unset.
 
-### Example file (ships at `docs/sovrant.config.example.json`)
+### Example file (ships at `sovrant.config.example` in the repo root; copy to `~/.sovrant/sovrant.config` or `./.sovrant/sovrant.config`)
 
 ```json
 {
