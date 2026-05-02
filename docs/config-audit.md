@@ -172,7 +172,7 @@
 - **C (encrypted credential store):** 9 — provider API keys, OAuth secrets, bearer tokens
 - **D (env-var only):** 26 — port, rate limit, runtime mode, USER_ID, NO_COLOR, ROUTER_MODE, deployment topology
 
-## Bucket-A Consolidation Plan ✅ DONE
+## Bucket-A Consolidation Plan ✅ DONE (renamed in Phase 88: `sovrant.config.json` → `sovrant.config`)
 
 Bucket-A items must be available *before* SQLite opens, so they live in a single
 physical JSON file rather than the DB. They're now consolidated into

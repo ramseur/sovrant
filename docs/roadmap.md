@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-05-02 (added Phase 87 artifacts-by-default + workspace identity unification — 49 phases shipped, 13 pending)
+**Last updated:** 2026-05-02 (added Phase 88 settings + provider profile consolidation, one-config name `sovrant.config` — 49 phases shipped, 14 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -8420,3 +8420,259 @@ group together and have no per-file syntax-highlighted preview.
 - **Auto-detected project types** (Node / .NET / Python / Rust) with
   type-specific actions ("Run", "Test", "Open in editor") — depends
   on the artifact viewer landing first; layer on top in a follow-up.
+
+---
+
+## Phase 88 — Settings & Provider Profile Consolidation: One Disk Config, Encrypted Keys, DB-Backed UI State
+
+> **Status:** Pending. Closes the remaining gap from the Phase 65
+> config audit. Today three JSON files still live in `~/.sovrant/`
+> alongside the SQLite DB, two of them holding API keys in plaintext
+> despite the encrypted credential store (Bucket C) being shipped.
+> This phase moves user-facing settings and provider profiles into the
+> DB, routes every secret through the credential store, deletes
+> `governance.json` outright, and leaves exactly one on-disk config
+> file: `sovrant.config` (Bucket A — bootstrap-critical paths
+> only).
+
+### Goal
+
+End state — a fresh `~/.sovrant/` directory after first run:
+
+```
+~/.sovrant/
+├── sovrant.config   # optional, bootstrap-only (dbPath, logFile, …)
+├── data/sovrant.db       # everything user-facing (settings, providers, governance, trust-boundary, …)
+├── credentials/.keystore # AES-GCM encrypted secrets (every API key, every token)
+├── artifacts/            # run-scoped deliverables
+└── logs/                 # daily-rolling logs
+```
+
+No `settings.json`, no `providers.json`, no `governance.json`. Every
+surface (CLI, Web, Desktop, Server, MCP) reads and writes through the
+same DB tables and the same credential store, so changing a model in
+Web is immediately visible in Desktop on the same install.
+
+### Why now
+
+Direct observation on the dev machine, 2026-05-02:
+
+- `~/.sovrant/settings.json` contains a real **plaintext OpenAI API
+  key** (`sk-proj-…`). It's written by `Setup.razor`, `Settings.razor`,
+  Web `Sidebar.razor`, Desktop `SidebarViewModel.cs`, and `Setup`
+  pages on every save.
+- `~/.sovrant/providers.json` contains **two more plaintext keys**
+  (OpenAI + OpenRouter), one per saved provider profile.
+- The encrypted `AesGcmCredentialStore` from Bucket C exists and is
+  wired for the server bootstrap token and other Bucket-C secrets,
+  but the user-facing settings UIs never call it.
+- `governance.json` is now read-only legacy (DB is authoritative since
+  Bucket-B Step 2), but `GovernanceConfig.Load` still reads it on
+  every boot as a fallback, and the Desktop `GovernanceView.axaml`
+  still says "Configuration saved to ~/.sovrant/governance.json" —
+  stale UI text plus a code path nobody needs.
+- Cross-surface drift: edit a setting in Web while Desktop is open and
+  the two diverge until restart, because both are the JSON file is
+  the source of truth and neither watches it.
+
+The audit doc claims Buckets A/B/C are ✅ DONE, but that was scoped to
+bootstrap paths, governance, trust-boundary, and Bucket-C secrets. The
+user's *active* settings and provider profiles were never in scope.
+Phase 88 finishes the job.
+
+### Scope
+
+**A. Move active settings into the DB**
+
+`SovrantConfig` fields currently in `~/.sovrant/settings.json`:
+
+| Field | Where it goes |
+|---|---|
+| `ApiKey` | `ICredentialStore` (encrypted), keyed by active provider profile id |
+| `BaseUrl` | DB — `user_preferences` table (or extend `workspace_settings` with user-scope rows) |
+| `Model` | DB |
+| `Provider` | DB (the active profile id; the row in the new `provider_profiles` table holds the name/url) |
+| `MaxTokens` | DB |
+| `PermissionMode` | DB |
+| `IntentRouting` | DB |
+| `WebSearch` | DB |
+
+A new SQLite table:
+
+```sql
+CREATE TABLE IF NOT EXISTS user_preferences (
+    user_id        TEXT NOT NULL,
+    key            TEXT NOT NULL,
+    value          TEXT NOT NULL,
+    updated_at     TEXT NOT NULL,
+    PRIMARY KEY (user_id, key)
+);
+```
+
+Per-user, per-key. `IUserPreferenceStore` is the single read/write
+abstraction; surfaces stop touching the filesystem.
+
+**B. Move provider profiles into the DB**
+
+Replace `providers.json` with:
+
+```sql
+CREATE TABLE IF NOT EXISTS provider_profiles (
+    profile_id     TEXT PRIMARY KEY,           -- e.g. "openai-gpt-5"
+    user_id        TEXT NOT NULL,
+    name           TEXT NOT NULL,              -- user-visible label
+    provider_kind  TEXT NOT NULL,              -- "OpenAI", "OpenRouter", "Anthropic", "Ollama", …
+    base_url       TEXT NOT NULL,
+    default_model  TEXT,
+    max_tokens     INTEGER,
+    credential_id  TEXT NOT NULL,              -- foreign reference into ICredentialStore
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
+);
+```
+
+The `credential_id` is the only link to the API key; the key itself
+never appears in the DB. `IProviderProfileStore` exposes
+`ListAsync` / `GetAsync` / `CreateAsync` / `UpdateAsync` /
+`DeleteAsync` / `ActivateAsync`.
+
+**C. API keys exclusively through `ICredentialStore`**
+
+Every UI flow (Setup wizard, Settings page, Sidebar provider switch,
+CLI `sovrant auth set`) writes the key via `AesGcmCredentialStore` and
+stores only the `credential_id` reference in the DB.
+
+`MutableAuthProvider.UpdateApiKey(...)` continues to be the runtime
+hot-swap path; what changes is its source — the credential store, not
+a JSON field. On boot, the active profile's credential is fetched
+once and held in memory; rotation goes through the store.
+
+**D. Delete `governance.json` outright**
+
+- Remove `GovernanceConfig.Load`'s file-reading paths (project +
+  global). DB is the only source.
+- Delete the legacy comment in `ServiceCollectionExtensions.cs:99`
+  ("legacy bootstrap fallback").
+- Update Desktop `GovernanceView.axaml:182` text from "saved to
+  `~/.sovrant/governance.json`" to "saved to workspace settings".
+- Update Web `Governance.razor:95` text similarly (drop the
+  bootstrap-fallback note — it's no longer one).
+- One-time migration: if `~/.sovrant/governance.json` exists on boot
+  and the DB has no governance row yet, ingest it and rename to
+  `governance.json.bak` so users can still find their old values.
+
+**E. One on-disk config: `sovrant.config`**
+
+Bucket-A's design stands. The file holds *only* the bootstrap-critical
+paths that must be available before SQLite opens:
+
+```json
+{
+  "dbPath":         "~/.sovrant/data/sovrant.db",
+  "logFile":        "~/.sovrant/logs/sovrant-{Date}.log",
+  "artifactsRoot":  "~/.sovrant/artifacts",
+  "keystorePath":   "~/.sovrant/credentials/.keystore",
+  "serverToken":    ""
+}
+```
+
+All five fields stay optional (defaults work without the file). No
+new fields land here in Phase 88; user-facing settings explicitly do
+*not* belong in this file.
+
+The file is named `sovrant.config` (no `.json` extension) — JSON
+internally, but the bare name signals "this is *the* config file" and
+avoids the implication that anything else could share the namespace.
+During a transition window, `BootstrapConfigLoader` searches for
+`sovrant.config` first and falls back to `sovrant.config.json` if
+present, so existing installs keep working while users rename.
+
+**F. Migration on first boot**
+
+A one-time `LegacyConfigMigrator` runs during storage init:
+
+1. If `~/.sovrant/settings.json` exists → ingest fields into
+   `user_preferences`, move the `ApiKey` into the credential store as
+   the active profile's credential, then rename to `settings.json.bak`.
+2. If `~/.sovrant/providers.json` exists → ingest each entry into
+   `provider_profiles` + credential store, rename to
+   `providers.json.bak`.
+3. If `~/.sovrant/governance.json` exists → ingest into the DB if
+   no row yet, rename to `governance.json.bak`.
+4. Idempotent — the migrator detects the `.bak` suffix and skips on
+   subsequent runs. Logs every field it moved.
+
+The `.bak` suffix is intentional: users keep an offline record of what
+their old config looked like, and a future support flow can ask
+"please attach `~/.sovrant/*.bak` if migration went sideways."
+
+### Non-goals
+
+- **Encrypting the entire DB** — orthogonal; if it lands, it's a
+  separate phase. Today the DB holds non-secret config; secrets live
+  in the keystore.
+- **Multi-user / multi-tenant config namespaces** — Phase 85 owns
+  identity. This phase uses whatever `IPrincipalAccessor` returns
+  (today, `SOVRANT_USER_ID || os-username`) without inventing its own
+  user model.
+- **Hot-reload of config across surfaces in real time** — out of
+  scope here; Phase 86's session bus + a small `IConfigChangeBus`
+  pub/sub can layer cross-surface notifications later.
+- **A settings export / import bundle** — useful but additive; not
+  blocking the consolidation goal.
+
+### Implementation sketch
+
+| Component | File | Notes |
+|---|---|---|
+| `user_preferences` migration | `src/Sovrant.Runtime/Storage/Migrations/V0XX__user_preferences.sql` | Per-user KV store |
+| `provider_profiles` migration | `src/Sovrant.Runtime/Storage/Migrations/V0XX__provider_profiles.sql` | + foreign credential_id |
+| `IUserPreferenceStore` | `src/Sovrant.Runtime/Preferences/` (new) | Replaces JSON read/write in every UI |
+| `IProviderProfileStore` | `src/Sovrant.Runtime/Providers/` (new) | Replaces `providers.json` |
+| `LegacyConfigMigrator` | `src/Sovrant.Runtime/Storage/LegacyConfigMigrator.cs` (new) | Runs once on storage init; renames source files to `.bak` |
+| Wire `AesGcmCredentialStore` into Settings UIs | `src/Sovrant.Web/Components/Pages/{Setup,Settings,Sidebar}.razor` + `src/Sovrant.Desktop/ViewModels/SidebarViewModel.cs` + `Sovrant.Cli` | Stop writing JSON; write through credential store + DB |
+| Delete file-read paths in `GovernanceConfig.Load` | `src/Sovrant.Runtime/Governance/GovernanceConfig.cs` | DB-only |
+| Update Governance UI copy | `src/Sovrant.Desktop/Views/GovernanceView.axaml`, `src/Sovrant.Web/Components/Pages/Governance.razor` | Stop referring to `~/.sovrant/governance.json` |
+| `BootstrapConfigLoader` filename search | `src/Sovrant.Runtime/Config/BootstrapConfigLoader.cs` | Look for `sovrant.config` first; fall back to legacy `sovrant.config.json` for one release |
+| Diagnostics page text | `src/Sovrant.Web/Components/Pages/Diagnostics.razor`, `src/Sovrant.Desktop/ViewModels/DiagnosticsViewModel.cs` | Show DB + keystore paths instead of `settings.json` path |
+
+### Acceptance Criteria
+
+- [ ] A fresh `~/.sovrant/` after first run contains *no* user-facing
+      JSON config files — only `sovrant.config` (optional),
+      `data/sovrant.db`, `credentials/.keystore`, `artifacts/`, `logs/`
+- [ ] Setting an API key through any surface (Setup wizard, Settings
+      page, CLI `sovrant auth set`) results in the key landing in the
+      keystore; `grep -r "sk-" ~/.sovrant` returns nothing outside
+      the encrypted keystore
+- [ ] Editing the model in Web Settings while Desktop is open shows
+      the new model in Desktop after a refresh — both surfaces are
+      reading from the same DB row
+- [ ] An existing install with `settings.json` + `providers.json` +
+      `governance.json` boots once, ingests every value into the DB +
+      keystore, and renames the originals to `*.json.bak`. No data
+      loss; the user can keep using the product without re-entering
+      anything
+- [ ] Running the new code a second time does not re-process the
+      `.bak` files (idempotent)
+- [ ] `GovernanceConfig.Load` no longer references the filesystem;
+      `grep -n governance.json src/` returns only doc/comment hits in
+      the migrator + roadmap
+- [ ] CLI `sovrant config show` prints the effective settings sourced
+      from DB + keystore (key value masked); no path hints to a JSON
+      file the user could edit
+- [ ] Removing `~/.sovrant/sovrant.config` (or never creating it)
+      still boots cleanly with defaults
+
+### Deferred
+
+- **Cross-surface live config sync** — when Web changes a setting,
+  push to Desktop in real time. Easy follow-up once the config
+  change-bus exists; not blocking the consolidation goal.
+- **Encrypted DB at rest** — a different security boundary; revisit
+  if a customer asks.
+- **Settings export / import** — handy for moving installs between
+  machines, but additive.
+- **Per-workspace setting overrides** — Bucket-B Step 7 covers the
+  shape; layer on top of `user_preferences` once the basic store
+  ships.
