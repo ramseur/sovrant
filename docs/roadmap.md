@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-05-02 (added Phase 86 background session continuation — 49 phases shipped, 12 pending)
+**Last updated:** 2026-05-02 (added Phase 87 artifacts-by-default + workspace identity unification — 49 phases shipped, 13 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -8195,3 +8195,228 @@ a backgrounded session finishes, errors, or hits a confirmation prompt.
   swarms work in Phase 79.
 - **Mobile push notifications** — depends on a mobile surface, which
   isn't on the roadmap yet.
+
+---
+
+## Phase 87 — Artifacts-by-Default for Code & Documents (with Workspace Identity Unification)
+
+> **Status:** Pending. Closes the loop between *what the LLM produces* and
+> *where it lands*. Today the assistant routinely dumps multi-thousand-token
+> code and document bodies into the chat instead of writing them to the
+> artifact store, and the artifact store itself silently splits the same
+> "personal" workspace into two parallel directories because two different
+> derivations of the default-workspace ID drift apart. Both bugs surfaced
+> through the Node-app and presentation dogfood sessions on 2026-05-02.
+
+### Goal
+
+Anything the user asks the assistant to *create* — code, documents,
+presentations, reports, scaffolded projects — should land as an artifact
+with no ceremony. The user shouldn't have to say "make it an artifact,"
+the LLM shouldn't have to be told twice not to paste a 14k-char markdown
+body into chat, and `~/.sovrant/artifacts/` should never contain two
+directories for the same logical workspace.
+
+### Why now
+
+Concrete dogfood evidence from the 2026-05-02 sessions:
+
+- **Presentation session** (`session-aa76e3ce…`): user said "can you make
+  me a presentation that teaches my team about ai?" → assistant emitted
+  a 14,054-char markdown body inline (5,463 output tokens) → user had
+  to follow up with "create the document as an artifact" before the
+  Artifact tool was invoked.
+- **Node-app session** (`session-c8bf7b8e…`): five consecutive assistant
+  turns producing 1,943 → 4,231 → 10,379 → 480 → 738 chars of "I'm going
+  to create…" prose (peak: 8,192 output tokens). Only after the user
+  explicitly said "do not output code to the screen, simply create the
+  code files in the artifact folder" did two files actually get written
+  via Artifact — then the assistant gave up. User had to repeat "thats
+  only two files" three times.
+- **Workspace split:** `~/.sovrant/artifacts/` contains both `personal/`
+  and `ws-personal-eramseur/`. The first comes from
+  `ArtifactScope.DefaultWorkspaceId = "personal"` (the literal fallback
+  in tool calls); the second from `SqliteWorkspaceStore.CreatePersonalWorkspaceAsync`
+  which mints `ws-personal-{userId}`. Same user, two homes.
+
+The cost is real: ~20–30k wasted output tokens per "scaffold me an app"
+turn, plus user time spent corraling the model into using the tool that
+was already available, plus a workspace identity scheme that quietly
+violates the cross-surface guarantee the rest of the platform is built on.
+
+### Scope
+
+**A. Content Creation Discipline (system prompt)**
+
+`SystemPromptBuilder` gains an explicit section:
+
+> Any deliverable longer than ~30 lines (code, document, presentation,
+> report, data file) MUST be produced via the `Artifact` tool — never
+> pasted into chat. For multi-file outputs (apps, projects), use one
+> `Artifact` call per file, or `write_many` for a batch. Reply with a
+> short summary referencing the artifact paths; do not echo the bodies.
+
+The rule is checked in two places: the prompt teaches it, and a
+post-turn lint flags any assistant message containing >30 lines of
+fenced code/markdown that didn't accompany an Artifact write
+(non-blocking warning in the dev console; metric for tracking).
+
+**B. Artifact tool description rewrite**
+
+Drop the agent-only framing. Today's description (`"Agents produce
+artifacts in isolation; the orchestrator and user consume results.
+Do NOT use this for agent-to-agent messaging."`) reads to the
+chat-assistant LLM like *"this is for swarm/team plumbing, not me."*
+New description:
+
+> The canonical place for any deliverable the user receives — code
+> files, documents, presentations, reports, data. Always prefer
+> `Artifact` over inline chat content for anything more than a few
+> lines. Actions: `write` (one file), `write_many` (manifest of files
+> for project scaffolds), `read`, `list`.
+
+**C. `Artifact write_many` action**
+
+A new action that takes a manifest:
+
+```json
+{
+  "action": "write_many",
+  "files": [
+    { "path": "package.json",       "content": "...", "content_type": "application/json" },
+    { "path": "src/index.ts",       "content": "...", "content_type": "text/typescript" },
+    { "path": "src/routes/auth.ts", "content": "...", "content_type": "text/typescript" }
+  ]
+}
+```
+
+One tool call, one approval prompt, one transactional write. Today a
+30-file scaffold is 30 round-trips and 30 permission prompts — which
+is why the assistant gives up after two files.
+
+**D. Workspace Identity Unification (prerequisite)**
+
+A single canonical derivation, used everywhere:
+
+```csharp
+public static class WorkspaceIdentity
+{
+    public static string DefaultPersonalFor(string userId) => $"ws-personal-{userId}";
+}
+```
+
+- `ArtifactScope.DefaultWorkspaceId = "personal"` literal is removed.
+  The remaining headless-CLI fallback derives from
+  `Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName`
+  via `WorkspaceIdentity.DefaultPersonalFor(...)`.
+- `ConversationRuntime` auto-injects `workspace_id`, `project_id`, and
+  `run_id` into every `Artifact` / `DocumentGenerate` /
+  `DocumentFromTemplate` / `DocumentPackage` tool call when the LLM
+  omits them — the active context is always the source of truth, and
+  the LLM never has to guess.
+- `Sovrant.Desktop.ViewModels.ProjectsViewModel`'s independent
+  derivation collapses into the shared helper.
+- One-time storage init migration: if both `~/.sovrant/artifacts/personal/`
+  and `~/.sovrant/artifacts/ws-personal-{userId}/` exist, move children
+  into the canonical dir and remove the orphan; sweep
+  `artifacts`, `sessions`, `projects`, and any other table for
+  `workspace_id = 'personal'` rows and rewrite to the canonical id.
+
+**E. Permission UX — session-scoped tool grants**
+
+`Artifact` is `ToolTier.Moderate` — already routed through the
+permission policy. The friction today is that a 30-file scaffold
+demands 30 individual approvals. Add a **per-turn** "always allow
+Artifact for this turn" affordance to the confirmation dialog
+(Desktop + Web + CLI), distinct from the existing "always allow for
+this session" toggle. Auto-clears when the turn ends.
+
+**F. Artifacts screen — code support (Desktop + Web)**
+
+Today the artifact viewer renders Markdown/PDF/DOCX (Phase 65). After
+this phase, a scaffolded Node app produces 30 artifact rows that don't
+group together and have no per-file syntax-highlighted preview.
+
+- File-tree view per `run_id`: artifacts in the same run cluster into
+  a folder tree, not a flat list.
+- Syntax-highlighted preview for code MIME types (TS/JS/TSX/PY/CS/Go/Rust/etc.)
+  via Monaco read-only embedded editor.
+- "Download as zip" action for the run scope — one-click export of the
+  whole scaffold.
+- "Open in editor" deep-link for users who set a default editor in
+  Settings (VS Code / JetBrains / Zed).
+- MIME inference filled in for code extensions (the existing
+  `GuessContentType` in `Sovrant.Web.Program` already covers PDF/DOCX
+  but not `.ts`, `.tsx`, `.py`, `.cs`, etc.).
+
+### Non-goals
+
+- **A linter that *blocks* over-long inline code/markdown** — start with
+  a soft warning + telemetry. Blocking risks worse UX if the heuristic
+  is wrong.
+- **Auto-running the scaffold** (`npm install` / `dotnet run`) — that's
+  a different question (tool-execution + permission), out of scope here.
+- **Real-time co-editing of artifacts** — read-only preview is enough
+  for this phase; editing comes via download or the user's editor.
+
+### Implementation sketch
+
+| Component | File | Notes |
+|---|---|---|
+| Content Creation Discipline block | `src/Sovrant.Runtime/Prompt/SystemPromptBuilder.cs` | New section, conditional on Artifact tool being available |
+| Artifact tool description | `src/Sovrant.Tools/Artifacts/ArtifactTool.cs` | Drop agent-only framing; mention `write_many` |
+| `write_many` action + schema | `src/Sovrant.Tools/Artifacts/ArtifactTool.cs` | Manifest-based; one approval, one transactional write |
+| `WorkspaceIdentity.DefaultPersonalFor` | `src/Sovrant.Runtime/Workspaces/WorkspaceIdentity.cs` (new) | Single canonical derivation |
+| Remove `ArtifactScope.DefaultWorkspaceId = "personal"` literal | `src/Sovrant.Runtime/Artifacts/ArtifactScope.cs` | Replace with userId-derived helper or required parameter |
+| Auto-inject scope on Artifact/Document tool calls | `src/Sovrant.Runtime/Conversation/ConversationRuntime.cs` (~line 812) | Already partially scoped; extend to the four document tools |
+| Collapse Desktop ProjectsViewModel derivation | `src/Sovrant.Desktop/ViewModels/ProjectsViewModel.cs:17` | Use `WorkspaceIdentity.DefaultPersonalFor` |
+| Migration: merge `personal/` → `ws-personal-{userId}/` | `src/Sovrant.Runtime/Storage/Migrations/V0XX__workspace_identity.sql` + filesystem sweep on init | Idempotent; logs every move |
+| Per-turn "always allow Artifact" toggle | `BlazorConfirmationHandler` (Web), `ConfirmationDialog` (Desktop), `Sovrant.Cli` confirm | Resets on turn boundary |
+| Artifact file-tree view | `src/Sovrant.Web/Components/Pages/Artifacts.razor` + `src/Sovrant.Desktop/Views/ArtifactsView.axaml` | Group by run_id, render as tree |
+| Monaco code preview | `src/Sovrant.Web/wwwroot/js/monaco-loader.js` (new) + Razor component | Read-only; existing PDF iframe pattern parallel |
+| Download-as-zip endpoint | `src/Sovrant.Web/Program.cs` (`MapArtifactsZipEndpoint`) + Desktop equivalent | Streams zip of run scope |
+| MIME inference for code | `src/Sovrant.Web/Program.cs:213` `GuessContentType` | Add `.ts`, `.tsx`, `.js`, `.jsx`, `.py`, `.cs`, `.go`, `.rs`, `.java`, `.rb`, `.php` |
+| Post-turn lint metric | `src/Sovrant.Runtime/Conversation/ConversationRuntime.cs` | Counts >30-line code/markdown blocks not accompanied by Artifact write; emits to logs |
+
+### Acceptance Criteria
+
+- [ ] User says "create me a Node app that does X" — assistant
+      produces a plan, then writes ≥ 5 files via `Artifact write_many`
+      with no inline code body in chat
+- [ ] User says "make me a presentation about Y" — assistant writes
+      the artifact and replies with a short summary + path; no
+      14k-char inline body
+- [ ] `~/.sovrant/artifacts/` contains exactly one personal-workspace
+      directory (`ws-personal-{userId}`); the literal `personal/` no
+      longer appears for new installs and is migrated for existing ones
+- [ ] Artifacts screen (Web + Desktop) groups artifacts of one
+      `run_id` into a single tree-view; clicking a `.ts` / `.cs` file
+      shows syntax-highlighted preview
+- [ ] "Download as zip" produces a working archive of a scaffolded
+      project (extract → `npm install` succeeds, or equivalent)
+- [ ] A user who approves "always allow Artifact for this turn" can
+      receive a 30-file scaffold without further prompts; the grant
+      auto-clears at turn end
+- [ ] CLI `sovrant artifacts list` and `sovrant artifacts open` find
+      the same artifacts the Web/Desktop UI sees, scoped to the same
+      `ws-personal-{userId}`
+- [ ] Migration sweep is idempotent (running storage init twice does
+      not move anything the second time) and audited (log line per
+      moved file / rewritten DB row)
+- [ ] Post-turn lint metric counts zero "code body without Artifact
+      write" warnings on a representative scaffold session
+
+### Deferred
+
+- **Hard-blocking the LLM from emitting over-long inline code** —
+  start with the system-prompt rule + soft telemetry; revisit if the
+  rule isn't reliably followed after a model bump.
+- **Artifact versioning / diffs** — useful for "regenerate this file"
+  flows, but a separate phase. Today artifacts are immutable per
+  `run_id`; that's enough.
+- **Cross-workspace artifact moves** — once Phase 85 ships proper
+  multi-user identity, a "copy artifact to shared workspace" flow
+  becomes worth designing. Not now.
+- **Auto-detected project types** (Node / .NET / Python / Rust) with
+  type-specific actions ("Run", "Test", "Open in editor") — depends
+  on the artifact viewer landing first; layer on top in a follow-up.
