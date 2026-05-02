@@ -28,11 +28,15 @@ public static class Program
         var runtimeMode = Environment.GetEnvironmentVariable("SOVRANT_RUNTIME_MODE") ?? "embedded";
         var isRemote = string.Equals(runtimeMode, "remote", StringComparison.OrdinalIgnoreCase);
 
+        var bootstrapConfig = BootstrapConfigLoader.Load(args);
+
         var builder = WebApplication.CreateBuilder(args);
         builder.WebHost.UseUrls("http://localhost:5100");
         builder.WebHost.UseStaticWebAssets();
 
-        builder.Services.AddLogging(b => b.AddSovrantLogging(consoleMinOverride: LogLevel.Warning));
+        builder.Services.AddLogging(b => b.AddSovrantLogging(
+            consoleMinOverride: LogLevel.Warning,
+            logFileOverride: bootstrapConfig.LogFile));
 
         if (isRemote)
         {
@@ -68,7 +72,7 @@ public static class Program
                 Environment.SetEnvironmentVariable("LLM_BASE_URL", config.BaseUrl.ToString());
 
             // Core runtime — same as Desktop's App.axaml.cs BuildApp()
-            builder.Services.AddSovrantRuntime(config);
+            builder.Services.AddSovrantRuntime(config, bootstrapConfig);
             builder.Services.AddSovrantTools();
             builder.Services.AddOrchestrationSystem();
             builder.Services.AddSovrantCommands();

@@ -1,0 +1,296 @@
+@page "/trust-boundary"
+@using Sovrant.Runtime.Config
+@using Sovrant.Runtime.TrustBoundary
+@using Sovrant.Runtime.Workspaces
+@inject IWorkspaceSettingsStore SettingsStore
+@inject SovrantConfig Config
+@inject LiveSettingsRegistry LiveSettings
+
+<div class="settings-page">
+    <h1>Trust Boundary</h1>
+    <p class="text-muted text-sm">
+        Sanitization, intent verification, and provider exemptions for outgoing
+        prompts. Stored in the workspace settings DB; <code>settings.json</code>
+        remains the bootstrap fallback.
+    </p>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="status-message">@_status</div>
+    }
+
+    <!-- Master toggle -->
+    <div class="gov-card">
+        <div class="toggle-card" style="border:none;padding:0;">
+            <div>
+                <div class="toggle-title">Trust Boundary Enabled</div>
+                <div class="toggle-desc">Master switch for the entire pipeline (sanitizer + intent verification).</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" @bind="_enabled" />
+                <span class="slider"></span>
+            </label>
+        </div>
+    </div>
+
+    <!-- Sanitizer -->
+    <h2 class="mt-16">Sanitizer</h2>
+    <div class="gov-card">
+        <div class="toggle-card" style="border:none;padding:0;">
+            <div>
+                <div class="toggle-title">Sanitizer Enabled</div>
+                <div class="toggle-desc">Detect and act on PII, corporate data, and custom patterns.</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" @bind="_sanitizerEnabled" />
+                <span class="slider"></span>
+            </label>
+        </div>
+
+        <div class="gov-field-row">
+            <div>
+                <span class="gov-field-label">Mode</span>
+                <div class="toggle-desc">redact replaces; warn logs only; block refuses.</div>
+            </div>
+            <select class="gov-field-input" @bind="_sanitizerMode">
+                <option value="redact">redact</option>
+                <option value="warn">warn</option>
+                <option value="block">block</option>
+            </select>
+        </div>
+
+        <div class="toggle-card" style="border:none;padding:0;">
+            <div>
+                <div class="toggle-title">Log Redactions</div>
+                <div class="toggle-desc">Record what was redacted, for the audit trail.</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" @bind="_logRedactions" />
+                <span class="slider"></span>
+            </label>
+        </div>
+    </div>
+
+    <!-- Corporate Domains -->
+    <h2 class="mt-16">Corporate Domains</h2>
+    <div class="input-group" style="margin-bottom:10px;">
+        <input type="text" @bind="_newDomain" placeholder="e.g. acme.internal" />
+        <button class="btn-primary" style="width:auto;padding:8px 16px;" @onclick="AddDomain">Add</button>
+    </div>
+    @if (_corporateDomains.Count == 0)
+    {
+        <p class="text-muted text-sm">No corporate domains configured</p>
+    }
+    @foreach (var d in _corporateDomains)
+    {
+        <div class="gov-item gov-item-warn">
+            <code class="gov-item-text gov-text-warn">@d</code>
+            <button class="btn-sm btn-danger" @onclick="() => _corporateDomains.Remove(d)">Remove</button>
+        </div>
+    }
+
+    <!-- Allow List -->
+    <h2 class="mt-16">Allow List</h2>
+    <p class="text-muted text-sm">Patterns or domains that should never be redacted.</p>
+    <div class="input-group" style="margin-bottom:10px;">
+        <input type="text" @bind="_newAllow" placeholder="e.g. example.com" />
+        <button class="btn-primary" style="width:auto;padding:8px 16px;" @onclick="AddAllow">Add</button>
+    </div>
+    @if (_allowList.Count == 0)
+    {
+        <p class="text-muted text-sm">No allow-list entries</p>
+    }
+    @foreach (var a in _allowList)
+    {
+        <div class="gov-item gov-item-default">
+            <code class="gov-item-text">@a</code>
+            <button class="btn-sm btn-danger" @onclick="() => _allowList.Remove(a)">Remove</button>
+        </div>
+    }
+
+    <!-- Exempt Providers -->
+    <h2 class="mt-16">Exempt Providers</h2>
+    <p class="text-muted text-sm">Providers that bypass sanitization (e.g. local-only models).</p>
+    <div class="input-group" style="margin-bottom:10px;">
+        <input type="text" @bind="_newExempt" placeholder="e.g. ollama" />
+        <button class="btn-primary" style="width:auto;padding:8px 16px;" @onclick="AddExempt">Add</button>
+    </div>
+    @if (_exemptProviders.Count == 0)
+    {
+        <p class="text-muted text-sm">No exempt providers</p>
+    }
+    @foreach (var p in _exemptProviders)
+    {
+        <div class="gov-item gov-item-default">
+            <code class="gov-item-text">@p</code>
+            <button class="btn-sm btn-danger" @onclick="() => _exemptProviders.Remove(p)">Remove</button>
+        </div>
+    }
+
+    <!-- Custom Patterns -->
+    <h2 class="mt-16">Custom Patterns</h2>
+    <p class="text-muted text-sm">Regex patterns to detect organisation-specific sensitive data.</p>
+    <div class="input-group" style="margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+        <input type="text" @bind="_newPatternName" placeholder="Name (e.g. internal-id)" style="flex:1;min-width:140px;" />
+        <input type="text" @bind="_newPatternRegex" placeholder="Regex (e.g. ACME-\d{6})" style="flex:2;min-width:200px;" />
+        <select class="gov-field-input" @bind="_newPatternAction" style="width:auto;">
+            <option value="redact">redact</option>
+            <option value="warn">warn</option>
+            <option value="block">block</option>
+        </select>
+        <button class="btn-primary" style="width:auto;padding:8px 16px;" @onclick="AddPattern">Add</button>
+    </div>
+    @if (_customPatterns.Count == 0)
+    {
+        <p class="text-muted text-sm">No custom patterns configured</p>
+    }
+    @foreach (var p in _customPatterns)
+    {
+        <div class="gov-item gov-item-warn">
+            <div class="gov-item-text">
+                <strong>@p.Name</strong> &nbsp;
+                <code>@p.RegexPattern</code> &nbsp;
+                <span class="text-muted">(@p.Action)</span>
+            </div>
+            <button class="btn-sm btn-danger" @onclick="() => _customPatterns.Remove(p)">Remove</button>
+        </div>
+    }
+
+    <!-- Intent Verification -->
+    <h2 class="mt-16">Intent Verification</h2>
+    <div class="gov-card">
+        <div class="toggle-card" style="border:none;padding:0;">
+            <div>
+                <div class="toggle-title">Intent Verification Enabled</div>
+                <div class="toggle-desc">Inspect each turn for intent before sending to the model.</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" @bind="_intentEnabled" />
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="toggle-card" style="border:none;padding:0;">
+            <div>
+                <div class="toggle-title">Clarify Ambiguous Intent</div>
+                <div class="toggle-desc">Ask the user to clarify before acting on ambiguous requests.</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" @bind="_clarifyAmbiguous" />
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="toggle-card" style="border:none;padding:0;">
+            <div>
+                <div class="toggle-title">Block Harmful Intent</div>
+                <div class="toggle-desc">Refuse turns whose intent is judged clearly harmful.</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" @bind="_blockHarmful" />
+                <span class="slider"></span>
+            </label>
+        </div>
+    </div>
+
+    <button class="btn-primary" style="max-width:200px;margin-top:20px;" @onclick="SaveConfigAsync">Save Configuration</button>
+    <p class="text-muted text-sm">Saved values take effect on the next conversation turn.</p>
+</div>
+
+@code {
+    private bool _enabled;
+
+    private bool _sanitizerEnabled = true;
+    private string _sanitizerMode = "redact";
+    private bool _logRedactions;
+    private List<string> _corporateDomains = [];
+    private List<string> _allowList = [];
+    private List<string> _exemptProviders = [];
+    private List<CustomPattern> _customPatterns = [];
+
+    private bool _intentEnabled = true;
+    private bool _clarifyAmbiguous = true;
+    private bool _blockHarmful = true;
+
+    private string _newDomain = string.Empty;
+    private string _newAllow = string.Empty;
+    private string _newExempt = string.Empty;
+    private string _newPatternName = string.Empty;
+    private string _newPatternRegex = string.Empty;
+    private string _newPatternAction = "redact";
+    private string _status = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        var resolved = TrustBoundaryConfig.Resolve(Config.TrustBoundary, SettingsStore);
+
+        _enabled = resolved.Enabled;
+        _sanitizerEnabled = resolved.Sanitizer.Enabled;
+        _sanitizerMode = resolved.Sanitizer.Mode;
+        _logRedactions = resolved.Sanitizer.LogRedactions;
+        _corporateDomains = [.. resolved.Sanitizer.CorporateDomains];
+        _allowList = [.. resolved.Sanitizer.AllowList];
+        _exemptProviders = [.. resolved.Sanitizer.ExemptProviders];
+        _customPatterns = [.. resolved.Sanitizer.CustomPatterns];
+
+        _intentEnabled = resolved.IntentVerification.Enabled;
+        _clarifyAmbiguous = resolved.IntentVerification.ClarifyAmbiguous;
+        _blockHarmful = resolved.IntentVerification.BlockHarmfulIntent;
+    }
+
+    private void AddDomain() => AddIfNew(_corporateDomains, ref _newDomain);
+    private void AddAllow() => AddIfNew(_allowList, ref _newAllow);
+    private void AddExempt() => AddIfNew(_exemptProviders, ref _newExempt);
+
+    private static void AddIfNew(List<string> target, ref string buffer)
+    {
+        var trimmed = buffer?.Trim();
+        if (!string.IsNullOrEmpty(trimmed) && !target.Contains(trimmed))
+            target.Add(trimmed);
+        buffer = string.Empty;
+    }
+
+    private void AddPattern()
+    {
+        var name = _newPatternName?.Trim();
+        var regex = _newPatternRegex?.Trim();
+        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(regex)) return;
+        _customPatterns.Add(new CustomPattern(name, regex, _newPatternAction ?? "redact"));
+        _newPatternName = string.Empty;
+        _newPatternRegex = string.Empty;
+        _newPatternAction = "redact";
+    }
+
+    private async Task SaveConfigAsync()
+    {
+        try
+        {
+            var config = new TrustBoundaryConfig
+            {
+                Enabled = _enabled,
+                Sanitizer = new SanitizerConfig
+                {
+                    Enabled = _sanitizerEnabled,
+                    Mode = _sanitizerMode,
+                    CorporateDomains = [.. _corporateDomains],
+                    AllowList = [.. _allowList],
+                    ExemptProviders = [.. _exemptProviders],
+                    CustomPatterns = [.. _customPatterns],
+                    LogRedactions = _logRedactions,
+                },
+                IntentVerification = new IntentVerificationConfig
+                {
+                    Enabled = _intentEnabled,
+                    ClarifyAmbiguous = _clarifyAmbiguous,
+                    BlockHarmfulIntent = _blockHarmful,
+                },
+            };
+
+            await config.SaveToStoreAsync(SettingsStore);
+            LiveSettings.ReloadAll();
+            _status = "Trust boundary config saved.";
+        }
+        catch (Exception ex)
+        {
+            _status = $"Save failed: {ex.Message}";
+        }
+    }
+}

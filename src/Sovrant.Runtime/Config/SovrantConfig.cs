@@ -23,13 +23,6 @@ public sealed class SovrantConfig
     public string? ApiKey { get; set; }
 
     /// <summary>
-    /// Optional override for the SQLite database path. Takes priority over
-    /// <c>SOVRANT_DB_PATH</c>. Defaults to <c>~/.sovrant/data/sovrant.db</c>.
-    /// Settable via <c>--db-path</c> CLI flag.
-    /// </summary>
-    public string? DbPath { get; init; }
-
-    /// <summary>
     /// Input token count that triggers context auto-compaction (history summarisation).
     /// Set to 0 to disable. Default: 80000. Override via <c>SOVRANT_COMPACT_THRESHOLD</c>.
     /// </summary>
@@ -67,7 +60,6 @@ public sealed class SovrantConfig
         PermissionMode = PermissionMode,
         BaseUrl = BaseUrl,
         ApiKey = ApiKey,
-        DbPath = DbPath,
         CompactThreshold = CompactThreshold,
         ModelLevels = ModelLevels,
         TrustBoundary = TrustBoundary,

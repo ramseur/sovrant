@@ -128,6 +128,7 @@
 
 @code {
     [Inject] private SovrantConfig Config { get; set; } = default!;
+    [Inject] private BootstrapConfig Bootstrap { get; set; } = default!;
     [Inject] private ISmartRouter Router { get; set; } = default!;
     [Inject] private IHttpClientFactory HttpFactory { get; set; } = default!;
 
@@ -185,7 +186,7 @@
         _osInfo = $"{RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})";
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        _dbPath = Config.DbPath ?? Path.Combine(home, ".sovrant", "data", "sovrant.db");
+        _dbPath = Bootstrap.DbPath ?? Path.Combine(home, ".sovrant", "data", "sovrant.db");
         _artifactsPath = Path.Combine(home, ".sovrant", "artifacts");
         _configPath = Path.Combine(home, ".sovrant", "settings.json");
         _logDir = Path.Combine(home, ".sovrant", "logs");

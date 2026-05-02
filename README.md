@@ -77,21 +77,43 @@ dotnet run --project src/Sovrant.Web
 
 ### CLI
 
-Set your provider credentials:
+Set your provider credentials. Sovrant stores API keys in an encrypted, on-disk credential store; the `auth` subcommand prompts without echo so the key never lands in shell history.
 
-**Linux / macOS / WSL:**
+**Recommended (interactive — no echo):**
+```bash
+dotnet run --project src/Sovrant.Cli -- auth set llm
+# Enter value for llm: ********
+
+# inspect what's configured (names only, never values)
+dotnet run --project src/Sovrant.Cli -- auth list
+
+# remove a stored key
+dotnet run --project src/Sovrant.Cli -- auth delete llm
+```
+
+**Scripted / CI (read from stdin):**
+```bash
+cat key.txt | dotnet run --project src/Sovrant.Cli -- auth set llm --stdin
+```
+
+**Env-var override (still supported for 12-factor / CI parity — wins over the stored value):**
+
+Linux / macOS / WSL:
 ```bash
 export LLM_API_KEY="sk-..."
 # Optional: use a different provider
 export LLM_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai/"
 ```
 
-**Windows (PowerShell):**
+Windows (PowerShell):
 ```powershell
 $env:LLM_API_KEY = "sk-..."
-# Optional: use a different provider
 $env:LLM_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 ```
+
+> **Precedence:** environment variable &gt; encrypted credential store &gt; built-in default. `auth list` shows which is currently winning for each name.
+
+Supported `auth set <name>` values: `llm`, `provider`, `brave`, `firecrawl`, `openrouter`.
 
 **Then run:**
 ```bash
@@ -856,15 +878,17 @@ Place a markdown file at `.sovrant/commands/{name}.md`. Invoking `/{name}` in th
 
 ### Environment Variables
 
+API-key variables marked **(stored)** below can alternatively be saved with `sovrant auth set <name>` into the encrypted credential store; the env var still overrides the stored value when set.
+
 | Variable | Required | Description |
 |---|---|---|
-| `LLM_API_KEY` | Yes | API key for the primary provider. Aliases: `OPENAI_API_KEY`, `PROVIDER_API_KEY` |
+| `LLM_API_KEY` | Yes (or `auth set llm`) | API key for the primary provider — **(stored)** as `llm`. Aliases: `OPENAI_API_KEY`, `PROVIDER_API_KEY` |
 | `LLM_BASE_URL` | No | Provider base URL (default: `https://api.openai.com/v1`). Alias: `OPENAI_BASE_URL` |
 | `SOVRANT_TOKEN` | Yes (server) | Bearer token for HTTP API authentication |
 | `SOVRANT_PORT` | No | Server port (default: `5200`) |
 | `SOVRANT_MODEL` | No | Default model name |
 | `PROVIDER_BASE_URL` | No | Enables native messages API provider (`/v1/messages` format) |
-| `PROVIDER_API_KEY` | No | API key for the native messages API provider |
+| `PROVIDER_API_KEY` | No | API key for the native messages API provider — **(stored)** as `provider` |
 | `OLLAMA_BASE_URL` | No | Enables local Ollama provider |
 | `ROUTER_MODE` | No | `Smart` (default) or `Fixed` |
 | `ROUTER_STRATEGY` | No | `Balanced` (default), `Latency`, or `Cost` |
@@ -874,8 +898,8 @@ Place a markdown file at `.sovrant/commands/{name}.md`. Invoking `/{name}` in th
 | `SOVRANT_INTENT_ROUTING` | No | `true` (default) or `false` — enables/disables intent-aware model routing |
 | `SOVRANT_WEB_SEARCH` | No | Backend selector: `auto` (default), `brave`, `firecrawl`, `native`, `off`. See [docs/web-search.md](docs/web-search.md). |
 | `LLM_WEB_SEARCH` | No | Deprecated alias — `true` is treated as `SOVRANT_WEB_SEARCH=native` and emits a warning |
-| `BRAVE_API_KEY` | No | Enables WebSearch via Brave Search API |
-| `FIRECRAWL_API_KEY` | No | Enables WebSearch via FireCrawl |
+| `BRAVE_API_KEY` | No | Enables WebSearch via Brave Search API — **(stored)** as `brave` |
+| `FIRECRAWL_API_KEY` | No | Enables WebSearch via FireCrawl — **(stored)** as `firecrawl` |
 | `SOVRANT_DB_PATH` | No | SQLite database path (default: `~/.sovrant/data/sovrant.db`) |
 | `SOVRANT_DB_REQUIRE` | No | `true` to fail fast on DB init errors (recommended for production) |
 | `SOVRANT_DB_BACKUP_ON_UPGRADE` | No | `true` to snapshot DB before applying migrations |
@@ -888,7 +912,7 @@ Place a markdown file at `.sovrant/commands/{name}.md`. Invoking `/{name}` in th
 | `SOVRANT_LOG_FORMAT` | No | `text` (default) or `json` (structured) |
 | `SOVRANT_MCP_TOKEN` | No | Required bearer token for MCP server mode |
 | `SOVRANT_MCP_TOOLS` | No | Comma-separated allow-list of tools for MCP server mode |
-| `OPENROUTER_API_KEY` | No | Enables live model metadata discovery from OpenRouter |
+| `OPENROUTER_API_KEY` | No | Enables live model metadata discovery from OpenRouter — **(stored)** as `openrouter` |
 
 > **Desktop and Web apps** store provider configuration in `~/.sovrant/settings.json` via the Settings UI — no environment variables needed for basic usage.
 
@@ -901,7 +925,7 @@ Place a markdown file at `.sovrant/commands/{name}.md`. Invoking `/{name}` in th
 | `~/.sovrant/providers.json` | Saved provider profiles (desktop/web) |
 | `~/.sovrant/governance.json` | Governance config (blocked commands, protected files, secrets) |
 | `~/.sovrant/logs/` | Rolling application log files |
-| `~/.sovrant/credentials/.keystore` | AES-256-GCM master key (auto-generated) |
+| `~/.sovrant/credentials/.keystore` | AES-256-GCM master key (auto-generated). Decrypts the `credentials` table in the SQLite DB where `auth set` writes API keys. Override path via `SOVRANT_KEYSTORE_PATH` or `keystorePath` in `sovrant.config.json`. |
 | `~/.sovrant/memory.md` | Global memory (human-edited, injected into system prompt) |
 | `.sovrant/memory.md` | Project memory (human-edited, injected into system prompt) |
 | `.sovrant/settings.json` | Project-level settings overrides |

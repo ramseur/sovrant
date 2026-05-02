@@ -41,6 +41,9 @@
         <DataTemplate DataType="vm:GovernanceViewModel">
             <views:GovernanceView />
         </DataTemplate>
+        <DataTemplate DataType="vm:TrustBoundaryViewModel">
+            <views:TrustBoundaryView />
+        </DataTemplate>
         <DataTemplate DataType="vm:ProjectsViewModel">
             <views:ProjectsView />
         </DataTemplate>

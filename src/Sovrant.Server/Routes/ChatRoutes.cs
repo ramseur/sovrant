@@ -7,6 +7,7 @@ using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Hooks;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Tools;
+using Sovrant.Runtime.Workspaces;
 using Sovrant.Server.Auth;
 using Sovrant.Server.OpenAi;
 using Sovrant.Server.Permissions;
@@ -41,6 +42,7 @@ internal static class ChatRoutes
         SovrantConfig sovrantConfig,
         IHookRunner hookRunner,
         ILoggerFactory loggerFactory,
+        IWorkspaceSettingsStore? workspaceSettings,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
@@ -159,7 +161,8 @@ internal static class ChatRoutes
             // Stateless one-shot with scoped credentials — build a transient runtime manually.
             var runtimeLogger = loggerFactory.CreateLogger<ConversationRuntime>();
             runtime = new ConversationRuntime(
-                activeRouter, toolExecutor, toolRegistry, sessionStore, sovrantConfig, runtimeLogger, hookRunner);
+                activeRouter, toolExecutor, toolRegistry, sessionStore, sovrantConfig, runtimeLogger, hookRunner,
+                settings: workspaceSettings);
             await runtime.InitializeSessionAsync(sessionId: null, ownerUserId: ownerUserId, ct).ConfigureAwait(false);
         }
         else

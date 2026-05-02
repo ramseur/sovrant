@@ -1,0 +1,332 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:tb="using:Sovrant.Runtime.TrustBoundary"
+             x:Class="Sovrant.Desktop.Views.TrustBoundaryView"
+             x:DataType="vm:TrustBoundaryViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <ScrollViewer Padding="32,24">
+        <StackPanel MaxWidth="640" Spacing="20">
+            <!-- Header -->
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+                    <Button Content="Refresh"
+                            Command="{Binding RefreshCommand}"
+                            Padding="12,6" CornerRadius="6"
+                            Background="Transparent"
+                            Foreground="{DynamicResource TextPrimary}" />
+                    <Button Content="Save"
+                            Command="{Binding SaveCommand}"
+                            Padding="14,6" CornerRadius="6"
+                            Background="{DynamicResource BrandPrimary}" Foreground="White"
+                            FontWeight="SemiBold" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="Trust Boundary" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock Text="Sanitization, intent verification, and provider exemptions for outgoing prompts."
+                               FontSize="12" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextMuted}" />
+                    <TextBlock Text="{Binding StatusMessage}"
+                               FontSize="11" Foreground="{DynamicResource TextMuted}"
+                               IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                </StackPanel>
+            </DockPanel>
+
+            <!-- Master toggle -->
+            <Border Padding="14,10" CornerRadius="8"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}"
+                    BorderThickness="1">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <CheckBox IsChecked="{Binding Enabled}" />
+                    <StackPanel>
+                        <TextBlock Text="Trust Boundary Enabled" FontWeight="SemiBold" FontSize="14"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock Text="Master switch for the entire pipeline (sanitizer + intent verification)."
+                                   FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Sanitizer -->
+            <TextBlock Text="Sanitizer" FontSize="16" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimary}" />
+            <Border Padding="14,10" CornerRadius="8"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}"
+                    BorderThickness="1">
+                <StackPanel Spacing="10">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <CheckBox IsChecked="{Binding SanitizerEnabled}" />
+                        <StackPanel>
+                            <TextBlock Text="Sanitizer Enabled" FontWeight="SemiBold" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="Detect and act on PII, corporate data, and custom patterns."
+                                       FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <DockPanel>
+                        <ComboBox DockPanel.Dock="Right" SelectedItem="{Binding SanitizerMode}"
+                                  Width="120">
+                            <ComboBoxItem Content="redact" />
+                            <ComboBoxItem Content="warn" />
+                            <ComboBoxItem Content="block" />
+                        </ComboBox>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Mode" FontWeight="SemiBold" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="redact replaces; warn logs only; block refuses."
+                                       FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                        </StackPanel>
+                    </DockPanel>
+
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <CheckBox IsChecked="{Binding LogRedactions}" />
+                        <StackPanel>
+                            <TextBlock Text="Log Redactions" FontWeight="SemiBold" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="Record what was redacted, for the audit trail."
+                                       FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Corporate Domains -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="Corporate Domains" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right"
+                            Content="Add"
+                            Command="{Binding AddDomainCommand}"
+                            Padding="10,6" CornerRadius="6" Margin="8,0,0,0"
+                            Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
+                    <TextBox Text="{Binding NewDomain}"
+                             Watermark="e.g. acme.internal"
+                             FontSize="12" Padding="8,6" CornerRadius="6" />
+                </DockPanel>
+                <ItemsControl ItemsSource="{Binding CorporateDomains}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <Border Margin="0,2" Padding="10,6" CornerRadius="6"
+                                    Background="{DynamicResource SurfaceCard}"
+                                    BorderBrush="{DynamicResource StatusWarn}"
+                                    BorderThickness="1">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right"
+                                            Content="Remove"
+                                            Command="{Binding $parent[ItemsControl].((vm:TrustBoundaryViewModel)DataContext).RemoveDomainCommand}"
+                                            CommandParameter="{Binding}"
+                                            Padding="6,2" CornerRadius="4" FontSize="10"
+                                            Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
+                                    <TextBlock Text="{Binding}" FontFamily="Consolas,Menlo,monospace"
+                                               FontSize="13" Foreground="{DynamicResource StatusWarn}"
+                                               VerticalAlignment="Center" />
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="No corporate domains configured"
+                           FontSize="12" Foreground="{DynamicResource TextMuted}"
+                           IsVisible="{Binding !CorporateDomains.Count}" />
+            </StackPanel>
+
+            <!-- Allow List -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="Allow List" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="Patterns or domains that should never be redacted."
+                           FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right"
+                            Content="Add"
+                            Command="{Binding AddAllowCommand}"
+                            Padding="10,6" CornerRadius="6" Margin="8,0,0,0"
+                            Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
+                    <TextBox Text="{Binding NewAllow}"
+                             Watermark="e.g. example.com"
+                             FontSize="12" Padding="8,6" CornerRadius="6" />
+                </DockPanel>
+                <ItemsControl ItemsSource="{Binding AllowList}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <Border Margin="0,2" Padding="10,6" CornerRadius="6"
+                                    Background="{DynamicResource SurfaceCard}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right"
+                                            Content="Remove"
+                                            Command="{Binding $parent[ItemsControl].((vm:TrustBoundaryViewModel)DataContext).RemoveAllowCommand}"
+                                            CommandParameter="{Binding}"
+                                            Padding="6,2" CornerRadius="4" FontSize="10"
+                                            Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
+                                    <TextBlock Text="{Binding}" FontFamily="Consolas,Menlo,monospace"
+                                               FontSize="13" Foreground="{DynamicResource TextPrimary}"
+                                               VerticalAlignment="Center" />
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="No allow-list entries"
+                           FontSize="12" Foreground="{DynamicResource TextMuted}"
+                           IsVisible="{Binding !AllowList.Count}" />
+            </StackPanel>
+
+            <!-- Exempt Providers -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="Exempt Providers" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="Providers that bypass sanitization (e.g. local-only models)."
+                           FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right"
+                            Content="Add"
+                            Command="{Binding AddExemptCommand}"
+                            Padding="10,6" CornerRadius="6" Margin="8,0,0,0"
+                            Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
+                    <TextBox Text="{Binding NewExempt}"
+                             Watermark="e.g. ollama"
+                             FontSize="12" Padding="8,6" CornerRadius="6" />
+                </DockPanel>
+                <ItemsControl ItemsSource="{Binding ExemptProviders}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <Border Margin="0,2" Padding="10,6" CornerRadius="6"
+                                    Background="{DynamicResource SurfaceCard}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right"
+                                            Content="Remove"
+                                            Command="{Binding $parent[ItemsControl].((vm:TrustBoundaryViewModel)DataContext).RemoveExemptCommand}"
+                                            CommandParameter="{Binding}"
+                                            Padding="6,2" CornerRadius="4" FontSize="10"
+                                            Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
+                                    <TextBlock Text="{Binding}" FontFamily="Consolas,Menlo,monospace"
+                                               FontSize="13" Foreground="{DynamicResource TextPrimary}"
+                                               VerticalAlignment="Center" />
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="No exempt providers"
+                           FontSize="12" Foreground="{DynamicResource TextMuted}"
+                           IsVisible="{Binding !ExemptProviders.Count}" />
+            </StackPanel>
+
+            <!-- Custom Patterns -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="Custom Patterns" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="Regex patterns to detect organisation-specific sensitive data."
+                           FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                <Grid ColumnDefinitions="*,2*,Auto,Auto" RowDefinitions="Auto" ColumnSpacing="6">
+                    <TextBox Grid.Column="0" Text="{Binding NewPatternName}"
+                             Watermark="Name (e.g. internal-id)"
+                             FontSize="12" Padding="8,6" CornerRadius="6" />
+                    <TextBox Grid.Column="1" Text="{Binding NewPatternRegex}"
+                             Watermark="Regex (e.g. ACME-\d{6})"
+                             FontFamily="Consolas,Menlo,monospace"
+                             FontSize="12" Padding="8,6" CornerRadius="6" />
+                    <ComboBox Grid.Column="2" SelectedItem="{Binding NewPatternAction}" Width="100">
+                        <ComboBoxItem Content="redact" />
+                        <ComboBoxItem Content="warn" />
+                        <ComboBoxItem Content="block" />
+                    </ComboBox>
+                    <Button Grid.Column="3"
+                            Content="Add"
+                            Command="{Binding AddPatternCommand}"
+                            Padding="10,6" CornerRadius="6"
+                            Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding CustomPatterns}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="tb:CustomPattern">
+                            <Border Margin="0,2" Padding="10,6" CornerRadius="6"
+                                    Background="{DynamicResource SurfaceCard}"
+                                    BorderBrush="{DynamicResource StatusWarn}"
+                                    BorderThickness="1">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right"
+                                            Content="Remove"
+                                            Command="{Binding $parent[ItemsControl].((vm:TrustBoundaryViewModel)DataContext).RemovePatternCommand}"
+                                            CommandParameter="{Binding}"
+                                            Padding="6,2" CornerRadius="4" FontSize="10"
+                                            Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13"
+                                                   Foreground="{DynamicResource StatusWarn}" />
+                                        <TextBlock Text="{Binding RegexPattern}" FontFamily="Consolas,Menlo,monospace"
+                                                   FontSize="12" Foreground="{DynamicResource TextPrimary}" />
+                                        <TextBlock Text="{Binding Action, StringFormat='({0})'}" FontSize="11"
+                                                   Foreground="{DynamicResource TextMuted}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="No custom patterns configured"
+                           FontSize="12" Foreground="{DynamicResource TextMuted}"
+                           IsVisible="{Binding !CustomPatterns.Count}" />
+            </StackPanel>
+
+            <!-- Intent Verification -->
+            <TextBlock Text="Intent Verification" FontSize="16" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimary}" />
+            <Border Padding="14,10" CornerRadius="8"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}"
+                    BorderThickness="1">
+                <StackPanel Spacing="10">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <CheckBox IsChecked="{Binding IntentEnabled}" />
+                        <StackPanel>
+                            <TextBlock Text="Intent Verification Enabled" FontWeight="SemiBold" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="Inspect each turn for intent before sending to the model."
+                                       FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <CheckBox IsChecked="{Binding ClarifyAmbiguous}" />
+                        <StackPanel>
+                            <TextBlock Text="Clarify Ambiguous Intent" FontWeight="SemiBold" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="Ask the user to clarify before acting on ambiguous requests."
+                                       FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <CheckBox IsChecked="{Binding BlockHarmful}" />
+                        <StackPanel>
+                            <TextBlock Text="Block Harmful Intent" FontWeight="SemiBold" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="Refuse turns whose intent is judged clearly harmful."
+                                       FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Save -->
+            <Button Content="Save Configuration"
+                    Command="{Binding SaveCommand}"
+                    HorizontalAlignment="Left"
+                    Padding="14,8" CornerRadius="6"
+                    Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="13"
+                    FontWeight="SemiBold" />
+            <TextBlock Text="Saved values take effect on the next conversation turn."
+                       FontSize="11" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextMuted}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

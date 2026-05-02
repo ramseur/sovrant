@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Config;
 using Sovrant.Agents.Models;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Agents.Shared;
 
@@ -19,19 +20,30 @@ public sealed partial class OrchestrationCoordinator : IDisposable
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _taskCts =
         new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _semaphore;
-    private readonly AgentSystemConfig _config;
+    private readonly ILiveSettings<AgentSystemConfig> _config;
     private readonly ILogger<OrchestrationCoordinator> _logger;
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Dispatching task '{TaskId}' to agent '{AgentName}'")]
     private static partial void LogDispatch(ILogger logger, string taskId, string agentName);
 
-    public OrchestrationCoordinator(AgentSystemConfig config, ILogger<OrchestrationCoordinator> logger)
+    /// <summary>
+    /// DI ctor — accepts the hot-reloadable <see cref="ILiveSettings{AgentSystemConfig}"/>.
+    /// Tests with a static <see cref="AgentSystemConfig"/> wrap it in
+    /// <see cref="LiveSettings.Static{T}"/>.
+    /// </summary>
+    public OrchestrationCoordinator(
+        ILiveSettings<AgentSystemConfig> config,
+        ILogger<OrchestrationCoordinator> logger)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(logger);
         _config = config;
         _logger = logger;
-        _semaphore = new SemaphoreSlim(config.MaxConcurrentAgents, config.MaxConcurrentAgents);
+        // Concurrency cap is captured at construction — a hot-reload of
+        // MaxConcurrentAgents takes effect on the next process start. Timeout
+        // (TaskTimeoutSeconds) is read live on each Dispatch.
+        var initial = config.Current;
+        _semaphore = new SemaphoreSlim(initial.MaxConcurrentAgents, initial.MaxConcurrentAgents);
     }
 
     /// <summary>Registers an agent so it can receive dispatched tasks.</summary>
@@ -67,7 +79,7 @@ public sealed partial class OrchestrationCoordinator : IDisposable
 
         // Create linked CTS: caller's ct + timeout
         using var timeoutCts = new CancellationTokenSource(
-            TimeSpan.FromSeconds(_config.TaskTimeoutSeconds));
+            TimeSpan.FromSeconds(_config.Current.TaskTimeoutSeconds));
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
 
         _taskCts[task.Id] = linkedCts;

@@ -1,5 +1,7 @@
+using Sovrant.Api.Auth;
 using Sovrant.Api.Config;
 using Sovrant.Runtime.Config;
+using Sovrant.Runtime.Mcp;
 
 namespace Sovrant.Commands.Commands;
 
@@ -13,15 +15,18 @@ namespace Sovrant.Commands.Commands;
 public sealed class WebSearchCommand : ISlashCommand
 {
     private readonly CredentialConfig? _credentials;
+    private readonly ICredentialStore? _credentialStore;
     private readonly WebSearchOptions? _options;
     private readonly SovrantConfig? _config;
 
     public WebSearchCommand(
         CredentialConfig? credentials = null,
+        ICredentialStore? credentialStore = null,
         WebSearchOptions? options = null,
         SovrantConfig? config = null)
     {
         _credentials = credentials;
+        _credentialStore = credentialStore;
         _options = options;
         _config = config;
     }
@@ -31,36 +36,45 @@ public sealed class WebSearchCommand : ISlashCommand
     public string Description => "Select the web-search backend (auto, brave, firecrawl, native, off).";
     public string Category => "Tools";
 
-    public Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
+    public async Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
     {
         var trimmed = (args ?? string.Empty).Trim();
 
         if (string.IsNullOrEmpty(trimmed))
-            return Task.FromResult(new SlashCommandResult(BuildStatus()));
+            return new SlashCommandResult(await BuildStatusAsync(ct).ConfigureAwait(false));
 
         if (TryParseBackend(trimmed, out var chosen))
         {
             if (_config is not null) _config.WebSearchOverride = chosen;
-            return Task.FromResult(new SlashCommandResult(
-                $"Web search backend set to '{BackendName(chosen)}' for this session."));
+            return new SlashCommandResult(
+                $"Web search backend set to '{BackendName(chosen)}' for this session.");
         }
 
-        return Task.FromResult(new SlashCommandResult(
-            $"Unknown backend '{trimmed}'. Valid: auto, brave, firecrawl, native, off.\n\n" + BuildStatus()));
+        return new SlashCommandResult(
+            $"Unknown backend '{trimmed}'. Valid: auto, brave, firecrawl, native, off.\n\n"
+            + await BuildStatusAsync(ct).ConfigureAwait(false));
     }
 
-    private string BuildStatus()
+    private async Task<string> BuildStatusAsync(CancellationToken ct)
     {
-        var braveSet = !string.IsNullOrWhiteSpace(_credentials?.BraveApiKey ?? Environment.GetEnvironmentVariable("BRAVE_API_KEY"));
-        var firecrawlSet = !string.IsNullOrWhiteSpace(_credentials?.FirecrawlApiKey ?? Environment.GetEnvironmentVariable("FIRECRAWL_API_KEY"));
+        var braveKey = await CredentialResolver.ResolveAsync(
+            _credentialStore, CredentialKeys.BraveApiKey, "BRAVE_API_KEY",
+            _credentials?.BraveApiKey, ct).ConfigureAwait(false);
+        var firecrawlKey = await CredentialResolver.ResolveAsync(
+            _credentialStore, CredentialKeys.FirecrawlApiKey, "FIRECRAWL_API_KEY",
+            _credentials?.FirecrawlApiKey, ct).ConfigureAwait(false);
+        var braveSet = !string.IsNullOrWhiteSpace(braveKey);
+        var firecrawlSet = !string.IsNullOrWhiteSpace(firecrawlKey);
         var resolved = _config?.WebSearchOverride ?? _options?.Backend ?? WebSearchBackend.Auto;
         var source = _config?.WebSearchOverride is not null ? "session override"
                    : _options is not null ? "global default"
                    : "fallback";
 
-        var keys = new List<string>();
-        keys.Add(braveSet ? "Brave (key set)" : "Brave (no key)");
-        keys.Add(firecrawlSet ? "FireCrawl (key set)" : "FireCrawl (no key)");
+        var keys = new List<string>
+        {
+            braveSet ? "Brave (key set)" : "Brave (no key)",
+            firecrawlSet ? "FireCrawl (key set)" : "FireCrawl (no key)",
+        };
 
         return
             $"Active backend: {BackendName(resolved)} ({source})\n" +

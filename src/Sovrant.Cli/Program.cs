@@ -161,6 +161,126 @@ routerStatusCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
 routerCmd.Add(routerStatusCmd);
 root.Add(routerCmd);
 
+// ── 'auth' subcommand group ──────────────────────────────────────────────────
+// Bucket-C of the config audit: keys live in the encrypted credential store
+// instead of plaintext env vars / config files. Env vars still override at
+// runtime for 12-factor / CI parity. Reads are deliberately prompt-based
+// (no echo) so secrets don't appear in shell history or `ps`.
+var authCmd = new Command("auth", "Manage encrypted credential store entries (LLM API keys, etc.).");
+
+var authStdinOpt = new Option<bool>("--stdin")
+    { Description = "Read the value from stdin (no terminal prompt). Useful for CI / piping." };
+var authNameArg = new Argument<string>("name") { Description = "Logical name (e.g. llm, provider, brave, firecrawl, openrouter)." };
+
+var authSetCmd = new Command("set", "Store a secret under <name> (no-echo prompt unless --stdin).");
+authSetCmd.Add(authNameArg);
+authSetCmd.Add(authStdinOpt);
+authSetCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    var name = pr.GetValue(authNameArg)!;
+    var key = AuthCommandRegistry.ResolveKey(name);
+    if (key is null)
+    {
+        AnsiConsole.MarkupLine($"[red]Unknown credential name '{Markup.Escape(name)}'.[/] Valid names: llm, provider, brave, firecrawl, openrouter.");
+        Environment.ExitCode = 2;
+        return;
+    }
+
+    string value;
+    if (pr.GetValue(authStdinOpt))
+    {
+        value = (await Console.In.ReadToEndAsync(ct).ConfigureAwait(false)).Trim();
+        if (string.IsNullOrEmpty(value))
+        {
+            AnsiConsole.MarkupLine("[red]No value received on stdin.[/]");
+            Environment.ExitCode = 2;
+            return;
+        }
+    }
+    else
+    {
+        value = AnsiConsole.Prompt(new TextPrompt<string>($"Enter value for [bold]{Markup.Escape(name)}[/]:")
+            .PromptStyle("yellow")
+            .Secret());
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            AnsiConsole.MarkupLine("[red]Empty value — nothing stored.[/]");
+            Environment.ExitCode = 2;
+            return;
+        }
+    }
+
+    await using var sp = BuildServices(pr);
+    // The credential store needs migrations applied before it can read/write.
+    var storage = sp.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>();
+    await storage.InitializeAsync(ct).ConfigureAwait(false);
+
+    var store = sp.GetRequiredService<Sovrant.Runtime.Mcp.ICredentialStore>();
+    await store.StoreAsync(key, value, ct).ConfigureAwait(false);
+    AnsiConsole.MarkupLine($"[green]Stored {Markup.Escape(name)} ({Markup.Escape(key)}).[/]");
+});
+authCmd.Add(authSetCmd);
+
+var authListCmd = new Command("list", "List which credentials are configured (names only — never values).");
+authListCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    await using var sp = BuildServices(pr);
+    var storage = sp.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>();
+    await storage.InitializeAsync(ct).ConfigureAwait(false);
+    var store = sp.GetRequiredService<Sovrant.Runtime.Mcp.ICredentialStore>();
+
+    var rows = new List<(string Name, string Key, bool Stored, string? EnvOverride)>();
+    foreach (var (name, key, envVars) in AuthCommandRegistry.Names)
+    {
+        var stored = await store.RetrieveAsync(key, ct).ConfigureAwait(false) is { Length: > 0 };
+        string? envHit = null;
+        foreach (var ev in envVars)
+        {
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(ev)))
+            {
+                envHit = ev;
+                break;
+            }
+        }
+        rows.Add((name, key, stored, envHit));
+    }
+
+    var table = new Table().AddColumns("Name", "Key", "Stored", "Env override");
+    foreach (var (name, key, stored, envHit) in rows)
+    {
+        table.AddRow(
+            Markup.Escape(name),
+            $"[grey]{Markup.Escape(key)}[/]",
+            stored ? "[green]\u2713[/]" : "[grey]—[/]",
+            envHit is null ? "[grey]—[/]" : $"[yellow]{Markup.Escape(envHit)}[/]");
+    }
+    AnsiConsole.Write(table);
+});
+authCmd.Add(authListCmd);
+
+var authDeleteCmd = new Command("delete", "Remove a credential from the store.");
+authDeleteCmd.Add(authNameArg);
+authDeleteCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    var name = pr.GetValue(authNameArg)!;
+    var key = AuthCommandRegistry.ResolveKey(name);
+    if (key is null)
+    {
+        AnsiConsole.MarkupLine($"[red]Unknown credential name '{Markup.Escape(name)}'.[/]");
+        Environment.ExitCode = 2;
+        return;
+    }
+
+    await using var sp = BuildServices(pr);
+    var storage = sp.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>();
+    await storage.InitializeAsync(ct).ConfigureAwait(false);
+    var store = sp.GetRequiredService<Sovrant.Runtime.Mcp.ICredentialStore>();
+    await store.DeleteAsync(key, ct).ConfigureAwait(false);
+    AnsiConsole.MarkupLine($"[green]Deleted {Markup.Escape(name)}.[/]");
+});
+authCmd.Add(authDeleteCmd);
+root.Add(authCmd);
+
 // ── 'prompt' subcommand ───────────────────────────────────────────────────────
 var messageArg = new Argument<string>("message") { Description = "The message to send to the assistant." };
 var promptCmd = new Command("prompt", "Send a single message and exit.");
@@ -223,6 +343,7 @@ mcpCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
     }
 
     var config = ConfigLoader.Load();
+    var bootstrap = BootstrapConfigLoader.Load(args);
     var model = pr.GetValue(modelOpt);
 
     // Force dontAsk permission mode — MCP server is non-interactive.
@@ -240,8 +361,10 @@ mcpCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
         .ConfigureServices(services =>
         {
             // Suppress console logging — stdout is the JSON-RPC transport.
-            services.AddLogging(b => b.AddSovrantLogging(consoleMinOverride: LogLevel.None));
-            services.AddSovrantRuntime(config);
+            services.AddLogging(b => b.AddSovrantLogging(
+                consoleMinOverride: LogLevel.None,
+                logFileOverride: bootstrap.LogFile));
+            services.AddSovrantRuntime(config, bootstrap);
             services.AddSovrantTools();
             services.AddSingleton<IPermissionPolicy>(new CiPermissionPolicy());
             services.AddSingleton<IUserInputProvider, CiUserInputProvider>();
@@ -798,6 +921,7 @@ return await parseResult.InvokeAsync(parseResult.InvocationConfiguration, Cancel
 ServiceProvider BuildServices(ParseResult pr)
 {
     var config = ConfigLoader.Load();
+    var bootstrap = BootstrapConfigLoader.Load(args);
     var ciMode = pr.GetValue(ciOpt);
 
     // Apply CLI overrides on top of file/env config.
@@ -805,7 +929,7 @@ ServiceProvider BuildServices(ParseResult pr)
     var permModeRaw = pr.GetValue(permModeOpt);
     var dbPath = pr.GetValue(dbPathOpt);
 
-    if (model is not null || permModeRaw is not null || dbPath is not null)
+    if (model is not null || permModeRaw is not null)
     {
         var pm = config.PermissionMode;
         if (permModeRaw is not null)
@@ -818,16 +942,20 @@ ServiceProvider BuildServices(ParseResult pr)
             PermissionMode = pm,
             BaseUrl = config.BaseUrl,
             ApiKey = config.ApiKey,
-            DbPath = dbPath ?? config.DbPath,
         };
     }
+
+    if (dbPath is not null)
+        bootstrap = bootstrap with { DbPath = dbPath };
 
     var services = new ServiceCollection();
 
     if (ciMode)
     {
         // CI mode: suppress all console logging — output is JSON only.
-        services.AddLogging(b => b.AddSovrantLogging(consoleMinOverride: LogLevel.None));
+        services.AddLogging(b => b.AddSovrantLogging(
+            consoleMinOverride: LogLevel.None,
+            logFileOverride: bootstrap.LogFile));
     }
     else
     {
@@ -836,10 +964,11 @@ ServiceProvider BuildServices(ParseResult pr)
         // Users can override with SOVRANT_LOG_LEVEL=Debug to see console debug output too.
         var explicitLevel = Environment.GetEnvironmentVariable("SOVRANT_LOG_LEVEL");
         services.AddLogging(b => b.AddSovrantLogging(
-            consoleMinOverride: string.IsNullOrEmpty(explicitLevel) ? LogLevel.Warning : null));
+            consoleMinOverride: string.IsNullOrEmpty(explicitLevel) ? LogLevel.Warning : null,
+            logFileOverride: bootstrap.LogFile));
     }
 
-    services.AddSovrantRuntime(config);
+    services.AddSovrantRuntime(config, bootstrap);
     services.AddSovrantTools();
     services.AddOrchestrationSystem();
     services.AddSovrantCommands();
@@ -1342,4 +1471,26 @@ static class CiJsonOptions
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
+}
+
+// Bucket-C: logical name → credential-store key + env-var aliases.
+// Used by the `sovrant auth` subcommand group.
+static class AuthCommandRegistry
+{
+    public static readonly (string Name, string Key, string[] EnvVars)[] Names =
+    [
+        ("llm",        Sovrant.Api.Auth.CredentialKeys.LlmApiKey,         new[] { "LLM_API_KEY", "OPENAI_API_KEY" }),
+        ("provider",   Sovrant.Api.Auth.CredentialKeys.ProviderApiKey,    new[] { "PROVIDER_API_KEY" }),
+        ("brave",      Sovrant.Api.Auth.CredentialKeys.BraveApiKey,       new[] { "BRAVE_API_KEY" }),
+        ("firecrawl",  Sovrant.Api.Auth.CredentialKeys.FirecrawlApiKey,   new[] { "FIRECRAWL_API_KEY" }),
+        ("openrouter", Sovrant.Api.Auth.CredentialKeys.OpenRouterApiKey,  new[] { "OPENROUTER_API_KEY" }),
+    ];
+
+    public static string? ResolveKey(string name)
+    {
+        foreach (var (n, k, _) in Names)
+            if (string.Equals(n, name, StringComparison.OrdinalIgnoreCase))
+                return k;
+        return null;
+    }
 }

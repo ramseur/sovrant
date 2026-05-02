@@ -61,7 +61,8 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
                 _services.GetRequiredService<SovrantConfig>(),
                 _services.GetRequiredService<ILogger<ConversationRuntime>>(),
                 _services.GetService<IHookRunner>(),
-                _services.GetService<MemoryInjector>());
+                _services.GetService<MemoryInjector>(),
+                settings: _services.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>());
         }
         else
         {

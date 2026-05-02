@@ -1,6 +1,8 @@
 @page "/governance"
 @using Sovrant.Runtime.Governance
-@using System.Text.Json
+@using Sovrant.Runtime.Workspaces
+@inject IWorkspaceSettingsStore SettingsStore
+@inject LiveSettingsRegistry LiveSettings
 
 <div class="settings-page">
     <h1>Governance</h1>
@@ -89,8 +91,8 @@
         </div>
     }
 
-    <button class="btn-primary" style="max-width:200px;margin-top:20px;" @onclick="SaveConfig">Save Configuration</button>
-    <p class="text-muted text-sm">Configuration saved to ~/.sovrant/governance.json</p>
+    <button class="btn-primary" style="max-width:200px;margin-top:20px;" @onclick="SaveConfigAsync">Save Configuration</button>
+    <p class="text-muted text-sm">Stored in the workspace settings DB; <code>~/.sovrant/governance.json</code> remains a bootstrap fallback.</p>
 </div>
 
 @code {
@@ -104,12 +106,9 @@
     private string _newSecretPattern = string.Empty;
     private string _status = string.Empty;
 
-    private static readonly string ConfigPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".sovrant", "governance.json");
-
     protected override void OnInitialized()
     {
-        var config = GovernanceConfig.Load();
+        var config = GovernanceConfig.Load(workingDirectory: null, settings: SettingsStore);
         _level = config.GovernanceLevelName;
         _auditLog = config.AuditLog;
         _blockedCommands = [.. config.BlockedCommands];
@@ -144,7 +143,7 @@
         }
     }
 
-    private void SaveConfig()
+    private async Task SaveConfigAsync()
     {
         try
         {
@@ -153,9 +152,8 @@
             foreach (var f in _protectedFiles) config.ProtectedFiles.Add(f);
             foreach (var p in _secretPatterns) config.SecretPatterns.Add(p);
 
-            Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
-            var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(ConfigPath, json);
+            await config.SaveToStoreAsync(SettingsStore);
+            LiveSettings.ReloadAll();
             _status = "Governance config saved.";
         }
         catch (Exception ex) { _status = $"Save failed: {ex.Message}"; }

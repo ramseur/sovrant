@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Runtime.Governance;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime.Tests.Governance;
 
@@ -12,7 +13,7 @@ public sealed class GovernanceMonitorTests
             GovernanceLevelName = level.ToString(),
             AuditLog = false, // Disable file I/O in tests
         };
-        return new GovernanceMonitor(config, NullAuditStore.Instance, NullLogger<GovernanceMonitor>.Instance);
+        return new GovernanceMonitor(LiveSettings.Static(config), NullAuditStore.Instance, NullLogger<GovernanceMonitor>.Instance);
     }
 
     // --- Pre-execution: Dangerous commands ---
@@ -57,6 +58,35 @@ public sealed class GovernanceMonitorTests
         var verdict = await monitor.EvaluateAsync(ctx);
 
         Assert.Equal(GovernanceAction.Allow, verdict.Action);
+    }
+
+    [Fact]
+    public async Task HotReload_RefreshesBlockedCommands()
+    {
+        GovernanceConfig MakeConfig(params string[] blocked)
+        {
+            var c = new GovernanceConfig
+            {
+                GovernanceLevelName = nameof(GovernanceLevel.Strict),
+                AuditLog = false,
+            };
+            foreach (var b in blocked) c.BlockedCommands.Add(b);
+            return c;
+        }
+
+        var current = MakeConfig();
+        var live = new LiveSettings<GovernanceConfig>(() => current);
+        using var monitor = new GovernanceMonitor(live, NullAuditStore.Instance, NullLogger<GovernanceMonitor>.Instance);
+
+        var ctx = new GovernanceContext(GovernancePhase.Pre, "Bash", ToolInput: "deploy --to-prod");
+        Assert.Equal(GovernanceAction.Allow, (await monitor.EvaluateAsync(ctx)).Action);
+
+        current = MakeConfig("deploy --to-prod");
+        live.Reload();
+
+        var verdict = await monitor.EvaluateAsync(ctx);
+        Assert.Equal(GovernanceAction.Block, verdict.Action);
+        Assert.Equal("DangerousCommand", verdict.Rule);
     }
 
     // --- Pre-execution: Config protection ---

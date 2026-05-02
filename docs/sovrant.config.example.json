@@ -1,0 +1,15 @@
+{
+  "_comment": "Sovrant bootstrap configuration. Copy this file to one of the locations below, then uncomment and edit the fields you want to override. Leave a field unset (or null) to keep the built-in default.",
+  "_locations": [
+    "Project-scoped: ./.sovrant/sovrant.config.json (committed alongside the workspace)",
+    "User-scoped:    ~/.sovrant/sovrant.config.json (your personal default for all workspaces)",
+    "Custom path:    pass --config <path> on the command line"
+  ],
+  "_precedence": "CLI flags > environment variables > project file > user file > built-in defaults",
+
+  "dbPath": "C:/Users/you/.sovrant/data/sovrant.db",
+  "logFile": "C:/Users/you/.sovrant/logs/sovrant-{Date}.log",
+  "artifactsRoot": "C:/Users/you/.sovrant/artifacts",
+  "keystorePath": "C:/Users/you/.sovrant/credentials/.keystore",
+  "serverToken": "replace-with-a-long-random-string"
+}

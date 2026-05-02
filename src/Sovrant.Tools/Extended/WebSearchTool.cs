@@ -3,10 +3,12 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Sovrant.Api.Auth;
 using Sovrant.Api.Config;
 using Sovrant.Api.Routing;
 using Sovrant.Api.Types;
 using Sovrant.Runtime.Config;
+using Sovrant.Runtime.Mcp;
 
 namespace Sovrant.Tools.Extended;
 
@@ -34,6 +36,7 @@ public sealed class WebSearchTool : ITool
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly CredentialConfig? _credentials;
+    private readonly ICredentialStore? _credentialStore;
     private readonly ISmartRouter? _router;
     private readonly SovrantConfig? _config;
     private readonly WebSearchOptions? _webSearchOptions;
@@ -41,12 +44,14 @@ public sealed class WebSearchTool : ITool
     public WebSearchTool(
         IHttpClientFactory httpClientFactory,
         CredentialConfig? credentials = null,
+        ICredentialStore? credentialStore = null,
         ISmartRouter? router = null,
         SovrantConfig? config = null,
         WebSearchOptions? webSearchOptions = null)
     {
         _httpClientFactory = httpClientFactory;
         _credentials = credentials;
+        _credentialStore = credentialStore;
         _router = router;
         _config = config;
         _webSearchOptions = webSearchOptions;
@@ -62,8 +67,12 @@ public sealed class WebSearchTool : ITool
 
         var count = Math.Clamp(input.GetIntProp("count", 5), 1, 20);
 
-        var braveKey = _credentials?.BraveApiKey ?? Environment.GetEnvironmentVariable("BRAVE_API_KEY");
-        var firecrawlKey = _credentials?.FirecrawlApiKey ?? Environment.GetEnvironmentVariable("FIRECRAWL_API_KEY");
+        var braveKey = await CredentialResolver.ResolveAsync(
+            _credentialStore, CredentialKeys.BraveApiKey, "BRAVE_API_KEY",
+            _credentials?.BraveApiKey, ct).ConfigureAwait(false);
+        var firecrawlKey = await CredentialResolver.ResolveAsync(
+            _credentialStore, CredentialKeys.FirecrawlApiKey, "FIRECRAWL_API_KEY",
+            _credentials?.FirecrawlApiKey, ct).ConfigureAwait(false);
         var hasBrave = !string.IsNullOrWhiteSpace(braveKey);
         var hasFirecrawl = !string.IsNullOrWhiteSpace(firecrawlKey);
 

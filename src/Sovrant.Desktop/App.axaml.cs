@@ -85,10 +85,13 @@ public partial class App : Application
     private void BuildApp(SovrantConfig config, IClassicDesktopStyleApplicationLifetime desktop)
     {
         var services = new ServiceCollection();
+        var bootstrap = BootstrapConfigLoader.Load();
 
-        services.AddLogging(b => b.AddSovrantLogging(consoleMinOverride: LogLevel.Warning));
+        services.AddLogging(b => b.AddSovrantLogging(
+            consoleMinOverride: LogLevel.Warning,
+            logFileOverride: bootstrap.LogFile));
 
-        services.AddSovrantRuntime(config);
+        services.AddSovrantRuntime(config, bootstrap);
         services.AddSovrantTools();
         services.AddOrchestrationSystem();
         services.AddSovrantCommands();
@@ -124,6 +127,7 @@ public partial class App : Application
         services.AddTransient<SkillsViewModel>();
         services.AddTransient<MemoryViewModel>();
         services.AddTransient<GovernanceViewModel>();
+        services.AddTransient<TrustBoundaryViewModel>();
         services.AddTransient<ProjectsViewModel>();
         services.AddTransient<WorkspacesViewModel>();
         services.AddTransient<AgentsViewModel>();
@@ -136,6 +140,12 @@ public partial class App : Application
         Services = _serviceProvider;
 
         _serviceProvider.GetRequiredService<ToolRegistrar>().RegisterAll();
+
+        // Run DB migrations synchronously before resolving any VM that touches
+        // the DB (e.g. BudgetEnforcer queries workspace_settings in its ctor).
+        // InitializeAsync is idempotent — the deferred Task.Run below re-calls it.
+        _serviceProvider.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>()
+            .InitializeAsync().GetAwaiter().GetResult();
 
         var mainVm = _serviceProvider.GetRequiredService<MainViewModel>();
         var window = new MainWindow { DataContext = mainVm };

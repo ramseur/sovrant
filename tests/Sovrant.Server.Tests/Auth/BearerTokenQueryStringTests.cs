@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Sovrant.Server.Auth;
-using Sovrant.Api.Config;
+using Sovrant.Runtime.Config;
 
 namespace Sovrant.Server.Tests.Auth;
 
@@ -72,9 +72,9 @@ public sealed class BearerTokenQueryStringTests
         var builder = new WebHostBuilder()
             .ConfigureServices(services =>
             {
-                services.AddSingleton(new CredentialConfig
+                services.AddSingleton(new BootstrapConfig
                 {
-                    SovrantToken = TestToken,
+                    ServerToken = TestToken,
                 });
                 services.AddSingleton<BearerTokenMiddleware>();
             })

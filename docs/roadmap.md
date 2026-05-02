@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-30 (Phase 81 unified memory shipped — 49 phases shipped, 7 pending)
+**Last updated:** 2026-04-30 (Phase 81 unified memory shipped — 49 phases shipped, 9 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -114,7 +114,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 
 ### Still pending
 
-> **Last audited:** 2026-04-30. 49 phases complete, 7 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61; Phase 78 Path 2 shipped through commit 10; Phase 81 unified memory shipped (workspace_memory rows now flow through `MemoryInjector` into the system prompt). Everything below is *not yet shipped*.
+> **Last audited:** 2026-04-30. 49 phases complete, 9 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61; Phase 78 Path 2 shipped through commit 10; Phase 81 unified memory shipped (workspace_memory rows now flow through `MemoryInjector` into the system prompt). Everything below is *not yet shipped*.
 
 | Gap | Phase | Priority |
 |---|---|---|
@@ -137,6 +137,8 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Agents page (renamed from Agent Templates): single-agent definition + run — author agents via markdown files, edit them in-app, reference them by name from the standard agenting loop, and launch chat sessions (or one-shot if self-contained) with run history | Phase 79 | Medium–High |
 | Composio MCP integration — first-class platform awareness for Composio's MCP catalog (250+ apps), in-app browse/enable, managed OAuth via Composio connections, per-user/workspace credential scoping, still routed through Sovrant's `MCPTool` proxy and permission model | Phase 80 | Medium |
 | ~~Unified memory — wire user-saved `workspace_memory` rows into `ConversationRuntime.BuildSystemPrompt()` so memory saved via the workspace UI/API actually reaches the LLM~~ | Phase 81 ✅ | High |
+| OpenTelemetry observability — emit traces/metrics/logs for runs, turns, tool calls, router decisions, and provider HTTP via OTLP so operators can ship to any OTel-compatible backend (Honeycomb, Tempo, Jaeger, Datadog, etc.) | Phase 82 | Medium–High |
+| Pluggable memory backends — abstract `IMemoryStore` so the SQLite implementation can be swapped for distributed/remote stores (mem0, Pinecone-style vector DBs, Redis, Postgres+pgvector); enables shared/team memory across nodes | Phase 83 | Medium |
 
 ### v1.0 release polish (in progress)
 
@@ -7613,3 +7615,190 @@ Delivered as five sequenced PRs on `sovrant-openc-dotnet-port`:
 - [x] `LLM_WEB_SEARCH=true` continues to work with a deprecation warning
 - [x] All web-search related tests pass; no behaviour regression in the
       existing `OpenAiResponsesProvider` path
+
+---
+
+## Phase 82 — OpenTelemetry Observability
+
+> **Status:** Pending. Adds first-class OTel emission so operators can ship Sovrant
+> traces, metrics, and logs to any OTel-compatible backend (Honeycomb, Tempo,
+> Jaeger, Datadog, Dynatrace, Grafana Cloud, self-hosted OTel Collector) without
+> us picking a vendor.
+
+### Goal
+
+Replace ad-hoc logging and the `RuntimeTraceWriter` JSONL stream with a real
+OpenTelemetry pipeline. Every meaningful unit of work — engine run, turn, tool
+call, router decision, provider HTTP request, swarm wave, mission step — emits
+spans, metrics, and structured log records via the OTel SDK. Export is OTLP by
+default; the existing JSONL writer stays as an optional console exporter for
+local debugging.
+
+### Why now
+
+- Operators running Sovrant.Server in production need standard observability,
+  not bespoke log files. The `/v1/runs/...` and `/v1/missions/...` surfaces
+  already correlate by run/session/workspace IDs — those become trace
+  attributes "for free".
+- Cost tracking (Phase 55) and budgets (V018) are already collected per
+  session/project; emitting them as OTel metrics gives a single dashboard for
+  $/run, latency, error rates.
+- Required for Phase 40 (enterprise auth & multi-tenancy) — auditors expect
+  per-tenant trace sampling and metric tagging.
+
+### Scope
+
+- **Tracing**: Wrap top-level operations as spans (`engine.run`, `turn`,
+  `tool.invoke`, `router.route`, `provider.http`, `swarm.wave`,
+  `mission.step`). Attach `workspace.id`, `project.id`, `session.id`,
+  `run.id`, `model`, `provider`, `tier`, `intent`, `tools.invoked` as
+  attributes.
+- **Metrics**: Counters / histograms / gauges for `sovrant.runs.total`,
+  `sovrant.turns.duration`, `sovrant.tool.invocations`,
+  `sovrant.tokens.input` / `.output`, `sovrant.cost.usd`,
+  `sovrant.router.decisions`, `sovrant.provider.errors`,
+  `sovrant.sessions.active`. All tagged with the same dimensions as spans.
+- **Logs**: Bridge `ILogger` records into the OTel logs signal so existing
+  log lines flow through OTLP with trace correlation. Keep the file logger
+  for local dev.
+- **Exporters**: OTLP (HTTP and gRPC) by default; optional console exporter
+  enabled via `SOVRANT_OTEL_CONSOLE=true`. Resource attributes seeded from
+  `service.name=sovrant`, `service.version`, `deployment.environment`.
+- **Sampling**: Default to parent-based + ratio (`SOVRANT_OTEL_TRACE_RATIO`,
+  default `1.0` for dev, `0.1` recommended in prod). Mission/team runs always
+  sampled to preserve audit completeness.
+- **Surfaces**: Activate in CLI/Server/Web/Desktop. CLI gets a simple
+  `--otel-endpoint` flag; the rest read `OTEL_EXPORTER_OTLP_ENDPOINT` per
+  the standard OTel env-var contract.
+
+### Implementation sketch
+
+| Component | File | Notes |
+|---|---|---|
+| `SovrantOtelExtensions.AddSovrantOtel(...)` | `src/Sovrant.Runtime/Observability/` | Wires `OpenTelemetry.Trace` / `.Metrics` / `.Logs`; reads `BootstrapConfig` + standard `OTEL_*` env vars |
+| `SovrantActivitySource` | `src/Sovrant.Runtime/Observability/` | Single `ActivitySource("Sovrant")` shared by all instrumentation |
+| `SovrantMeter` | `src/Sovrant.Runtime/Observability/` | Single `Meter("Sovrant")` exposing the metric set above |
+| `RuntimeTraceWriter` | existing | Stays — JSONL becomes an opt-in custom exporter when OTel is disabled |
+| `ConversationRuntime` | `src/Sovrant.Runtime/Conversation/` | Open `engine.run` / `turn` spans; record token counts as metric instruments |
+| `ToolRegistry.InvokeAsync` | `src/Sovrant.Runtime/Tools/` | `tool.invoke` span + counter |
+| `SmartRouter.RouteAsync` | `src/Sovrant.Api/Routing/` | `router.route` span with provider/tier attributes |
+| Provider HTTP clients | `src/Sovrant.Api/Providers/*` | `HttpClient` instrumentation via `AddHttpClientInstrumentation()` |
+| `Sovrant.Server/Program.cs` | existing | `AddAspNetCoreInstrumentation()` for endpoint spans |
+
+### Acceptance Criteria
+
+- [ ] Local dev with `SOVRANT_OTEL_CONSOLE=true` prints structured spans to stdout
+- [ ] OTLP export to a Collector reachable at `OTEL_EXPORTER_OTLP_ENDPOINT`
+- [ ] All spans correlated by trace ID across server endpoints, runtime, and
+      provider HTTP calls (single trace per `engine.run`)
+- [ ] Metrics include token counts, cost USD, tool invocations, router decisions
+- [ ] Existing JSONL writer still works when OTel is disabled (no regression)
+- [ ] CLI `--otel-endpoint` flag and standard `OTEL_*` env vars both honored
+- [ ] Documentation: new `docs/observability.md` with example Collector config
+      and dashboards (Tempo / Jaeger / Honeycomb) plus README env-table refresh
+
+### Deferred
+
+- Vendor-specific exporters beyond OTLP (Datadog/New Relic native exporters) —
+  users can plug them into their Collector instead.
+- Continuous profiling (pprof) — separate concern; OTel profiling signal is
+  still stabilizing.
+
+---
+
+## Phase 83 — Pluggable Memory Backends (mem0, Vector DBs, Redis, Postgres)
+
+> **Status:** Pending. Generalises the SQLite memory store behind an interface
+> so deployments can swap to a distributed/remote backend (mem0, Pinecone-style
+> vector DBs, Redis, Postgres+pgvector) without changing call sites. Enables
+> shared/team memory across nodes and large-scale semantic recall.
+
+### Goal
+
+Today `IMemoryStore` is implemented only by the SQLite-backed
+`SqliteMemoryStore`. That works great for single-node CLI / Desktop / single
+Server installs but doesn't support:
+
+- A team running Sovrant across many server replicas that all share memory
+- A workspace with thousands of memories where semantic recall (embedding
+  similarity) outperforms keyword/FTS5 matching
+- Cross-tenant managed deployments where memory is its own service
+
+The phase introduces a small provider abstraction so the SQLite backend stays
+the default but operators can drop in alternatives via configuration.
+
+### Why now
+
+- Phase 81 (unified memory) shipped: every saved memory now flows into the
+  system prompt via `MemoryInjector`. Scaling that to thousands of memories
+  per workspace is the obvious next pain point.
+- mem0 is gaining traction as a hosted memory layer with semantic recall,
+  decay, and contradiction handling out of the box — exactly the
+  capabilities we'd otherwise have to rebuild.
+- The bucket-A consolidation work (config-audit Phase 1) means the storage
+  layer's bootstrap path is already pluggable; adding a second store is a
+  natural follow-on.
+
+### Scope
+
+- **Provider interface refresh**: extend `IMemoryStore` with optional
+  semantic methods (`SearchSimilarAsync`, `EmbedAsync`) gated behind a
+  capability check so SQLite implementations aren't forced to add vector
+  support.
+- **Built-in providers**:
+  - `SqliteMemoryStore` (existing, default) — keyword + FTS5 recall
+  - `Mem0MemoryStore` — HTTP wrapper around mem0's API, supports semantic
+    recall, decay, contradictions
+  - `PgVectorMemoryStore` — Postgres + `pgvector` for self-hosted semantic
+    recall (workspace-scoped tables)
+  - `RedisMemoryStore` — Redis Search + RedisVL for distributed in-cache
+    memory with TTL
+- **Selector**: `SOVRANT_MEMORY_BACKEND` env var (`sqlite` (default) /
+  `mem0` / `pgvector` / `redis`); credentials via the credential store
+  (`memory.{backend}.api_key` / `memory.{backend}.connection_string`).
+- **Embedding strategy**: Reuse the configured LLM provider's embeddings
+  endpoint when the backend needs vectors (`text-embedding-3-small` for
+  OpenAI, etc.). Backends that produce their own embeddings (mem0) skip
+  this path.
+- **Migration tooling**: `sovrant memory migrate --from sqlite --to mem0`
+  CLI command that streams all memories from one provider to another with
+  workspace/project scoping preserved.
+- **Hybrid mode** (stretch): Two backends chained — local SQLite for
+  instant lookups, remote backend for shared/semantic recall — merged at
+  query time.
+
+### Implementation sketch
+
+| Component | File | Notes |
+|---|---|---|
+| `IMemoryStore` extensions | `src/Sovrant.Runtime/Memory/` | Add optional `SearchSimilarAsync`, `IMemoryCapabilities` |
+| `Mem0MemoryStore` | `src/Sovrant.Runtime/Memory/Backends/` | Typed HTTP client, retries, OAuth/API key via credential store |
+| `PgVectorMemoryStore` | `src/Sovrant.Runtime/Memory/Backends/` | Npgsql + `pgvector`; one table per workspace |
+| `RedisMemoryStore` | `src/Sovrant.Runtime/Memory/Backends/` | StackExchange.Redis + Redis Search index |
+| `MemoryStoreFactory` | `src/Sovrant.Runtime/Memory/` | Reads selector, builds the right store; wires DI |
+| `MemoryMigrateCommand` | `src/Sovrant.Cli/Commands/` | Drains source → destination; idempotent; resumable |
+| `SovrantConfig.Memory.Backend` | `src/Sovrant.Runtime/Config/` | Persisted preference (DB settings table); env override per Bucket-D |
+| Settings UI (Web + Desktop) | various | Backend dropdown; "Test connection" button; migrate CTA |
+
+### Acceptance Criteria
+
+- [ ] Default SQLite backend remains untouched; existing behaviour and tests
+      pass with no changes
+- [ ] `SOVRANT_MEMORY_BACKEND=mem0` boots end-to-end with credentials sourced
+      from the credential store; semantic recall returns higher-relevance
+      results than FTS5 on a sample workspace
+- [ ] `pgvector` and `redis` backends pass the same `IMemoryStore` contract
+      tests as SQLite (parity suite shared across backends)
+- [ ] `sovrant memory migrate` round-trips a workspace's memories without
+      data loss; reports counts, skips already-migrated rows
+- [ ] Settings UI shows the active backend, allows switching with a
+      migration prompt, and surfaces connection errors clearly
+- [ ] Phase 81's `MemoryInjector` works identically across all backends
+      (semantic backends rank by similarity, SQLite by recency)
+
+### Deferred
+
+- **Hybrid (local + remote) mode** — kept as a stretch; ship the single-backend
+  path first.
+- **Multi-tenant managed memory service** — a hosted Sovrant memory layer is
+  a separate product question, not a runtime feature.

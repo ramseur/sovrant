@@ -1,4 +1,5 @@
 using Sovrant.Runtime.TrustBoundary;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime.Tests.TrustBoundary;
 
@@ -150,5 +151,30 @@ public sealed class ContentPolicyEngineTests
         var engine = new ContentPolicyEngine();
         var verdict = engine.EvaluateOutbound("HOW TO MAKE A BOMB");
         Assert.IsType<EthicalVerdict.Block>(verdict);
+    }
+
+    [Fact]
+    public void HotReload_RefreshesCustomBlockedPatterns()
+    {
+        var current = new TrustBoundaryConfig
+        {
+            EthicalHarness = new EthicalPolicy { Strictness = EthicalStrictness.Enterprise },
+        };
+        var live = new LiveSettings<TrustBoundaryConfig>(() => current);
+        using var engine = new ContentPolicyEngine(live);
+
+        Assert.IsType<EthicalVerdict.Allow>(engine.EvaluateOutbound("Discuss merger talks freely"));
+
+        current = new TrustBoundaryConfig
+        {
+            EthicalHarness = new EthicalPolicy
+            {
+                Strictness = EthicalStrictness.Enterprise,
+                CustomBlockedPatterns = ["merger talks"],
+            },
+        };
+        live.Reload();
+
+        Assert.IsType<EthicalVerdict.Block>(engine.EvaluateOutbound("Discuss merger talks freely"));
     }
 }

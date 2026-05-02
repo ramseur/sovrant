@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime.Governance;
 
@@ -6,15 +7,25 @@ namespace Sovrant.Runtime.Governance;
 /// Aggregates all governance rules (secret detection, dangerous commands, config protection)
 /// and evaluates tool operations. Respects the configured <see cref="GovernanceLevel"/>.
 /// </summary>
-public sealed partial class GovernanceMonitor : IGovernanceMonitor
+public sealed partial class GovernanceMonitor : IGovernanceMonitor, IDisposable
 {
-    private readonly GovernanceConfig _config;
-    private readonly GovernanceLevel _level;
-    private readonly SecretDetector _secretDetector;
-    private readonly DangerousCommandDetector _commandDetector;
-    private readonly ConfigProtectionRule _configProtection;
+    private readonly ILiveSettings<GovernanceConfig> _liveConfig;
+    private readonly IDisposable? _changedSubscription;
     private readonly IAuditStore _auditStore;
     private readonly ILogger<GovernanceMonitor> _logger;
+    private RuleSet _rules;
+
+    /// <summary>
+    /// Snapshot of derived rules built from a single <see cref="GovernanceConfig"/>.
+    /// Atomic-swapped on hot reload via <see cref="Volatile.Write{T}(ref T, T)"/> so
+    /// in-flight <see cref="EvaluateAsync"/> calls see a consistent set of detectors.
+    /// </summary>
+    private sealed record RuleSet(
+        GovernanceConfig Config,
+        GovernanceLevel Level,
+        SecretDetector SecretDetector,
+        DangerousCommandDetector CommandDetector,
+        ConfigProtectionRule ConfigProtection);
 
     // Tool names that execute shell commands
     private static readonly HashSet<string> ShellTools = new(StringComparer.OrdinalIgnoreCase)
@@ -37,37 +48,54 @@ public sealed partial class GovernanceMonitor : IGovernanceMonitor
     [LoggerMessage(Level = LogLevel.Debug, Message = "Governance audit: {Rule} — {Reason} (tool={ToolName})")]
     private static partial void LogAudit(ILogger logger, string rule, string reason, string toolName);
 
-    public GovernanceMonitor(GovernanceConfig config, IAuditStore auditStore, ILogger<GovernanceMonitor> logger)
+    /// <summary>
+    /// DI ctor — accepts the hot-reloadable <see cref="ILiveSettings{GovernanceConfig}"/>.
+    /// Tests with a static <see cref="GovernanceConfig"/> wrap it in
+    /// <see cref="LiveSettings.Static{T}"/>.
+    /// </summary>
+    public GovernanceMonitor(
+        ILiveSettings<GovernanceConfig> liveConfig,
+        IAuditStore auditStore,
+        ILogger<GovernanceMonitor> logger)
     {
-        ArgumentNullException.ThrowIfNull(config);
-        _config = config;
-        _level = config.Level;
+        ArgumentNullException.ThrowIfNull(liveConfig);
+        _liveConfig = liveConfig;
         _logger = logger;
         _auditStore = auditStore;
-        _secretDetector = new SecretDetector(config.SecretPatterns);
-        _commandDetector = new DangerousCommandDetector(config.BlockedCommands);
-        _configProtection = new ConfigProtectionRule(config.ProtectedFiles);
+        _rules = BuildRules(liveConfig.Current);
+        _changedSubscription = liveConfig.OnChanged(fresh =>
+            Volatile.Write(ref _rules, BuildRules(fresh)));
     }
+
+    /// <inheritdoc/>
+    public void Dispose() => _changedSubscription?.Dispose();
+
+    private static RuleSet BuildRules(GovernanceConfig config) => new(
+        Config: config,
+        Level: config.Level,
+        SecretDetector: new SecretDetector(config.SecretPatterns),
+        CommandDetector: new DangerousCommandDetector(config.BlockedCommands),
+        ConfigProtection: new ConfigProtectionRule(config.ProtectedFiles));
 
     /// <inheritdoc/>
     public async Task<GovernanceVerdict> EvaluateAsync(GovernanceContext context, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(context);
-        GovernanceVerdict verdict;
-
-        if (context.Phase == GovernancePhase.Pre)
-            verdict = EvaluatePre(context);
-        else
-            verdict = EvaluatePost(context);
+        // Capture the current rule snapshot once per call so a hot-reload mid-evaluation
+        // doesn't tear (e.g. EvaluatePre uses one config, audit uses another).
+        var rules = Volatile.Read(ref _rules);
+        GovernanceVerdict verdict = context.Phase == GovernancePhase.Pre
+            ? EvaluatePre(context, rules)
+            : EvaluatePost(context, rules);
 
         // Audit logging (if enabled)
-        if (_config.AuditLog && verdict.Action != GovernanceAction.Allow)
+        if (rules.Config.AuditLog && verdict.Action != GovernanceAction.Allow)
         {
             await _auditStore.LogGovernanceEventAsync(context, verdict, ct).ConfigureAwait(false);
         }
 
         // Log bash commands (post-execution audit)
-        if (_config.AuditLog &&
+        if (rules.Config.AuditLog &&
             context.Phase == GovernancePhase.Post &&
             ShellTools.Contains(context.ToolName) &&
             !string.IsNullOrEmpty(context.ToolInput))
@@ -84,13 +112,13 @@ public sealed partial class GovernanceMonitor : IGovernanceMonitor
         {
             case GovernanceAction.Block:
                 LogBlock(_logger, verdict.Rule, verdict.Reason, context.ToolName, context.SessionId ?? "unknown");
-                if (_level == GovernanceLevel.Minimal)
+                if (rules.Level == GovernanceLevel.Minimal)
                 {
                     // Minimal mode: downgrade block to audit-only
                     LogAudit(_logger, verdict.Rule, verdict.Reason, context.ToolName);
                     return GovernanceVerdict.Allowed;
                 }
-                if (_level == GovernanceLevel.Standard)
+                if (rules.Level == GovernanceLevel.Standard)
                 {
                     // Standard mode: downgrade block to warn
                     return verdict with { Action = GovernanceAction.Warn };
@@ -100,7 +128,7 @@ public sealed partial class GovernanceMonitor : IGovernanceMonitor
 
             case GovernanceAction.Warn:
                 LogWarn(_logger, verdict.Rule, verdict.Reason, context.ToolName, context.SessionId ?? "unknown");
-                if (_level == GovernanceLevel.Minimal)
+                if (rules.Level == GovernanceLevel.Minimal)
                 {
                     LogAudit(_logger, verdict.Rule, verdict.Reason, context.ToolName);
                     return GovernanceVerdict.Allowed;
@@ -112,12 +140,12 @@ public sealed partial class GovernanceMonitor : IGovernanceMonitor
         }
     }
 
-    private GovernanceVerdict EvaluatePre(GovernanceContext context)
+    private static GovernanceVerdict EvaluatePre(GovernanceContext context, RuleSet rules)
     {
         // Check for dangerous commands in shell tools
         if (ShellTools.Contains(context.ToolName) && !string.IsNullOrEmpty(context.ToolInput))
         {
-            var dangerousPattern = _commandDetector.Check(context.ToolInput);
+            var dangerousPattern = rules.CommandDetector.Check(context.ToolInput);
             if (dangerousPattern is not null)
                 return new GovernanceVerdict(GovernanceAction.Block,
                     $"Dangerous command detected: '{dangerousPattern}'",
@@ -133,7 +161,7 @@ public sealed partial class GovernanceMonitor : IGovernanceMonitor
         // Check for config file protection on file-modifying tools
         if (FileModifyTools.Contains(context.ToolName))
         {
-            if (_configProtection.IsProtected(context.FilePath))
+            if (rules.ConfigProtection.IsProtected(context.FilePath))
                 return new GovernanceVerdict(GovernanceAction.Block,
                     $"Protected configuration file: '{context.FilePath}'",
                     "ConfigProtection");
@@ -142,11 +170,11 @@ public sealed partial class GovernanceMonitor : IGovernanceMonitor
         return GovernanceVerdict.Allowed;
     }
 
-    private GovernanceVerdict EvaluatePost(GovernanceContext context)
+    private static GovernanceVerdict EvaluatePost(GovernanceContext context, RuleSet rules)
     {
         // Secret detection on tool input and output
         var textToScan = $"{context.ToolInput}\n{context.ToolOutput}";
-        var secretFinding = _secretDetector.Scan(textToScan);
+        var secretFinding = rules.SecretDetector.Scan(textToScan);
         if (secretFinding is not null)
             return new GovernanceVerdict(GovernanceAction.Warn,
                 secretFinding,

@@ -25,7 +25,7 @@ public static class AgentSystemFactory
         if (config.UseIsolatedAgents)
         {
             return new ProcessBasedOrchestrationSystem(
-                config,
+                services.GetRequiredService<Sovrant.Runtime.Workspaces.ILiveSettings<AgentSystemConfig>>(),
                 services.GetRequiredService<ILogger<ProcessBasedOrchestrationSystem>>());
         }
 

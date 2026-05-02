@@ -12,6 +12,7 @@ public partial class DiagnosticsViewModel : ViewModelBase
 {
     private readonly ISmartRouter _router;
     private readonly SovrantConfig _config;
+    private readonly BootstrapConfig _bootstrap;
     private readonly IHttpClientFactory _httpFactory;
 
     [ObservableProperty]
@@ -68,10 +69,11 @@ public partial class DiagnosticsViewModel : ViewModelBase
     // Health checks
     public ObservableCollection<HealthCheckItem> HealthChecks { get; } = [];
 
-    public DiagnosticsViewModel(ISmartRouter router, SovrantConfig config, IHttpClientFactory httpFactory)
+    public DiagnosticsViewModel(ISmartRouter router, SovrantConfig config, BootstrapConfig bootstrap, IHttpClientFactory httpFactory)
     {
         _router = router;
         _config = config;
+        _bootstrap = bootstrap;
         _httpFactory = httpFactory;
         LoadSystemInfo();
         _ = RunAllChecksAsync();
@@ -108,7 +110,7 @@ public partial class DiagnosticsViewModel : ViewModelBase
 
         // Paths
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        DbPath = _config.DbPath ?? Path.Combine(home, ".sovrant", "data", "sovrant.db");
+        DbPath = _bootstrap.DbPath ?? Path.Combine(home, ".sovrant", "data", "sovrant.db");
         ArtifactsPath = Path.Combine(home, ".sovrant", "artifacts");
         ConfigPath = Path.Combine(home, ".sovrant", "settings.json");
     }

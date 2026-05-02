@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Sovrant.Api.Types;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime.TrustBoundary;
 
@@ -8,14 +9,48 @@ namespace Sovrant.Runtime.TrustBoundary;
 /// Runs all registered <see cref="IPatternDetector"/>s over every text field in a
 /// <see cref="MessagesRequest"/> and replaces matches with deterministic placeholders.
 /// </summary>
-public sealed class PromptSanitizer : IPromptSanitizer
+public sealed class PromptSanitizer : IPromptSanitizer, IDisposable
 {
-    private readonly IReadOnlyList<IPatternDetector> _detectors;
+    private readonly IDisposable? _changedSubscription;
+    private IReadOnlyList<IPatternDetector> _detectors;
 
     public PromptSanitizer(IEnumerable<IPatternDetector> detectors)
     {
         _detectors = detectors.ToList();
     }
+
+    /// <summary>
+    /// Hot-reloadable ctor — derives the detector set from the live trust-boundary
+    /// config and atomically swaps it on every <see cref="ILiveSettings{T}.OnChanged"/>
+    /// notification. In-flight <see cref="Sanitize"/> calls keep the snapshot they
+    /// captured when they started.
+    /// </summary>
+    [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor]
+    public PromptSanitizer(ILiveSettings<TrustBoundaryConfig> liveConfig)
+    {
+        ArgumentNullException.ThrowIfNull(liveConfig);
+        _detectors = BuildDetectors(liveConfig.Current);
+        _changedSubscription = liveConfig.OnChanged(fresh =>
+            Volatile.Write(ref _detectors, BuildDetectors(fresh)));
+    }
+
+    private static IPatternDetector[] BuildDetectors(TrustBoundaryConfig config)
+    {
+        var corp = new CorporateDataConfig
+        {
+            CorporateDomains = config.Sanitizer.CorporateDomains,
+            AllowList = config.Sanitizer.AllowList,
+        };
+        return
+        [
+            new PiiDetector(),
+            new CorporateDataDetector(corp),
+            new CustomPatternRegistry(config.Sanitizer.CustomPatterns),
+        ];
+    }
+
+    /// <inheritdoc/>
+    public void Dispose() => _changedSubscription?.Dispose();
 
     public SanitizationResult Sanitize(MessagesRequest request)
     {
@@ -102,9 +137,13 @@ public sealed class PromptSanitizer : IPromptSanitizer
     {
         if (string.IsNullOrEmpty(text)) return text;
 
+        // Snapshot the detector list once per call so a hot-reload mid-sanitize
+        // doesn't tear (e.g. some detectors from old config, some from new).
+        var detectors = Volatile.Read(ref _detectors);
+
         // Collect all detections from all detectors.
         var allDetections = new List<Detection>();
-        foreach (var detector in _detectors)
+        foreach (var detector in detectors)
         {
             allDetections.AddRange(detector.Detect(text));
         }

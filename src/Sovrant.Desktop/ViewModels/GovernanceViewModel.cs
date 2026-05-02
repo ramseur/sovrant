@@ -1,9 +1,8 @@
 using System.Collections.ObjectModel;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.Governance;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Desktop.ViewModels;
 
@@ -31,18 +30,13 @@ public partial class GovernanceViewModel : ViewModelBase
     public ObservableCollection<string> ProtectedFiles { get; } = [];
     public ObservableCollection<string> SecretPatterns { get; } = [];
 
-    private static readonly string GlobalConfigPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".sovrant", "governance.json");
+    private readonly IWorkspaceSettingsStore? _settings;
+    private readonly LiveSettingsRegistry? _liveSettings;
 
-    private static readonly JsonSerializerOptions SerializerOptions = new()
+    public GovernanceViewModel(IWorkspaceSettingsStore? settings = null, LiveSettingsRegistry? liveSettings = null)
     {
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
-
-    public GovernanceViewModel()
-    {
+        _settings = settings;
+        _liveSettings = liveSettings;
         LoadConfig();
     }
 
@@ -109,7 +103,7 @@ public partial class GovernanceViewModel : ViewModelBase
 
     private void LoadConfig()
     {
-        var config = GovernanceConfig.Load();
+        var config = GovernanceConfig.Load(workingDirectory: null, settings: _settings);
 
         GovernanceLevel = config.Level.ToString();
         AuditLogEnabled = config.AuditLog;
@@ -127,8 +121,14 @@ public partial class GovernanceViewModel : ViewModelBase
             SecretPatterns.Add(p);
     }
 
-    private void SaveConfig()
+    private async void SaveConfig()
     {
+        if (_settings is null)
+        {
+            StatusMessage = "Settings store unavailable.";
+            return;
+        }
+
         try
         {
             var config = new GovernanceConfig
@@ -147,11 +147,8 @@ public partial class GovernanceViewModel : ViewModelBase
             foreach (var p in SecretPatterns)
                 config.SecretPatterns.Add(p);
 
-            var dir = Path.GetDirectoryName(GlobalConfigPath)!;
-            Directory.CreateDirectory(dir);
-            var json = JsonSerializer.Serialize(config, SerializerOptions);
-            File.WriteAllText(GlobalConfigPath, json);
-
+            await config.SaveToStoreAsync(_settings).ConfigureAwait(false);
+            _liveSettings?.ReloadAll();
             StatusMessage = "Saved.";
         }
         catch (Exception ex)

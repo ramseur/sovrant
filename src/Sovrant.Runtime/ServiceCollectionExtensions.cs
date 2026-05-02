@@ -31,20 +31,26 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddSovrantRuntime(
         this IServiceCollection services,
-        SovrantConfig? config = null)
+        SovrantConfig? config = null,
+        BootstrapConfig? bootstrap = null)
     {
         ArgumentNullException.ThrowIfNull(services);
 
         config ??= ConfigLoader.Load();
+        bootstrap ??= BootstrapConfigLoader.Load();
 
         // Register config as singleton
         services.AddSingleton(config);
+        services.AddSingleton(bootstrap);
+
+        // Hot-reload registry (Bucket-B step 4) — every LiveSettings<T>
+        // self-registers with this so the Settings UI can fan out reloads.
+        services.AddSingleton<Workspaces.LiveSettingsRegistry>();
 
         // Storage provider (Phase 32) — SQLite by default.
-        // Phase 42.5 — SovrantConfig.DbPath (from --db-path CLI flag) takes priority
-        // over the SOVRANT_DB_PATH env var and the default ~/.sovrant/data/sovrant.db.
+        // The DB path comes from BootstrapConfig (CLI > env > sovrant.config.json > default).
         services.AddSingleton(sp => new SqliteStorageProvider(
-            sp.GetRequiredService<ILogger<SqliteStorageProvider>>(), config.DbPath));
+            sp.GetRequiredService<ILogger<SqliteStorageProvider>>(), bootstrap.DbPath));
         services.AddSingleton<IStorageProvider>(sp => sp.GetRequiredService<SqliteStorageProvider>());
         services.AddSingleton<ISqliteConnectionFactory>(sp => sp.GetRequiredService<SqliteStorageProvider>());
 
@@ -57,6 +63,21 @@ public static class ServiceCollectionExtensions
         var credentials = Sovrant.Api.Config.CredentialConfig.Resolve(apiConfig);
         services.AddSingleton(credentials);
         services.AddLlmProviders(apiConfig, credentials);
+
+        // Bucket-C: replace the static IAuthProvider that AddLlmProviders registered
+        // with one that prefers the encrypted credential store when no env var is set.
+        // Web/Desktop further override this with MutableAuthProvider for live edits;
+        // the latest registration always wins so their UI hot-swap path is unaffected.
+        services.AddSingleton<Sovrant.Api.Auth.IAuthProvider>(sp =>
+            new Mcp.CredentialStoreAuthProvider(
+                sp.GetRequiredService<Mcp.ICredentialStore>(),
+                Sovrant.Api.Auth.CredentialKeys.LlmApiKey,
+                fallback: credentials.LlmApiKey));
+
+        // Override the bootstrap IApiKeyResolver registered by AddLlmProviders with the
+        // store-aware version now that ICredentialStore is available. Used by
+        // LiveModelMetadataFetcher (OpenRouter key) and ProviderApiProvider's auth header.
+        services.AddSingleton<Sovrant.Api.Auth.IApiKeyResolver, Mcp.CredentialStoreApiKeyResolver>();
 
         // Permission policy — mutable so EnterPlanMode/ExitPlanMode tools can toggle it at runtime.
         // The server overrides both IPermissionPolicy and IPermissionModeAccessor with its own
@@ -74,8 +95,22 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAuditStore>(sp =>
             new SqliteAuditStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
-        // Governance monitor — loads governance.json from disk.
-        services.AddSingleton<GovernanceConfig>(_ => GovernanceConfig.Load());
+        // Governance monitor — loads from env > workspace_settings DB >
+        // ~/.sovrant/governance.json (legacy bootstrap fallback) > defaults.
+        // Wrapped in ILiveSettings so the Settings UI can hot-reload secret
+        // patterns / blocked commands / protected files without a restart.
+        services.AddSingleton<Workspaces.LiveSettings<GovernanceConfig>>(sp =>
+        {
+            var live = new Workspaces.LiveSettings<GovernanceConfig>(
+                () => GovernanceConfig.Load(
+                    workingDirectory: null,
+                    settings: sp.GetService<Workspaces.IWorkspaceSettingsStore>()));
+            sp.GetRequiredService<Workspaces.LiveSettingsRegistry>().Register(live);
+            return live;
+        });
+        services.AddSingleton<Workspaces.ILiveSettings<GovernanceConfig>>(
+            sp => sp.GetRequiredService<Workspaces.LiveSettings<GovernanceConfig>>());
+        services.AddSingleton(sp => sp.GetRequiredService<Workspaces.ILiveSettings<GovernanceConfig>>().Current);
         services.AddSingleton<IGovernanceMonitor, GovernanceMonitor>();
 
         // Phase 59 — Agentic loop hardening: intent gate, plan approval,
@@ -89,30 +124,30 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Governance.IOrchestrationRouter, Governance.HeuristicOrchestrationRouter>();
 
         // Phase 58 — Trust Boundary: sanitization, ethical harness, intent verification.
+        // Hot-reloadable since Bucket-B step 4: the live wrapper subscribes the
+        // sanitizer / ethical harness so they atomically swap their detector list
+        // and compiled custom-blocked regexes when the Settings UI saves changes.
+        services.AddSingleton<Workspaces.LiveSettings<TrustBoundary.TrustBoundaryConfig>>(sp =>
+        {
+            var live = new Workspaces.LiveSettings<TrustBoundary.TrustBoundaryConfig>(
+                () => TrustBoundary.TrustBoundaryConfig.Resolve(
+                    config.TrustBoundary,
+                    sp.GetService<Workspaces.IWorkspaceSettingsStore>()));
+            sp.GetRequiredService<Workspaces.LiveSettingsRegistry>().Register(live);
+            return live;
+        });
+        services.AddSingleton<Workspaces.ILiveSettings<TrustBoundary.TrustBoundaryConfig>>(
+            sp => sp.GetRequiredService<Workspaces.LiveSettings<TrustBoundary.TrustBoundaryConfig>>());
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<Workspaces.ILiveSettings<TrustBoundary.TrustBoundaryConfig>>().Current);
         services.AddSingleton<TrustBoundary.EthicalAuditLog>();
         services.AddSingleton<TrustBoundary.IEthicalHarness>(sp =>
-        {
-            var tbConfig = config.TrustBoundary;
-            return new TrustBoundary.ContentPolicyEngine(
-                tbConfig.EthicalHarness,
-                sp.GetRequiredService<TrustBoundary.EthicalAuditLog>());
-        });
+            new TrustBoundary.ContentPolicyEngine(
+                sp.GetRequiredService<Workspaces.ILiveSettings<TrustBoundary.TrustBoundaryConfig>>(),
+                sp.GetRequiredService<TrustBoundary.EthicalAuditLog>()));
         services.AddSingleton<TrustBoundary.IPromptSanitizer>(sp =>
-        {
-            var tbConfig = config.TrustBoundary;
-            var corpConfig = new TrustBoundary.CorporateDataConfig
-            {
-                CorporateDomains = tbConfig.Sanitizer.CorporateDomains,
-                AllowList = tbConfig.Sanitizer.AllowList,
-            };
-            IEnumerable<TrustBoundary.IPatternDetector> detectors =
-            [
-                new TrustBoundary.PiiDetector(),
-                new TrustBoundary.CorporateDataDetector(corpConfig),
-                new TrustBoundary.CustomPatternRegistry(tbConfig.Sanitizer.CustomPatterns),
-            ];
-            return new TrustBoundary.PromptSanitizer(detectors);
-        });
+            new TrustBoundary.PromptSanitizer(
+                sp.GetRequiredService<Workspaces.ILiveSettings<TrustBoundary.TrustBoundaryConfig>>()));
         services.AddSingleton<TrustBoundary.IntentVerificationBridge>(sp =>
             new TrustBoundary.IntentVerificationBridge(
                 sp.GetService<Governance.IIntentGate>(),
@@ -202,6 +237,34 @@ public static class ServiceCollectionExtensions
         // this one.
         services.AddSingleton<Engine.IStepRunner, Engine.LlmStepRunner>();
 
+        // Executor tuning (Bucket-B) — env > workspace_settings > defaults
+        // for re-plan / retry caps, wrapped in ILiveSettings so the Settings
+        // UI can hot-reload without a process restart.
+        services.AddSingleton<Workspaces.LiveSettings<Engine.ExecutorOptions>>(sp =>
+        {
+            var live = new Workspaces.LiveSettings<Engine.ExecutorOptions>(
+                () => Engine.ExecutorOptions.Resolve(sp.GetService<Workspaces.IWorkspaceSettingsStore>()));
+            sp.GetRequiredService<Workspaces.LiveSettingsRegistry>().Register(live);
+            return live;
+        });
+        services.AddSingleton<Workspaces.ILiveSettings<Engine.ExecutorOptions>>(
+            sp => sp.GetRequiredService<Workspaces.LiveSettings<Engine.ExecutorOptions>>());
+        services.AddSingleton(sp => sp.GetRequiredService<Workspaces.ILiveSettings<Engine.ExecutorOptions>>().Current);
+
+        // Compaction threshold (Bucket-B) — single-scalar live wrapper so the
+        // Settings UI can adjust SOVRANT_COMPACT_THRESHOLD without restart.
+        services.AddSingleton<Workspaces.LiveSettings<Conversation.CompactionSettings>>(sp =>
+        {
+            var live = new Workspaces.LiveSettings<Conversation.CompactionSettings>(
+                () => Conversation.CompactionSettings.Resolve(
+                    sp.GetService<Workspaces.IWorkspaceSettingsStore>(),
+                    fallback: config.CompactThreshold));
+            sp.GetRequiredService<Workspaces.LiveSettingsRegistry>().Register(live);
+            return live;
+        });
+        services.AddSingleton<Workspaces.ILiveSettings<Conversation.CompactionSettings>>(
+            sp => sp.GetRequiredService<Workspaces.LiveSettings<Conversation.CompactionSettings>>());
+
         // Default LlmExecutor wired to the production step runner. Tests
         // that need a bespoke step runner build their own executor.
         services.AddSingleton<Engine.IExecutor, Engine.LlmExecutor>();
@@ -256,7 +319,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<McpClientRegistry>();
         services.AddSingleton<McpToolRegistrar>();
         services.AddSingleton<ICredentialStore>(sp =>
-            new SqliteCredentialStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+            new SqliteCredentialStore(sp.GetRequiredService<ISqliteConnectionFactory>(), bootstrap.KeystorePath));
         // MCP/LSP server-entry stores (V019) — metadata only; secrets live in
         // ICredentialStore under "mcp.{name}.client_secret" / "access_token".
         services.AddSingleton<IMcpServerStore>(sp =>

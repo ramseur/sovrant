@@ -172,13 +172,15 @@
 - **C (encrypted credential store):** 9 — provider API keys, OAuth secrets, bearer tokens
 - **D (env-var only):** 26 — port, rate limit, runtime mode, USER_ID, NO_COLOR, ROUTER_MODE, deployment topology
 
-## Bucket-A Consolidation Plan
+## Bucket-A Consolidation Plan ✅ DONE
 
 Bucket-A items must be available *before* SQLite opens, so they live in a single
-physical JSON file rather than the DB. Today they're scattered across
-`SovrantConfig.DbPath`, env vars (`SOVRANT_LOG_FILE`, `SOVRANT_ARTIFACTS_ROOT`,
-`SOVRANT_TOKEN`, `SOVRANT_DB_PATH`), an embedded `IConfiguration` key
-(`Server:Token`), and hardcoded paths (`AesGcmCredentialStore` keystore).
+physical JSON file rather than the DB. They're now consolidated into
+`BootstrapConfig` / `BootstrapConfigLoader` and a single user-facing JSON file
+`sovrant.config.json`. Previously scattered across `SovrantConfig.DbPath`,
+env vars (`SOVRANT_LOG_FILE`, `SOVRANT_ARTIFACTS_ROOT`, `SOVRANT_TOKEN`,
+`SOVRANT_DB_PATH`), an embedded `IConfiguration` key (`Server:Token`), and
+hardcoded paths (credential store keystore).
 
 ### Target file: `sovrant.config.json`
 
@@ -234,3 +236,305 @@ between machines or onto a mounted secret volume.
 `~` expands to the user's home directory; `{Date}` in `logFile` is replaced at
 write time by the logging framework. All five fields are optional — omit any
 to fall back to the default.
+
+## Bucket-C Credential Store ✅ DONE
+
+All five Bucket-C secrets now flow through the encrypted `ICredentialStore` with
+runtime override via env var. `sovrant auth set <name>` writes the value through
+`AesGcmCredentialStore`; consumers read it back via the env > store > snapshot
+chain so a `auth set llm <new-key>` rotation takes effect on the next request
+without restarting the process.
+
+| Row | Key | Store key (`CredentialKeys`) | CLI name | Env override(s) | Consumer |
+|-----|-----|------------------------------|----------|-----------------|----------|
+| 15  | `LlmApiKey`        | `llm.api_key`               | `llm`        | `LLM_API_KEY` > `OPENAI_API_KEY` > `PROVIDER_API_KEY` | `CredentialStoreAuthProvider` (primary `IAuthProvider`) |
+| 17  | `ProviderApiKey`   | `provider.api_key`          | `provider`   | `PROVIDER_API_KEY`     | `ProviderApiProvider.BuildRequestAsync` (per-request `x-api-key`) |
+| 21  | `BraveApiKey`      | `websearch.brave_api_key`   | `brave`      | `BRAVE_API_KEY`        | `WebSearchTool` + `WebSearchCommand` (status display) |
+| 22  | `FirecrawlApiKey`  | `websearch.firecrawl_api_key` | `firecrawl` | `FIRECRAWL_API_KEY`    | `WebSearchTool` + `WebSearchCommand` (status display) |
+| 23  | `OpenRouterApiKey` | `openrouter.api_key`        | `openrouter` | `OPENROUTER_API_KEY`  | `LiveModelMetadataFetcher.FetchAsync` |
+
+**Wiring summary:**
+- `Sovrant.Api.Auth.IApiKeyResolver` (interface) lives in `Sovrant.Api` so consumers
+  there don't need a Runtime reference. `Sovrant.Api` registers the bootstrap
+  `EnvApiKeyResolver` (env > snapshot only); `Sovrant.Runtime` overrides it with
+  `CredentialStoreApiKeyResolver` once the encrypted store is open.
+- `CredentialResolver.ResolveAsync` (in `Sovrant.Runtime.Mcp`) is the single helper
+  for one-shot non-cached lookups — it powers both the `IApiKeyResolver` adapter
+  and direct callers in `Sovrant.Tools` / `Sovrant.Commands`.
+- The primary LLM key still uses the cached `CredentialStoreAuthProvider` because
+  it's hit on every model call; secondary keys use `CredentialResolver` directly
+  (no caching, since they're rare/manual code paths and hot-rotation matters more
+  than a per-call store hit).
+- `ProviderApiProvider`'s `x-api-key` header is now built per-request inside
+  `BuildRequestAsync` instead of baked into `HttpClient.DefaultRequestHeaders.Authorization`
+  (which used a malformed scheme and missed env-var rotations).
+
+## Bucket-B Step 1 — simple scalars ✅ DONE
+
+Five tunable scalars now resolve through `WorkspaceSettingsResolver`
+(`Sovrant.Runtime.Workspaces`) with the chain **env var > `IWorkspaceSettingsStore`
+global row > hardcoded fallback**. The store is read once at DI construction
+time and cached for the process lifetime — matches the pre-existing
+`BudgetEnforcer` pattern; hot-swap from a Settings UI is deferred to step 3
+where it's actually needed.
+
+| Row | Setting | Store key (`WorkspaceSettingsKeys`) | Env override | Default | Consumer |
+|-----|---------|--------------------------------------|--------------|---------|----------|
+| 30  | Re-plan budget               | `executor.max_replans`        | `SOVRANT_EXECUTOR_MAX_REPLANS`     | `3`    | `ExecutorOptions.Resolve` → DI factory in `Sovrant.Runtime` |
+| 31  | Step retry budget            | `executor.max_step_retries`   | `SOVRANT_EXECUTOR_MAX_STEP_RETRIES`| `2`    | `ExecutorOptions.Resolve` |
+| 32  | Max concurrent agents        | `agent.max_concurrent`        | `SOVRANT_AGENT_MAX_CONCURRENT`     | `5`    | `AgentSystemConfig.Resolve` → deferred DI factory in `AddOrchestrationSystem` |
+| 33  | Per-task agent timeout (sec) | `agent.task_timeout_seconds`  | `SOVRANT_AGENT_TASK_TIMEOUT_SECONDS`| `120` | `AgentSystemConfig.Resolve` |
+| 34  | Compaction threshold (input tokens) | `compact.threshold`    | `SOVRANT_COMPACT_THRESHOLD`        | `SovrantConfig.CompactThreshold` (snapshot) | `ConversationRuntime` ctor |
+
+**Wiring notes:**
+- `WorkspaceSettingsResolver.ResolveInt` / `ResolveDecimalOrNull` / `ResolveString`
+  (synchronous-over-async) is the single entry point so the precedence chain
+  stays consistent across consumers. Catches `InvalidOperationException`,
+  `DbException`, `IOException`, `UnauthorizedAccessException` from the store
+  so fresh-install / unmigrated-DB cases fall through to the fallback.
+- `AgentSystemConfig.Resolve(IWorkspaceSettingsStore?)` replaces the eager
+  `FromEnvironment()` call in `AddOrchestrationSystem`; the DI registration
+  is deferred so the settings store is available at first resolution.
+- `ConversationRuntime` accepts an optional `IWorkspaceSettingsStore? settings`
+  ctor parameter (last position). `SovrantConfig.CompactThreshold` is preserved
+  as the snapshot fallback so existing `settings.json` files keep working.
+- Tests: `WorkspaceSettingsResolverTests` (14 cases) covers env-wins, store-wins,
+  fallback, null-store, bad-env, bad-store-value, throwing-store, and culture
+  invariance. Lives in `tests/Sovrant.Runtime.Tests/Workspaces`.
+
+**Out of scope for step 1 (deferred):**
+- Governance scalars (rows 35-39 — `BlockedCommands`, `ProtectedFiles`,
+  `SecretPatterns`, `AuditLog`, `GovernanceLevelName`) — these are list/string
+  shapes that need migration helpers, not just scalar resolves. Step 2.
+- TrustBoundary settings (rows 44-54) and the Settings UI write path — step 3.
+- Hot-reload from the Settings UI — every Bucket-B consumer reads at construction
+  and caches; settings changes still require a restart until step 3 introduces
+  mutable singletons where it matters.
+
+## Bucket-B Step 2 — Governance ✅ DONE
+
+Rows 35-39 (`GovernanceConfig`) now resolve through the same env > DB > fallback
+chain as step 1, with the JSON-file pair (`~/.sovrant/governance.json` global +
+`<workspace>/.sovrant/governance.json` project-local) demoted to **bootstrap
+fallback**. Existing JSON setups keep working; the first save through the
+Settings UI promotes the values to the DB and they take precedence on next load.
+
+| Row | Setting | Store key (`WorkspaceSettingsKeys`) | Env override | Default | Shape |
+|-----|---------|--------------------------------------|--------------|---------|-------|
+| 35  | Governance level    | `governance.level`              | `SOVRANT_GOVERNANCE_LEVEL`           | `standard`     | string |
+| 36  | Blocked commands    | `governance.blocked_commands`   | `SOVRANT_GOVERNANCE_BLOCKED_COMMANDS`| `[]`           | JSON array (DB) / JSON or comma-separated (env) |
+| 37  | Protected files     | `governance.protected_files`    | `SOVRANT_GOVERNANCE_PROTECTED_FILES` | `[]`           | JSON array / JSON or comma-separated |
+| 38  | Secret patterns     | `governance.secret_patterns`    | `SOVRANT_GOVERNANCE_SECRET_PATTERNS` | `[]`           | JSON array / JSON or comma-separated |
+| 39  | Audit log           | `governance.audit_log`          | `SOVRANT_GOVERNANCE_AUDIT_LOG`       | `true`         | bool (`true`/`false`/`1`/`0`/`yes`/`no`/`on`/`off`, case-insensitive) |
+
+**New resolver helpers:**
+- `WorkspaceSettingsResolver.ResolveBool` — same precedence chain; common
+  truthy/falsy forms accepted, unparseable values fall through to next layer.
+- `WorkspaceSettingsResolver.ResolveStringList` — DB stores JSON arrays;
+  env accepts JSON or comma-separated for shell-friendliness; lists fully
+  replace (no merge) when a higher-priority source is set.
+
+**Wiring notes:**
+- `GovernanceConfig.Load` now has a two-arg overload taking `IWorkspaceSettingsStore?`;
+  the legacy single-arg `Load(workingDirectory)` calls it with `settings: null`
+  so existing call sites stay green.
+- DI in `Sovrant.Runtime.ServiceCollectionExtensions` resolves the store via
+  `sp.GetService<IWorkspaceSettingsStore>()` so the deferred-factory pattern
+  works regardless of registration order.
+- `GovernanceConfig.SaveToStoreAsync(store)` is the single write entry point
+  used by both Web and Desktop Settings UIs.
+- **Settings UI write paths are now DB-backed:**
+  - `Sovrant.Web/Components/Pages/Governance.razor` — injects
+    `IWorkspaceSettingsStore`, calls `SaveToStoreAsync` on save instead of
+    serializing to `~/.sovrant/governance.json`.
+  - `Sovrant.Desktop/ViewModels/GovernanceViewModel.cs` — takes
+    `IWorkspaceSettingsStore?` via DI, same write path.
+- **Reading list values:** the loader replaces (not merges) the JSON-file list
+  when DB / env values are set. This matches the "DB is the persistent source
+  of truth" model and avoids silent contamination by leftover JSON-file entries.
+
+**Tests:** 14 new resolver tests (bool truthy/falsy forms, env-wins, store-wins,
+fallback, bad values; list JSON/CSV parsing, fallback identity, bad JSON,
+empty-string-as-unset) + 5 new `GovernanceConfigTests` cases (DB overrides
+JSON, DB-missing falls back to JSON, null-store legacy parity, full save round-trip,
+all-fields persistence). All 859 Runtime, 229 Agents, and 164 Server tests pass.
+
+**Out of scope for step 2 (deferred — see Roadmap below):**
+- TrustBoundary settings (rows 44-54) and Web UI — step 3 ✅ done.
+- Hot-reload across all Bucket-B settings — step 4 (cross-cutting).
+- Desktop TrustBoundary UI — step 5.
+- Settings UI for step-1 scalars (executor/agent/compaction) — step 6 (optional).
+- Per-workspace overrides (vs the current global-only model) — step 7.
+
+## Bucket-B Roadmap
+
+Steps 1 and 2 established the env > DB > snapshot pipeline and the resolver helpers.
+The remaining work splits along three axes — **scope of settings**, **read vs write**,
+and **single-process vs cross-process consistency**. This roadmap orders the
+remaining steps so each one ships an independently usable improvement and so that
+foundational primitives (mutable runtime singletons, the per-workspace dimension)
+land before the UI work that depends on them.
+
+### Step 3 — TrustBoundary read path + Web UI ✅ DONE
+
+Rows 44-54 (`TrustBoundaryConfig`, `SanitizerConfig`, `IntentVerificationConfig`)
+now flow through the same env > DB > snapshot > defaults pipeline as Bucket-B
+steps 1 and 2.
+
+**Keys added to `WorkspaceSettingsKeys`:**
+- `trustboundary.enabled`
+- `trustboundary.sanitizer.{enabled,mode,corporate_domains,custom_patterns,allow_list,exempt_providers,log_redactions}`
+- `trustboundary.intent.{enabled,clarify_ambiguous,block_harmful}`
+
+**Read path:** `TrustBoundaryConfig.Resolve(snapshot, settings)` constructs a
+fresh `TrustBoundaryConfig` (and child `SanitizerConfig` / `IntentVerificationConfig`
+instances, since all properties are `init`-only) layered as env > DB > snapshot.
+The DI registration in `ServiceCollectionExtensions` now resolves a singleton
+`TrustBoundaryConfig` from `Resolve(config.TrustBoundary, IWorkspaceSettingsStore?)`
+and downstream sanitizer / ethical-harness / intent registrations consume that
+singleton — `config.TrustBoundary` is no longer read directly. The
+`EthicalHarness` branch is currently snapshot-only (no DB keys are defined yet).
+
+**`CustomPatterns` (row 48):** JSON-encoded `List<CustomPattern>` (record with
+`Name`, `RegexPattern`, `Action`). Env vars accept the same JSON; comma-separated
+form is *not* supported for this list because each entry has structure.
+
+**Write path:** `TrustBoundaryConfig.SaveToStoreAsync(store)` writes the 11 keys
+to the global workspace row. Validation runs first (Q3 decision — validate on
+save) and rejects unknown sanitizer modes and non-compiling custom regexes
+before any DB write happens, so a partial half-saved state is impossible.
+
+**Validation also retro-fitted to `GovernanceConfig.SaveToStoreAsync`:** rejects
+unknown `GovernanceLevelName` values and non-compiling secret regexes.
+
+**Web UI:** new `/trust-boundary` page (`Sovrant.Web/Components/Pages/TrustBoundaryPage.razor`)
+with master-toggle, sanitizer mode/toggles, list editors for corporate domains,
+allow list, exempt providers, custom patterns, and the three intent toggles.
+Linked from the governance secondary panel (`GovernancePanel.razor`). Direct
+DI inject of `IWorkspaceSettingsStore` and `SovrantConfig` — no separate HTTP
+endpoint needed for Blazor Server.
+
+**Tests:** 8 new `TrustBoundaryConfigTests` (null-store, store-overrides-snapshot,
+custom-pattern JSON round-trip, save persists all fields, save→load round-trip,
+invalid mode rejected, invalid regex rejected, valid config passes Validate) +
+2 new `GovernanceConfigTests` (invalid level rejected, invalid secret regex
+rejected). Full Runtime suite: 869 passed, 0 failed.
+
+**Acceptance:** TrustBoundary fields persist to the DB and load on next process
+start. Restart still required for the change to take effect at runtime — that's
+step 4.
+
+### Step 4 — Hot-reload via mutable runtime singletons (cross-cutting) ✅ DONE
+
+**Semantics (decided):** *honour on next turn*. In-flight requests keep their
+captured config; the next call into a live consumer sees the new values. We do
+not drop or re-initialise live sessions.
+
+**What shipped:**
+
+1. `Sovrant.Runtime.Workspaces.ILiveSettings<T>` (`Current` + `OnChanged(handler)`
+   returning `IDisposable`) and `LiveSettings<T>` (the mutable wrapper) plus
+   `LiveSettingsRegistry` (fan-out `ReloadAll`). `LiveSettings.Static<T>` covers
+   tests / call sites that hold a static snapshot.
+2. Cheap-tier wrappers (read `Current` on each use): `ExecutorOptions`,
+   `CompactionSettings`, `AgentSystemConfig` — `LlmExecutor`,
+   `ConversationRuntime`, `OrchestrationCoordinator`,
+   `ProcessBasedOrchestrationSystem` migrated. `MaxConcurrentAgents` stays
+   captured at construction (semaphore can't be resized mid-flight) — documented
+   in-source.
+3. Expensive-tier wrappers (subscribe and atomically swap internal state via
+   `Volatile.Read/Write` over a `Snapshot` record):
+   - `GovernanceMonitor` swaps `RuleSet(Config, Level, SecretDetector,
+     CommandDetector, ConfigProtection)`.
+   - `PromptSanitizer` swaps the detector array.
+   - `ContentPolicyEngine` swaps `Snapshot(Policy, CustomBlockedRegexes)`.
+   Each implements `IDisposable` to drop its `OnChanged` subscription.
+4. DI: `LiveSettingsRegistry` registered as a singleton. Each setting registers a
+   `LiveSettings<T>` (self-registering with the registry) plus an
+   `ILiveSettings<T>` alias and a convenience `T` resolver from `Current`.
+5. Settings UI fan-out: `Sovrant.Web` `Governance.razor` and
+   `TrustBoundaryPage.razor` plus the Desktop `GovernanceViewModel` call
+   `LiveSettingsRegistry.ReloadAll()` immediately after `SaveToStoreAsync`.
+
+**Tests:** Added `LiveSettingsTests` (5 tests over the primitive),
+`HotReloadEndToEndTests` (governance + sanitizer end-to-end through
+`SaveToStoreAsync` → `ReloadAll`), plus per-component hot-reload tests in
+`GovernanceMonitorTests`, `PromptSanitizerTests`, `ContentPolicyEngineTests`.
+Full Runtime suite: 877 passed, 0 failed.
+
+**Acceptance:** Save in the Settings UI → next call into the affected service
+sees the new values, no restart. Validated end-to-end.
+
+### Step 5 — Desktop TrustBoundary UI ✅ DONE
+
+Avalonia view + view-model now mirror the Web `/trust-boundary` page.
+
+**Shipped:**
+
+1. `Sovrant.Desktop/ViewModels/TrustBoundaryViewModel.cs` — observable
+   properties for the master toggle, sanitizer enable/mode/log-redactions,
+   the three intent toggles, plus `ObservableCollection`s for corporate
+   domains, allow-list, exempt providers, and `CustomPattern` rows. Reads via
+   `TrustBoundaryConfig.Resolve(_config.TrustBoundary, _settings)`. Save runs
+   `TrustBoundaryConfig.SaveToStoreAsync(store)` then
+   `LiveSettingsRegistry.ReloadAll()` so step 4's hot-reload kicks in
+   immediately. Validation errors surface via `StatusMessage`.
+2. `Sovrant.Desktop/Views/TrustBoundaryView.axaml` (+ `.axaml.cs`) — scrollable
+   form with Add/Remove rows for the three string lists and a 4-column grid
+   editor for `CustomPattern` (name, regex, action). Themed via the existing
+   `Surface*` / `Brand*` / `Status*` `DynamicResource` tokens.
+3. DI: `services.AddTransient<TrustBoundaryViewModel>()` in `App.axaml.cs`.
+4. Nav: `MainViewModel.OnNavigationRequested` resolves `"TrustBoundary"`
+   to the new VM. `Views/MainWindow.axaml` declares the
+   `vm:TrustBoundaryViewModel` → `views:TrustBoundaryView` `DataTemplate`.
+   `Views/GovernancePanelView.axaml` adds a "🔒  Trust Boundary" button to the
+   governance group panel between Governance and Diagnostics.
+
+**Acceptance:** Navigate Governance group → Trust Boundary → edit values →
+Save → next conversation turn picks up the new sanitizer / intent settings
+without restart (via step 4's `ReloadAll`).
+
+### Step 6 — Settings UI for step-1 scalars (optional)
+
+Currently the executor / agent / compaction tunables (rows 30-32, 33, 34) have
+no UI at all — env vars and direct `workspace_settings` rows are the only
+write paths. If users want to tune these without leaving the app, add a single
+"Performance & Limits" panel to Web + Desktop. This is genuinely optional;
+power users will edit env vars and casual users won't touch these.
+
+### Step 7 — Per-workspace overrides
+
+Every step-1/2/3 consumer reads `GetGlobalAsync` (the empty-string workspace
+row). The `IWorkspaceSettingsStore` interface already supports per-workspace
+rows; what's missing is:
+
+1. A way for consumers to know which workspace they're operating in
+   (`WorkspaceContext` exists but isn't threaded through every config consumer).
+2. UI affordance — "this workspace" vs "default for all workspaces" toggle on
+   each settings page.
+3. A merge resolver that reads the workspace row, falls back to the global row,
+   and finally to the existing snapshot/defaults chain.
+
+This is a real UX win for shared installations but is a deeper change than the
+prior steps. Recommend deferring until at least one user asks for it.
+
+### Open questions — resolved
+
+1. **Hot-reload semantics for in-flight sessions** — *honour on next turn*.
+   Recorded in step 4 above.
+2. **Settings audit trail** — *deferred until there's a shared-tenant story*.
+   For single-user desktop / one-admin server installs the value is modest
+   (settings rarely change; one person makes the change). For multi-admin
+   server deployments compliance traceability becomes a real win — defer
+   that work to a future "team installations" milestone. The data model is
+   purely additive (separate `settings_audit` table; no consumer changes),
+   so deferring doesn't lock anything in.
+3. **Schema validation on `SaveAsync`** — *yes, write-time validation*.
+   Each `SaveToStoreAsync` enforces shape constraints (enum values, regex
+   compilability, non-negative integers, valid mode strings) and throws
+   `ArgumentException` rather than persisting bad data. The resolver's
+   read-time permissiveness stays as a safety net for legacy / hand-edited
+   rows. Step 3 introduces this for `TrustBoundaryConfig.SaveToStoreAsync`;
+   step 2's `GovernanceConfig.SaveToStoreAsync` is retro-fitted in the same
+   step for consistency.
+

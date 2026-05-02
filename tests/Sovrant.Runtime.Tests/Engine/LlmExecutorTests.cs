@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Runtime.Engine;
 using Sovrant.Runtime.Storage;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime.Tests.Engine;
 
@@ -55,7 +56,7 @@ public sealed class LlmExecutorTests : IAsyncDisposable
             ProjectId: "proj-test");
 
     private LlmExecutor MakeExecutor(IStepRunner stepRunner, ExecutorOptions? options = null) =>
-        new(stepRunner, _traceStore, options, NullLogger<LlmExecutor>.Instance);
+        new(stepRunner, _traceStore, LiveSettings.Static(options ?? new ExecutorOptions()), NullLogger<LlmExecutor>.Instance);
 
     private static StepOutcome Succeed(int stepIndex, string summary = "ok") =>
         new(stepIndex, StepStatus.Succeeded, summary, null, MatchedExpectation: true,

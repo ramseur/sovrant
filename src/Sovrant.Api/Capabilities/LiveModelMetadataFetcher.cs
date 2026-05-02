@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Sovrant.Api.Auth;
 using Sovrant.Api.Config;
 
 namespace Sovrant.Api.Capabilities;
@@ -15,6 +16,7 @@ public sealed partial class LiveModelMetadataFetcher
     private readonly IModelCapabilityRegistry _registry;
     private readonly HttpClient _httpClient;
     private readonly CredentialConfig? _credentials;
+    private readonly IApiKeyResolver? _keyResolver;
     private readonly ILogger<LiveModelMetadataFetcher> _logger;
 
     /// <summary>OpenRouter's public model listing — no auth required.</summary>
@@ -24,12 +26,14 @@ public sealed partial class LiveModelMetadataFetcher
         IModelCapabilityRegistry registry,
         HttpClient httpClient,
         ILogger<LiveModelMetadataFetcher> logger,
-        CredentialConfig? credentials = null)
+        CredentialConfig? credentials = null,
+        IApiKeyResolver? keyResolver = null)
     {
         _registry = registry;
         _httpClient = httpClient;
         _logger = logger;
         _credentials = credentials;
+        _keyResolver = keyResolver;
     }
 
     /// <summary>
@@ -38,8 +42,14 @@ public sealed partial class LiveModelMetadataFetcher
     /// </summary>
     public async Task FetchAsync(CancellationToken ct = default)
     {
-        // Only fetch if an OpenRouter key is configured (no point otherwise)
-        var openRouterKey = _credentials?.OpenRouterApiKey ?? Environment.GetEnvironmentVariable("OPENROUTER_API_KEY");
+        // Only fetch if an OpenRouter key is configured (no point otherwise).
+        // env > store > snapshot via the resolver; falls back to env+snapshot when
+        // no resolver is present (very early bootstrap).
+        var openRouterKey = _keyResolver is not null
+            ? await _keyResolver.ResolveAsync(
+                CredentialKeys.OpenRouterApiKey, "OPENROUTER_API_KEY",
+                _credentials?.OpenRouterApiKey, ct).ConfigureAwait(false)
+            : Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ?? _credentials?.OpenRouterApiKey;
         if (string.IsNullOrEmpty(openRouterKey))
             return;
 

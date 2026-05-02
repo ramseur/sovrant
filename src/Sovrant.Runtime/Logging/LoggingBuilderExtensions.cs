@@ -18,11 +18,18 @@ public static class LoggingBuilderExtensions
     /// noise should be suppressed unless the user explicitly sets <c>SOVRANT_LOG_LEVEL</c>.
     /// When <c>null</c>, uses the same level as the global minimum.
     /// </param>
+    /// <param name="logFileOverride">
+    /// Optional log file path supplied by <c>BootstrapConfig.LogFile</c>. When non-null, this
+    /// takes precedence over <c>SOVRANT_LOG_FILE</c> and the built-in default.
+    /// </param>
     public static ILoggingBuilder AddSovrantLogging(
         this ILoggingBuilder builder,
-        LogLevel? consoleMinOverride = null)
+        LogLevel? consoleMinOverride = null,
+        string? logFileOverride = null)
     {
         var config = SovrantLogConfig.FromEnvironment();
+        if (!string.IsNullOrEmpty(logFileOverride))
+            config = config with { FilePath = logFileOverride };
 
         builder.ClearProviders();
         builder.SetMinimumLevel(config.MinimumLevel);

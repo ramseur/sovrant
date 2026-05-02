@@ -11,6 +11,7 @@ using Sovrant.Runtime.Memory;
 using Sovrant.Runtime.Session;
 using Sovrant.Api.Capabilities;
 using Sovrant.Runtime.Tools;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime.Conversation;
 
@@ -34,6 +35,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly IModelCapabilityRegistry? _capabilityRegistry;
     private readonly Governance.IIntentGate? _intentGate;
     private readonly Metrics.CostModelLoggerFacade? _costFacade;
+    private readonly ILiveSettings<CompactionSettings> _compaction;
     private readonly List<InputMessage> _history = [];
     private string _systemPrompt;
     /// <summary>Once true, all subsequent turns expose tools (session used tools at least once).</summary>
@@ -96,7 +98,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         string? systemPromptOverride = null,
         IModelCapabilityRegistry? capabilityRegistry = null,
         Governance.IIntentGate? intentGate = null,
-        Metrics.CostModelLoggerFacade? costFacade = null)
+        Metrics.CostModelLoggerFacade? costFacade = null,
+        IWorkspaceSettingsStore? settings = null,
+        ILiveSettings<CompactionSettings>? compaction = null)
     {
         _router = router;
         _toolExecutor = toolExecutor;
@@ -109,6 +113,11 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         _capabilityRegistry = capabilityRegistry;
         _intentGate = intentGate;
         _costFacade = costFacade;
+        // Hot-reload path: when DI supplies a live wrapper, use it directly so
+        // Settings UI changes take effect on the next turn. Otherwise fall back
+        // to a static snapshot resolved once from env > store > settings.json.
+        _compaction = compaction ?? LiveSettings.Static(
+            CompactionSettings.Resolve(settings, fallback: _config.CompactThreshold));
         _systemPrompt = systemPromptOverride ?? BuildSystemPrompt();
     }
 
@@ -671,11 +680,12 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
     /// <summary>
     /// Summarises the oldest portion of <see cref="_history"/> using the LLM when the input
-    /// token count approaches <see cref="SovrantConfig.CompactThreshold"/>.
+    /// token count approaches the resolved compact threshold (env &gt; workspace_settings &gt;
+    /// <see cref="SovrantConfig.CompactThreshold"/>).
     /// </summary>
     private async Task MaybeCompactHistoryAsync(int inputTokens, CancellationToken ct)
     {
-        var threshold = _config.CompactThreshold;
+        var threshold = _compaction.Current.Threshold;
         if (threshold <= 0 || inputTokens < threshold) return;
         if (_history.Count < 6) return;
 

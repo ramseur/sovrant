@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Config;
 using Sovrant.Agents.Models;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Agents.Isolated;
 
@@ -22,14 +23,21 @@ public sealed partial class ProcessBasedOrchestrationSystem : IOrchestrationSyst
         new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _taskCts =
         new(StringComparer.Ordinal);
-    private readonly AgentSystemConfig _config;
+    private readonly ILiveSettings<AgentSystemConfig> _config;
     private readonly ILogger<ProcessBasedOrchestrationSystem> _logger;
     private volatile bool _disposed;
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Dispatching task '{TaskId}' to process agent '{AgentName}'")]
     private static partial void LogDispatch(ILogger logger, string taskId, string agentName);
 
-    public ProcessBasedOrchestrationSystem(AgentSystemConfig config, ILogger<ProcessBasedOrchestrationSystem> logger)
+    /// <summary>
+    /// DI ctor — accepts the hot-reloadable <see cref="ILiveSettings{AgentSystemConfig}"/>.
+    /// Tests with a static <see cref="AgentSystemConfig"/> wrap it in
+    /// <see cref="LiveSettings.Static{T}"/>.
+    /// </summary>
+    public ProcessBasedOrchestrationSystem(
+        ILiveSettings<AgentSystemConfig> config,
+        ILogger<ProcessBasedOrchestrationSystem> logger)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(logger);
@@ -73,7 +81,7 @@ public sealed partial class ProcessBasedOrchestrationSystem : IOrchestrationSyst
 
         // Create linked CTS: caller's ct + timeout
         using var timeoutCts = new CancellationTokenSource(
-            TimeSpan.FromSeconds(_config.TaskTimeoutSeconds));
+            TimeSpan.FromSeconds(_config.Current.TaskTimeoutSeconds));
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
 
         _taskCts[task.Id] = linkedCts;

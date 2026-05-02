@@ -1,5 +1,6 @@
 using Sovrant.Api.Types;
 using Sovrant.Runtime.TrustBoundary;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime.Tests.TrustBoundary;
 
@@ -158,5 +159,40 @@ public sealed class PromptSanitizerTests
         var text = ((InputContentBlock.TextBlock)result.Request.Messages[0].Content[0]).Text;
         Assert.DoesNotContain("Project Titan", text);
         Assert.Contains("[CODENAMES_1]", text);
+    }
+
+    [Fact]
+    public void HotReload_RefreshesCustomPatterns()
+    {
+        var current = new TrustBoundaryConfig
+        {
+            Enabled = true,
+            Sanitizer = new SanitizerConfig { Enabled = true },
+        };
+        var live = new LiveSettings<TrustBoundaryConfig>(() => current);
+        using var sanitizer = new PromptSanitizer(live);
+
+        var request = new MessagesRequest("gpt-4o-mini", 1024,
+            [InputMessage.UserText("Codename: Falcon")]);
+
+        var beforeText = ((InputContentBlock.TextBlock)
+            sanitizer.Sanitize(request).Request.Messages[0].Content[0]).Text;
+        Assert.Contains("Falcon", beforeText);
+
+        current = new TrustBoundaryConfig
+        {
+            Enabled = true,
+            Sanitizer = new SanitizerConfig
+            {
+                Enabled = true,
+                CustomPatterns = [new CustomPattern("CODENAMES", @"Falcon", "redact")],
+            },
+        };
+        live.Reload();
+
+        var afterText = ((InputContentBlock.TextBlock)
+            sanitizer.Sanitize(request).Request.Messages[0].Content[0]).Text;
+        Assert.DoesNotContain("Falcon", afterText);
+        Assert.Contains("[CODENAMES_1]", afterText);
     }
 }

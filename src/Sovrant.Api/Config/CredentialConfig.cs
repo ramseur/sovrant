@@ -27,9 +27,6 @@ public sealed class CredentialConfig
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "String form used throughout for trailing-slash normalisation and HttpClient.BaseAddress construction.")]
     public string OllamaBaseUrl { get; init; } = "http://localhost:11434/v1";
 
-    /// <summary>Static bearer token for server auth (SOVRANT_TOKEN > Server:Token).</summary>
-    public string SovrantToken { get; init; } = string.Empty;
-
     /// <summary>Brave Search API key (BRAVE_API_KEY).</summary>
     public string BraveApiKey { get; init; } = string.Empty;
 
@@ -83,10 +80,6 @@ public sealed class CredentialConfig
             ?? "http://localhost:11434/v1";
         if (!ollamaUrl.EndsWith('/')) ollamaUrl += "/";
 
-        var sovrantToken = Environment.GetEnvironmentVariable("SOVRANT_TOKEN")
-            ?? configuration["Server:Token"]
-            ?? string.Empty;
-
         return new CredentialConfig
         {
             LlmApiKey = llmApiKey,
@@ -94,7 +87,6 @@ public sealed class CredentialConfig
             ProviderApiKey = providerApiKey,
             ProviderBaseUrl = providerBaseUrl,
             OllamaBaseUrl = ollamaUrl,
-            SovrantToken = sovrantToken,
             BraveApiKey = Environment.GetEnvironmentVariable("BRAVE_API_KEY") ?? string.Empty,
             FirecrawlApiKey = Environment.GetEnvironmentVariable("FIRECRAWL_API_KEY") ?? string.Empty,
             OpenRouterApiKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ?? string.Empty,

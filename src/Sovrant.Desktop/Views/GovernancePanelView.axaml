@@ -14,6 +14,11 @@
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="🔒  Trust Boundary"
+                    Command="{Binding NavigateCommand}" CommandParameter="TrustBoundary"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
             <Button Content="🔧  Diagnostics"
                     Command="{Binding NavigateCommand}" CommandParameter="Diagnostics"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"

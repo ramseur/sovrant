@@ -98,6 +98,7 @@ public partial class MainViewModel : ViewModelBase
             "Skills" => _services.GetRequiredService<SkillsViewModel>(),
             "Memory" => _services.GetRequiredService<MemoryViewModel>(),
             "Governance" => _services.GetRequiredService<GovernanceViewModel>(),
+            "TrustBoundary" => _services.GetRequiredService<TrustBoundaryViewModel>(),
             "Projects" => _services.GetRequiredService<ProjectsViewModel>(),
             "Workspaces" => _services.GetRequiredService<WorkspacesViewModel>(),
             "Agents" => _services.GetRequiredService<AgentsViewModel>(),

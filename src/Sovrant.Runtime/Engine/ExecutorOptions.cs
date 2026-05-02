@@ -1,3 +1,5 @@
+using Sovrant.Runtime.Workspaces;
+
 namespace Sovrant.Runtime.Engine;
 
 /// <summary>
@@ -13,6 +15,19 @@ public sealed record ExecutorOptions(
 {
     /// <summary>Default options — 3 re-plans, 2 retries per step.</summary>
     public static ExecutorOptions Default { get; } = new();
+
+    /// <summary>
+    /// Resolves <see cref="ExecutorOptions"/> from env &gt; <see cref="IWorkspaceSettingsStore"/>
+    /// &gt; defaults. Env vars: <c>SOVRANT_EXECUTOR_MAX_REPLANS</c>,
+    /// <c>SOVRANT_EXECUTOR_MAX_STEP_RETRIES</c>.
+    /// </summary>
+    public static ExecutorOptions Resolve(IWorkspaceSettingsStore? settings) => new(
+        MaxReplans: WorkspaceSettingsResolver.ResolveInt(
+            settings, WorkspaceSettingsKeys.ExecutorMaxReplans,
+            "SOVRANT_EXECUTOR_MAX_REPLANS", fallback: 3),
+        MaxStepRetries: WorkspaceSettingsResolver.ResolveInt(
+            settings, WorkspaceSettingsKeys.ExecutorMaxStepRetries,
+            "SOVRANT_EXECUTOR_MAX_STEP_RETRIES", fallback: 2));
 }
 
 /// <summary>

@@ -32,13 +32,6 @@ public class OpenAiCompatProvider : ILlmProvider
     private static readonly Action<ILogger, string, Exception?> _logSseSkip =
         LoggerMessage.Define<string>(LogLevel.Warning, new EventId(4, "SseSkip"), "Skipping unparseable SSE data: '{Data}'.");
 
-    /// <summary>Initializes a new instance of <see cref="OpenAiCompatProvider"/>.</summary>
-    /// <param name="http">The HTTP client configured for this provider.</param>
-    /// <param name="auth">The authentication provider.</param>
-    /// <param name="logger">The logger.</param>
-    public OpenAiCompatProvider(HttpClient http, IAuthProvider auth, ILogger logger)
-        : this(http, auth, logger, webSearch: null, capabilities: null, credentials: null) { }
-
     /// <summary>
     /// Initializes a new instance with the dependencies required for the
     /// centralised <see cref="NativeWebSearchInjector"/> decision. When any
@@ -49,9 +42,9 @@ public class OpenAiCompatProvider : ILlmProvider
         HttpClient http,
         IAuthProvider auth,
         ILogger logger,
-        WebSearchOptions? webSearch,
-        IModelCapabilityRegistry? capabilities,
-        CredentialConfig? credentials)
+        WebSearchOptions? webSearch = null,
+        IModelCapabilityRegistry? capabilities = null,
+        CredentialConfig? credentials = null)
     {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(auth);

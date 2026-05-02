@@ -3,6 +3,7 @@ using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Config;
 using Sovrant.Agents.Models;
 using Sovrant.Agents.Shared;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Agents.Tests.Shared;
 
@@ -13,7 +14,7 @@ public sealed class OrchestrationCoordinatorTests : IDisposable
 
     public OrchestrationCoordinatorTests()
     {
-        _coordinator = new OrchestrationCoordinator(_config, NullLogger<OrchestrationCoordinator>.Instance);
+        _coordinator = new OrchestrationCoordinator(LiveSettings.Static(_config), NullLogger<OrchestrationCoordinator>.Instance);
     }
 
     public void Dispose() => _coordinator.Dispose();
@@ -67,7 +68,7 @@ public sealed class OrchestrationCoordinatorTests : IDisposable
     public async Task DispatchAsync_Timeout_Returns_Fail()
     {
         var config = new AgentSystemConfig { TaskTimeoutSeconds = 1 };
-        using var coordinator = new OrchestrationCoordinator(config, NullLogger<OrchestrationCoordinator>.Instance);
+        using var coordinator = new OrchestrationCoordinator(LiveSettings.Static(config), NullLogger<OrchestrationCoordinator>.Instance);
 
         var slowAgent = new SlowAgent("slow", delay: TimeSpan.FromSeconds(10));
         coordinator.AddAgent(slowAgent);
@@ -114,7 +115,7 @@ public sealed class OrchestrationCoordinatorTests : IDisposable
     public async Task MaxConcurrentAgents_Enforces_Limit()
     {
         var config = new AgentSystemConfig { MaxConcurrentAgents = 1, TaskTimeoutSeconds = 10 };
-        using var coordinator = new OrchestrationCoordinator(config, NullLogger<OrchestrationCoordinator>.Instance);
+        using var coordinator = new OrchestrationCoordinator(LiveSettings.Static(config), NullLogger<OrchestrationCoordinator>.Instance);
 
         var trackingAgent = new TrackingAgent("track");
         coordinator.AddAgent(trackingAgent);

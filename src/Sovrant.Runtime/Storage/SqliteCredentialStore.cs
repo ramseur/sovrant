@@ -7,7 +7,8 @@ namespace Sovrant.Runtime.Storage;
 /// <summary>
 /// SQLite-backed credential store. Same AES-256-GCM encryption as <see cref="AesGcmCredentialStore"/>
 /// but stores encrypted blobs in the <c>credentials</c> table instead of individual files.
-/// The master key is still stored on disk at <c>~/.sovrant/credentials/.keystore</c>.
+/// The master key file (<c>.keystore</c>) is the one piece that still lives on disk —
+/// its path is sourced from <see cref="Config.BootstrapConfig.KeystorePath"/> via DI.
 /// </summary>
 internal sealed class SqliteCredentialStore : ICredentialStore, IDisposable
 {
@@ -16,16 +17,16 @@ internal sealed class SqliteCredentialStore : ICredentialStore, IDisposable
     private const int TagSize = 16;
 
     private readonly ISqliteConnectionFactory _connectionFactory;
-    private readonly string _keystoreDir;
+    private readonly string _keystorePath;
     private byte[]? _masterKey;
     private readonly SemaphoreSlim _keyInit = new(1, 1);
 
-    public SqliteCredentialStore(ISqliteConnectionFactory connectionFactory, string? keystoreDir = null)
+    public SqliteCredentialStore(ISqliteConnectionFactory connectionFactory, string? keystorePath = null)
     {
         _connectionFactory = connectionFactory;
-        _keystoreDir = keystoreDir ?? Path.Combine(
+        _keystorePath = keystorePath ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".sovrant", "credentials");
+            ".sovrant", "credentials", ".keystore");
     }
 
     public async Task StoreAsync(string key, string value, CancellationToken ct = default)
@@ -132,22 +133,23 @@ internal sealed class SqliteCredentialStore : ICredentialStore, IDisposable
 
     private async Task<byte[]> LoadOrCreateKeyAsync(CancellationToken ct)
     {
-        Directory.CreateDirectory(_keystoreDir);
-        var keystorePath = Path.Combine(_keystoreDir, ".keystore");
+        var dir = Path.GetDirectoryName(_keystorePath);
+        if (!string.IsNullOrEmpty(dir))
+            Directory.CreateDirectory(dir);
 
-        if (File.Exists(keystorePath))
+        if (File.Exists(_keystorePath))
         {
-            var hex = (await File.ReadAllTextAsync(keystorePath, ct).ConfigureAwait(false)).Trim();
+            var hex = (await File.ReadAllTextAsync(_keystorePath, ct).ConfigureAwait(false)).Trim();
             if (hex.Length == KeySize * 2)
                 return Convert.FromHexString(hex);
         }
 
         var key = new byte[KeySize];
         RandomNumberGenerator.Fill(key);
-        await File.WriteAllTextAsync(keystorePath, Convert.ToHexString(key), ct).ConfigureAwait(false);
+        await File.WriteAllTextAsync(_keystorePath, Convert.ToHexString(key), ct).ConfigureAwait(false);
 
         if (!OperatingSystem.IsWindows())
-            File.SetUnixFileMode(keystorePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            File.SetUnixFileMode(_keystorePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
 
         return key;
     }

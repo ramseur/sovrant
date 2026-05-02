@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Sovrant.Runtime.Storage;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime.Engine;
 
@@ -45,17 +46,22 @@ public sealed partial class LlmExecutor : IExecutor
 
     private readonly IStepRunner _stepRunner;
     private readonly IRuntimeTraceStore _traceStore;
-    private readonly ExecutorOptions _options;
+    private readonly ILiveSettings<ExecutorOptions> _options;
     private readonly ILogger<LlmExecutor> _logger;
     private readonly TimeProvider _clock;
     private readonly Governance.IPlanPresenter? _planPresenter;
     private readonly Governance.PlanApprovalGate? _approvalGate;
     private readonly Governance.PlanProgressTracker? _progressTracker;
 
+    /// <summary>
+    /// DI ctor — accepts the hot-reloadable <see cref="ILiveSettings{ExecutorOptions}"/>.
+    /// Tests with a static <see cref="ExecutorOptions"/> wrap it in
+    /// <see cref="LiveSettings.Static{T}"/>.
+    /// </summary>
     public LlmExecutor(
         IStepRunner stepRunner,
         IRuntimeTraceStore traceStore,
-        ExecutorOptions? options = null,
+        ILiveSettings<ExecutorOptions> options,
         ILogger<LlmExecutor>? logger = null,
         TimeProvider? clock = null,
         Governance.IPlanPresenter? planPresenter = null,
@@ -64,7 +70,7 @@ public sealed partial class LlmExecutor : IExecutor
     {
         _stepRunner = stepRunner ?? throw new ArgumentNullException(nameof(stepRunner));
         _traceStore = traceStore ?? throw new ArgumentNullException(nameof(traceStore));
-        _options = options ?? ExecutorOptions.Default;
+        _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<LlmExecutor>.Instance;
         _clock = clock ?? TimeProvider.System;
         _planPresenter = planPresenter;
@@ -112,7 +118,7 @@ public sealed partial class LlmExecutor : IExecutor
                             currentPlan, outcomes, replanCount, ExecutionTerminalState.Completed);
 
                     case InnerTerminalKind.ReplanRequested:
-                        if (replanCount >= _options.MaxReplans)
+                        if (replanCount >= _options.Current.MaxReplans)
                         {
                             LogReplanBudgetExhausted(_logger, runContext.RuntimeRunId, replanCount);
                             await AppendRunCompletedAsync(
@@ -241,10 +247,11 @@ public sealed partial class LlmExecutor : IExecutor
                             OffendingStepIndex: step.Index));
 
                     case StepStatus.Failed:
-                        if (attempt <= _options.MaxStepRetries)
+                        var maxRetries = _options.Current.MaxStepRetries;
+                        if (attempt <= maxRetries)
                         {
                             LogStepRetry(
-                                _logger, runContext.RuntimeRunId, step.Index, attempt, _options.MaxStepRetries + 1);
+                                _logger, runContext.RuntimeRunId, step.Index, attempt, maxRetries + 1);
                             attempt++;
                             continue;
                         }

@@ -27,7 +27,6 @@ public static class ServiceCollectionExtensions
 
         var apiKey = credentials.LlmApiKey;
         var baseUrl = credentials.LlmBaseUrl;
-        var providerApiKey = credentials.ProviderApiKey;
         var providerApiUrl = credentials.ProviderBaseUrl;
         var hasProviderApi = credentials.HasProviderApi;
         var ollamaUrl = credentials.OllamaBaseUrl;
@@ -50,6 +49,11 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IAuthProvider>(new ApiKeyAuthProvider(apiKey));
 
+        // Bootstrap-time API-key resolver — env > snapshot. Sovrant.Runtime
+        // overrides this with a credential-store-aware adapter once the encrypted
+        // store is open (see CredentialStoreApiKeyResolver).
+        services.AddSingleton<IApiKeyResolver, EnvApiKeyResolver>();
+
         // Model capability registry (Phase 54) — layered resolution:
         // user overrides > bundled overrides > live metadata > defaults.
         services.AddSingleton<IModelCapabilityRegistry>(sp =>
@@ -61,7 +65,8 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<IModelCapabilityRegistry>(),
                 sp.GetRequiredService<IHttpClientFactory>().CreateClient("ModelMetadataFetcher"),
                 sp.GetRequiredService<ILogger<LiveModelMetadataFetcher>>(),
-                sp.GetService<CredentialConfig>()));
+                sp.GetService<CredentialConfig>(),
+                sp.GetService<IApiKeyResolver>()));
 
         // Providers inject ILogger (non-generic base interface). Register a factory-backed instance
         // so the DI container can resolve it for typed HTTP clients.
@@ -78,13 +83,14 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<OllamaProvider>(c => c.BaseAddress = new Uri(ollamaUrl));
         if (hasProviderApi)
         {
+            // Bucket-C: x-api-key is now resolved per-request inside BuildRequestAsync via
+            // IApiKeyResolver (env > store > snapshot), so we no longer bake the snapshot
+            // value into the HttpClient default headers — that path missed runtime rotations
+            // and used a malformed Authorization scheme.
             services.AddHttpClient<ProviderApiProvider>(c =>
             {
                 c.BaseAddress = new Uri(providerApiUrl!);
                 c.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
-                if (!string.IsNullOrWhiteSpace(providerApiKey))
-                    c.DefaultRequestHeaders.Authorization =
-                        new System.Net.Http.Headers.AuthenticationHeaderValue("x-api-key", providerApiKey);
             });
         }
         services.AddHttpClient("SmartRouterPing");

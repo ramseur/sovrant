@@ -21,6 +21,8 @@ public sealed class ProviderApiProvider : ILlmProvider
     private readonly ILogger<ProviderApiProvider> _logger;
     private readonly WebSearchOptions? _webSearch;
     private readonly IModelCapabilityRegistry? _capabilities;
+    private readonly IApiKeyResolver? _keyResolver;
+    private readonly string? _providerKeyFallback;
     private readonly bool _hasBraveKey;
     private readonly bool _hasFirecrawlKey;
 
@@ -38,14 +40,16 @@ public sealed class ProviderApiProvider : ILlmProvider
     /// <param name="auth">The authentication provider.</param>
     /// <param name="logger">The logger.</param>
     public ProviderApiProvider(HttpClient http, IAuthProvider auth, ILogger<ProviderApiProvider> logger)
-        : this(http, auth, logger, webSearch: null, capabilities: null, credentials: null) { }
+        : this(http, auth, logger, webSearch: null, capabilities: null, credentials: null, keyResolver: null) { }
 
     /// <summary>
     /// Initializes a new instance with the dependencies required for the
     /// centralised <see cref="NativeWebSearchInjector"/> decision. When
     /// <paramref name="webSearch"/> is <see langword="null"/> Anthropic's
     /// <c>web_search_20250305</c> server tool is never injected — the
-    /// legacy behaviour.
+    /// legacy behaviour. <paramref name="keyResolver"/> enables per-request
+    /// resolution of <c>provider.api_key</c> from the credential store; when
+    /// null we fall back to <paramref name="auth"/> for the legacy single-key path.
     /// </summary>
     public ProviderApiProvider(
         HttpClient http,
@@ -53,7 +57,8 @@ public sealed class ProviderApiProvider : ILlmProvider
         ILogger<ProviderApiProvider> logger,
         WebSearchOptions? webSearch,
         IModelCapabilityRegistry? capabilities,
-        CredentialConfig? credentials)
+        CredentialConfig? credentials,
+        IApiKeyResolver? keyResolver = null)
     {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(auth);
@@ -63,6 +68,8 @@ public sealed class ProviderApiProvider : ILlmProvider
         _logger = logger;
         _webSearch = webSearch;
         _capabilities = capabilities;
+        _keyResolver = keyResolver;
+        _providerKeyFallback = credentials?.ProviderApiKey;
         _hasBraveKey = !string.IsNullOrWhiteSpace(credentials?.BraveApiKey);
         _hasFirecrawlKey = !string.IsNullOrWhiteSpace(credentials?.FirecrawlApiKey);
     }
@@ -127,7 +134,18 @@ public sealed class ProviderApiProvider : ILlmProvider
 
     private async Task<HttpRequestMessage> BuildRequestAsync(MessagesRequest req, CancellationToken ct)
     {
-        var apiKey = await _auth.GetAuthHeaderAsync(ct).ConfigureAwait(false);
+        // Prefer the dedicated provider.api_key resolver (env > store > snapshot)
+        // when wired. Falls through to the shared IAuthProvider when the resolver
+        // returns nothing or isn't supplied (legacy single-key deployments).
+        string? apiKey = null;
+        if (_keyResolver is not null)
+        {
+            apiKey = await _keyResolver.ResolveAsync(
+                CredentialKeys.ProviderApiKey, "PROVIDER_API_KEY",
+                _providerKeyFallback, ct).ConfigureAwait(false);
+        }
+        if (string.IsNullOrEmpty(apiKey))
+            apiKey = await _auth.GetAuthHeaderAsync(ct).ConfigureAwait(false);
         var plan = ResolvePlan(req.Model);
 
         // When the plan suppresses the WebSearch function tool, drop it from the

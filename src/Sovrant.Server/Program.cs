@@ -17,6 +17,7 @@ using Sovrant.Tools;
 using Sovrant.Tools.Extended;
 
 // ── Configuration ─────────────────────────────────────────────────────────────
+var bootstrapConfig = BootstrapConfigLoader.Load(args);
 var sovrantConfig = ConfigLoader.Load();
 var apiConfig = ConfigLoader.BuildConfiguration();
 var credentials = CredentialConfig.Resolve(apiConfig);
@@ -34,7 +35,7 @@ builder.WebHost.ConfigureKestrel(o =>
     o.Limits.MaxRequestLineSize = 16 * 1024;         // 16 KB
 });
 
-builder.Services.AddLogging(b => b.AddSovrantLogging());
+builder.Services.AddLogging(b => b.AddSovrantLogging(logFileOverride: bootstrapConfig.LogFile));
 
 // Mutable runtime config — single source of truth for live config changes.
 // LlmApiKey lives in the encrypted credential store, not here.
@@ -46,7 +47,7 @@ var mutableConfig = new MutableServerConfig(
 builder.Services.AddSingleton(mutableConfig);
 
 // Core runtime (providers + router + session store + conversation runtime).
-builder.Services.AddSovrantRuntime(sovrantConfig);
+builder.Services.AddSovrantRuntime(sovrantConfig, bootstrapConfig);
 
 // Override IAuthProvider, IPermissionPolicy, and IPermissionModeAccessor with mutable variants.
 // In Microsoft DI the last registration wins for GetRequiredService<T>().
@@ -144,11 +145,12 @@ builder.Services.AddRateLimiter(options =>
 });
 
 // ── Startup validation ────────────────────────────────────────────────────────
-if (string.IsNullOrEmpty(credentials.SovrantToken))
+if (string.IsNullOrEmpty(bootstrapConfig.ServerToken))
 {
     throw new InvalidOperationException(
-        "SOVRANT_TOKEN environment variable is required. " +
-        "Set it to a non-empty bearer token that clients must supply to authenticate requests.");
+        "A server bearer token is required. Set it via SOVRANT_TOKEN, " +
+        "the \"serverToken\" field of sovrant.config.json, or --config <path>. " +
+        "Clients must supply this token to authenticate requests.");
 }
 
 // ── App pipeline ──────────────────────────────────────────────────────────────

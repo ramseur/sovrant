@@ -29,8 +29,32 @@ public static class ServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        var resolvedConfig = config ?? AgentSystemConfig.FromEnvironment();
-        services.AddSingleton(resolvedConfig);
+        // When an explicit config is supplied (tests, programmatic callers) honour it
+        // and wrap it in a static live-settings handle so consumers that depend on
+        // ILiveSettings<AgentSystemConfig> still resolve. Otherwise build a hot-reloadable
+        // wrapper that re-resolves env > workspace_settings > defaults on Reload.
+        if (config is not null)
+        {
+            services.AddSingleton(config);
+            services.AddSingleton<Sovrant.Runtime.Workspaces.ILiveSettings<AgentSystemConfig>>(
+                _ => Sovrant.Runtime.Workspaces.LiveSettings.Static(config));
+        }
+        else
+        {
+            services.AddSingleton<Sovrant.Runtime.Workspaces.LiveSettings<AgentSystemConfig>>(sp =>
+            {
+                var live = new Sovrant.Runtime.Workspaces.LiveSettings<AgentSystemConfig>(
+                    () => AgentSystemConfig.Resolve(
+                        sp.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>()));
+                sp.GetRequiredService<Sovrant.Runtime.Workspaces.LiveSettingsRegistry>()
+                    .Register(live);
+                return live;
+            });
+            services.AddSingleton<Sovrant.Runtime.Workspaces.ILiveSettings<AgentSystemConfig>>(
+                sp => sp.GetRequiredService<Sovrant.Runtime.Workspaces.LiveSettings<AgentSystemConfig>>());
+            services.AddSingleton(sp =>
+                sp.GetRequiredService<Sovrant.Runtime.Workspaces.ILiveSettings<AgentSystemConfig>>().Current);
+        }
 
         // Always register shared-backend singletons; the factory only constructs them
         // when UseIsolatedAgents == false.
@@ -39,7 +63,7 @@ public static class ServiceCollectionExtensions
 
         // The factory resolves the correct backend at first resolution.
         services.AddSingleton<IOrchestrationSystem>(sp =>
-            AgentSystemFactory.Create(resolvedConfig, sp));
+            AgentSystemFactory.Create(sp.GetRequiredService<AgentSystemConfig>(), sp));
 
         // Template registry and agent factory
         services.AddSingleton<AgentTemplateRegistry>();

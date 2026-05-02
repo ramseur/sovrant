@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Agents.Config;
 using Sovrant.Agents.Isolated;
 using Sovrant.Agents.Models;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Agents.Tests.Isolated;
 
@@ -18,7 +19,7 @@ public sealed class ProcessBasedOrchestrationSystemTests : IDisposable
 
     public ProcessBasedOrchestrationSystemTests()
     {
-        _system = new ProcessBasedOrchestrationSystem(_config, NullLogger<ProcessBasedOrchestrationSystem>.Instance);
+        _system = new ProcessBasedOrchestrationSystem(LiveSettings.Static(_config), NullLogger<ProcessBasedOrchestrationSystem>.Instance);
     }
 
     public void Dispose() => _system.Dispose();

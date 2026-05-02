@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime.TrustBoundary;
 
@@ -38,11 +39,14 @@ public sealed class EthicalPolicy
 /// or context — but it catches the clearly harmful patterns that no model should
 /// be asked to produce, regardless of its own safety training.
 /// </summary>
-public sealed partial class ContentPolicyEngine : IEthicalHarness
+public sealed partial class ContentPolicyEngine : IEthicalHarness, IDisposable
 {
-    private readonly EthicalPolicy _policy;
-    private readonly List<Regex> _customBlockedRegexes;
     private readonly EthicalAuditLog? _auditLog;
+    private readonly IDisposable? _changedSubscription;
+    private Snapshot _snapshot;
+
+    /// <summary>Atomically swappable bundle of policy + compiled custom regexes.</summary>
+    private sealed record Snapshot(EthicalPolicy Policy, IReadOnlyList<Regex> CustomBlockedRegexes);
 
     // ── Harmful content categories ─────────────────────────────────────
     // Each category has a set of indicator patterns. A single match → block.
@@ -96,24 +100,54 @@ public sealed partial class ContentPolicyEngine : IEthicalHarness
 
     public ContentPolicyEngine(EthicalPolicy? policy = null, EthicalAuditLog? auditLog = null)
     {
-        _policy = policy ?? new EthicalPolicy();
         _auditLog = auditLog;
-        _customBlockedRegexes = [];
-        foreach (var pattern in _policy.CustomBlockedPatterns)
+        _snapshot = BuildSnapshot(policy ?? new EthicalPolicy());
+    }
+
+    /// <summary>
+    /// Hot-reloadable ctor — derives <see cref="EthicalPolicy"/> from
+    /// <see cref="TrustBoundaryConfig.EthicalHarness"/> and atomically swaps the
+    /// policy + compiled custom-blocked regexes on every change notification.
+    /// </summary>
+    [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor]
+    public ContentPolicyEngine(ILiveSettings<TrustBoundaryConfig> liveConfig, EthicalAuditLog? auditLog = null)
+    {
+        ArgumentNullException.ThrowIfNull(liveConfig);
+        _auditLog = auditLog;
+        _snapshot = BuildSnapshot(liveConfig.Current.EthicalHarness);
+        _changedSubscription = liveConfig.OnChanged(fresh =>
+            Volatile.Write(ref _snapshot, BuildSnapshot(fresh.EthicalHarness)));
+    }
+
+    private static Snapshot BuildSnapshot(EthicalPolicy policy)
+    {
+        var compiled = new List<Regex>();
+        foreach (var pattern in policy.CustomBlockedPatterns)
         {
             if (!string.IsNullOrWhiteSpace(pattern))
-                _customBlockedRegexes.Add(new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase));
+                compiled.Add(new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase));
         }
+        return new Snapshot(policy, compiled);
     }
+
+    /// <inheritdoc/>
+    public void Dispose() => _changedSubscription?.Dispose();
 
     public EthicalVerdict EvaluateOutbound(string text) => Evaluate(text, isOutbound: true);
 
-    public EthicalVerdict EvaluateInbound(string text) =>
-        _policy.ResponseScanning ? Evaluate(text, isOutbound: false) : new EthicalVerdict.Allow();
-
-    private EthicalVerdict Evaluate(string text, bool isOutbound)
+    public EthicalVerdict EvaluateInbound(string text)
     {
-        if (!_policy.Enabled || string.IsNullOrWhiteSpace(text))
+        var snap = Volatile.Read(ref _snapshot);
+        return snap.Policy.ResponseScanning ? Evaluate(text, isOutbound: false, snap) : new EthicalVerdict.Allow();
+    }
+
+    private EthicalVerdict Evaluate(string text, bool isOutbound) =>
+        Evaluate(text, isOutbound, Volatile.Read(ref _snapshot));
+
+    private EthicalVerdict Evaluate(string text, bool isOutbound, Snapshot snap)
+    {
+        var policy = snap.Policy;
+        if (!policy.Enabled || string.IsNullOrWhiteSpace(text))
             return new EthicalVerdict.Allow();
 
         // Check standard categories (always active).
@@ -131,7 +165,7 @@ public sealed partial class ContentPolicyEngine : IEthicalHarness
         }
 
         // Check strict categories (Strict and Enterprise modes).
-        if (_policy.Strictness >= EthicalStrictness.Strict)
+        if (policy.Strictness >= EthicalStrictness.Strict)
         {
             foreach (var (category, patterns) in s_strictCategories)
             {
@@ -148,9 +182,9 @@ public sealed partial class ContentPolicyEngine : IEthicalHarness
         }
 
         // Check custom blocked patterns (Enterprise mode).
-        if (_policy.Strictness >= EthicalStrictness.Enterprise)
+        if (policy.Strictness >= EthicalStrictness.Enterprise)
         {
-            foreach (var regex in _customBlockedRegexes)
+            foreach (var regex in snap.CustomBlockedRegexes)
             {
                 if (regex.IsMatch(text))
                 {
