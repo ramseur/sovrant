@@ -35,8 +35,8 @@ public sealed class SqliteStorageProviderTests : IAsyncDisposable
     {
         await _provider.InitializeAsync();
 
-        // Bumped to 19 after V019 (mcp_servers + lsp_servers tables; entries moved out of settings.json).
-        Assert.Equal(19, _provider.SchemaVersion);
+        // Bumped to 21 after Phase 88 V020 (user_preferences) + V021 (provider_profiles).
+        Assert.Equal(21, _provider.SchemaVersion);
     }
 
     [Fact]

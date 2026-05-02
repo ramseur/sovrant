@@ -13,6 +13,7 @@ using Sovrant.Runtime.Memory;
 using Sovrant.Runtime.Missions;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Preferences;
+using Sovrant.Runtime.Providers;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.Tools;
@@ -192,6 +193,13 @@ public static class ServiceCollectionExtensions
         // never land here; only references (provider profile id) do.
         services.AddSingleton<IUserPreferenceStore>(sp =>
             new SqliteUserPreferenceStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+
+        // Phase 88-B — provider profile store. Replaces ~/.sovrant/providers.json.
+        // Each row holds non-secret metadata (name, base url, default model,
+        // max tokens) plus a credential_id reference whose plaintext key
+        // lives only in the encrypted ICredentialStore.
+        services.AddSingleton<IProviderProfileStore>(sp =>
+            new SqliteProviderProfileStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
         // Project service (Phase 36)
         services.AddSingleton<IProjectService>(sp =>
