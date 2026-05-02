@@ -131,6 +131,7 @@ public sealed class ChatMessageModel
 
     public void CompleteStreaming()
     {
+        IsThinking = false;
         IsStreaming = false;
         IsComplete = true;
         IsExecutingTools = false;

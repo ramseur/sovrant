@@ -112,6 +112,8 @@
     private string _inputText = string.Empty;
     private bool _isSending;
     private CancellationTokenSource? _sendCts;
+    private ChatMessageModel? _streamingMsg;
+    private bool _stopRequested;
     private int _tokenCount;
     private decimal _sessionCost;
     private string _pageError = string.Empty;
@@ -395,6 +397,7 @@
         var ct = _sendCts.Token;
 
         _isSending = true;
+        _stopRequested = false;
         var isFirstMessage = _messages.All(m => m.Role != "user");
 
         // Add user message
@@ -405,6 +408,7 @@
         var assistantMsg = new ChatMessageModel { Role = "assistant", ModelName = Config.Model };
         assistantMsg.StartThinking();
         _messages.Add(assistantMsg);
+        _streamingMsg = assistantMsg;
         StateHasChanged();
         await ScrollToBottom();
 
@@ -450,6 +454,7 @@
         {
             await elapsedCts.CancelAsync();
             _isSending = false;
+            _streamingMsg = null;
             assistantMsg.CompleteStreaming();
             StateHasChanged();
             await ScrollToBottom();
@@ -462,6 +467,24 @@
 
     private Task StopAsync()
     {
+        if (!_isSending || _stopRequested) return Task.CompletedTask;
+        _stopRequested = true;
+
+        // Immediate UX feedback: mark the streaming message stopped and flip
+        // the input bar back to Send. The runtime cancellation propagates
+        // through _sendCts and the SendToRuntimeAsync `finally` will run when
+        // the HTTP stream actually tears down — which can lag a beat.
+        if (_streamingMsg is { } msg)
+        {
+            if (string.IsNullOrEmpty(msg.Text))
+                msg.Text = "[Stopped]";
+            msg.StopThinking();
+            msg.CompleteStreaming();
+        }
+        _streamingMsg = null;
+        _isSending = false;
+        StateHasChanged();
+
         _sendCts?.Cancel();
         return Task.CompletedTask;
     }

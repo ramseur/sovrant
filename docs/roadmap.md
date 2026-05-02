@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-05-02 (added Phase 84 prompt library + Phase 85 identity & login parity — 49 phases shipped, 11 pending)
+**Last updated:** 2026-05-02 (added Phase 86 background session continuation — 49 phases shipped, 12 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -8046,3 +8046,152 @@ by every surface.
   TOTP first.
 - **Cross-org user federation** — out of scope; a single Sovrant install
   is one identity domain.
+
+---
+
+## Phase 86 — Background Session Continuation Across Navigation & Session Switches
+
+> **Status:** Pending. Lets a user kick off a long-running turn in one
+> session, navigate away (other menu items, another session, even close
+> the chat surface entirely), and have it keep working — surfacing the
+> result when it's done and letting the user catch up on the stream when
+> they return.
+
+### Goal
+
+Today the runtime pool (`RuntimeSessionPool`) already keeps per-session
+runtimes warm — the in-flight turn doesn't actually stop when the user
+navigates away. But the UI surfaces (Desktop `ChatViewModel`, Web
+`Chat.razor`) tie streaming subscriptions to the active view: leaving
+the page detaches the subscriber, returning later sees a "frozen" chat,
+and switching to another session loses any sense that the previous one
+was still working.
+
+The phase makes session execution **truly backgrounded**: turns continue
+on the runtime, intermediate events are buffered, and any surface that
+re-subscribes (the same session reopened, a different surface attached
+to the same DB / server) replays what it missed and then catches the
+live tail. Users get cross-session indicators — a badge or toast — when
+a backgrounded session finishes, errors, or hits a confirmation prompt.
+
+### Why now
+
+- Dogfooding Node-app scaffolding routinely produces 30-second–5-minute
+  turns. Switching to Activity, Memory, or another session to check
+  something mid-run currently looks like the chat hung.
+- Phase 85's multi-surface identity makes it obvious the runtime is
+  shared — the user expects state to follow them, not the view.
+- Confirmation prompts + tool calls already block on user input; if the
+  user is on another page when one fires, today they must guess that
+  the prompt is waiting somewhere else.
+- Phase 79's swarms/teams will spawn many parallel sessions; without
+  background continuation the UX collapses into context-switch tax.
+
+### Scope
+
+**Runtime side**
+
+- Per-session **event broker** (`ISessionEventBus`) sits in front of
+  `IConversationRuntime`'s event stream. Buffers the last N
+  `RuntimeEvent`s (Message, ToolCall, ToolResult, ModelSelected,
+  TurnComplete, ConfirmationRequested, Error) per session with a
+  bounded ring buffer; older events spill to the existing
+  `session_entries` log so replay is always possible.
+- Sessions in the pool gain a **status** (`Idle`, `Running`,
+  `WaitingForConfirmation`, `Errored`, `Completed`) that surfaces
+  expose without subscribing to the full stream.
+- Eviction TTL (currently fires on idle sessions) is **disabled while
+  status ∈ {Running, WaitingForConfirmation}** — a backgrounded turn
+  can't be silently killed by the eviction service.
+
+**UI side (Desktop + Web parity)**
+
+- Sidebar session list shows per-session status pips: spinner for
+  `Running`, ❗ for `WaitingForConfirmation`, ✕ for `Errored`,
+  ✓ briefly on `Completed → Idle`.
+- Switching to a session that has unread events replays the buffer
+  (cheap — already in memory) then attaches to the live tail.
+- Global toast / system tray / browser-tab title updates when a
+  backgrounded session finishes or needs confirmation. Click-through
+  jumps to the session.
+- Closing the chat surface entirely (Desktop window minimised, Web tab
+  navigated to a non-chat page) does **not** cancel; the runtime keeps
+  going and surfaces the result when the user returns. Explicit
+  cancel is a separate per-session "Stop" action.
+
+**Server-mode parity**
+
+- Web/CLI in remote mode receive the same buffered events via SignalR;
+  reconnect after a transient drop replays from the last seen sequence
+  number rather than restarting the turn.
+- Session status is queryable via `GET /v1/sessions/{id}/status` so a
+  CLI `sovrant status` command can list what's running across the
+  user's sessions.
+
+**Persistence**
+
+- `session_entries` already records every event by sequence; the broker
+  layers an in-memory cache on top, not a new store. Replay falls
+  through to the DB if the buffer is cold (e.g. server restart mid-turn).
+
+### Non-goals
+
+- Resuming a turn after a **process restart** — the runtime is in-process
+  state. If the server/desktop crashes mid-turn, the turn is lost; only
+  the persisted history survives. (A future phase could checkpoint
+  long-running tool loops, but not here.)
+- Running *multiple turns in parallel within a single session*. One
+  turn at a time per session; the broker just decouples the **viewer**
+  from the **executor**.
+
+### Implementation sketch
+
+| Component | File | Notes |
+|---|---|---|
+| `ISessionEventBus` + impl | `src/Sovrant.Runtime/Conversation/` | Per-session ring buffer, sequence numbers, late-subscriber replay |
+| `RuntimeSessionPool` status | `src/Sovrant.Runtime/Conversation/RuntimeSessionPool.cs` | Track `SessionStatus`; expose via `GetStatusAsync(sessionId)`; suppress eviction while busy |
+| `SessionEvictionService` guard | `src/Sovrant.Server/SessionEvictionService.cs` | Skip eviction for non-Idle status |
+| Desktop sidebar status pips | `src/Sovrant.Desktop/ViewModels/SessionsViewModel.cs` + `Views/SessionsView.axaml` | Subscribe to `ISessionEventBus.StatusChanged` |
+| Web sidebar status pips | `src/Sovrant.Web/Components/Layout/Sessions*.razor` | Mirror Desktop |
+| Desktop tray notifications | `src/Sovrant.Desktop/Services/NotificationService.cs` (new) | Avalonia tray icon flash + balloon on `Completed`/`WaitingForConfirmation` |
+| Web tab-title updates | `src/Sovrant.Web/wwwroot/js/sovrant-notify.js` (new) + JS interop | `document.title` prefix, optional `Notification` API |
+| Replay on attach | `ChatViewModel`, `Chat.razor` | On session select, drain bus → render → subscribe to live tail |
+| Server status endpoint | `src/Sovrant.Server/Routes/SessionRoutes.cs` | `GET /v1/sessions/{id}/status` |
+| CLI `sovrant status` | `src/Sovrant.Cli/Commands/StatusCommand.cs` (new) | Lists running/waiting sessions for the logged-in user |
+
+### Acceptance Criteria
+
+- [ ] User starts a long-running turn (e.g. "scaffold a Node app"), navigates
+      to another menu item, and returns to the same chat — the in-flight
+      turn is still running, intermediate tool calls / messages that fired
+      while away are visible, and the live tail continues
+- [ ] User starts a turn in session A, switches to session B, then back to
+      A — buffered events replay and the live tail attaches without a
+      duplicate or missed event
+- [ ] A turn that hits a confirmation prompt while the user is on another
+      page surfaces an indicator (sidebar pip + toast/tray); clicking it
+      jumps to the session and shows the prompt
+- [ ] Eviction service does not reap a session whose status is `Running`
+      or `WaitingForConfirmation`, regardless of TTL
+- [ ] Web/CLI in remote mode survive a transient SignalR disconnect during
+      a turn — reconnect replays from the last seen sequence and the
+      stream continues from where it left off
+- [ ] An explicit per-session **Stop** action cancels the in-flight turn
+      cleanly (existing cancellation token plumbing) without affecting
+      other sessions
+- [ ] Desktop tray + Web tab-title indicators fire on `Completed` and
+      `WaitingForConfirmation`, and clear on `Idle` or when the user
+      reopens the session
+- [ ] `sovrant status` (CLI) lists running/waiting sessions for the
+      logged-in user with their status and elapsed time
+
+### Deferred
+
+- **Mid-turn process-restart recovery** — would require checkpointing
+  active tool loops; covered separately if/when crash recovery becomes
+  a priority.
+- **Multiple parallel turns per session** — different problem (turn
+  fan-out, not viewer/executor decoupling); revisit alongside the
+  swarms work in Phase 79.
+- **Mobile push notifications** — depends on a mobile surface, which
+  isn't on the roadmap yet.
