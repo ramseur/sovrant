@@ -103,7 +103,7 @@ public partial class GovernanceViewModel : ViewModelBase
 
     private void LoadConfig()
     {
-        var config = GovernanceConfig.Load(workingDirectory: null, settings: _settings);
+        var config = GovernanceConfig.Load(_settings);
 
         GovernanceLevel = config.Level.ToString();
         AuditLogEnabled = config.AuditLog;

@@ -3,37 +3,17 @@ using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime.Tests.Governance;
 
-public sealed class GovernanceConfigTests : IDisposable
+public sealed class GovernanceConfigTests
 {
-    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), $"sovrant-gov-cfg-{Guid.NewGuid():N}");
-
-    public GovernanceConfigTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
-
     [Fact]
-    public void Load_DbValuesOverrideJsonFiles()
+    public void Load_DbValuesPopulateConfig()
     {
-        var dir = Path.Combine(_tempDir, ".sovrant");
-        Directory.CreateDirectory(dir);
-        File.WriteAllText(Path.Combine(dir, "governance.json"), """
-        {
-            "governance_level": "permissive",
-            "blocked_commands": ["from-json"],
-            "audit_log": false
-        }
-        """);
-
         var store = new InMemoryStore();
         store.Seed(WorkspaceSettingsKeys.GovernanceLevel, "strict");
         store.Seed(WorkspaceSettingsKeys.GovernanceAuditLog, "true");
         store.Seed(WorkspaceSettingsKeys.GovernanceBlockedCommands, """["from-db-1","from-db-2"]""");
 
-        var config = GovernanceConfig.Load(_tempDir, store);
+        var config = GovernanceConfig.Load(store);
 
         Assert.Equal(GovernanceLevel.Strict, config.Level);
         Assert.True(config.AuditLog);
@@ -43,38 +23,25 @@ public sealed class GovernanceConfigTests : IDisposable
     }
 
     [Fact]
-    public void Load_DbMissing_FallsBackToJsonFiles()
+    public void Load_NullStore_ReturnsDefaults()
     {
-        var dir = Path.Combine(_tempDir, ".sovrant");
-        Directory.CreateDirectory(dir);
-        File.WriteAllText(Path.Combine(dir, "governance.json"), """
-        {
-            "governance_level": "strict",
-            "blocked_commands": ["from-json"]
-        }
-        """);
+        var config = GovernanceConfig.Load(settings: null);
 
-        var store = new InMemoryStore();
-        var config = GovernanceConfig.Load(_tempDir, store);
-
-        Assert.Equal(GovernanceLevel.Strict, config.Level);
-        Assert.Single(config.BlockedCommands);
-        Assert.Contains("from-json", config.BlockedCommands);
+        Assert.Equal(GovernanceLevel.Standard, config.Level);
+        Assert.True(config.AuditLog);
+        Assert.Empty(config.BlockedCommands);
+        Assert.Empty(config.ProtectedFiles);
+        Assert.Empty(config.SecretPatterns);
     }
 
     [Fact]
-    public void Load_NullStore_BehavesLikeLegacyLoad()
+    public void Load_EmptyStore_ReturnsDefaults()
     {
-        var dir = Path.Combine(_tempDir, ".sovrant");
-        Directory.CreateDirectory(dir);
-        File.WriteAllText(Path.Combine(dir, "governance.json"), """
-        {
-            "governance_level": "minimal"
-        }
-        """);
+        var config = GovernanceConfig.Load(new InMemoryStore());
 
-        var config = GovernanceConfig.Load(_tempDir, settings: null);
-        Assert.Equal(GovernanceLevel.Minimal, config.Level);
+        Assert.Equal(GovernanceLevel.Standard, config.Level);
+        Assert.True(config.AuditLog);
+        Assert.Empty(config.BlockedCommands);
     }
 
     [Fact]
@@ -114,13 +81,49 @@ public sealed class GovernanceConfigTests : IDisposable
         saved.SecretPatterns.Add("AWS_[A-Z]+");
 
         await saved.SaveToStoreAsync(store);
-        var loaded = GovernanceConfig.Load(_tempDir, store);
+        var loaded = GovernanceConfig.Load(store);
 
         Assert.Equal(GovernanceLevel.Minimal, loaded.Level);
         Assert.False(loaded.AuditLog);
         Assert.Equal("dangerous-cmd", Assert.Single(loaded.BlockedCommands));
         Assert.Equal("*.key", Assert.Single(loaded.ProtectedFiles));
         Assert.Equal("AWS_[A-Z]+", Assert.Single(loaded.SecretPatterns));
+    }
+
+    [Fact]
+    public async Task SaveToStoreAsync_InvalidLevel_Throws()
+    {
+        var store = new InMemoryStore();
+        var config = new GovernanceConfig { GovernanceLevelName = "ultra" };
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => config.SaveToStoreAsync(store));
+        Assert.Contains("GovernanceLevelName", ex.Message);
+        Assert.Null(await store.GetGlobalAsync(WorkspaceSettingsKeys.GovernanceLevel));
+    }
+
+    [Fact]
+    public async Task SaveToStoreAsync_InvalidSecretRegex_Throws()
+    {
+        var store = new InMemoryStore();
+        var config = new GovernanceConfig { GovernanceLevelName = "standard" };
+        config.SecretPatterns.Add("[unterminated");
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => config.SaveToStoreAsync(store));
+        Assert.Contains("[unterminated", ex.Message);
+    }
+
+    [Fact]
+    public void Level_InvalidName_DefaultsToStandard()
+    {
+        var config = new GovernanceConfig { GovernanceLevelName = "invalid" };
+        Assert.Equal(GovernanceLevel.Standard, config.Level);
+    }
+
+    [Fact]
+    public void Level_CaseInsensitive()
+    {
+        var config = new GovernanceConfig { GovernanceLevelName = "MINIMAL" };
+        Assert.Equal(GovernanceLevel.Minimal, config.Level);
     }
 
     private sealed class InMemoryStore : IWorkspaceSettingsStore
@@ -150,89 +153,5 @@ public sealed class GovernanceConfigTests : IDisposable
         public Task<IReadOnlyDictionary<string, string>> GetAllAsync(string workspaceId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyDictionary<string, string>>(
                 new Dictionary<string, string>(_data, StringComparer.Ordinal));
-    }
-
-    [Fact]
-    public async Task SaveToStoreAsync_InvalidLevel_Throws()
-    {
-        var store = new InMemoryStore();
-        var config = new GovernanceConfig { GovernanceLevelName = "ultra" };
-
-        var ex = await Assert.ThrowsAsync<ArgumentException>(() => config.SaveToStoreAsync(store));
-        Assert.Contains("GovernanceLevelName", ex.Message);
-        Assert.Null(await store.GetGlobalAsync(WorkspaceSettingsKeys.GovernanceLevel));
-    }
-
-    [Fact]
-    public async Task SaveToStoreAsync_InvalidSecretRegex_Throws()
-    {
-        var store = new InMemoryStore();
-        var config = new GovernanceConfig { GovernanceLevelName = "standard" };
-        config.SecretPatterns.Add("[unterminated");
-
-        var ex = await Assert.ThrowsAsync<ArgumentException>(() => config.SaveToStoreAsync(store));
-        Assert.Contains("[unterminated", ex.Message);
-    }
-
-    [Fact]
-    public void Load_NoFile_ReturnsDefaults()
-    {
-        var config = GovernanceConfig.Load(_tempDir);
-
-        Assert.Equal(GovernanceLevel.Standard, config.Level);
-        Assert.True(config.AuditLog);
-        Assert.Empty(config.BlockedCommands);
-        Assert.Empty(config.ProtectedFiles);
-        Assert.Empty(config.SecretPatterns);
-    }
-
-    [Fact]
-    public void Load_ValidJson_ParsesAllFields()
-    {
-        var dir = Path.Combine(_tempDir, ".sovrant");
-        Directory.CreateDirectory(dir);
-        File.WriteAllText(Path.Combine(dir, "governance.json"), """
-        {
-            "governance_level": "strict",
-            "blocked_commands": ["rm -rf /home"],
-            "protected_files": ["*.lock"],
-            "secret_patterns": ["MY_SECRET_[0-9]+"],
-            "audit_log": false
-        }
-        """);
-
-        var config = GovernanceConfig.Load(_tempDir);
-
-        Assert.Equal(GovernanceLevel.Strict, config.Level);
-        Assert.False(config.AuditLog);
-        Assert.Single(config.BlockedCommands);
-        Assert.Contains("rm -rf /home", config.BlockedCommands);
-        Assert.Single(config.ProtectedFiles);
-        Assert.Single(config.SecretPatterns);
-    }
-
-    [Fact]
-    public void Load_InvalidJson_ReturnsDefaults()
-    {
-        var dir = Path.Combine(_tempDir, ".sovrant");
-        Directory.CreateDirectory(dir);
-        File.WriteAllText(Path.Combine(dir, "governance.json"), "not json{{{");
-
-        var config = GovernanceConfig.Load(_tempDir);
-        Assert.Equal(GovernanceLevel.Standard, config.Level);
-    }
-
-    [Fact]
-    public void Level_InvalidName_DefaultsToStandard()
-    {
-        var config = new GovernanceConfig { GovernanceLevelName = "invalid" };
-        Assert.Equal(GovernanceLevel.Standard, config.Level);
-    }
-
-    [Fact]
-    public void Level_CaseInsensitive()
-    {
-        var config = new GovernanceConfig { GovernanceLevelName = "MINIMAL" };
-        Assert.Equal(GovernanceLevel.Minimal, config.Level);
     }
 }

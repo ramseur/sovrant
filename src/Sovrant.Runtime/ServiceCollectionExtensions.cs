@@ -97,16 +97,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAuditStore>(sp =>
             new SqliteAuditStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
-        // Governance monitor — loads from env > workspace_settings DB >
-        // ~/.sovrant/governance.json (legacy bootstrap fallback) > defaults.
+        // Governance monitor — loads from env > workspace_settings DB > defaults.
         // Wrapped in ILiveSettings so the Settings UI can hot-reload secret
         // patterns / blocked commands / protected files without a restart.
         services.AddSingleton<Workspaces.LiveSettings<GovernanceConfig>>(sp =>
         {
             var live = new Workspaces.LiveSettings<GovernanceConfig>(
                 () => GovernanceConfig.Load(
-                    workingDirectory: null,
-                    settings: sp.GetService<Workspaces.IWorkspaceSettingsStore>()));
+                    sp.GetService<Workspaces.IWorkspaceSettingsStore>()));
             sp.GetRequiredService<Workspaces.LiveSettingsRegistry>().Register(live);
             return live;
         });

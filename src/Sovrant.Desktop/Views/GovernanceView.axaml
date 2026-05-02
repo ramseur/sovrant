@@ -179,7 +179,7 @@
                            IsVisible="{Binding !SecretPatterns.Count}" />
             </StackPanel>
 
-            <TextBlock Text="Configuration saved to ~/.sovrant/governance.json"
+            <TextBlock Text="Configuration saved to the workspace settings database."
                        FontSize="11" TextWrapping="Wrap"
                        Foreground="{DynamicResource TextMuted}" />
         </StackPanel>

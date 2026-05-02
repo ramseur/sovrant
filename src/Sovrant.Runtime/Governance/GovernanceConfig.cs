@@ -7,8 +7,11 @@ using Sovrant.Runtime.Workspaces;
 namespace Sovrant.Runtime.Governance;
 
 /// <summary>
-/// Configuration for the governance monitor, loaded from <c>.sovrant/governance.json</c>
-/// or <c>~/.sovrant/governance.json</c>.
+/// Configuration for the governance monitor, persisted to the
+/// <see cref="IWorkspaceSettingsStore"/> global row. The legacy
+/// <c>governance.json</c> file is no longer read at runtime — Phase 88-F's
+/// <c>LegacyConfigMigrator</c> imports any existing file into the DB on
+/// first boot and renames it to <c>.bak</c>.
 /// </summary>
 public sealed class GovernanceConfig
 {
@@ -38,39 +41,13 @@ public sealed class GovernanceConfig
             : GovernanceLevel.Standard;
 
     /// <summary>
-    /// Loads config by merging project-local (<c>.sovrant/governance.json</c>) over
-    /// global (<c>~/.sovrant/governance.json</c>), then applying the
-    /// <c>SOVRANT_GOVERNANCE_LEVEL</c> env var override.
+    /// Resolves config in env &gt; <see cref="IWorkspaceSettingsStore"/> &gt;
+    /// defaults order. A null store yields defaults (overridable by env vars).
     /// </summary>
-    public static GovernanceConfig Load(string? workingDirectory = null)
-        => Load(workingDirectory, settings: null);
-
-    /// <summary>
-    /// Loads config with the full env &gt; <see cref="IWorkspaceSettingsStore"/> &gt;
-    /// JSON files &gt; defaults precedence chain. JSON files remain the bootstrap
-    /// fallback so existing <c>.sovrant/governance.json</c> setups keep working
-    /// until the user re-saves through the Settings UI.
-    /// </summary>
-    public static GovernanceConfig Load(string? workingDirectory, IWorkspaceSettingsStore? settings)
+    public static GovernanceConfig Load(IWorkspaceSettingsStore? settings)
     {
-        workingDirectory ??= Directory.GetCurrentDirectory();
+        var config = new GovernanceConfig();
 
-        var globalPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".sovrant", "governance.json");
-
-        var projectPath = Path.Combine(workingDirectory, ".sovrant", "governance.json");
-
-        // Start with defaults, then layer global, then project-local — these
-        // serve as the snapshot fallback.
-        var config = TryLoad(globalPath) ?? new GovernanceConfig();
-        var projectConfig = TryLoad(projectPath);
-        if (projectConfig is not null)
-            config = Merge(config, projectConfig);
-
-        // Layer DB values over the JSON-file snapshot. Env vars (read inside the
-        // resolver) win over both. List values fully replace, matching the
-        // "DB is the persistent source of truth" model.
         config.GovernanceLevelName = WorkspaceSettingsResolver.ResolveString(
             settings, WorkspaceSettingsKeys.GovernanceLevel,
             "SOVRANT_GOVERNANCE_LEVEL", fallback: config.GovernanceLevelName)
@@ -98,8 +75,6 @@ public sealed class GovernanceConfig
     /// <summary>
     /// Persists this config's five governance fields to the global
     /// <see cref="IWorkspaceSettingsStore"/> row. Lists are JSON-encoded.
-    /// Settings UIs call this instead of writing <c>~/.sovrant/governance.json</c>;
-    /// the JSON file remains the bootstrap fallback.
     /// </summary>
     public async Task SaveToStoreAsync(IWorkspaceSettingsStore store, CancellationToken ct = default)
     {
@@ -151,57 +126,5 @@ public sealed class GovernanceConfig
         target.Clear();
         foreach (var item in source)
             target.Add(item);
-    }
-
-    private static GovernanceConfig? TryLoad(string path)
-    {
-        if (!File.Exists(path))
-            return null;
-        try
-        {
-            var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<GovernanceConfig>(json);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    private static GovernanceConfig Merge(GovernanceConfig baseConfig, GovernanceConfig overlay)
-    {
-        // Overlay wins for scalar values
-        var merged = new GovernanceConfig
-        {
-            GovernanceLevelName = overlay.GovernanceLevelName,
-            AuditLog = overlay.AuditLog,
-        };
-
-        // Merge collections (union)
-        foreach (var cmd in baseConfig.BlockedCommands)
-            merged.BlockedCommands.Add(cmd);
-        foreach (var cmd in overlay.BlockedCommands)
-        {
-            if (!merged.BlockedCommands.Contains(cmd))
-                merged.BlockedCommands.Add(cmd);
-        }
-
-        foreach (var f in baseConfig.ProtectedFiles)
-            merged.ProtectedFiles.Add(f);
-        foreach (var f in overlay.ProtectedFiles)
-        {
-            if (!merged.ProtectedFiles.Contains(f))
-                merged.ProtectedFiles.Add(f);
-        }
-
-        foreach (var p in baseConfig.SecretPatterns)
-            merged.SecretPatterns.Add(p);
-        foreach (var p in overlay.SecretPatterns)
-        {
-            if (!merged.SecretPatterns.Contains(p))
-                merged.SecretPatterns.Add(p);
-        }
-
-        return merged;
     }
 }

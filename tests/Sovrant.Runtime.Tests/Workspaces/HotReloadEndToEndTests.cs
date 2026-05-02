@@ -19,7 +19,7 @@ public sealed class HotReloadEndToEndTests
     {
         var store = new InMemoryStore();
         var live = new LiveSettings<GovernanceConfig>(
-            () => GovernanceConfig.Load(workingDirectory: null, settings: store));
+            () => GovernanceConfig.Load(store));
         var registry = new LiveSettingsRegistry();
         registry.Register(live);
 

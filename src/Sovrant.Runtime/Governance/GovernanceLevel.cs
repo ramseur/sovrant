@@ -2,7 +2,7 @@ namespace Sovrant.Runtime.Governance;
 
 /// <summary>
 /// Controls the enforcement behavior of the governance monitor.
-/// Configurable via <c>SOVRANT_GOVERNANCE_LEVEL</c> env var or <c>.sovrant/governance.json</c>.
+/// Configurable via <c>SOVRANT_GOVERNANCE_LEVEL</c> env var or the workspace settings DB.
 /// </summary>
 public enum GovernanceLevel
 {
