@@ -12,6 +12,7 @@ using Sovrant.Runtime.Evals;
 using Sovrant.Runtime.Memory;
 using Sovrant.Runtime.Missions;
 using Sovrant.Runtime.Permissions;
+using Sovrant.Runtime.Preferences;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.Tools;
@@ -185,6 +186,12 @@ public static class ServiceCollectionExtensions
         // runtime-mutable knobs that previously lived in env vars only.
         services.AddSingleton<IWorkspaceSettingsStore>(sp =>
             new SqliteWorkspaceSettingsStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+
+        // Phase 88-A — per-user preference store. Replaces the user-facing
+        // fields previously written to ~/.sovrant/settings.json. API keys
+        // never land here; only references (provider profile id) do.
+        services.AddSingleton<IUserPreferenceStore>(sp =>
+            new SqliteUserPreferenceStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
         // Project service (Phase 36)
         services.AddSingleton<IProjectService>(sp =>
