@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-05-02 (added Phase 88 settings + provider profile consolidation, one-config name `sovrant.config` — 49 phases shipped, 14 pending)
+**Last updated:** 2026-05-02 (Phase 88 settings + provider profile consolidation shipped; added Phase 89 Command Center cockpit surface for agents/teams/missions — 50 phases shipped, 14 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -139,6 +139,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | ~~Unified memory — wire user-saved `workspace_memory` rows into `ConversationRuntime.BuildSystemPrompt()` so memory saved via the workspace UI/API actually reaches the LLM~~ | Phase 81 ✅ | High |
 | OpenTelemetry observability — emit traces/metrics/logs for runs, turns, tool calls, router decisions, and provider HTTP via OTLP so operators can ship to any OTel-compatible backend (Honeycomb, Tempo, Jaeger, Datadog, etc.) | Phase 82 | Medium–High |
 | Pluggable memory backends — abstract `IMemoryStore` so the SQLite implementation can be swapped for distributed/remote stores (mem0, Pinecone-style vector DBs, Redis, Postgres+pgvector); enables shared/team memory across nodes | Phase 83 | Medium |
+| Command Center — single cockpit surface for active agents, team runs, and autonomous missions; start/steer/pause/cancel from one grid; live lifecycle events over the session bus; reuses Phase 78/79/67 substrate (no new runtime) | Phase 89 | Medium–High |
 
 ### v1.0 release polish (in progress)
 
@@ -8684,3 +8685,183 @@ their old config looked like, and a future support flow can ask
 - **Per-workspace setting overrides** — Bucket-B Step 7 covers the
   shape; layer on top of `user_preferences` once the basic store
   ships.
+
+---
+
+## Phase 89 — Command Center: Sovrant as the Operations Surface for Agents, Teams & Missions
+
+**Depends on:** Phase 67 (autonomous modes), Phase 78 (teams substrate
+with parallel execution + file locks + quality gate), Phase 79 (agents
+as first-class callable definitions), Phase 86 (background session
+continuation), Phase 81 (workspace/project memory wired to system
+prompt)
+**Difficulty:** Medium — most of the substrate already exists; this
+phase is consolidation, telemetry, and a unified surface, not new
+runtime engines.
+
+### Why
+
+Across Phases 78/79/67 we end up with three callable shapes (single
+agents, teams, autonomous missions), two execution modes per shape
+(sequential / parallel), a quality gate, file locks, run history
+ledgers, the activity page, and per-agent run history. Each of those
+landed in its own page: **Agents** to define them, **Orchestration**
+to run teams, **Activity** to look back at what happened, **Chat** to
+talk to one. That's correct as a feature inventory and wrong as a
+mental model. The user does not have a single screen that answers
+*"what is Sovrant doing for me right now, and what can I steer?"*
+
+The competitive framing is **mission-control**, not
+chat-with-extensions. AutoGen Studio, CrewAI Hub, and LangGraph Studio
+each evolved a "running graph / who's working / what's pending"
+surface because once teams and autonomous modes exist, the chat box
+is no longer the main loop — it's one input among several. Sovrant's
+pieces are already strictly more powerful (file locks, quality gate,
+trust boundary from Phase 58, cost tracking from Phase 55), but they
+present as *separate features* instead of a single cockpit.
+
+This phase folds the user's "command center for agents" idea into
+the orchestration story: **Command Center is a surface, not a new
+engine.** It reuses the team substrate (Phase 78), the agent
+definitions (Phase 79), the autonomous driver (Phase 67), and the
+session continuation bus (Phase 86). Nothing under the hood becomes
+a new runtime — but the user finally has a place to *operate* what
+already runs.
+
+### Goals
+
+- **One cockpit page** — `/command` (or promoted to root for desktop /
+  web shell) showing every active mission, team run, agent session,
+  and queued task in one live grid. Each row exposes its current
+  step, the agent or member responsible, last update, and a pause /
+  resume / cancel control.
+- **Start work from the cockpit** — a single action surface for
+  spawning a new run regardless of shape: pick *who* (agent / team /
+  mission template) and *what* (prompt + scope), and the cockpit
+  routes to the right executor. No need to navigate to Orchestration
+  for a team or Agents for a solo run.
+- **Steer in flight** — pause / resume / cancel for any running unit;
+  reroute a stuck task to a different team member; inject a
+  follow-up prompt without losing the run's history; approve or deny
+  the next destructive action when a mission hits a permission gate.
+  All of this already exists piecemeal in Phase 67 (mission gates) and
+  Phase 78 (team coordinator hooks); the cockpit surfaces it
+  consistently.
+- **Live status without polling** — reuses the Phase 86 session bus
+  to push lifecycle events (`AgentStarted`, `TaskCompleted`,
+  `QualityGateFailed`, `PermissionRequested`) into the cockpit; no
+  page-reload to see progress.
+- **Ledger-backed history pane** — the cockpit's "recent runs" row
+  reads from `agent_runs` (Phase 79) and the mission ledger (Phase
+  67); clicking a row opens it read-only or forks it into a new run.
+  Shares the data source with the Activity page so the two surfaces
+  stay consistent — Activity is the historical view, Command Center
+  is the operating view.
+- **Quality gate + trust boundary visible inline** — when a team's
+  `SwarmQualityGate` (Phase 78) flags a verdict, or the trust
+  boundary (Phase 58) intercepts an agent's intent, that signal
+  surfaces directly on the row, not buried in a logs pane. The user
+  sees the *verdict* the same way an oncall sees a paging incident.
+- **Cost & budget pill per run** — pulls from Phase 55's cost
+  tracking, so a long mission shows its accruing spend live and a
+  budget breach can pause it before completion.
+- **Web + Desktop parity** — the cockpit ships on both surfaces
+  reading the same store; the Desktop variant gets a system-tray
+  badge for active runs (so the user knows Sovrant is doing work
+  when minimized).
+
+### Non-goals
+
+- **A new runtime or scheduler.** Teams (Phase 78), agents (Phase 79),
+  and autonomous missions (Phase 67) keep their executors; the
+  cockpit only reads + steers.
+- **A new persistence layer.** Reuses `agent_runs`, `team_runs`,
+  the mission ledger, and the session bus that already exist or are
+  scoped in those phases.
+- **Replacing chat.** Chat remains the conversational surface for
+  a single agent / single mission; the cockpit is the *fleet* view.
+- **Multi-tenant / org-wide command center.** Phase 89 is per-user
+  + per-workspace, mirroring how the rest of the product scopes
+  state. A team-wide cockpit is a separate phase if a customer asks.
+
+### Study questions
+
+- **Where does it live in the nav?** Promote to top-level (`/command`
+  or `/`), fold into Activity as a "Live" tab, or surface as a
+  collapsible drawer over every page? Top-level signals it's the
+  default surface; drawer keeps chat-first users undisturbed.
+- **Does Command Center deprecate Orchestration?** The Orchestration
+  page (post-Phase 78) is fundamentally a config surface for teams.
+  Command Center is the run surface. Either we keep Orchestration
+  as the *editor* and Command Center as the *operator*, or we fold
+  the editor into the cockpit's detail pane and retire Orchestration.
+  Folding is cleaner; keeping is safer for muscle memory.
+- **What's the right control model for autonomous missions?** A long
+  mission (Phase 67) may run for hours with dozens of intermediate
+  steps. Does the cockpit render every step, only milestones, or a
+  collapsible tree per mission? Probably milestones by default with
+  drill-down on click — keeps the grid scannable.
+- **Permission-gate UX.** When a mission requests an
+  `AcceptEdits`-mode tool call, does the cockpit pop a modal, badge
+  the row, or both? Modal is intrusive across many concurrent runs;
+  a row badge plus a system notification probably scales better.
+- **Failure surfacing.** When a tool call errors, do we show the
+  full stack on the row, a one-line summary with a "details"
+  affordance, or route to logs? Probably summary on the row, full
+  detail in a side pane — matches the "incident dashboard" model.
+
+### Implementation sketch
+
+| Component | File / Path | Notes |
+|---|---|---|
+| `/command` page | `src/Sovrant.Web/Components/Pages/CommandCenter.razor` (new) | Live grid; reads from session bus + DB ledgers |
+| Desktop equivalent | `src/Sovrant.Desktop/Views/CommandCenterView.axaml` (+ VM) | Same data; tray badge for active runs |
+| `IRunStreamHub` | `src/Sovrant.Runtime/Sessions/` (extend Phase 86 bus) | Pushes lifecycle events to subscribed UIs |
+| `RunSummary` projection | `src/Sovrant.Runtime/Sessions/RunSummary.cs` (new) | DB view that unifies `agent_runs` + `team_runs` + mission ledger into a single shape for the cockpit |
+| Steering API | `src/Sovrant.Api/Runs/RunControl.cs` (new) | `Pause`, `Resume`, `Cancel`, `InjectPrompt`, `Reroute` endpoints; CLI parity via `sovrant runs <action>` |
+| Quality-gate + trust-boundary signals | `src/Sovrant.Runtime/Trust/`, `src/Sovrant.Agents/Swarm/SwarmQualityGate.cs` | Emit structured events on the bus when verdicts fire |
+| Cost pill | Reuse Phase 55 cost-tracker; new `RunSummary.LiveCost` field | Read-only projection |
+| Activity page | `src/Sovrant.Web/Components/Pages/Activity.razor` | Switches to "history" framing; cross-link to Command Center for the live view |
+
+### Acceptance criteria
+
+- [ ] `/command` (Web) and a Command Center pane (Desktop) ship and
+      show every active agent session, team run, and autonomous
+      mission for the active user/workspace in one live grid
+- [ ] Starting a run from the cockpit dispatches to the correct
+      executor (agent / team / mission) without navigating to a
+      different page
+- [ ] Pause / resume / cancel work for every shape; integration test
+      proving each control reaches the right executor and the run
+      reflects the new state in the cockpit within one event
+      round-trip
+- [ ] Quality-gate verdicts (Phase 78) and trust-boundary signals
+      (Phase 58) appear inline on the run row, not only in logs
+- [ ] Cost & budget pill per run reads from the Phase 55 cost ledger
+      live; a budget breach pauses the run and surfaces the reason
+      on the row
+- [ ] Lifecycle events stream over the Phase 86 bus — no polling;
+      the cockpit reflects state changes within ~1s of the executor
+      emitting them
+- [ ] CLI parity: `sovrant runs ls`, `sovrant runs pause <id>`,
+      `sovrant runs cancel <id>`, `sovrant runs inject <id> <prompt>`
+- [ ] Activity page reframed as the historical view; cross-links to
+      Command Center for live runs; no functional duplication
+- [ ] Decision recorded for the Orchestration page: kept as
+      team-config editor (with cockpit as the run surface) or folded
+      into the cockpit's detail pane and retired
+
+### Deferred
+
+- **Multi-user / team-wide cockpit** — every developer in an org
+  watching the same fleet. Useful but additive; per-user first.
+- **Approval workflows beyond pause/resume** — multi-step approvals
+  for high-risk operations (e.g. "this mission wants to push to
+  prod, two engineers must approve") layer on top once the basic
+  pause-on-permission-gate works.
+- **Replay from history** — open a finished run and step through it
+  forensically. Possible because the bus is event-sourced; not in
+  scope for the initial cockpit.
+- **Agent marketplace surfacing** — when other users' agents are
+  publishable (post-Phase 79), the cockpit's "Start work" picker
+  becomes a marketplace search. Out of scope here.
