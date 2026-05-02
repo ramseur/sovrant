@@ -134,8 +134,11 @@ public partial class App : Application
         services.AddTransient<AgentsViewModel>();
         services.AddTransient<AutomationsViewModel>();
         services.AddTransient<OrchestrationViewModel>();
-        services.AddTransient<ActivityViewModel>();
-        services.AddTransient<CommandCenterViewModel>();
+        // Singleton: MainViewModel subscribes to RowSelected once at startup.
+        // Transient would hand back a fresh, unwired instance on every nav-rail
+        // click into Command Center, breaking row clicks after the first detour
+        // into chat / orchestration.
+        services.AddSingleton<CommandCenterViewModel>();
         services.AddSingleton<CommandPaletteViewModel>();
 
         _serviceProvider = services.BuildServiceProvider();

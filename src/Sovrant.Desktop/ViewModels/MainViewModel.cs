@@ -45,11 +45,43 @@ public partial class MainViewModel : ViewModelBase
         _sidebar = sidebar;
         _commandPalette = commandPalette;
         _services = services;
-        _currentPage = services.GetRequiredService<CommandCenterViewModel>();
+        var cockpit = services.GetRequiredService<CommandCenterViewModel>();
+        _currentPage = cockpit;
+        cockpit.RowSelected += OnCockpitRowSelected;
 
         sidebar.NavigationRequested += OnNavigationRequested;
         sidebar.SessionResumeRequested += OnSessionResumeRequested;
         commandPalette.CommandExecuted += OnCommandExecuted;
+    }
+
+    /// <summary>
+    /// Bridge from the cockpit grid into the matching detail view. Sessions
+    /// resume in chat; team runs open Orchestration; agent runs render inline
+    /// inside the cockpit (no page swap) so /activity doesn't need to exist.
+    /// Missions/claws stay on the cockpit until a dedicated detail view exists.
+    /// </summary>
+    private async void OnCockpitRowSelected(object? sender, CommandCenterRowSelectedEventArgs e)
+    {
+        switch (e.Kind)
+        {
+            case "session":
+                var chat = CreateChatViewModel();
+                CurrentPage = chat;
+                await chat.LoadSessionAsync(e.Id);
+                break;
+            case "agent-run":
+                if (CurrentPage is CommandCenterViewModel cockpit)
+                {
+                    await cockpit.OpenRunAsync(e.Id);
+                }
+                break;
+            case "team-run":
+                CurrentPage = _services.GetRequiredService<OrchestrationViewModel>();
+                break;
+            // mission/claw — no dedicated detail view yet; keep cockpit visible.
+            default:
+                break;
+        }
     }
 
     [RelayCommand]
@@ -114,8 +146,7 @@ public partial class MainViewModel : ViewModelBase
             "Agents" => _services.GetRequiredService<AgentsViewModel>(),
             "Automations" => _services.GetRequiredService<AutomationsViewModel>(),
             "Orchestration" => _services.GetRequiredService<OrchestrationViewModel>(),
-            "Activity" => _services.GetRequiredService<ActivityViewModel>(),
-            "CommandCenter" => _services.GetRequiredService<CommandCenterViewModel>(),
+            "CommandCenter" => ResetCockpitToGrid(),
             _ => CurrentPage,
         };
     }
@@ -125,6 +156,18 @@ public partial class MainViewModel : ViewModelBase
         var chat = CreateChatViewModel();
         CurrentPage = chat;
         await chat.LoadSessionAsync(sessionId);
+    }
+
+    /// <summary>
+    /// Returns the singleton cockpit, resetting it out of focused-run mode so
+    /// nav-rail re-entry always lands on the grid instead of a stale detail.
+    /// </summary>
+    private CommandCenterViewModel ResetCockpitToGrid()
+    {
+        var cockpit = _services.GetRequiredService<CommandCenterViewModel>();
+        if (cockpit.BackToGridCommand.CanExecute(null))
+            cockpit.BackToGridCommand.Execute(null);
+        return cockpit;
     }
 
     private ChatViewModel CreateChatViewModel()

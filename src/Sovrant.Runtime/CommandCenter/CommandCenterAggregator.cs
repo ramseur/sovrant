@@ -140,7 +140,7 @@ public sealed class CommandCenterAggregator
                 CostUsd: r.CostUsd,
                 DetailRoute: !string.IsNullOrEmpty(r.TeamId)
                     ? $"/orchestration?run={Uri.EscapeDataString(r.RunId)}"
-                    : $"/activity?run={Uri.EscapeDataString(r.RunId)}",
+                    : $"/command?run={Uri.EscapeDataString(r.RunId)}",
                 WorkspaceId: r.WorkspaceId,
                 ProjectId: r.ProjectId));
         }

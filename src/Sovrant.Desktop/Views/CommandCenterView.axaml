@@ -5,7 +5,9 @@
              x:DataType="vm:CommandCenterViewModel"
              Background="{DynamicResource SurfaceBackground}">
 
-    <DockPanel>
+    <Grid>
+    <!-- Cockpit grid mode (default) -->
+    <DockPanel IsVisible="{Binding !IsFocused}">
         <!-- Header -->
         <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="8">
             <DockPanel>
@@ -175,51 +177,154 @@
                 <ItemsControl ItemsSource="{Binding Rows}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:CommandCenterRowViewModel">
-                            <Border Background="{DynamicResource SurfaceCard}"
-                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1,0,1,1"
-                                    Padding="14,10">
-                                <Grid ColumnDefinitions="120,*,110,110,80">
-                                    <!-- Kind pill: icon + text, matches the Web cc-kind-pill. -->
-                                    <Border Grid.Column="0"
-                                            Background="{DynamicResource SurfaceBackground}"
-                                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
-                                            CornerRadius="999" Padding="8,2"
-                                            HorizontalAlignment="Left" VerticalAlignment="Center">
-                                        <StackPanel Orientation="Horizontal" Spacing="4">
-                                            <TextBlock Text="{Binding KindIcon}" FontSize="11"
-                                                       VerticalAlignment="Center" />
-                                            <TextBlock Text="{Binding Kind}" FontSize="11"
-                                                       Foreground="{DynamicResource TextSecondary}"
-                                                       VerticalAlignment="Center" />
+                            <Button Command="{Binding $parent[ItemsControl].((vm:CommandCenterViewModel)DataContext).SelectRowCommand}"
+                                    CommandParameter="{Binding}"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Padding="0" Margin="0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Cursor="Hand">
+                                <Border Background="{DynamicResource SurfaceCard}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1,0,1,1"
+                                        Padding="14,10">
+                                    <Grid ColumnDefinitions="120,*,110,110,80">
+                                        <!-- Kind pill: icon + text, matches the Web cc-kind-pill. -->
+                                        <Border Grid.Column="0"
+                                                Background="{DynamicResource SurfaceBackground}"
+                                                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                                                CornerRadius="999" Padding="8,2"
+                                                HorizontalAlignment="Left" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <TextBlock Text="{Binding KindIcon}" FontSize="11"
+                                                           VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding Kind}" FontSize="11"
+                                                           Foreground="{DynamicResource TextSecondary}"
+                                                           VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Border>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextPrimary}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding Preview}" FontSize="11"
+                                                       Foreground="{DynamicResource TextMuted}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       IsVisible="{Binding Preview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                                         </StackPanel>
-                                    </Border>
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
-                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextPrimary}"
+                                        <TextBlock Grid.Column="2" Text="{Binding Status}" FontSize="11"
+                                                   Foreground="{DynamicResource StatusPass}"
+                                                   VerticalAlignment="Center"
                                                    TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{Binding Preview}" FontSize="11"
+                                        <TextBlock Grid.Column="3" Text="{Binding LastActivity}" FontSize="11"
                                                    Foreground="{DynamicResource TextMuted}"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   IsVisible="{Binding Preview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                    </StackPanel>
-                                    <TextBlock Grid.Column="2" Text="{Binding Status}" FontSize="11"
-                                               Foreground="{DynamicResource StatusPass}"
-                                               VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Grid.Column="3" Text="{Binding LastActivity}" FontSize="11"
-                                               Foreground="{DynamicResource TextMuted}"
-                                               VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Grid.Column="4" Text="{Binding Cost}" FontSize="11"
-                                               Foreground="{DynamicResource TextMuted}"
-                                               VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis" />
-                                </Grid>
-                            </Border>
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="4" Text="{Binding Cost}" FontSize="11"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </Grid>
+                                </Border>
+                            </Button>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </ScrollViewer>
         </DockPanel>
     </DockPanel>
+
+    <!-- Focused agent-run detail mode (replaces grid when IsFocused). -->
+    <DockPanel IsVisible="{Binding IsFocused}" Margin="32,24,32,24">
+        <StackPanel DockPanel.Dock="Top" Spacing="8">
+            <DockPanel>
+                <Button DockPanel.Dock="Right"
+                        Content="← Back to Command Center"
+                        Command="{Binding BackToGridCommand}"
+                        Padding="12,6" CornerRadius="6"
+                        Background="Transparent"
+                        Foreground="{DynamicResource BrandPrimary}" />
+                <TextBlock Text="Agent run" FontSize="24" FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimary}" />
+            </DockPanel>
+
+            <TextBlock Text="{Binding FocusError}"
+                       FontSize="12" Foreground="{DynamicResource StatusFail}"
+                       IsVisible="{Binding FocusError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       TextWrapping="Wrap" />
+
+            <TextBlock Text="Loading run…" FontSize="12"
+                       Foreground="{DynamicResource TextSecondary}"
+                       IsVisible="{Binding FocusLoading}" />
+
+            <Border Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                    CornerRadius="8" Padding="14,12" Margin="0,8,0,0"
+                    IsVisible="{Binding FocusedTitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="{Binding FocusedTitle}" FontSize="16" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <WrapPanel Orientation="Horizontal" ItemSpacing="14">
+                        <TextBlock Text="{Binding FocusedStatus, StringFormat='Status: {0}'}" FontSize="11"
+                                   Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="{Binding FocusedStarted, StringFormat='Started: {0}'}" FontSize="11"
+                                   Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="{Binding FocusedDuration, StringFormat='Duration: {0}'}" FontSize="11"
+                                   Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="{Binding FocusedTokens}" FontSize="11"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   IsVisible="{Binding FocusedTokens, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        <TextBlock Text="{Binding FocusedCost, StringFormat='Cost: {0}'}" FontSize="11"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   IsVisible="{Binding FocusedCost, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        <TextBlock Text="{Binding FocusedRunId, StringFormat='RunId: {0}'}" FontSize="11"
+                                   Foreground="{DynamicResource TextMuted}" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Text="Turns" FontSize="14" FontWeight="SemiBold" Margin="0,16,0,4"
+                       Foreground="{DynamicResource TextPrimary}" />
+
+            <TextBlock Text="No turn detail recorded for this run."
+                       FontSize="12" Foreground="{DynamicResource TextMuted}"
+                       IsVisible="{Binding FocusedHasNoTurns}" />
+        </StackPanel>
+
+        <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding FocusedTurns}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:CommandCenterTurnViewModel">
+                        <Border Background="{DynamicResource SurfaceCard}"
+                                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                                CornerRadius="6" Padding="12,10" Margin="0,0,0,8">
+                            <StackPanel Spacing="6">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="{Binding Role}" FontSize="11" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimary}" />
+                                    <TextBlock Text="{Binding ToolName}" FontSize="11"
+                                               Foreground="{DynamicResource BrandPrimary}"
+                                               IsVisible="{Binding ToolName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                    <TextBlock Text="{Binding Time}" FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}" />
+                                    <TextBlock Text="{Binding TokensLabel}" FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}"
+                                               IsVisible="{Binding TokensLabel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                    <TextBlock Text="error" FontSize="11"
+                                               Foreground="{DynamicResource StatusFail}"
+                                               IsVisible="{Binding IsError}" />
+                                </StackPanel>
+                                <SelectableTextBlock Text="{Binding Content}"
+                                                     FontFamily="Consolas, Menlo, monospace"
+                                                     FontSize="11"
+                                                     Foreground="{DynamicResource TextPrimary}"
+                                                     TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+    </Grid>
 </UserControl>

@@ -1,122 +1,213 @@
 @page "/command"
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Routing
 @using Sovrant.Runtime.CommandCenter
+@using Sovrant.Runtime.Session
+@using Sovrant.Runtime.Storage
 @implements IDisposable
 
 <div class="settings-page">
-    <div class="diag-header">
-        <div>
-            <h1>Command Center</h1>
-            <p class="text-secondary cc-subtitle">
-                What is Sovrant doing for you right now?
-                <button type="button" class="btn-link cc-help-toggle" @onclick="ToggleHelp">
-                    @(_showHelp ? "Hide guide" : "What are these?")
-                </button>
-            </p>
-        </div>
-        <button class="btn-secondary" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Refreshing…" : "Refresh")</button>
-    </div>
-
-    @if (_showHelp)
+    @if (_focusedRun is not null || _resolvingFocus)
     {
-        <div class="cc-help-panel">
-            <dl class="cc-help-grid">
-                <dt><span class="cc-kind-pill cc-kind-mission">&#x1F3AF; mission</span></dt>
-                <dd>A long-running goal Sovrant decomposes into a plan, then runs through teams and agents until done. Top of the orchestration stack — survives restarts and waits for human input when needed.</dd>
-
-                <dt><span class="cc-kind-pill cc-kind-team-run">&#x1F465; team run</span></dt>
-                <dd>One execution of a team — a group of agents running together under a profile (sequential, parallel, or swarm). Each member produces an agent run beneath it.</dd>
-
-                <dt><span class="cc-kind-pill cc-kind-agent-run">&#x1F916; agent run</span></dt>
-                <dd>A single agent executing a task — either standalone (kicked off from the Agents page) or as a member of a team run. Has its own ledger row, turns, and review.</dd>
-
-                <dt><span class="cc-kind-pill cc-kind-session">&#x1F4AC; session</span></dt>
-                <dd>A chat conversation with the assistant. Click to resume; persists across restarts.</dd>
-
-                <dt><span class="cc-kind-pill cc-kind-claw">&#x1F517; claw</span></dt>
-                <dd>An autonomous external system Sovrant connects to over MCP (n8n, Zapier, custom servers). Claws run in their own world; Sovrant monitors and steers them from here. Foundational — full claw runtime lands later.</dd>
-            </dl>
-        </div>
-    }
-
-    @if (!string.IsNullOrEmpty(_error))
-    {
-        <div class="page-error-banner" role="alert">
-            <span>&#9888;</span><span class="error-message">@_error</span>
-        </div>
-    }
-
-    <div class="cc-stat-row">
-        <CcStat Label="Missions" Value="@(_state?.ActiveMissions ?? 0)"
-                Tooltip="Long-running goals decomposed into team and agent runs." />
-        <CcStat Label="Team runs" Value="@(_state?.ActiveTeamRuns ?? 0)"
-                Tooltip="One execution of a team of agents under a sequential, parallel, or swarm profile." />
-        <CcStat Label="Agent runs" Value="@(_state?.ActiveAgentRuns ?? 0)"
-                Tooltip="A single agent executing a task — standalone or as a team member." />
-        <CcStat Label="Sessions" Value="@(_state?.ActiveSessions ?? 0)"
-                Tooltip="Chat conversations with the assistant. Click to resume." />
-        <CcStat Label="Claws" Value="@(_state?.ActiveClaws ?? 0)"
-                Tooltip="Autonomous external systems connected over MCP (n8n, Zapier, custom)." />
-    </div>
-
-    @if (_state is null && _loading)
-    {
-        <div class="cc-empty">
-            <p class="text-secondary">Loading…</p>
-        </div>
-    }
-    else if (_state is null || _state.Rows.Count == 0)
-    {
-        <div class="cc-empty">
-            <h2>Nothing in flight</h2>
-            <p class="text-secondary">
-                Start a chat or run an agent template to see activity here.
-                The cockpit refreshes every couple of seconds while a run is active.
-            </p>
-            <div class="cc-empty-actions">
-                <a href="/" class="btn-primary">New chat</a>
-                <a href="/agents" class="btn-outline">Run an agent</a>
+        @* Focused agent-run detail. Grid is hidden; the cockpit is the
+           parent surface and we render the run inline so /activity does
+           not need to exist as a separate page. *@
+        <div class="diag-header">
+            <div>
+                <h1>Agent run</h1>
+                <p class="text-secondary cc-subtitle">
+                    <a class="btn-link" href="/command">&larr; Back to Command Center</a>
+                </p>
             </div>
         </div>
+
+        @if (_resolvingFocus)
+        {
+            <div class="cc-empty"><p class="text-secondary">Loading run…</p></div>
+        }
+        else if (_focusedRun is not null)
+        {
+            <div class="activity-header">
+                <h2>@(_focusedRun.MemberId ?? _focusedRun.Kind)</h2>
+                <div class="detail-meta">
+                    <span class="cc-status cc-status-@_focusedRun.Status.ToLowerInvariant()">@_focusedRun.Status</span>
+                    <span>Started: @_focusedRun.StartedAt.LocalDateTime.ToString("MMM d, HH:mm:ss", CultureInfo.InvariantCulture)</span>
+                    @if (_focusedRun.EndedAt is { } ended)
+                    {
+                        <span>Duration: @FormatDuration(ended - _focusedRun.StartedAt)</span>
+                    }
+                    @if (_focusedRun.InputTokens + _focusedRun.OutputTokens > 0)
+                    {
+                        <span>Tokens: in @_focusedRun.InputTokens / out @_focusedRun.OutputTokens</span>
+                    }
+                    @if (_focusedRun.CostUsd is { } cost)
+                    {
+                        <span>Cost: @cost.ToString("C4", CultureInfo.InvariantCulture)</span>
+                    }
+                    <span class="text-muted">RunId: @_focusedRun.RunId</span>
+                </div>
+            </div>
+
+            <h3>Turns</h3>
+            @if (!string.IsNullOrEmpty(_focusError))
+            {
+                <div class="text-fail">@_focusError</div>
+            }
+            else if (_focusedTurns.Count == 0)
+            {
+                <div class="text-muted">No turn detail recorded for this run.</div>
+            }
+            else
+            {
+                <div class="turn-list">
+                    @foreach (var entry in _focusedTurns)
+                    {
+                        <div class="turn-row turn-@RoleClass(entry)">
+                            <div class="turn-row-head">
+                                <span class="turn-role">@RoleLabel(entry)</span>
+                                @if (!string.IsNullOrEmpty(entry.ToolName))
+                                {
+                                    <span class="turn-tool">@entry.ToolName</span>
+                                }
+                                <span class="turn-time">@entry.Timestamp.LocalDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture)</span>
+                                @if (entry.InputTokens + entry.OutputTokens > 0)
+                                {
+                                    <span class="turn-tokens">in @entry.InputTokens / out @entry.OutputTokens</span>
+                                }
+                                @if (entry.IsError)
+                                {
+                                    <span class="turn-error">error</span>
+                                }
+                            </div>
+                            <pre class="turn-content">@TruncateOutput(entry.Content)</pre>
+                        </div>
+                    }
+                </div>
+            }
+        }
     }
     else
     {
-        <div class="cc-grid">
-            <div class="cc-grid-header">
-                <div class="cc-col-kind">Kind</div>
-                <div class="cc-col-title">Title</div>
-                <div class="cc-col-status">Status</div>
-                <div class="cc-col-when">Last activity</div>
-                <div class="cc-col-cost">Cost</div>
+        <div class="diag-header">
+            <div>
+                <h1>Command Center</h1>
+                <p class="text-secondary cc-subtitle">
+                    What is Sovrant doing for you right now?
+                    <button type="button" class="btn-link cc-help-toggle" @onclick="ToggleHelp">
+                        @(_showHelp ? "Hide guide" : "What are these?")
+                    </button>
+                </p>
             </div>
-            @foreach (var row in _state.Rows)
-            {
-                <a class="cc-grid-row" href="@(row.DetailRoute ?? "#")">
-                    <div class="cc-col-kind">
-                        <span class="cc-kind-pill cc-kind-@(row.Kind)">@KindIcon(row.Kind) @row.Kind</span>
-                    </div>
-                    <div class="cc-col-title">
-                        <div class="cc-title">@row.Title</div>
-                        @if (!string.IsNullOrEmpty(row.Preview))
-                        {
-                            <div class="cc-preview text-muted text-sm">@row.Preview</div>
-                        }
-                    </div>
-                    <div class="cc-col-status">
-                        <span class="cc-status cc-status-@row.Status.ToLowerInvariant()">@row.Status</span>
-                    </div>
-                    <div class="cc-col-when text-sm text-muted">@FormatRelative(row.LastActivity)</div>
-                    <div class="cc-col-cost text-sm text-muted">@(row.CostUsd is null ? "—" : $"${row.CostUsd:F4}")</div>
-                </a>
-            }
+            <button class="btn-secondary" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Refreshing…" : "Refresh")</button>
         </div>
-        <div class="text-muted text-sm cc-footer">
-            Last refreshed @_state.GeneratedAt.LocalDateTime.ToString("HH:mm:ss") · auto-refresh every 2s
+
+        @if (_showHelp)
+        {
+            <div class="cc-help-panel">
+                <dl class="cc-help-grid">
+                    <dt><span class="cc-kind-pill cc-kind-mission">&#x1F3AF; mission</span></dt>
+                    <dd>A long-running goal Sovrant decomposes into a plan, then runs through teams and agents until done. Top of the orchestration stack — survives restarts and waits for human input when needed.</dd>
+
+                    <dt><span class="cc-kind-pill cc-kind-team-run">&#x1F465; team run</span></dt>
+                    <dd>One execution of a team — a group of agents running together under a profile (sequential, parallel, or swarm). Each member produces an agent run beneath it.</dd>
+
+                    <dt><span class="cc-kind-pill cc-kind-agent-run">&#x1F916; agent run</span></dt>
+                    <dd>A single agent executing a task — either standalone (kicked off from the Agents page) or as a member of a team run. Has its own ledger row, turns, and review.</dd>
+
+                    <dt><span class="cc-kind-pill cc-kind-session">&#x1F4AC; session</span></dt>
+                    <dd>A chat conversation with the assistant. Click to resume; persists across restarts.</dd>
+
+                    <dt><span class="cc-kind-pill cc-kind-claw">&#x1F517; claw</span></dt>
+                    <dd>An autonomous external system Sovrant connects to over MCP (n8n, Zapier, custom servers). Claws run in their own world; Sovrant monitors and steers them from here. Foundational — full claw runtime lands later.</dd>
+                </dl>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="page-error-banner" role="alert">
+                <span>&#9888;</span><span class="error-message">@_error</span>
+            </div>
+        }
+
+        <div class="cc-stat-row">
+            <CcStat Label="Missions" Value="@(_state?.ActiveMissions ?? 0)"
+                    Tooltip="Long-running goals decomposed into team and agent runs." />
+            <CcStat Label="Team runs" Value="@(_state?.ActiveTeamRuns ?? 0)"
+                    Tooltip="One execution of a team of agents under a sequential, parallel, or swarm profile." />
+            <CcStat Label="Agent runs" Value="@(_state?.ActiveAgentRuns ?? 0)"
+                    Tooltip="A single agent executing a task — standalone or as a team member." />
+            <CcStat Label="Sessions" Value="@(_state?.ActiveSessions ?? 0)"
+                    Tooltip="Chat conversations with the assistant. Click to resume." />
+            <CcStat Label="Claws" Value="@(_state?.ActiveClaws ?? 0)"
+                    Tooltip="Autonomous external systems connected over MCP (n8n, Zapier, custom)." />
         </div>
+
+        @if (_state is null && _loading)
+        {
+            <div class="cc-empty">
+                <p class="text-secondary">Loading…</p>
+            </div>
+        }
+        else if (_state is null || _state.Rows.Count == 0)
+        {
+            <div class="cc-empty">
+                <h2>Nothing in flight</h2>
+                <p class="text-secondary">
+                    Start a chat or run an agent template to see activity here.
+                    The cockpit refreshes every couple of seconds while a run is active.
+                </p>
+                <div class="cc-empty-actions">
+                    <a href="/" class="btn-primary">New chat</a>
+                    <a href="/agents" class="btn-outline">Run an agent</a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="cc-grid">
+                <div class="cc-grid-header">
+                    <div class="cc-col-kind">Kind</div>
+                    <div class="cc-col-title">Title</div>
+                    <div class="cc-col-status">Status</div>
+                    <div class="cc-col-when">Last activity</div>
+                    <div class="cc-col-cost">Cost</div>
+                </div>
+                @foreach (var row in _state.Rows)
+                {
+                    <a class="cc-grid-row" href="@(row.DetailRoute ?? "#")">
+                        <div class="cc-col-kind">
+                            <span class="cc-kind-pill cc-kind-@(row.Kind)">@KindIcon(row.Kind) @row.Kind</span>
+                        </div>
+                        <div class="cc-col-title">
+                            <div class="cc-title">@row.Title</div>
+                            @if (!string.IsNullOrEmpty(row.Preview))
+                            {
+                                <div class="cc-preview text-muted text-sm">@row.Preview</div>
+                            }
+                        </div>
+                        <div class="cc-col-status">
+                            <span class="cc-status cc-status-@row.Status.ToLowerInvariant()">@row.Status</span>
+                        </div>
+                        <div class="cc-col-when text-sm text-muted">@FormatRelative(row.LastActivity)</div>
+                        <div class="cc-col-cost text-sm text-muted">@(row.CostUsd is null ? "—" : $"${row.CostUsd:F4}")</div>
+                    </a>
+                }
+            </div>
+            <div class="text-muted text-sm cc-footer">
+                Last refreshed @_state.GeneratedAt.LocalDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture) · auto-refresh every 2s
+            </div>
+        }
     }
 </div>
 
 @code {
     [Inject] private CommandCenterAggregator Aggregator { get; set; } = default!;
+    [Inject] private IAgentRunStore AgentRuns { get; set; } = default!;
+    [Inject] private ISessionStore Sessions { get; set; } = default!;
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    private const int MaxOutputBytes = 2048;
 
     private CommandCenterState? _state;
     private bool _loading;
@@ -124,13 +215,120 @@
     private bool _showHelp;
     private System.Threading.Timer? _timer;
 
+    // Focused-run state (when ?run=X is in the URL).
+    private AgentRunRecord? _focusedRun;
+    private List<SessionEntry> _focusedTurns = [];
+    private bool _resolvingFocus;
+    private string _focusError = string.Empty;
+
     private void ToggleHelp() => _showHelp = !_showHelp;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadAsync();
-        _timer = new System.Threading.Timer(_ => InvokeAsync(LoadAsync), null,
-            TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+        // Decide focus mode BEFORE any await so the first render commits to the
+        // correct branch — otherwise the grid flashes before we resolve the run.
+        var initialRunId = ReadRunId(Nav.Uri);
+        if (!string.IsNullOrEmpty(initialRunId))
+        {
+            _resolvingFocus = true;
+        }
+
+        Nav.LocationChanged += OnLocationChanged;
+
+        if (!string.IsNullOrEmpty(initialRunId))
+        {
+            await ResolveRunAsync(initialRunId!);
+        }
+        else
+        {
+            await LoadAsync();
+            // Poll only while we're showing the grid. The detail view is static
+            // for the duration of the focus and a rolling refresh would clobber
+            // the user's read.
+            _timer = new System.Threading.Timer(_ => InvokeAsync(LoadAsync), null,
+                TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+        }
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        var runId = ReadRunId(e.Location);
+        _ = InvokeAsync(async () =>
+        {
+            if (!string.IsNullOrEmpty(runId))
+            {
+                StopPolling();
+                _resolvingFocus = true;
+                StateHasChanged();
+                await ResolveRunAsync(runId!);
+            }
+            else
+            {
+                // Returned to /command — clear focus and resume polling.
+                _focusedRun = null;
+                _focusedTurns = [];
+                _focusError = string.Empty;
+                _resolvingFocus = false;
+                await LoadAsync();
+                _timer ??= new System.Threading.Timer(_ => InvokeAsync(LoadAsync), null,
+                    TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+                StateHasChanged();
+            }
+        });
+    }
+
+    private async Task ResolveRunAsync(string runId)
+    {
+        _focusError = string.Empty;
+        _focusedRun = null;
+        _focusedTurns = [];
+
+        try
+        {
+            _focusedRun = await AgentRuns.GetAsync(runId);
+            if (_focusedRun is null)
+            {
+                _focusError = $"Run '{runId}' not found in the agent-run ledger. It may have been pruned or originated from a different workspace.";
+            }
+            else
+            {
+                try
+                {
+                    var entries = await Sessions.LoadAsync(runId, Sovrant.Web.Program.SovrantUserId);
+                    _focusedTurns = entries.ToList();
+                }
+                catch
+                {
+                    // Run record exists but turns weren't persisted under the run id.
+                    _focusedTurns = [];
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _focusError = $"Failed to load run: {ex.Message}";
+        }
+        finally
+        {
+            _resolvingFocus = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string? ReadRunId(string url)
+    {
+        var uri = new Uri(url, UriKind.RelativeOrAbsolute);
+        var query = uri.IsAbsoluteUri
+            ? uri.Query
+            : (url.Contains('?', StringComparison.Ordinal) ? url[url.IndexOf('?', StringComparison.Ordinal)..] : string.Empty);
+        var parsed = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(query);
+        return parsed.TryGetValue("run", out var r) ? r.ToString() : null;
+    }
+
+    private void StopPolling()
+    {
+        _timer?.Dispose();
+        _timer = null;
     }
 
     private async Task LoadAsync()
@@ -169,11 +367,43 @@
         if (delta.TotalSeconds < 60) return $"{(int)delta.TotalSeconds}s ago";
         if (delta.TotalMinutes < 60) return $"{(int)delta.TotalMinutes}m ago";
         if (delta.TotalHours < 24) return $"{(int)delta.TotalHours}h ago";
-        return when.LocalDateTime.ToString("MMM d, HH:mm");
+        return when.LocalDateTime.ToString("MMM d, HH:mm", CultureInfo.InvariantCulture);
     }
+
+    private static string FormatDuration(TimeSpan ts)
+    {
+        if (ts.TotalSeconds < 60) return $"{ts.TotalSeconds:F0}s";
+        if (ts.TotalMinutes < 60) return $"{ts.Minutes}m {ts.Seconds}s";
+        return $"{(int)ts.TotalHours}h {ts.Minutes}m";
+    }
+
+    private static string TruncateOutput(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+        return s.Length <= MaxOutputBytes ? s : s[..MaxOutputBytes] + "\n…(truncated)";
+    }
+
+    private static string RoleLabel(SessionEntry e) => e.Role switch
+    {
+        "user" => "User",
+        "assistant" => "Assistant",
+        "tool_use" => "Tool",
+        "tool_result" => "Tool result",
+        "system" => "System",
+        _ => e.Role,
+    };
+
+    private static string RoleClass(SessionEntry e) => e.Role switch
+    {
+        "user" => "user",
+        "assistant" => "assistant",
+        "tool_use" or "tool_result" => "tool",
+        _ => "system",
+    };
 
     public void Dispose()
     {
+        Nav.LocationChanged -= OnLocationChanged;
         _timer?.Dispose();
     }
 }

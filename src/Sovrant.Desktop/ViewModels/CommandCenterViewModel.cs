@@ -4,17 +4,25 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.CommandCenter;
+using Sovrant.Runtime.Session;
+using Sovrant.Runtime.Storage;
 
 namespace Sovrant.Desktop.ViewModels;
 
 /// <summary>
 /// Phase 90 / Phase 89 MVP — Command Center cockpit.
 /// Polls the read-only aggregator every 2s and surfaces a flat grid
-/// of "what is the engine doing right now?" rows.
+/// of "what is the engine doing right now?" rows. Agent-run drill-down
+/// is rendered inline in this same view (focused mode) so /activity
+/// doesn't need to exist as a separate destination.
 /// </summary>
 public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
 {
+    private const int MaxOutputBytes = 2048;
+
     private readonly CommandCenterAggregator _aggregator;
+    private readonly IAgentRunStore _agentRuns;
+    private readonly ISessionStore _sessions;
     private readonly System.Timers.Timer _timer;
     private bool _disposed;
 
@@ -29,6 +37,23 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _isEmpty = true;
     [ObservableProperty] private bool _showHelp;
 
+    // Focus-mode state. While IsFocused is true, the grid hides and the run
+    // detail panel renders in its place; polling pauses so the detail view
+    // doesn't get clobbered by a refresh.
+    [ObservableProperty] private bool _isFocused;
+    [ObservableProperty] private bool _focusLoading;
+    [ObservableProperty] private string _focusError = string.Empty;
+    [ObservableProperty] private string _focusedRunId = string.Empty;
+    [ObservableProperty] private string _focusedTitle = string.Empty;
+    [ObservableProperty] private string _focusedStatus = string.Empty;
+    [ObservableProperty] private string _focusedStarted = string.Empty;
+    [ObservableProperty] private string _focusedDuration = string.Empty;
+    [ObservableProperty] private string _focusedTokens = string.Empty;
+    [ObservableProperty] private string _focusedCost = string.Empty;
+    [ObservableProperty] private bool _focusedHasNoTurns;
+
+    public ObservableCollection<CommandCenterTurnViewModel> FocusedTurns { get; } = [];
+
     public string HelpToggleLabel => ShowHelp ? "Hide guide" : "What are these?";
 
     partial void OnShowHelpChanged(bool value) => OnPropertyChanged(nameof(HelpToggleLabel));
@@ -38,9 +63,22 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<CommandCenterRowViewModel> Rows { get; } = [];
 
-    public CommandCenterViewModel(CommandCenterAggregator aggregator)
+    /// <summary>
+    /// Raised when the user clicks a row in the cockpit grid. MainViewModel
+    /// listens and routes by Kind: sessions resume in chat, team-runs open
+    /// Orchestration, agent-runs stay on the cockpit and render inline via
+    /// <see cref="OpenRunAsync"/>.
+    /// </summary>
+    public event EventHandler<CommandCenterRowSelectedEventArgs>? RowSelected;
+
+    public CommandCenterViewModel(
+        CommandCenterAggregator aggregator,
+        IAgentRunStore agentRuns,
+        ISessionStore sessions)
     {
         _aggregator = aggregator;
+        _agentRuns = agentRuns;
+        _sessions = sessions;
         _ = LoadAsync();
         _timer = new System.Timers.Timer(2000);
         _timer.Elapsed += async (_, _) => await LoadAsync();
@@ -51,14 +89,120 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private async Task RefreshAsync() => await LoadAsync();
 
+    [RelayCommand]
+    private void SelectRow(CommandCenterRowViewModel? row)
+    {
+        if (row is null) return;
+        RowSelected?.Invoke(this, new CommandCenterRowSelectedEventArgs(
+            row.Kind, row.Id, row.DetailRoute));
+    }
+
+    [RelayCommand]
+    private void BackToGrid()
+    {
+        IsFocused = false;
+        FocusError = string.Empty;
+        FocusedTurns.Clear();
+    }
+
+    /// <summary>
+    /// Switch the cockpit into focused-detail mode for a single agent run.
+    /// Pulls the run record from the ledger (header), then loads the run's
+    /// session entries (turns). Caller is MainViewModel routing an agent-run
+    /// click — the cockpit page itself stays current.
+    /// </summary>
+    public async Task OpenRunAsync(string runId)
+    {
+        if (string.IsNullOrWhiteSpace(runId)) return;
+
+        IsFocused = true;
+        FocusLoading = true;
+        FocusError = string.Empty;
+        FocusedRunId = runId;
+        FocusedTurns.Clear();
+        FocusedHasNoTurns = false;
+
+        try
+        {
+            var record = await _agentRuns.GetAsync(runId).ConfigureAwait(false);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (record is null)
+                {
+                    FocusError = $"Run '{runId}' not found in the agent-run ledger.";
+                    return;
+                }
+
+                FocusedTitle = record.MemberId ?? record.Kind;
+                FocusedStatus = record.Status;
+                FocusedStarted = record.StartedAt.LocalDateTime.ToString("MMM d, HH:mm:ss", CultureInfo.InvariantCulture);
+                FocusedDuration = record.EndedAt is { } ended
+                    ? FormatDuration(ended - record.StartedAt)
+                    : "in flight";
+                FocusedTokens = (record.InputTokens + record.OutputTokens) > 0
+                    ? string.Format(CultureInfo.InvariantCulture, "in {0} / out {1}", record.InputTokens, record.OutputTokens)
+                    : string.Empty;
+                FocusedCost = record.CostUsd is { } c
+                    ? c.ToString("C4", CultureInfo.InvariantCulture)
+                    : string.Empty;
+            });
+
+            if (record is not null)
+            {
+                IReadOnlyList<SessionEntry> entries;
+                try
+                {
+                    entries = await _sessions.LoadAsync(runId, App.SovrantUserId).ConfigureAwait(false);
+                }
+                catch
+                {
+                    entries = [];
+                }
+
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    foreach (var e in entries)
+                    {
+                        FocusedTurns.Add(new CommandCenterTurnViewModel
+                        {
+                            Role = RoleLabel(e.Role),
+                            RoleClass = RoleClass(e.Role),
+                            ToolName = e.ToolName ?? string.Empty,
+                            Time = e.Timestamp.LocalDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture),
+                            TokensLabel = (e.InputTokens + e.OutputTokens) > 0
+                                ? string.Format(CultureInfo.InvariantCulture, "in {0} / out {1}", e.InputTokens, e.OutputTokens)
+                                : string.Empty,
+                            IsError = e.IsError,
+                            Content = TruncateOutput(e.Content),
+                        });
+                    }
+                    FocusedHasNoTurns = FocusedTurns.Count == 0;
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => FocusError = $"Failed to load run: {ex.Message}");
+        }
+        finally
+        {
+            FocusLoading = false;
+        }
+    }
+
     private async Task LoadAsync()
     {
+        // Don't refresh the grid while the user is reading focused detail —
+        // the rolling clear/repopulate would clobber the panel underneath.
+        if (IsFocused) return;
+
         try
         {
             IsLoading = true;
             var state = await _aggregator.GetActiveStateAsync();
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                if (IsFocused) return;
                 ActiveMissions = state.ActiveMissions;
                 ActiveTeamRuns = state.ActiveTeamRuns;
                 ActiveAgentRuns = state.ActiveAgentRuns;
@@ -120,6 +264,37 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
         return when.LocalDateTime.ToString("MMM d, HH:mm", CultureInfo.InvariantCulture);
     }
 
+    private static string FormatDuration(TimeSpan ts)
+    {
+        if (ts.TotalSeconds < 60) return $"{ts.TotalSeconds:F0}s";
+        if (ts.TotalMinutes < 60) return $"{ts.Minutes}m {ts.Seconds}s";
+        return $"{(int)ts.TotalHours}h {ts.Minutes}m";
+    }
+
+    private static string TruncateOutput(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+        return s.Length <= MaxOutputBytes ? s : s[..MaxOutputBytes] + "\n…(truncated)";
+    }
+
+    private static string RoleLabel(string role) => role switch
+    {
+        "user" => "User",
+        "assistant" => "Assistant",
+        "tool_use" => "Tool",
+        "tool_result" => "Tool result",
+        "system" => "System",
+        _ => role,
+    };
+
+    private static string RoleClass(string role) => role switch
+    {
+        "user" => "user",
+        "assistant" => "assistant",
+        "tool_use" or "tool_result" => "tool",
+        _ => "system",
+    };
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -142,4 +317,29 @@ public partial class CommandCenterRowViewModel : ViewModelBase
     [ObservableProperty] private string _preview = string.Empty;
     [ObservableProperty] private string _cost = string.Empty;
     [ObservableProperty] private string _detailRoute = string.Empty;
+}
+
+public partial class CommandCenterTurnViewModel : ViewModelBase
+{
+    [ObservableProperty] private string _role = string.Empty;
+    [ObservableProperty] private string _roleClass = string.Empty;
+    [ObservableProperty] private string _toolName = string.Empty;
+    [ObservableProperty] private string _time = string.Empty;
+    [ObservableProperty] private string _tokensLabel = string.Empty;
+    [ObservableProperty] private bool _isError;
+    [ObservableProperty] private string _content = string.Empty;
+}
+
+public sealed class CommandCenterRowSelectedEventArgs : EventArgs
+{
+    public CommandCenterRowSelectedEventArgs(string kind, string id, string detailRoute)
+    {
+        Kind = kind;
+        Id = id;
+        DetailRoute = detailRoute;
+    }
+
+    public string Kind { get; }
+    public string Id { get; }
+    public string DetailRoute { get; }
 }

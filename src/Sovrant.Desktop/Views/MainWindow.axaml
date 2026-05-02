@@ -59,9 +59,6 @@
         <DataTemplate DataType="vm:OrchestrationViewModel">
             <views:OrchestrationView />
         </DataTemplate>
-        <DataTemplate DataType="vm:ActivityViewModel">
-            <views:ActivityView />
-        </DataTemplate>
         <DataTemplate DataType="vm:CommandCenterViewModel">
             <views:CommandCenterView />
         </DataTemplate>
