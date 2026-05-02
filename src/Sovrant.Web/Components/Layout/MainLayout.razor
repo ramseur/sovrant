@@ -8,6 +8,9 @@
         <div class="rail-secondary-body">
             @switch (_selectedGroup)
             {
+                case "command":
+                    <CommandCenterPanel OnNavigate="Navigate" />
+                    break;
                 case "chat":
                     <Sidebar OnNavigate="Navigate" />
                     break;
@@ -61,7 +64,12 @@
     private readonly string _userInitial = Environment.UserName.Length > 0
         ? Environment.UserName[..1].ToUpperInvariant() : "U";
 
-    private void OnGroupSelected(string group) => _selectedGroup = group;
+    private void OnGroupSelected(string group)
+    {
+        _selectedGroup = group;
+        // Cockpit: open the page directly so the rail icon doubles as a launcher.
+        if (group == "command") Nav.NavigateTo("/command");
+    }
 
     private void Navigate(string url)
     {

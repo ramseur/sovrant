@@ -1,0 +1,142 @@
+@page "/command"
+@using Sovrant.Runtime.CommandCenter
+@implements IDisposable
+
+<div class="settings-page">
+    <div class="diag-header">
+        <div>
+            <h1>Command Center</h1>
+            <p class="text-secondary cc-subtitle">What is Sovrant doing for you right now?</p>
+        </div>
+        <button class="btn-secondary" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Refreshing…" : "Refresh")</button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="page-error-banner" role="alert">
+            <span>&#9888;</span><span class="error-message">@_error</span>
+        </div>
+    }
+
+    <div class="cc-stat-row">
+        <CcStat Label="Missions" Value="@(_state?.ActiveMissions ?? 0)" />
+        <CcStat Label="Team runs" Value="@(_state?.ActiveTeamRuns ?? 0)" />
+        <CcStat Label="Agent runs" Value="@(_state?.ActiveAgentRuns ?? 0)" />
+        <CcStat Label="Sessions" Value="@(_state?.ActiveSessions ?? 0)" />
+    </div>
+
+    @if (_state is null && _loading)
+    {
+        <div class="cc-empty">
+            <p class="text-secondary">Loading…</p>
+        </div>
+    }
+    else if (_state is null || _state.Rows.Count == 0)
+    {
+        <div class="cc-empty">
+            <h2>Nothing in flight</h2>
+            <p class="text-secondary">
+                Start a chat or run an agent template to see activity here.
+                The cockpit refreshes every couple of seconds while a run is active.
+            </p>
+            <div class="cc-empty-actions">
+                <a href="/" class="btn-primary">New chat</a>
+                <a href="/agents" class="btn-outline">Run an agent</a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="cc-grid">
+            <div class="cc-grid-header">
+                <div class="cc-col-kind">Kind</div>
+                <div class="cc-col-title">Title</div>
+                <div class="cc-col-status">Status</div>
+                <div class="cc-col-when">Last activity</div>
+                <div class="cc-col-cost">Cost</div>
+            </div>
+            @foreach (var row in _state.Rows)
+            {
+                <a class="cc-grid-row" href="@(row.DetailRoute ?? "#")">
+                    <div class="cc-col-kind">
+                        <span class="cc-kind-pill cc-kind-@(row.Kind)">@KindIcon(row.Kind) @row.Kind</span>
+                    </div>
+                    <div class="cc-col-title">
+                        <div class="cc-title">@row.Title</div>
+                        @if (!string.IsNullOrEmpty(row.Preview))
+                        {
+                            <div class="cc-preview text-muted text-sm">@row.Preview</div>
+                        }
+                    </div>
+                    <div class="cc-col-status">
+                        <span class="cc-status cc-status-@row.Status.ToLowerInvariant()">@row.Status</span>
+                    </div>
+                    <div class="cc-col-when text-sm text-muted">@FormatRelative(row.LastActivity)</div>
+                    <div class="cc-col-cost text-sm text-muted">@(row.CostUsd is null ? "—" : $"${row.CostUsd:F4}")</div>
+                </a>
+            }
+        </div>
+        <div class="text-muted text-sm cc-footer">
+            Last refreshed @_state.GeneratedAt.LocalDateTime.ToString("HH:mm:ss") · auto-refresh every 2s
+        </div>
+    }
+</div>
+
+@code {
+    [Inject] private CommandCenterAggregator Aggregator { get; set; } = default!;
+
+    private CommandCenterState? _state;
+    private bool _loading;
+    private string _error = string.Empty;
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        _timer = new System.Threading.Timer(_ => InvokeAsync(LoadAsync), null,
+            TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _state = await Aggregator.GetActiveStateAsync(Sovrant.Web.Program.SovrantUserId);
+            _error = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load cockpit state: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string KindIcon(string kind) => kind switch
+    {
+        "mission" => "\U0001F3AF",
+        "team-run" => "\U0001F465",
+        "agent-run" => "\U0001F916",
+        "session" => "\U0001F4AC",
+        _ => "•",
+    };
+
+    private static string FormatRelative(DateTimeOffset when)
+    {
+        var delta = DateTimeOffset.UtcNow - when;
+        if (delta.TotalSeconds < 5) return "just now";
+        if (delta.TotalSeconds < 60) return $"{(int)delta.TotalSeconds}s ago";
+        if (delta.TotalMinutes < 60) return $"{(int)delta.TotalMinutes}m ago";
+        if (delta.TotalHours < 24) return $"{(int)delta.TotalHours}h ago";
+        return when.LocalDateTime.ToString("MMM d, HH:mm");
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+}

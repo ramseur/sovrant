@@ -25,14 +25,14 @@
     {
         <div class="page-error-banner" role="alert">
             <span>&#9888;</span>
-            <span style="flex:1;">@_loadError</span>
+            <span class="error-message">@_loadError</span>
             <button class="btn-sm" @onclick="LoadAllAsync">Retry</button>
         </div>
     }
 
     @if (_isLoading)
     {
-        <p class="text-secondary" style="margin: 24px 0;">Loading memory…</p>
+        <p class="loading-row">Loading memory…</p>
     }
     else if (_tab == 0)
     {
@@ -47,7 +47,7 @@
                     <div class="memory-content">
                         <div class="memory-text">@p.Pattern</div>
                         <div class="memory-meta">
-                            <span class="confidence-badge" style="@ConfidenceStyle(p.Confidence)">@((p.Confidence * 100).ToString("F0"))%</span>
+                            <span class="confidence-badge @ConfidenceClass(p.Confidence)">@((p.Confidence * 100).ToString("F0"))%</span>
                             <span class="text-muted text-sm">@p.Project</span>
                             <span class="text-muted text-sm">@p.CreatedAt.LocalDateTime.ToString("d")</span>
                         </div>
@@ -71,7 +71,7 @@
                         <div class="memory-text"><strong>When:</strong> @inst.Trigger</div>
                         <div class="memory-text"><strong>Then:</strong> @inst.Action</div>
                         <div class="memory-meta">
-                            <span class="confidence-badge" style="@ConfidenceStyle(inst.Confidence)">@((inst.Confidence * 100).ToString("F0"))%</span>
+                            <span class="confidence-badge @ConfidenceClass(inst.Confidence)">@((inst.Confidence * 100).ToString("F0"))%</span>
                             <span class="text-muted text-sm">@inst.CreatedAt.LocalDateTime.ToString("d")</span>
                         </div>
                     </div>
@@ -168,9 +168,6 @@
         catch (Exception ex) { _status = $"Delete failed: {ex.Message}"; }
     }
 
-    private static string ConfidenceStyle(double c)
-    {
-        var color = c >= 0.7 ? "var(--status-pass)" : c >= 0.4 ? "var(--status-warn)" : "var(--status-fail)";
-        return $"background: {color}22; color: {color};";
-    }
+    private static string ConfidenceClass(double c)
+        => c >= 0.7 ? "high" : c >= 0.4 ? "medium" : "low";
 }

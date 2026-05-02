@@ -1,0 +1,121 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.CommandCenterView"
+             x:DataType="vm:CommandCenterViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel>
+        <!-- Header -->
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="8">
+            <DockPanel>
+                <Button DockPanel.Dock="Right"
+                        Content="Refresh"
+                        Command="{Binding RefreshCommand}"
+                        Padding="12,6" CornerRadius="6"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
+                <StackPanel>
+                    <TextBlock Text="Command Center" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                               Text="What is Sovrant doing for you right now?" />
+                </StackPanel>
+            </DockPanel>
+
+            <TextBlock Text="{Binding ErrorMessage}"
+                       FontSize="11"
+                       Foreground="{DynamicResource StatusFail}"
+                       IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       TextWrapping="Wrap" />
+
+            <!-- KPI tiles -->
+            <UniformGrid Rows="1" Columns="4" Margin="0,8,0,0">
+                <Border Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        CornerRadius="8" Padding="14,12" Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="MISSIONS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="{Binding ActiveMissions}" FontSize="24" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                    </StackPanel>
+                </Border>
+                <Border Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        CornerRadius="8" Padding="14,12" Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="TEAM RUNS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="{Binding ActiveTeamRuns}" FontSize="24" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                    </StackPanel>
+                </Border>
+                <Border Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        CornerRadius="8" Padding="14,12" Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="AGENT RUNS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="{Binding ActiveAgentRuns}" FontSize="24" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                    </StackPanel>
+                </Border>
+                <Border Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        CornerRadius="8" Padding="14,12">
+                    <StackPanel>
+                        <TextBlock Text="SESSIONS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="{Binding ActiveSessions}" FontSize="24" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+        </StackPanel>
+
+        <!-- Empty state -->
+        <StackPanel DockPanel.Dock="Top" HorizontalAlignment="Center" Margin="0,40"
+                    Spacing="10" IsVisible="{Binding IsEmpty}">
+            <TextBlock Text="Nothing in flight" FontSize="18" FontWeight="SemiBold"
+                       HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextPrimary}" />
+            <TextBlock TextWrapping="Wrap" MaxWidth="480"
+                       HorizontalAlignment="Center" TextAlignment="Center"
+                       Foreground="{DynamicResource TextSecondary}"
+                       Text="Start a chat or run an agent template to see activity here. The cockpit refreshes every couple of seconds while a run is active." />
+        </StackPanel>
+
+        <!-- Content -->
+        <ScrollViewer Margin="32,8,32,24" IsVisible="{Binding !IsEmpty}">
+            <ItemsControl ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:CommandCenterRowViewModel">
+                        <Border Background="{DynamicResource SurfaceCard}"
+                                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                                CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
+                            <Grid ColumnDefinitions="100,*,120,120,80">
+                                <TextBlock Grid.Column="0" Text="{Binding Kind}" FontSize="11"
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           VerticalAlignment="Center" />
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Preview}" FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}"
+                                               TextTrimming="CharacterEllipsis"
+                                               IsVisible="{Binding Preview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="{Binding Status}" FontSize="11"
+                                           Foreground="{DynamicResource StatusPass}"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="3" Text="{Binding LastActivity}" FontSize="11"
+                                           Foreground="{DynamicResource TextMuted}"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="4" Text="{Binding Cost}" FontSize="11"
+                                           Foreground="{DynamicResource TextMuted}"
+                                           VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

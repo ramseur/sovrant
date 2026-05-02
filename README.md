@@ -1,17 +1,17 @@
 # Sovrant
 
-**An open-source, provider-agnostic agentic AI engine built on .NET 10.**
+**A source-available command center for agents and agent activity — built on .NET 10.**
 
 Sovrant is a clean-room C# reimplementation inspired by the architecture and feature set of [OpenClaude](https://github.com/Gitlawb/openclaude) (the community fork of Anthropic's Claude Code). **No Anthropic source code was copied, translated, or incorporated.** Every line of Sovrant is original C# / .NET 10 code written from scratch — the project uses OpenClaude only as a functional reference for what an agentic coding tool should be able to do, not as a source of code.
 
-Sovrant is a general-purpose platform for running autonomous AI agents that can hold persistent conversations, use tools, coordinate teams of sub-agents, and integrate with any LLM provider. It is not limited to coding — Sovrant powers chat interfaces, research workflows, business process automation, content creation, project management, and any task that benefits from tool-augmented, session-persistent AI.
+Sovrant is a single-operator cockpit for running, steering, and observing autonomous AI agents — and a team substrate (96 endpoints, SignalR hub, role-based members, run profiles) for when you grow. It is not limited to coding — Sovrant powers chat interfaces, research workflows, business process automation, content creation, project management, and any task that benefits from tool-augmented, session-persistent AI.
 
 The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **desktop application** (Windows/macOS/Linux), a **web application** (Blazor Server), an **MCP server** for IDE embedding, or via **webhooks** from Slack, Teams, Discord, and custom systems. Agents read and write files, execute shell commands, search the web, call tools autonomously, delegate to sub-agents, and maintain full conversation history across sessions — all with configurable permission controls.
 
 > **Architecture note:** The CLI, Server, Desktop, and Web are independent frontends. All consume the runtime layer (`Sovrant.Runtime`) directly — the server does **not** depend on the CLI, and the desktop/web apps run the runtime in-process. You can deploy any frontend independently.
 
 **Runtime:** .NET 10 / C# 14
-**License:** [see LICENSE]
+**License:** Business Source License 1.1 — source-available, converts to Apache 2.0 on 2030-04-29. See [LICENSE](LICENSE).
 **Status:** 56 tools. 25 agent templates. 32 built-in skills. 96 server endpoints + SignalR hub. Team orchestration (with run profiles — Phase 78 Path 2). Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 1,492 tests passing across 10 projects.
 
 ---

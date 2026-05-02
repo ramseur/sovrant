@@ -56,6 +56,12 @@
                 }
             }
         </div>
+        @if (FooterTemplate is not null)
+        {
+            <div class="master-footer">
+                @FooterTemplate
+            </div>
+        }
     </div>
     <div class="detail-panel">
         @if (SelectedItem is not null && DetailTemplate is not null)
@@ -82,6 +88,7 @@
     [Parameter] public RenderFragment<TItem>? DetailTemplate { get; set; }
     [Parameter] public Func<TItem, string>? GroupKeySelector { get; set; }
     [Parameter] public RenderFragment<TItem>? GroupHeaderTemplate { get; set; }
+    [Parameter] public RenderFragment? FooterTemplate { get; set; }
     [Parameter] public EventCallback OnRefresh { get; set; }
     [Parameter] public EventCallback<TItem> OnItemSelected { get; set; }
     [Parameter] public EventCallback<string> OnSearch { get; set; }

@@ -30,49 +30,88 @@
 
         <!-- Master-detail -->
         <Grid Margin="32,12,32,24" ColumnDefinitions="300,12,*">
-            <!-- List -->
-            <ScrollViewer Grid.Column="0">
-                <ItemsControl ItemsSource="{Binding FilteredTemplates}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="vm:AgentTemplateItemViewModel">
-                            <Button Command="{Binding $parent[ItemsControl].((vm:AgentsViewModel)DataContext).SelectTemplateCommand}"
-                                    CommandParameter="{Binding}"
-                                    HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Stretch"
-                                    Padding="0" Margin="0,2"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    Cursor="Hand">
-                                <Border Padding="12,8" CornerRadius="8"
-                                        Background="{DynamicResource SurfaceCard}"
-                                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
-                                    <StackPanel Spacing="4">
-                                        <DockPanel>
-                                            <Border DockPanel.Dock="Right"
-                                                    Padding="5,2" CornerRadius="4"
-                                                    Background="{DynamicResource BrandPrimary}">
-                                                <TextBlock Text="{Binding RecommendedLevel}"
-                                                           FontSize="10" Foreground="White" />
-                                            </Border>
-                                            <TextBlock Text="{Binding Name}"
-                                                       FontSize="13" FontWeight="SemiBold"
-                                                       FontFamily="Consolas,Menlo,monospace"
-                                                       Foreground="{DynamicResource BrandPrimary}" />
-                                        </DockPanel>
-                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}">
-                                            <Run Text="Role: " />
-                                            <Run Text="{Binding Role}" />
-                                        </TextBlock>
-                                        <TextBlock Text="{Binding ToolsSummary}"
-                                                   FontSize="10" Foreground="{DynamicResource TextMuted}"
+            <!-- Master pane: list of templates + recent runs at the bottom -->
+            <Grid Grid.Column="0" RowDefinitions="*,Auto">
+                <ScrollViewer Grid.Row="0">
+                    <ItemsControl ItemsSource="{Binding FilteredTemplates}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:AgentTemplateItemViewModel">
+                                <Button Command="{Binding $parent[ItemsControl].((vm:AgentsViewModel)DataContext).SelectTemplateCommand}"
+                                        CommandParameter="{Binding}"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Stretch"
+                                        Padding="0" Margin="0,2"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Cursor="Hand">
+                                    <Border Padding="12,8" CornerRadius="8"
+                                            Background="{DynamicResource SurfaceCard}"
+                                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                        <StackPanel Spacing="4">
+                                            <DockPanel>
+                                                <Border DockPanel.Dock="Right"
+                                                        Padding="5,2" CornerRadius="4"
+                                                        Background="{DynamicResource BrandPrimary}">
+                                                    <TextBlock Text="{Binding RecommendedLevel}"
+                                                               FontSize="10" Foreground="White" />
+                                                </Border>
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           FontFamily="Consolas,Menlo,monospace"
+                                                           Foreground="{DynamicResource BrandPrimary}" />
+                                            </DockPanel>
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}">
+                                                <Run Text="Role: " />
+                                                <Run Text="{Binding Role}" />
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding ToolsSummary}"
+                                                       FontSize="10" Foreground="{DynamicResource TextMuted}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- Phase 90 Track C — Recent runs (this workspace) -->
+                <Border Grid.Row="1"
+                        Margin="0,12,0,0"
+                        Padding="12,10"
+                        CornerRadius="8"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="RECENT RUNS"
+                                   FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock IsVisible="{Binding !RecentRuns.Count}"
+                                   FontSize="11" Foreground="{DynamicResource TextMuted}"
+                                   Text="No agent runs yet." />
+                        <ItemsControl ItemsSource="{Binding RecentRuns}" MaxHeight="160">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:RecentAgentRunViewModel">
+                                    <StackPanel Spacing="2" Margin="0,3">
+                                        <TextBlock Text="{Binding Title}"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextPrimary}"
                                                    TextTrimming="CharacterEllipsis" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="{Binding Status}"
+                                                       FontSize="10"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                            <TextBlock Text="{Binding WhenLabel}"
+                                                       FontSize="10"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
                                     </StackPanel>
-                                </Border>
-                            </Button>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </Grid>
 
             <!-- Detail pane -->
             <Grid Grid.Column="2">
@@ -94,13 +133,63 @@
                         BorderThickness="1"
                         Padding="20,16"
                         IsVisible="{Binding !!SelectedTemplate}">
-                    <ContentControl Content="{Binding SelectedTemplate}">
-                        <ContentControl.ContentTemplate>
-                            <DataTemplate DataType="vm:AgentTemplateItemViewModel">
-                                <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
-                            </DataTemplate>
-                        </ContentControl.ContentTemplate>
-                    </ContentControl>
+                    <DockPanel>
+                        <!-- Phase 90 Track C — Run now controls -->
+                        <Border DockPanel.Dock="Top"
+                                Margin="0,0,0,14"
+                                Padding="12"
+                                CornerRadius="8"
+                                Background="{DynamicResource SurfaceBackground}"
+                                BorderBrush="{DynamicResource SurfaceBorder}"
+                                BorderThickness="1">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Run this template"
+                                           FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}" />
+                                <TextBox Text="{Binding RunPrompt, Mode=TwoWay}"
+                                         Watermark="Describe the task for the agent…"
+                                         AcceptsReturn="True"
+                                         MinHeight="56"
+                                         CornerRadius="6" Padding="8,6"
+                                         Background="{DynamicResource SurfaceBackground}" />
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <Button Content="Run now"
+                                            Command="{Binding RunNowCommand}"
+                                            IsEnabled="{Binding !IsRunning}"
+                                            Padding="14,6" CornerRadius="6"
+                                            Background="{DynamicResource BrandPrimary}"
+                                            Foreground="White" />
+                                    <TextBlock Text="{Binding LastRunStatus}"
+                                               VerticalAlignment="Center"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                </StackPanel>
+                                <Border IsVisible="{Binding LastRunOutput, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                        Padding="10"
+                                        CornerRadius="6"
+                                        Background="{DynamicResource SurfaceCard}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                        BorderThickness="1"
+                                        MaxHeight="240">
+                                    <ScrollViewer>
+                                        <SelectableTextBlock Text="{Binding LastRunOutput}"
+                                                             FontFamily="Consolas,Menlo,monospace"
+                                                             FontSize="12"
+                                                             TextWrapping="Wrap"
+                                                             Foreground="{DynamicResource TextPrimary}" />
+                                    </ScrollViewer>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <ContentControl Content="{Binding SelectedTemplate}">
+                            <ContentControl.ContentTemplate>
+                                <DataTemplate DataType="vm:AgentTemplateItemViewModel">
+                                    <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
+                                </DataTemplate>
+                            </ContentControl.ContentTemplate>
+                        </ContentControl>
+                    </DockPanel>
                 </Border>
             </Grid>
         </Grid>

@@ -25,7 +25,7 @@
             </select>
         </div>
 
-        <div class="toggle-card" style="border:none;padding:0;">
+        <div class="toggle-card toggle-card-bare">
             <div>
                 <div class="toggle-title">Audit Logging</div>
                 <div class="toggle-desc">Log all agent actions for audit trail</div>
@@ -39,9 +39,9 @@
 
     <!-- Blocked Commands -->
     <h2>Blocked Commands</h2>
-    <div class="input-group" style="margin-bottom:10px;">
+    <div class="input-group input-group-tight">
         <input type="text" @bind="_newBlockedCmd" placeholder="e.g. rm -rf /" />
-        <button class="btn-primary" style="width:auto;padding:8px 16px;" @onclick="AddBlockedCommand">Add</button>
+        <button class="btn-primary btn-inline-add" @onclick="AddBlockedCommand">Add</button>
     </div>
     @if (_blockedCommands.Count == 0)
     {
@@ -57,9 +57,9 @@
 
     <!-- Protected Files -->
     <h2 class="mt-16">Protected Files</h2>
-    <div class="input-group" style="margin-bottom:10px;">
+    <div class="input-group input-group-tight">
         <input type="text" @bind="_newProtectedFile" placeholder="e.g. .env, credentials.json" />
-        <button class="btn-primary" style="width:auto;padding:8px 16px;" @onclick="AddProtectedFile">Add</button>
+        <button class="btn-primary btn-inline-add" @onclick="AddProtectedFile">Add</button>
     </div>
     @if (_protectedFiles.Count == 0)
     {
@@ -75,9 +75,9 @@
 
     <!-- Secret Patterns -->
     <h2 class="mt-16">Secret Detection Patterns</h2>
-    <div class="input-group" style="margin-bottom:10px;">
+    <div class="input-group input-group-tight">
         <input type="text" @bind="_newSecretPattern" placeholder="e.g. sk-[a-zA-Z0-9]+" />
-        <button class="btn-primary" style="width:auto;padding:8px 16px;" @onclick="AddSecretPattern">Add</button>
+        <button class="btn-primary btn-inline-add" @onclick="AddSecretPattern">Add</button>
     </div>
     @if (_secretPatterns.Count == 0)
     {

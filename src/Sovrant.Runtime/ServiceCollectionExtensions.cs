@@ -207,6 +207,11 @@ public static class ServiceCollectionExtensions
         // (a missing source file is a no-op).
         services.AddSingleton<LegacyConfigMigrator>();
 
+        // Phase 90 / Phase 89 MVP — Command Center aggregator. Read-only
+        // flattener over missions, agent_runs, and sessions; powers the
+        // /command cockpit page (Web + Desktop) and GET /v1/command-center/state.
+        services.AddSingleton<Sovrant.Runtime.CommandCenter.CommandCenterAggregator>();
+
         // Project service (Phase 36)
         services.AddSingleton<IProjectService>(sp =>
             new SqliteProjectStore(

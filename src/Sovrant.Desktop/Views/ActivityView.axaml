@@ -19,7 +19,7 @@
                     <TextBlock Text="Activity" FontSize="24" FontWeight="Bold"
                                Foreground="{DynamicResource TextPrimary}" />
                     <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
-                               Text="Recent agent sessions — what ran, how it went, what it touched" />
+                               Text="Recent agent sessions — click a row to inspect its turns" />
                 </StackPanel>
             </DockPanel>
             <TextBlock Text="{Binding StatusMessage}"
@@ -29,111 +29,178 @@
                        TextWrapping="Wrap" />
         </StackPanel>
 
-        <!-- Content -->
-        <ScrollViewer Margin="32,12,32,24">
-            <Grid>
-                <!-- Loading -->
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Spacing="8" IsVisible="{Binding IsLoading}">
-                    <TextBlock Text="Loading sessions…"
+        <!-- Master/detail -->
+        <Grid Margin="32,12,32,24" ColumnDefinitions="380,12,*">
+            <!-- Master list -->
+            <ScrollViewer Grid.Column="0">
+                <StackPanel Spacing="6">
+                    <!-- Empty state -->
+                    <StackPanel Spacing="6" Margin="0,40">
+                        <StackPanel.IsVisible>
+                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                <Binding Path="!IsLoading" />
+                                <Binding Path="!Sessions.Count" />
+                                <Binding Path="!HasError" />
+                            </MultiBinding>
+                        </StackPanel.IsVisible>
+                        <TextBlock Text="No activity yet"
+                                   FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}"
+                                   HorizontalAlignment="Center" />
+                        <TextBlock FontSize="11"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   TextWrapping="Wrap" TextAlignment="Center"
+                                   Text="Start a chat session and history will appear here." />
+                    </StackPanel>
+
+                    <ItemsControl ItemsSource="{Binding Sessions}"
+                                  IsVisible="{Binding Sessions.Count}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:ActivityItemViewModel">
+                                <Button Command="{Binding $parent[ItemsControl].((vm:ActivityViewModel)DataContext).SelectSessionCommand}"
+                                        CommandParameter="{Binding}"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Stretch"
+                                        Padding="0" Margin="0,2"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Cursor="Hand">
+                                    <Border Padding="12,10" CornerRadius="8"
+                                            Background="{DynamicResource SurfaceCard}"
+                                            BorderBrush="{DynamicResource SurfaceBorder}"
+                                            BorderThickness="1">
+                                        <StackPanel Spacing="4">
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Right"
+                                                           Text="{Binding StartedAt, StringFormat='{}{0:MMM d, HH:mm}'}"
+                                                           FontSize="10"
+                                                           Foreground="{DynamicResource TextMuted}" />
+                                                <Border Padding="5,1" CornerRadius="4"
+                                                        Background="{DynamicResource BrandPrimary}"
+                                                        HorizontalAlignment="Left"
+                                                        Margin="0,0,8,0">
+                                                    <TextBlock Text="{Binding Outcome}"
+                                                               FontSize="9" FontWeight="Bold"
+                                                               Foreground="White" />
+                                                </Border>
+                                            </DockPanel>
+                                            <TextBlock Text="{Binding FirstTask}"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       TextWrapping="Wrap"
+                                                       MaxLines="2"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextPrimary}" />
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <TextBlock FontSize="10" Foreground="{DynamicResource TextMuted}">
+                                                    <Run Text="{Binding TurnCount}" /><Run Text=" turns" />
+                                                </TextBlock>
+                                                <TextBlock FontSize="10" Foreground="{DynamicResource TextMuted}"
+                                                           Text="{Binding Duration}" />
+                                                <TextBlock FontSize="10" Foreground="{DynamicResource StatusFail}"
+                                                           IsVisible="{Binding ErrorCount}">
+                                                    <Run Text="{Binding ErrorCount}" /><Run Text=" err" />
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Detail pane: turn-by-turn breakdown -->
+            <Border Grid.Column="2" CornerRadius="10"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}"
+                    BorderThickness="1">
+                <Panel>
+                    <TextBlock IsVisible="{Binding !SelectedSession}"
+                               Text="Select a session to inspect its turns"
                                FontSize="13"
                                Foreground="{DynamicResource TextMuted}"
-                               HorizontalAlignment="Center" />
-                </StackPanel>
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                    <DockPanel IsVisible="{Binding !!SelectedSession}" Margin="20,16">
+                        <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,12">
+                            <TextBlock Text="{Binding SelectedSession.FirstTask}"
+                                       FontSize="16" FontWeight="SemiBold"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <StackPanel Orientation="Horizontal" Spacing="14">
+                                <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}">
+                                    <Run Text="Outcome: " /><Run Text="{Binding SelectedSession.Outcome}" />
+                                </TextBlock>
+                                <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}">
+                                    <Run Text="Duration: " /><Run Text="{Binding SelectedSession.Duration}" />
+                                </TextBlock>
+                                <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}">
+                                    <Run Text="Turns: " /><Run Text="{Binding SelectedSession.TurnCount}" />
+                                </TextBlock>
+                                <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}"
+                                           IsVisible="{Binding SelectedSession.TotalTokens}">
+                                    <Run Text="Tokens: " /><Run Text="{Binding SelectedSession.TotalTokens}" />
+                                </TextBlock>
+                                <TextBlock FontSize="11" Foreground="{DynamicResource StatusFail}"
+                                           IsVisible="{Binding SelectedSession.ErrorCount}">
+                                    <Run Text="Errors: " /><Run Text="{Binding SelectedSession.ErrorCount}" />
+                                </TextBlock>
+                            </StackPanel>
+                        </StackPanel>
 
-                <!-- Empty -->
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Spacing="12" Margin="0,40">
-                    <StackPanel.IsVisible>
-                        <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="!IsLoading" />
-                            <Binding Path="!Sessions.Count" />
-                            <Binding Path="!HasError" />
-                        </MultiBinding>
-                    </StackPanel.IsVisible>
-                    <TextBlock Text="No activity yet"
-                               FontSize="16" FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextPrimary}"
-                               HorizontalAlignment="Center" />
-                    <TextBlock FontSize="13"
-                               Foreground="{DynamicResource TextSecondary}"
-                               TextWrapping="Wrap" MaxWidth="420"
-                               TextAlignment="Center"
-                               Text="Start a chat session and your activity history will appear here once the session ends." />
-                </StackPanel>
+                        <TextBlock DockPanel.Dock="Top"
+                                   Text="{Binding DetailError}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource StatusFail}"
+                                   IsVisible="{Binding DetailError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   TextWrapping="Wrap" />
 
-                <!-- List -->
-                <ItemsControl ItemsSource="{Binding Sessions}"
-                              IsVisible="{Binding Sessions.Count}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="vm:ActivityItemViewModel">
-                            <Border Margin="0,4" Padding="14,12" CornerRadius="8"
-                                    Background="{DynamicResource SurfaceCard}"
-                                    BorderBrush="{DynamicResource SurfaceBorder}"
-                                    BorderThickness="1">
-                                <StackPanel Spacing="6">
-                                    <DockPanel>
-                                        <TextBlock DockPanel.Dock="Right"
-                                                   Text="{Binding StartedAt, StringFormat='{}{0:MMM d, HH:mm}'}"
-                                                   FontSize="11"
-                                                   Foreground="{DynamicResource TextMuted}" />
-                                        <Border Padding="6,2" CornerRadius="4"
-                                                Background="{DynamicResource BrandPrimary}"
-                                                HorizontalAlignment="Left"
-                                                Margin="0,0,8,0">
-                                            <TextBlock Text="{Binding Outcome}"
-                                                       FontSize="10" FontWeight="Bold"
-                                                       Foreground="White" />
+                        <ScrollViewer>
+                            <ItemsControl ItemsSource="{Binding Turns}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vm:TurnItemViewModel">
+                                        <Border Margin="0,4" Padding="10,8"
+                                                CornerRadius="6"
+                                                Background="{DynamicResource SurfaceBackground}"
+                                                BorderBrush="{DynamicResource SurfaceBorder}"
+                                                BorderThickness="1">
+                                            <StackPanel Spacing="4">
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <TextBlock Text="{Binding Role}"
+                                                               FontSize="11" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextPrimary}" />
+                                                    <TextBlock Text="{Binding ToolName}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource StatusWarn}"
+                                                               IsVisible="{Binding ToolName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                    <TextBlock Text="{Binding Time}"
+                                                               FontSize="10"
+                                                               FontFamily="Consolas,Menlo,monospace"
+                                                               Foreground="{DynamicResource TextMuted}" />
+                                                    <TextBlock Text="{Binding TokensLabel}"
+                                                               FontSize="10"
+                                                               Foreground="{DynamicResource TextMuted}"
+                                                               IsVisible="{Binding TokensLabel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                    <TextBlock Text="error"
+                                                               FontSize="10" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource StatusFail}"
+                                                               IsVisible="{Binding IsError}" />
+                                                </StackPanel>
+                                                <SelectableTextBlock Text="{Binding Content}"
+                                                                     FontSize="11"
+                                                                     FontFamily="Consolas,Menlo,monospace"
+                                                                     TextWrapping="Wrap"
+                                                                     Foreground="{DynamicResource TextPrimary}" />
+                                            </StackPanel>
                                         </Border>
-                                        <TextBlock Text="{Binding SessionId}"
-                                                   FontSize="11"
-                                                   FontFamily="Consolas,Menlo,monospace"
-                                                   Foreground="{DynamicResource TextSecondary}"
-                                                   TextTrimming="CharacterEllipsis" />
-                                    </DockPanel>
-                                    <TextBlock Text="{Binding FirstTask}"
-                                               FontSize="13"
-                                               FontWeight="SemiBold"
-                                               TextWrapping="Wrap"
-                                               Foreground="{DynamicResource TextPrimary}" />
-                                    <StackPanel Orientation="Horizontal" Spacing="16">
-                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}">
-                                            <Run Text="Duration: " />
-                                            <Run Text="{Binding Duration}" />
-                                        </TextBlock>
-                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}">
-                                            <Run Text="Turns: " />
-                                            <Run Text="{Binding TurnCount}" />
-                                        </TextBlock>
-                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}"
-                                                   IsVisible="{Binding TotalTokens}">
-                                            <Run Text="Tokens: " />
-                                            <Run Text="{Binding TotalTokens}" />
-                                        </TextBlock>
-                                        <TextBlock FontSize="11" Foreground="{DynamicResource StatusFail}"
-                                                   IsVisible="{Binding ErrorCount}">
-                                            <Run Text="Errors: " />
-                                            <Run Text="{Binding ErrorCount}" />
-                                        </TextBlock>
-                                    </StackPanel>
-                                    <TextBlock FontSize="11" TextWrapping="Wrap"
-                                               Foreground="{DynamicResource TextMuted}"
-                                               IsVisible="{Binding ToolsUsed, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                                        <Run Text="Tools: " />
-                                        <Run Text="{Binding ToolsUsed}" />
-                                    </TextBlock>
-                                    <TextBlock FontSize="11" TextWrapping="Wrap"
-                                               Foreground="{DynamicResource TextMuted}"
-                                               IsVisible="{Binding FilesModified, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                                        <Run Text="Files: " />
-                                        <Run Text="{Binding FilesModified}" />
-                                    </TextBlock>
-                                </StackPanel>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </Grid>
-        </ScrollViewer>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Panel>
+            </Border>
+        </Grid>
     </DockPanel>
 </UserControl>

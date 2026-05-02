@@ -26,12 +26,17 @@
             <h3>Parameters</h3>
             @if (context.Parameters.Count > 0)
             {
-                <table class="provider-table">
+                <table class="provider-table sortable-table">
                     <thead>
-                        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr>
+                            <th class="sortable" @onclick='() => SortBy("name")'>Name @SortGlyph("name")</th>
+                            <th class="sortable" @onclick='() => SortBy("type")'>Type @SortGlyph("type")</th>
+                            <th class="sortable" @onclick='() => SortBy("required")'>Required @SortGlyph("required")</th>
+                            <th>Description</th>
+                        </tr>
                     </thead>
                     <tbody>
-                        @foreach (var p in context.Parameters)
+                        @foreach (var p in SortedParams(context.Parameters))
                         {
                             <tr>
                                 <td><code>@p.Name</code></td>
@@ -59,6 +64,28 @@
     private List<ToolItem> _all = [];
     private List<ToolItem> _filtered = [];
     private ToolItem? _selected;
+    private string _sortKey = "name";
+    private bool _sortDesc;
+
+    private void SortBy(string key)
+    {
+        if (_sortKey == key) _sortDesc = !_sortDesc;
+        else { _sortKey = key; _sortDesc = false; }
+    }
+
+    private string SortGlyph(string key)
+        => _sortKey == key ? (_sortDesc ? "▼" : "▲") : string.Empty;
+
+    private IEnumerable<ParamInfo> SortedParams(IEnumerable<ParamInfo> input)
+    {
+        IEnumerable<ParamInfo> sorted = _sortKey switch
+        {
+            "type" => input.OrderBy(p => p.Type, StringComparer.OrdinalIgnoreCase),
+            "required" => input.OrderBy(p => p.Required ? 0 : 1),
+            _ => input.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase),
+        };
+        return _sortDesc ? sorted.Reverse() : sorted;
+    }
 
     protected override void OnInitialized() => Load();
 

@@ -70,6 +70,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITeamRegistry>(sp =>
             new SqliteTeamRegistry(sp.GetRequiredService<Sovrant.Runtime.Storage.ISqliteConnectionFactory>()));
         services.AddSingleton<SovrantAgentFactory>();
+        services.AddSingleton<AdHocAgentRunner>();
 
         // Swarm orchestrator infrastructure
         services.AddSingleton(_ => SwarmConfigLoader.Load());

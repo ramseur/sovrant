@@ -1,6 +1,13 @@
 @page "/agents"
 @using Sovrant.Agents.Templates
+@using Sovrant.Agents.Shared
+@using Sovrant.Runtime.Storage
+@using Sovrant.Web.Services
 @using Markdig
+@inject AgentTemplateRegistry TemplateRegistry
+@inject AdHocAgentRunner Runner
+@inject IAgentRunStore RunStore
+@inject ActiveContextService ActiveContext
 
 <MasterDetailLayout TItem="AgentItem"
                     Title="Agent Templates"
@@ -8,7 +15,7 @@
                     Items="@_filtered"
                     SelectedItem="@_selected"
                     EmptyMessage="No agent templates registered."
-                    OnItemSelected="@(a => { _selected = a; return Task.CompletedTask; })"
+                    OnItemSelected="OnSelected"
                     OnSearch="Search">
     <ItemTemplate>
         <div class="item-title">@context.Name</div>
@@ -22,6 +29,32 @@
                 <span>Level: @context.RecommendedLevel</span>
                 <span>Tools: @context.ToolsSummary</span>
             </div>
+
+            <!-- Phase 90 Track C — Run now -->
+            <div class="run-now-card">
+                <div class="run-now-header">Run this template</div>
+                <textarea class="run-now-prompt"
+                          placeholder="Describe the task for the agent…"
+                          @bind="_runPrompt"
+                          @bind:event="oninput"
+                          rows="3"></textarea>
+                <div class="run-now-actions">
+                    <button class="btn-primary"
+                            disabled="@(_isRunning || string.IsNullOrWhiteSpace(_runPrompt))"
+                            @onclick="@(() => RunNowAsync(context))">
+                        @(_isRunning ? "Running…" : "Run now")
+                    </button>
+                    @if (_lastRunStatus is not null)
+                    {
+                        <span class="run-now-status @_lastRunStatusClass">@_lastRunStatus</span>
+                    }
+                </div>
+                @if (!string.IsNullOrEmpty(_lastRunOutput))
+                {
+                    <pre class="run-now-output">@_lastRunOutput</pre>
+                }
+            </div>
+
             @if (context.AllowedTools.Count > 0)
             {
                 <h3>Allowed Tools</h3>
@@ -38,19 +71,50 @@
             </div>
         </div>
     </DetailTemplate>
+    <FooterTemplate>
+        <div class="recent-runs">
+            <div class="recent-runs-header">
+                <span>Recent runs (this workspace)</span>
+                <button class="btn-link" @onclick="LoadRecentRunsAsync">Refresh</button>
+            </div>
+            @if (_recentRuns.Count == 0)
+            {
+                <div class="recent-runs-empty">No agent runs yet.</div>
+            }
+            else
+            {
+                @foreach (var r in _recentRuns)
+                {
+                    <div class="recent-run">
+                        <div class="recent-run-title">@(string.IsNullOrEmpty(r.MemberId) ? r.Kind : r.MemberId)</div>
+                        <div class="recent-run-meta">
+                            <span class="recent-run-status @StatusClass(r.Status)">@r.Status</span>
+                            <span>@FormatRelative(r.EndedAt ?? r.StartedAt)</span>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </FooterTemplate>
 </MasterDetailLayout>
 
 @code {
-    [Inject] private AgentTemplateRegistry TemplateRegistry { get; set; } = default!;
-
     private List<AgentItem> _all = [];
     private List<AgentItem> _filtered = [];
     private AgentItem? _selected;
 
+    private string _runPrompt = string.Empty;
+    private bool _isRunning;
+    private string? _lastRunStatus;
+    private string _lastRunStatusClass = string.Empty;
+    private string _lastRunOutput = string.Empty;
+
+    private List<AgentRunRecord> _recentRuns = [];
+
     private static readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions().Build();
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         _all = TemplateRegistry.All
             .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
@@ -64,6 +128,77 @@
                 SystemPrompt = t.SystemPrompt,
             }).ToList();
         _filtered = _all;
+        await LoadRecentRunsAsync();
+    }
+
+    private Task OnSelected(AgentItem item)
+    {
+        _selected = item;
+        _runPrompt = string.Empty;
+        _lastRunStatus = null;
+        _lastRunOutput = string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private async Task RunNowAsync(AgentItem agent)
+    {
+        if (string.IsNullOrWhiteSpace(_runPrompt) || _isRunning) return;
+        _isRunning = true;
+        _lastRunStatus = "Starting…";
+        _lastRunStatusClass = "running";
+        _lastRunOutput = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var result = await Runner.RunAsync(
+                templateName: agent.Name,
+                prompt: _runPrompt,
+                workspaceId: ActiveContext.WorkspaceId,
+                projectId: string.IsNullOrEmpty(ActiveContext.ProjectId) ? null : ActiveContext.ProjectId,
+                userId: Program.SovrantUserId);
+
+            if (result.Success)
+            {
+                _lastRunStatus = "Completed";
+                _lastRunStatusClass = "succeeded";
+                _lastRunOutput = result.Output;
+            }
+            else
+            {
+                _lastRunStatus = "Failed";
+                _lastRunStatusClass = "failed";
+                _lastRunOutput = result.Error ?? "(no error message)";
+            }
+        }
+        catch (Exception ex)
+        {
+            _lastRunStatus = "Failed";
+            _lastRunStatusClass = "failed";
+            _lastRunOutput = ex.Message;
+        }
+        finally
+        {
+            _isRunning = false;
+            await LoadRecentRunsAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadRecentRunsAsync()
+    {
+        try
+        {
+            var filter = string.IsNullOrEmpty(ActiveContext.WorkspaceId)
+                ? null
+                : new AgentRunFilter(WorkspaceId: ActiveContext.WorkspaceId);
+            var runs = await RunStore.ListAsync(filter, limit: 10);
+            _recentRuns = runs.ToList();
+        }
+        catch
+        {
+            _recentRuns = [];
+        }
     }
 
     private void Search(string text)
@@ -82,6 +217,25 @@
         <= 5 => string.Join(", ", tools),
         _ => $"{string.Join(", ", tools.Take(5))} +{tools.Count - 5} more",
     };
+
+    private static string StatusClass(string status) => status?.ToLowerInvariant() switch
+    {
+        "running" => "running",
+        "succeeded" => "succeeded",
+        "failed" => "failed",
+        "cancelled" => "cancelled",
+        _ => string.Empty,
+    };
+
+    private static string FormatRelative(DateTimeOffset when)
+    {
+        var delta = DateTimeOffset.UtcNow - when;
+        if (delta.TotalSeconds < 5) return "just now";
+        if (delta.TotalSeconds < 60) return $"{(int)delta.TotalSeconds}s ago";
+        if (delta.TotalMinutes < 60) return $"{(int)delta.TotalMinutes}m ago";
+        if (delta.TotalHours < 24) return $"{(int)delta.TotalHours}h ago";
+        return when.LocalDateTime.ToString("MMM d, HH:mm");
+    }
 
     private sealed class AgentItem
     {

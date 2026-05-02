@@ -152,7 +152,7 @@
                            FontSize="12"
                            Foreground="{DynamicResource StatusPass}" />
 
-                <TextBlock Text="Providers are stored in ~/.sovrant/providers.json. Click Activate to switch the active provider."
+                <TextBlock Text="Provider profiles are stored in the local database; API keys are stored in the OS keystore (Windows Credential Manager / macOS Keychain / libsecret). Click Activate to switch the active provider."
                            FontSize="11" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextMuted}" />
             </StackPanel>

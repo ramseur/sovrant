@@ -15,7 +15,7 @@
             <label>New Project</label>
             <div class="input-group">
                 <input type="text" @bind="_newName" placeholder="Project name..." />
-                <button class="btn-primary btn-sm" style="width:auto;padding:8px 16px;" @onclick="CreateAsync">Create</button>
+                <button class="btn-primary btn-sm btn-inline-add" @onclick="CreateAsync">Create</button>
             </div>
         </div>
     </div>
@@ -29,7 +29,7 @@
     {
         <div class="page-error-banner" role="alert">
             <span>&#9888;</span>
-            <span style="flex:1;">@_loadError</span>
+            <span class="error-message">@_loadError</span>
             <button class="btn-sm" @onclick="LoadAsync">Retry</button>
         </div>
     }
@@ -40,7 +40,7 @@
 
     @if (_isLoading)
     {
-        <p class="text-secondary" style="margin: 24px 0;">Loading projects…</p>
+        <p class="loading-row">Loading projects…</p>
     }
     else
     {

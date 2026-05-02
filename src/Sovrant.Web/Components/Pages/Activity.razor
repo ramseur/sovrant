@@ -1,106 +1,179 @@
 @page "/activity"
 @using Sovrant.Runtime.Memory
+@using Sovrant.Runtime.Session
+@using Sovrant.Web.Services
 
-<div class="settings-page">
-    <div class="diag-header">
-        <div>
-            <h1>Activity</h1>
-            <p class="text-secondary" style="margin:0;">Recent agent sessions — what ran, how it went, what it touched</p>
+<MasterDetailLayout TItem="SessionSummary"
+                    Title="Activity"
+                    ItemCount="@_summaries.Count"
+                    Items="@_summaries"
+                    SelectedItem="@_selected"
+                    EmptyMessage="No activity yet — start a chat session to see history here."
+                    OnRefresh="LoadAsync"
+                    OnItemSelected="OnSelectedAsync"
+                    ShowSearch="false">
+    <ItemTemplate>
+        <div class="item-title">
+            @(context.Tasks.Count > 0 ? Truncate(context.Tasks[0], 80) : "(no task recorded)")
         </div>
-        <button class="btn-secondary" @onclick="LoadAsync">Refresh</button>
-    </div>
+        <div class="item-subtitle">
+            <span class="outcome-badge @context.Outcome.ToString().ToLowerInvariant()">@context.Outcome</span>
+            &middot; @context.StartedAt.LocalDateTime.ToString("MMM d, HH:mm")
+            &middot; @context.TurnCount turns
+        </div>
+    </ItemTemplate>
+    <DetailTemplate>
+        <div class="detail-content activity-detail">
+            <div class="activity-header">
+                <h2>@(context.Tasks.Count > 0 ? context.Tasks[0] : "(no task recorded)")</h2>
+                <div class="detail-meta">
+                    <span class="outcome-badge @context.Outcome.ToString().ToLowerInvariant()">@context.Outcome</span>
+                    <span>Started: @context.StartedAt.LocalDateTime.ToString("MMM d, HH:mm:ss")</span>
+                    <span>Duration: @FormatDuration(context.EndedAt - context.StartedAt)</span>
+                    <span>Turns: @context.TurnCount</span>
+                    @if (context.TotalInputTokens + context.TotalOutputTokens > 0)
+                    {
+                        <span>Tokens: @(context.TotalInputTokens + context.TotalOutputTokens)</span>
+                    }
+                    @if (context.ErrorCount > 0)
+                    {
+                        <span class="text-fail">Errors: @context.ErrorCount</span>
+                    }
+                </div>
+                @if (context.ToolsUsed.Count > 0)
+                {
+                    <div class="detail-meta">Tools used: @string.Join(", ", context.ToolsUsed)</div>
+                }
+                @if (context.FilesModified.Count > 0)
+                {
+                    <div class="detail-meta">Files: @string.Join(", ", context.FilesModified)</div>
+                }
+            </div>
 
-    @if (_isLoading)
-    {
-        <div class="empty-state" style="margin-top: 32px; text-align: center; padding: 48px 24px;">
-            <p class="text-secondary">Loading sessions…</p>
-        </div>
-    }
-    else if (!string.IsNullOrEmpty(_error))
-    {
-        <div class="status-message" style="background: var(--status-fail-bg, rgba(244,67,54,0.1)); color: var(--status-fail); padding: 12px; border-radius: 6px; margin-top: 16px;">
-            @_error
-        </div>
-    }
-    else if (_summaries.Count == 0)
-    {
-        <div class="empty-state" style="margin-top: 32px; text-align: center; padding: 48px 24px;">
-            <h2 style="margin: 0 0 8px 0;">No activity yet</h2>
-            <p class="text-secondary" style="max-width: 480px; margin: 0 auto;">
-                Start a chat session and your activity history will appear here once the session ends.
-            </p>
-        </div>
-    }
-    else
-    {
-        <div class="memory-list" style="margin-top: 16px;">
-            @foreach (var s in _summaries)
+            <h3>Turns</h3>
+            @if (_loadingDetail)
             {
-                <div class="memory-card">
-                    <div class="memory-content">
-                        <div class="memory-meta" style="margin-bottom: 6px;">
-                            <span class="outcome-badge @s.Outcome.ToString().ToLowerInvariant()">@s.Outcome</span>
-                            <span class="text-muted text-sm" style="font-family: var(--font-mono, monospace);">@s.SessionId[..Math.Min(12, s.SessionId.Length)]</span>
-                            <span class="text-muted text-sm">@s.StartedAt.LocalDateTime.ToString("MMM d, HH:mm")</span>
+                <div class="text-secondary">Loading turns…</div>
+            }
+            else if (!string.IsNullOrEmpty(_detailError))
+            {
+                <div class="text-fail">@_detailError</div>
+            }
+            else if (_entries.Count == 0)
+            {
+                <div class="text-muted">No turn detail recorded for this session.</div>
+            }
+            else
+            {
+                <div class="turn-list">
+                    @foreach (var entry in _entries)
+                    {
+                        <div class="turn-row turn-@RoleClass(entry)">
+                            <div class="turn-row-head">
+                                <span class="turn-role">@RoleLabel(entry)</span>
+                                @if (!string.IsNullOrEmpty(entry.ToolName))
+                                {
+                                    <span class="turn-tool">@entry.ToolName</span>
+                                }
+                                <span class="turn-time">@entry.Timestamp.LocalDateTime.ToString("HH:mm:ss")</span>
+                                @if (entry.InputTokens + entry.OutputTokens > 0)
+                                {
+                                    <span class="turn-tokens">in @entry.InputTokens / out @entry.OutputTokens</span>
+                                }
+                                @if (entry.IsError)
+                                {
+                                    <span class="turn-error">error</span>
+                                }
+                            </div>
+                            <pre class="turn-content">@TruncateOutput(entry.Content)</pre>
                         </div>
-                        <div class="memory-text" style="font-weight: 600;">
-                            @(s.Tasks.Count > 0 ? s.Tasks[0] : "(no task recorded)")
-                        </div>
-                        <div class="memory-meta" style="margin-top: 6px;">
-                            <span class="text-muted text-sm">Duration: @FormatDuration(s.EndedAt - s.StartedAt)</span>
-                            <span class="text-muted text-sm">Turns: @s.TurnCount</span>
-                            @if (s.TotalInputTokens + s.TotalOutputTokens > 0)
-                            {
-                                <span class="text-muted text-sm">Tokens: @(s.TotalInputTokens + s.TotalOutputTokens)</span>
-                            }
-                            @if (s.ErrorCount > 0)
-                            {
-                                <span class="text-sm" style="color: var(--status-fail);">Errors: @s.ErrorCount</span>
-                            }
-                        </div>
-                        @if (s.ToolsUsed.Count > 0)
-                        {
-                            <div class="text-muted text-sm" style="margin-top: 4px;">Tools: @string.Join(", ", s.ToolsUsed)</div>
-                        }
-                        @if (s.FilesModified.Count > 0)
-                        {
-                            <div class="text-muted text-sm" style="margin-top: 2px;">Files: @string.Join(", ", s.FilesModified)</div>
-                        }
-                    </div>
+                    }
                 </div>
             }
         </div>
-    }
-</div>
+    </DetailTemplate>
+</MasterDetailLayout>
 
 @code {
     [Inject] private IMemoryStore MemoryStore { get; set; } = default!;
+    [Inject] private ISessionStore SessionStore { get; set; } = default!;
 
-    private bool _isLoading = true;
-    private string _error = string.Empty;
     private List<SessionSummary> _summaries = [];
+    private SessionSummary? _selected;
+    private List<SessionEntry> _entries = [];
+    private bool _loadingDetail;
+    private string _detailError = string.Empty;
 
     private static readonly string Project = Directory.GetCurrentDirectory();
+    private const int MaxOutputBytes = 2048;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private async Task LoadAsync()
     {
-        _isLoading = true;
-        _error = string.Empty;
         try
         {
             _summaries = (await MemoryStore.LoadSummariesAsync(Project, maxCount: 50)).ToList();
         }
         catch (Exception ex)
         {
-            _error = $"Failed to load activity: {ex.Message}";
+            _summaries = [];
+            _detailError = $"Failed to load activity: {ex.Message}";
+        }
+    }
+
+    private async Task OnSelectedAsync(SessionSummary summary)
+    {
+        _selected = summary;
+        _loadingDetail = true;
+        _detailError = string.Empty;
+        _entries = [];
+        StateHasChanged();
+        try
+        {
+            var entries = await SessionStore.LoadAsync(summary.SessionId, ownerUserId: Program.SovrantUserId);
+            _entries = entries.ToList();
+        }
+        catch (Exception ex)
+        {
+            _detailError = $"Failed to load turn detail: {ex.Message}";
         }
         finally
         {
-            _isLoading = false;
+            _loadingDetail = false;
+            StateHasChanged();
         }
     }
+
+    private static string Truncate(string s, int max)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+        return s.Length <= max ? s : s[..(max - 1)] + "…";
+    }
+
+    private static string TruncateOutput(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+        return s.Length <= MaxOutputBytes ? s : s[..MaxOutputBytes] + "\n…(truncated)";
+    }
+
+    private static string RoleLabel(SessionEntry e) => e.Role switch
+    {
+        "user" => "User",
+        "assistant" => "Assistant",
+        "tool_use" => "Tool",
+        "tool_result" => "Tool result",
+        "system" => "System",
+        _ => e.Role,
+    };
+
+    private static string RoleClass(SessionEntry e) => e.Role switch
+    {
+        "user" => "user",
+        "assistant" => "assistant",
+        "tool_use" or "tool_result" => "tool",
+        _ => "system",
+    };
 
     private static string FormatDuration(TimeSpan ts)
     {

@@ -16,10 +16,11 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private CommandPaletteViewModel _commandPalette;
 
-    /// <summary>Phase 69 — currently selected rail group: chat, knowledge, agents, workspace, connect, governance.</summary>
+    /// <summary>Phase 69 — currently selected rail group: command, chat, knowledge, agents, workspace, connect, governance.</summary>
     [ObservableProperty]
-    private string _selectedGroup = "chat";
+    private string _selectedGroup = "command";
 
+    public bool IsCommandGroup => SelectedGroup == "command";
     public bool IsChatGroup => SelectedGroup == "chat";
     public bool IsKnowledgeGroup => SelectedGroup == "knowledge";
     public bool IsAgentsGroup => SelectedGroup == "agents";
@@ -29,12 +30,17 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnSelectedGroupChanged(string value)
     {
+        OnPropertyChanged(nameof(IsCommandGroup));
         OnPropertyChanged(nameof(IsChatGroup));
         OnPropertyChanged(nameof(IsKnowledgeGroup));
         OnPropertyChanged(nameof(IsAgentsGroup));
         OnPropertyChanged(nameof(IsWorkspaceGroup));
         OnPropertyChanged(nameof(IsConnectGroup));
         OnPropertyChanged(nameof(IsGovernanceGroup));
+
+        // Cockpit: tap the Command Center icon = open the cockpit page directly.
+        if (value == "command")
+            OnNavigationRequested(this, "CommandCenter");
     }
 
     private readonly IServiceProvider _services;
@@ -45,7 +51,7 @@ public partial class MainViewModel : ViewModelBase
         _sidebar = sidebar;
         _commandPalette = commandPalette;
         _services = services;
-        _currentPage = CreateChatViewModel();
+        _currentPage = services.GetRequiredService<CommandCenterViewModel>();
 
         sidebar.NavigationRequested += OnNavigationRequested;
         sidebar.SessionResumeRequested += OnSessionResumeRequested;
@@ -105,6 +111,7 @@ public partial class MainViewModel : ViewModelBase
             "Automations" => _services.GetRequiredService<AutomationsViewModel>(),
             "Orchestration" => _services.GetRequiredService<OrchestrationViewModel>(),
             "Activity" => _services.GetRequiredService<ActivityViewModel>(),
+            "CommandCenter" => _services.GetRequiredService<CommandCenterViewModel>(),
             _ => CurrentPage,
         };
     }

@@ -41,7 +41,7 @@
 
         @if (!string.IsNullOrEmpty(_status))
         {
-            <div class="status-message" style="margin-top:12px;">@_status</div>
+            <div class="status-message">@_status</div>
         }
     </div>
 </div>
@@ -167,7 +167,7 @@
             if (trimmedBase.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
                 Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", trimmedKey);
 
-            Nav.NavigateTo("/");
+            Nav.NavigateTo("/command");
         }
         catch (Exception ex) { _status = $"Failed to save: {ex.Message}"; }
         finally { _saving = false; }

@@ -17,8 +17,8 @@
             </p>
         </div>
         <div style="display:flex;gap:8px;flex-shrink:0;">
-            <button class="btn-secondary" style="width:auto;padding:8px 16px;" @onclick="ReloadFromStore">Refresh</button>
-            <button class="btn-primary" style="width:auto;padding:8px 16px;" @onclick="SaveConfigAsync">Save</button>
+            <button class="btn-secondary btn-inline-add" @onclick="ReloadFromStore">Refresh</button>
+            <button class="btn-primary btn-inline-add" @onclick="SaveConfigAsync">Save</button>
         </div>
     </div>
 
@@ -29,7 +29,7 @@
 
     <!-- Master toggle -->
     <div class="gov-card">
-        <div class="toggle-card" style="border:none;padding:0;">
+        <div class="toggle-card toggle-card-bare">
             <div>
                 <div class="toggle-title">Trust Boundary Enabled</div>
                 <div class="toggle-desc">Master switch for the entire pipeline (sanitizer + intent verification).</div>
@@ -44,7 +44,7 @@
     <!-- Sanitizer -->
     <h2 class="mt-16">Sanitizer</h2>
     <div class="gov-card">
-        <div class="toggle-card" style="border:none;padding:0;">
+        <div class="toggle-card toggle-card-bare">
             <div>
                 <div class="toggle-title">Sanitizer Enabled</div>
                 <div class="toggle-desc">Detect and act on PII, corporate data, and custom patterns.</div>
@@ -67,7 +67,7 @@
             </select>
         </div>
 
-        <div class="toggle-card" style="border:none;padding:0;">
+        <div class="toggle-card toggle-card-bare">
             <div>
                 <div class="toggle-title">Log Redactions</div>
                 <div class="toggle-desc">Record what was redacted, for the audit trail.</div>
@@ -81,9 +81,9 @@
 
     <!-- Corporate Domains -->
     <h2 class="mt-16">Corporate Domains</h2>
-    <div class="input-group" style="margin-bottom:10px;">
+    <div class="input-group input-group-tight">
         <input type="text" @bind="_newDomain" placeholder="e.g. acme.internal" />
-        <button class="btn-primary" style="width:auto;padding:8px 16px;" @onclick="AddDomain">Add</button>
+        <button class="btn-primary btn-inline-add" @onclick="AddDomain">Add</button>
     </div>
     @if (_corporateDomains.Count == 0)
     {
@@ -100,9 +100,9 @@
     <!-- Allow List -->
     <h2 class="mt-16">Allow List</h2>
     <p class="text-muted text-sm">Patterns or domains that should never be redacted.</p>
-    <div class="input-group" style="margin-bottom:10px;">
+    <div class="input-group input-group-tight">
         <input type="text" @bind="_newAllow" placeholder="e.g. example.com" />
-        <button class="btn-primary" style="width:auto;padding:8px 16px;" @onclick="AddAllow">Add</button>
+        <button class="btn-primary btn-inline-add" @onclick="AddAllow">Add</button>
     </div>
     @if (_allowList.Count == 0)
     {
@@ -119,9 +119,9 @@
     <!-- Exempt Providers -->
     <h2 class="mt-16">Exempt Providers</h2>
     <p class="text-muted text-sm">Providers that bypass sanitization (e.g. local-only models).</p>
-    <div class="input-group" style="margin-bottom:10px;">
+    <div class="input-group input-group-tight">
         <input type="text" @bind="_newExempt" placeholder="e.g. ollama" />
-        <button class="btn-primary" style="width:auto;padding:8px 16px;" @onclick="AddExempt">Add</button>
+        <button class="btn-primary btn-inline-add" @onclick="AddExempt">Add</button>
     </div>
     @if (_exemptProviders.Count == 0)
     {
@@ -146,7 +146,7 @@
             <option value="warn">warn</option>
             <option value="block">block</option>
         </select>
-        <button class="btn-primary" style="width:auto;padding:8px 16px;" @onclick="AddPattern">Add</button>
+        <button class="btn-primary btn-inline-add" @onclick="AddPattern">Add</button>
     </div>
     @if (_customPatterns.Count == 0)
     {
@@ -167,7 +167,7 @@
     <!-- Intent Verification -->
     <h2 class="mt-16">Intent Verification</h2>
     <div class="gov-card">
-        <div class="toggle-card" style="border:none;padding:0;">
+        <div class="toggle-card toggle-card-bare">
             <div>
                 <div class="toggle-title">Intent Verification Enabled</div>
                 <div class="toggle-desc">Inspect each turn for intent before sending to the model.</div>
@@ -177,7 +177,7 @@
                 <span class="slider"></span>
             </label>
         </div>
-        <div class="toggle-card" style="border:none;padding:0;">
+        <div class="toggle-card toggle-card-bare">
             <div>
                 <div class="toggle-title">Clarify Ambiguous Intent</div>
                 <div class="toggle-desc">Ask the user to clarify before acting on ambiguous requests.</div>
@@ -187,7 +187,7 @@
                 <span class="slider"></span>
             </label>
         </div>
-        <div class="toggle-card" style="border:none;padding:0;">
+        <div class="toggle-card toggle-card-bare">
             <div>
                 <div class="toggle-title">Block Harmful Intent</div>
                 <div class="toggle-desc">Refuse turns whose intent is judged clearly harmful.</div>

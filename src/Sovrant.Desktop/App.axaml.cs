@@ -135,6 +135,7 @@ public partial class App : Application
         services.AddTransient<AutomationsViewModel>();
         services.AddTransient<OrchestrationViewModel>();
         services.AddTransient<ActivityViewModel>();
+        services.AddTransient<CommandCenterViewModel>();
         services.AddSingleton<CommandPaletteViewModel>();
 
         _serviceProvider = services.BuildServiceProvider();

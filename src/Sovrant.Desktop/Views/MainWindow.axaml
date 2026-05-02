@@ -62,6 +62,9 @@
         <DataTemplate DataType="vm:ActivityViewModel">
             <views:ActivityView />
         </DataTemplate>
+        <DataTemplate DataType="vm:CommandCenterViewModel">
+            <views:CommandCenterView />
+        </DataTemplate>
         <DataTemplate DataType="vm:PlaceholderViewModel">
             <views:PlaceholderView />
         </DataTemplate>
@@ -81,7 +84,13 @@
                             BorderBrush="{DynamicResource SurfaceBorder}"
                             BorderThickness="0,0,0,1"
                             Padding="6,8">
-                        <UniformGrid Rows="1" Columns="6">
+                        <UniformGrid Rows="1" Columns="7">
+                            <Button Content="🎯" ToolTip.Tip="Command Center"
+                                    Command="{Binding SelectGroupCommand}" CommandParameter="command"
+                                    Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
+                                    Background="{Binding IsCommandGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
+                                    Foreground="{Binding IsCommandGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
+                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
                             <Button Content="💬" ToolTip.Tip="Chat"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="chat"
                                     Height="36" CornerRadius="8" FontSize="16" Margin="1,0"

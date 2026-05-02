@@ -234,6 +234,7 @@ ProjectRoutes.Map(app);
 UserRoutes.Map(app);
 MeRoutes.Map(app);
 CostRoutes.Map(app);
+CommandCenterRoutes.Map(app);
 
 // SignalR hub for real-time web frontend streaming (Phase 61).
 app.MapHub<Sovrant.Server.Hubs.ChatHub>("/hubs/chat");

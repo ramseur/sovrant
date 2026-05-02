@@ -280,7 +280,7 @@
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="Swarm Defaults" FontSize="18" FontWeight="Bold"
                                                Foreground="{DynamicResource TextPrimary}" />
-                                    <TextBlock Text="Default run settings inherited by new teams. Per-team overrides land with Phase 78."
+                                    <TextBlock Text="Default run settings inherited by new teams. Override per-team from each team's settings page."
                                                FontSize="12" Foreground="{DynamicResource TextSecondary}"
                                                TextWrapping="Wrap" />
                                 </StackPanel>

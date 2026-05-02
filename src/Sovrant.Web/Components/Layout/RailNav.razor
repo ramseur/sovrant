@@ -5,6 +5,8 @@
 *@
 
 <div class="rail-icons-row">
+    <button class="rail-icon @(Selected == "command" ? "active" : "")"
+            title="Command Center" @onclick='() => OnSelect.InvokeAsync("command")'>&#x1F3AF;</button>
     <button class="rail-icon @(Selected == "chat" ? "active" : "")"
             title="Chat" @onclick='() => OnSelect.InvokeAsync("chat")'>&#x1F4AC;</button>
     <button class="rail-icon @(Selected == "knowledge" ? "active" : "")"

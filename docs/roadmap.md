@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-05-02 (Phase 88 settings + provider profile consolidation shipped; added Phase 89 Command Center cockpit surface for agents/teams/missions — 50 phases shipped, 14 pending)
+**Last updated:** 2026-05-02 (Phase 87 artifacts + Phase 88 settings shipped; Phase 89 Command Center MVP and Phase 90 Public Release Readiness queued — 51 phases shipped, 15 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -8865,3 +8865,75 @@ already runs.
 - **Agent marketplace surfacing** — when other users' agents are
   publishable (post-Phase 79), the cockpit's "Start work" picker
   becomes a marketplace search. Out of scope here.
+
+---
+
+## Phase 90 — Public Release Readiness: Command Center, Polish & Repositioning
+
+**Status:** In progress (added 2026-05-02 as the umbrella for everything gating a public flip-the-switch decision).
+**Depends on:** Phases 78 (teams), 79 (agents), 87 (artifacts), 88 (settings — partially shipped, plaintext-key fix is in this phase). Pulls Phase 89 MVP scope forward as Track B.
+**Difficulty:** Low–Medium. No new runtime engines; this is the "make it shippable" phase. The hardest item is Phase 89 MVP, and that scope is bounded to a read-only live grid.
+
+### Why
+
+The license is finalized (BSL 1.1, Apache 2.0 conversion 2030-04-29). The engine itself is feature-complete for a v1: 56 tools, 25 agent templates, 96 endpoints, 5 delivery modes, 1,587 tests. What still gates flipping the GitHub repo to public is not engineering — it's *honesty of presentation* and *finishing what's visible*.
+
+Three concrete blockers:
+
+1. **The README is dishonest.** Line 3 calls Sovrant "open-source" — it's BSL, source-available. The headline pitches "coordinate teams of sub-agents," which oversells: the team API is real, but the team-collaboration UX is thin. A first-time visitor reads the README and forms wrong expectations.
+2. **The value prop is undelivered.** Sovrant is positioned as a *command center for agents and agent activity* — but Phase 89 is unstarted. Today the user has Agents, Orchestration, Activity, and Chat as four separate screens with no single answer to "what is Sovrant doing for me right now?" The competitive frame is mission-control; we ship feature-list-of-screens.
+3. **Visible UI rough edges.** `Automations` is a "Coming Soon" stub in Web nav; Desktop `OrchestrationView` has hardcoded *"per-team overrides land with Phase 78"* placeholder text (Phase 78 shipped); `/agents` shows templates only with no path to deploy or run; Activity has no drill-down; provider profiles still write API keys to disk in plaintext (Phase 88 leftover).
+
+This phase is the bounded fix-list. Nothing here is a new feature for its own sake — every track maps directly to "would a first-time visitor see this?"
+
+### Goals
+
+- **Honest positioning.** README, headline, and license language reflect reality: source-available BSL, solo-first command center for agents and agent activity, with team substrate ready.
+- **Phase 89 MVP shipped.** A read-only live grid showing every active mission/team-run/agent-session, with click-through to the existing detail pages. Becomes the homepage for Web and Desktop. Write controls (pause/resume/cancel/spawn) deferred to Phase 89-Phase-2 post-release.
+- **Agent operations loop closed.** From `/agents` the user can fire a run on a template; from `Activity` the user can drill into a session's turns, tool calls, and errors. Together with Command Center, this is the "operate Sovrant" trio.
+- **Visual polish parity.** Web and Desktop reach a consistent, professional bar — no inline-style drift, no hardcoded phase numbers visible, every page has empty + loading states, light/dark theme parity. CLI is verified working (no new polish, just smoke-test the documented commands).
+- **Security gap closed.** Provider API keys never sit in plaintext on disk; existing plaintext keys migrate to the keystore.
+- **Onboarding works on a clean machine.** First-run wizard on Web and Desktop completes and lands the user on Command Center, not on a blank chat.
+
+### Non-goals
+
+- **Phase 89 Phase-2 controls** (pause/resume/cancel, in-cockpit run spawning, quality-gate inline alerts, Desktop tray badge). These deepen the cockpit but do not gate release.
+- **Phase 80–86.** None of those gate the value prop or release.
+- **Team-collaboration UX expansion** (member invite UI, presence indicators, multi-user cockpit). The substrate stays; the UX is honestly scoped as roadmap.
+- **Mobile responsive Web.** Desktop covers offline / personal device; Web is desktop-browser-first for v1.
+- **Monaco syntax highlighting** in artifact previews (Phase 87 Track F leftover).
+
+### Tracks
+
+- **A — Repositioning.** README headline / sub-pitch / license text rewrite; team language softened; Command Center section added once B lands.
+- **B — Phase 89 MVP Command Center.** New `/command` page on Web + Desktop, read-only live grid, click-through to existing detail pages. New thin endpoint `GET /v1/command-center/state`.
+- **C — Agent instance management.** `/agents` detail pane gets "Run now"; master pane gets "Recent runs (this workspace)" reading from `agent_runs`.
+- **D — Activity drill-down.** Convert flat list to master/detail; per-turn breakdown of tool calls, tokens, governance verdicts, errors.
+- **E — Visual polish pass.** Inline-style cleanup, missing empty/loading states, hardcoded-phase-number purge, sortable tables on Tools/Skills, consistent margins on Desktop.
+- **F — Automations decision.** Delete the Web stub; document the "automations come via MCP-connected platforms (n8n, Zapier, Make)" architectural decision; add an Integrations callout.
+- **G — Phase 88 plaintext-key fix.** Move `api_key` field through the existing keystore; one-shot migration from any existing plaintext file.
+- **H — CLI smoke verification.** Walk every documented command; fix any breakages.
+- **I — First-run wizard polish.** Verify clean-install onboarding on Web + Desktop; ensure landing page after wizard is Command Center.
+
+### Acceptance criteria
+
+- [ ] `README.md:3` says "source-available" (or equivalent), not "open-source"; license language matches LICENSE
+- [ ] README headline frames Sovrant as a command center for agents and agent activity
+- [ ] Command Center page (`/command`) renders on Web and Desktop and shows live activity from a fresh chat turn within ~2s
+- [ ] `/agents` allows running a template; the run appears in Command Center within ~2s
+- [ ] Clicking an Activity row drills into per-turn detail (tool calls, tokens, governance)
+- [ ] No "Coming Soon" pages reachable from Web nav
+- [ ] No hardcoded phase numbers visible in user-facing UI text
+- [ ] Provider profiles never write `api_key` plaintext to disk; existing plaintext keys migrate to keystore on first launch
+- [ ] Every documented CLI command succeeds on a clean install
+- [ ] Fresh-install Web wizard → completes → lands on Command Center; same on Desktop
+- [ ] Full solution test pass; no regressions in 1,587 tests
+
+### Deferred to Phase 89-Phase-2 (post-release)
+
+- Pause / resume / cancel controls per run
+- Inline run-spawning from the cockpit
+- Quality-gate + trust-boundary inline alerts on rows
+- Cost & budget pill per run
+- Desktop tray badge for active runs
+- SignalR push (replace 2s poll once Phase 86 lands)

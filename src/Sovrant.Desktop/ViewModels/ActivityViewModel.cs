@@ -1,14 +1,18 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.Memory;
+using Sovrant.Runtime.Session;
 
 namespace Sovrant.Desktop.ViewModels;
 
 public partial class ActivityViewModel : ViewModelBase
 {
     private readonly IMemoryStore _memoryStore;
+    private readonly ISessionStore _sessionStore;
+    private const int MaxOutputBytes = 2048;
 
     [ObservableProperty]
     private bool _isLoading;
@@ -19,16 +23,73 @@ public partial class ActivityViewModel : ViewModelBase
     [ObservableProperty]
     private bool _hasError;
 
-    public ObservableCollection<ActivityItemViewModel> Sessions { get; } = [];
+    [ObservableProperty]
+    private ActivityItemViewModel? _selectedSession;
 
-    public ActivityViewModel(IMemoryStore memoryStore)
+    [ObservableProperty]
+    private bool _detailLoading;
+
+    [ObservableProperty]
+    private string _detailError = string.Empty;
+
+    public ObservableCollection<ActivityItemViewModel> Sessions { get; } = [];
+    public ObservableCollection<TurnItemViewModel> Turns { get; } = [];
+
+    public ActivityViewModel(IMemoryStore memoryStore, ISessionStore sessionStore)
     {
         _memoryStore = memoryStore;
+        _sessionStore = sessionStore;
         _ = LoadAsync();
     }
 
     [RelayCommand]
     private async Task RefreshAsync() => await LoadAsync();
+
+    [RelayCommand]
+    private async Task SelectSessionAsync(ActivityItemViewModel? session)
+    {
+        SelectedSession = session;
+        if (session is null) return;
+        await LoadTurnsAsync(session.SessionId).ConfigureAwait(false);
+    }
+
+    private async Task LoadTurnsAsync(string sessionId)
+    {
+        DetailLoading = true;
+        DetailError = string.Empty;
+        await Dispatcher.UIThread.InvokeAsync(() => Turns.Clear());
+
+        try
+        {
+            var entries = await _sessionStore.LoadAsync(sessionId, App.SovrantUserId).ConfigureAwait(false);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                foreach (var e in entries)
+                {
+                    Turns.Add(new TurnItemViewModel
+                    {
+                        Role = RoleLabel(e.Role),
+                        RoleClass = RoleClass(e.Role),
+                        ToolName = e.ToolName ?? string.Empty,
+                        Time = e.Timestamp.LocalDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture),
+                        TokensLabel = (e.InputTokens + e.OutputTokens) > 0
+                            ? string.Format(CultureInfo.InvariantCulture, "in {0} / out {1}", e.InputTokens, e.OutputTokens)
+                            : string.Empty,
+                        IsError = e.IsError,
+                        Content = TruncateOutput(e.Content),
+                    });
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            DetailError = $"Failed to load turns: {ex.Message}";
+        }
+        finally
+        {
+            DetailLoading = false;
+        }
+    }
 
     private async Task LoadAsync()
     {
@@ -80,6 +141,30 @@ public partial class ActivityViewModel : ViewModelBase
         if (ts.TotalMinutes < 60) return $"{ts.Minutes}m {ts.Seconds}s";
         return $"{(int)ts.TotalHours}h {ts.Minutes}m";
     }
+
+    private static string TruncateOutput(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+        return s.Length <= MaxOutputBytes ? s : s[..MaxOutputBytes] + "\n…(truncated)";
+    }
+
+    private static string RoleLabel(string role) => role switch
+    {
+        "user" => "User",
+        "assistant" => "Assistant",
+        "tool_use" => "Tool",
+        "tool_result" => "Tool result",
+        "system" => "System",
+        _ => role,
+    };
+
+    private static string RoleClass(string role) => role switch
+    {
+        "user" => "user",
+        "assistant" => "assistant",
+        "tool_use" or "tool_result" => "tool",
+        _ => "system",
+    };
 }
 
 public partial class ActivityItemViewModel : ViewModelBase
@@ -95,4 +180,15 @@ public partial class ActivityItemViewModel : ViewModelBase
     [ObservableProperty] private string _filesModified = string.Empty;
     [ObservableProperty] private string _firstTask = string.Empty;
     [ObservableProperty] private int _totalTokens;
+}
+
+public partial class TurnItemViewModel : ViewModelBase
+{
+    [ObservableProperty] private string _role = string.Empty;
+    [ObservableProperty] private string _roleClass = string.Empty;
+    [ObservableProperty] private string _toolName = string.Empty;
+    [ObservableProperty] private string _time = string.Empty;
+    [ObservableProperty] private string _tokensLabel = string.Empty;
+    [ObservableProperty] private bool _isError;
+    [ObservableProperty] private string _content = string.Empty;
 }
