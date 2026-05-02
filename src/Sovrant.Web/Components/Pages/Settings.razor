@@ -1,13 +1,15 @@
 @page "/settings"
 @using Microsoft.Extensions.DependencyInjection
+@using Sovrant.Api.Auth
 @using Sovrant.Api.Capabilities
 @using Sovrant.Api.Config
 @using Sovrant.Api.Routing
 @using Sovrant.Runtime.Config
+@using Sovrant.Runtime.Mcp
 @using Sovrant.Runtime.Permissions
+@using Sovrant.Runtime.Preferences
+@using Sovrant.Runtime.Providers
 @using Sovrant.Web.Adapters
-@using System.Text.Json
-@using System.Text.Json.Serialization
 @using Sovrant.Web.Services
 
 <div class="settings-page">
@@ -81,7 +83,7 @@
                 <div class="status-message">@_statusMessage</div>
             }
 
-            <p class="text-muted text-sm">Providers are stored in ~/.sovrant/providers.json. Click Activate to switch the active provider.</p>
+            <p class="text-muted text-sm">Providers are stored in the encrypted credential store. Click Activate to switch the active provider.</p>
         </div>
     }
     else
@@ -182,6 +184,9 @@
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
     [Inject] private IServiceProvider Services { get; set; } = default!;
+    [Inject] private IUserPreferenceStore Prefs { get; set; } = default!;
+    [Inject] private IProviderProfileStore ProfileStore { get; set; } = default!;
+    [Inject] private ICredentialStore Credentials { get; set; } = default!;
 
     private ISmartRouter? _router;
     private WebSearchOptions? _webSearchOptions;
@@ -201,22 +206,11 @@
     private bool _braveKeySet;
     private bool _firecrawlKeySet;
     private bool _modelSupportsNative;
-    private List<ProviderProfile> _savedProfiles = [];
+    private List<ProviderProfileVm> _savedProfiles = [];
 
     private CancellationTokenSource? _autoSaveCts;
 
-    private static readonly string SettingsPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".sovrant", "settings.json");
-    private static readonly string ProfilesPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".sovrant", "providers.json");
-
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
-
-    private static readonly Dictionary<string, string> ProviderBaseUrls = new(StringComparer.Ordinal)
+    public static readonly Dictionary<string, string> ProviderBaseUrls = new(StringComparer.Ordinal)
     {
         ["OpenAI"] = "https://api.openai.com/v1",
         ["OpenRouter"] = "https://openrouter.ai/api/v1",
@@ -248,9 +242,8 @@
         _braveKeySet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BRAVE_API_KEY"));
         _firecrawlKeySet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FIRECRAWL_API_KEY"));
         RefreshNativeSupportFlag();
-        _selectedProvider = InferProvider();
-        LoadProfiles();
-        await Task.CompletedTask;
+        _selectedProvider = await InferProviderAsync();
+        await LoadProfilesAsync();
     }
 
     private void RefreshNativeSupportFlag()
@@ -304,64 +297,94 @@
         var displayName = string.IsNullOrWhiteSpace(_newProfileName)
             ? _selectedProvider : _newProfileName.Trim();
 
-        // Update existing profile for same provider, or add new one.
-        var existing = _savedProfiles.FirstOrDefault(p =>
-            p.Provider.Equals(_selectedProvider, StringComparison.OrdinalIgnoreCase));
-        if (existing is not null)
+        var trimmedKey = _apiKey.Trim();
+        var trimmedBase = (_baseUrl ?? string.Empty).Trim();
+        var profileId = MakeProfileId(_selectedProvider, displayName);
+        var credentialId = $"provider.{profileId}.api_key";
+        var userId = Sovrant.Web.Program.SovrantUserId;
+
+        try
         {
-            existing.Name = displayName;
-            existing.ApiKey = _apiKey; existing.BaseUrl = _baseUrl; existing.MaxTokens = _maxOutputTokens;
+            await Credentials.StoreAsync(credentialId, trimmedKey);
+
+            var now = DateTimeOffset.UtcNow;
+            var existingRow = await ProfileStore.GetAsync(profileId);
+            var profile = new ProviderProfile(
+                ProfileId: profileId,
+                UserId: userId,
+                Name: displayName,
+                ProviderKind: _selectedProvider,
+                BaseUrl: trimmedBase,
+                DefaultModel: existingRow?.DefaultModel ?? Config.Model,
+                MaxTokens: _maxOutputTokens,
+                CredentialId: credentialId,
+                CreatedAt: existingRow?.CreatedAt ?? now,
+                UpdatedAt: now);
+            if (existingRow is null)
+                await ProfileStore.CreateAsync(profile);
+            else
+                await ProfileStore.UpdateAsync(profile);
+
+            await LoadProfilesAsync();
+            var added = _savedProfiles.FirstOrDefault(p => p.ProfileId == profileId);
+            if (added is not null)
+                await ActivateProfile(added);
+            _newProfileName = string.Empty;
+            _statusMessage = $"Provider '{_selectedProvider}' saved and activated.";
         }
-        else
-        {
-            _savedProfiles.Add(new ProviderProfile
-            {
-                Name = displayName, Provider = _selectedProvider,
-                ApiKey = _apiKey, BaseUrl = _baseUrl, MaxTokens = _maxOutputTokens,
-            });
-        }
-        PersistProfiles();
-        await ActivateProfile(_savedProfiles.First(p =>
-            p.Provider.Equals(_selectedProvider, StringComparison.OrdinalIgnoreCase)));
-        _newProfileName = string.Empty;
-        _statusMessage = $"Provider '{_selectedProvider}' saved and activated.";
+        catch (Exception ex) { _statusMessage = $"Failed to add provider: {ex.Message}"; }
     }
 
-    private async Task ActivateProfile(ProviderProfile profile)
+    private async Task ActivateProfile(ProviderProfileVm profile)
     {
-        _selectedProvider = profile.Provider; _apiKey = profile.ApiKey; _baseUrl = profile.BaseUrl;
+        _selectedProvider = profile.Provider;
+        _apiKey = profile.ApiKey;
+        _baseUrl = profile.BaseUrl;
         _maxOutputTokens = profile.MaxTokens;
+
+        await Prefs.SetAsync(Sovrant.Web.Program.SovrantUserId,
+            UserPreferenceKeys.ActiveProviderProfileId, profile.ProfileId);
+
         await SaveAsync();
         _statusMessage = $"Switched to '{profile.Name}'.";
     }
 
-    private void DeleteProfile(ProviderProfile profile)
-    {
-        _savedProfiles.Remove(profile);
-        PersistProfiles();
-        _statusMessage = $"Profile '{profile.Name}' deleted.";
-    }
-
-    private void LoadProfiles()
-    {
-        _savedProfiles.Clear();
-        if (!File.Exists(ProfilesPath)) return;
-        try
-        {
-            var json = File.ReadAllText(ProfilesPath);
-            _savedProfiles = JsonSerializer.Deserialize<List<ProviderProfile>>(json, SerializerOptions) ?? [];
-        }
-        catch { /* ignore */ }
-    }
-
-    private void PersistProfiles()
+    private async Task DeleteProfile(ProviderProfileVm profile)
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(ProfilesPath)!);
-            File.WriteAllText(ProfilesPath, JsonSerializer.Serialize(_savedProfiles, SerializerOptions));
+            await ProfileStore.DeleteAsync(profile.ProfileId);
+            if (!string.IsNullOrWhiteSpace(profile.CredentialId))
+                await Credentials.DeleteAsync(profile.CredentialId);
+            await LoadProfilesAsync();
+            _statusMessage = $"Profile '{profile.Name}' deleted.";
         }
-        catch { /* best effort */ }
+        catch (Exception ex) { _statusMessage = $"Delete failed: {ex.Message}"; }
+    }
+
+    private async Task LoadProfilesAsync()
+    {
+        try
+        {
+            var rows = await ProfileStore.ListAsync(Sovrant.Web.Program.SovrantUserId);
+            var list = new List<ProviderProfileVm>(rows.Count);
+            foreach (var row in rows)
+            {
+                var apiKey = await Credentials.RetrieveAsync(row.CredentialId) ?? string.Empty;
+                list.Add(new ProviderProfileVm
+                {
+                    ProfileId = row.ProfileId,
+                    CredentialId = row.CredentialId,
+                    Name = row.Name,
+                    Provider = row.ProviderKind,
+                    ApiKey = apiKey,
+                    BaseUrl = row.BaseUrl ?? string.Empty,
+                    MaxTokens = row.MaxTokens ?? 32000,
+                });
+            }
+            _savedProfiles = list;
+        }
+        catch { _savedProfiles = []; }
     }
 
     private void OnPermissionModeChanged()
@@ -401,21 +424,25 @@
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
-            Dictionary<string, object?> existing = [];
-            if (File.Exists(SettingsPath))
-                existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(await File.ReadAllTextAsync(SettingsPath)) ?? [];
+            var userId = Sovrant.Web.Program.SovrantUserId;
+            await Prefs.SetAsync(userId, UserPreferenceKeys.Provider, _selectedProvider);
+            if (!string.IsNullOrWhiteSpace(Config.Model))
+                await Prefs.SetAsync(userId, UserPreferenceKeys.Model, Config.Model);
+            await Prefs.SetAsync(userId, UserPreferenceKeys.MaxTokens,
+                _maxOutputTokens.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            await Prefs.SetAsync(userId, UserPreferenceKeys.PermissionMode, _permissionMode);
+            await Prefs.SetAsync(userId, UserPreferenceKeys.IntentRouting,
+                _intentRoutingEnabled ? "true" : "false");
+            await Prefs.SetAsync(userId, UserPreferenceKeys.WebSearch, _webSearchBackend);
+            if (!string.IsNullOrWhiteSpace(_baseUrl))
+                await Prefs.SetAsync(userId, UserPreferenceKeys.BaseUrl, _baseUrl.Trim());
+            else
+                await Prefs.DeleteAsync(userId, UserPreferenceKeys.BaseUrl);
 
-            existing["Provider"] = _selectedProvider;
-            existing["Model"] = Config.Model;
-            existing["MaxTokens"] = _maxOutputTokens;
-            existing["PermissionMode"] = _permissionMode;
-            existing["IntentRouting"] = _intentRoutingEnabled;
-            existing["WebSearch"] = _webSearchBackend;
-            if (!string.IsNullOrWhiteSpace(_apiKey)) existing["ApiKey"] = _apiKey;
-            if (!string.IsNullOrWhiteSpace(_baseUrl)) existing["BaseUrl"] = _baseUrl; else existing.Remove("BaseUrl");
-
-            await File.WriteAllTextAsync(SettingsPath, JsonSerializer.Serialize(existing, SerializerOptions));
+            // Mirror the current key to the global LLM credential so server-side
+            // auth lookups resolve on the next request.
+            if (!string.IsNullOrWhiteSpace(_apiKey))
+                await Credentials.StoreAsync(CredentialKeys.LlmApiKey, _apiKey.Trim());
 
             // Hot-swap runtime config, env vars, and auth provider.
             // Model is managed by sidebar dropdown, not settings.
@@ -453,27 +480,31 @@
         StateHasChanged();
     }
 
-    private string InferProvider()
+    private async Task<string> InferProviderAsync()
     {
         try
         {
-            if (File.Exists(SettingsPath))
-            {
-                var json = File.ReadAllText(SettingsPath);
-                using var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("Provider", out var prop) && prop.GetString() is { Length: > 0 } saved)
-                    return saved;
-            }
+            var saved = await Prefs.GetAsync(Sovrant.Web.Program.SovrantUserId, UserPreferenceKeys.Provider);
+            if (!string.IsNullOrWhiteSpace(saved)) return saved;
         }
-        catch { }
+        catch { /* fall through */ }
         var url = Config.BaseUrl?.ToString() ?? string.Empty;
         if (url.Contains("openrouter", StringComparison.OrdinalIgnoreCase)) return "OpenRouter";
         if (url.Contains("deepseek", StringComparison.OrdinalIgnoreCase)) return "DeepSeek";
         return "OpenAI";
     }
 
-    private class ProviderProfile
+    private static string MakeProfileId(string provider, string name)
     {
+        var slug = $"{provider}-{name}".ToLowerInvariant();
+        var sanitized = new string(slug.Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
+        return sanitized.Trim('-');
+    }
+
+    private class ProviderProfileVm
+    {
+        public string ProfileId { get; set; } = string.Empty;
+        public string CredentialId { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string Provider { get; set; } = string.Empty;
         public string ApiKey { get; set; } = string.Empty;

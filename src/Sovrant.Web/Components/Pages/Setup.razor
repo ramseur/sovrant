@@ -1,8 +1,10 @@
 @page "/setup"
+@using Sovrant.Api.Auth
 @using Sovrant.Runtime.Config
+@using Sovrant.Runtime.Mcp
+@using Sovrant.Runtime.Preferences
+@using Sovrant.Runtime.Providers
 @using Sovrant.Web.Adapters
-@using System.Text.Json
-@using System.Text.Json.Serialization
 
 <div class="setup-backdrop">
     <div class="setup-card">
@@ -48,23 +50,15 @@
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private SovrantConfig Config { get; set; } = default!;
     [Inject] private MutableAuthProvider AuthProvider { get; set; } = default!;
+    [Inject] private IUserPreferenceStore Prefs { get; set; } = default!;
+    [Inject] private IProviderProfileStore Profiles { get; set; } = default!;
+    [Inject] private ICredentialStore Credentials { get; set; } = default!;
 
     private string _provider = "OpenAI";
     private string _apiKey = string.Empty;
     private string _baseUrl = "https://api.openai.com/v1";
     private string _status = string.Empty;
     private bool _saving;
-
-    private static readonly string SettingsPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".sovrant", "settings.json");
-    private static readonly string ProfilesPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".sovrant", "providers.json");
-
-    private static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
 
     private static readonly string[] Providers =
         ["OpenAI", "OpenRouter", "DeepSeek", "Groq", "Mistral", "Together AI", "Google", "Azure OpenAI", "Ollama", "LM Studio", "Custom"];
@@ -84,7 +78,6 @@
         ["Custom"] = "",
     };
 
-    // Default model per provider — used as initial model when none is configured yet.
     private static readonly Dictionary<string, string> DefaultModels = new(StringComparer.Ordinal)
     {
         ["OpenAI"] = "gpt-4o",
@@ -119,72 +112,71 @@
         _status = string.Empty;
         try
         {
-            var dir = Path.GetDirectoryName(SettingsPath)!;
-            Directory.CreateDirectory(dir);
-
-            // Pick a sensible default model for the provider.
+            var trimmedKey = _apiKey.Trim();
+            var trimmedBase = (_baseUrl ?? string.Empty).Trim();
             var defaultModel = DefaultModels.GetValueOrDefault(_provider, "gpt-4o");
 
-            // Save to settings.json
-            Dictionary<string, object?> existing = [];
-            if (File.Exists(SettingsPath))
-                existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(await File.ReadAllTextAsync(SettingsPath)) ?? [];
+            var profileId = MakeProfileId(_provider);
+            var credentialId = $"provider.{profileId}.api_key";
+            var userId = Sovrant.Web.Program.SovrantUserId;
 
-            existing["Provider"] = _provider;
-            existing["Model"] = defaultModel;
-            existing["ApiKey"] = _apiKey.Trim();
-            if (!string.IsNullOrWhiteSpace(_baseUrl)) existing["BaseUrl"] = _baseUrl.Trim();
+            await Credentials.StoreAsync(credentialId, trimmedKey);
+            await Credentials.StoreAsync(CredentialKeys.LlmApiKey, trimmedKey);
 
-            await File.WriteAllTextAsync(SettingsPath, JsonSerializer.Serialize(existing, JsonOpts));
+            var now = DateTimeOffset.UtcNow;
+            var profile = new ProviderProfile(
+                ProfileId: profileId,
+                UserId: userId,
+                Name: _provider,
+                ProviderKind: _provider,
+                BaseUrl: trimmedBase,
+                DefaultModel: defaultModel,
+                MaxTokens: 32000,
+                CredentialId: credentialId,
+                CreatedAt: now,
+                UpdatedAt: now);
 
-            // Also save as the first provider profile in providers.json
-            var profiles = new List<Dictionary<string, object>>
-            {
-                new()
-                {
-                    ["Name"] = _provider,
-                    ["Provider"] = _provider,
-                    ["ApiKey"] = _apiKey.Trim(),
-                    ["BaseUrl"] = _baseUrl.Trim(),
-                    ["MaxTokens"] = 32000,
-                }
-            };
-            // Merge with any existing profiles.
-            if (File.Exists(ProfilesPath))
-            {
-                try
-                {
-                    var existingProfiles = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(
-                        await File.ReadAllTextAsync(ProfilesPath)) ?? [];
-                    foreach (var p in existingProfiles)
-                    {
-                        if (p.TryGetValue("Provider", out var prov) && prov?.ToString() != _provider)
-                            profiles.Add(p);
-                    }
-                }
-                catch { /* ignore parse errors */ }
-            }
-            await File.WriteAllTextAsync(ProfilesPath, JsonSerializer.Serialize(profiles, JsonOpts));
+            var existing = await Profiles.GetAsync(profileId);
+            if (existing is null)
+                await Profiles.CreateAsync(profile);
+            else
+                await Profiles.UpdateAsync(profile with { CreatedAt = existing.CreatedAt });
 
-            // Hot-swap runtime config
+            await Prefs.SetAsync(userId, UserPreferenceKeys.ActiveProviderProfileId, profileId);
+            await Prefs.SetAsync(userId, UserPreferenceKeys.Provider, _provider);
+            await Prefs.SetAsync(userId, UserPreferenceKeys.Model, defaultModel);
+            if (!string.IsNullOrWhiteSpace(trimmedBase))
+                await Prefs.SetAsync(userId, UserPreferenceKeys.BaseUrl, trimmedBase);
+            await Prefs.SetAsync(userId, UserPreferenceKeys.MaxTokens, "32000");
+
+            // Hot-swap runtime config so the chat surface works without a restart.
             Config.Model = defaultModel;
-            Config.ApiKey = _apiKey.Trim();
-            Environment.SetEnvironmentVariable("LLM_API_KEY", _apiKey.Trim());
-            Environment.SetEnvironmentVariable("LLM_MODEL", defaultModel);
-            AuthProvider.ApiKey = _apiKey.Trim();
-            if (!string.IsNullOrWhiteSpace(_baseUrl))
+            Config.ApiKey = trimmedKey;
+            Config.MaxTokens = 32000;
+            AuthProvider.ApiKey = trimmedKey;
+            if (!string.IsNullOrWhiteSpace(trimmedBase) && Uri.TryCreate(trimmedBase, UriKind.Absolute, out var parsed))
             {
-                var parsed = new Uri(_baseUrl.Trim());
                 Config.BaseUrl = parsed;
                 AuthProvider.BaseUrl = parsed;
-                Environment.SetEnvironmentVariable("LLM_BASE_URL", _baseUrl.Trim());
+                Environment.SetEnvironmentVariable("LLM_BASE_URL", trimmedBase);
             }
-            if (_baseUrl.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
-                Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", _apiKey.Trim());
+
+            // Env-var bridge for any provider clients still reading from the environment.
+            Environment.SetEnvironmentVariable("LLM_API_KEY", trimmedKey);
+            Environment.SetEnvironmentVariable("LLM_MODEL", defaultModel);
+            if (trimmedBase.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
+                Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", trimmedKey);
 
             Nav.NavigateTo("/");
         }
         catch (Exception ex) { _status = $"Failed to save: {ex.Message}"; }
         finally { _saving = false; }
+    }
+
+    private static string MakeProfileId(string provider)
+    {
+        var slug = $"{provider}-{provider}".ToLowerInvariant();
+        var sanitized = new string(slug.Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
+        return sanitized.Trim('-');
     }
 }

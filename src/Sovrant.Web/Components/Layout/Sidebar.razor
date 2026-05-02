@@ -1,5 +1,9 @@
 @using System.Text.Json
+@using Sovrant.Api.Auth
 @using Sovrant.Runtime.Config
+@using Sovrant.Runtime.Mcp
+@using Sovrant.Runtime.Preferences
+@using Sovrant.Runtime.Providers
 @using Sovrant.Runtime.Session
 @using Sovrant.Runtime.Workspaces
 @using Sovrant.Runtime.Projects
@@ -135,19 +139,24 @@
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
     [Inject] private MutableAuthProvider AuthProvider { get; set; } = default!;
     [Inject] private IHttpClientFactory HttpFactory { get; set; } = default!;
+    [Inject] private IUserPreferenceStore Prefs { get; set; } = default!;
+    [Inject] private IProviderProfileStore ProfileStore { get; set; } = default!;
+    [Inject] private ICredentialStore Credentials { get; set; } = default!;
 
     private string _searchText = string.Empty;
     private string _currentModel = string.Empty;
     private string _currentProvider = string.Empty;
     private bool _treeOpen;
 
-    private record ProviderProfileItem(string Name, string Provider, string Model, string ApiKey, string BaseUrl, int MaxTokens);
+    private record ProviderProfileItem(string ProfileId, string CredentialId, string Name, string Provider, string Model, string ApiKey, string BaseUrl, int MaxTokens);
     private List<ProviderProfileItem> _providerProfiles = [];
 
     private TreeGroup? _selectedTreeGroup;
 
     private class TreeGroup
     {
+        public string ProfileId { get; set; } = string.Empty;
+        public string CredentialId { get; set; } = string.Empty;
         public string Provider { get; set; } = string.Empty;
         public string ApiKey { get; set; } = string.Empty;
         public string BaseUrl { get; set; } = string.Empty;
@@ -183,13 +192,13 @@
     private List<SessionItem> _recentSessions = [];
     private List<SessionItem> _filteredSessions = [];
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         _currentModel = ShortenModelName(Config.Model);
         _isConnected = !string.IsNullOrWhiteSpace(Config.ApiKey);
         _connectionStatus = _isConnected ? "Connected" : "No API key";
-        InferProvider();
-        LoadProviderProfiles();
+        await InferProviderAsync();
+        await LoadProviderProfilesAsync();
 
         // Seed the shared context with initial model/provider
         ActiveContext.SetModel(_currentModel, _currentProvider);
@@ -197,28 +206,26 @@
         ActiveContext.OnDataChanged += OnDataChanged;
     }
 
-    private void LoadProviderProfiles()
+    private async Task LoadProviderProfilesAsync()
     {
-        var path = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".sovrant", "providers.json");
         _providerProfiles = [];
         _treeGroups = [];
-        if (!File.Exists(path)) return;
         try
         {
-            var json = File.ReadAllText(path);
-            using var doc = JsonDocument.Parse(json);
-            var list = new List<ProviderProfileItem>();
-            foreach (var el in doc.RootElement.EnumerateArray())
+            var rows = await ProfileStore.ListAsync(Sovrant.Web.Program.SovrantUserId);
+            var list = new List<ProviderProfileItem>(rows.Count);
+            foreach (var row in rows)
             {
+                var apiKey = await Credentials.RetrieveAsync(row.CredentialId) ?? string.Empty;
                 list.Add(new ProviderProfileItem(
-                    el.GetProperty("Name").GetString() ?? "",
-                    el.GetProperty("Provider").GetString() ?? "",
-                    el.TryGetProperty("Model", out var m) ? m.GetString() ?? "" : "",
-                    el.GetProperty("ApiKey").GetString() ?? "",
-                    el.GetProperty("BaseUrl").GetString() ?? "",
-                    el.TryGetProperty("MaxTokens", out var mt) ? mt.GetInt32() : 32000));
+                    ProfileId: row.ProfileId,
+                    CredentialId: row.CredentialId,
+                    Name: row.Name,
+                    Provider: row.ProviderKind,
+                    Model: row.DefaultModel ?? string.Empty,
+                    ApiKey: apiKey,
+                    BaseUrl: row.BaseUrl ?? string.Empty,
+                    MaxTokens: row.MaxTokens ?? 32000));
             }
             _providerProfiles = list;
             BuildTreeGroups();
@@ -236,6 +243,8 @@
             {
                 group = new TreeGroup
                 {
+                    ProfileId = profile.ProfileId,
+                    CredentialId = profile.CredentialId,
                     Provider = profile.Provider,
                     ApiKey = profile.ApiKey,
                     BaseUrl = profile.BaseUrl,
@@ -361,33 +370,29 @@
 
         ActiveContext.SetModel(_currentModel, _currentProvider);
 
-        // Persist.
-        var profile = new ProviderProfileItem("", group.Provider, model, group.ApiKey, group.BaseUrl, group.MaxTokens);
-        await PersistActiveProviderAsync(profile);
+        // Persist active selection (profile id + scalar prefs + global key mirror).
+        await PersistActiveProfileAsync(group, model);
     }
 
-    private static async Task PersistActiveProviderAsync(ProviderProfileItem profile)
+    private async Task PersistActiveProfileAsync(TreeGroup group, string model)
     {
         try
         {
-            var settingsPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".sovrant", "settings.json");
-            Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
-            Dictionary<string, object?> existing = [];
-            if (File.Exists(settingsPath))
-                existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(
-                    await File.ReadAllTextAsync(settingsPath)) ?? [];
+            var userId = Sovrant.Web.Program.SovrantUserId;
+            if (!string.IsNullOrWhiteSpace(group.ProfileId))
+                await Prefs.SetAsync(userId, UserPreferenceKeys.ActiveProviderProfileId, group.ProfileId);
+            await Prefs.SetAsync(userId, UserPreferenceKeys.Provider, group.Provider);
+            if (!string.IsNullOrWhiteSpace(model))
+                await Prefs.SetAsync(userId, UserPreferenceKeys.Model, model);
+            await Prefs.SetAsync(userId, UserPreferenceKeys.MaxTokens,
+                group.MaxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            if (!string.IsNullOrWhiteSpace(group.BaseUrl))
+                await Prefs.SetAsync(userId, UserPreferenceKeys.BaseUrl, group.BaseUrl);
 
-            existing["Provider"] = profile.Provider;
-            if (!string.IsNullOrWhiteSpace(profile.Model))
-                existing["Model"] = profile.Model;
-            existing["MaxTokens"] = profile.MaxTokens;
-            if (!string.IsNullOrWhiteSpace(profile.ApiKey)) existing["ApiKey"] = profile.ApiKey;
-            if (!string.IsNullOrWhiteSpace(profile.BaseUrl)) existing["BaseUrl"] = profile.BaseUrl;
-
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            await File.WriteAllTextAsync(settingsPath, JsonSerializer.Serialize(existing, options));
+            // Mirror to the global LLM key so MutableApiKeyAuthProvider's lookup
+            // (CredentialKeys.LlmApiKey) resolves on the very next request.
+            if (!string.IsNullOrWhiteSpace(group.ApiKey))
+                await Credentials.StoreAsync(CredentialKeys.LlmApiKey, group.ApiKey);
         }
         catch { /* best effort */ }
     }
@@ -405,14 +410,14 @@
 
     private void OnActiveContextChanged()
     {
-        InvokeAsync(() =>
+        InvokeAsync(async () =>
         {
             // Refresh model card from config (Settings may have changed it)
             _currentModel = ShortenModelName(Config.Model);
             _isConnected = !string.IsNullOrWhiteSpace(Config.ApiKey);
             _connectionStatus = _isConnected ? "Connected" : "No API key";
-            InferProvider();
-            LoadProviderProfiles();
+            await InferProviderAsync();
+            await LoadProviderProfilesAsync();
             StateHasChanged();
         });
     }
@@ -432,7 +437,7 @@
         StateHasChanged();
     }
 
-    private void InferProvider()
+    private async Task InferProviderAsync()
     {
         var url = Config.BaseUrl?.ToString() ?? string.Empty;
         _currentProvider = url switch
@@ -448,19 +453,12 @@
             _ => "Custom",
         };
 
-        // Try saved provider name
+        // Refine with the saved provider preference if present.
         try
         {
-            var path = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".sovrant", "settings.json");
-            if (File.Exists(path))
-            {
-                var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
-                if (json.RootElement.TryGetProperty("Provider", out var prop) &&
-                    prop.GetString() is { Length: > 0 } saved)
-                    _currentProvider = saved;
-            }
+            var saved = await Prefs.GetAsync(Sovrant.Web.Program.SovrantUserId, UserPreferenceKeys.Provider);
+            if (!string.IsNullOrWhiteSpace(saved))
+                _currentProvider = saved;
         }
         catch { /* use inferred */ }
     }
