@@ -201,6 +201,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IProviderProfileStore>(sp =>
             new SqliteProviderProfileStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
+        // Phase 88-F — legacy config migrator. Runs once on startup; ingests
+        // ~/.sovrant/{settings,providers,governance}.json into the DB +
+        // credential store and renames the originals to *.json.bak. Idempotent
+        // (a missing source file is a no-op).
+        services.AddSingleton<LegacyConfigMigrator>();
+
         // Project service (Phase 36)
         services.AddSingleton<IProjectService>(sp =>
             new SqliteProjectStore(
@@ -387,6 +393,17 @@ public static class ServiceCollectionExtensions
         // Initialize SQLite storage (runs migrations).
         var storage = services.GetRequiredService<IStorageProvider>();
         await storage.InitializeAsync(ct).ConfigureAwait(false);
+
+        // Phase 88-F — one-shot legacy config import. Reads
+        // ~/.sovrant/{settings,providers,governance}.json into the DB +
+        // credential store, then renames the originals to *.json.bak so
+        // subsequent boots skip them. Runs after migrations so the new
+        // tables exist; runs before MCP bootstrap so any provider-related
+        // setup downstream sees the imported state.
+        var legacyMigrator = services.GetRequiredService<LegacyConfigMigrator>();
+        var migratorUserId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
+            ?? Environment.UserName;
+        await legacyMigrator.RunAsync(migratorUserId, ct).ConfigureAwait(false);
 
         // Load model capability overrides (Phase 54) — bundled + user + env.
         // Must run before live fetch so overrides take priority.
