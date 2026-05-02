@@ -202,6 +202,15 @@ if (!string.IsNullOrEmpty(credentials.LlmApiKey))
         await credentialStore.StoreAsync(MutableApiKeyAuthProvider.LlmApiKeyCredentialKey, credentials.LlmApiKey).ConfigureAwait(false);
 }
 
+// Phase 88-C — re-sync MutableServerConfig from SovrantConfig now that
+// InitializeRuntimeAsync's ApplyUserPreferencesAsync has populated it from
+// the DB. The mutableConfig built earlier (line ~42) was seeded from the
+// JSON file; this overwrite makes sure the running server uses the user's
+// saved DB values on boots after the migrator renamed settings.json.
+mutableConfig.Model = sovrantConfig.Model;
+if (sovrantConfig.BaseUrl is not null)
+    mutableConfig.LlmBaseUrl = sovrantConfig.BaseUrl.ToString();
+
 // Routes.
 ChatRoutes.Map(app);
 ConfigRoutes.Map(app);

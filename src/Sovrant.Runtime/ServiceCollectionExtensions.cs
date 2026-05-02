@@ -399,9 +399,18 @@ public static class ServiceCollectionExtensions
         // tables exist; runs before MCP bootstrap so any provider-related
         // setup downstream sees the imported state.
         var legacyMigrator = services.GetRequiredService<LegacyConfigMigrator>();
-        var migratorUserId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
+        var sovrantUserId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
             ?? Environment.UserName;
-        await legacyMigrator.RunAsync(migratorUserId, ct).ConfigureAwait(false);
+        await legacyMigrator.RunAsync(sovrantUserId, ct).ConfigureAwait(false);
+
+        // Phase 88-C — apply persisted user preferences and the active
+        // provider's credential to the runtime SovrantConfig. The migrator
+        // (88-F) imports legacy *.json into the DB on first boot; this step
+        // is what makes those values visible to running code on every boot
+        // thereafter. Without it, second-boot users would see SovrantConfig
+        // defaults instead of their saved settings (settings.json is now
+        // .bak).
+        await ApplyUserPreferencesAsync(services, sovrantUserId, ct).ConfigureAwait(false);
 
         // Load model capability overrides (Phase 54) — bundled + user + env.
         // Must run before live fetch so overrides take priority.
@@ -433,5 +442,75 @@ public static class ServiceCollectionExtensions
 
         var registrar = services.GetRequiredService<McpToolRegistrar>();
         await registrar.RegisterAllAsync(mcpServers, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Phase 88-C — pulls saved user preferences out of <see cref="Preferences.IUserPreferenceStore"/>
+    /// and the active provider profile's API key out of
+    /// <see cref="Mcp.ICredentialStore"/>, then mutates the singleton
+    /// <see cref="SovrantConfig"/> in place. Runs once during
+    /// <see cref="InitializeRuntimeAsync"/>, immediately after the legacy
+    /// migrator. The DB is the source of truth — ConfigLoader's JSON-file
+    /// values are now only the bootstrap default before this step runs.
+    /// </summary>
+    internal static async Task ApplyUserPreferencesAsync(
+        IServiceProvider services, string userId, CancellationToken ct)
+    {
+        var prefs = services.GetRequiredService<Preferences.IUserPreferenceStore>();
+        var profileStore = services.GetRequiredService<Providers.IProviderProfileStore>();
+        var credentials = services.GetRequiredService<Mcp.ICredentialStore>();
+        var config = services.GetRequiredService<SovrantConfig>();
+
+        // Scalar prefs.
+        var model = await prefs.GetAsync(userId, Preferences.UserPreferenceKeys.Model, ct).ConfigureAwait(false);
+        if (!string.IsNullOrEmpty(model))
+            config.Model = model;
+
+        var maxTokensRaw = await prefs.GetAsync(userId, Preferences.UserPreferenceKeys.MaxTokens, ct).ConfigureAwait(false);
+        if (int.TryParse(maxTokensRaw, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var maxTokens))
+            config.MaxTokens = maxTokens;
+
+        var baseUrlRaw = await prefs.GetAsync(userId, Preferences.UserPreferenceKeys.BaseUrl, ct).ConfigureAwait(false);
+        if (!string.IsNullOrEmpty(baseUrlRaw) && Uri.TryCreate(baseUrlRaw, UriKind.Absolute, out var baseUrl))
+            config.BaseUrl = baseUrl;
+
+        var permModeRaw = await prefs.GetAsync(userId, Preferences.UserPreferenceKeys.PermissionMode, ct).ConfigureAwait(false);
+        if (Enum.TryParse<PermissionMode>(permModeRaw, ignoreCase: true, out var permMode))
+            config.PermissionMode = permMode;
+
+        var webSearchRaw = await prefs.GetAsync(userId, Preferences.UserPreferenceKeys.WebSearch, ct).ConfigureAwait(false);
+        if (Enum.TryParse<Sovrant.Api.Config.WebSearchBackend>(webSearchRaw, ignoreCase: true, out var webSearch))
+            config.WebSearchOverride = webSearch;
+
+        // Active provider profile → API key (and BaseUrl/Model/MaxTokens
+        // overrides if set on the profile). Falls back to the global
+        // CredentialKeys.LlmApiKey entry for installs that came in via the
+        // settings.json migrator path (no profile id pinned).
+        string? apiKey = null;
+        var activeProfileId = await prefs.GetAsync(
+            userId, Preferences.UserPreferenceKeys.ActiveProviderProfileId, ct).ConfigureAwait(false);
+        if (!string.IsNullOrEmpty(activeProfileId))
+        {
+            var profile = await profileStore.GetAsync(activeProfileId, ct).ConfigureAwait(false);
+            if (profile is not null)
+            {
+                if (!string.IsNullOrEmpty(profile.DefaultModel))
+                    config.Model = profile.DefaultModel;
+                if (profile.MaxTokens.HasValue)
+                    config.MaxTokens = profile.MaxTokens.Value;
+                if (!string.IsNullOrEmpty(profile.BaseUrl)
+                    && Uri.TryCreate(profile.BaseUrl, UriKind.Absolute, out var profileBaseUrl))
+                    config.BaseUrl = profileBaseUrl;
+                apiKey = await credentials.RetrieveAsync(profile.CredentialId, ct).ConfigureAwait(false);
+            }
+        }
+
+        if (string.IsNullOrEmpty(apiKey))
+            apiKey = await credentials.RetrieveAsync(
+                Sovrant.Api.Auth.CredentialKeys.LlmApiKey, ct).ConfigureAwait(false);
+
+        if (!string.IsNullOrEmpty(apiKey))
+            config.ApiKey = apiKey;
     }
 }

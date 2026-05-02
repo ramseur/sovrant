@@ -12,7 +12,7 @@ namespace Sovrant.Server.Auth;
 internal sealed class MutableApiKeyAuthProvider : IAuthProvider
 {
     /// <summary>Storage key used by the server to persist the LLM API key.</summary>
-    public const string LlmApiKeyCredentialKey = "llm:api_key";
+    public const string LlmApiKeyCredentialKey = CredentialKeys.LlmApiKey;
 
     private readonly ICredentialStore _store;
     private volatile string? _cached;
