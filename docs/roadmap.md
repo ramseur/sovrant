@@ -8580,6 +8580,14 @@ All five fields stay optional (defaults work without the file). No
 new fields land here in Phase 88; user-facing settings explicitly do
 *not* belong in this file.
 
+**Invariant going forward:** `sovrant.config` is the *only* on-disk
+config file. Any future configuration that genuinely cannot live in
+the DB or the credential store (i.e. needed before SQLite opens, or
+needed to find the SQLite/keystore paths themselves) extends
+`sovrant.config` with a new field — it does *not* introduce a new
+JSON file. PRs that add a sibling file in `~/.sovrant/` should be
+rejected on this rule alone.
+
 The file is named `sovrant.config` (no `.json` extension) — JSON
 internally, but the bare name signals "this is *the* config file" and
 avoids the implication that anything else could share the namespace.
