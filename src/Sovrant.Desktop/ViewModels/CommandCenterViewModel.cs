@@ -24,8 +24,17 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private int _activeTeamRuns;
     [ObservableProperty] private int _activeAgentRuns;
     [ObservableProperty] private int _activeSessions;
+    [ObservableProperty] private int _activeClaws;
     [ObservableProperty] private string _lastRefreshed = string.Empty;
     [ObservableProperty] private bool _isEmpty = true;
+    [ObservableProperty] private bool _showHelp;
+
+    public string HelpToggleLabel => ShowHelp ? "Hide guide" : "What are these?";
+
+    partial void OnShowHelpChanged(bool value) => OnPropertyChanged(nameof(HelpToggleLabel));
+
+    [RelayCommand]
+    private void ToggleHelp() => ShowHelp = !ShowHelp;
 
     public ObservableCollection<CommandCenterRowViewModel> Rows { get; } = [];
 
@@ -54,6 +63,7 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
                 ActiveTeamRuns = state.ActiveTeamRuns;
                 ActiveAgentRuns = state.ActiveAgentRuns;
                 ActiveSessions = state.ActiveSessions;
+                ActiveClaws = state.ActiveClaws;
                 LastRefreshed = state.GeneratedAt.LocalDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
 
                 Rows.Clear();
@@ -96,6 +106,7 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
         "team-run" => "\U0001F465",
         "agent-run" => "\U0001F916",
         "session" => "\U0001F4AC",
+        "claw" => "\U0001F517",
         _ => "•",
     };
 

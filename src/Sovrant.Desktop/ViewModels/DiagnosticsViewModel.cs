@@ -60,9 +60,6 @@ public partial class DiagnosticsViewModel : ViewModelBase
     [ObservableProperty]
     private string _artifactsPath = string.Empty;
 
-    [ObservableProperty]
-    private string _configPath = string.Empty;
-
     // Provider health
     public ObservableCollection<ProviderHealthItem> Providers { get; } = [];
 
@@ -112,7 +109,6 @@ public partial class DiagnosticsViewModel : ViewModelBase
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         DbPath = _bootstrap.DbPath ?? Path.Combine(home, ".sovrant", "data", "sovrant.db");
         ArtifactsPath = Path.Combine(home, ".sovrant", "artifacts");
-        ConfigPath = Path.Combine(home, ".sovrant", "settings.json");
     }
 
     [RelayCommand]
@@ -122,17 +118,7 @@ public partial class DiagnosticsViewModel : ViewModelBase
         HealthChecks.Clear();
         Providers.Clear();
 
-        // 1. Settings file
-        var settingsExists = File.Exists(ConfigPath);
-        HealthChecks.Add(new HealthCheckItem
-        {
-            Name = "Settings file",
-            Status = settingsExists ? "PASS" : "WARN",
-            IsHealthy = settingsExists,
-            Detail = settingsExists ? ConfigPath : "No settings.json found — using defaults",
-        });
-
-        // 2. API key
+        // API key
         var hasKey = !string.IsNullOrWhiteSpace(_config.ApiKey);
         HealthChecks.Add(new HealthCheckItem
         {

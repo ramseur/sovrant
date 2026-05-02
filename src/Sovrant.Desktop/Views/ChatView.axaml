@@ -125,36 +125,6 @@
             </StackPanel>
         </Border>
 
-        <!-- Context breadcrumb -->
-        <Border DockPanel.Dock="Top"
-                Padding="24,8"
-                BorderThickness="0,0,0,1"
-                BorderBrush="{DynamicResource SurfaceBorder}"
-                Background="{DynamicResource SurfaceBackground}">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-                <TextBlock Text="🏢" FontSize="11" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding ActiveContext.ActiveWorkspaceName}"
-                           FontSize="12" FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextSecondary}"
-                           VerticalAlignment="Center" />
-                <TextBlock Text=">"
-                           FontSize="12"
-                           Foreground="{DynamicResource TextMuted}"
-                           VerticalAlignment="Center"
-                           IsVisible="{Binding ActiveContext.HasActiveProject}" />
-                <TextBlock Text="{Binding ActiveContext.ActiveProjectName}"
-                           FontSize="12" FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextPrimary}"
-                           VerticalAlignment="Center"
-                           IsVisible="{Binding ActiveContext.HasActiveProject}" />
-                <TextBlock Text="(no project)"
-                           FontSize="11" FontStyle="Italic"
-                           Foreground="{DynamicResource TextMuted}"
-                           VerticalAlignment="Center"
-                           IsVisible="{Binding !ActiveContext.HasActiveProject}" />
-            </StackPanel>
-        </Border>
-
         <!-- Content area: Grid allows hero to truly center while ScrollViewer fills -->
         <Grid>
             <!-- Empty hero state — centered in the full remaining space -->

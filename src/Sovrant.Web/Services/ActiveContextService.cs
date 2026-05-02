@@ -23,6 +23,9 @@ public sealed class ActiveContextService
     /// <summary>Fires when a session should be resumed in the chat page.</summary>
     public event Action<string>? OnSessionResume;
 
+    /// <summary>Fires when the user wants to start a fresh chat (chat rail icon click).</summary>
+    public event Action? OnNewSession;
+
     /// <summary>
     /// Session id set by <see cref="ResumeSession"/> so the Chat page can pick
     /// it up even when it hasn't been mounted yet (first click from another page).
@@ -63,4 +66,7 @@ public sealed class ActiveContextService
         PendingResumeSessionId = sessionId;
         OnSessionResume?.Invoke(sessionId);
     }
+
+    /// <summary>Request the chat page to start a fresh session.</summary>
+    public void StartNewSession() => OnNewSession?.Invoke();
 }

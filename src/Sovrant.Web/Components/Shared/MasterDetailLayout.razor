@@ -1,6 +1,8 @@
 @typeparam TItem
 
-<div class="master-detail">
+<div class="master-detail @(HideMaster ? "master-detail-detail-only" : "")">
+    @if (!HideMaster)
+    {
     <div class="master-panel">
         <div class="master-header">
             <h1>@Title</h1>
@@ -63,6 +65,7 @@
             </div>
         }
     </div>
+    }
     <div class="detail-panel">
         @if (SelectedItem is not null && DetailTemplate is not null)
         {
@@ -81,6 +84,7 @@
     [Parameter] public string Title { get; set; } = string.Empty;
     [Parameter] public int? ItemCount { get; set; }
     [Parameter] public bool ShowSearch { get; set; } = true;
+    [Parameter] public bool HideMaster { get; set; }
     [Parameter] public string EmptyMessage { get; set; } = "No items found.";
     [Parameter] public IEnumerable<TItem>? Items { get; set; }
     [Parameter] public TItem? SelectedItem { get; set; }

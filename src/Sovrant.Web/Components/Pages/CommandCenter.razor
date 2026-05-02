@@ -6,10 +6,37 @@
     <div class="diag-header">
         <div>
             <h1>Command Center</h1>
-            <p class="text-secondary cc-subtitle">What is Sovrant doing for you right now?</p>
+            <p class="text-secondary cc-subtitle">
+                What is Sovrant doing for you right now?
+                <button type="button" class="btn-link cc-help-toggle" @onclick="ToggleHelp">
+                    @(_showHelp ? "Hide guide" : "What are these?")
+                </button>
+            </p>
         </div>
         <button class="btn-secondary" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Refreshing…" : "Refresh")</button>
     </div>
+
+    @if (_showHelp)
+    {
+        <div class="cc-help-panel">
+            <dl class="cc-help-grid">
+                <dt><span class="cc-kind-pill cc-kind-mission">&#x1F3AF; mission</span></dt>
+                <dd>A long-running goal Sovrant decomposes into a plan, then runs through teams and agents until done. Top of the orchestration stack — survives restarts and waits for human input when needed.</dd>
+
+                <dt><span class="cc-kind-pill cc-kind-team-run">&#x1F465; team run</span></dt>
+                <dd>One execution of a team — a group of agents running together under a profile (sequential, parallel, or swarm). Each member produces an agent run beneath it.</dd>
+
+                <dt><span class="cc-kind-pill cc-kind-agent-run">&#x1F916; agent run</span></dt>
+                <dd>A single agent executing a task — either standalone (kicked off from the Agents page) or as a member of a team run. Has its own ledger row, turns, and review.</dd>
+
+                <dt><span class="cc-kind-pill cc-kind-session">&#x1F4AC; session</span></dt>
+                <dd>A chat conversation with the assistant. Click to resume; persists across restarts.</dd>
+
+                <dt><span class="cc-kind-pill cc-kind-claw">&#x1F517; claw</span></dt>
+                <dd>An autonomous external system Sovrant connects to over MCP (n8n, Zapier, custom servers). Claws run in their own world; Sovrant monitors and steers them from here. Foundational — full claw runtime lands later.</dd>
+            </dl>
+        </div>
+    }
 
     @if (!string.IsNullOrEmpty(_error))
     {
@@ -19,10 +46,16 @@
     }
 
     <div class="cc-stat-row">
-        <CcStat Label="Missions" Value="@(_state?.ActiveMissions ?? 0)" />
-        <CcStat Label="Team runs" Value="@(_state?.ActiveTeamRuns ?? 0)" />
-        <CcStat Label="Agent runs" Value="@(_state?.ActiveAgentRuns ?? 0)" />
-        <CcStat Label="Sessions" Value="@(_state?.ActiveSessions ?? 0)" />
+        <CcStat Label="Missions" Value="@(_state?.ActiveMissions ?? 0)"
+                Tooltip="Long-running goals decomposed into team and agent runs." />
+        <CcStat Label="Team runs" Value="@(_state?.ActiveTeamRuns ?? 0)"
+                Tooltip="One execution of a team of agents under a sequential, parallel, or swarm profile." />
+        <CcStat Label="Agent runs" Value="@(_state?.ActiveAgentRuns ?? 0)"
+                Tooltip="A single agent executing a task — standalone or as a team member." />
+        <CcStat Label="Sessions" Value="@(_state?.ActiveSessions ?? 0)"
+                Tooltip="Chat conversations with the assistant. Click to resume." />
+        <CcStat Label="Claws" Value="@(_state?.ActiveClaws ?? 0)"
+                Tooltip="Autonomous external systems connected over MCP (n8n, Zapier, custom)." />
     </div>
 
     @if (_state is null && _loading)
@@ -88,7 +121,10 @@
     private CommandCenterState? _state;
     private bool _loading;
     private string _error = string.Empty;
+    private bool _showHelp;
     private System.Threading.Timer? _timer;
+
+    private void ToggleHelp() => _showHelp = !_showHelp;
 
     protected override async Task OnInitializedAsync()
     {
@@ -122,6 +158,7 @@
         "team-run" => "\U0001F465",
         "agent-run" => "\U0001F916",
         "session" => "\U0001F4AC",
+        "claw" => "\U0001F517",
         _ => "•",
     };
 

@@ -13,6 +13,7 @@ public partial class WorkspacesViewModel : ViewModelBase
 {
     private readonly IWorkspaceService _workspaceService;
     private readonly IUserService _userService;
+    private readonly ActiveContextViewModel _activeContext;
 
     [ObservableProperty]
     private string _statusMessage = string.Empty;
@@ -33,10 +34,11 @@ public partial class WorkspacesViewModel : ViewModelBase
 
     private static string DesktopUserId => App.SovrantUserId;
 
-    public WorkspacesViewModel(IWorkspaceService workspaceService, IUserService userService)
+    public WorkspacesViewModel(IWorkspaceService workspaceService, IUserService userService, ActiveContextViewModel activeContext)
     {
         _workspaceService = workspaceService;
         _userService = userService;
+        _activeContext = activeContext;
         _ = LoadAsync();
     }
 
@@ -61,6 +63,7 @@ public partial class WorkspacesViewModel : ViewModelBase
             NewWorkspaceName = string.Empty;
             StatusMessage = $"Created workspace '{name}'.";
             await LoadAsync();
+            await _activeContext.RefreshCommand.ExecuteAsync(null);
         }
         catch (Exception ex)
         {
@@ -83,6 +86,7 @@ public partial class WorkspacesViewModel : ViewModelBase
             if (SelectedWorkspace == workspace) SelectedWorkspace = null;
             StatusMessage = $"Deleted workspace '{workspace.Name}'.";
             await LoadAsync();
+            await _activeContext.RefreshCommand.ExecuteAsync(null);
         }
         else
         {

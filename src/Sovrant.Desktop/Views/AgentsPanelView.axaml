@@ -9,7 +9,7 @@
             <TextBlock Text="AGENTS" FontSize="11" FontWeight="Bold"
                        Foreground="{DynamicResource TextMuted}"
                        Margin="6,4,0,10" />
-            <Button Content="🤖  Agent Templates"
+            <Button Content="🤖  Templates"
                     Command="{Binding NavigateCommand}" CommandParameter="Agents"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
@@ -19,8 +19,8 @@
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-            <Button Content="📊  Activity"
-                    Command="{Binding NavigateCommand}" CommandParameter="Activity"
+            <Button Content="🎯  Command Center"
+                    Command="{Binding NavigateCommand}" CommandParameter="CommandCenter"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="Transparent" Foreground="{DynamicResource TextPrimary}" />

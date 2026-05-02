@@ -64,6 +64,10 @@ public sealed class AdHocAgentRunner
         try
         {
             var agent = _factory.Create(template);
+            // Bind the runtime's session id to the run id so the agent's turns
+            // are persisted under the same id as the agent_runs ledger row —
+            // /activity?run={runId} can then resolve to the agent's session.
+            await agent.InitializeSessionAsync(runId, userId, ct).ConfigureAwait(false);
             var taskId = Guid.NewGuid().ToString("N");
             var result = await agent.HandleAsync(new AgentTask(taskId, prompt), ct).ConfigureAwait(false);
 

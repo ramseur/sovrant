@@ -27,6 +27,15 @@ public sealed partial class SovrantAgent : BaseAgent
         _runtime = runtime;
     }
 
+    /// <summary>
+    /// Binds this agent's runtime to a specific session id so its turns are
+    /// persisted under that id. Used by <see cref="AdHocAgentRunner"/> to align
+    /// the runtime's session id with the agent_runs ledger RunId, which lets
+    /// the Activity drill-down find the run by its RunId.
+    /// </summary>
+    public Task InitializeSessionAsync(string sessionId, string? ownerUserId = null, CancellationToken ct = default)
+        => _runtime.InitializeSessionAsync(sessionId, ownerUserId, ct);
+
     /// <inheritdoc/>
     public override async Task<AgentResult> HandleAsync(AgentTask task, CancellationToken ct = default)
     {

@@ -79,18 +79,27 @@
                     BorderBrush="{DynamicResource SurfaceBorder}"
                     BorderThickness="0,0,1,0">
                 <DockPanel>
-                    <!-- Top: horizontal row of group icons -->
+                    <!-- Top: Sovrant brand mark, then horizontal row of group icons.
+                         Height matches TopContextBarView so the bottom borders line up across the window. -->
+                    <Border DockPanel.Dock="Top"
+                            Height="50"
+                            BorderBrush="{DynamicResource SurfaceBorder}"
+                            BorderThickness="0,0,0,1"
+                            Padding="14,0">
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <TextBlock Text="⚡" FontSize="18"
+                                       Foreground="{DynamicResource BrandPrimary}"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="Sovrant" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
                     <Border DockPanel.Dock="Top"
                             BorderBrush="{DynamicResource SurfaceBorder}"
                             BorderThickness="0,0,0,1"
                             Padding="6,8">
-                        <UniformGrid Rows="1" Columns="7">
-                            <Button Content="🎯" ToolTip.Tip="Command Center"
-                                    Command="{Binding SelectGroupCommand}" CommandParameter="command"
-                                    Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
-                                    Background="{Binding IsCommandGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsCommandGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
+                        <UniformGrid Rows="1" Columns="6">
                             <Button Content="💬" ToolTip.Tip="Chat"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="chat"
                                     Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
@@ -182,8 +191,12 @@
             </Border>
 
             <!-- Main content -->
-            <ContentControl Content="{Binding CurrentPage}"
-                            Margin="0" />
+            <DockPanel>
+                <views:TopContextBarView DataContext="{Binding Sidebar}"
+                                         DockPanel.Dock="Top" />
+                <ContentControl Content="{Binding CurrentPage}"
+                                Margin="0" />
+            </DockPanel>
         </DockPanel>
 
         <!-- Command palette overlay -->

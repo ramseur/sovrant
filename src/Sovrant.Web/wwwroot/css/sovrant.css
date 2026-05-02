@@ -66,6 +66,139 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     flex-direction: column;
 }
 
+/* ===== Top Context Bar (model + workspace + project switchers) ===== */
+/* Height matches .rail-brand so the bottom border lines up across the page. */
+.top-context-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 50px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--surface-border);
+    background: var(--surface-background);
+    flex-shrink: 0;
+}
+
+/* Shared pill style — every switcher in the top bar uses the same height,
+   border, padding, and chevron color so they look like one family. */
+.top-context-bar .tcb-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--surface-border);
+    background: var(--surface-card);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.top-context-bar .tcb-switcher {
+    position: relative;
+    min-width: 280px;
+    max-width: 360px;
+    flex: 0 1 auto;
+}
+/* Override generic .model-tree-trigger styles when nested in the top bar. */
+.top-context-bar .model-tree-trigger {
+    width: 100%;
+    height: 32px;
+    margin: 0;
+    padding: 0 10px;
+    border: 1px solid var(--surface-border);
+    background: var(--surface-card);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    box-sizing: border-box;
+}
+.top-context-bar .model-tree-trigger-text {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+}
+.top-context-bar .model-tree-model {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.top-context-bar .model-tree-provider {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.top-context-bar .model-tree-provider::before {
+    content: "·";
+    margin-right: 6px;
+    color: var(--text-muted);
+}
+.top-context-bar .model-tree-chevron {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.top-context-bar .tcb-divider {
+    width: 1px;
+    height: 22px;
+    background: var(--surface-border);
+    margin: 0 4px;
+    flex-shrink: 0;
+}
+.top-context-bar .tcb-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--surface-border);
+    background: var(--surface-card);
+    border-radius: 6px;
+    min-width: 160px;
+    max-width: 240px;
+    flex: 0 1 auto;
+    box-sizing: border-box;
+}
+.top-context-bar .tcb-icon {
+    font-size: 13px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+.top-context-bar .tcb-field select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 13px;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+    outline: none;
+    /* Inline chevron — same color/size as the model switcher chevron. */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%237a8390' d='M5 6 0 0h10z'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 2px center;
+    padding-right: 16px;
+}
+.top-context-bar .tcb-field select:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+
 /* ===== Sidebar (expanded) ===== */
 .sidebar {
     width: 260px;
@@ -513,6 +646,36 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     flex-direction: column;
 }
 
+.rail-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px;
+    height: 50px;
+    box-sizing: border-box;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text-primary);
+    letter-spacing: 0.2px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--surface-border);
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+}
+
+.rail-brand:hover { color: var(--brand-primary); }
+
+.rail-brand-icon {
+    font-size: 18px;
+    color: var(--brand-primary);
+}
+
+.rail-brand-text {
+    line-height: 1;
+}
+
 .rail-icons-row {
     display: flex;
     flex-direction: row;
@@ -648,7 +811,9 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 24px;
+    padding: 0 24px;
+    height: 34px;
+    box-sizing: border-box;
     border-bottom: 1px solid var(--surface-border);
     font-size: 12px;
     color: var(--text-secondary);
@@ -807,7 +972,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
 /* Assistant message — subtle card background */
 .msg-card {
-    padding: 14px 0;
+    padding: 14px 18px;
     border-radius: 12px;
     background: var(--assistant-message-bg);
     color: var(--text-primary);
@@ -1701,6 +1866,10 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     overflow: hidden;
 }
 
+.master-detail-detail-only .detail-panel {
+    width: 100%;
+}
+
 .master-panel {
     width: 320px;
     min-width: 320px;
@@ -2361,7 +2530,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 /* ===== Command Center (Phase 90) ===== */
 .cc-stat-row {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 12px;
     margin: 16px 0 12px;
 }
@@ -2426,7 +2595,15 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     color: var(--text-secondary);
     text-transform: lowercase;
 }
-.cc-title { font-weight: 500; }
+/* Title column needs min-width: 0 so its overflowing children (which use ellipsis)
+   can actually shrink below their content width inside the grid track. */
+.cc-col-title { min-width: 0; }
+.cc-title {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .cc-preview {
     margin-top: 2px;
     overflow: hidden;
@@ -2472,6 +2649,31 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     gap: 8px;
 }
 .cc-subtitle { margin: 0; }
+
+.cc-help-toggle {
+    margin-left: 10px;
+    font-size: 12px;
+    padding: 0;
+}
+
+.cc-help-panel {
+    margin: 12px 0 16px;
+    padding: 14px 18px;
+    background: var(--surface-2, #1f2230);
+    border: 1px solid var(--surface-border);
+    border-radius: 6px;
+}
+
+.cc-help-grid {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 10px 16px;
+    margin: 0;
+    align-items: start;
+}
+
+.cc-help-grid dt { margin: 0; }
+.cc-help-grid dd { margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
 .cc-footer {
     margin-top: 8px;
 }
@@ -2588,6 +2790,17 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
 /* ===== Activity drill-down (Phase 90 Track D) ===== */
 .activity-detail .activity-header { margin-bottom: 16px; }
+
+.activity-banner {
+    padding: 10px 16px;
+    margin: 8px 16px;
+    background: var(--surface-2, #1f2230);
+    border: 1px solid var(--surface-border);
+    border-left: 3px solid var(--brand-primary);
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
 .activity-detail h3 {
     margin: 18px 0 10px;
     font-size: 13px;

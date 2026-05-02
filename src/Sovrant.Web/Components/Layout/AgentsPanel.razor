@@ -1,9 +1,12 @@
-@*  Phase 69 — Agents group secondary panel.  *@
+@*  Agents group secondary panel.
+    Consolidates the live Command Center cockpit with agent templates,
+    orchestration, and activity drill-down — one umbrella for everything
+    "what are my agents doing right now and how do I steer them?".  *@
 
 <div class="rail-secondary-header">Agents</div>
-<NavButton Href="/agents" Icon="&#x1F916;" Label="Agent Templates" OnClick="OnNavigate" />
+<NavButton Href="/agents" Icon="&#x1F916;" Label="Templates" OnClick="OnNavigate" />
 <NavButton Href="/orchestration" Icon="&#x1F3BC;" Label="Orchestration" OnClick="OnNavigate" />
-<NavButton Href="/activity" Icon="&#x1F4CA;" Label="Activity" OnClick="OnNavigate" />
+<NavButton Href="/command" Icon="&#x1F3AF;" Label="Command Center" OnClick="OnNavigate" />
 
 @code {
     [Parameter] public EventCallback<string> OnNavigate { get; set; }

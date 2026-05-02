@@ -16,11 +16,10 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private CommandPaletteViewModel _commandPalette;
 
-    /// <summary>Phase 69 — currently selected rail group: command, chat, knowledge, agents, workspace, connect, governance.</summary>
+    /// <summary>Phase 69 — currently selected rail group: chat, knowledge, agents, workspace, connect, governance. Command Center is reached via the Agents panel.</summary>
     [ObservableProperty]
-    private string _selectedGroup = "command";
+    private string _selectedGroup = "agents";
 
-    public bool IsCommandGroup => SelectedGroup == "command";
     public bool IsChatGroup => SelectedGroup == "chat";
     public bool IsKnowledgeGroup => SelectedGroup == "knowledge";
     public bool IsAgentsGroup => SelectedGroup == "agents";
@@ -30,17 +29,12 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnSelectedGroupChanged(string value)
     {
-        OnPropertyChanged(nameof(IsCommandGroup));
         OnPropertyChanged(nameof(IsChatGroup));
         OnPropertyChanged(nameof(IsKnowledgeGroup));
         OnPropertyChanged(nameof(IsAgentsGroup));
         OnPropertyChanged(nameof(IsWorkspaceGroup));
         OnPropertyChanged(nameof(IsConnectGroup));
         OnPropertyChanged(nameof(IsGovernanceGroup));
-
-        // Cockpit: tap the Command Center icon = open the cockpit page directly.
-        if (value == "command")
-            OnNavigationRequested(this, "CommandCenter");
     }
 
     private readonly IServiceProvider _services;
@@ -59,7 +53,17 @@ public partial class MainViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void SelectGroup(string group) => SelectedGroup = group;
+    private void SelectGroup(string group)
+    {
+        SelectedGroup = group;
+        // Clicking the chat icon also starts a new chat — replaces the
+        // dedicated "New Chat" button and saves the user a click.
+        if (group == "chat")
+        {
+            CurrentPage = CreateChatViewModel();
+            Sidebar.SelectedNavItem = "Chat";
+        }
+    }
 
     [RelayCommand]
     private void OpenSettings() => OnNavigationRequested(this, "Settings");

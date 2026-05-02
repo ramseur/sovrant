@@ -405,6 +405,18 @@ public partial class SidebarViewModel : ViewModelBase
     /// <summary>Reads model and provider info from the current config.</summary>
     public void LoadFromConfig(SovrantConfig config)
     {
+        // First-run / clean-install state: no API key AND no configured model means
+        // there's no provider yet. Show a placeholder instead of inferring "OpenAI"
+        // from an empty URL.
+        if (string.IsNullOrWhiteSpace(config.ApiKey) && string.IsNullOrWhiteSpace(config.Model))
+        {
+            CurrentModel = "No model";
+            CurrentProvider = "Add a provider";
+            IsConnected = false;
+            ConnectionStatus = "No API key";
+            return;
+        }
+
         CurrentModel = ShortenModelName(config.Model);
 
         // Infer provider from base URL.

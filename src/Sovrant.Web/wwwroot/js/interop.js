@@ -33,6 +33,12 @@ window.sovrantInterop = {
                 dotNetRef.invokeMethodAsync('OnCtrlK');
             }
         });
+    },
+
+    getElementRect: function (element) {
+        if (!element) return null;
+        const r = element.getBoundingClientRect();
+        return { top: r.top, left: r.left, width: r.width, height: r.height, bottom: r.bottom, right: r.right };
     }
 };
 

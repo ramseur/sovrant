@@ -195,7 +195,7 @@
                     Background="{DynamicResource SurfaceCard}"
                     BorderBrush="{DynamicResource SurfaceBorder}"
                     BorderThickness="1">
-                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" >
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" >
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="Runtime" FontSize="11"
                                Foreground="{DynamicResource TextMuted}" Margin="0,0,20,6" />
                     <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding RuntimeVersion}" FontSize="12"
@@ -218,14 +218,8 @@
                                TextWrapping="Wrap" />
 
                     <TextBlock Grid.Row="4" Grid.Column="0" Text="Database" FontSize="11"
-                               Foreground="{DynamicResource TextMuted}" Margin="0,0,20,6" />
-                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding DbPath}" FontSize="12"
-                               Foreground="{DynamicResource TextSecondary}"
-                               TextTrimming="CharacterEllipsis" />
-
-                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Settings" FontSize="11"
                                Foreground="{DynamicResource TextMuted}" Margin="0,0,20,0" />
-                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding ConfigPath}" FontSize="12"
+                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding DbPath}" FontSize="12"
                                Foreground="{DynamicResource TextSecondary}"
                                TextTrimming="CharacterEllipsis" />
                 </Grid>

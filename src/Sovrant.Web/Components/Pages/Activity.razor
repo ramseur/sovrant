@@ -3,6 +3,11 @@
 @using Sovrant.Runtime.Session
 @using Sovrant.Web.Services
 
+@if (!string.IsNullOrEmpty(_deepLinkBanner))
+{
+    <div class="activity-banner">@_deepLinkBanner</div>
+}
+
 <MasterDetailLayout TItem="SessionSummary"
                     Title="Activity"
                     ItemCount="@_summaries.Count"
@@ -11,7 +16,8 @@
                     EmptyMessage="No activity yet — start a chat session to see history here."
                     OnRefresh="LoadAsync"
                     OnItemSelected="OnSelectedAsync"
-                    ShowSearch="false">
+                    ShowSearch="false"
+                    HideMaster="@_isFocused">
     <ItemTemplate>
         <div class="item-title">
             @(context.Tasks.Count > 0 ? Truncate(context.Tasks[0], 80) : "(no task recorded)")
@@ -97,23 +103,101 @@
 @code {
     [Inject] private IMemoryStore MemoryStore { get; set; } = default!;
     [Inject] private ISessionStore SessionStore { get; set; } = default!;
+    [Inject] private NavigationManager Nav { get; set; } = default!;
 
     private List<SessionSummary> _summaries = [];
     private SessionSummary? _selected;
     private List<SessionEntry> _entries = [];
     private bool _loadingDetail;
     private string _detailError = string.Empty;
+    private bool _isFocused;
+    private string _deepLinkBanner = string.Empty;
 
     private static readonly string Project = Directory.GetCurrentDirectory();
     private const int MaxOutputBytes = 2048;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+
+        // Honor a deep-link query param: /activity?session=<id> or ?run=<id>.
+        // Both behave identically here — they select that specific row in
+        // the master pane and load its turn detail.
+        var uri = new Uri(Nav.Uri);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+        var deepLinkId = query.TryGetValue("session", out var s) ? s.ToString()
+                       : query.TryGetValue("run", out var r) ? r.ToString()
+                       : null;
+        if (!string.IsNullOrEmpty(deepLinkId))
+        {
+            await ResolveDeepLinkAsync(deepLinkId!);
+        }
+    }
+
+    /// <summary>
+    /// Resolve a deep-link id (session or agent run) to a focused detail view.
+    /// Tries the synthesized summary list first; if that misses, falls back to
+    /// loading entries directly under the id (covers ad-hoc agent runs whose
+    /// session entries persist under the RunId). If both miss, drops out of
+    /// focused mode so the user sees the master list with a banner instead of
+    /// a blank page.
+    /// </summary>
+    private async Task ResolveDeepLinkAsync(string id)
+    {
+        var match = _summaries.FirstOrDefault(x => x.SessionId == id);
+        if (match is not null)
+        {
+            _isFocused = true;
+            await OnSelectedAsync(match);
+            return;
+        }
+
+        try
+        {
+            var entries = await SessionStore.LoadAsync(id, Sovrant.Web.Program.SovrantUserId);
+            if (entries.Count > 0)
+            {
+                var synthetic = SessionSummaryExtractor.Extract(id, Project, entries.ToList());
+                _summaries.Insert(0, synthetic);
+                _isFocused = true;
+                await OnSelectedAsync(synthetic);
+                return;
+            }
+        }
+        catch { /* fall through to banner */ }
+
+        _isFocused = false;
+        _deepLinkBanner = $"No captured review for '{id}'. The run may pre-date review tracking, or it ran in a different workspace.";
+    }
 
     private async Task LoadAsync()
     {
         try
         {
-            _summaries = (await MemoryStore.LoadSummariesAsync(Project, maxCount: 50)).ToList();
+            // 1. Load post-mortem summaries (the rich data, when sessions completed
+            //    cleanly enough to persist one).
+            var stored = (await MemoryStore.LoadSummariesAsync(Project, maxCount: 100)).ToList();
+            var byId = stored.ToDictionary(s => s.SessionId, s => s, StringComparer.Ordinal);
+
+            // 2. Synthesize summaries for any raw session that doesn't have a
+            //    stored one yet — including live in-flight sessions that the
+            //    cockpit just deep-linked us to.
+            var ids = await SessionStore.ListAsync(Sovrant.Web.Program.SovrantUserId);
+            foreach (var id in ids.Take(100))
+            {
+                if (byId.ContainsKey(id)) continue;
+                try
+                {
+                    var entries = await SessionStore.LoadAsync(id, Sovrant.Web.Program.SovrantUserId);
+                    if (entries.Count == 0) continue;
+                    var synthetic = SessionSummaryExtractor.Extract(id, Project, entries);
+                    byId[id] = synthetic;
+                }
+                catch { /* skip unreadable sessions */ }
+            }
+
+            _summaries = byId.Values.OrderByDescending(s => s.StartedAt).ToList();
+            _detailError = string.Empty;
         }
         catch (Exception ex)
         {

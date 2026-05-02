@@ -18,8 +18,19 @@
                 <StackPanel>
                     <TextBlock Text="Command Center" FontSize="24" FontWeight="Bold"
                                Foreground="{DynamicResource TextPrimary}" />
-                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
-                               Text="What is Sovrant doing for you right now?" />
+                    <!-- WrapPanel so the help-toggle drops below the subtitle when the window is narrow,
+                         instead of running into it on a single line. -->
+                    <WrapPanel Orientation="Horizontal">
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                   Text="What is Sovrant doing for you right now?"
+                                   Margin="0,0,10,0" />
+                        <Button Command="{Binding ToggleHelpCommand}"
+                                Padding="0" Background="Transparent" BorderThickness="0"
+                                Foreground="{DynamicResource BrandPrimary}"
+                                FontSize="12" Cursor="Hand">
+                            <TextBlock Text="{Binding HelpToggleLabel}" TextDecorations="Underline" />
+                        </Button>
+                    </WrapPanel>
                 </StackPanel>
             </DockPanel>
 
@@ -29,11 +40,56 @@
                        IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                        TextWrapping="Wrap" />
 
+            <!-- Help / explainer panel -->
+            <Border IsVisible="{Binding ShowHelp}"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                    CornerRadius="8" Padding="16,12" Margin="0,8,0,0">
+                <StackPanel Spacing="10">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="🎯 mission" FontWeight="SemiBold" Width="120"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="A long-running goal Sovrant decomposes into a plan, then runs through teams and agents until done. Survives restarts and waits for human input when needed." />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="👥 team run" FontWeight="SemiBold" Width="120"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="One execution of a team — a group of agents running together under a profile (sequential, parallel, or swarm). Each member produces an agent run beneath it." />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="🤖 agent run" FontWeight="SemiBold" Width="120"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="A single agent executing a task — either standalone (kicked off from the Agents page) or as a member of a team run. Has its own ledger row, turns, and review." />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="💬 session" FontWeight="SemiBold" Width="120"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="A chat conversation with the assistant. Click to resume; persists across restarts." />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="🔗 claw" FontWeight="SemiBold" Width="120"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="An autonomous external system Sovrant connects to over MCP (n8n, Zapier, custom servers). Sovrant monitors and steers them from here. Foundational — full claw runtime lands later." />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <!-- KPI tiles -->
-            <UniformGrid Rows="1" Columns="4" Margin="0,8,0,0">
+            <UniformGrid Rows="1" Columns="5" Margin="0,8,0,0">
                 <Border Background="{DynamicResource SurfaceCard}"
                         BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
-                        CornerRadius="8" Padding="14,12" Margin="0,0,8,0">
+                        CornerRadius="8" Padding="14,12" Margin="0,0,8,0"
+                        ToolTip.Tip="Long-running goals decomposed into team and agent runs.">
                     <StackPanel>
                         <TextBlock Text="MISSIONS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
                         <TextBlock Text="{Binding ActiveMissions}" FontSize="24" FontWeight="SemiBold"
@@ -42,7 +98,8 @@
                 </Border>
                 <Border Background="{DynamicResource SurfaceCard}"
                         BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
-                        CornerRadius="8" Padding="14,12" Margin="0,0,8,0">
+                        CornerRadius="8" Padding="14,12" Margin="0,0,8,0"
+                        ToolTip.Tip="One execution of a team of agents under a sequential, parallel, or swarm profile.">
                     <StackPanel>
                         <TextBlock Text="TEAM RUNS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
                         <TextBlock Text="{Binding ActiveTeamRuns}" FontSize="24" FontWeight="SemiBold"
@@ -51,7 +108,8 @@
                 </Border>
                 <Border Background="{DynamicResource SurfaceCard}"
                         BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
-                        CornerRadius="8" Padding="14,12" Margin="0,0,8,0">
+                        CornerRadius="8" Padding="14,12" Margin="0,0,8,0"
+                        ToolTip.Tip="A single agent executing a task — standalone or as a team member.">
                     <StackPanel>
                         <TextBlock Text="AGENT RUNS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
                         <TextBlock Text="{Binding ActiveAgentRuns}" FontSize="24" FontWeight="SemiBold"
@@ -60,10 +118,21 @@
                 </Border>
                 <Border Background="{DynamicResource SurfaceCard}"
                         BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
-                        CornerRadius="8" Padding="14,12">
+                        CornerRadius="8" Padding="14,12" Margin="0,0,8,0"
+                        ToolTip.Tip="Chat conversations with the assistant. Click to resume.">
                     <StackPanel>
                         <TextBlock Text="SESSIONS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
                         <TextBlock Text="{Binding ActiveSessions}" FontSize="24" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                    </StackPanel>
+                </Border>
+                <Border Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        CornerRadius="8" Padding="14,12"
+                        ToolTip.Tip="Autonomous external systems connected over MCP (n8n, Zapier, custom).">
+                    <StackPanel>
+                        <TextBlock Text="CLAWS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="{Binding ActiveClaws}" FontSize="24" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" />
                     </StackPanel>
                 </Border>
@@ -83,39 +152,74 @@
         </StackPanel>
 
         <!-- Content -->
-        <ScrollViewer Margin="32,8,32,24" IsVisible="{Binding !IsEmpty}">
-            <ItemsControl ItemsSource="{Binding Rows}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="vm:CommandCenterRowViewModel">
-                        <Border Background="{DynamicResource SurfaceCard}"
-                                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
-                                CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
-                            <Grid ColumnDefinitions="100,*,120,120,80">
-                                <TextBlock Grid.Column="0" Text="{Binding Kind}" FontSize="11"
-                                           Foreground="{DynamicResource TextSecondary}"
-                                           VerticalAlignment="Center" />
-                                <StackPanel Grid.Column="1">
-                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding Preview}" FontSize="11"
+        <DockPanel Margin="32,8,32,24" IsVisible="{Binding !IsEmpty}">
+            <!-- Column headers — match the row template grid below so columns line up. -->
+            <Border DockPanel.Dock="Top"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                    CornerRadius="8,8,0,0" Padding="14,8" Margin="0,0,0,-1">
+                <Grid ColumnDefinitions="120,*,110,110,80">
+                    <TextBlock Grid.Column="0" Text="KIND" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <TextBlock Grid.Column="1" Text="TITLE" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <TextBlock Grid.Column="2" Text="STATUS" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <TextBlock Grid.Column="3" Text="LAST ACTIVITY" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <TextBlock Grid.Column="4" Text="COST" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                </Grid>
+            </Border>
+            <ScrollViewer>
+                <ItemsControl ItemsSource="{Binding Rows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:CommandCenterRowViewModel">
+                            <Border Background="{DynamicResource SurfaceCard}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1,0,1,1"
+                                    Padding="14,10">
+                                <Grid ColumnDefinitions="120,*,110,110,80">
+                                    <!-- Kind pill: icon + text, matches the Web cc-kind-pill. -->
+                                    <Border Grid.Column="0"
+                                            Background="{DynamicResource SurfaceBackground}"
+                                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                                            CornerRadius="999" Padding="8,2"
+                                            HorizontalAlignment="Left" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="{Binding KindIcon}" FontSize="11"
+                                                       VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding Kind}" FontSize="11"
+                                                       Foreground="{DynamicResource TextSecondary}"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Preview}" FontSize="11"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   IsVisible="{Binding Preview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="{Binding Status}" FontSize="11"
+                                               Foreground="{DynamicResource StatusPass}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="3" Text="{Binding LastActivity}" FontSize="11"
                                                Foreground="{DynamicResource TextMuted}"
-                                               TextTrimming="CharacterEllipsis"
-                                               IsVisible="{Binding Preview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                </StackPanel>
-                                <TextBlock Grid.Column="2" Text="{Binding Status}" FontSize="11"
-                                           Foreground="{DynamicResource StatusPass}"
-                                           VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="3" Text="{Binding LastActivity}" FontSize="11"
-                                           Foreground="{DynamicResource TextMuted}"
-                                           VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="4" Text="{Binding Cost}" FontSize="11"
-                                           Foreground="{DynamicResource TextMuted}"
-                                           VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="4" Text="{Binding Cost}" FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </DockPanel>
     </DockPanel>
 </UserControl>

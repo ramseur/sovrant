@@ -1,0 +1,510 @@
+@using System.Text.Json
+@using Sovrant.Api.Auth
+@using Sovrant.Runtime.Config
+@using Sovrant.Runtime.Mcp
+@using Sovrant.Runtime.Preferences
+@using Sovrant.Runtime.Providers
+@using Sovrant.Runtime.Workspaces
+@using Sovrant.Runtime.Projects
+@using Sovrant.Web.Adapters
+@using Sovrant.Web.Services
+@implements IDisposable
+
+<div class="top-context-bar">
+    <!-- Model / Provider two-step switcher -->
+    <div class="model-tree-switcher tcb-switcher">
+        <button class="model-tree-trigger" @ref="_triggerRef" @onclick="ToggleTreeDropdown" @onclick:stopPropagation="true">
+            <div class="model-tree-trigger-content">
+                <span class="status-dot @(_isConnected ? "connected" : "warning")"></span>
+                <div class="model-tree-trigger-text">
+                    <span class="model-tree-model">@_currentModel</span>
+                    <span class="model-tree-provider">@_currentProvider</span>
+                </div>
+            </div>
+            <span class="model-tree-chevron @(_treeOpen ? "open" : "")">&#x25BE;</span>
+        </button>
+        @if (_treeOpen)
+        {
+            <div class="model-tree-dropdown" style="@_dropdownStyle" @onclick:stopPropagation="true">
+                @if (_providerProfiles.Count == 0)
+                {
+                    <div class="model-tree-empty">No providers configured. <a href="/settings" @onclick='() => { _treeOpen = false; }'>Add one in Settings</a></div>
+                }
+                else if (_selectedTreeGroup is null)
+                {
+                    <div class="model-tree-step-label">Select provider</div>
+                    @foreach (var group in _treeGroups)
+                    {
+                        var isCurrent = group.Provider.Equals(_currentProvider, StringComparison.OrdinalIgnoreCase);
+                        <button class="model-tree-provider-item @(isCurrent ? "active" : "")"
+                                @onclick="() => DrillIntoProvider(group)">
+                            <span class="model-tree-provider-name">@group.Provider</span>
+                            <span class="model-tree-group-badge">@(group.Models.Count > 0 ? group.Models.Count.ToString() : "...")</span>
+                        </button>
+                    }
+                }
+                else
+                {
+                    <button class="model-tree-back" @onclick="() => _selectedTreeGroup = null">
+                        &#x25C2; Back to providers
+                    </button>
+                    <div class="model-tree-step-label">@_selectedTreeGroup.Provider models</div>
+                    <div class="model-tree-models">
+                        @foreach (var model in _selectedTreeGroup.Models)
+                        {
+                            var isActive = model == Config.Model
+                                || model == ShortenModelName(Config.Model);
+                            <button class="model-tree-model-item @(isActive ? "active" : "")"
+                                    @onclick="() => SelectModel(_selectedTreeGroup, model)">
+                                @ShortenModelName(model)
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="tcb-divider"></div>
+
+    <!-- Workspace -->
+    <div class="tcb-field">
+        <span class="tcb-icon">&#x1F3E2;</span>
+        <select @bind="_selectedWorkspaceId" @bind:after="OnWorkspaceChanged" disabled="@(_workspaces.Count <= 1)">
+            @foreach (var w in _workspaces)
+            {
+                <option value="@w.Id">@w.Name</option>
+            }
+        </select>
+    </div>
+
+    <!-- Project -->
+    <div class="tcb-field">
+        <span class="tcb-icon">&#x1F4C1;</span>
+        <select @bind="_selectedProjectId" @bind:after="OnProjectChanged" disabled="@(_projects.Count == 0)">
+            <option value="">@(_projects.Count == 0 ? "No projects" : "(No project)")</option>
+            @foreach (var p in _projects)
+            {
+                <option value="@p.Id">@p.Name</option>
+            }
+        </select>
+    </div>
+</div>
+
+@code {
+    [Inject] private SovrantConfig Config { get; set; } = default!;
+    [Inject] private IWorkspaceService WorkspaceService { get; set; } = default!;
+    [Inject] private IProjectService ProjectService { get; set; } = default!;
+    [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
+    [Inject] private MutableAuthProvider AuthProvider { get; set; } = default!;
+    [Inject] private IHttpClientFactory HttpFactory { get; set; } = default!;
+    [Inject] private IUserPreferenceStore Prefs { get; set; } = default!;
+    [Inject] private IProviderProfileStore ProfileStore { get; set; } = default!;
+    [Inject] private ICredentialStore Credentials { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private ElementReference _triggerRef;
+    private string _dropdownStyle = string.Empty;
+
+    private string _currentModel = string.Empty;
+    private string _currentProvider = string.Empty;
+    private bool _treeOpen;
+    private bool _isConnected;
+
+    private record ProviderProfileItem(string ProfileId, string CredentialId, string Name, string Provider, string Model, string ApiKey, string BaseUrl, int MaxTokens);
+    private List<ProviderProfileItem> _providerProfiles = [];
+
+    private TreeGroup? _selectedTreeGroup;
+
+    private class TreeGroup
+    {
+        public string ProfileId { get; set; } = string.Empty;
+        public string CredentialId { get; set; } = string.Empty;
+        public string Provider { get; set; } = string.Empty;
+        public string ApiKey { get; set; } = string.Empty;
+        public string BaseUrl { get; set; } = string.Empty;
+        public int MaxTokens { get; set; } = 32000;
+        public List<string> Models { get; set; } = [];
+        public bool ModelsFetchedLive { get; set; }
+    }
+
+    private List<TreeGroup> _treeGroups = [];
+
+    private static readonly Dictionary<string, string[]> StaticProviderModels = new(StringComparer.Ordinal)
+    {
+        ["OpenAI"] = ["gpt-5", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini", "o4-mini", "o3", "o3-mini", "o1", "o1-mini"],
+        ["DeepSeek"] = ["deepseek-chat", "deepseek-reasoner"],
+        ["Groq"] = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"],
+        ["Mistral"] = ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest", "open-mixtral-8x22b"],
+        ["Together AI"] = ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", "mistralai/Mixtral-8x7B-Instruct-v0.1", "Qwen/Qwen2.5-72B-Instruct-Turbo"],
+        ["Google"] = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"],
+        ["Azure OpenAI"] = ["gpt-4o", "gpt-4o-mini", "gpt-4.1"],
+    };
+
+    private string _selectedWorkspaceId = string.Empty;
+    private string _selectedProjectId = string.Empty;
+
+    private record WorkspaceItem(string Id, string Name, string Type);
+    private record ProjectItem(string Id, string Name);
+
+    private List<WorkspaceItem> _workspaces = [];
+    private List<ProjectItem> _projects = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isConnected = !string.IsNullOrWhiteSpace(Config.ApiKey);
+        await InferProviderAsync();
+        await LoadProviderProfilesAsync();
+
+        if (_providerProfiles.Count == 0 && !_isConnected)
+        {
+            _currentModel = "No model";
+            _currentProvider = "Add a provider";
+        }
+        else
+        {
+            _currentModel = ShortenModelName(Config.Model);
+        }
+
+        ActiveContext.SetModel(_currentModel, _currentProvider);
+        ActiveContext.OnChanged += OnActiveContextChanged;
+        ActiveContext.OnDataChanged += OnDataChanged;
+    }
+
+    private async Task LoadProviderProfilesAsync()
+    {
+        _providerProfiles = [];
+        _treeGroups = [];
+        try
+        {
+            var rows = await ProfileStore.ListAsync(Sovrant.Web.Program.SovrantUserId);
+            var list = new List<ProviderProfileItem>(rows.Count);
+            foreach (var row in rows)
+            {
+                var apiKey = await Credentials.RetrieveAsync(row.CredentialId) ?? string.Empty;
+                list.Add(new ProviderProfileItem(
+                    ProfileId: row.ProfileId,
+                    CredentialId: row.CredentialId,
+                    Name: row.Name,
+                    Provider: row.ProviderKind,
+                    Model: row.DefaultModel ?? string.Empty,
+                    ApiKey: apiKey,
+                    BaseUrl: row.BaseUrl ?? string.Empty,
+                    MaxTokens: row.MaxTokens ?? 32000));
+            }
+            _providerProfiles = list;
+            BuildTreeGroups();
+        }
+        catch { /* best effort */ }
+    }
+
+    private void BuildTreeGroups()
+    {
+        var groups = new Dictionary<string, TreeGroup>(StringComparer.OrdinalIgnoreCase);
+        foreach (var profile in _providerProfiles)
+        {
+            if (!groups.TryGetValue(profile.Provider, out var group))
+            {
+                group = new TreeGroup
+                {
+                    ProfileId = profile.ProfileId,
+                    CredentialId = profile.CredentialId,
+                    Provider = profile.Provider,
+                    ApiKey = profile.ApiKey,
+                    BaseUrl = profile.BaseUrl,
+                    MaxTokens = profile.MaxTokens,
+                };
+                if (StaticProviderModels.TryGetValue(profile.Provider, out var staticModels))
+                    group.Models.AddRange(staticModels);
+                groups[profile.Provider] = group;
+            }
+            if (!string.IsNullOrWhiteSpace(profile.Model) &&
+                !group.Models.Contains(profile.Model, StringComparer.OrdinalIgnoreCase))
+            {
+                group.Models.Insert(0, profile.Model);
+            }
+        }
+        _treeGroups = groups.Values.ToList();
+    }
+
+    private async Task ToggleTreeDropdown()
+    {
+        _treeOpen = !_treeOpen;
+        if (!_treeOpen)
+        {
+            _selectedTreeGroup = null;
+            _dropdownStyle = string.Empty;
+            return;
+        }
+        try
+        {
+            var rect = await JS.InvokeAsync<DropdownRect?>("sovrantInterop.getElementRect", _triggerRef);
+            if (rect is not null)
+            {
+                var width = Math.Max(rect.Width, 280);
+                _dropdownStyle = string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                    $"position: fixed; top: {rect.Bottom + 4}px; left: {rect.Left}px; width: {width}px; right: auto;");
+            }
+        }
+        catch { /* fall back to CSS-only positioning */ }
+    }
+
+    private sealed record DropdownRect(double Top, double Left, double Width, double Height, double Bottom, double Right);
+
+    private async Task DrillIntoProvider(TreeGroup group)
+    {
+        _selectedTreeGroup = group;
+        if (!group.ModelsFetchedLive && !string.IsNullOrWhiteSpace(group.BaseUrl) && !string.IsNullOrWhiteSpace(group.ApiKey))
+        {
+            var fetched = await FetchModelIdsAsync(group.BaseUrl, group.ApiKey);
+            var filtered = FilterChatModels(fetched);
+            if (filtered.Count > 0)
+            {
+                group.Models.Clear();
+                group.Models.AddRange(filtered);
+                group.ModelsFetchedLive = true;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private static List<string> FilterChatModels(List<string> ids)
+    {
+        if (ids.Count == 0) return ids;
+        var excludes = new[]
+        {
+            "embedding", "embed-", "-embed",
+            "dall-e", "dalle", "image-",
+            "whisper", "tts-", "-tts",
+            "moderation",
+            "realtime-preview", "transcribe",
+            "babbage", "ada-00", "curie", "davinci",
+        };
+        return ids.Where(id =>
+        {
+            foreach (var ex in excludes)
+                if (id.Contains(ex, StringComparison.OrdinalIgnoreCase)) return false;
+            return true;
+        }).ToList();
+    }
+
+    private async Task<List<string>> FetchModelIdsAsync(string baseUrl, string apiKey)
+    {
+        try
+        {
+            using var http = HttpFactory.CreateClient("ProviderProbe");
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            var modelsUrl = baseUrl.TrimEnd('/') + "/models";
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(modelsUrl));
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey.Trim());
+            var response = await http.SendAsync(request, cts.Token);
+            response.EnsureSuccessStatusCode();
+            using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
+            var models = new List<string>();
+            if (doc.RootElement.TryGetProperty("data", out var data))
+                foreach (var item in data.EnumerateArray())
+                    if (item.TryGetProperty("id", out var id) && id.GetString() is { } modelId)
+                        models.Add(modelId);
+            models.Sort(StringComparer.OrdinalIgnoreCase);
+            return models;
+        }
+        catch { return []; }
+    }
+
+    private async Task SelectModel(TreeGroup group, string model)
+    {
+        Config.ApiKey = group.ApiKey;
+        Config.MaxTokens = group.MaxTokens;
+        Config.Model = model;
+        AuthProvider.ApiKey = group.ApiKey;
+
+        if (!string.IsNullOrWhiteSpace(group.BaseUrl))
+        {
+            var parsed = new Uri(group.BaseUrl);
+            Config.BaseUrl = parsed;
+            AuthProvider.BaseUrl = parsed;
+            Environment.SetEnvironmentVariable("LLM_BASE_URL", group.BaseUrl);
+        }
+        else
+        {
+            Config.BaseUrl = null;
+            AuthProvider.BaseUrl = null;
+            Environment.SetEnvironmentVariable("LLM_BASE_URL", null);
+        }
+
+        Environment.SetEnvironmentVariable("LLM_API_KEY", group.ApiKey);
+        Environment.SetEnvironmentVariable("LLM_MODEL", model);
+        if (group.BaseUrl.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
+            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", group.ApiKey);
+
+        _currentModel = ShortenModelName(model);
+        _currentProvider = group.Provider;
+        _isConnected = !string.IsNullOrWhiteSpace(group.ApiKey);
+        _treeOpen = false;
+        _dropdownStyle = string.Empty;
+
+        ActiveContext.SetModel(_currentModel, _currentProvider);
+
+        await PersistActiveProfileAsync(group, model);
+    }
+
+    private async Task PersistActiveProfileAsync(TreeGroup group, string model)
+    {
+        try
+        {
+            var userId = Sovrant.Web.Program.SovrantUserId;
+            if (!string.IsNullOrWhiteSpace(group.ProfileId))
+                await Prefs.SetAsync(userId, UserPreferenceKeys.ActiveProviderProfileId, group.ProfileId);
+            await Prefs.SetAsync(userId, UserPreferenceKeys.Provider, group.Provider);
+            if (!string.IsNullOrWhiteSpace(model))
+                await Prefs.SetAsync(userId, UserPreferenceKeys.Model, model);
+            await Prefs.SetAsync(userId, UserPreferenceKeys.MaxTokens,
+                group.MaxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            if (!string.IsNullOrWhiteSpace(group.BaseUrl))
+                await Prefs.SetAsync(userId, UserPreferenceKeys.BaseUrl, group.BaseUrl);
+            if (!string.IsNullOrWhiteSpace(group.ApiKey))
+                await Credentials.StoreAsync(CredentialKeys.LlmApiKey, group.ApiKey);
+        }
+        catch { /* best effort */ }
+    }
+
+    private void OnDataChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await LoadWorkspacesAsync();
+                await LoadProjectsAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[TopContextBar] OnDataChanged failed: {ex.Message}");
+            }
+            StateHasChanged();
+        });
+    }
+
+    private void OnActiveContextChanged()
+    {
+        InvokeAsync(async () =>
+        {
+            _isConnected = !string.IsNullOrWhiteSpace(Config.ApiKey);
+            await InferProviderAsync();
+            await LoadProviderProfilesAsync();
+            if (_providerProfiles.Count == 0 && !_isConnected)
+            {
+                _currentModel = "No model";
+                _currentProvider = "Add a provider";
+            }
+            else
+            {
+                _currentModel = ShortenModelName(Config.Model);
+            }
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        ActiveContext.OnChanged -= OnActiveContextChanged;
+        ActiveContext.OnDataChanged -= OnDataChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Sovrant.Web.Program.RuntimeReady.Task;
+        await LoadWorkspacesAsync();
+        StateHasChanged();
+    }
+
+    private async Task InferProviderAsync()
+    {
+        var url = Config.BaseUrl?.ToString() ?? string.Empty;
+        _currentProvider = url switch
+        {
+            _ when url.Contains("openrouter", StringComparison.OrdinalIgnoreCase) => "OpenRouter",
+            _ when url.Contains("deepseek", StringComparison.OrdinalIgnoreCase) => "DeepSeek",
+            _ when url.Contains("groq", StringComparison.OrdinalIgnoreCase) => "Groq",
+            _ when url.Contains("mistral", StringComparison.OrdinalIgnoreCase) => "Mistral",
+            _ when url.Contains("together", StringComparison.OrdinalIgnoreCase) => "Together AI",
+            _ when url.Contains("localhost:11434", StringComparison.Ordinal) => "Ollama",
+            _ when url.Contains("localhost:1234", StringComparison.Ordinal) => "LM Studio",
+            _ when string.IsNullOrEmpty(url) => "OpenAI",
+            _ => "Custom",
+        };
+
+        try
+        {
+            var saved = await Prefs.GetAsync(Sovrant.Web.Program.SovrantUserId, UserPreferenceKeys.Provider);
+            if (!string.IsNullOrWhiteSpace(saved))
+                _currentProvider = saved;
+        }
+        catch { /* use inferred */ }
+    }
+
+    private static string ShortenModelName(string model)
+    {
+        if (string.IsNullOrEmpty(model)) return model;
+        var slashIdx = model.IndexOf('/', StringComparison.Ordinal);
+        if (slashIdx >= 0 && slashIdx < model.Length - 1)
+            model = model[(slashIdx + 1)..];
+        foreach (var suffix in new[] { ":free", ":extended" })
+        {
+            if (model.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                model = model[..^suffix.Length];
+                break;
+            }
+        }
+        return model;
+    }
+
+    private async Task LoadWorkspacesAsync()
+    {
+        try
+        {
+            var list = await WorkspaceService.ListForUserAsync(Sovrant.Web.Program.SovrantUserId);
+            _workspaces = list.Select(w => new WorkspaceItem(w.WorkspaceId, w.Name, w.Type.ToString())).ToList();
+            Console.WriteLine($"[TopContextBar] Loaded {_workspaces.Count} workspace(s).");
+            var personal = _workspaces.FirstOrDefault(w => w.Type.Equals("Personal", StringComparison.OrdinalIgnoreCase));
+            if (personal is not null && string.IsNullOrEmpty(_selectedWorkspaceId))
+            {
+                _selectedWorkspaceId = personal.Id;
+                ActiveContext.SetWorkspace(personal.Id, personal.Name);
+                await LoadProjectsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[TopContextBar] LoadWorkspacesAsync failed: {ex.Message}");
+        }
+    }
+
+    private async Task LoadProjectsAsync()
+    {
+        if (string.IsNullOrEmpty(_selectedWorkspaceId)) return;
+        try
+        {
+            var list = await ProjectService.ListAsync(_selectedWorkspaceId);
+            _projects = list.Select(p => new ProjectItem(p.ProjectId, p.Name)).ToList();
+        }
+        catch { _projects = []; }
+    }
+
+    private async Task OnWorkspaceChanged()
+    {
+        _selectedProjectId = string.Empty;
+        await LoadProjectsAsync();
+        var ws = _workspaces.FirstOrDefault(w => w.Id == _selectedWorkspaceId);
+        ActiveContext.SetWorkspace(_selectedWorkspaceId, ws?.Name ?? "Personal");
+    }
+
+    private void OnProjectChanged()
+    {
+        var proj = _projects.FirstOrDefault(p => p.Id == _selectedProjectId);
+        ActiveContext.SetProject(_selectedProjectId, proj?.Name ?? string.Empty);
+    }
+}

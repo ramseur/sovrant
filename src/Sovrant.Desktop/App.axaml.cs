@@ -169,6 +169,14 @@ public partial class App : Application
         desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
         desktop.ShutdownRequested += (_, _) => Environment.Exit(0);
         MainWindow = window;
+        // Avalonia's classic desktop lifetime calls Start() once the initial
+        // sync part of OnFrameworkInitializationCompleted returns, and would
+        // normally Show() MainWindow at that point. Because BuildAppAsync
+        // awaits, the lifetime has already Started before we set MainWindow,
+        // so we Show() explicitly. On first-run paths the setup wizard's own
+        // Show() kept the pump alive and masked this; with an existing
+        // API key no wizard runs and the bug surfaces.
+        window.Show();
 
         // Background user/workspace seeding — InitializeRuntimeAsync above
         // already covered storage migrations, the legacy migrator, the

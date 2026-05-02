@@ -3,14 +3,15 @@
 
 <div class="app-shell">
     <aside class="rail-secondary">
+        <button class="rail-brand" @onclick='() => { _selectedGroup = "chat"; Nav.NavigateTo("/"); }' title="Home">
+            <span class="rail-brand-icon">&#9889;</span>
+            <span class="rail-brand-text">Sovrant</span>
+        </button>
         <RailNav Selected="@_selectedGroup" OnSelect="OnGroupSelected" />
 
         <div class="rail-secondary-body">
             @switch (_selectedGroup)
             {
-                case "command":
-                    <CommandCenterPanel OnNavigate="Navigate" />
-                    break;
                 case "chat":
                     <Sidebar OnNavigate="Navigate" />
                     break;
@@ -46,6 +47,7 @@
     </aside>
 
     <main class="content-area">
+        <TopContextBar />
         @Body
     </main>
 
@@ -55,6 +57,7 @@
 @code {
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private Sovrant.Web.Services.ActiveContextService ActiveContext { get; set; } = default!;
 
     private string _selectedGroup = "chat";
     private CommandPalette? _palette;
@@ -67,8 +70,16 @@
     private void OnGroupSelected(string group)
     {
         _selectedGroup = group;
-        // Cockpit: open the page directly so the rail icon doubles as a launcher.
-        if (group == "command") Nav.NavigateTo("/command");
+        // Clicking the chat icon also starts a new chat — replaces the
+        // dedicated "New Chat" button and saves the user a click. We have
+        // to both navigate (covers the "currently on /settings" case) AND
+        // fire a reset event (covers the "already on /" case where Blazor
+        // reuses the component instance and OnInitialized doesn't re-run).
+        if (group == "chat")
+        {
+            ActiveContext.StartNewSession();
+            Nav.NavigateTo("/", forceLoad: false);
+        }
     }
 
     private void Navigate(string url)

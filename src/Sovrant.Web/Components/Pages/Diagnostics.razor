@@ -116,10 +116,6 @@
             <div class="info-value">@_artifactsPath</div>
         </div>
         <div class="info-item">
-            <div class="info-label">Settings</div>
-            <div class="info-value">@_configPath</div>
-        </div>
-        <div class="info-item">
             <div class="info-label">Logs</div>
             <div class="info-value">@_logDir</div>
         </div>
@@ -146,7 +142,6 @@
     private string _dbPath = string.Empty;
     private string _dbStatus = "Checking...";
     private string _artifactsPath = string.Empty;
-    private string _configPath = string.Empty;
     private string _logDir = string.Empty;
 
     private readonly List<HealthCheck> _healthChecks = [];
@@ -188,7 +183,6 @@
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         _dbPath = Bootstrap.DbPath ?? Path.Combine(home, ".sovrant", "data", "sovrant.db");
         _artifactsPath = Path.Combine(home, ".sovrant", "artifacts");
-        _configPath = Path.Combine(home, ".sovrant", "settings.json");
         _logDir = Path.Combine(home, ".sovrant", "logs");
     }
 
@@ -198,11 +192,6 @@
         _healthChecks.Clear();
         _providers.Clear();
         StateHasChanged();
-
-        var settingsExists = File.Exists(_configPath);
-        _healthChecks.Add(new HealthCheck("Settings file",
-            settingsExists ? "PASS" : "WARN",
-            settingsExists ? _configPath : "No settings.json found — using defaults"));
 
         var hasKey = !string.IsNullOrWhiteSpace(Config.ApiKey);
         _healthChecks.Add(new HealthCheck("API key",

@@ -26,4 +26,5 @@ public sealed record CommandCenterState(
     int ActiveTeamRuns,
     int ActiveAgentRuns,
     int ActiveSessions,
+    int ActiveClaws,
     IReadOnlyList<CommandCenterRow> Rows);

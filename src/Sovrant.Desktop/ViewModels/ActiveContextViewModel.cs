@@ -151,19 +151,67 @@ public partial class ActiveContextViewModel : ViewModelBase
             var workspaces = await _workspaceService.ListForUserAsync(UserId);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                // Preserve the current selection by ID across the reload —
+                // Clear() would orphan ComboBox.SelectedItem and reset the binding.
+                var previouslySelectedId = SelectedWorkspace?.Id ?? ActiveWorkspaceId;
+
                 Workspaces.Clear();
+                WorkspaceOption? toReselect = null;
                 foreach (var w in workspaces)
                 {
-                    Workspaces.Add(new WorkspaceOption
+                    var option = new WorkspaceOption
                     {
                         Id = w.WorkspaceId,
                         Name = w.Name,
                         Type = w.Type.ToString(),
-                    });
+                    };
+                    Workspaces.Add(option);
+                    if (option.Id == previouslySelectedId) toReselect = option;
+                }
+
+                // If nothing is currently selected (or the prior selection vanished),
+                // default to the personal workspace so the user always sees a context.
+                if (toReselect is null && string.IsNullOrEmpty(previouslySelectedId))
+                {
+                    toReselect = Workspaces.FirstOrDefault(
+                        w => w.Type.Equals("personal", StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (toReselect is not null && !ReferenceEquals(SelectedWorkspace, toReselect))
+                {
+                    if (string.IsNullOrEmpty(previouslySelectedId))
+                    {
+                        // No prior context — fire the full change pipeline so projects load.
+                        SelectedWorkspace = toReselect;
+                    }
+                    else
+                    {
+                        // Restore selection without firing the project-clearing side effects
+                        // of OnSelectedWorkspaceChanged — the workspace context is unchanged.
+                        SetSelectedWorkspaceSilent(toReselect);
+                    }
                 }
             });
         }
         catch { /* best effort */ }
+    }
+
+    /// <summary>
+    /// Update the selected workspace reference without re-running the
+    /// "workspace changed" side effects (clearing project, reloading projects, raising
+    /// ContextChanged). Used when the underlying collection was just reloaded and the
+    /// active workspace itself didn't actually change.
+    /// </summary>
+    private void SetSelectedWorkspaceSilent(WorkspaceOption option)
+    {
+        // Set the backing field directly (bypassing the generated setter) so the
+        // OnSelectedWorkspaceChanged side effects don't fire, then raise the
+        // change notification manually so the ComboBox re-binds.
+#pragma warning disable MVVMTK0034
+        if (ReferenceEquals(_selectedWorkspace, option)) return;
+        _selectedWorkspace = option;
+#pragma warning restore MVVMTK0034
+        OnPropertyChanged(nameof(SelectedWorkspace));
     }
 
     private async Task LoadProjectsAsync()
@@ -174,12 +222,16 @@ public partial class ActiveContextViewModel : ViewModelBase
             var projects = await _projectService.ListAsync(ActiveWorkspaceId);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                // Preserve the current project selection by ID across the reload.
+                var previouslySelectedId = SelectedProjectChoice?.Id ?? ActiveProjectId;
+
                 Projects.Clear();
                 ProjectChoices.Clear();
 
                 var noneOption = new ProjectOption { Id = string.Empty, Name = "(None)", Slug = string.Empty };
                 ProjectChoices.Add(noneOption);
 
+                ProjectOption? toReselect = string.IsNullOrEmpty(previouslySelectedId) ? noneOption : null;
                 foreach (var p in projects)
                 {
                     var opt = new ProjectOption
@@ -190,12 +242,26 @@ public partial class ActiveContextViewModel : ViewModelBase
                     };
                     Projects.Add(opt);
                     ProjectChoices.Add(opt);
+                    if (opt.Id == previouslySelectedId) toReselect = opt;
                 }
 
-                SelectedProjectChoice = noneOption;
+                // Default to (None) if the previously-selected project no longer exists.
+                toReselect ??= noneOption;
+
+                if (!ReferenceEquals(SelectedProjectChoice, toReselect))
+                    SetSelectedProjectSilent(toReselect);
             });
         }
         catch { /* best effort */ }
+    }
+
+    private void SetSelectedProjectSilent(ProjectOption option)
+    {
+#pragma warning disable MVVMTK0034
+        if (ReferenceEquals(_selectedProjectChoice, option)) return;
+        _selectedProjectChoice = option;
+#pragma warning restore MVVMTK0034
+        OnPropertyChanged(nameof(SelectedProjectChoice));
     }
 }
 

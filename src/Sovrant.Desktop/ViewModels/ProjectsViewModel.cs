@@ -12,6 +12,7 @@ namespace Sovrant.Desktop.ViewModels;
 public partial class ProjectsViewModel : ViewModelBase
 {
     private readonly IProjectService _projectService;
+    private readonly ActiveContextViewModel _activeContext;
     private readonly List<ProjectItemViewModel> _allProjects = [];
 
     private static readonly string PersonalWorkspaceId = WorkspaceIdentity.DefaultPersonal();
@@ -36,9 +37,10 @@ public partial class ProjectsViewModel : ViewModelBase
 
     public ObservableCollection<ProjectItemViewModel> FilteredProjects { get; } = [];
 
-    public ProjectsViewModel(IProjectService projectService)
+    public ProjectsViewModel(IProjectService projectService, ActiveContextViewModel activeContext)
     {
         _projectService = projectService;
+        _activeContext = activeContext;
         _ = LoadAsync();
     }
 
@@ -63,6 +65,7 @@ public partial class ProjectsViewModel : ViewModelBase
             NewProjectName = string.Empty;
             StatusMessage = $"Created project '{name}'.";
             await LoadAsync();
+            await _activeContext.RefreshCommand.ExecuteAsync(null);
         }
         catch (Exception ex)
         {
@@ -77,6 +80,7 @@ public partial class ProjectsViewModel : ViewModelBase
         if (SelectedProject == project) SelectedProject = null;
         StatusMessage = $"Deleted project '{project.Name}'.";
         await LoadAsync();
+        await _activeContext.RefreshCommand.ExecuteAsync(null);
     }
 
     [RelayCommand]

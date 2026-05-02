@@ -5,14 +5,12 @@
 *@
 
 <div class="rail-icons-row">
-    <button class="rail-icon @(Selected == "command" ? "active" : "")"
-            title="Command Center" @onclick='() => OnSelect.InvokeAsync("command")'>&#x1F3AF;</button>
     <button class="rail-icon @(Selected == "chat" ? "active" : "")"
             title="Chat" @onclick='() => OnSelect.InvokeAsync("chat")'>&#x1F4AC;</button>
-    <button class="rail-icon @(Selected == "knowledge" ? "active" : "")"
-            title="Knowledge" @onclick='() => OnSelect.InvokeAsync("knowledge")'>&#x1F4DA;</button>
     <button class="rail-icon @(Selected == "agents" ? "active" : "")"
             title="Agents" @onclick='() => OnSelect.InvokeAsync("agents")'>&#x1F916;</button>
+    <button class="rail-icon @(Selected == "knowledge" ? "active" : "")"
+            title="Knowledge" @onclick='() => OnSelect.InvokeAsync("knowledge")'>&#x1F4DA;</button>
     <button class="rail-icon @(Selected == "workspace" ? "active" : "")"
             title="Workspace" @onclick='() => OnSelect.InvokeAsync("workspace")'>&#x1F3D7;&#xFE0F;</button>
     <button class="rail-icon @(Selected == "connect" ? "active" : "")"

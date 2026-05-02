@@ -9,17 +9,6 @@
 @implements IDisposable
 
 <div class="chat-page" @onkeydown="HandleGlobalKeyDown" tabindex="0">
-    <!-- Context breadcrumb -->
-    <div class="chat-breadcrumb">
-        <span>&#x1F3E2;</span>
-        <span class="breadcrumb-workspace">@_workspaceName</span>
-        @if (!string.IsNullOrEmpty(_projectName))
-        {
-            <span class="breadcrumb-sep">&gt;</span>
-            <span class="breadcrumb-project">@_projectName</span>
-        }
-    </div>
-
     <!-- Page-level error banner (shown for failures not tied to a single message,
          e.g. session load, runtime init, slash-command load). -->
     @if (!string.IsNullOrEmpty(_pageError))
@@ -108,6 +97,7 @@
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
     [Inject] private SovrantConfig Config { get; set; } = default!;
+    [Inject] private NavigationManager Nav { get; set; } = default!;
 
     private ElementReference _inputRef;
     private string _inputText = string.Empty;
@@ -119,8 +109,6 @@
     private decimal _sessionCost;
     private string _pageError = string.Empty;
     private string _sessionId = $"session-{Guid.NewGuid():N}";
-    private string _workspaceName => ActiveContext.WorkspaceName;
-    private string _projectName => ActiveContext.ProjectName;
 
     private readonly List<ChatMessageModel> _messages = [];
 
@@ -149,6 +137,18 @@
         ConfirmationHandler.ConfirmationRequested += OnConfirmationRequested;
         ActiveContext.OnChanged += OnContextChanged;
         ActiveContext.OnSessionResume += OnSessionResume;
+        ActiveContext.OnNewSession += OnNewSession;
+
+        // Resume from ?session=<id> in the URL (Command Center deep-link).
+        var uri = new Uri(Nav.Uri);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue("session", out var sessionParam) &&
+            !string.IsNullOrWhiteSpace(sessionParam) &&
+            sessionParam.ToString() != _sessionId)
+        {
+            OnSessionResume(sessionParam.ToString());
+            return;
+        }
 
         // Pick up a resume request that fired before we mounted (e.g. user
         // clicked a Recent item while on another page).
@@ -604,10 +604,13 @@
 
     private void OnContextChanged() => InvokeAsync(StateHasChanged);
 
+    private void OnNewSession() => InvokeAsync(() => { ClearChat(); return Task.CompletedTask; });
+
     public void Dispose()
     {
         ConfirmationHandler.ConfirmationRequested -= OnConfirmationRequested;
         ActiveContext.OnChanged -= OnContextChanged;
         ActiveContext.OnSessionResume -= OnSessionResume;
+        ActiveContext.OnNewSession -= OnNewSession;
     }
 }
