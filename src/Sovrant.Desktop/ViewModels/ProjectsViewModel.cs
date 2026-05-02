@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.Projects;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Desktop.ViewModels;
 
@@ -13,8 +14,7 @@ public partial class ProjectsViewModel : ViewModelBase
     private readonly IProjectService _projectService;
     private readonly List<ProjectItemViewModel> _allProjects = [];
 
-    private static readonly string PersonalWorkspaceId =
-        $"ws-personal-{Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName}";
+    private static readonly string PersonalWorkspaceId = WorkspaceIdentity.DefaultPersonal();
 
     [ObservableProperty]
     private string _newProjectName = string.Empty;

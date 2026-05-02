@@ -23,10 +23,10 @@ internal sealed class InteractiveConfirmationHandler : IToolConfirmationHandler
         _shellEnv = shellEnv ?? throw new ArgumentNullException(nameof(shellEnv));
     }
 
-    public async Task<bool> RequestConfirmationAsync(string toolName, JsonElement input, CancellationToken ct)
+    public async Task<ConfirmationDecision> RequestConfirmationAsync(string toolName, JsonElement input, CancellationToken ct)
     {
         if (Console.IsInputRedirected)
-            return false;
+            return ConfirmationDecision.Deny;
 
         await s_gate.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -62,8 +62,17 @@ internal sealed class InteractiveConfirmationHandler : IToolConfirmationHandler
             }
 
             AnsiConsole.WriteLine();
-            var confirmed = await AnsiConsole.ConfirmAsync("  Allow?", defaultValue: true, ct).ConfigureAwait(false);
-            return confirmed;
+            var choice = await AnsiConsole
+                .PromptAsync(new SelectionPrompt<string>()
+                    .Title("  Allow?")
+                    .AddChoices("Allow once", "Allow for the rest of this turn", "Deny"), ct)
+                .ConfigureAwait(false);
+            return choice switch
+            {
+                "Allow once" => ConfirmationDecision.AllowOnce,
+                "Allow for the rest of this turn" => ConfirmationDecision.AllowForTurn,
+                _ => ConfirmationDecision.Deny,
+            };
         }
         finally
         {

@@ -60,6 +60,7 @@
                 <ChatMessage Message="msg"
                              OnRetry="RetryLast"
                              OnApprove="ApproveTool"
+                             OnApproveForTurn="ApproveToolForTurn"
                              OnDeny="DenyTool" />
             }
         }
@@ -569,6 +570,14 @@
         tool.PendingRequest?.Approve();
         tool.IsPendingConfirmation = false;
         tool.Status = "Approved";
+        StateHasChanged();
+    }
+
+    private void ApproveToolForTurn(ToolUseModel tool)
+    {
+        tool.PendingRequest?.ApproveForTurn();
+        tool.IsPendingConfirmation = false;
+        tool.Status = "Approved (turn)";
         StateHasChanged();
     }
 

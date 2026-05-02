@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime.Storage;
 
@@ -393,7 +394,7 @@ public sealed partial class SqliteStorageProvider : IStorageProvider, ISqliteCon
         if (check.ExecuteScalar() is null)
             return;
 
-        var workspaceId = $"ws-personal-{userId}";
+        var workspaceId = WorkspaceIdentity.DefaultPersonalFor(userId);
         var slug = $"personal-{userId}";
 
         using var wsCmd = connection.CreateCommand();
@@ -438,7 +439,7 @@ public sealed partial class SqliteStorageProvider : IStorageProvider, ISqliteCon
             return;
 
         string[] oldIds = ["desktop-user", "web-user"];
-        var canonicalWsId = $"ws-personal-{canonicalId}";
+        var canonicalWsId = WorkspaceIdentity.DefaultPersonalFor(canonicalId);
 
         // Temporarily disable FK checks — many tables cross-reference users/workspaces
         // and we need to update or delete across all of them atomically.
@@ -450,7 +451,7 @@ public sealed partial class SqliteStorageProvider : IStorageProvider, ISqliteCon
         {
             foreach (var oldId in oldIds)
             {
-                var oldWsId = $"ws-personal-{oldId}";
+                var oldWsId = WorkspaceIdentity.DefaultPersonalFor(oldId);
 
                 // Check if the old user exists at all.
                 using var checkCmd = connection.CreateCommand();

@@ -156,6 +156,8 @@ public static class ServiceCollectionExtensions
         // Tool registry and executor
         services.AddSingleton<IToolRegistry, InMemoryToolRegistry>();
         services.AddSingleton<IToolConfirmationHandler, DenyAllConfirmationHandler>();
+        // Phase 87 Track E — per-turn approval cache for "always allow this turn".
+        services.AddSingleton<IPerTurnApprovalCache, PerTurnApprovalCache>();
         services.AddSingleton<IToolExecutor, DefaultToolExecutor>();
 
         // Session store — SQLite primary, optional JSONL dual-write.
@@ -327,6 +329,15 @@ public static class ServiceCollectionExtensions
             return sp.GetRequiredService<IArtifactStoreFactory>().Create(backend);
         });
         services.AddSingleton<LegacyArtifactImporter>();
+        services.AddSingleton<WorkspaceIdentityMigrator>(sp =>
+        {
+            var store = sp.GetRequiredService<IArtifactStore>();
+            // The factory currently only produces LocalArtifactStore for the
+            // local backend; the migrator only makes sense against an on-disk
+            // tree, so other backends produce a no-op migrator.
+            var root = store is LocalArtifactStore local ? local.Root : string.Empty;
+            return new WorkspaceIdentityMigrator(root, sp.GetRequiredService<ILogger<WorkspaceIdentityMigrator>>());
+        });
 
         // Eval framework (Phase 27) — SQLite-backed since Phase 49
         services.AddSingleton<IEvalResultStore>(sp =>
@@ -434,6 +445,11 @@ public static class ServiceCollectionExtensions
         // Run one-shot legacy artifact migration (Phase 53).
         var importer = services.GetRequiredService<LegacyArtifactImporter>();
         await importer.ImportIfNeededAsync(ct).ConfigureAwait(false);
+
+        // Phase 87 Track D — sweep the legacy `personal/` artifact directory
+        // into the canonical `ws-personal-{userId}/` layout. Idempotent.
+        var workspaceMigrator = services.GetRequiredService<WorkspaceIdentityMigrator>();
+        workspaceMigrator.MigrateIfNeeded();
 
         var mcpStore = services.GetRequiredService<IMcpServerStore>();
         var mcpServers = await mcpStore.GetAllAsync(ct).ConfigureAwait(false);

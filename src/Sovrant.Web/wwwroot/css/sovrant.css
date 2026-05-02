@@ -1023,6 +1023,16 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     font-weight: 600;
 }
 
+.btn-approve-turn {
+    padding: 5px 14px;
+    border-radius: 6px;
+    background: transparent;
+    border: 1px solid var(--status-pass);
+    color: var(--status-pass);
+    font-size: 12px;
+    font-weight: 600;
+}
+
 .btn-deny {
     padding: 5px 14px;
     border-radius: 6px;
@@ -1735,6 +1745,23 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     background: var(--surface-card);
     border-color: var(--brand-primary);
 }
+
+.master-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 6px 4px 6px;
+    margin: 8px 0 2px 0;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--surface-border);
+}
+.master-group-header:first-child { border-top: 0; margin-top: 0; }
+.master-group-header a { font-size: 11px; font-weight: 600; }
 
 .item-title {
     font-size: 13px;

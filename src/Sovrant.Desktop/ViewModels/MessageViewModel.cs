@@ -456,6 +456,14 @@ public partial class ToolUseViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void ApproveForTurn()
+    {
+        PendingRequest?.ApproveForTurn();
+        IsPendingConfirmation = false;
+        Status = "Approved (turn)";
+    }
+
+    [RelayCommand]
     private void Deny()
     {
         PendingRequest?.Deny();

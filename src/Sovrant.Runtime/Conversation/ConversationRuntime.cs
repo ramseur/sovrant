@@ -36,6 +36,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly Governance.IIntentGate? _intentGate;
     private readonly Metrics.CostModelLoggerFacade? _costFacade;
     private readonly ILiveSettings<CompactionSettings> _compaction;
+    private readonly Permissions.IPerTurnApprovalCache? _approvalCache;
     private readonly List<InputMessage> _history = [];
     private string _systemPrompt;
     /// <summary>Once true, all subsequent turns expose tools (session used tools at least once).</summary>
@@ -64,6 +65,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Tool complete: tool={ToolName}, duration_ms={DurationMs}, is_error={IsError}")]
     private static partial void LogToolResult(ILogger logger, string toolName, long durationMs, bool isError);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Content discipline miss: assistant emitted a {Lines}-line code fence in chat (session={SessionId}); should have used Artifact.write")]
+    private static partial void LogContentDisciplineMiss(ILogger logger, int lines, string sessionId);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "LLM request failed: {Error}")]
     private static partial void LogRequestFailed(ILogger logger, string error);
@@ -100,7 +104,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         Governance.IIntentGate? intentGate = null,
         Metrics.CostModelLoggerFacade? costFacade = null,
         IWorkspaceSettingsStore? settings = null,
-        ILiveSettings<CompactionSettings>? compaction = null)
+        ILiveSettings<CompactionSettings>? compaction = null,
+        Permissions.IPerTurnApprovalCache? approvalCache = null)
     {
         _router = router;
         _toolExecutor = toolExecutor;
@@ -118,6 +123,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         // to a static snapshot resolved once from env > store > settings.json.
         _compaction = compaction ?? LiveSettings.Static(
             CompactionSettings.Resolve(settings, fallback: _config.CompactThreshold));
+        _approvalCache = approvalCache;
         _systemPrompt = systemPromptOverride ?? BuildSystemPrompt();
     }
 
@@ -185,6 +191,10 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         // Ambient logging scope — session_id and model appear on every log line within this turn.
         using var sessionScope = _logger.BeginScope(
             new Dictionary<string, object?> { ["session_id"] = SessionId, ["model"] = _config.Model });
+
+        // Phase 87 Track E — fresh "always allow this turn" approval set for
+        // each turn. Disposed when the turn ends (including early returns).
+        using var approvalScope = _approvalCache?.BeginTurn();
 
         _history.Add(InputMessage.UserText(userMessage));
         await AppendSessionEntryAsync("user", userMessage, ct).ConfigureAwait(false);
@@ -326,6 +336,16 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     inputTokens: accumulated.InputTokens,
                     outputTokens: accumulated.OutputTokens)
                     .ConfigureAwait(false);
+
+                // Phase 87 Track A — flag turns where the model dumped a long
+                // fenced code block in chat instead of writing through Artifact.
+                // Telemetry only — does not block or rewrite the response.
+                if (ArtifactToolRegistered())
+                {
+                    var fenceLines = LongestFencedBlockLines(assistantText);
+                    if (fenceLines >= ContentDisciplineFenceThreshold)
+                        LogContentDisciplineMiss(_logger, fenceLines, _sessionId);
+                }
             }
 
             // Build the assistant turn message (convert OutputContentBlock → InputContentBlock)
@@ -420,12 +440,19 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     continue;
                 }
 
-                yield return new RuntimeEvent.ToolUseRequested(tu.Id, tu.Name, tu.Input);
+                // Phase 87 Track D — for scope-aware tools (Artifact + Document*),
+                // inject workspace_id, project_id, and run_id from the runtime if
+                // the LLM omitted them. Without this the tool falls back to its
+                // own default and an artifact can land outside the user's
+                // personal workspace.
+                var toolInput = AugmentScopeIfNeeded(tu.Name, tu.Input);
+
+                yield return new RuntimeEvent.ToolUseRequested(tu.Id, tu.Name, toolInput);
 
                 LogToolDispatched(_logger, tu.Name);
                 var toolSw = Stopwatch.StartNew();
 
-                var execResult = await _toolExecutor.ExecuteAsync(tu.Name, tu.Input, ct).ConfigureAwait(false);
+                var execResult = await _toolExecutor.ExecuteAsync(tu.Name, toolInput, ct).ConfigureAwait(false);
 
                 toolSw.Stop();
                 LogToolResult(_logger, tu.Name, toolSw.ElapsedMilliseconds, execResult.IsError);
@@ -748,6 +775,103 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private static string ExtractText(InputMessage m) =>
         string.Join(" ", m.Content.OfType<InputContentBlock.TextBlock>().Select(b => b.Text));
 
+    private static readonly HashSet<string> s_scopeAwareTools = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Artifact",
+        "DocumentGenerate",
+        "DocumentFromTemplate",
+        "DocumentPackage",
+    };
+
+    /// <summary>
+    /// Phase 87 Track D — for scope-aware tools, fills in workspace_id,
+    /// project_id, and run_id when the LLM omitted them. Pure: returns a new
+    /// <see cref="JsonElement"/> when augmentation is needed; otherwise
+    /// returns the original.
+    /// </summary>
+    private JsonElement AugmentScopeIfNeeded(string toolName, JsonElement input)
+    {
+        if (!s_scopeAwareTools.Contains(toolName))
+            return input;
+
+        if (input.ValueKind != JsonValueKind.Object)
+            return input;
+
+        var hasWorkspace = input.TryGetProperty("workspace_id", out var wsProp) && wsProp.ValueKind == JsonValueKind.String;
+        var hasProject = input.TryGetProperty("project_id", out var projProp) && projProp.ValueKind == JsonValueKind.String;
+        var hasRun = input.TryGetProperty("run_id", out var runProp) && runProp.ValueKind == JsonValueKind.String;
+
+        if (hasWorkspace && hasProject && hasRun)
+            return input;
+
+        var resolvedUserId = _ownerUserId is { Length: > 0 } u ? u : WorkspaceIdentity.CurrentUserId;
+        var defaultWorkspace = Environment.GetEnvironmentVariable("SOVRANT_WORKSPACE_ID")
+            ?? WorkspaceIdentity.DefaultPersonalFor(resolvedUserId);
+        var defaultProject = Environment.GetEnvironmentVariable("SOVRANT_PROJECT_ID")
+            ?? Artifacts.ArtifactScope.DefaultProjectId;
+
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            foreach (var prop in input.EnumerateObject())
+                prop.WriteTo(writer);
+
+            if (!hasWorkspace) writer.WriteString("workspace_id", defaultWorkspace);
+            if (!hasProject) writer.WriteString("project_id", defaultProject);
+            if (!hasRun) writer.WriteString("run_id", _sessionId);
+            writer.WriteEndObject();
+        }
+
+        var doc = JsonDocument.Parse(buffer.ToArray());
+        return doc.RootElement.Clone();
+    }
+
+    // Phase 87 Track A — count code-fence lines in the assistant's chat output
+    // and return the longest single fenced block. Used to detect when the
+    // model dumped file-shaped content into chat instead of writing through
+    // the Artifact tool.
+    private const int ContentDisciplineFenceThreshold = 30;
+
+    private static int LongestFencedBlockLines(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return 0;
+        var longest = 0;
+        var inFence = false;
+        var current = 0;
+        foreach (var rawLine in text.Split('\n'))
+        {
+            var line = rawLine.TrimStart();
+            if (line.StartsWith("```", StringComparison.Ordinal))
+            {
+                if (inFence)
+                {
+                    if (current > longest) longest = current;
+                    current = 0;
+                    inFence = false;
+                }
+                else
+                {
+                    inFence = true;
+                    current = 0;
+                }
+                continue;
+            }
+            if (inFence) current++;
+        }
+        // Unclosed fence — still count what we accumulated.
+        if (inFence && current > longest) longest = current;
+        return longest;
+    }
+
+    private bool ArtifactToolRegistered()
+    {
+        var defs = _toolRegistry.GetDefinitions();
+        for (var i = 0; i < defs.Count; i++)
+            if (defs[i].Name == "Artifact") return true;
+        return false;
+    }
+
     private async Task AppendSessionEntryAsync(
         string role,
         string content,
@@ -808,8 +932,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         }
 
         // Artifacts guidance — use the Artifact tool for documents, plans, reports, etc.
+        var resolvedUserId = _ownerUserId is { Length: > 0 } u ? u : WorkspaceIdentity.CurrentUserId;
         var workspaceId = Environment.GetEnvironmentVariable("SOVRANT_WORKSPACE_ID")
-            ?? Artifacts.ArtifactScope.DefaultWorkspaceId;
+            ?? WorkspaceIdentity.DefaultPersonalFor(resolvedUserId);
         var projectId = Environment.GetEnvironmentVariable("SOVRANT_PROJECT_ID")
             ?? Artifacts.ArtifactScope.DefaultProjectId;
         sb.Append("\n\nWhen creating documents, plans, reports, specifications, or any deliverable that is NOT a direct modification to existing source code, ")

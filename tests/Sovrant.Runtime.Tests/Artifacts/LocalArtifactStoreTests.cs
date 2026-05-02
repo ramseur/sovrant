@@ -281,7 +281,7 @@ public sealed class LocalArtifactStoreTests : IDisposable
         var scope = new ArtifactScope { RunId = "run-fallback" };
 
         var handle = await _store.CreateRunScopeAsync(scope);
-        Assert.Contains("personal", handle.Location, StringComparison.Ordinal);
+        Assert.Contains("ws-personal-", handle.Location, StringComparison.Ordinal);
         Assert.Contains("default-project", handle.Location, StringComparison.Ordinal);
         // No user segment in the path
         Assert.DoesNotContain("default-user", handle.Location, StringComparison.Ordinal);

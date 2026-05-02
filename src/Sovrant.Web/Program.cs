@@ -187,6 +187,7 @@ public static class Program
     // (browsers block file:/// in iframes on non-file origins).
     private static void MapArtifactsEndpoint(WebApplication app)
     {
+        // Single-file endpoint.
         app.MapGet("/artifacts/{workspaceId}/{projectId}/{runId}/{*relPath}",
             (string workspaceId, string projectId, string runId, string relPath,
              Sovrant.Runtime.Artifacts.IArtifactStore store) =>
@@ -216,23 +217,67 @@ public static class Program
             if (!File.Exists(fullPath))
                 return Results.NotFound();
 
-            var contentType = GuessContentType(fullPath);
+            var contentType = Sovrant.Web.Services.ArtifactMime.For(Path.GetExtension(fullPath));
             return Results.File(fullPath, contentType, enableRangeProcessing: true);
+        });
+
+        // Streams a zip of every file under {ws}/{proj}/{run}. Lets the user grab
+        // an entire run as one download from the Artifacts page.
+        app.MapGet("/artifacts/{workspaceId}/{projectId}/{runId}.zip",
+            (string workspaceId, string projectId, string runId,
+             Sovrant.Runtime.Artifacts.IArtifactStore store) =>
+        {
+            if (store is not Sovrant.Runtime.Artifacts.LocalArtifactStore local)
+                return Results.NotFound();
+
+            if (workspaceId.Contains("..", StringComparison.Ordinal) ||
+                projectId.Contains("..", StringComparison.Ordinal) ||
+                runId.Contains("..", StringComparison.Ordinal))
+            {
+                return Results.BadRequest();
+            }
+
+            var ws = Uri.UnescapeDataString(workspaceId);
+            var proj = Uri.UnescapeDataString(projectId);
+            var run = Uri.UnescapeDataString(runId);
+
+            var rootFull = Path.GetFullPath(local.Root);
+            var runDir = Path.GetFullPath(Path.Combine(rootFull, ws, proj, run));
+            if (!runDir.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
+                return Results.BadRequest();
+            if (!Directory.Exists(runDir))
+                return Results.NotFound();
+
+            var safeRun = SanitizeForFilename(run);
+            return Results.Stream(async (output) =>
+            {
+                using var archive = new System.IO.Compression.ZipArchive(
+                    output, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: false);
+                foreach (var file in Directory.EnumerateFiles(runDir, "*", SearchOption.AllDirectories))
+                {
+                    if (Path.GetFileName(file).Equals("_manifest.json", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var rel = Path.GetRelativePath(runDir, file).Replace('\\', '/');
+                    var entry = archive.CreateEntry(rel, System.IO.Compression.CompressionLevel.Fastest);
+                    await using var entryStream = await entry.OpenAsync().ConfigureAwait(false);
+                    await using var fileStream = File.OpenRead(file);
+                    await fileStream.CopyToAsync(entryStream).ConfigureAwait(false);
+                }
+            }, contentType: "application/zip", fileDownloadName: $"{safeRun}.zip");
         });
     }
 
-    private static string GuessContentType(string path)
+    private static string SanitizeForFilename(string name)
     {
-        var ext = Path.GetExtension(path);
-        if (ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase)) return "application/pdf";
-        if (ext.Equals(".docx", StringComparison.OrdinalIgnoreCase)) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-        if (ext.Equals(".xlsx", StringComparison.OrdinalIgnoreCase)) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-        if (ext.Equals(".pptx", StringComparison.OrdinalIgnoreCase)) return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-        if (ext.Equals(".md", StringComparison.OrdinalIgnoreCase) || ext.Equals(".txt", StringComparison.OrdinalIgnoreCase)) return "text/plain; charset=utf-8";
-        if (ext.Equals(".json", StringComparison.OrdinalIgnoreCase)) return "application/json";
-        if (ext.Equals(".html", StringComparison.OrdinalIgnoreCase) || ext.Equals(".htm", StringComparison.OrdinalIgnoreCase)) return "text/html; charset=utf-8";
-        if (ext.Equals(".png", StringComparison.OrdinalIgnoreCase)) return "image/png";
-        if (ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase) || ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)) return "image/jpeg";
-        return "application/octet-stream";
+        var invalid = Path.GetInvalidFileNameChars();
+        var span = name.AsSpan();
+        Span<char> buffer = stackalloc char[Math.Min(span.Length, 64)];
+        var len = 0;
+        for (var i = 0; i < span.Length && len < buffer.Length; i++)
+        {
+            var c = span[i];
+            buffer[len++] = Array.IndexOf(invalid, c) >= 0 ? '_' : c;
+        }
+        return len == 0 ? "artifacts" : new string(buffer[..len]);
     }
 }

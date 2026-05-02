@@ -4,6 +4,7 @@ using Sovrant.Runtime.Artifacts;
 using Sovrant.Runtime.Documents;
 using Sovrant.Runtime.Documents.Templates;
 using Sovrant.Runtime.Documents.Trust;
+using Sovrant.Runtime.Workspaces;
 using DocFormat = Sovrant.Runtime.Documents.DocumentFormat;
 
 namespace Sovrant.Tools.Documents;
@@ -87,7 +88,7 @@ public sealed class DocumentFromTemplateTool : ITool
 
         var scope = new ArtifactScope
         {
-            WorkspaceId = input.GetStringProp("workspace_id", ArtifactScope.DefaultWorkspaceId),
+            WorkspaceId = input.GetStringProp("workspace_id", WorkspaceIdentity.DefaultPersonal()),
             ProjectId = input.GetStringProp("project_id", ArtifactScope.DefaultProjectId),
             RunId = runId,
         };

@@ -37,9 +37,14 @@ public sealed class ArtifactToolTests : IDisposable
     }
 
     [Fact]
-    public void Definition_Description_MentionsArtifacts()
+    public void Definition_Description_DescribesFileSaving()
     {
-        Assert.Contains("artifact", _tool.Definition.Description, StringComparison.OrdinalIgnoreCase);
+        // Phase 87 Track B reframed Artifact as the default write target for
+        // any generated file (was previously agent-only). The description
+        // should make that purpose obvious.
+        var desc = _tool.Definition.Description;
+        Assert.Contains("file", desc, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("write", desc, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -89,6 +94,84 @@ public sealed class ArtifactToolTests : IDisposable
         var result = await _tool.ExecuteAsync(input);
         Assert.Contains("Error", result, StringComparison.Ordinal);
         Assert.Contains("run_id", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── WriteMany ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task WriteMany_MultipleEntries_AllPersisted()
+    {
+        var input = Parse("""
+            {
+                "action":"write_many",
+                "run_id":"run-many-1",
+                "entries":[
+                    {"path":"a.txt","content":"alpha"},
+                    {"path":"sub/b.txt","content":"beta","content_type":"text/plain"},
+                    {"path":"c.json","content":"{\"k\":1}","content_type":"application/json"}
+                ]
+            }
+        """);
+        var result = await _tool.ExecuteAsync(input);
+        Assert.Contains("\"status\":\"written\"", result, StringComparison.Ordinal);
+        Assert.Contains("\"written_count\":3", result, StringComparison.Ordinal);
+
+        // Each file readable back individually — parse the read response to
+        // avoid grappling with how System.Text.Json escapes inner JSON content.
+        foreach (var (path, expected) in new[] { ("a.txt", "alpha"), ("sub/b.txt", "beta"), ("c.json", "{\"k\":1}") })
+        {
+            var read = await _tool.ExecuteAsync(Parse(
+                $$"""{"action":"read","path":"{{path}}","run_id":"run-many-1"}"""));
+            using var doc = JsonDocument.Parse(read);
+            Assert.Equal(expected, doc.RootElement.GetProperty("content").GetString());
+        }
+    }
+
+    [Fact]
+    public async Task WriteMany_MissingEntries_ReturnsError()
+    {
+        var input = Parse("""{"action":"write_many","run_id":"run-many-2"}""");
+        var result = await _tool.ExecuteAsync(input);
+        Assert.Contains("Error", result, StringComparison.Ordinal);
+        Assert.Contains("entries", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task WriteMany_EmptyEntries_ReturnsError()
+    {
+        var input = Parse("""{"action":"write_many","run_id":"run-many-3","entries":[]}""");
+        var result = await _tool.ExecuteAsync(input);
+        Assert.Contains("Error", result, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WriteMany_MissingRunId_ReturnsError()
+    {
+        var input = Parse("""
+            {"action":"write_many","entries":[{"path":"a.txt","content":"x"}]}
+        """);
+        var result = await _tool.ExecuteAsync(input);
+        Assert.Contains("Error", result, StringComparison.Ordinal);
+        Assert.Contains("run_id", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task WriteMany_PartialBadEntry_ReturnsPartialStatus()
+    {
+        var input = Parse("""
+            {
+                "action":"write_many",
+                "run_id":"run-many-4",
+                "entries":[
+                    {"path":"good.txt","content":"ok"},
+                    {"path":"bad.txt"}
+                ]
+            }
+        """);
+        var result = await _tool.ExecuteAsync(input);
+        Assert.Contains("\"status\":\"partial\"", result, StringComparison.Ordinal);
+        Assert.Contains("\"written_count\":1", result, StringComparison.Ordinal);
+        Assert.Contains("\"error_count\":1", result, StringComparison.Ordinal);
     }
 
     // ── Read ──────────────────────────────────────────────────────────────────

@@ -58,7 +58,8 @@
                                 <div class="tool-confirmation">
                                     <div class="tool-input-preview">@tool.Result</div>
                                     <div class="tool-actions">
-                                        <button class="btn-approve" @onclick="() => OnApprove.InvokeAsync(tool)">&#x2713; Allow</button>
+                                        <button class="btn-approve" @onclick="() => OnApprove.InvokeAsync(tool)">&#x2713; Allow once</button>
+                                        <button class="btn-approve-turn" @onclick="() => OnApproveForTurn.InvokeAsync(tool)" title="Auto-approve this tool for the rest of this turn">&#x2713;&#x2713; Allow for turn</button>
                                         <button class="btn-deny" @onclick="() => OnDeny.InvokeAsync(tool)">&#x2715; Deny</button>
                                     </div>
                                 </div>
@@ -111,6 +112,7 @@
     [Parameter, EditorRequired] public ChatMessageModel Message { get; set; } = default!;
     [Parameter] public EventCallback OnRetry { get; set; }
     [Parameter] public EventCallback<ToolUseModel> OnApprove { get; set; }
+    [Parameter] public EventCallback<ToolUseModel> OnApproveForTurn { get; set; }
     [Parameter] public EventCallback<ToolUseModel> OnDeny { get; set; }
 
     private static readonly string _userInitial = Environment.UserName.Length > 0

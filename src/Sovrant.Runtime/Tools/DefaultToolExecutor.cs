@@ -14,6 +14,7 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
     private readonly IPermissionPolicy _policy;
     private readonly IGovernanceMonitor _governance;
     private readonly IToolConfirmationHandler _confirmationHandler;
+    private readonly IPerTurnApprovalCache? _approvalCache;
     private readonly ILogger<DefaultToolExecutor> _logger;
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Executing tool '{ToolName}'")]
@@ -42,12 +43,14 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
         IPermissionPolicy policy,
         IGovernanceMonitor governance,
         IToolConfirmationHandler confirmationHandler,
-        ILogger<DefaultToolExecutor> logger)
+        ILogger<DefaultToolExecutor> logger,
+        IPerTurnApprovalCache? approvalCache = null)
     {
         _registry = registry;
         _policy = policy;
         _governance = governance;
         _confirmationHandler = confirmationHandler;
+        _approvalCache = approvalCache;
         _logger = logger;
     }
 
@@ -68,15 +71,19 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
                     $"Tool '{toolName}' is blocked in the current permission mode.", IsError: true);
 
             case PolicyDecision.RequireConfirmation:
+                if (_approvalCache is not null && _approvalCache.IsAllowed(toolName))
+                    break; // user already said "always allow this turn" for this tool
                 LogConfirmationRequired(_logger, toolName);
-                var confirmed = await _confirmationHandler
+                var userDecision = await _confirmationHandler
                     .RequestConfirmationAsync(toolName, input, ct).ConfigureAwait(false);
-                if (!confirmed)
+                if (userDecision == ConfirmationDecision.Deny)
                 {
                     LogDenied(_logger, toolName);
                     return new ToolExecutionResult(false,
                         $"Tool '{toolName}' was denied by the user.", IsError: true);
                 }
+                if (userDecision == ConfirmationDecision.AllowForTurn)
+                    _approvalCache?.Allow(toolName);
                 break;
         }
 

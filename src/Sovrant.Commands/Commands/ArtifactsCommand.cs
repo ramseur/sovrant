@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Sovrant.Runtime.Artifacts;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Commands.Commands;
 
@@ -114,7 +115,7 @@ public sealed class ArtifactsCommand : ISlashCommand
 
         return new ArtifactScope
         {
-            WorkspaceId = workspaceId ?? ArtifactScope.DefaultWorkspaceId,
+            WorkspaceId = workspaceId ?? WorkspaceIdentity.DefaultPersonal(),
             ProjectId = projectId ?? ArtifactScope.DefaultProjectId,
             RunId = runId,
         };

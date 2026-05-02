@@ -1,5 +1,6 @@
 @page "/artifacts"
 @using Sovrant.Runtime.Artifacts
+@using Sovrant.Web.Services
 @using Markdig
 
 @if (!string.IsNullOrEmpty(_loadError))
@@ -19,10 +20,23 @@
                     EmptyMessage="No artifacts found."
                     OnRefresh="LoadAsync"
                     OnItemSelected="SelectItem"
-                    OnSearch="Search">
+                    OnSearch="Search"
+                    GroupKeySelector="@(a => $"{a.WorkspaceId}|{a.ProjectId}|{a.RunId}")">
+    <GroupHeaderTemplate>
+        <span>@context.WorkspaceId / @context.ProjectId
+            @if (!string.IsNullOrEmpty(context.RunId))
+            {
+                <text> &middot; run @context.RunId[..Math.Min(8, context.RunId.Length)]</text>
+            }
+        </span>
+        @if (!string.IsNullOrEmpty(context.RunZipUrl))
+        {
+            <a href="@context.RunZipUrl" download="@($"{context.RunId}.zip")" class="btn-outline btn-sm">Download zip</a>
+        }
+    </GroupHeaderTemplate>
     <ItemTemplate>
         <div class="item-title">@context.FileName</div>
-        <div class="item-subtitle">@context.WorkspaceId &middot; @context.SizeDisplay &middot; @context.ContentType</div>
+        <div class="item-subtitle">@context.SizeDisplay &middot; @context.ContentType</div>
     </ItemTemplate>
     <DetailTemplate>
         <div class="detail-content">
@@ -126,10 +140,12 @@
                     : fileName;
 
                 var accessUrl = string.Empty;
+                var runZipUrl = string.Empty;
                 if (!string.IsNullOrEmpty(workspaceId) && !string.IsNullOrEmpty(projectId) && !string.IsNullOrEmpty(runId))
                 {
                     var escapedTail = string.Join('/', artifactPath.Split('/').Select(Uri.EscapeDataString));
                     accessUrl = $"/artifacts/{Uri.EscapeDataString(workspaceId)}/{Uri.EscapeDataString(projectId)}/{Uri.EscapeDataString(runId)}/{escapedTail}";
+                    runZipUrl = $"/artifacts/{Uri.EscapeDataString(workspaceId)}/{Uri.EscapeDataString(projectId)}/{Uri.EscapeDataString(runId)}.zip";
                 }
 
                 items.Add(new ArtifactItem
@@ -149,10 +165,17 @@
                     IsMarkdown = ext.Equals(".md", StringComparison.OrdinalIgnoreCase),
                     IsPdf = ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase),
                     AccessUrl = accessUrl,
+                    RunZipUrl = runZipUrl,
                 });
             }
 
-            _all = items.OrderByDescending(a => a.LastModified).ToList();
+            // Group rows so that artifacts from the same run are visually clustered,
+            // newest run first, then newest file within the run.
+            _all = items
+                .GroupBy(a => (a.WorkspaceId, a.ProjectId, a.RunId))
+                .OrderByDescending(g => g.Max(a => a.LastModified))
+                .SelectMany(g => g.OrderByDescending(a => a.LastModified))
+                .ToList();
             ApplyFilter();
         }
         catch (Exception ex)
@@ -207,14 +230,7 @@
         return $"{bytes / (1024.0 * 1024.0):F1} MB";
     }
 
-    private static string GuessMime(string ext) => ext.ToLowerInvariant() switch
-    {
-        ".md" => "text/markdown", ".json" => "application/json", ".xml" => "text/xml",
-        ".html" => "text/html", ".css" => "text/css", ".js" => "text/javascript",
-        ".ts" => "text/typescript", ".cs" => "text/x-csharp", ".py" => "text/x-python",
-        ".png" => "image/png", ".jpg" or ".jpeg" => "image/jpeg", ".svg" => "image/svg+xml",
-        _ => "application/octet-stream",
-    };
+    private static string GuessMime(string ext) => ArtifactMime.For(ext);
 
     private sealed class ArtifactItem
     {
@@ -233,6 +249,7 @@
         public bool IsMarkdown { get; init; }
         public bool IsPdf { get; init; }
         public string AccessUrl { get; init; } = string.Empty;
+        public string RunZipUrl { get; init; } = string.Empty;
         public string? Preview { get; set; }
     }
 }

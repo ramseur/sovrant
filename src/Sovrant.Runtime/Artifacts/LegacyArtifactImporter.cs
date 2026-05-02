@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime.Artifacts;
 
@@ -63,7 +64,7 @@ public sealed partial class LegacyArtifactImporter
             var runId = $"legacy-{slug}";
             var scope = new ArtifactScope
             {
-                WorkspaceId = ArtifactScope.DefaultWorkspaceId,
+                WorkspaceId = WorkspaceIdentity.DefaultPersonal(),
                 ProjectId = ArtifactScope.DefaultProjectId,
                 RunId = runId,
             };
@@ -84,7 +85,7 @@ public sealed partial class LegacyArtifactImporter
                 var manifest = new ArtifactManifest
                 {
                     RunId = runId,
-                    WorkspaceId = ArtifactScope.DefaultWorkspaceId,
+                    WorkspaceId = WorkspaceIdentity.DefaultPersonal(),
                     ProjectId = ArtifactScope.DefaultProjectId,
                     CreatedAt = DateTimeOffset.UtcNow,
                     MigratedFrom = "legacy",

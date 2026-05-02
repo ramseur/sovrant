@@ -2,6 +2,7 @@ using System.Text.Json;
 using Sovrant.Api.Types;
 using Sovrant.Runtime.Artifacts;
 using Sovrant.Runtime.Documents;
+using Sovrant.Runtime.Workspaces;
 using DocFormat = Sovrant.Runtime.Documents.DocumentFormat;
 
 namespace Sovrant.Tools.Documents;
@@ -54,7 +55,7 @@ public sealed class DocumentGenerateTool : ITool
 
         var scope = new ArtifactScope
         {
-            WorkspaceId = input.GetStringProp("workspace_id", ArtifactScope.DefaultWorkspaceId),
+            WorkspaceId = input.GetStringProp("workspace_id", WorkspaceIdentity.DefaultPersonal()),
             ProjectId = input.GetStringProp("project_id", ArtifactScope.DefaultProjectId),
             RunId = runId,
         };

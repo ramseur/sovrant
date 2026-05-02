@@ -67,6 +67,27 @@ public sealed class SystemPromptBuilder
                 parts.Add($"You have access to the following tools: {toolList}.");
             }
 
+            // Phase 87 Track A — Content Creation Discipline. Only emit when
+            // Artifact is registered, so prompts for stripped-down tool sets
+            // (e.g. read-only / plan mode) don't reference a tool the model
+            // cannot call.
+            if (HasArtifactTool(tools))
+            {
+                parts.Add(
+                    "CONTENT CREATION DISCIPLINE — when you produce a file the user will want to keep " +
+                    "(code, documents, configs, reports, data), save it via the Artifact tool instead " +
+                    "of pasting the contents into chat:\n\n" +
+                    "- Use Artifact 'write' for a single file, 'write_many' for multiple files in one call. " +
+                    "Scope (workspace, project, run) is auto-attached — only set 'path' and 'content'.\n" +
+                    "- Short snippets and examples (~20 lines or fewer, illustrating a point inline) stay " +
+                    "in chat. Anything that has a natural filename, or that the user is likely to copy " +
+                    "into a real file, goes through Artifact.\n" +
+                    "- After saving, briefly mention what you wrote and the path(s) so the user can find it. " +
+                    "Don't repeat the full contents in chat — the file is the deliverable.\n" +
+                    "- Edits to existing repository files use Edit/Write directly. Artifact is for new " +
+                    "generated outputs that don't have an existing path in the working tree.");
+            }
+
             // Orchestration strategy — teach the LLM when to escalate
             if (HasOrchestrationTools(tools))
             {
@@ -110,4 +131,7 @@ public sealed class SystemPromptBuilder
     /// </summary>
     private static bool HasOrchestrationTools(IReadOnlyList<ToolDefinition> tools) =>
         tools.Any(t => t.Name is "Agent" or "Swarm" or "TeamCreate" or "TeamRun" or "Mission");
+
+    private static bool HasArtifactTool(IReadOnlyList<ToolDefinition> tools) =>
+        tools.Any(t => t.Name == "Artifact");
 }

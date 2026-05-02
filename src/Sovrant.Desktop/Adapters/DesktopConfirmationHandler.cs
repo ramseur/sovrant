@@ -15,17 +15,17 @@ public sealed class DesktopConfirmationHandler : IToolConfirmationHandler
 {
     /// <summary>
     /// Raised when a tool needs user confirmation. The handler should call
-    /// <see cref="ConfirmationRequest.Approve"/> or <see cref="ConfirmationRequest.Deny"/>
-    /// to unblock the tool executor.
+    /// <see cref="ConfirmationRequest.Approve"/>, <see cref="ConfirmationRequest.ApproveForTurn"/>,
+    /// or <see cref="ConfirmationRequest.Deny"/> to unblock the tool executor.
     /// </summary>
     public event Action<ConfirmationRequest>? ConfirmationRequested;
 
-    public async Task<bool> RequestConfirmationAsync(string toolName, JsonElement input, CancellationToken ct)
+    public async Task<ConfirmationDecision> RequestConfirmationAsync(string toolName, JsonElement input, CancellationToken ct)
     {
         if (ConfirmationRequested is null)
         {
             // No UI subscriber — deny by default for safety.
-            return false;
+            return ConfirmationDecision.Deny;
         }
 
         var request = new ConfirmationRequest(toolName, input);
@@ -42,11 +42,11 @@ public sealed class DesktopConfirmationHandler : IToolConfirmationHandler
 /// </summary>
 public sealed class ConfirmationRequest
 {
-    private readonly TaskCompletionSource<bool> _tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<ConfirmationDecision> _tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public string ToolName { get; }
     public JsonElement Input { get; }
-    public Task<bool> Task => _tcs.Task;
+    public Task<ConfirmationDecision> Task => _tcs.Task;
 
     public ConfirmationRequest(string toolName, JsonElement input)
     {
@@ -54,6 +54,7 @@ public sealed class ConfirmationRequest
         Input = input;
     }
 
-    public void Approve() => _tcs.TrySetResult(true);
-    public void Deny() => _tcs.TrySetResult(false);
+    public void Approve() => _tcs.TrySetResult(ConfirmationDecision.AllowOnce);
+    public void ApproveForTurn() => _tcs.TrySetResult(ConfirmationDecision.AllowForTurn);
+    public void Deny() => _tcs.TrySetResult(ConfirmationDecision.Deny);
 }

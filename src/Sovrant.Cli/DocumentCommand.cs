@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Sovrant.Runtime.Artifacts;
 using Sovrant.Runtime.Documents;
 using Sovrant.Runtime.Documents.Templates;
+using Sovrant.Runtime.Workspaces;
 using Spectre.Console;
 using SovrantDocumentFormat = Sovrant.Runtime.Documents.DocumentFormat;
 
@@ -336,7 +337,7 @@ internal static class DocumentCommand
 
             var scope = new ArtifactScope
             {
-                WorkspaceId = pr.GetValue(workspaceOpt) ?? ArtifactScope.DefaultWorkspaceId,
+                WorkspaceId = pr.GetValue(workspaceOpt) ?? WorkspaceIdentity.DefaultPersonal(),
                 ProjectId = pr.GetValue(projectOpt) ?? ArtifactScope.DefaultProjectId,
                 RunId = pr.GetValue(runOpt) ?? $"cli-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}".Substring(0, 40),
             };

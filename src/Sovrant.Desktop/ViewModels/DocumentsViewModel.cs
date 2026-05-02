@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.Artifacts;
 using Sovrant.Runtime.Documents;
 using Sovrant.Runtime.Documents.Templates;
+using Sovrant.Runtime.Workspaces;
 using SovrantDocumentFormat = Sovrant.Runtime.Documents.DocumentFormat;
 
 namespace Sovrant.Desktop.ViewModels;
@@ -131,7 +132,7 @@ public partial class DocumentsViewModel : ViewModelBase
                 format = overridden;
 
             var workspaceId = string.IsNullOrWhiteSpace(_activeContext.ActiveWorkspaceId)
-                ? ArtifactScope.DefaultWorkspaceId
+                ? WorkspaceIdentity.DefaultPersonal()
                 : _activeContext.ActiveWorkspaceId;
             var projectId = string.IsNullOrWhiteSpace(_activeContext.ActiveProjectId)
                 ? ArtifactScope.DefaultProjectId

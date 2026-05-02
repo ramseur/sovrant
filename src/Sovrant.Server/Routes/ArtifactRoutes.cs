@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Sovrant.Runtime.Artifacts;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Server.Routes;
 
@@ -115,7 +116,7 @@ internal static class ArtifactRoutes
         {
             WorkspaceId = query["workspace_id"].FirstOrDefault()
                 ?? ctx.Request.Headers["X-Workspace-Id"].FirstOrDefault()
-                ?? ArtifactScope.DefaultWorkspaceId,
+                ?? WorkspaceIdentity.DefaultPersonal(),
             ProjectId = query["project_id"].FirstOrDefault()
                 ?? ctx.Request.Headers["X-Project-Id"].FirstOrDefault()
                 ?? ArtifactScope.DefaultProjectId,

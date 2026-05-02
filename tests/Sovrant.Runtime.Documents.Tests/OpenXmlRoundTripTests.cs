@@ -100,7 +100,7 @@ public class OpenXmlRoundTripTests : IDisposable
         FileName = fileName,
         Scope = new ArtifactScope
         {
-            WorkspaceId = ArtifactScope.DefaultWorkspaceId,
+            WorkspaceId = "ws-test",
             ProjectId = ArtifactScope.DefaultProjectId,
             RunId = $"test-{Guid.NewGuid():N}",
         },

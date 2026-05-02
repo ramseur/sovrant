@@ -1,5 +1,6 @@
 @page "/projects"
 @using Sovrant.Runtime.Projects
+@using Sovrant.Runtime.Workspaces
 @using Sovrant.Web.Services
 @implements IDisposable
 
@@ -89,7 +90,7 @@
     [Inject] private IProjectService ProjectService { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
 
-    private string WorkspaceId => string.IsNullOrEmpty(ActiveContext.WorkspaceId) ? "personal" : ActiveContext.WorkspaceId;
+    private string WorkspaceId => string.IsNullOrEmpty(ActiveContext.WorkspaceId) ? WorkspaceIdentity.DefaultPersonal() : ActiveContext.WorkspaceId;
     private string _newName = string.Empty;
     private string _search = string.Empty;
     private string _status = string.Empty;

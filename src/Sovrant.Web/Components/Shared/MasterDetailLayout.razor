@@ -28,8 +28,27 @@
             }
             else
             {
+                string? lastGroupKey = null;
                 @foreach (var item in Items)
                 {
+                    if (GroupKeySelector is not null)
+                    {
+                        var groupKey = GroupKeySelector(item);
+                        if (!string.Equals(groupKey, lastGroupKey, StringComparison.Ordinal))
+                        {
+                            lastGroupKey = groupKey;
+                            <div class="master-group-header">
+                                @if (GroupHeaderTemplate is not null)
+                                {
+                                    @GroupHeaderTemplate(item)
+                                }
+                                else
+                                {
+                                    <span>@groupKey</span>
+                                }
+                            </div>
+                        }
+                    }
                     <button class="master-item @(ReferenceEquals(item, SelectedItem) ? "active" : "")"
                             @onclick="() => Select(item)">
                         @ItemTemplate!(item)
@@ -61,6 +80,8 @@
     [Parameter] public TItem? SelectedItem { get; set; }
     [Parameter] public RenderFragment<TItem>? ItemTemplate { get; set; }
     [Parameter] public RenderFragment<TItem>? DetailTemplate { get; set; }
+    [Parameter] public Func<TItem, string>? GroupKeySelector { get; set; }
+    [Parameter] public RenderFragment<TItem>? GroupHeaderTemplate { get; set; }
     [Parameter] public EventCallback OnRefresh { get; set; }
     [Parameter] public EventCallback<TItem> OnItemSelected { get; set; }
     [Parameter] public EventCallback<string> OnSearch { get; set; }

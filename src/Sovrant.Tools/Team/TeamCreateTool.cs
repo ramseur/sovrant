@@ -5,6 +5,7 @@ using Sovrant.Agents.Teams;
 using Sovrant.Agents.Templates;
 using Sovrant.Api.Types;
 using Sovrant.Runtime.Artifacts;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Tools.Team;
 
@@ -45,7 +46,7 @@ public sealed class TeamCreateTool : ITool
             return Task.FromResult("Error: 'name' is required.");
 
         var teamName = GetStringOrNull(input, "team_name") ?? "default";
-        var workspaceId = _workspace?.ArtifactScope?.WorkspaceId ?? ArtifactScope.DefaultWorkspaceId;
+        var workspaceId = _workspace?.ArtifactScope?.WorkspaceId ?? WorkspaceIdentity.DefaultPersonal();
         var projectId = _workspace?.ArtifactScope?.ProjectId ?? ArtifactScope.DefaultProjectId;
         var teamId = EnsureTeam(workspaceId, projectId, teamName);
 

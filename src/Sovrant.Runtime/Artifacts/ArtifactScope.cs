@@ -1,3 +1,5 @@
+using Sovrant.Runtime.Workspaces;
+
 namespace Sovrant.Runtime.Artifacts;
 
 /// <summary>
@@ -14,14 +16,16 @@ namespace Sovrant.Runtime.Artifacts;
 /// </remarks>
 public sealed record ArtifactScope
 {
-    /// <summary>Sentinel used when no workspace is configured (matches Phase 35 seed).</summary>
-    public const string DefaultWorkspaceId = "personal";
-
     /// <summary>Sentinel used when no project is configured.</summary>
     public const string DefaultProjectId = "default-project";
 
-    /// <summary>The workspace. Defaults to <see cref="DefaultWorkspaceId"/>.</summary>
-    public string WorkspaceId { get; init; } = DefaultWorkspaceId;
+    /// <summary>
+    /// The workspace. Defaults to the active user's personal workspace
+    /// (<c>ws-personal-{userId}</c>) — never the bare <c>"personal"</c>
+    /// literal. Phase 87 unifies this with the canonical workspace id
+    /// produced by <see cref="SqliteWorkspaceStore"/>.
+    /// </summary>
+    public string WorkspaceId { get; init; } = WorkspaceIdentity.DefaultPersonal();
 
     /// <summary>The project within the workspace. Defaults to <see cref="DefaultProjectId"/>.</summary>
     public string ProjectId { get; init; } = DefaultProjectId;
@@ -38,4 +42,11 @@ public sealed record ArtifactScope
     /// workspace members see the same artifacts.
     /// </summary>
     public string? UserId { get; init; }
+
+    /// <summary>
+    /// Returns the canonical personal workspace id for the given user.
+    /// Prefer this over inlining the format string.
+    /// </summary>
+    public static string DefaultWorkspaceFor(string userId)
+        => WorkspaceIdentity.DefaultPersonalFor(userId);
 }

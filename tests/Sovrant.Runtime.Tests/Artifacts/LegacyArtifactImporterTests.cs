@@ -55,7 +55,10 @@ public sealed class LegacyArtifactImporterTests : IDisposable
 
         // Verify files landed under workspace-scoped layout (no user segment)
         var expectedDir = Path.Combine(
-            _artifactsRoot, "personal", "default-project", "legacy-my-test-guide");
+            _artifactsRoot,
+            Sovrant.Runtime.Workspaces.WorkspaceIdentity.DefaultPersonal(),
+            "default-project",
+            "legacy-my-test-guide");
         Assert.True(Directory.Exists(expectedDir));
         Assert.True(File.Exists(Path.Combine(expectedDir, "output.md")));
         Assert.True(File.Exists(Path.Combine(expectedDir, "data.json")));

@@ -3,6 +3,7 @@
 @using Sovrant.Runtime.Artifacts
 @using Sovrant.Runtime.Documents
 @using Sovrant.Runtime.Documents.Templates
+@using Sovrant.Runtime.Workspaces
 @using Sovrant.Web.Services
 @using SovrantDocumentFormat = Sovrant.Runtime.Documents.DocumentFormat
 
@@ -213,7 +214,7 @@
                 format = overridden;
 
             var workspaceId = string.IsNullOrWhiteSpace(ActiveContext.WorkspaceId)
-                ? ArtifactScope.DefaultWorkspaceId : ActiveContext.WorkspaceId;
+                ? WorkspaceIdentity.DefaultPersonal() : ActiveContext.WorkspaceId;
             var projectId = string.IsNullOrWhiteSpace(ActiveContext.ProjectId)
                 ? ArtifactScope.DefaultProjectId : ActiveContext.ProjectId;
 
