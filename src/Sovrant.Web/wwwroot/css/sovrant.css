@@ -1251,6 +1251,21 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     margin-bottom: 16px;
 }
 
+.settings-page-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--surface-background);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--surface-border);
+}
+
 .settings-page h2 {
     font-size: 15px;
     font-weight: 600;

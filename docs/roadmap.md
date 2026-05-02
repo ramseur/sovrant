@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-04-30 (Phase 81 unified memory shipped — 49 phases shipped, 9 pending)
+**Last updated:** 2026-05-02 (added Phase 84 prompt library + Phase 85 identity & login parity — 49 phases shipped, 11 pending)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -7802,3 +7802,247 @@ the default but operators can drop in alternatives via configuration.
   path first.
 - **Multi-tenant managed memory service** — a hosted Sovrant memory layer is
   a separate product question, not a runtime feature.
+
+---
+
+## Phase 84 — Prompt Library: Reusable, Parameterised Prompt Templates Across Surfaces
+
+> **Status:** Pending. Adds a first-class prompt library so users can author,
+> share, version, and invoke reusable prompt templates from CLI, Web, and
+> Desktop. Templates support variables, are scoped to user / workspace /
+> project, and are wired into the slash-command surface so they feel like
+> native commands.
+
+### Goal
+
+Users repeatedly type the same multi-paragraph prompts ("write a unit test
+for X", "audit this PR for security issues", "scaffold a Node app with the
+following structure…") across sessions. Today there's no shared place to
+keep them; they end up in scratch files, browser bookmarks, or muscle
+memory. A prompt library treats prompts as durable, named, parameterised
+artifacts — the way skills and agents are.
+
+### Why now
+
+- The agentic loop is mature enough that the bottleneck has shifted from
+  "can the model do this?" to "can the user describe what they want
+  consistently?" — prompts are the user-side analogue of skills.
+- Skills (Phase 67) and Agents (Phase 79) already model named, scoped,
+  parameterised behaviours. Prompts share most of the metadata shape and
+  storage primitives, so this is incremental.
+- Dogfooding shows users hand-rolling the same scaffolding prompts every
+  session. A library would compress that to a one-liner.
+
+### Scope
+
+A `PromptTemplate` is a record with:
+
+- **Name** (slug, unique within scope)
+- **Description** (short — shows up in pickers)
+- **Body** (markdown with `{{variable}}` substitutions)
+- **Variables** (typed: `string`, `enum`, `multiline`, `file-ref`,
+  `agent-ref`)
+- **Scope** (user / workspace / project / global-shared)
+- **Tags** (for filtering)
+- **Version** (so edits don't silently change behaviour for callers)
+- **Source** (built-in / user-authored / imported / shared)
+
+Surfaces:
+
+- **CLI** — `/prompt list`, `/prompt run <name>`, `/prompt new`,
+  `/prompt edit`. Slash-command alias auto-registered: `/<prompt-name>`
+  routes to the template after variable prompts.
+- **Web** — Prompts page (parallel to Skills/Agents), card list with run
+  button, inline editor, "import from file" and "share to workspace".
+- **Desktop** — Prompts panel under the Knowledge group; same affordances.
+  Inline picker in the chat composer (`/` triggers prompt + slash-command
+  picker).
+- **Server** — `GET/POST/PUT/DELETE /v1/prompts`, `POST /v1/prompts/{name}/run`
+  (returns the rendered prompt; client decides whether to send it as a
+  user turn).
+
+Storage: SQLite migration `prompts` + `prompt_variables` tables, scoped
+by `user_id` / `workspace_id` / `project_id` (mirrors the artifact /
+memory scoping pattern). Sharing a prompt = copying it to another scope
+or marking it `global-shared`.
+
+Built-ins: ship a starter set covering common dogfood paths — "scaffold
+a Node app", "write a Markdown PRD from these notes", "review this PR
+for security issues", "summarise this conversation as memory".
+
+### Implementation sketch
+
+| Component | File | Notes |
+|---|---|---|
+| `PromptTemplate` record | `src/Sovrant.Runtime/Prompts/` | Body + typed variables + scope |
+| `IPromptStore` + `SqlitePromptStore` | `src/Sovrant.Runtime/Prompts/` + Storage | CRUD, scoped lookups |
+| Migration `V0XX__prompts.sql` | `src/Sovrant.Runtime/Storage/Migrations/` | Two tables, indexed by scope |
+| `PromptRenderer` | `src/Sovrant.Runtime/Prompts/` | `{{var}}` substitution, missing-var validation |
+| `PromptSlashCommand` | `src/Sovrant.Commands/` | Auto-registers `/<name>` for each prompt in scope |
+| `PromptRoutes` | `src/Sovrant.Server/Routes/` | REST surface |
+| Web `Prompts.razor` | `src/Sovrant.Web/Components/Pages/` | List + editor + run |
+| Desktop `PromptsView.axaml` | `src/Sovrant.Desktop/Views/` | Knowledge-group panel |
+| CLI `PromptCommand` | `src/Sovrant.Cli/Commands/` | list/run/new/edit/import |
+| Built-in prompts | `prompts/builtin/*.md` | Embedded resources, seeded on first boot |
+
+### Acceptance Criteria
+
+- [ ] User authors a prompt in any surface; it appears in the others within
+      the same scope (workspace / project) without restart
+- [ ] `/<prompt-name>` works as a slash command in CLI, Web, and Desktop;
+      missing variables prompt the user inline
+- [ ] Prompt scoping respects the existing user / workspace / project
+      hierarchy — a project prompt only shows when that project is active
+- [ ] Built-in starter prompts ship with the install and are visible
+      under "global-shared"; users can fork them into their own scope
+- [ ] Version bump on edit is automatic; running an older version is
+      opt-in via `/prompt run <name>@<version>`
+- [ ] Tests cover render variable substitution, scope resolution, and
+      slash-command auto-registration
+
+### Deferred
+
+- **Prompt marketplace / community sharing** — out of scope; private
+  share-to-workspace is enough for v1.
+- **A/B prompt evaluation** — instrumentation to compare prompt variants
+  by outcome belongs in the eval framework, not the prompt library.
+- **Prompt chains / pipelines** — building one prompt from the output of
+  another. Use the agentic loop or a custom skill for this until demand
+  surfaces.
+
+---
+
+## Phase 85 — Identity & Login Parity Across CLI, Web, Desktop & Server
+
+> **Status:** Pending. Aligns how users are identified and authenticated
+> across all four surfaces so a Sovrant install behaves as one product
+> regardless of how the user enters it. Server's existing per-request
+> credential and bearer-token model for data queries stays as-is; this
+> phase is about the **login** side: a single best-practice email +
+> hashed-password identity that the surfaces share.
+
+### Goal
+
+Today each surface invents its own notion of "who am I":
+
+- **Desktop** — `SOVRANT_USER_ID || Environment.UserName` (no auth)
+- **CLI** — same env-var fallback (no auth)
+- **Web** — Blazor Server with optional per-session bearer token; no first-class user
+- **Server** — first-class users + API tokens (Phase 38), workspace membership, RLS-ish scoping
+
+This means a user who sets up Desktop, then opens the same install in the
+browser, looks like a different person to the system. Workspaces, sessions,
+and memories don't follow them. A multi-user team can't safely share a
+laptop or a server without spoofing each other.
+
+The phase introduces a single login flow — **email + password (Argon2id)**
+plus optional OAuth providers — and threads the resulting `UserId` through
+every surface. The server's existing API-token model stays the source of
+truth for *machine-to-machine* identity; this phase covers the
+*human-to-product* identity that funnels into it.
+
+### Why now
+
+- Phases 35–38 already shipped users, workspaces, memberships, and API
+  tokens. The data model is there; only the surface plumbing is missing.
+- Dogfooding already trips over the inconsistency: switching from Desktop
+  to Web mid-session loses context because the user identity differs.
+- The trust-boundary work (Phase 58) and audit logging want a single
+  reliable principal — bolting auth on later means rewriting attribution.
+- Source-available licensing (BSL → Apache) means more eyes on the code;
+  shipping with no first-class auth on Desktop/CLI is a defensibility
+  problem.
+
+### Scope
+
+**One identity model, four surfaces.** A `User` record (already exists)
+gains an `email_hash`, `password_hash` (Argon2id), `email_verified_at`,
+and `last_login_at`. Login produces a session token consumed identically
+by every surface.
+
+**Surface flows:**
+
+- **Desktop** — first run shows a login/register dialog (already have a
+  setup wizard pattern; extend it). Token persisted in DPAPI-protected
+  store. "Continue as local user (no auth)" remains an option for
+  air-gapped use; it maps to a synthetic single-user account that can
+  be promoted to a real one later.
+- **CLI** — `sovrant login` opens browser to a local callback (mirrors
+  the MCP OAuth flow), or accepts `--email/--password`, or reads
+  `SOVRANT_API_TOKEN` for headless. Token stored in OS keychain.
+- **Web** — Blazor login page (`/login`, `/register`, `/forgot-password`),
+  cookie auth for browser sessions, JWT for the SDK. SSO plug-in points
+  for Google / Microsoft / GitHub.
+- **Server** — adds `POST /v1/auth/login`, `POST /v1/auth/register`,
+  `POST /v1/auth/logout`, `POST /v1/auth/forgot-password`,
+  `POST /v1/auth/reset-password`. Existing per-request credential and
+  workspace-token mechanisms (the "complicated auth scheme" for data
+  scoping) are unchanged — login mints a token that those layers
+  continue to consume.
+
+**Best-practice security baseline:**
+
+- Argon2id password hashing (Konscious.Security.Cryptography), tuned
+  per OWASP 2026 recommendations
+- Rate-limited login endpoint (existing rate-limit middleware)
+- Email-based password reset with single-use, time-bound tokens
+- Optional TOTP 2FA (defer to a follow-up if scope grows)
+- Session tokens are signed JWTs with short TTL + refresh; revocation
+  list piggybacks on existing API-token revocation table
+- Tokens scoped by audience (`desktop`, `cli`, `web`, `sdk`) so a leaked
+  CLI token can't be used in the browser session
+
+**Migration path:**
+
+- Existing installs with no auth boot into "local user" mode. A
+  one-time prompt in each surface invites the user to upgrade to an
+  account; declining keeps local mode working forever.
+- Existing sessions / workspaces / memories are owned by `SOVRANT_USER_ID
+  || os-username`. Upgrading to an account migrates ownership in place
+  (idempotent, audited).
+
+### Implementation sketch
+
+| Component | File | Notes |
+|---|---|---|
+| Migration `V0XX__user_login.sql` | `src/Sovrant.Runtime/Storage/Migrations/` | Add `email_hash`, `password_hash`, `email_verified_at`, `last_login_at`, `password_reset_tokens` table |
+| `IPasswordHasher` + Argon2id impl | `src/Sovrant.Runtime/Auth/` | Konscious.Security.Cryptography; tuned params |
+| `IIdentityService` | `src/Sovrant.Runtime/Auth/` | Register / login / verify / reset / token-mint |
+| `JwtSessionTokenIssuer` | `src/Sovrant.Runtime/Auth/` | Short-TTL access + refresh; audience claim |
+| `AuthRoutes` | `src/Sovrant.Server/Routes/` | Login / register / logout / forgot / reset |
+| `LoginPage.razor` + `RegisterPage.razor` | `src/Sovrant.Web/Components/Pages/` | + cookie middleware wiring |
+| Desktop `LoginDialog` | `src/Sovrant.Desktop/Views/` | First-run + Settings → Account |
+| `OsKeychainTokenStore` | `src/Sovrant.Cli/Auth/` | Wraps DPAPI / Keychain / libsecret |
+| `sovrant login/logout/whoami` | `src/Sovrant.Cli/Commands/` | + browser-callback flow |
+| `IPrincipalAccessor` | `src/Sovrant.Runtime/Auth/` | Single abstraction surfaces use to read current user |
+| Optional SSO providers | `src/Sovrant.Server/Auth/` | Google / Microsoft / GitHub OAuth — pluggable, off by default |
+
+### Acceptance Criteria
+
+- [ ] A user registers in Desktop and immediately sees the same workspaces,
+      sessions, and memories when they open Web pointing at the same DB / server
+- [ ] CLI `sovrant login` works headlessly (`--email --password`) and
+      interactively (browser callback); subsequent commands resolve the
+      same `UserId` as Desktop / Web
+- [ ] Server's existing per-request credential model (`X-LLM-Api-Key`,
+      workspace tokens) is unchanged and continues to scope data access;
+      login layers cleanly on top
+- [ ] Password storage uses Argon2id with parameters meeting OWASP 2026
+      guidance; a hash audit script verifies it
+- [ ] Rate-limited login + lockout-on-brute-force behaviour is covered by
+      tests
+- [ ] Existing single-user installs ("local user" mode) continue to work
+      with no migration required, and the one-time upgrade flow migrates
+      data ownership atomically
+- [ ] Token audiences prevent cross-surface token reuse; integration tests
+      confirm a CLI-audience token rejected by web cookie middleware
+- [ ] Logout revokes the token everywhere within the next refresh cycle
+
+### Deferred
+
+- **Federated identity (SAML, enterprise SSO)** — deferred to a separate
+  enterprise phase once a paying customer asks.
+- **Hardware-key second factor (WebAuthn / passkeys)** — desirable, but
+  TOTP first.
+- **Cross-org user federation** — out of scope; a single Sovrant install
+  is one identity domain.

@@ -101,6 +101,17 @@ public static class Program
 
         var app = builder.Build();
 
+        if (!isRemote)
+        {
+            // Run DB migrations synchronously before app.RunAsync() so any page
+            // that synchronously touches the DB on render (e.g. TrustBoundaryPage
+            // resolving IWorkspaceSettingsStore in OnInitialized) can't race the
+            // background InitializeRuntimeAsync. Idempotent — the deferred
+            // Task.Run below re-calls it for model metadata, MCP bootstrap, etc.
+            await app.Services.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>()
+                .InitializeAsync().ConfigureAwait(false);
+        }
+
         app.MapStaticAssets();
         app.UseAntiforgery();
 

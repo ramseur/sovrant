@@ -14,11 +14,9 @@
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-            <Button Content="⚡  Automations"
-                    Command="{Binding NavigateCommand}" CommandParameter="Automations"
-                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+            <!-- Automations entry hidden: workflow automation will be delivered through MCP-connected
+                 platforms (n8n, etc.) rather than a built-in surface. VM/View/route remain wired. -->
+
         </StackPanel>
     </ScrollViewer>
 </UserControl>

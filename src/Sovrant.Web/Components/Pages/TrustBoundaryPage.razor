@@ -7,12 +7,20 @@
 @inject LiveSettingsRegistry LiveSettings
 
 <div class="settings-page">
-    <h1>Trust Boundary</h1>
-    <p class="text-muted text-sm">
-        Sanitization, intent verification, and provider exemptions for outgoing
-        prompts. Stored in the workspace settings DB; <code>settings.json</code>
-        remains the bootstrap fallback.
-    </p>
+    <div class="settings-page-header">
+        <div>
+            <h1 style="margin-bottom:4px;">Trust Boundary</h1>
+            <p class="text-muted text-sm" style="margin:0;">
+                Sanitization, intent verification, and provider exemptions for outgoing
+                prompts. Stored in the workspace settings DB; <code>settings.json</code>
+                remains the bootstrap fallback.
+            </p>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+            <button class="btn-secondary" style="width:auto;padding:8px 16px;" @onclick="ReloadFromStore">Refresh</button>
+            <button class="btn-primary" style="width:auto;padding:8px 16px;" @onclick="SaveConfigAsync">Save</button>
+        </div>
+    </div>
 
     @if (!string.IsNullOrEmpty(_status))
     {
@@ -191,8 +199,7 @@
         </div>
     </div>
 
-    <button class="btn-primary" style="max-width:200px;margin-top:20px;" @onclick="SaveConfigAsync">Save Configuration</button>
-    <p class="text-muted text-sm">Saved values take effect on the next conversation turn.</p>
+    <p class="text-muted text-sm" style="margin-top:20px;">Saved values take effect on the next conversation turn.</p>
 </div>
 
 @code {
@@ -218,7 +225,9 @@
     private string _newPatternAction = "redact";
     private string _status = string.Empty;
 
-    protected override void OnInitialized()
+    protected override void OnInitialized() => ReloadFromStore();
+
+    private void ReloadFromStore()
     {
         var resolved = TrustBoundaryConfig.Resolve(Config.TrustBoundary, SettingsStore);
 

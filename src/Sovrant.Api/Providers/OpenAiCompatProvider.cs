@@ -62,7 +62,9 @@ public class OpenAiCompatProvider : ILlmProvider
     public virtual string Name => "openai-compat";
 
     /// <inheritdoc/>
-    public Uri BaseUrl => _http.BaseAddress ?? new Uri("about:blank");
+    public Uri BaseUrl =>
+        (_auth is IBaseUrlOverride { BaseUrl: { } ov } ? ov : _http.BaseAddress)
+        ?? new Uri("about:blank");
 
     /// <inheritdoc/>
     public async Task<Result<MessageResponse>> SendAsync(MessagesRequest req, CancellationToken ct = default)
