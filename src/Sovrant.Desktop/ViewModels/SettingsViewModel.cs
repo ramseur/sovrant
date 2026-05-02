@@ -1,17 +1,22 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Avalonia;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Api.Auth;
 using Sovrant.Api.Capabilities;
 using Sovrant.Api.Config;
 using Sovrant.Api.Routing;
 using Sovrant.Desktop.Adapters;
 using Sovrant.Runtime.Config;
+using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Permissions;
+using Sovrant.Runtime.Preferences;
+using Sovrant.Runtime.Providers;
+using RuntimeProfile = Sovrant.Runtime.Providers.ProviderProfile;
 
 namespace Sovrant.Desktop.ViewModels;
 
@@ -24,26 +29,15 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly SidebarViewModel _sidebar;
     private readonly MutableAuthProvider _authProvider;
     private readonly IHttpClientFactory _httpFactory;
+    private readonly IUserPreferenceStore _prefs;
+    private readonly IProviderProfileStore _profileStore;
+    private readonly ICredentialStore _credentials;
     private readonly ISmartRouter? _router;
     private readonly WebSearchOptions? _webSearchOptions;
     private readonly IModelCapabilityRegistry? _capabilities;
     private CancellationTokenSource? _autoSaveCts;
     private bool _initialized;
     private bool _suppressAutoSave;
-
-    private static readonly string SettingsPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".sovrant", "settings.json");
-
-    private static readonly string ProfilesPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".sovrant", "providers.json");
-
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
 
     // Known base URLs per provider. These match the endpoints each provider
     // expects for OpenAI-compatible chat completions.
@@ -127,6 +121,9 @@ public partial class SettingsViewModel : ViewModelBase
 
     public SettingsViewModel(SovrantConfig config, IPermissionModeAccessor permissionModeAccessor,
         SidebarViewModel sidebar, MutableAuthProvider authProvider, IHttpClientFactory httpFactory,
+        IUserPreferenceStore prefs,
+        IProviderProfileStore profileStore,
+        ICredentialStore credentials,
         ISmartRouter? router = null,
         WebSearchOptions? webSearchOptions = null,
         IModelCapabilityRegistry? capabilities = null)
@@ -136,11 +133,15 @@ public partial class SettingsViewModel : ViewModelBase
         _sidebar = sidebar;
         _authProvider = authProvider;
         _httpFactory = httpFactory;
+        _prefs = prefs;
+        _profileStore = profileStore;
+        _credentials = credentials;
         _router = router;
         _webSearchOptions = webSearchOptions;
         _capabilities = capabilities;
 
-        // Load current values from runtime config.
+        // Load current values from runtime config (already populated by
+        // ApplyUserPreferencesAsync at boot).
         _modelName = config.Model;
         _maxOutputTokens = config.MaxTokens;
         _apiKey = config.ApiKey ?? string.Empty;
@@ -148,13 +149,33 @@ public partial class SettingsViewModel : ViewModelBase
         _permissionMode = permissionModeAccessor.Mode;
         _intentRoutingEnabled = router?.IntentRoutingEnabled ?? false;
         _webSearchBackend = config.WebSearchOverride ?? webSearchOptions?.Backend ?? WebSearchBackend.Auto;
-        _selectedProvider = InferProvider(config);
 
-        LoadProfiles();
-        _ = LoadModelsForProviderAsync(_selectedProvider);
+        // Provider name + saved profile list need DB reads — fire and forget;
+        // the UI will populate as the await chain completes.
+        _selectedProvider = InferProviderFromBaseUrl(config.BaseUrl);
+        _ = HydrateFromStoresAsync();
+
         UpdateWebSearchStatus();
 
         _initialized = true;
+    }
+
+    private async Task HydrateFromStoresAsync()
+    {
+        // Provider name is stored in user preferences when explicitly set.
+        var savedProvider = await _prefs.GetAsync(App.SovrantUserId, UserPreferenceKeys.Provider);
+        if (!string.IsNullOrEmpty(savedProvider))
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                _suppressAutoSave = true;
+                SelectedProvider = savedProvider;
+                _suppressAutoSave = false;
+            });
+        }
+
+        await LoadProfilesAsync();
+        await Dispatcher.UIThread.InvokeAsync(() => _ = LoadModelsForProviderAsync(SelectedProvider));
     }
 
     private void UpdateWebSearchStatus()
@@ -211,7 +232,7 @@ public partial class SettingsViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void SelectTab(string tab) => SelectedTab = int.Parse(tab, System.Globalization.CultureInfo.InvariantCulture);
+    private void SelectTab(string tab) => SelectedTab = int.Parse(tab, CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Debounced auto-save: waits 600ms after the last change, then saves.
@@ -435,34 +456,39 @@ public partial class SettingsViewModel : ViewModelBase
             ? SelectedProvider
             : NewProfileName.Trim();
 
-        // Update existing profile for same provider, or add new.
-        var existing = SavedProfiles.FirstOrDefault(p =>
-            p.Provider.Equals(SelectedProvider, StringComparison.OrdinalIgnoreCase));
+        var profileId = MakeProfileId(SelectedProvider, displayName);
+        var credentialId = $"provider.{profileId}.api_key";
 
-        if (existing is not null)
-        {
-            existing.Name = displayName;
-            existing.ApiKey = ApiKey;
-            existing.BaseUrl = BaseUrl;
-            existing.MaxTokens = MaxOutputTokens;
-        }
+        // Persist secret to credential store first so the row's reference is valid.
+        await _credentials.StoreAsync(credentialId, ApiKey.Trim());
+
+        var now = DateTimeOffset.UtcNow;
+        var runtimeProfile = new RuntimeProfile(
+            ProfileId: profileId,
+            UserId: App.SovrantUserId,
+            Name: displayName,
+            ProviderKind: SelectedProvider,
+            BaseUrl: BaseUrl ?? string.Empty,
+            DefaultModel: string.IsNullOrWhiteSpace(ModelName) ? null : ModelName.Trim(),
+            MaxTokens: MaxOutputTokens,
+            CredentialId: credentialId,
+            CreatedAt: now,
+            UpdatedAt: now);
+
+        var existing = await _profileStore.GetAsync(profileId);
+        if (existing is null)
+            await _profileStore.CreateAsync(runtimeProfile);
         else
-        {
-            SavedProfiles.Add(new ProviderProfile
-            {
-                Name = displayName,
-                Provider = SelectedProvider,
-                ApiKey = ApiKey,
-                BaseUrl = BaseUrl,
-                MaxTokens = MaxOutputTokens,
-            });
-        }
+            await _profileStore.UpdateAsync(runtimeProfile with { CreatedAt = existing.CreatedAt });
 
-        PersistProfiles();
+        // Refresh the UI list so the new profile appears immediately.
+        await LoadProfilesAsync();
 
-        // Auto-switch to the newly added provider.
-        await LoadProfileAsync(SavedProfiles.First(p =>
-            p.Provider.Equals(SelectedProvider, StringComparison.OrdinalIgnoreCase)));
+        // Auto-switch to the newly added profile.
+        var added = SavedProfiles.FirstOrDefault(p =>
+            string.Equals(p.ProfileId, profileId, StringComparison.Ordinal));
+        if (added is not null)
+            await LoadProfileAsync(added);
 
         NewProfileName = string.Empty;
         StatusMessage = $"Provider '{SelectedProvider}' added and activated.";
@@ -479,6 +505,8 @@ public partial class SettingsViewModel : ViewModelBase
             ApiKey = profile.ApiKey;
             BaseUrl = profile.BaseUrl;
             MaxOutputTokens = profile.MaxTokens;
+            if (!string.IsNullOrWhiteSpace(profile.Model))
+                ModelName = profile.Model;
             SelectedProfile = profile;
         }
         finally
@@ -486,50 +514,61 @@ public partial class SettingsViewModel : ViewModelBase
             _suppressAutoSave = false;
         }
 
+        // Pin this profile id as the active one — boot path will pick it up next time.
+        await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.ActiveProviderProfileId, profile.ProfileId);
+
         // Single save applies everything to runtime config + env vars.
         await SaveAsync();
         // Refresh sidebar dropdown to reflect changes.
-        _sidebar.LoadProviderProfiles();
+        await _sidebar.LoadProviderProfilesAsync();
         StatusMessage = $"Switched to '{profile.Name}'.";
     }
 
     [RelayCommand]
-    private void DeleteProfile(ProviderProfile profile)
+    private async Task DeleteProfileAsync(ProviderProfile profile)
     {
+        await _profileStore.DeleteAsync(profile.ProfileId);
+        await _credentials.DeleteAsync(profile.CredentialId);
         SavedProfiles.Remove(profile);
-        PersistProfiles();
         if (SelectedProfile == profile) SelectedProfile = null;
         StatusMessage = $"Profile '{profile.Name}' deleted.";
     }
 
-    private void LoadProfiles()
+    private async Task LoadProfilesAsync()
     {
-        SavedProfiles.Clear();
-        if (!File.Exists(ProfilesPath)) return;
-
-        try
+        var rows = await _profileStore.ListAsync(App.SovrantUserId);
+        var hydrated = new List<ProviderProfile>(rows.Count);
+        foreach (var row in rows)
         {
-            var json = File.ReadAllText(ProfilesPath);
-            var profiles = JsonSerializer.Deserialize<List<ProviderProfile>>(json, SerializerOptions);
-            if (profiles is not null)
+            var apiKey = await _credentials.RetrieveAsync(row.CredentialId) ?? string.Empty;
+            hydrated.Add(new ProviderProfile
             {
-                foreach (var p in profiles)
-                    SavedProfiles.Add(p);
-            }
+                ProfileId = row.ProfileId,
+                CredentialId = row.CredentialId,
+                Name = row.Name,
+                Provider = row.ProviderKind,
+                Model = row.DefaultModel ?? string.Empty,
+                ApiKey = apiKey,
+                BaseUrl = row.BaseUrl,
+                MaxTokens = row.MaxTokens ?? 32000,
+            });
         }
-        catch { /* ignore corrupt file */ }
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            SavedProfiles.Clear();
+            foreach (var p in hydrated)
+                SavedProfiles.Add(p);
+        });
     }
 
-    private void PersistProfiles()
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
+        Justification = "Profile ids are URL-style slugs and conventionally lowercase; never compared as security tokens.")]
+    private static string MakeProfileId(string provider, string name)
     {
-        try
-        {
-            var dir = Path.GetDirectoryName(ProfilesPath)!;
-            Directory.CreateDirectory(dir);
-            var json = JsonSerializer.Serialize(SavedProfiles.ToList(), SerializerOptions);
-            File.WriteAllText(ProfilesPath, json);
-        }
-        catch { /* best effort */ }
+        var slug = $"{provider}-{name}".ToLowerInvariant();
+        var sanitized = new string(slug.Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
+        return sanitized.Trim('-');
     }
 
     // ─── Save ──────────────────────────────────────────
@@ -539,34 +578,27 @@ public partial class SettingsViewModel : ViewModelBase
     {
         try
         {
-            var dir = Path.GetDirectoryName(SettingsPath)!;
-            Directory.CreateDirectory(dir);
-
-            // Read existing file to preserve fields we don't manage.
-            Dictionary<string, object?> existing = [];
-            if (File.Exists(SettingsPath))
-            {
-                var json = await File.ReadAllTextAsync(SettingsPath);
-                existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(json) ?? [];
-            }
-
-            existing["Provider"] = SelectedProvider;
-            existing["Model"] = ModelName;
-            existing["MaxTokens"] = MaxOutputTokens;
-            existing["PermissionMode"] = PermissionMode.ToString();
-            existing["IntentRouting"] = IntentRoutingEnabled;
-            existing["WebSearch"] = WebSearchBackend.ToString();
-
-            if (!string.IsNullOrWhiteSpace(ApiKey))
-                existing["ApiKey"] = ApiKey;
+            // Persist scalar prefs to the per-user store.
+            await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.Provider, SelectedProvider);
+            await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.Model, ModelName.Trim());
+            await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.MaxTokens,
+                MaxOutputTokens.ToString(CultureInfo.InvariantCulture));
+            await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.PermissionMode, PermissionMode.ToString());
+            await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.IntentRouting,
+                IntentRoutingEnabled ? "true" : "false");
+            await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.WebSearch, WebSearchBackend.ToString());
 
             if (!string.IsNullOrWhiteSpace(BaseUrl))
-                existing["BaseUrl"] = BaseUrl;
+                await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.BaseUrl, BaseUrl.Trim());
             else
-                existing.Remove("BaseUrl");
+                await _prefs.DeleteAsync(App.SovrantUserId, UserPreferenceKeys.BaseUrl);
 
-            var output = JsonSerializer.Serialize(existing, SerializerOptions);
-            await File.WriteAllTextAsync(SettingsPath, output);
+            // Secret never goes to the preference store. The MutableApiKeyAuthProvider
+            // (server) and ApplyUserPreferencesAsync (boot path) both look up
+            // CredentialKeys.LlmApiKey, so writing here keeps the running process
+            // and the next boot in agreement.
+            if (!string.IsNullOrWhiteSpace(ApiKey))
+                await _credentials.StoreAsync(CredentialKeys.LlmApiKey, ApiKey.Trim());
 
             // Hot-swap runtime config, env vars, and auth provider.
             _config.Model = ModelName.Trim();
@@ -652,25 +684,9 @@ public partial class SettingsViewModel : ViewModelBase
         return null;
     }
 
-    private static string InferProvider(SovrantConfig config)
+    private static string InferProviderFromBaseUrl(Uri? baseUrl)
     {
-        try
-        {
-            var path = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".sovrant", "settings.json");
-            if (File.Exists(path))
-            {
-                var json = File.ReadAllText(path);
-                using var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("Provider", out var prop) &&
-                    prop.GetString() is { Length: > 0 } saved)
-                    return saved;
-            }
-        }
-        catch { /* fall through */ }
-
-        var url = config.BaseUrl?.ToString() ?? string.Empty;
+        var url = baseUrl?.ToString() ?? string.Empty;
         if (url.Contains("openrouter", StringComparison.OrdinalIgnoreCase)) return "OpenRouter";
         if (url.Contains("deepseek", StringComparison.OrdinalIgnoreCase)) return "DeepSeek";
         if (url.Contains("groq", StringComparison.OrdinalIgnoreCase)) return "Groq";
@@ -706,6 +722,12 @@ public partial class SettingsViewModel : ViewModelBase
 
 public partial class ProviderProfile : ViewModelBase
 {
+    /// <summary>Stable id used as the row key in <c>provider_profiles</c>.</summary>
+    public string ProfileId { get; set; } = string.Empty;
+
+    /// <summary>Lookup key used by the credential store for this profile's API key.</summary>
+    public string CredentialId { get; set; } = string.Empty;
+
     [ObservableProperty] private string _name = string.Empty;
     [ObservableProperty] private string _provider = string.Empty;
     [ObservableProperty] private string _model = string.Empty;

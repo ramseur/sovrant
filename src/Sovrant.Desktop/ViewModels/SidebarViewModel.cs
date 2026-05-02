@@ -1,13 +1,16 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
+using System.Net.Http;
 using System.Text.Json;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Desktop.Adapters;
 using Sovrant.Runtime.Config;
+using Sovrant.Runtime.Mcp;
+using Sovrant.Runtime.Preferences;
+using Sovrant.Runtime.Providers;
 using Sovrant.Runtime.Session;
-using System.Diagnostics.CodeAnalysis;
-using System.Net.Http;
 
 namespace Sovrant.Desktop.ViewModels;
 
@@ -17,6 +20,9 @@ public partial class SidebarViewModel : ViewModelBase
     private readonly SovrantConfig _config;
     private readonly MutableAuthProvider? _authProvider;
     private readonly IHttpClientFactory? _httpFactory;
+    private readonly IUserPreferenceStore _prefs;
+    private readonly IProviderProfileStore _profileStore;
+    private readonly ICredentialStore _credentials;
     private bool _suppressProfileSwitch;
 
     public ActiveContextViewModel ActiveContext { get; }
@@ -77,16 +83,26 @@ public partial class SidebarViewModel : ViewModelBase
     public event EventHandler<string>? NavigationRequested;
     public event EventHandler<string>? SessionResumeRequested;
 
-    public SidebarViewModel(ISessionStore sessionStore, SovrantConfig config, ActiveContextViewModel activeContext,
-        MutableAuthProvider? authProvider = null, IHttpClientFactory? httpFactory = null)
+    public SidebarViewModel(
+        ISessionStore sessionStore,
+        SovrantConfig config,
+        ActiveContextViewModel activeContext,
+        IUserPreferenceStore prefs,
+        IProviderProfileStore profileStore,
+        ICredentialStore credentials,
+        MutableAuthProvider? authProvider = null,
+        IHttpClientFactory? httpFactory = null)
     {
         _sessionStore = sessionStore;
         _config = config;
         _authProvider = authProvider;
         _httpFactory = httpFactory;
+        _prefs = prefs;
+        _profileStore = profileStore;
+        _credentials = credentials;
         ActiveContext = activeContext;
         LoadFromConfig(config);
-        LoadProviderProfiles();
+        _ = LoadProviderProfilesAsync();
         _ = LoadSessionsAsync();
     }
 
@@ -230,10 +246,15 @@ public partial class SidebarViewModel : ViewModelBase
         IsDropdownOpen = false;
         SelectedTreeGroup = null;
 
-        _ = PersistActiveProviderAsync(new ProviderProfileEntry
+        _ = PersistActiveProfileAsync(new ProviderProfileEntry
         {
-            Provider = group.Provider, Model = option.Model,
-            ApiKey = group.ApiKey, BaseUrl = group.BaseUrl, MaxTokens = group.MaxTokens,
+            ProfileId = group.ProfileId,
+            CredentialId = group.CredentialId,
+            Provider = group.Provider,
+            Model = option.Model,
+            ApiKey = group.ApiKey,
+            BaseUrl = group.BaseUrl,
+            MaxTokens = group.MaxTokens,
         });
     }
 
@@ -278,23 +299,34 @@ public partial class SidebarViewModel : ViewModelBase
         IsConnected = !string.IsNullOrWhiteSpace(profile.ApiKey);
         ConnectionStatus = IsConnected ? "Connected" : "No API key";
 
-        _ = PersistActiveProviderAsync(profile);
+        _ = PersistActiveProfileAsync(profile);
     }
 
-    public void LoadProviderProfiles()
+    public async Task LoadProviderProfilesAsync()
     {
-        var path = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".sovrant", "providers.json");
-        ProviderProfiles.Clear();
-        TreeGroups.Clear();
-        if (!File.Exists(path)) return;
-        try
+        var rows = await _profileStore.ListAsync(App.SovrantUserId);
+        var entries = new List<ProviderProfileEntry>(rows.Count);
+        foreach (var row in rows)
         {
-            var json = File.ReadAllText(path);
-            var profiles = JsonSerializer.Deserialize<List<ProviderProfileEntry>>(json);
-            if (profiles is null) return;
-            foreach (var p in profiles)
+            var apiKey = await _credentials.RetrieveAsync(row.CredentialId) ?? string.Empty;
+            entries.Add(new ProviderProfileEntry
+            {
+                ProfileId = row.ProfileId,
+                CredentialId = row.CredentialId,
+                Name = row.Name,
+                Provider = row.ProviderKind,
+                Model = row.DefaultModel ?? string.Empty,
+                ApiKey = apiKey,
+                BaseUrl = row.BaseUrl,
+                MaxTokens = row.MaxTokens ?? 32000,
+            });
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            ProviderProfiles.Clear();
+            TreeGroups.Clear();
+            foreach (var p in entries)
                 ProviderProfiles.Add(p);
 
             // Select the profile matching current provider without triggering a switch.
@@ -305,8 +337,7 @@ public partial class SidebarViewModel : ViewModelBase
             _suppressProfileSwitch = false;
 
             BuildTreeGroups();
-        }
-        catch { /* best effort */ }
+        });
     }
 
     private void BuildTreeGroups()
@@ -320,6 +351,8 @@ public partial class SidebarViewModel : ViewModelBase
                 group = new ProviderTreeGroup
                 {
                     Provider = profile.Provider,
+                    ProfileId = profile.ProfileId,
+                    CredentialId = profile.CredentialId,
                     ApiKey = profile.ApiKey,
                     BaseUrl = profile.BaseUrl,
                     MaxTokens = profile.MaxTokens,
@@ -342,29 +375,29 @@ public partial class SidebarViewModel : ViewModelBase
         }
     }
 
-    private static readonly JsonSerializerOptions s_jsonOptions = new() { WriteIndented = true };
-
-    private static async Task PersistActiveProviderAsync(ProviderProfileEntry profile)
+    private async Task PersistActiveProfileAsync(ProviderProfileEntry profile)
     {
         try
         {
-            var settingsPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".sovrant", "settings.json");
-            Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
-            Dictionary<string, object?> existing = [];
-            if (File.Exists(settingsPath))
-                existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(
-                    await File.ReadAllTextAsync(settingsPath)) ?? [];
+            // Pin this profile id as the active one so the next boot's
+            // ApplyUserPreferencesAsync hydrates the same provider.
+            if (!string.IsNullOrEmpty(profile.ProfileId))
+                await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.ActiveProviderProfileId, profile.ProfileId);
 
-            existing["Provider"] = profile.Provider;
+            await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.Provider, profile.Provider);
+
             if (!string.IsNullOrWhiteSpace(profile.Model))
-                existing["Model"] = profile.Model;
-            existing["MaxTokens"] = profile.MaxTokens;
-            if (!string.IsNullOrWhiteSpace(profile.ApiKey)) existing["ApiKey"] = profile.ApiKey;
-            if (!string.IsNullOrWhiteSpace(profile.BaseUrl)) existing["BaseUrl"] = profile.BaseUrl;
+                await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.Model, profile.Model);
+            if (!string.IsNullOrWhiteSpace(profile.BaseUrl))
+                await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.BaseUrl, profile.BaseUrl);
 
-            await File.WriteAllTextAsync(settingsPath, JsonSerializer.Serialize(existing, s_jsonOptions));
+            await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.MaxTokens,
+                profile.MaxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+            // Refresh the credential under the global key so the next boot's
+            // fallback path (no profile) finds the same value too.
+            if (!string.IsNullOrWhiteSpace(profile.ApiKey))
+                await _credentials.StoreAsync(Sovrant.Api.Auth.CredentialKeys.LlmApiKey, profile.ApiKey);
         }
         catch { /* best effort */ }
     }
@@ -389,21 +422,14 @@ public partial class SidebarViewModel : ViewModelBase
             _ => "Custom",
         };
 
-        // Read saved provider name from settings.json if available.
-        try
+        // Refine from saved preference if one exists. Async fire-and-forget;
+        // the URL inference is already a usable display value.
+        _ = Task.Run(async () =>
         {
-            var path = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".sovrant", "settings.json");
-            if (File.Exists(path))
-            {
-                var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
-                if (json.RootElement.TryGetProperty("Provider", out var prop) &&
-                    prop.GetString() is { Length: > 0 } saved)
-                    CurrentProvider = saved;
-            }
-        }
-        catch { /* use inferred provider */ }
+            var saved = await _prefs.GetAsync(App.SovrantUserId, UserPreferenceKeys.Provider);
+            if (!string.IsNullOrEmpty(saved))
+                await Dispatcher.UIThread.InvokeAsync(() => CurrentProvider = saved);
+        });
 
         IsConnected = !string.IsNullOrWhiteSpace(config.ApiKey);
         ConnectionStatus = IsConnected ? "Connected" : "No API key";
@@ -504,12 +530,14 @@ public partial class SidebarViewModel : ViewModelBase
 
 public sealed class ProviderProfileEntry
 {
+    public string ProfileId { get; set; } = string.Empty;
+    public string CredentialId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Provider { get; set; } = string.Empty;
     public string Model { get; set; } = string.Empty;
     public string ApiKey { get; set; } = string.Empty;
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "Deserialized from JSON")]
+    [SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "Persisted as TEXT in SQLite")]
     public string BaseUrl { get; set; } = string.Empty;
     public int MaxTokens { get; set; } = 32000;
 
@@ -521,9 +549,11 @@ public partial class ProviderTreeGroup : ViewModelBase
     [ObservableProperty]
     private string _provider = string.Empty;
 
+    public string ProfileId { get; set; } = string.Empty;
+    public string CredentialId { get; set; } = string.Empty;
     public string ApiKey { get; set; } = string.Empty;
 
-    [SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "Deserialized from JSON")]
+    [SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "Persisted as TEXT in SQLite")]
     public string BaseUrl { get; set; } = string.Empty;
 
     public int MaxTokens { get; set; } = 32000;

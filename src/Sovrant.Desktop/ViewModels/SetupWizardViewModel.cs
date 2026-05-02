@@ -1,28 +1,23 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Api.Auth;
+using Sovrant.Desktop.Adapters;
 using Sovrant.Runtime.Config;
+using Sovrant.Runtime.Mcp;
+using Sovrant.Runtime.Preferences;
+using Sovrant.Runtime.Providers;
+using RuntimeProfile = Sovrant.Runtime.Providers.ProviderProfile;
 
 namespace Sovrant.Desktop.ViewModels;
 
 public partial class SetupWizardViewModel : ViewModelBase
 {
     private readonly SovrantConfig _config;
-
-    private static readonly string SettingsPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".sovrant", "settings.json");
-
-    private static readonly string ProfilesPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".sovrant", "providers.json");
-
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
+    private readonly IUserPreferenceStore _prefs;
+    private readonly IProviderProfileStore _profileStore;
+    private readonly ICredentialStore _credentials;
+    private readonly MutableAuthProvider? _authProvider;
 
     // Known base URLs per provider — shared with SettingsViewModel.
     private static readonly Dictionary<string, string> ProviderBaseUrls =
@@ -62,9 +57,18 @@ public partial class SetupWizardViewModel : ViewModelBase
     /// <summary>Raised after settings are saved successfully.</summary>
     public event Action? SetupCompleted;
 
-    public SetupWizardViewModel(SovrantConfig config)
+    public SetupWizardViewModel(
+        SovrantConfig config,
+        IUserPreferenceStore prefs,
+        IProviderProfileStore profileStore,
+        ICredentialStore credentials,
+        MutableAuthProvider? authProvider = null)
     {
         _config = config;
+        _prefs = prefs;
+        _profileStore = profileStore;
+        _credentials = credentials;
+        _authProvider = authProvider;
         _isVisible = string.IsNullOrWhiteSpace(config.ApiKey);
 
         // Set initial provider.
@@ -90,54 +94,69 @@ public partial class SetupWizardViewModel : ViewModelBase
 
         try
         {
-            var dir = Path.GetDirectoryName(SettingsPath)!;
-            Directory.CreateDirectory(dir);
-
+            var trimmedKey = ApiKey.Trim();
+            var trimmedBase = (BaseUrl ?? string.Empty).Trim();
             var defaultModel = DefaultModels.GetValueOrDefault(SelectedProvider, "gpt-4o");
 
-            // Save to settings.json
-            Dictionary<string, object?> existing = [];
-            if (File.Exists(SettingsPath))
+            var profileId = MakeProfileId(SelectedProvider, SelectedProvider);
+            var credentialId = $"provider.{profileId}.api_key";
+
+            // Encrypted credentials first so the profile row's reference is valid the moment it's inserted.
+            await _credentials.StoreAsync(credentialId, trimmedKey);
+            // Mirror to the global key so MutableApiKeyAuthProvider's lookup
+            // (CredentialKeys.LlmApiKey) resolves on the very next request.
+            await _credentials.StoreAsync(CredentialKeys.LlmApiKey, trimmedKey);
+
+            var now = DateTimeOffset.UtcNow;
+            var runtimeProfile = new RuntimeProfile(
+                ProfileId: profileId,
+                UserId: App.SovrantUserId,
+                Name: SelectedProvider,
+                ProviderKind: SelectedProvider,
+                BaseUrl: trimmedBase,
+                DefaultModel: defaultModel,
+                MaxTokens: 32000,
+                CredentialId: credentialId,
+                CreatedAt: now,
+                UpdatedAt: now);
+
+            var existing = await _profileStore.GetAsync(profileId);
+            if (existing is null)
+                await _profileStore.CreateAsync(runtimeProfile);
+            else
+                await _profileStore.UpdateAsync(runtimeProfile with { CreatedAt = existing.CreatedAt });
+
+            // Pin the new profile as active and save scalar prefs so they survive the next boot.
+            await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.ActiveProviderProfileId, profileId);
+            await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.Provider, SelectedProvider);
+            await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.Model, defaultModel);
+            if (!string.IsNullOrWhiteSpace(trimmedBase))
+                await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.BaseUrl, trimmedBase);
+            await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.MaxTokens,
+                "32000");
+
+            // Hot-swap the running config so the chat surface works without a restart.
+            _config.ApiKey = trimmedKey;
+            _config.Model = defaultModel;
+            _config.MaxTokens = 32000;
+            if (!string.IsNullOrWhiteSpace(trimmedBase) && Uri.TryCreate(trimmedBase, UriKind.Absolute, out var parsed))
+                _config.BaseUrl = parsed;
+
+            if (_authProvider is not null)
             {
-                var json = await File.ReadAllTextAsync(SettingsPath);
-                existing = JsonSerializer.Deserialize<Dictionary<string, object?>>(json) ?? [];
+                _authProvider.ApiKey = trimmedKey;
+                if (_config.BaseUrl is not null)
+                    _authProvider.BaseUrl = _config.BaseUrl;
             }
 
-            existing["Provider"] = SelectedProvider;
-            existing["Model"] = defaultModel;
-            existing["ApiKey"] = ApiKey.Trim();
-            if (!string.IsNullOrWhiteSpace(BaseUrl))
-                existing["BaseUrl"] = BaseUrl.Trim();
-
-            await File.WriteAllTextAsync(SettingsPath, JsonSerializer.Serialize(existing, SerializerOptions));
-
-            // Also save as a provider profile in providers.json
-            var newProfile = new Dictionary<string, object>
-            {
-                ["Name"] = SelectedProvider,
-                ["Provider"] = SelectedProvider,
-                ["ApiKey"] = ApiKey.Trim(),
-                ["BaseUrl"] = (BaseUrl ?? string.Empty).Trim(),
-                ["MaxTokens"] = 32000,
-            };
-            var profiles = new List<Dictionary<string, object>>();
-            if (File.Exists(ProfilesPath))
-            {
-                try
-                {
-                    var existingProfiles = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(
-                        await File.ReadAllTextAsync(ProfilesPath)) ?? [];
-                    // Keep existing profiles for other providers.
-                    foreach (var p in existingProfiles)
-                    {
-                        if (p.TryGetValue("Provider", out var prov) && prov?.ToString() != SelectedProvider)
-                            profiles.Add(p);
-                    }
-                }
-                catch { /* ignore parse errors */ }
-            }
-            profiles.Insert(0, newProfile);
-            await File.WriteAllTextAsync(ProfilesPath, JsonSerializer.Serialize(profiles, SerializerOptions));
+            // Env-var bridge for any provider clients still reading from the
+            // environment (LiveModelMetadataFetcher, OpenRouter API key probe).
+            Environment.SetEnvironmentVariable("LLM_API_KEY", trimmedKey);
+            Environment.SetEnvironmentVariable("LLM_MODEL", defaultModel);
+            if (!string.IsNullOrWhiteSpace(trimmedBase))
+                Environment.SetEnvironmentVariable("LLM_BASE_URL", trimmedBase);
+            if (trimmedBase.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
+                Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", trimmedKey);
 
             IsVisible = false;
             SetupCompleted?.Invoke();
@@ -150,6 +169,15 @@ public partial class SetupWizardViewModel : ViewModelBase
         {
             IsSaving = false;
         }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
+        Justification = "Profile ids are URL-style slugs and conventionally lowercase; never compared as security tokens.")]
+    private static string MakeProfileId(string provider, string name)
+    {
+        var slug = $"{provider}-{name}".ToLowerInvariant();
+        var sanitized = new string(slug.Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
+        return sanitized.Trim('-');
     }
 
     public IReadOnlyList<string> Providers { get; } =

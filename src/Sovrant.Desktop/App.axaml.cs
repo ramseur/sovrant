@@ -47,18 +47,20 @@ public partial class App : Application
             return;
         }
 
-        // Check if first-run setup is needed BEFORE building the DI container.
         // Desktop uses Fixed routing — the configured provider is used directly.
         Environment.SetEnvironmentVariable("ROUTER_MODE", "Fixed");
-        var config = ConfigLoader.Load();
-        if (string.IsNullOrWhiteSpace(config.ApiKey))
-        {
-            await RunSetupWizardAsync(desktop);
-            // Reload config now that the wizard has saved settings.json.
-            config = ConfigLoader.Load();
-        }
 
-        // Bridge config into env vars so the API layer picks them up.
+        // Build DI first; ApplyUserPreferencesAsync (Phase 88-C) runs inside
+        // InitializeRuntimeAsync and hydrates SovrantConfig from the DB +
+        // credential store, so we can't decide whether to show the setup
+        // wizard until that step has run. ConfigLoader.Load() now only reads
+        // sovrant.config / env vars — never per-user settings — so its
+        // ApiKey is empty for everyone except the env-var bootstrap path.
+        var config = ConfigLoader.Load();
+
+        // Bridge env-var bootstrap values (rare; mostly CI / dev) so the API
+        // layer sees them immediately. Real per-user values come from
+        // InitializeRuntimeAsync below.
         if (!string.IsNullOrWhiteSpace(config.ApiKey))
         {
             Environment.SetEnvironmentVariable("LLM_API_KEY", config.ApiKey);
@@ -68,10 +70,9 @@ public partial class App : Application
         if (config.BaseUrl is not null)
             Environment.SetEnvironmentVariable("LLM_BASE_URL", config.BaseUrl.ToString());
 
-        // Now build the full app with the correct config.
         try
         {
-            BuildApp(config, desktop);
+            await BuildAppAsync(config, desktop).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -82,7 +83,7 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    private void BuildApp(SovrantConfig config, IClassicDesktopStyleApplicationLifetime desktop)
+    private async Task BuildAppAsync(SovrantConfig config, IClassicDesktopStyleApplicationLifetime desktop)
     {
         var services = new ServiceCollection();
         var bootstrap = BootstrapConfigLoader.Load();
@@ -141,11 +142,25 @@ public partial class App : Application
 
         _serviceProvider.GetRequiredService<ToolRegistrar>().RegisterAll();
 
-        // Run DB migrations synchronously before resolving any VM that touches
-        // the DB (e.g. BudgetEnforcer queries workspace_settings in its ctor).
-        // InitializeAsync is idempotent — the deferred Task.Run below re-calls it.
-        _serviceProvider.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>()
-            .InitializeAsync().GetAwaiter().GetResult();
+        // Run DB migrations + the legacy migrator + ApplyUserPreferencesAsync
+        // synchronously so SovrantConfig.ApiKey is hydrated from the DB before
+        // we decide whether to show the setup wizard. Subsequent boot work
+        // (model metadata, MCP servers, user/workspace seeding) runs on a
+        // background task below.
+        await _serviceProvider.InitializeRuntimeAsync().ConfigureAwait(true);
+
+        // First-run setup — only after ApplyUserPreferencesAsync has had a
+        // chance to populate config.ApiKey from the credential store.
+        if (string.IsNullOrWhiteSpace(config.ApiKey))
+        {
+            await RunSetupWizardAsync(desktop, _serviceProvider).ConfigureAwait(true);
+            // The wizard hot-swaps SovrantConfig in place; no reload needed.
+        }
+
+        // Refresh the auth provider's API key now that the wizard (or the
+        // boot path) has populated config.ApiKey.
+        if (!string.IsNullOrWhiteSpace(config.ApiKey))
+            mutableAuth.ApiKey = config.ApiKey!;
 
         var mainVm = _serviceProvider.GetRequiredService<MainViewModel>();
         var window = new MainWindow { DataContext = mainVm };
@@ -154,13 +169,14 @@ public partial class App : Application
         desktop.ShutdownRequested += (_, _) => Environment.Exit(0);
         MainWindow = window;
 
-        // Initialize runtime in background — DB migrations, model metadata, MCP servers.
+        // Background user/workspace seeding — InitializeRuntimeAsync above
+        // already covered storage migrations, the legacy migrator, the
+        // preference apply step, and model-metadata fetching. The remaining
+        // work just needs to happen before the user starts a chat session.
         _ = Task.Run(async () =>
         {
             try
             {
-                await _serviceProvider.InitializeRuntimeAsync().ConfigureAwait(false);
-
                 // Ensure the desktop user exists (required by workspace FK constraints).
                 var userService = _serviceProvider.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
                 var user = await userService.GetAsync(SovrantUserId).ConfigureAwait(false);
@@ -176,7 +192,7 @@ public partial class App : Application
             catch (Exception ex)
             {
                 var logger = _serviceProvider.GetRequiredService<ILogger<App>>();
-                logger.LogError(ex, "Runtime initialization failed");
+                logger.LogError(ex, "User/workspace seeding failed");
             }
             finally
             {
@@ -187,11 +203,14 @@ public partial class App : Application
 
     /// <summary>
     /// Shows the setup wizard as a modal dialog before the main app loads.
-    /// Returns after the user completes setup (settings.json is saved).
+    /// The wizard writes credentials/preferences/profile rows to the DB +
+    /// credential store via DI services and hot-swaps the running
+    /// <see cref="SovrantConfig"/>; no on-disk JSON file is touched.
     /// </summary>
-    private static async Task RunSetupWizardAsync(IClassicDesktopStyleApplicationLifetime desktop)
+    private static async Task RunSetupWizardAsync(
+        IClassicDesktopStyleApplicationLifetime desktop, IServiceProvider services)
     {
-        var setupVm = new SetupWizardViewModel(new SovrantConfig());
+        var setupVm = ActivatorUtilities.CreateInstance<SetupWizardViewModel>(services);
 
         var wizardWindow = new Window
         {
