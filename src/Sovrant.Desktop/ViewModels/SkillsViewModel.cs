@@ -1,11 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
-using Avalonia.Controls;
-using Avalonia.Controls.ApplicationLifetimes;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Sovrant.Desktop.Views.Dialogs;
 using Sovrant.Tools.Skills;
 
 namespace Sovrant.Desktop.ViewModels;
@@ -26,6 +23,15 @@ public partial class SkillsViewModel : ViewModelBase
 
     [ObservableProperty]
     private string _detailMarkdown = string.Empty;
+
+    [ObservableProperty]
+    private MarkdownEditorViewModel? _activeEditor;
+
+    [ObservableProperty]
+    private bool _isEditing;
+
+    [ObservableProperty]
+    private string? _editingSlug;
 
     public ObservableCollection<SkillItemViewModel> FilteredSkills { get; } = [];
 
@@ -50,21 +56,25 @@ public partial class SkillsViewModel : ViewModelBase
     private void Refresh() => LoadSkills();
 
     [RelayCommand]
-    private void SelectSkill(SkillItemViewModel skill) => SelectedSkill = skill;
+    private void SelectSkill(SkillItemViewModel skill)
+    {
+        if (IsEditing) CancelEdit();
+        SelectedSkill = skill;
+    }
 
     [RelayCommand]
-    private async Task NewSkill() => await OpenEditor(string.Empty, NewSkillTemplate, readOnly: false, title: "New skill").ConfigureAwait(false);
+    private void NewSkill() => BeginEdit(slug: string.Empty, source: NewSkillTemplate, title: "New skill");
 
     [RelayCommand]
     private async Task EditSkill()
     {
         if (SelectedSkill is null) return;
         var src = _registry.TryGetSource(SelectedSkill.Name);
-        if (src is null) return;
-        var content = File.Exists(src.Path) ? await File.ReadAllTextAsync(src.Path).ConfigureAwait(true) : SelectedSkill.Body;
-        var slug = Path.GetFileNameWithoutExtension(src.Path);
-        var readOnly = src.Tier == SkillTier.BuiltIn;
-        await OpenEditor(slug, content, readOnly, title: SelectedSkill.Name).ConfigureAwait(false);
+        var content = src is not null && File.Exists(src.Path)
+            ? await File.ReadAllTextAsync(src.Path).ConfigureAwait(true)
+            : SelectedSkill.Body;
+        var slug = src is not null ? Path.GetFileNameWithoutExtension(src.Path) : string.Empty;
+        BeginEdit(slug, content, SelectedSkill.Name);
     }
 
     [RelayCommand]
@@ -79,27 +89,66 @@ public partial class SkillsViewModel : ViewModelBase
         LoadSkills();
     }
 
-    private async Task OpenEditor(string slug, string source, bool readOnly, string title)
+    private void BeginEdit(string slug, string source, string title)
     {
-        var owner = GetOwnerWindow();
-        if (owner is null) return;
-
+        DetachEditor();
+        EditingSlug = slug;
         var vm = new MarkdownEditorViewModel();
-        vm.Load(source, readOnly, title);
-        var dialog = new TemplateEditorDialog(vm);
-        var result = await dialog.ShowDialog<string?>(owner).ConfigureAwait(true);
-        if (result is null) return;
-
-        var resolvedSlug = ExtractSlug(result) ?? slug;
-        if (string.IsNullOrWhiteSpace(resolvedSlug)) return;
-        _registry.SaveGlobal(resolvedSlug, result);
-        LoadSkills();
+        vm.Load(source, title);
+        vm.Saved += OnEditorSaved;
+        vm.Cancelled += OnEditorCancelled;
+        ActiveEditor = vm;
+        IsEditing = true;
     }
 
-    private static Window? GetOwnerWindow() =>
-        Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
-            ? desktop.MainWindow
-            : null;
+    private void OnEditorSaved(object? sender, string source)
+    {
+        var resolvedSlug = ExtractSlug(source) ?? EditingSlug ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(resolvedSlug)) return;
+        _registry.SaveGlobal(resolvedSlug, source);
+        var savedName = ExtractName(source);
+        EndEdit();
+        LoadSkills();
+        if (!string.IsNullOrEmpty(savedName))
+        {
+            SelectedSkill = _allSkills.FirstOrDefault(s =>
+                string.Equals(s.Name, savedName, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    private static string? ExtractName(string markdown)
+    {
+        if (!markdown.StartsWith("---", StringComparison.Ordinal)) return null;
+        var end = markdown.IndexOf("\n---", 3, StringComparison.Ordinal);
+        if (end < 0) return null;
+        var fm = markdown.Substring(3, end - 3);
+        foreach (var line in fm.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith("name:", StringComparison.OrdinalIgnoreCase))
+                return trimmed.Substring(5).Trim().Trim('"', '\'');
+        }
+        return null;
+    }
+
+    private void OnEditorCancelled(object? sender, EventArgs e) => EndEdit();
+
+    private void CancelEdit() => EndEdit();
+
+    private void EndEdit()
+    {
+        DetachEditor();
+        IsEditing = false;
+        EditingSlug = null;
+    }
+
+    private void DetachEditor()
+    {
+        if (ActiveEditor is null) return;
+        ActiveEditor.Saved -= OnEditorSaved;
+        ActiveEditor.Cancelled -= OnEditorCancelled;
+        ActiveEditor = null;
+    }
 
     private static string? ExtractSlug(string markdown)
     {

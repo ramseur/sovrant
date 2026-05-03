@@ -1,7 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
-             xmlns:ctrl="using:Sovrant.Desktop.Controls"
              xmlns:ae="using:AvaloniaEdit"
              x:Class="Sovrant.Desktop.Views.Shared.MarkdownEditorView"
              x:DataType="vm:MarkdownEditorViewModel">
@@ -21,9 +20,6 @@
                         <Run Text="{Binding WordCount}" />
                         <Run Text=" words" />
                     </TextBlock>
-                    <Button Content="Toggle preview"
-                            Command="{Binding TogglePreviewCommand}"
-                            Padding="10,4" />
                     <Button Content="Cancel"
                             Command="{Binding CancelCommand}"
                             Padding="10,4" />
@@ -32,22 +28,13 @@
                             Padding="10,4"
                             Background="{DynamicResource BrandPrimary}"
                             Foreground="White"
-                            IsEnabled="{Binding ValidationError, Converter={x:Static StringConverters.IsNullOrEmpty}}"
-                            IsVisible="{Binding !IsReadOnly}" />
+                            IsEnabled="{Binding ValidationError, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <TextBlock Text="{Binding Title}"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource TextPrimary}"
                                IsVisible="{Binding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    <Border Background="{DynamicResource SurfaceBorder}"
-                            CornerRadius="3"
-                            Padding="6,2"
-                            IsVisible="{Binding IsReadOnly}">
-                        <TextBlock Text="Read-only"
-                                   FontSize="11"
-                                   Foreground="{DynamicResource TextSecondary}" />
-                    </Border>
                     <TextBlock Text="{Binding ValidationError}"
                                FontSize="12"
                                Foreground="{DynamicResource StatusFail}"
@@ -56,34 +43,12 @@
             </DockPanel>
         </Border>
 
-        <!-- Editor + preview -->
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-
-            <ae:TextEditor x:Name="Editor"
-                           Grid.Column="0"
-                           ShowLineNumbers="True"
-                           WordWrap="True"
-                           FontFamily="Consolas,Menlo,monospace"
-                           FontSize="13"
-                           IsReadOnly="{Binding IsReadOnly}"
-                           Background="{DynamicResource SurfaceBackground}"
-                           Foreground="{DynamicResource TextPrimary}" />
-
-            <GridSplitter Grid.Column="1"
-                          Width="4"
-                          Background="{DynamicResource SurfaceBorder}"
-                          IsVisible="{Binding ShowPreview}" />
-
-            <ScrollViewer Grid.Column="2"
-                          IsVisible="{Binding ShowPreview}"
-                          Padding="16,12">
-                <ctrl:SafeMarkdownPresenter Markdown="{Binding PreviewMarkdown}" />
-            </ScrollViewer>
-        </Grid>
+        <ae:TextEditor x:Name="Editor"
+                       ShowLineNumbers="True"
+                       WordWrap="True"
+                       FontFamily="Consolas,Menlo,monospace"
+                       FontSize="13"
+                       Background="{DynamicResource SurfaceBackground}"
+                       Foreground="{DynamicResource TextPrimary}" />
     </DockPanel>
 </UserControl>

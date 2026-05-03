@@ -8938,3 +8938,46 @@ This phase is the bounded fix-list. Nothing here is a new feature for its own sa
 - Cost & budget pill per run
 - Desktop tray badge for active runs
 - SignalR push (replace 2s poll once Phase 86 lands)
+
+## Phase 91 — Knowledge Authoring on Desktop: AvaloniaEdit Inline Editor Fixes
+
+**Status:** Deferred. Web shipped (Phase 90 cycle); Desktop edit/new/delete buttons hidden in `SkillsView` until the issues below are resolved.
+
+### Why now (later)
+
+Phase 90 shipped the rich-editor pattern for Skills/Documents/Tools markdown templates on both Web (BlazorMonaco + Markdig) and Desktop (AvaloniaEdit + SafeMarkdownPresenter). Web works end-to-end. Desktop has three known defects that are **not** worth blocking the release for, but must be fixed before knowledge authoring is exposed on Desktop:
+
+1. **Edit existing skill renders blank body** — title binds correctly but the AvaloniaEdit `TextEditor.Text` is not displayed despite `SyncEditorFromVm()` setting it. Suspected initial-load race between `DataContextChanged` and `AttachedToVisualTree`; mitigation in place (lazy `EnsureEditor()` lookup) did not fully resolve.
+2. **New entry → editor accepts no input** — caret/focus/key-input dead. Suspected missing or partial AvaloniaEdit theme registration even after `<StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />` was added to `App.axaml`, OR a hit-test layering issue with the stacked Borders in the detail Grid.
+3. **Save round-trip stale viewer** — after save+`LoadSkills()`, the viewer shows the old `SkillItemViewModel` because `SelectedSkill` references the dropped instance. Mitigation in place (re-select by `name`) — keep, but verify after #1 and #2 are fixed.
+
+### Scope
+
+- Reproduce each defect in a minimal Avalonia harness (TextEditor in a Border in a Grid) to isolate framework vs. integration.
+- Verify AvaloniaEdit 11.x is fully themed under the dark `FluentTheme` — may require additional resource includes (`AvaloniaEdit.TextMate` grammar styles, caret brushes).
+- Confirm `TextEditor` receives keyboard focus when the parent Border becomes `IsVisible=true`; if not, force focus on visibility change.
+- After fix, re-enable the `+ New` / `Edit` / `Delete` buttons on `SkillsView` and apply the same pattern to a Desktop Documents knowledge view and Desktop Tools knowledge view (parity with Web `/documents/templates` and `/tools/templates`).
+- Decision recorded (2026-05-03 feedback memory `feedback_inline_knowledge_editor.md`): editor is **inline only** (no popup), **no preview pane**, **always editable** with copy-on-write to `~/.sovrant/{kind}/{slug}.md` for built-ins.
+
+### Critical files (existing, reuse on resume)
+
+- `src/Sovrant.Desktop/Views/Shared/MarkdownEditorView.axaml(.cs)` — single-column TextEditor, hardened lookup
+- `src/Sovrant.Desktop/ViewModels/MarkdownEditorViewModel.cs` — `Source`/`Saved`/`Cancelled`, frontmatter validation
+- `src/Sovrant.Desktop/ViewModels/SkillsViewModel.cs` — `BeginEdit`/`OnEditorSaved`/`EndEdit` flow with re-select-by-name after save
+- `src/Sovrant.Desktop/App.axaml` — AvaloniaEdit Fluent theme include
+- `src/Sovrant.Desktop/Views/SkillsView.axaml` — buttons hidden, viewer-only Border layout (revert when fixed)
+
+### Out of scope (do not expand here)
+
+- Replacing AvaloniaEdit with another editor (Monaco-via-WebView, custom TextBox-based) — only if the framework-side fix proves intractable.
+- Versioning, history, multi-user authoring (still Phase 90 deferral).
+- Visual frontmatter form.
+
+### Verification
+
+1. Edit a built-in skill → editor opens with full body visible → modify → save → viewer shows updated content.
+2. `+ New` → editor opens with template → type freely → save → entry appears with the chosen `name`.
+3. Delete a user-tier skill → entry disappears → viewer shows empty state.
+4. Built-in protection: deleting a built-in is impossible from UI (button hidden — current behaviour).
+5. Round-trip parity with Web: same markdown source authored on Desktop renders identically on Web `/skills`.
+

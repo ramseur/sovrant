@@ -15,15 +15,27 @@ public partial class MarkdownEditorView : UserControl
     public MarkdownEditorView()
     {
         InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
+        AttachedToVisualTree += OnAttached;
+    }
+
+    private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
+
+    private void OnAttached(object? sender, Avalonia.VisualTreeAttachmentEventArgs e)
+    {
+        EnsureEditor();
+        SyncEditorFromVm();
+    }
+
+    private void EnsureEditor()
+    {
+        if (_editor is not null) return;
         _editor = this.FindControl<TextEditor>("Editor");
         if (_editor is not null)
         {
             _editor.TextChanged += OnEditorTextChanged;
         }
-        DataContextChanged += OnDataContextChanged;
     }
-
-    private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
     private void OnDataContextChanged(object? sender, System.EventArgs e)
     {
@@ -34,7 +46,13 @@ public partial class MarkdownEditorView : UserControl
         if (_vm is not null)
         {
             _vm.PropertyChanged += OnVmPropertyChanged;
+            EnsureEditor();
             SyncEditorFromVm();
+        }
+        else
+        {
+            EnsureEditor();
+            if (_editor is not null) _editor.Text = string.Empty;
         }
     }
 
