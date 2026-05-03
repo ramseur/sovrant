@@ -11,7 +11,7 @@
          CA2007: ConfigureAwait(false) is wrong on UI code that must resume on UI thread.
          CA1031: Top-level error handlers in UI apps intentionally catch Exception.
          CA1848: LoggerMessage delegates are overkill for a desktop app's handful of log sites. -->
-    <NoWarn>$(NoWarn);CA1515;CA2007;CA1031;CA1848;CA1003;CA1062</NoWarn>
+    <NoWarn>$(NoWarn);CA1515;CA2007;CA1031;CA1848;CA1003;CA1062;CA1716</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,6 +22,7 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="Markdig" Version="0.40.0" />
     <PackageReference Include="Markdown.Avalonia" Version="11.0.2" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" Version="11.3.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.5" />

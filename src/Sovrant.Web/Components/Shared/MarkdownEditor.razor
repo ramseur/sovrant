@@ -1,0 +1,190 @@
+@using BlazorMonaco.Editor
+@using Markdig
+@implements IAsyncDisposable
+
+<div class="md-editor @(_showPreview ? "md-editor-split" : "md-editor-source-only")">
+    <div class="md-editor-toolbar">
+        <div class="md-editor-toolbar-left">
+            @if (!string.IsNullOrEmpty(Title))
+            {
+                <span class="md-editor-title">@Title</span>
+            }
+            @if (ReadOnly)
+            {
+                <span class="md-editor-readonly-badge">Read-only</span>
+            }
+            @if (!string.IsNullOrEmpty(_validationError))
+            {
+                <span class="md-editor-error">@_validationError</span>
+            }
+        </div>
+        <div class="md-editor-toolbar-right">
+            <span class="md-editor-wordcount">@_wordCount words</span>
+            <button class="btn-outline btn-sm" type="button" @onclick="TogglePreview">
+                @(_showPreview ? "Hide preview" : "Show preview")
+            </button>
+            @if (OnCancel.HasDelegate)
+            {
+                <button class="btn-outline btn-sm" type="button" @onclick="OnCancel">Cancel</button>
+            }
+            @if (!ReadOnly && OnSave.HasDelegate)
+            {
+                <button class="btn-primary btn-sm" type="button" @onclick="HandleSave" disabled="@(_validationError is not null)">Save</button>
+            }
+        </div>
+    </div>
+    <div class="md-editor-body" style="@($"min-height: {MinHeight};")">
+        <div class="md-editor-source">
+            <StandaloneCodeEditor @ref="_editor"
+                                  Id="@_editorId"
+                                  ConstructionOptions="GetEditorOptions"
+                                  OnDidChangeModelContent="OnEditorChanged" />
+        </div>
+        @if (_showPreview)
+        {
+            <div class="md-editor-preview">
+                <div class="message-markdown">
+                    @((MarkupString)_previewHtml)
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public EventCallback<string> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public string MinHeight { get; set; } = "420px";
+    [Parameter] public string? Title { get; set; }
+
+    private static readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
+        .UseAdvancedExtensions().Build();
+
+    private readonly string _editorId = $"md-editor-{Guid.NewGuid():N}";
+    private StandaloneCodeEditor? _editor;
+    private bool _showPreview = true;
+    private string _previewHtml = string.Empty;
+    private int _wordCount;
+    private string? _validationError;
+    private string _currentValue = string.Empty;
+    private CancellationTokenSource? _debounceCts;
+
+    protected override void OnParametersSet()
+    {
+        if (!string.Equals(_currentValue, Value, StringComparison.Ordinal))
+        {
+            _currentValue = Value ?? string.Empty;
+            UpdatePreview(_currentValue);
+            if (_editor is not null)
+            {
+                _ = _editor.SetValue(_currentValue);
+            }
+        }
+    }
+
+    private StandaloneEditorConstructionOptions GetEditorOptions(StandaloneCodeEditor editor) => new()
+    {
+        Value = _currentValue,
+        Language = "markdown",
+        Theme = "vs-dark",
+        AutomaticLayout = true,
+        WordWrap = "on",
+        Minimap = new EditorMinimapOptions { Enabled = false },
+        ReadOnly = ReadOnly,
+        FontSize = 13,
+        ScrollBeyondLastLine = false,
+        TabSize = 2,
+    };
+
+    private async Task OnEditorChanged(ModelContentChangedEvent e)
+    {
+        if (_editor is null) return;
+        var text = await _editor.GetValue();
+        _currentValue = text ?? string.Empty;
+
+        if (ValueChanged.HasDelegate)
+            await ValueChanged.InvokeAsync(_currentValue);
+
+        ValidateFrontmatter(_currentValue);
+        await DebouncedPreview(_currentValue);
+    }
+
+    private async Task DebouncedPreview(string value)
+    {
+        _debounceCts?.Cancel();
+        _debounceCts = new CancellationTokenSource();
+        var token = _debounceCts.Token;
+        try
+        {
+            await Task.Delay(200, token);
+            if (token.IsCancellationRequested) return;
+            UpdatePreview(value);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    private void UpdatePreview(string value)
+    {
+        _previewHtml = string.IsNullOrEmpty(value) ? string.Empty : Markdown.ToHtml(value, _pipeline);
+        _wordCount = string.IsNullOrWhiteSpace(value)
+            ? 0
+            : value.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
+    }
+
+    private void ValidateFrontmatter(string value)
+    {
+        _validationError = null;
+        if (string.IsNullOrWhiteSpace(value)) return;
+        if (!value.StartsWith("---", StringComparison.Ordinal))
+        {
+            _validationError = "Missing YAML frontmatter (must start with ---)";
+            return;
+        }
+        var endIdx = value.IndexOf("\n---", 3, StringComparison.Ordinal);
+        if (endIdx < 0)
+        {
+            _validationError = "Frontmatter is not closed (missing trailing ---)";
+            return;
+        }
+        var fm = value.Substring(3, endIdx - 3);
+        var hasName = false;
+        foreach (var line in fm.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith("name:", StringComparison.OrdinalIgnoreCase))
+            {
+                var nameValue = trimmed.Substring(5).Trim().Trim('"', '\'');
+                if (!string.IsNullOrEmpty(nameValue))
+                {
+                    hasName = true;
+                    break;
+                }
+            }
+        }
+        if (!hasName)
+            _validationError = "Frontmatter must include a non-empty 'name' field";
+    }
+
+    private void TogglePreview() => _showPreview = !_showPreview;
+
+    private async Task HandleSave()
+    {
+        if (_validationError is not null) return;
+        if (OnSave.HasDelegate)
+            await OnSave.InvokeAsync(_currentValue);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+        if (_editor is not null)
+        {
+            await _editor.DisposeEditor();
+        }
+    }
+}

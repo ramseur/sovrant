@@ -95,6 +95,11 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<ITemplateRegistry, TemplateRegistry>();
 
+        // User-authored markdown templates (3-tier filesystem). Coexists with the
+        // code-defined IDocumentTemplate registry above; the Knowledge UI renders
+        // both alongside each other.
+        services.AddSingleton<UserDocumentTemplateRegistry>();
+
         // Document packages — bundles of templates rendered against shared data.
         foreach (var pkg in BuiltInDocumentPackages.All)
             services.AddSingleton(pkg);

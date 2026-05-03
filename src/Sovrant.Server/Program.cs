@@ -228,6 +228,7 @@ TeamRoutes.Map(app);
 ArtifactRoutes.Map(app);
 ToolRegistryRoutes.Map(app);
 SkillRegistryRoutes.Map(app);
+KnowledgeAuthoringRoutes.Map(app);
 AgentTemplateRoutes.Map(app);
 WorkspaceRoutes.Map(app);
 ProjectRoutes.Map(app);

@@ -12,6 +12,9 @@
                     OnRefresh="Load"
                     OnItemSelected="@(t => { _selected = t; return Task.CompletedTask; })"
                     OnSearch="Search">
+    <FooterTemplate>
+        <a class="btn-outline btn-sm" href="/tools/templates">User templates →</a>
+    </FooterTemplate>
     <ItemTemplate>
         <div class="item-title">@context.Name</div>
         <div class="item-subtitle">@Truncate(context.Description, 60)</div>

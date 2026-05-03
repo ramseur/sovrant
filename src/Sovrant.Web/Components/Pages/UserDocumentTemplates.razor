@@ -1,5 +1,5 @@
-@page "/skills"
-@using Sovrant.Tools.Skills
+@page "/documents/templates"
+@using Sovrant.Runtime.Documents.Templates
 @using Sovrant.Web.Components.Shared
 @using Markdig
 
@@ -7,7 +7,7 @@
 {
     <div class="detail-content" style="padding:0; height:100%;">
         <MarkdownEditor Value="@_editing.Source"
-                        Title="@(_editing.IsNew ? "New skill" : _editing.Slug)"
+                        Title="@(_editing.IsNew ? "New document template" : _editing.Slug)"
                         ReadOnly="@_editing.ReadOnly"
                         OnSave="HandleSave"
                         OnCancel="@(() => { _editing = null; return Task.CompletedTask; })" />
@@ -15,45 +15,32 @@
 }
 else
 {
-    <MasterDetailLayout TItem="SkillItem"
-                        Title="Skills"
+    <MasterDetailLayout TItem="TemplateItem"
+                        Title="Document Templates"
                         ItemCount="@_filtered.Count"
                         Items="@_filtered"
                         SelectedItem="@_selected"
-                        EmptyMessage="No skills registered."
+                        EmptyMessage="No user document templates. Click + New to create one."
                         OnRefresh="Reload"
-                        OnItemSelected="@(s => { _selected = s; return Task.CompletedTask; })"
+                        OnItemSelected="@(t => { _selected = t; return Task.CompletedTask; })"
                         OnSearch="Search">
         <ItemTemplate>
             <div class="item-title">
                 @context.Name
-                @if (context.Tier == SkillTier.Global)
-                {
-                    <span class="tier-badge tier-user" title="User template">user</span>
-                }
-                else if (context.Tier == SkillTier.Project)
-                {
-                    <span class="tier-badge tier-project" title="Project template">project</span>
-                }
+                <span class="tier-badge tier-@(context.Tier.ToString().ToLowerInvariant())">@context.Tier.ToString().ToLowerInvariant()</span>
             </div>
-            <div class="item-subtitle">
-                @if (!string.IsNullOrEmpty(context.Trigger))
-                {
-                    <code>@context.Trigger</code>
-                    <span> &middot; </span>
-                }
-                @context.AgentCount agents &middot; @context.ToolCount tools
-            </div>
+            <div class="item-subtitle">@context.Industry &middot; @context.DefaultFormat</div>
         </ItemTemplate>
         <FooterTemplate>
-            <button class="btn-primary btn-sm" @onclick="StartNew">+ New skill</button>
+            <button class="btn-primary btn-sm" @onclick="StartNew">+ New template</button>
+            <a class="btn-outline btn-sm" href="/documents" style="margin-left:8px;">Built-in templates</a>
         </FooterTemplate>
         <DetailTemplate>
             <div class="detail-content">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
                     <h2 style="margin:0;">@context.Name</h2>
                     <div style="display:flex; gap:8px;">
-                        @if (context.Tier == SkillTier.BuiltIn)
+                        @if (context.Tier == UserTemplateTier.BuiltIn)
                         {
                             <button class="btn-outline btn-sm" @onclick="@(() => StartDuplicate(context))">Duplicate to user</button>
                             <button class="btn-outline btn-sm" @onclick="@(() => StartEdit(context, readOnly: true))">View source</button>
@@ -65,18 +52,18 @@ else
                         }
                     </div>
                 </div>
-                <p class="text-secondary">@context.Description</p>
                 <div class="detail-meta">
-                    @if (!string.IsNullOrEmpty(context.Trigger))
-                    {
-                        <span>Trigger: <code>@context.Trigger</code></span>
-                    }
-                    <span>Agents: @(context.AgentCount > 0 ? string.Join(", ", context.Agents) : "None")</span>
-                    <span>Tools: @(context.ToolCount > 0 ? string.Join(", ", context.Tools) : "None")</span>
+                    <span><code>@context.Slug</code></span>
+                    <span>@context.Industry</span>
+                    <span>Default: @context.DefaultFormat</span>
                 </div>
+                @if (!string.IsNullOrEmpty(context.Description))
+                {
+                    <p class="text-secondary">@context.Description</p>
+                }
                 @if (!string.IsNullOrEmpty(context.Body))
                 {
-                    <h3>Workflow</h3>
+                    <h3>Body</h3>
                     <div class="message-markdown">
                         @((MarkupString)Markdown.ToHtml(context.Body, _pipeline))
                     </div>
@@ -87,49 +74,44 @@ else
 }
 
 @code {
-    [Inject] private SkillRegistry SkillRegistry { get; set; } = default!;
+    [Inject] private UserDocumentTemplateRegistry Registry { get; set; } = default!;
 
-    private List<SkillItem> _all = [];
-    private List<SkillItem> _filtered = [];
-    private SkillItem? _selected;
+    private List<TemplateItem> _all = [];
+    private List<TemplateItem> _filtered = [];
+    private TemplateItem? _selected;
     private EditorState? _editing;
 
     private static readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions().Build();
 
-    private const string NewSkillTemplate = """
+    private const string NewTemplate = """
         ---
-        name: untitled-skill
-        description: Briefly describe what this skill does and when to use it.
-        trigger: /untitled
+        name: untitled-template
+        description: One-line description.
+        industry: general
+        default_format: markdown
         ---
-        ## Steps
-        1. ...
-        2. ...
+        # {{title}}
+
+        Write your template body here. Use {{field}} placeholders for inputs.
         """;
 
     protected override void OnInitialized() => Reload();
 
     private void Reload()
     {
-        _all = SkillRegistry.All
-            .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(s =>
+        _all = Registry.All
+            .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(t => new TemplateItem
             {
-                var src = SkillRegistry.TryGetSource(s.Name);
-                return new SkillItem
-                {
-                    Name = s.Name,
-                    Description = s.Description,
-                    Trigger = s.Trigger,
-                    Agents = s.Agents,
-                    Tools = s.Tools,
-                    AgentCount = s.Agents.Count,
-                    ToolCount = s.Tools.Count,
-                    Body = s.Body,
-                    Tier = src?.Tier ?? SkillTier.BuiltIn,
-                    SourcePath = src?.Path,
-                };
+                Slug = t.Slug,
+                Name = t.Name,
+                Description = t.Description,
+                Industry = t.Industry,
+                DefaultFormat = t.DefaultFormat,
+                Body = t.Body,
+                Tier = t.Tier,
+                SourcePath = t.SourcePath,
             }).ToList();
         _filtered = _all;
     }
@@ -138,41 +120,32 @@ else
     {
         _filtered = string.IsNullOrWhiteSpace(text)
             ? _all
-            : _all.Where(s =>
-                s.Name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
-                s.Description.Contains(text, StringComparison.OrdinalIgnoreCase)
+            : _all.Where(t =>
+                t.Name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                t.Description.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                t.Industry.Contains(text, StringComparison.OrdinalIgnoreCase)
             ).ToList();
     }
 
     private void StartNew() =>
-        _editing = new EditorState { Slug = string.Empty, Source = NewSkillTemplate, IsNew = true, ReadOnly = false };
+        _editing = new EditorState { Slug = string.Empty, Source = NewTemplate, IsNew = true, ReadOnly = false };
 
-    private void StartEdit(SkillItem item, bool readOnly)
+    private void StartEdit(TemplateItem item, bool readOnly)
     {
-        var source = item.SourcePath is not null && File.Exists(item.SourcePath)
-            ? File.ReadAllText(item.SourcePath)
-            : item.Body;
+        var source = File.Exists(item.SourcePath) ? File.ReadAllText(item.SourcePath) : item.Body;
         _editing = new EditorState
         {
-            Slug = item.SourcePath is null ? item.Name : Path.GetFileNameWithoutExtension(item.SourcePath),
+            Slug = item.Slug,
             Source = source,
             IsNew = false,
             ReadOnly = readOnly,
         };
     }
 
-    private void StartDuplicate(SkillItem item)
+    private void StartDuplicate(TemplateItem item)
     {
-        var source = item.SourcePath is not null && File.Exists(item.SourcePath)
-            ? File.ReadAllText(item.SourcePath)
-            : item.Body;
-        _editing = new EditorState
-        {
-            Slug = item.SourcePath is null ? item.Name : Path.GetFileNameWithoutExtension(item.SourcePath),
-            Source = source,
-            IsNew = true,
-            ReadOnly = false,
-        };
+        var source = File.Exists(item.SourcePath) ? File.ReadAllText(item.SourcePath) : item.Body;
+        _editing = new EditorState { Slug = item.Slug, Source = source, IsNew = true, ReadOnly = false };
     }
 
     private Task HandleSave(string markdown)
@@ -181,17 +154,15 @@ else
         var slug = ExtractSlug(markdown) ?? _editing.Slug;
         if (string.IsNullOrWhiteSpace(slug)) return Task.CompletedTask;
 
-        SkillRegistry.SaveGlobal(slug, markdown);
+        Registry.SaveGlobal(slug, markdown);
         _editing = null;
         Reload();
         return Task.CompletedTask;
     }
 
-    private Task DeleteAsync(SkillItem item)
+    private Task DeleteAsync(TemplateItem item)
     {
-        if (item.SourcePath is null) return Task.CompletedTask;
-        var slug = Path.GetFileNameWithoutExtension(item.SourcePath);
-        SkillRegistry.DeleteGlobal(slug);
+        Registry.DeleteGlobal(item.Slug);
         if (_selected == item) _selected = null;
         Reload();
         return Task.CompletedTask;
@@ -226,18 +197,16 @@ else
         return sb.ToString().Trim('-');
     }
 
-    private sealed class SkillItem
+    private sealed class TemplateItem
     {
+        public string Slug { get; init; } = string.Empty;
         public string Name { get; init; } = string.Empty;
         public string Description { get; init; } = string.Empty;
-        public string Trigger { get; init; } = string.Empty;
-        public IReadOnlyList<string> Agents { get; init; } = [];
-        public IReadOnlyList<string> Tools { get; init; } = [];
-        public int AgentCount { get; init; }
-        public int ToolCount { get; init; }
+        public string Industry { get; init; } = string.Empty;
+        public string DefaultFormat { get; init; } = string.Empty;
         public string Body { get; init; } = string.Empty;
-        public SkillTier Tier { get; init; }
-        public string? SourcePath { get; init; }
+        public UserTemplateTier Tier { get; init; }
+        public string SourcePath { get; init; } = string.Empty;
     }
 
     private sealed class EditorState

@@ -16,6 +16,9 @@
                     OnRefresh="Load"
                     OnItemSelected="SelectItem"
                     OnSearch="Search">
+    <FooterTemplate>
+        <a class="btn-outline btn-sm" href="/documents/templates">User templates →</a>
+    </FooterTemplate>
     <ItemTemplate>
         <div class="item-title">@context.Name</div>
         <div class="item-subtitle">@context.Industry &middot; @FormatName(context.DefaultFormat)</div>

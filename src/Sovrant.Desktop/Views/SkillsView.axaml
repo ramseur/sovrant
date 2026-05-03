@@ -10,13 +10,35 @@
         <!-- Header -->
         <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="12">
             <DockPanel>
-                <Button DockPanel.Dock="Right"
-                        Content="Refresh"
-                        Command="{Binding RefreshCommand}"
-                        Padding="12,6"
-                        CornerRadius="6"
-                        Background="Transparent"
-                        Foreground="{DynamicResource TextPrimary}" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+                    <Button Content="+ New"
+                            Command="{Binding NewSkillCommand}"
+                            Padding="12,6"
+                            CornerRadius="6"
+                            Background="{DynamicResource BrandPrimary}"
+                            Foreground="White"
+                            FontWeight="SemiBold" />
+                    <Button Content="Edit"
+                            Command="{Binding EditSkillCommand}"
+                            IsEnabled="{Binding SelectedSkill, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            Padding="12,6"
+                            CornerRadius="6"
+                            Background="Transparent"
+                            Foreground="{DynamicResource TextPrimary}" />
+                    <Button Content="Delete"
+                            Command="{Binding DeleteSkillCommand}"
+                            IsVisible="{Binding SelectedSkill.IsUserAuthored, FallbackValue=False}"
+                            Padding="12,6"
+                            CornerRadius="6"
+                            Background="Transparent"
+                            Foreground="{DynamicResource TextPrimary}" />
+                    <Button Content="Refresh"
+                            Command="{Binding RefreshCommand}"
+                            Padding="12,6"
+                            CornerRadius="6"
+                            Background="Transparent"
+                            Foreground="{DynamicResource TextPrimary}" />
+                </StackPanel>
                 <StackPanel>
                     <TextBlock Text="Skills" FontSize="24" FontWeight="Bold"
                                Foreground="{DynamicResource TextPrimary}" />
