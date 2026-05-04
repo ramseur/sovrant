@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-05-02 (Phase 90 Public Release Readiness shipped — Command Center on `/command`, repositioning, polish, plaintext-key fix; tagged `v0.9.0` — 53 phases shipped, 13 pending)
+**Last updated:** 2026-05-04 (post-90 housekeeping: Web Knowledge authoring buttons hidden pending Phase 91 UX rework; rail order on Web aligned with Desktop; Phases 91–93 authored — Knowledge Authoring Revisit, Active Sessions cap with Settings UI + DB-backed config, and Configuration Boundary Audit; duplicate Phase 82 disambiguated — OTel renumbered to 82.5)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -115,32 +115,38 @@ The engine is fully functional across five delivery modes with enterprise multi-
 
 ### Still pending
 
-> **Last audited:** 2026-04-30. 49 phases complete, 9 pending. Phase 39 consolidated into Phase 55; Phase 56 remote mode split to Phase 61; Phase 78 Path 2 shipped through commit 10; Phase 81 unified memory shipped (workspace_memory rows now flow through `MemoryInjector` into the system prompt). Everything below is *not yet shipped*.
+> **Last audited:** 2026-05-04. Tagged `v0.9.0`. Counting only "gap" phases (not partial-polish or quality-audit phases): **17 pending** (3 deferred, 14 active). Shipped since the prior 2026-04-30 audit: Phase 78 Teams Parity ✅, Phase 81 Unified Memory ✅, Phase 82 Web Search Architecture Overhaul ✅, Phase 88 Settings & Provider Consolidation ✅, Phase 89 Command Center ✅, Phase 90 Public Release Readiness ✅. Authored since: Phase 91 Knowledge Authoring Revisit, Phase 92 Active Sessions, Phase 93 Configuration Boundary Audit. Duplicate Phase 82 number resolved — OTel observability is now Phase 82.5.
+>
+> Quality / polish / audit phases (62, 68, 69, 70, 71, 72, 75) and partial-completion phases (56) are tracked in their own sections below; this table is gap-only.
 
 | Gap | Phase | Priority |
 |---|---|---|
 | Enterprise auth & multi-tenancy (RBAC, OAuth/OIDC, SSO) | Phase 40 | Deferred |
-| ~~Inter-agent communication — team-to-team, swarm-to-swarm coordination through leader/PM agents~~ | Phase 57 ✅ | Medium–High |
 | VS Code native extension | Phase 42 | Deferred (MCP server covers MCP-aware IDEs) |
 | Embedded terminal panel inside the desktop app | Phase 45 | Deferred |
 | n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |
 | Workspace backup, import & export | Phase 47 | Medium |
 | SearXNG web search backend (self-hosted, key-free) | Phase 49 | Low–Medium |
 | OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | Medium–High |
-| ~~Cost tracking, budgets & dashboard via OpenRouter (consolidated from Phases 39+55)~~ | Phase 55 ✅ | Medium |
-| ~~LLM provider sanitizer~~ → **Sovrant Trust Boundary** (sanitization, ethical harness, intent verification) | Phase 58 ✅ | High |
-| ~~Agentic loop hardening — intent classification, plan approval, execution governance, progress visibility~~ | Phase 59 ✅ | **Critical** |
 | Hermes Agent integration via MCP — alternative claw/federation bus provider with self-improving skills | Phase 60 | Medium |
-| ~~Remote server mode for web frontend — SignalR streaming, auth, `AddSovrantClient()` abstraction~~ | Phase 61 ✅ | High |
+| Cloud storage backends & workspace isolation (Google Docs, Box, Amazon S3) | Phase 64 | Medium |
 | Video generation — fal.ai, Kling AI, and pluggable provider support for text-to-video, image-to-video | Phase 65 | Medium |
-| ~~Document generation — PDFs, Word, Excel, PowerPoint, presentations + industry templates (real estate, healthcare, legal, finance)~~ | Phase 66 ✅ | Medium–High |
-| ~~Teams parity with Swarm — parallelism, file-lock safety, quality gate, and optional decomposition for team runs (Path 1 + Path 2 commits 1–10 shipped: V015 migration, `PUT /v1/teams/{id}/profile`, parallel/swarm run modes, decomposition, quality gate, integration tests)~~ | Phase 78 ✅ | High |
+| Autonomous agent modes (swarm autonomy & alternate claws) | Phase 67 | Medium |
+| Code creation: project scaffolding & app generation | Phase 73 | Medium–High |
+| Markdown-backed document templates | Phase 74 | Medium |
+| In-app document viewing | Phase 76 | Medium |
+| Project isolation with full feature parity | Phase 77 | Medium |
 | Agents page (renamed from Agent Templates): single-agent definition + run — author agents via markdown files, edit them in-app, reference them by name from the standard agenting loop, and launch chat sessions (or one-shot if self-contained) with run history | Phase 79 | Medium–High |
 | Composio MCP integration — first-class platform awareness for Composio's MCP catalog (250+ apps), in-app browse/enable, managed OAuth via Composio connections, per-user/workspace credential scoping, still routed through Sovrant's `MCPTool` proxy and permission model | Phase 80 | Medium |
-| ~~Unified memory — wire user-saved `workspace_memory` rows into `ConversationRuntime.BuildSystemPrompt()` so memory saved via the workspace UI/API actually reaches the LLM~~ | Phase 81 ✅ | High |
-| OpenTelemetry observability — emit traces/metrics/logs for runs, turns, tool calls, router decisions, and provider HTTP via OTLP so operators can ship to any OTel-compatible backend (Honeycomb, Tempo, Jaeger, Datadog, etc.) | Phase 82 | Medium–High |
+| OpenTelemetry observability — emit traces/metrics/logs for runs, turns, tool calls, router decisions, and provider HTTP via OTLP so operators can ship to any OTel-compatible backend (Honeycomb, Tempo, Jaeger, Datadog, etc.) | Phase 82.5 | Medium–High |
 | Pluggable memory backends — abstract `IMemoryStore` so the SQLite implementation can be swapped for distributed/remote stores (mem0, Pinecone-style vector DBs, Redis, Postgres+pgvector); enables shared/team memory across nodes | Phase 83 | Medium |
-| Command Center — single cockpit surface for active agents, team runs, and autonomous missions; start/steer/pause/cancel from one grid; live lifecycle events over the session bus; reuses Phase 78/79/67 substrate (no new runtime) | Phase 89 | Medium–High |
+| Prompt library: reusable, parameterised prompt templates across CLI / Web / Desktop | Phase 84 | Medium |
+| Identity & login parity across CLI / Web / Desktop / Server | Phase 85 | Medium–High |
+| Background session continuation across navigation & session switches | Phase 86 | High |
+| Artifacts-by-default for code & documents (with workspace identity unification) | Phase 87 | Medium–High |
+| Knowledge Authoring Revisit — Web + Desktop UX rework: single Edit action on any item, silent copy-on-write for built-ins, no "Duplicate to user" intermediate; fix AvaloniaEdit defects on Desktop | Phase 91 | Medium |
+| Active Sessions: up to 5 concurrent live tasks with return-anytime results; Settings UI on Web + Desktop, DB-backed; future admin console fallback | Phase 92 | High |
+| Configuration Boundary Audit: codify `sovrant.config` vs DB vs keystore with policy doc, audit pass, and CI guards | Phase 93 | Medium |
 
 ### v1.0 release polish (in progress)
 
@@ -7620,7 +7626,7 @@ Delivered as five sequenced PRs on `sovrant-openc-dotnet-port`:
 
 ---
 
-## Phase 82 — OpenTelemetry Observability
+## Phase 82.5 — OpenTelemetry Observability
 
 > **Status:** Pending. Adds first-class OTel emission so operators can ship Sovrant
 > traces, metrics, and logs to any OTel-compatible backend (Honeycomb, Tempo,
