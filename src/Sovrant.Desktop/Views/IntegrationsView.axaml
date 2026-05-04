@@ -47,15 +47,53 @@
                     <StackPanel Spacing="8">
                         <TextBlock Text="Add MCP Server" FontSize="12" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" />
-                        <TextBox Text="{Binding NewServerName}"
-                                 Watermark="Server name"
-                                 FontSize="12" Padding="8,6" CornerRadius="6" />
-                        <TextBox Text="{Binding NewServerCommand}"
-                                 Watermark="Command (e.g. npx, uvx)"
-                                 FontSize="12" Padding="8,6" CornerRadius="6" />
-                        <TextBox Text="{Binding NewServerArgs}"
-                                 Watermark="Args (space-separated)"
-                                 FontSize="12" Padding="8,6" CornerRadius="6" />
+
+                        <!-- Mode selector -->
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <RadioButton GroupName="addmode" Content="JSON" FontSize="11"
+                                         IsChecked="{Binding AddMode, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=json}" />
+                            <RadioButton GroupName="addmode" Content="stdio" FontSize="11"
+                                         IsChecked="{Binding AddMode, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=stdio}" />
+                            <RadioButton GroupName="addmode" Content="HTTP" FontSize="11"
+                                         IsChecked="{Binding AddMode, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=http}" />
+                        </StackPanel>
+
+                        <!-- JSON paste -->
+                        <StackPanel Spacing="8" IsVisible="{Binding AddMode, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=json}">
+                            <TextBox Text="{Binding NewServerJson}"
+                                     AcceptsReturn="True" TextWrapping="Wrap"
+                                     MinHeight="160"
+                                     Watermark='{}{ "mcpServers": { "pixellab": { "url": "https://api.pixellab.ai/mcp", "headers": { "Authorization": "Bearer ..." } } } }'
+                                     FontFamily="Consolas,Menlo,monospace"
+                                     FontSize="11" Padding="8,6" CornerRadius="6" />
+                        </StackPanel>
+
+                        <!-- stdio fields -->
+                        <StackPanel Spacing="8" IsVisible="{Binding AddMode, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=stdio}">
+                            <TextBox Text="{Binding NewServerName}" Watermark="Server name"
+                                     FontSize="12" Padding="8,6" CornerRadius="6" />
+                            <TextBox Text="{Binding NewServerCommand}" Watermark="Command (e.g. npx, uvx)"
+                                     FontSize="12" Padding="8,6" CornerRadius="6" />
+                            <TextBox Text="{Binding NewServerArgs}" Watermark="Args (space-separated)"
+                                     FontSize="12" Padding="8,6" CornerRadius="6" />
+                        </StackPanel>
+
+                        <!-- HTTP fields -->
+                        <StackPanel Spacing="8" IsVisible="{Binding AddMode, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=http}">
+                            <TextBox Text="{Binding NewServerName}" Watermark="Server name"
+                                     FontSize="12" Padding="8,6" CornerRadius="6" />
+                            <TextBox Text="{Binding NewServerUrl}" Watermark="https://api.example.com/mcp"
+                                     FontSize="12" Padding="8,6" CornerRadius="6" />
+                            <TextBox Text="{Binding NewServerBearer}"
+                                     PasswordChar="•" Watermark="Bearer token (optional)"
+                                     FontSize="12" Padding="8,6" CornerRadius="6" />
+                            <TextBox Text="{Binding NewServerHeadersJson}"
+                                     AcceptsReturn="True" MinHeight="60"
+                                     Watermark='Extra headers JSON (optional)'
+                                     FontFamily="Consolas,Menlo,monospace"
+                                     FontSize="11" Padding="8,6" CornerRadius="6" />
+                        </StackPanel>
+
                         <Button Content="Add Server"
                                 Command="{Binding AddServerCommand}"
                                 HorizontalAlignment="Stretch"
@@ -66,6 +104,7 @@
                         <TextBlock Text="{Binding StatusMessage}"
                                    FontSize="11"
                                    Foreground="{DynamicResource TextMuted}"
+                                   TextWrapping="Wrap"
                                    IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     </StackPanel>
                 </Border>

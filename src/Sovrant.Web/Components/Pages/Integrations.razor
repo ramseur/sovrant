@@ -1,4 +1,5 @@
 @page "/integrations"
+@using System.Text.Json
 @using Sovrant.Runtime.Config
 @using Sovrant.Runtime.Mcp
 
@@ -17,18 +18,61 @@
     <!-- Add server form -->
     <div class="card">
         <div class="form-field">
-            <label>Server Name</label>
-            <input type="text" @bind="_newName" placeholder="e.g. filesystem" />
+            <label>Add via</label>
+            <div style="display:flex;gap:16px;">
+                <label><input type="radio" name="addmode" checked=@(_addMode == "json") @onchange="@(() => _addMode = "json")" /> Paste JSON</label>
+                <label><input type="radio" name="addmode" checked=@(_addMode == "stdio") @onchange="@(() => _addMode = "stdio")" /> stdio (command)</label>
+                <label><input type="radio" name="addmode" checked=@(_addMode == "http") @onchange="@(() => _addMode = "http")" /> HTTP (URL + headers)</label>
+            </div>
         </div>
-        <div class="form-field">
-            <label>Command</label>
-            <input type="text" @bind="_newCommand" placeholder="e.g. npx" />
-        </div>
-        <div class="form-field">
-            <label>Arguments (space-separated)</label>
-            <input type="text" @bind="_newArgs" placeholder="e.g. -y @@modelcontextprotocol/server-filesystem /tmp" />
-        </div>
-        <button class="btn-primary" style="max-width:200px;" @onclick="AddServerAsync">Add Server</button>
+
+        @if (_addMode == "json")
+        {
+            <div class="form-field">
+                <label>MCP Server JSON</label>
+                <textarea @bind="_jsonInput" rows="10" style="font-family:Consolas,monospace;width:100%;"
+                          placeholder='@_jsonPlaceholder'></textarea>
+                <p class="text-muted text-sm">Paste the standard <code>mcpServers</code> block (one or many entries). Both stdio (<code>command</code>/<code>args</code>) and HTTP (<code>url</code>/<code>headers</code>) formats are supported.</p>
+            </div>
+            <button class="btn-primary" style="max-width:200px;" @onclick="AddFromJsonAsync">Add from JSON</button>
+        }
+        else if (_addMode == "stdio")
+        {
+            <div class="form-field">
+                <label>Server Name</label>
+                <input type="text" @bind="_newName" placeholder="e.g. filesystem" />
+            </div>
+            <div class="form-field">
+                <label>Command</label>
+                <input type="text" @bind="_newCommand" placeholder="e.g. npx" />
+            </div>
+            <div class="form-field">
+                <label>Arguments (space-separated)</label>
+                <input type="text" @bind="_newArgs" placeholder="e.g. -y @@modelcontextprotocol/server-filesystem /tmp" />
+            </div>
+            <button class="btn-primary" style="max-width:200px;" @onclick="AddStdioServerAsync">Add Server</button>
+        }
+        else
+        {
+            <div class="form-field">
+                <label>Server Name</label>
+                <input type="text" @bind="_newName" placeholder="e.g. pixellab" />
+            </div>
+            <div class="form-field">
+                <label>URL</label>
+                <input type="text" @bind="_newUrl" placeholder="https://api.example.com/mcp" />
+            </div>
+            <div class="form-field">
+                <label>Bearer Token (optional)</label>
+                <input type="password" @bind="_newBearer" placeholder="Sets Authorization: Bearer …" />
+            </div>
+            <div class="form-field">
+                <label>Extra Headers (JSON, optional)</label>
+                <textarea @bind="_newHeadersJson" rows="3" style="font-family:Consolas,monospace;width:100%;"
+                          placeholder='{"X-Workspace-Id": "abc"}'></textarea>
+            </div>
+            <button class="btn-primary" style="max-width:200px;" @onclick="AddHttpServerAsync">Add Server</button>
+        }
     </div>
 
     @if (!string.IsNullOrEmpty(_status))
@@ -50,14 +94,31 @@
                         <span class="outcome-badge @(s.IsConnected ? "success" : "unknown")">
                             @(s.IsConnected ? "Connected" : "Not Connected")
                         </span>
+                        <span class="text-muted text-sm">@s.Transport</span>
                     </div>
                     <div class="memory-meta">
-                        <span class="text-sm">@s.Command @string.Join(" ", s.Args)</span>
+                        @if (s.Url is not null)
+                        {
+                            <span class="text-sm">@s.Url</span>
+                        }
+                        else
+                        {
+                            <span class="text-sm">@s.Command @string.Join(" ", s.Args)</span>
+                        }
                     </div>
                     @if (s.ToolCount > 0)
                     {
                         <div class="memory-meta">
                             <span class="text-muted text-sm">@s.ToolCount tools: @s.ToolNames</span>
+                        </div>
+                    }
+                    @if (s.Headers.Count > 0)
+                    {
+                        <div class="memory-meta">
+                            @foreach (var kv in s.Headers)
+                            {
+                                <span class="text-muted text-sm">@kv.Key: @MaskSecret(kv.Key, kv.Value)</span>
+                            }
                         </div>
                     }
                     @if (s.EnvVars.Count > 0)
@@ -82,11 +143,30 @@
     [Inject] private IMcpServerStore ServerStore { get; set; } = default!;
     [Inject] private McpClientRegistry McpRegistry { get; set; } = default!;
 
+    private string _addMode = "json";
     private string _newName = string.Empty;
     private string _newCommand = string.Empty;
     private string _newArgs = string.Empty;
+    private string _newUrl = string.Empty;
+    private string _newBearer = string.Empty;
+    private string _newHeadersJson = string.Empty;
+    private string _jsonInput = string.Empty;
     private string _status = string.Empty;
     private List<ServerView> _servers = [];
+
+    private const string _jsonPlaceholder = """
+{
+  "mcpServers": {
+    "pixellab": {
+      "url": "https://api.pixellab.ai/mcp",
+      "transport": "http",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      }
+    }
+  }
+}
+""";
 
     protected override async Task OnInitializedAsync() => await LoadServersAsync().ConfigureAwait(false);
 
@@ -113,16 +193,22 @@
             }
             servers.Add(new ServerView
             {
-                Name = kv.Key, Command = kv.Value.Command,
-                Args = kv.Value.Args.ToList(), IsConnected = isConnected,
-                ToolCount = toolCount, ToolNames = toolNames,
+                Name = kv.Key,
+                Command = kv.Value.Command,
+                Args = kv.Value.Args.ToList(),
+                Url = kv.Value.Url,
+                Transport = kv.Value.Url is not null ? "http" : "stdio",
+                IsConnected = isConnected,
+                ToolCount = toolCount,
+                ToolNames = toolNames,
                 EnvVars = kv.Value.Env.ToDictionary(e => e.Key, e => e.Value),
+                Headers = kv.Value.Headers.ToDictionary(e => e.Key, e => e.Value),
             });
         }
         _servers = servers;
     }
 
-    private async Task AddServerAsync()
+    private async Task AddStdioServerAsync()
     {
         if (string.IsNullOrWhiteSpace(_newName) || string.IsNullOrWhiteSpace(_newCommand))
         {
@@ -142,10 +228,74 @@
             }).ConfigureAwait(false);
 
             _status = $"Server '{_newName}' added. Restart to connect.";
-            _newName = _newCommand = _newArgs = string.Empty;
+            ResetForm();
             await LoadServersAsync().ConfigureAwait(false);
         }
         catch (Exception ex) { _status = $"Failed: {ex.Message}"; }
+    }
+
+    private async Task AddHttpServerAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newName) || string.IsNullOrWhiteSpace(_newUrl))
+        {
+            _status = "Name and URL are required."; return;
+        }
+        if (!Uri.TryCreate(_newUrl.Trim(), UriKind.Absolute, out var url)
+            || (url.Scheme != "http" && url.Scheme != "https"))
+        {
+            _status = "URL must be an absolute http(s) URL."; return;
+        }
+        try
+        {
+            var headers = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (!string.IsNullOrWhiteSpace(_newHeadersJson))
+            {
+                var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(_newHeadersJson);
+                if (parsed is not null)
+                    foreach (var kv in parsed) headers[kv.Key] = kv.Value;
+            }
+            if (!string.IsNullOrWhiteSpace(_newBearer))
+                headers["Authorization"] = $"Bearer {_newBearer.Trim()}";
+
+            await ServerStore.UpsertAsync(_newName.Trim(), new McpServerConfig
+            {
+                Url = url,
+                Headers = headers,
+            }).ConfigureAwait(false);
+
+            _status = $"Server '{_newName}' added. Restart to connect.";
+            ResetForm();
+            await LoadServersAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex) { _status = $"Failed: {ex.Message}"; }
+    }
+
+    private async Task AddFromJsonAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_jsonInput))
+        {
+            _status = "Paste a JSON config first."; return;
+        }
+        try
+        {
+            var entries = McpJsonParser.Parse(_jsonInput);
+            if (entries.Count == 0)
+            {
+                _status = "No valid mcpServers entries found."; return;
+            }
+            foreach (var (name, config) in entries)
+                await ServerStore.UpsertAsync(name, config).ConfigureAwait(false);
+
+            _status = $"Added {entries.Count} server(s): {string.Join(", ", entries.Keys)}. Restart to connect.";
+            _jsonInput = string.Empty;
+            await LoadServersAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex) { _status = $"Failed: {ex.Message}"; }
+    }
+
+    private void ResetForm()
+    {
+        _newName = _newCommand = _newArgs = _newUrl = _newBearer = _newHeadersJson = string.Empty;
     }
 
     private async Task RemoveServerAsync(string name)
@@ -162,7 +312,7 @@
     private static string MaskSecret(string key, string value)
     {
         var upper = key.ToUpperInvariant();
-        if (upper.Contains("KEY") || upper.Contains("SECRET") || upper.Contains("TOKEN"))
+        if (upper.Contains("KEY") || upper.Contains("SECRET") || upper.Contains("TOKEN") || upper.Contains("AUTH"))
             return value.Length > 6 ? string.Concat(value.AsSpan(0, 4), "****") : "****";
         return value;
     }
@@ -172,9 +322,12 @@
         public string Name { get; init; } = string.Empty;
         public string Command { get; init; } = string.Empty;
         public List<string> Args { get; init; } = [];
+        public Uri? Url { get; init; }
+        public string Transport { get; init; } = "stdio";
         public bool IsConnected { get; init; }
         public int ToolCount { get; init; }
         public string ToolNames { get; init; } = string.Empty;
         public Dictionary<string, string> EnvVars { get; init; } = [];
+        public Dictionary<string, string> Headers { get; init; } = [];
     }
 }

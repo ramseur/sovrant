@@ -68,9 +68,15 @@ public sealed class SovrantConfig
 }
 
 /// <summary>Configuration for a single MCP server.</summary>
+/// <remarks>
+/// Two transports are supported. When <see cref="Url"/> is set, the HTTP/SSE
+/// transport is used and <see cref="Headers"/> are attached to every request
+/// (e.g. <c>Authorization: Bearer …</c>). Otherwise the stdio transport is used
+/// and the server is spawned via <see cref="Command"/> + <see cref="Args"/>.
+/// </remarks>
 public sealed class McpServerConfig
 {
-    /// <summary>The command to launch the MCP server process.</summary>
+    /// <summary>The command to launch the MCP server process. Ignored when <see cref="Url"/> is set.</summary>
     public string Command { get; init; } = string.Empty;
 
     /// <summary>Command-line arguments for the MCP server process.</summary>
@@ -78,6 +84,20 @@ public sealed class McpServerConfig
 
     /// <summary>Additional environment variables to set for the MCP server process.</summary>
     public IReadOnlyDictionary<string, string> Env { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Endpoint URL for an HTTP/SSE-based MCP server. When set, the HTTP transport is
+    /// used and <see cref="Command"/>/<see cref="Args"/> are ignored.
+    /// </summary>
+    public Uri? Url { get; init; }
+
+    /// <summary>
+    /// HTTP headers attached to every request when <see cref="Url"/> is set. Use this
+    /// for bearer tokens, API keys, etc. — values that contain "key", "secret", "token",
+    /// or "auth" are masked in UI surfaces.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Headers { get; init; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
 
     /// <summary>
