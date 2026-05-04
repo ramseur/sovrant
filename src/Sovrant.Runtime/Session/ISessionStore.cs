@@ -70,4 +70,17 @@ public interface ISessionStore
     /// that user are returned.
     /// </summary>
     Task<IReadOnlyList<SessionListItem>> SearchAsync(string query, string? ownerUserId = null, int limit = 50, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the names of MCP servers whose tools are exposed for this session,
+    /// or <c>null</c> if no gating is set (every connected server is available).
+    /// </summary>
+    Task<IReadOnlyList<string>?> GetMcpConnectionsAsync(string sessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Replaces the per-session MCP connection allow-list. Pass <c>null</c> to clear
+    /// the gate (every connected server is exposed); pass an empty list to disable
+    /// all MCP tools for the session.
+    /// </summary>
+    Task SetMcpConnectionsAsync(string sessionId, IReadOnlyList<string>? servers, string? ownerUserId = null, CancellationToken ct = default);
 }

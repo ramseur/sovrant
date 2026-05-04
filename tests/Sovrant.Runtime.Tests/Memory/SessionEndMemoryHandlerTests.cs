@@ -136,5 +136,10 @@ public sealed class SessionEndMemoryHandlerTests : IAsyncDisposable
 
         public Task<IReadOnlyList<SessionListItem>> SearchAsync(string query, string? ownerUserId = null, int limit = 50, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<SessionListItem>>([]);
+
+        public Task<IReadOnlyList<string>?> GetMcpConnectionsAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<string>?>(null);
+        public Task SetMcpConnectionsAsync(string sessionId, IReadOnlyList<string>? servers, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.CompletedTask;
     }
 }

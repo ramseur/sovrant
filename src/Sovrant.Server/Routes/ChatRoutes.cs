@@ -205,6 +205,28 @@ internal static class ChatRoutes
         if (req.Model is not null && sessionConfig is not null)
             sessionConfig.Model = req.Model;
 
+        // Apply the per-request MCP connection allow-list to the session, both
+        // in-memory (so the runtime gates this turn) and in storage (so the gate
+        // survives session reload). null = leave existing gate alone.
+        if (req.McpConnections is not null)
+        {
+            if (sessionConfig is not null)
+                sessionConfig.AllowedMcpServers = req.McpConnections;
+            if (req.SessionId is not null)
+            {
+                await sessionStore
+                    .SetMcpConnectionsAsync(req.SessionId, req.McpConnections, ownerUserId, ct)
+                    .ConfigureAwait(false);
+            }
+        }
+        else if (sessionConfig is not null && sessionConfig.AllowedMcpServers is null && req.SessionId is not null)
+        {
+            // Hydrate the in-memory gate from storage on first turn after a reload.
+            sessionConfig.AllowedMcpServers = await sessionStore
+                .GetMcpConnectionsAsync(req.SessionId, ct)
+                .ConfigureAwait(false);
+        }
+
         // Acquire the per-session lock to serialize concurrent turns (prevents history corruption).
         // Transient/one-shot runtimes have no lock (no shared state).
         if (sessionLock is not null)

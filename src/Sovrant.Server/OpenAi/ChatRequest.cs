@@ -28,6 +28,14 @@ public sealed class ChatCompletionRequest
     [JsonPropertyName("session_id")]
     public string? SessionId { get; init; }
 
+    /// <summary>
+    /// Extension field: per-session MCP connection allow-list. Names of MCP
+    /// servers whose tools should be exposed for this turn (and persisted as
+    /// the session's gate). <c>null</c> means leave the existing gate unchanged;
+    /// an empty list disables all MCP tools.
+    /// </summary>
+    [JsonPropertyName("mcp_connections")]
+    public IReadOnlyList<string>? McpConnections { get; init; }
 }
 
 /// <summary>A single message in a chat completion request.</summary>

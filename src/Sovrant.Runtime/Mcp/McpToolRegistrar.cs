@@ -86,6 +86,7 @@ public sealed partial class McpToolRegistrar : IAsyncDisposable
                 inputSchema = JsonDocument.Parse("{}").RootElement;
 
             var definition = new ToolDefinition(tool.Name, inputSchema) { Description = tool.Description };
+            _clientRegistry.MapTool(tool.Name, serverName);
 
             _registry.Register(definition, async (input, innerCt) =>
             {
@@ -148,6 +149,7 @@ public sealed partial class McpToolRegistrar : IAsyncDisposable
             _clients.Remove(existing);
             await existing.DisposeAsync().ConfigureAwait(false);
         }
+        _clientRegistry.ForgetServerTools(serverName);
 
         var client = await _clientFactory.CreateAsync(serverName, config, ct).ConfigureAwait(false);
         _clients.Add(client);

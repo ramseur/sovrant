@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Api.Routing;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Hooks;
+using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Memory;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Tools;
@@ -62,7 +63,8 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
                 _services.GetRequiredService<ILogger<ConversationRuntime>>(),
                 _services.GetService<IHookRunner>(),
                 _services.GetService<MemoryInjector>(),
-                settings: _services.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>());
+                settings: _services.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>(),
+                mcpClients: _services.GetService<McpClientRegistry>());
         }
         else
         {

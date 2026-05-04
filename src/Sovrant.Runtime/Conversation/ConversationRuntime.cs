@@ -10,6 +10,7 @@ using Sovrant.Runtime.Hooks;
 using Sovrant.Runtime.Memory;
 using Sovrant.Runtime.Session;
 using Sovrant.Api.Capabilities;
+using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Tools;
 using Sovrant.Runtime.Workspaces;
 
@@ -37,6 +38,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly Metrics.CostModelLoggerFacade? _costFacade;
     private readonly ILiveSettings<CompactionSettings> _compaction;
     private readonly Permissions.IPerTurnApprovalCache? _approvalCache;
+    private readonly McpClientRegistry? _mcpClients;
     private readonly List<InputMessage> _history = [];
     private string _systemPrompt;
     /// <summary>Once true, all subsequent turns expose tools (session used tools at least once).</summary>
@@ -105,7 +107,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         Metrics.CostModelLoggerFacade? costFacade = null,
         IWorkspaceSettingsStore? settings = null,
         ILiveSettings<CompactionSettings>? compaction = null,
-        Permissions.IPerTurnApprovalCache? approvalCache = null)
+        Permissions.IPerTurnApprovalCache? approvalCache = null,
+        McpClientRegistry? mcpClients = null)
     {
         _router = router;
         _toolExecutor = toolExecutor;
@@ -124,6 +127,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         _compaction = compaction ?? LiveSettings.Static(
             CompactionSettings.Resolve(settings, fallback: _config.CompactThreshold));
         _approvalCache = approvalCache;
+        _mcpClients = mcpClients;
         _systemPrompt = systemPromptOverride ?? BuildSystemPrompt();
     }
 
@@ -1175,12 +1179,29 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     }
 
     /// <summary>
-    /// Filters the tool list based on model capabilities. If the model doesn't
-    /// support native tools, returns empty. If it has a MaxTools limit, truncates.
+    /// Filters the tool list based on model capabilities and the per-session
+    /// MCP connection allow-list. If the model doesn't support native tools,
+    /// returns empty. If <see cref="SessionConfig.AllowedMcpServers"/> is set,
+    /// MCP-sourced tools whose server isn't on the list are dropped.
     /// </summary>
     private IReadOnlyList<ToolDefinition> FilterToolsForModel(IReadOnlyList<ToolDefinition> tools)
     {
-        if (tools.Count == 0 || _capabilityRegistry is null)
+        if (tools.Count == 0)
+            return tools;
+
+        // Per-session MCP gating — drop tools registered from servers the user
+        // didn't select for this session. Non-MCP tools are unaffected.
+        var allowed = SessionContext.Current?.AllowedMcpServers;
+        if (allowed is not null && _mcpClients is not null)
+        {
+            var allowSet = new HashSet<string>(allowed, StringComparer.Ordinal);
+            tools = tools
+                .Where(t => !_mcpClients.ToolToServer.TryGetValue(t.Name, out var server)
+                            || allowSet.Contains(server))
+                .ToList();
+        }
+
+        if (_capabilityRegistry is null)
             return tools;
 
         var caps = _capabilityRegistry.GetCapabilities(_config.Model);

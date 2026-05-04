@@ -11,8 +11,6 @@ namespace Sovrant.Server.Permissions;
 /// </summary>
 internal sealed class SessionAwarePermissionModeAdapter : IPermissionModeAccessor
 {
-    private static readonly AsyncLocal<SessionConfig?> s_current = new();
-
     private readonly MutableServerConfig _globalConfig;
 
     public SessionAwarePermissionModeAdapter(MutableServerConfig globalConfig)
@@ -21,15 +19,15 @@ internal sealed class SessionAwarePermissionModeAdapter : IPermissionModeAccesso
     }
 
     /// <summary>Sets the session config for the current async flow.</summary>
-    public static void SetCurrent(SessionConfig? config) => s_current.Value = config;
+    public static void SetCurrent(SessionConfig? config) => SessionContext.Current = config;
 
     /// <inheritdoc/>
     public PermissionMode Mode
     {
-        get => s_current.Value?.PermissionMode ?? _globalConfig.PermissionMode;
+        get => SessionContext.Current?.PermissionMode ?? _globalConfig.PermissionMode;
         set
         {
-            if (s_current.Value is { } session)
+            if (SessionContext.Current is { } session)
                 session.PermissionMode = value;
             else
                 _globalConfig.PermissionMode = value;

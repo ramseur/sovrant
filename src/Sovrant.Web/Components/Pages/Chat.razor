@@ -1,5 +1,6 @@
 @page "/"
 @using Sovrant.Runtime.Conversation
+@using Sovrant.Runtime.Mcp
 @using Sovrant.Runtime.Session
 @using Sovrant.Commands
 @using Sovrant.Web.Adapters
@@ -55,6 +56,40 @@
         }
     </div>
 
+    <!-- Connections selector -->
+    @if (_availableConnections.Count > 0)
+    {
+        <div class="chat-connections-row">
+            <button class="chat-connections-pill"
+                    type="button"
+                    title="Choose which MCP servers this session can call"
+                    @onclick="ToggleConnectionsMenu">
+                <span class="chat-connections-icon">&#128279;</span>
+                <span>Connections</span>
+                <span class="chat-connections-count">(@ConnectionsLabel)</span>
+            </button>
+            @if (_showConnectionsMenu)
+            {
+                <div class="chat-connections-menu" @onclick:stopPropagation="true">
+                    @foreach (var conn in _availableConnections)
+                    {
+                        var name = conn;
+                        <label class="chat-connections-item">
+                            <input type="checkbox"
+                                   checked="@_selectedConnections.Contains(name)"
+                                   @onchange="e => ToggleConnection(name, (bool)(e.Value ?? false))" />
+                            <span>@name</span>
+                        </label>
+                    }
+                    @if (_availableConnections.Count == 0)
+                    {
+                        <div class="chat-connections-empty">No MCP servers configured</div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
     <!-- Input bar -->
     <div class="chat-input-bar">
         <div class="input-wrapper">
@@ -98,6 +133,17 @@
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
     [Inject] private SovrantConfig Config { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
+    [Inject] private IMcpServerStore McpServerStore { get; set; } = default!;
+
+    private List<string> _availableConnections = [];
+    private HashSet<string> _selectedConnections = new(StringComparer.Ordinal);
+    private bool _showConnectionsMenu;
+    private bool _connectionsLoaded;
+
+    private string ConnectionsLabel =>
+        _selectedConnections.Count == _availableConnections.Count && _availableConnections.Count > 0
+            ? "all"
+            : _selectedConnections.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     private ElementReference _inputRef;
     private string _inputText = string.Empty;
@@ -138,6 +184,7 @@
         ActiveContext.OnChanged += OnContextChanged;
         ActiveContext.OnSessionResume += OnSessionResume;
         ActiveContext.OnNewSession += OnNewSession;
+        _ = LoadConnectionsAsync();
 
         // Resume from ?session=<id> in the URL (Command Center deep-link).
         var uri = new Uri(Nav.Uri);
@@ -204,6 +251,33 @@
     {
         _pageError = message;
         InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadConnectionsAsync()
+    {
+        try
+        {
+            var configs = await McpServerStore.GetAllAsync();
+            _availableConnections = configs.Keys.OrderBy(n => n, StringComparer.Ordinal).ToList();
+            // Default new sessions: every configured server selected. Users uncheck
+            // to scope a session — matches the legacy "all enabled" behaviour but
+            // makes the gate visible.
+            _selectedConnections = new HashSet<string>(_availableConnections, StringComparer.Ordinal);
+            _connectionsLoaded = true;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            ShowPageError($"Couldn't load MCP connections: {ex.Message}");
+        }
+    }
+
+    private void ToggleConnectionsMenu() => _showConnectionsMenu = !_showConnectionsMenu;
+
+    private void ToggleConnection(string name, bool selected)
+    {
+        if (selected) _selectedConnections.Add(name);
+        else _selectedConnections.Remove(name);
     }
 
     private void DismissPageError()
@@ -437,6 +511,20 @@
                 ActiveContext.NotifyDataChanged();
             }
 
+            // Apply the per-session MCP connection gate. When all servers are
+            // selected we leave the gate open (null) so non-MCP tools register
+            // identically to pre-Connections behaviour.
+            if (_connectionsLoaded)
+            {
+                var allSelected = _availableConnections.Count > 0
+                    && _selectedConnections.Count == _availableConnections.Count;
+                pooled.Config.AllowedMcpServers = allSelected
+                    ? null
+                    : _selectedConnections.ToList();
+                await SessionStore.SetMcpConnectionsAsync(_sessionId, pooled.Config.AllowedMcpServers);
+            }
+
+            using var _scope = SessionContext.Push(pooled.Config);
             await foreach (var ev in pooled.Runtime.RunTurnAsync(text, ct))
             {
                 HandleEvent(ev, assistantMsg);

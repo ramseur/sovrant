@@ -11,6 +11,18 @@ public sealed class SessionConfig
 {
     private volatile string? _model;
     private volatile int _permissionModeInt = -1; // -1 = use global default
+    private IReadOnlyList<string>? _allowedMcpServers;
+
+    /// <summary>
+    /// Names of MCP servers whose tools are exposed to the LLM for this session.
+    /// <see langword="null"/> means no gating — every connected server's tools are available.
+    /// An empty list disables all MCP tools.
+    /// </summary>
+    public IReadOnlyList<string>? AllowedMcpServers
+    {
+        get => _allowedMcpServers;
+        set => _allowedMcpServers = value;
+    }
 
     /// <summary>
     /// Per-session model override. <see langword="null"/> means use the global default.

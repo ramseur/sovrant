@@ -138,6 +138,19 @@ public sealed class RemoteSessionStore : ISessionStore
         return summaries;
     }
 
+    public Task<IReadOnlyList<string>?> GetMcpConnectionsAsync(string sessionId, CancellationToken ct = default)
+    {
+        // Connection gating is enforced server-side; the remote client doesn't read it back.
+        return Task.FromResult<IReadOnlyList<string>?>(null);
+    }
+
+    public Task SetMcpConnectionsAsync(string sessionId, IReadOnlyList<string>? servers, string? ownerUserId = null, CancellationToken ct = default)
+    {
+        // The web client passes mcp_connections per-request via the chat completion body,
+        // not by mutating server-side session state.
+        return Task.CompletedTask;
+    }
+
     public async Task<IReadOnlyList<SessionListItem>> SearchAsync(string query, string? ownerUserId = null, int limit = 50, CancellationToken ct = default)
     {
         var url = $"/v1/sessions?q={Uri.EscapeDataString(query)}";

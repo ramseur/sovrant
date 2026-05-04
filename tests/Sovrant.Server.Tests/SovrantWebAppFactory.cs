@@ -202,6 +202,17 @@ public sealed class FakeSessionStore : ISessionStore
             .ToList();
         return Task.FromResult<IReadOnlyList<SessionListItem>>(matches);
     }
+
+    private readonly Dictionary<string, IReadOnlyList<string>?> _mcpConnections = new(StringComparer.OrdinalIgnoreCase);
+
+    public Task<IReadOnlyList<string>?> GetMcpConnectionsAsync(string sessionId, CancellationToken ct = default)
+        => Task.FromResult(_mcpConnections.TryGetValue(sessionId, out var v) ? v : null);
+
+    public Task SetMcpConnectionsAsync(string sessionId, IReadOnlyList<string>? servers, string? ownerUserId = null, CancellationToken ct = default)
+    {
+        _mcpConnections[sessionId] = servers;
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>Fake smart router that returns a canned provider list.</summary>

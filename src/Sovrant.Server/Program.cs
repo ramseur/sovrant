@@ -220,6 +220,7 @@ SessionRoutes.Map(app);
 UsageRoutes.Map(app);
 WebhookRoutes.Map(app);
 McpAuthRoutes.Map(app);
+McpServerRoutes.Map(app);
 EvalRoutes.Map(app);
 SwarmRoutes.Map(app);
 EngineRoutes.Map(app);

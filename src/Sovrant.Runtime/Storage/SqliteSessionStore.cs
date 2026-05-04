@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Sovrant.Runtime.Session;
 
 namespace Sovrant.Runtime.Storage;
@@ -257,6 +258,64 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
                 UpdatedAt: DateTimeOffset.Parse(reader.GetString(2), CultureInfo.InvariantCulture)));
         }
         return summaries;
+    }
+
+    public async Task<IReadOnlyList<string>?> GetMcpConnectionsAsync(string sessionId, CancellationToken ct = default)
+    {
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT mcp_servers FROM sessions WHERE session_id = $sid";
+        cmd.Parameters.AddWithValue("$sid", sessionId);
+        var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        if (result is null || result is DBNull) return null;
+        var json = (string)result;
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(json) ?? [];
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    public async Task SetMcpConnectionsAsync(
+        string sessionId,
+        IReadOnlyList<string>? servers,
+        string? ownerUserId = null,
+        CancellationToken ct = default)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        if (ownerUserId is not null)
+        {
+            using var ownerCheck = connection.CreateCommand();
+            ownerCheck.CommandText = "SELECT user_id FROM sessions WHERE session_id = $sid";
+            ownerCheck.Parameters.AddWithValue("$sid", sessionId);
+            var owner = await ownerCheck.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
+            if (owner is null || !string.Equals(owner, ownerUserId, StringComparison.Ordinal))
+                return;
+        }
+
+        // Ensure a session row exists so the UI can record the gate before any
+        // entries have been appended.
+        using var ensureCmd = connection.CreateCommand();
+        ensureCmd.CommandText = """
+            INSERT OR IGNORE INTO sessions (session_id, user_id, started_at, updated_at)
+            VALUES ($sid, $uid,
+                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+            """;
+        ensureCmd.Parameters.AddWithValue("$sid", sessionId);
+        ensureCmd.Parameters.AddWithValue("$uid", ownerUserId ?? LegacyOwner);
+        await ensureCmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "UPDATE sessions SET mcp_servers = $mcp WHERE session_id = $sid";
+        cmd.Parameters.AddWithValue("$sid", sessionId);
+        cmd.Parameters.AddWithValue("$mcp", servers is null ? DBNull.Value : JsonSerializer.Serialize(servers));
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<SessionListItem>> SearchAsync(

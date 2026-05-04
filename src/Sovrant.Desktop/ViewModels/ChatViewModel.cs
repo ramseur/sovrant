@@ -7,6 +7,7 @@ using Sovrant.Commands;
 using Sovrant.Desktop.Adapters;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Conversation;
+using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Session;
 
 namespace Sovrant.Desktop.ViewModels;
@@ -19,6 +20,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private readonly DesktopConfirmationHandler? _confirmationHandler;
     private readonly ActiveContextViewModel _activeContext;
     private readonly SovrantConfig _config;
+    private readonly IMcpServerStore? _mcpStore;
 
     [ObservableProperty]
     private string _sessionId;
@@ -46,6 +48,20 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     public ActiveContextViewModel ActiveContext => _activeContext;
     public ObservableCollection<MessageViewModel> Messages { get; } = [];
     public ObservableCollection<CommandSuggestion> CommandSuggestions { get; } = [];
+    public ObservableCollection<McpConnectionItem> Connections { get; } = [];
+
+    public bool HasConnections => Connections.Count > 0;
+
+    public string ConnectionsLabel
+    {
+        get
+        {
+            var total = Connections.Count;
+            if (total == 0) return "(none)";
+            var selected = Connections.Count(c => c.IsSelected);
+            return selected == total ? "(all)" : $"({selected}/{total})";
+        }
+    }
 
     /// <summary>Raised after a turn completes (message sent and response received).</summary>
     public event Action? TurnCompleted;
@@ -53,7 +69,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     public ChatViewModel(IRuntimeSessionPool sessionPool, ISessionStore sessionStore,
         SlashCommandDispatcher commandDispatcher, ActiveContextViewModel activeContext,
         SovrantConfig config,
-        DesktopConfirmationHandler? confirmationHandler = null)
+        DesktopConfirmationHandler? confirmationHandler = null,
+        IMcpServerStore? mcpStore = null)
     {
         _sessionPool = sessionPool;
         _sessionStore = sessionStore;
@@ -61,10 +78,38 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         _confirmationHandler = confirmationHandler;
         _activeContext = activeContext;
         _config = config;
+        _mcpStore = mcpStore;
         _sessionId = $"session-{Guid.NewGuid():N}";
 
         if (_confirmationHandler is not null)
             _confirmationHandler.ConfirmationRequested += OnConfirmationRequested;
+
+        _ = LoadConnectionsAsync();
+    }
+
+    private async Task LoadConnectionsAsync()
+    {
+        if (_mcpStore is null) return;
+        try
+        {
+            var configs = await _mcpStore.GetAllAsync().ConfigureAwait(false);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                Connections.Clear();
+                foreach (var name in configs.Keys.OrderBy(n => n, StringComparer.Ordinal))
+                {
+                    var item = new McpConnectionItem(name) { IsSelected = true };
+                    item.PropertyChanged += (_, __) =>
+                    {
+                        OnPropertyChanged(nameof(ConnectionsLabel));
+                    };
+                    Connections.Add(item);
+                }
+                OnPropertyChanged(nameof(HasConnections));
+                OnPropertyChanged(nameof(ConnectionsLabel));
+            });
+        }
+        catch (System.Data.Common.DbException) { /* MCP table not yet provisioned — empty list is fine */ }
     }
 
     private void OnConfirmationRequested(ConfirmationRequest request)
@@ -213,6 +258,17 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             await App.RuntimeReady.Task.WaitAsync(linkedToken).ConfigureAwait(false);
 
             var pooled = await _sessionPool.GetOrCreateAsync(SessionId, ct: linkedToken).ConfigureAwait(false);
+
+            if (Connections.Count > 0)
+            {
+                var selected = Connections.Where(c => c.IsSelected).Select(c => c.Name).ToList();
+                var allSelected = selected.Count == Connections.Count;
+                pooled.Config.AllowedMcpServers = allSelected ? null : selected;
+                await _sessionStore.SetMcpConnectionsAsync(SessionId, pooled.Config.AllowedMcpServers, ct: linkedToken)
+                    .ConfigureAwait(false);
+            }
+
+            using var _scope = SessionContext.Push(pooled.Config);
             await foreach (var ev in pooled.Runtime.RunTurnAsync(text, linkedToken))
             {
                 await Dispatcher.UIThread.InvokeAsync(() => HandleEvent(ev, assistantMsg));
