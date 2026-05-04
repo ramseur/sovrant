@@ -8939,20 +8939,33 @@ This phase is the bounded fix-list. Nothing here is a new feature for its own sa
 - Desktop tray badge for active runs
 - SignalR push (replace 2s poll once Phase 86 lands)
 
-## Phase 91 — Knowledge Authoring on Desktop: AvaloniaEdit Inline Editor Fixes
+## Phase 91 — Knowledge Authoring Revisit (Web + Desktop)
 
-**Status:** Deferred. Web shipped (Phase 90 cycle); Desktop edit/new/delete buttons hidden in `SkillsView` until the issues below are resolved.
+**Status:** Deferred. Edit / New / Delete / Duplicate / View-source buttons hidden on **both** Web (`/skills`, `/documents/templates`, `/tools/templates`) and Desktop (`SkillsView`) until the issues below are resolved. Master-detail viewers stay live so users can still browse the Knowledge section.
 
 ### Why now (later)
 
-Phase 90 shipped the rich-editor pattern for Skills/Documents/Tools markdown templates on both Web (BlazorMonaco + Markdig) and Desktop (AvaloniaEdit + SafeMarkdownPresenter). Web works end-to-end. Desktop has three known defects that are **not** worth blocking the release for, but must be fixed before knowledge authoring is exposed on Desktop:
+Phase 90 shipped the rich-editor pattern for Skills/Documents/Tools markdown templates on both Web (BlazorMonaco + Markdig) and Desktop (AvaloniaEdit + SafeMarkdownPresenter). The infrastructure works, but the authoring UX has issues on both surfaces, and a deeper UX rethink is needed before re-enabling.
 
+**Web — UX feedback (2026-05-04):**
+- The "Duplicate to user" button is confusing wording, and it doesn't actually duplicate — it just opens the editor pointed at the user tier and allows edit. The two-step "duplicate then edit" model leaks the underlying tier system to users for no reason.
+- **Decision:** users/admins control the whole system; they should be able to **edit anything directly**, including built-ins. No "duplicate to user" intermediate step. Tier badges can stay (informational), but every item should have a single `Edit` button that drops straight into the editor. Saving a built-in writes a copy-on-write file silently — the user should not need to think about tiers.
+- Same UX rule applies to `/documents/templates` and `/tools/templates`.
+
+**Desktop — three open defects:**
 1. **Edit existing skill renders blank body** — title binds correctly but the AvaloniaEdit `TextEditor.Text` is not displayed despite `SyncEditorFromVm()` setting it. Suspected initial-load race between `DataContextChanged` and `AttachedToVisualTree`; mitigation in place (lazy `EnsureEditor()` lookup) did not fully resolve.
 2. **New entry → editor accepts no input** — caret/focus/key-input dead. Suspected missing or partial AvaloniaEdit theme registration even after `<StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />` was added to `App.axaml`, OR a hit-test layering issue with the stacked Borders in the detail Grid.
 3. **Save round-trip stale viewer** — after save+`LoadSkills()`, the viewer shows the old `SkillItemViewModel` because `SelectedSkill` references the dropped instance. Mitigation in place (re-select by `name`) — keep, but verify after #1 and #2 are fixed.
 
 ### Scope
 
+**Web side:**
+- Collapse `Edit` / `Duplicate to user` / `View source` into a **single `Edit` action per item**, regardless of tier. Saving a built-in does a silent copy-on-write to `~/.sovrant/{kind}/{slug}.md`.
+- Keep the `+ New` button.
+- `Delete` only enabled for non-built-in items (built-ins can be reset by deleting their user-tier override).
+- Re-evaluate whether tier badges (`user`, `project`, `built-in`) help or distract — keep informational, but they should not gate any action.
+
+**Desktop side:**
 - Reproduce each defect in a minimal Avalonia harness (TextEditor in a Border in a Grid) to isolate framework vs. integration.
 - Verify AvaloniaEdit 11.x is fully themed under the dark `FluentTheme` — may require additional resource includes (`AvaloniaEdit.TextMate` grammar styles, caret brushes).
 - Confirm `TextEditor` receives keyboard focus when the parent Border becomes `IsVisible=true`; if not, force focus on visibility change.
@@ -8961,6 +8974,13 @@ Phase 90 shipped the rich-editor pattern for Skills/Documents/Tools markdown tem
 
 ### Critical files (existing, reuse on resume)
 
+**Web:**
+- `src/Sovrant.Web/Components/Pages/Skills.razor` — buttons hidden, viewer-only layout (revert when fixed)
+- `src/Sovrant.Web/Components/Pages/UserDocumentTemplates.razor` — same
+- `src/Sovrant.Web/Components/Pages/UserToolTemplates.razor` — same
+- `src/Sovrant.Web/Components/Shared/MarkdownEditor.razor` — BlazorMonaco editor (works)
+
+**Desktop:**
 - `src/Sovrant.Desktop/Views/Shared/MarkdownEditorView.axaml(.cs)` — single-column TextEditor, hardened lookup
 - `src/Sovrant.Desktop/ViewModels/MarkdownEditorViewModel.cs` — `Source`/`Saved`/`Cancelled`, frontmatter validation
 - `src/Sovrant.Desktop/ViewModels/SkillsViewModel.cs` — `BeginEdit`/`OnEditorSaved`/`EndEdit` flow with re-select-by-name after save
@@ -8972,12 +8992,217 @@ Phase 90 shipped the rich-editor pattern for Skills/Documents/Tools markdown tem
 - Replacing AvaloniaEdit with another editor (Monaco-via-WebView, custom TextBox-based) — only if the framework-side fix proves intractable.
 - Versioning, history, multi-user authoring (still Phase 90 deferral).
 - Visual frontmatter form.
+- Multi-user permission model — Sovrant runs single-user / admin-trusted today.
 
 ### Verification
 
-1. Edit a built-in skill → editor opens with full body visible → modify → save → viewer shows updated content.
-2. `+ New` → editor opens with template → type freely → save → entry appears with the chosen `name`.
-3. Delete a user-tier skill → entry disappears → viewer shows empty state.
-4. Built-in protection: deleting a built-in is impossible from UI (button hidden — current behaviour).
-5. Round-trip parity with Web: same markdown source authored on Desktop renders identically on Web `/skills`.
+1. **Web — single Edit action:** browse `/skills`, click `Edit` on a built-in → editor opens with the source → save → viewer reloads with edits → second visit confirms the `~/.sovrant/skills/{slug}.md` shadow exists.
+2. **Web — no tier-leaking labels:** there is no "Duplicate to user" anywhere. Every item has at most `Edit` and (if non-built-in) `Delete`.
+3. **Desktop — Edit existing skill:** editor opens with full body visible → modify → save → viewer shows updated content.
+4. **Desktop — `+ New`:** editor opens with template → type freely → save → entry appears with the chosen `name`.
+5. **Desktop — Delete:** user-tier skill deletion → entry disappears → viewer shows empty state.
+6. **Built-in protection:** deleting a built-in (no override file) is impossible from UI; deleting a user-tier file that *shadows* a built-in is allowed and reveals the built-in again.
+7. **Round-trip parity:** same markdown authored on Desktop renders identically on Web `/skills`.
 
+## Phase 92 — Active Sessions: Up to 5 Concurrent Live Tasks With Return-Anytime Results
+
+**Status:** Pending. Builds on Phase 86 (Background Session Continuation) — confirms the user-facing contract and adds the per-user cap, slot UI, and "come-back-and-it's-done" guarantee.
+
+### Goal
+
+A user can have **up to 5 active sessions** running long-form tasks in parallel. Kick off "scaffold this Node app", "research these 8 vendors and write a comparison doc", "refactor this module" each in its own session, navigate freely, close the chat surface, switch sessions — and when they come back, the result is waiting: the artifact is in the workspace, the document is generated, the task is marked complete, or the failure is captured with the error and partial output.
+
+The cap (5) is the product contract — it shapes the slot UI ("3 of 5 active") and gives the runtime a known upper bound for concurrent in-flight turns per user.
+
+### Why now
+
+Phase 86 already plans the infrastructure (event broker, session status, eviction guard, replay on re-attach). What's missing is the **product surface**: the user has no visibility into how many sessions are live, no slot to claim, no clear "this finished while you were away → here's the artifact" landing. Without that, backgrounding feels accidental rather than a first-class capability. The cap also protects the runtime from unbounded fan-out as users get comfortable with parallelism.
+
+### Scope
+
+**Cap & accounting**
+
+- Per-user limit: **5 concurrent live sessions** (sessions whose status ∈ `Running` | `WaitingForConfirmation`). Idle/Completed sessions don't count.
+- Starting a turn over the cap: surface "You have N active sessions. Stop one or wait for one to finish." — with a one-click "show active sessions" link. The text reads the *current* configured cap, not a hard-coded 5.
+- Cap is per-user, not per-workspace; it's about runtime fan-out, not workspace isolation.
+- Default is **5**, with a sane range of **1–20** (UI slider/numeric input clamps to this; values outside the range fall back to the default and emit a warning).
+
+**Settings UI (Web + Desktop parity)**
+
+- Web `Settings.razor` and Desktop `SettingsView.axaml` both gain an **"Active sessions"** section (sits alongside provider/model preferences):
+  - A numeric stepper or slider, label *"Maximum concurrent active sessions"*, range 1–20, default 5.
+  - Help text: *"How many tasks you can run in the background at once. Each session runs independently — you can leave one and come back to it later. Lower this if you want fewer parallel tasks; raise it if your machine and provider tier can handle more."*
+  - Live preview of current usage: *"Currently using N of M."*
+  - Save writes the cap to the **user-settings DB row** (same table that Phase 88 consolidated UI state into) — *not* to `sovrant.config`. Change takes effect on next turn-start (no restart). Cap is reread by `RuntimeSessionPool` per-turn so it picks up edits without bouncing the runtime.
+- A future **admin console** (separate phase, see "Future admin surface" below) will expose this same setting at the org/tenant level for cross-user policy. For now, single-user / admin-trusted Sovrant means the user *is* the admin — the Settings UI is the only surface.
+
+**Config precedence (DB-first, file is bootstrap only)**
+
+- Per the one-disk-config rule (Phase 65 + 88): `sovrant.config` is for **initial deployment / bootstrap defaults only** — air-gapped installs, fleet provisioning, first-run seeds. User-facing settings live in the DB.
+- Resolution order at read time:
+  1. **User settings DB row** (`activeSessions.max`) — what the Settings UI writes.
+  2. **Org settings DB row** (future, owned by the admin console) — falls through here when no per-user value is set.
+  3. **`sovrant.config` deployment default** (`activeSessions.max`, optional) — only consulted if neither DB row has a value. Lets ops ship a non-default starting point without baking it into code.
+  4. **Hard-coded default** (`5`) — final fallback.
+- Saving from the Settings UI **never** writes to `sovrant.config`. The deployment default is read-only at runtime.
+
+**Future admin surface (forward reference, not in this phase)**
+
+- A planned **admin console** (likely Phase 95+; placeholder until scoped) will manage org-level policy for multi-user / multi-tenant deployments: per-role caps, per-user overrides, audit of who hit the cap, hard ceilings the user can't raise past.
+- The DB schema is admin-ready: per-user row first, org row second, deployment file third. When the admin console lands, it writes to the org row; per-user reads continue working unchanged.
+- **Out of scope here:** building the admin console, multi-user identity beyond Phase 85's groundwork, or any role-based override logic. We're only making sure today's DB-backed setting won't have to be re-architected when admins arrive.
+
+**Slot UI (Desktop + Web parity)**
+
+- Top of the chat sidebar shows **"Active sessions: N of 5"** with N filled pips. Clicking expands a compact list of just the active ones, with status pip (running / waiting / completed-just-now), elapsed time, and a one-line summary of the current step.
+- Sessions that completed-while-away get a subtle "✓ ready" badge in the regular session list until the user opens them. Opening clears the badge.
+- Failed sessions get a "⚠ failed" badge that persists until the user opens, reads, and dismisses it (or re-runs).
+
+**Return-anytime guarantee**
+
+- Whatever the task produces — artifact, document, code change, error log — is written to its terminal location *before* the session transitions to `Completed`/`Errored`. The user opening the session later sees:
+  - The full conversation transcript including everything that happened while they were away.
+  - Links to artifacts/documents in their final location (workspace tree, /artifacts, /documents).
+  - For code-creation tasks: a summary of files changed.
+  - For failed tasks: the error, the last successful step, and a one-click "resume from here" if the runtime can checkpoint.
+- "Come back and it's done" must work whether the user returns in 30 seconds or 30 minutes — the contract is **persistence of result**, not presence in memory.
+
+**Cross-session indicators**
+
+- Reuse the Phase 86 toast / tray / browser-tab-title plumbing. When a backgrounded session completes, the indicator names the session and links to the result artifact directly when available ("✓ scaffold-node-api → 12 files added to /artifacts").
+- Confirmation prompts surface the same way (Phase 86) but never count against the 5 cap any differently — `WaitingForConfirmation` is still "live."
+
+### Non-goals
+
+- **More than 5 in parallel.** If users push for it, revisit; do not silently raise the cap.
+- **Multiple turns within a single session.** One turn per session, same as Phase 86.
+- **Mid-turn process-restart recovery.** Same Phase 86 deferral — if the host crashes mid-turn, the session is lost, only persisted history remains.
+- **Mobile / push notifications.** Same as Phase 86.
+
+### Implementation sketch
+
+| Component | File | Notes |
+|---|---|---|
+| Cap resolver | `Sovrant.Server/Configuration/SessionLimits.cs` (new) | Reads in order: user-settings DB row → org-settings DB row (future) → `sovrant.config` bootstrap default → hard-coded 5; range-clamped 1–20; exposed via DI; reread per-turn |
+| Cap enforcement | `RuntimeSessionPool.StartTurnAsync` | Reject with `ActiveSessionLimitExceeded` when N == max; runtime returns reason for the UI banner |
+| Active count signal | `ISessionEventBus` (Phase 86) + a `IActiveSessionCounter` aggregator | Emits "N of M" updates; sidebar + Settings page subscribe |
+| Settings UI (Desktop) | `Views/SettingsView.axaml` + `SettingsViewModel` | New "Active sessions" section: numeric input, help text, live "N of M" |
+| Settings UI (Web) | `Components/Pages/Settings.razor` | Mirror Desktop |
+| Settings persistence | User-settings DB row (Phase 88 table) | Save writes to DB only; `sovrant.config` is **not** mutated by the UI |
+| Bootstrap default | `sovrant.config` schema (extend existing) | Optional `activeSessions.max` field, used only when no DB value exists; for fleet provisioning / first-run seeds |
+| Slot UI (Desktop) | `Views/Sidebar/ActiveSessionsHeader.axaml(.cs)` (new) + `SidebarViewModel.ActiveSessions` | Pips, expand-on-click, status row per active |
+| Slot UI (Web) | `Components/Layout/ActiveSessionsHeader.razor` (new) | Mirror Desktop |
+| Result-ready badges | Existing session list rows in `Sidebar.razor` / sidebar VMs | New `HasUnreadResult` / `HasUnreadFailure` flags driven by event bus |
+| Cap-exceeded banner | `ChatView` / `Chat.razor` | Modal-less inline banner with link to active list |
+| CLI parity | `sovrant status` (Phase 86 plan) | Show "N of M active" header and list |
+
+### Verification
+
+1. Start 5 long-running turns in 5 different sessions; navigate freely between menu items and sessions; the runtime keeps all 5 going, sidebar shows "5 of 5 active" with correct status pips.
+2. Try to start a 6th turn → cap-exceeded banner appears with a link to active sessions; nothing starts on the runtime.
+3. Stop one session; the slot frees; starting a new turn now succeeds.
+4. Close the chat surface (Desktop window minimised, Web tab navigated to `/documents`) while a turn is mid-flight → return 5 minutes later → session shows the full transcript, the artifact lives in `/artifacts`, the badge clears on open.
+5. Force a tool error mid-turn → session goes `Errored`, shows the error and last successful step, "⚠ failed" badge persists in sidebar until dismissed.
+6. Confirmation prompt fires while user is on another page → toast / tray / tab-title updates name the session; click-through goes straight to the prompt; the session still counts as one of the 5.
+7. Restart the host process: in-flight sessions are lost (per non-goal), but the persisted transcript + any already-written artifacts survive; the slot count returns to 0 of M cleanly.
+8. **Settings cap edit (Web):** open Settings → "Active sessions" → set to 3 → save → confirm the row in the user-settings DB table holds `activeSessions.max=3` and `sovrant.config` is **unchanged** → start 3 turns → 4th turn shows the cap-exceeded banner with "3 active" — confirms the DB write took effect without restart.
+9. **Settings cap edit (Desktop):** same flow under Desktop Settings.
+10. **Range clamp:** entering 0 or 25 in the Settings input snaps to the 1–20 range; entering a non-numeric value falls back to the saved value with no save.
+11. **Bootstrap default:** delete the user-settings DB row (or use a fresh install); set `activeSessions.max=8` in `sovrant.config`; first turn-start reads 8, not 5 — confirms the deployment fallback works.
+12. **DB precedence over file:** with `activeSessions.max=8` in `sovrant.config`, save 4 from the Settings UI; runtime now reads 4 (DB wins) — confirms the file is consulted only when no DB row exists.
+13. **Schema forward-compat:** stub a fake org-settings DB row with `activeSessions.max=10`; with no per-user row set, runtime reads 10; with a per-user row set to 3, runtime reads 3 — confirms the per-user → org → file → hard-coded order.
+
+### Cross-references
+
+- **Phase 86 — Background Session Continuation:** the runtime infrastructure this phase depends on. Phase 92 is the product contract on top of Phase 86's plumbing.
+- **Phase 87 — Artifacts-by-Default:** ensures whatever the task produces lands in a deterministic location, so "come back and it's done" has somewhere to point.
+- **Phase 88 — Settings & Provider Profile Consolidation:** establishes the `sovrant.config` writer pattern Phase 92's Settings UI plugs into. The "Active sessions" section is one more consumer of that surface.
+- **Phase 89 — Command Center:** the cockpit surfaces multi-session steering at a higher level (teams/missions); active-sessions slots are the per-user, single-task version.
+- **Future admin console (placeholder, not yet phased):** will own org-level policy and write to a DB-backed `org.settings.*` row that Phase 92's config layer reads as a fallback. Phase 92 is the per-user setting; the admin console is the org-level setting on top.
+
+## Phase 93 — Configuration Boundary Audit: `sovrant.config` vs DB vs Keystore — Codify the Rules
+
+**Status:** Pending. A short, focused audit + governance phase. No new product feature — the deliverable is a written policy, a decision matrix, and lint/test guards that keep future work from drifting back into multi-file disk config or DB/file confusion.
+
+### Goal
+
+Right now the rule "`sovrant.config` is the only on-disk config; everything else goes to DB or keystore" lives in a feedback memory (`feedback_one_disk_config.md`) and gets enforced one PR review at a time. Phase 88 consolidated existing config; Phase 92 added a new precedence layer (per-user DB → org DB → bootstrap file → default). Without a single canonical doc + automated guard, the next contributor will reach for a sibling `*.json` or write user state into `sovrant.config` and we'll find it during a credential leak post-mortem instead of at PR time.
+
+This phase produces:
+1. A canonical decision doc (in-repo, e.g. `docs/configuration-policy.md`).
+2. A matrix that maps every existing setting to its correct home and flags any current mis-classifications.
+3. Automated guards (build / test / lint) that fail when the rules are broken.
+
+### Why now
+
+- Phase 88 + 92 set a clear precedent (DB-first, file is bootstrap-only) but the rule is documented across feedback memos, scattered phase entries, and one-off PR comments — no one place a contributor can read.
+- The active-sessions cap (Phase 92) is the **first** new setting that uses the per-user DB → org DB → file → default chain. The next 5+ phases (Phase 88 follow-on, admin console, cost budgets, route preferences) will all face the same "where does this live?" question. Answering it once beats answering it five times inconsistently.
+- A real incident already happened (`settings.json` + `providers.json` holding plaintext API keys, per the feedback memo). The rule exists *because* of a credential leak. Codifying the rule turns the lesson into a guard.
+
+### Scope
+
+**1. Decision matrix — three buckets**
+
+For every category of state Sovrant handles, classify into exactly one bucket:
+
+| Bucket | Examples | Why this bucket |
+|---|---|---|
+| **`sovrant.config`** (on disk, JSON, single file) | Bootstrap defaults for fleet provisioning, air-gapped install seeds, OS-level paths the DB can't bootstrap itself from (DB connection string, log path), dev-machine overrides | Read-only at runtime; no per-user mutation; needed *before* the DB is reachable; must survive a wiped DB |
+| **DB** (user-settings table, org-settings table, etc.) | All user-facing settings (model, provider, max tokens, permission mode, web search, intent routing, **active-sessions cap**), UI state (sidebar collapse, last-open page), session/workspace/project/artifact records, agents/teams/skills metadata, audit logs | Per-user/org variation; mutable from UI; queryable; survives across surfaces (Web/Desktop/CLI) |
+| **Keystore** (encrypted credential store, OS-native where available) | API keys, OAuth tokens, refresh tokens, MCP server secrets | Sensitive; never plaintext on disk; never in DB unencrypted; never in `sovrant.config` |
+
+Anything that doesn't cleanly fit one bucket is a **design smell** — re-shape the requirement until it does.
+
+**2. Audit pass over the existing codebase**
+
+- Walk every read of `sovrant.config` (grep `sovrant.config`, `IConfiguration`, file-based config services). For each, decide: is this *truly* a bootstrap default, or did it leak in? Move leakers to the DB.
+- Walk every JSON file ever written under `~/.sovrant/`. There should be exactly one (`sovrant.config`); flag any others (legacy `settings.json`, `providers.json`, `governance.json` per the memo, any `.bak` files).
+- Walk every column / key in the user-settings and org-settings DB tables. Anything that's actually a secret moves to the keystore.
+
+**3. Codified policy doc — `docs/configuration-policy.md`**
+
+- Single source of truth. Linked from `CONTRIBUTING.md` and the top of every settings-related file.
+- Includes the matrix above + concrete answers to:
+  - "I'm adding a new user-facing setting — where does it go?" → DB user-settings row, surfaced in Settings UI, optionally seeded by a `sovrant.config` field at first run.
+  - "I'm adding a per-org setting" → DB org-settings row, owned by the future admin console.
+  - "I'm adding an API key for a new provider" → keystore, never DB or file.
+  - "I'm adding a deployment-time path" → `sovrant.config`, document why it can't bootstrap from DB.
+- Explicit anti-patterns: sibling `*.json` files in `~/.sovrant/`, plaintext secrets anywhere, mutating `sovrant.config` from UI code, reading user-facing settings directly from `IConfiguration` instead of from the DB-backed `IUserSettings` service.
+
+**4. Automated guards**
+
+- **Test:** assert that `~/.sovrant/` (in test fixtures and after smoke runs) contains exactly one file, `sovrant.config`. Fail if a `*.json` sibling appears.
+- **Test:** assert no plaintext-looking secret patterns (`sk-…`, `Bearer …`, etc.) are written into `sovrant.config` or any DB column not marked encrypted.
+- **Lint / Roslyn analyzer (or simple grep gate in CI):** flag direct writes to `sovrant.config` outside of the bootstrap writer; flag direct reads of user-facing settings from `IConfiguration` (require routing through `IUserSettings`).
+- **Schema check:** when a new setting is added, the contributor must mark it in code as one of `[BootstrapConfig]`, `[UserSetting]`, `[OrgSetting]`, `[Secret]`. Mis-attribution fails the build.
+
+### Non-goals
+
+- Migrating *new* config surfaces — this phase is about the rule, not about expanding what's stored. Active-sessions cap (Phase 92), cost budgets, etc. each handle their own migration when they ship.
+- Multi-tenant DB schema design — that lives with the admin console phase.
+- Replacing `sovrant.config` with environment variables or secrets manager — out of scope; the rule is about the *boundary*, not the format.
+
+### Deliverables
+
+1. `docs/configuration-policy.md` — the canonical doc + matrix.
+2. `CONTRIBUTING.md` link to the policy in the "Adding settings" section.
+3. Audit report (one-time, in the PR body): every existing setting bucketed, every flagged leak resolved or ticketed.
+4. CI guard(s): file-presence test, secret-pattern test, optional Roslyn analyzer or grep gate.
+5. Memory update (`feedback_one_disk_config.md` → keep as-is; add a pointer to the new doc so future agents read the long form, not the short form).
+
+### Verification
+
+1. The repo contains `docs/configuration-policy.md` with the three-bucket matrix and concrete answers to the four "where does this go?" questions above.
+2. `CONTRIBUTING.md` links to the policy.
+3. Running the test suite on a clean `~/.sovrant/` confirms exactly one file (`sovrant.config`) is created; introducing a deliberate sibling `.json` fails the test.
+4. Attempting to commit a plaintext API key into `sovrant.config` (via test fixture) fails the secret-pattern test.
+5. Adding a new setting without a bucket attribute fails the build (or the lint gate, depending on tool).
+6. The audit-report PR has zero open "leak" findings — all are either resolved in-PR or tracked as follow-up tickets with owners.
+
+### Cross-references
+
+- **Phase 65 — Config audit / one-disk-config rule origin.**
+- **Phase 88 — Settings & Provider Profile Consolidation:** the implementation that established the DB-backed user-settings surface.
+- **Phase 92 — Active Sessions:** the first new setting to use the full per-user DB → org DB → file → default chain. Phase 93 generalises that pattern.
+- **`feedback_one_disk_config.md`** memory: the rule that this phase codifies.
+- **Future admin console (placeholder):** will own the org-settings table that Phase 93's matrix already accounts for.

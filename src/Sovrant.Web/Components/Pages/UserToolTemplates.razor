@@ -32,25 +32,14 @@ else
             <div class="item-subtitle">@(string.IsNullOrEmpty(context.Category) ? "uncategorized" : context.Category)</div>
         </ItemTemplate>
         <FooterTemplate>
-            <button class="btn-primary btn-sm" @onclick="StartNew">+ New template</button>
-            <a class="btn-outline btn-sm" href="/tools" style="margin-left:8px;">Built-in tools</a>
+            <a class="btn-outline btn-sm" href="/tools">Built-in tools</a>
         </FooterTemplate>
+        @* Authoring buttons hidden — see Phase 91 roadmap entry. Re-enable after the
+           "edit anything, no Duplicate-to-user step" UX rework lands. *@
         <DetailTemplate>
             <div class="detail-content">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
                     <h2 style="margin:0;">@context.Name</h2>
-                    <div style="display:flex; gap:8px;">
-                        @if (context.Tier == UserToolTier.BuiltIn)
-                        {
-                            <button class="btn-outline btn-sm" @onclick="@(() => StartDuplicate(context))">Duplicate to user</button>
-                            <button class="btn-outline btn-sm" @onclick="@(() => StartEdit(context, readOnly: true))">View source</button>
-                        }
-                        else
-                        {
-                            <button class="btn-outline btn-sm" @onclick="@(() => StartEdit(context, readOnly: false))">Edit</button>
-                            <button class="btn-outline btn-sm" @onclick="@(() => DeleteAsync(context))">Delete</button>
-                        }
-                    </div>
                 </div>
                 <div class="detail-meta">
                     <span><code>@context.Slug</code></span>

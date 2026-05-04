@@ -45,25 +45,12 @@ else
                 @context.AgentCount agents &middot; @context.ToolCount tools
             </div>
         </ItemTemplate>
-        <FooterTemplate>
-            <button class="btn-primary btn-sm" @onclick="StartNew">+ New skill</button>
-        </FooterTemplate>
+        @* Authoring buttons hidden — see Phase 91 roadmap entry. Re-enable after the
+           "edit anything, no Duplicate-to-user step" UX rework lands. *@
         <DetailTemplate>
             <div class="detail-content">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
                     <h2 style="margin:0;">@context.Name</h2>
-                    <div style="display:flex; gap:8px;">
-                        @if (context.Tier == SkillTier.BuiltIn)
-                        {
-                            <button class="btn-outline btn-sm" @onclick="@(() => StartDuplicate(context))">Duplicate to user</button>
-                            <button class="btn-outline btn-sm" @onclick="@(() => StartEdit(context, readOnly: true))">View source</button>
-                        }
-                        else
-                        {
-                            <button class="btn-outline btn-sm" @onclick="@(() => StartEdit(context, readOnly: false))">Edit</button>
-                            <button class="btn-outline btn-sm" @onclick="@(() => DeleteAsync(context))">Delete</button>
-                        }
-                    </div>
                 </div>
                 <p class="text-secondary">@context.Description</p>
                 <div class="detail-meta">
