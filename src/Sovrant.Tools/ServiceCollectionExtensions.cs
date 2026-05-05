@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Lsp;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Documents;
+using Sovrant.Runtime.Prompt;
 using Sovrant.Tools.Agent;
 using Sovrant.Tools.Core;
 using Sovrant.Tools.Extended;
@@ -97,6 +98,7 @@ public static class ServiceCollectionExtensions
         // Skill system — registry, runner, tools
         services.AddSingleton<SkillRegistry>();
         services.AddSingleton<SkillRunner>();
+        services.AddSingleton<ICapabilityCatalog, CapabilityCatalog>();
         services.AddSingleton<ITool, SkillTool>();
         services.AddSingleton<ITool, SkillCreateTool>();
         services.AddSingleton<ITool, ToolSearchTool>();

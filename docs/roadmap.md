@@ -9211,4 +9211,236 @@ Anything that doesn't cleanly fit one bucket is a **design smell** — re-shape 
 - **Phase 88 — Settings & Provider Profile Consolidation:** the implementation that established the DB-backed user-settings surface.
 - **Phase 92 — Active Sessions:** the first new setting to use the full per-user DB → org DB → file → default chain. Phase 93 generalises that pattern.
 - **`feedback_one_disk_config.md`** memory: the rule that this phase codifies.
+
+---
+
+## Phase 94 — Provider & Model Switch Context Continuity
+
+**Status:** Planned
+**Goal:** Ensure that when a user switches provider or model mid-session, the active conversation context is correctly handed off to the new model — without redundant re-sends, token waste, or silent context loss.
+
+### Problem
+
+Today when a user runs `/model <new-model>` or switches provider in the UI mid-session, `ConversationRuntime` uses a new provider/model config but continues appending to `_history` as-is. This is fine for the happy path, but creates two failure modes:
+
+1. **Over-sending:** The new model receives the full prior message history even when the prior model had already compacted or summarised it internally. If compaction ran on model A and produced a summary, and the user then switches to model B, the summary message is re-sent alongside all original history — paying twice.
+2. **Under-sending / context mismatch:** Some providers (native messages API vs. OpenAI-compat) use different role schemas. A history built under one schema may be silently malformed or truncated by the adapter for the new provider, losing tool results or assistant reasoning without error.
+
+In either case the user pays more than necessary or gets a degraded continuation — and there is no observability to know which happened.
+
+### Goals
+
+- **No extra cost for a clean switch.** If the history is already compacted, the new model receives only the compacted form — not the original + compacted.
+- **Schema compatibility check on switch.** Before accepting the switch, validate that the current history can be faithfully represented in the target provider's message schema. If not, offer to compact first.
+- **Emit a switch event to cost tracking.** Log provider/model, token count at switch time, and the result of the compatibility check so cost anomalies after a switch are traceable.
+- **Preserve session continuity for the user.** The conversation continues naturally; the user does not need to re-send their last message or lose in-progress tool state.
+
+### Scope
+
+1. **History snapshot on switch** — when provider/model changes, snapshot the current `_history` token count and compaction state. If compaction ran and produced a summary, mark the history as `compacted-at=<turn>` so the new model receives only the compacted view.
+2. **Provider schema compatibility check** — a lightweight `IHistoryCompatibilityChecker` that inspects the current history for role patterns unsupported by the target provider's adapter (e.g., `tool` role messages under a provider that only understands `user`/`assistant`). Returns `compatible | needs-compaction | incompatible`.
+   - `compatible` → switch proceeds immediately.
+   - `needs-compaction` → auto-compact (using the `fast` tier) before switching; notify user.
+   - `incompatible` → surface a clear error: "This model's provider doesn't support tool-call history. Start a new session or compact first."
+3. **Cost-tracking event** — extend the existing metrics log with a `model_switch` event: `{from_provider, from_model, to_provider, to_model, token_count_at_switch, history_status}`.
+4. **CLI feedback** — `/model <name>` prints a one-line confirmation: `Switched to gpt-4o (history: 3,200 tokens, compatible).` If compaction ran: `Switched to gpt-4o (compacted 12,400 → 2,100 tokens before switch).`
+5. **Web/Desktop feedback** — model picker shows token count and compatibility status in the switch confirmation tooltip or bottom-bar indicator.
+
+### Non-goals
+
+- Cross-provider conversation migration (exporting and re-importing history in a different format) — that's a separate archive/export feature.
+- Automatic provider failover mid-turn (SmartRouter territory, Phase 48).
+- Changing the message schema stored in `_history` — the internal representation stays stable; only the outbound adapter layer is responsible for schema translation.
+
+### Verification
+
+1. Switch from Anthropic to OpenAI mid-session: history is sent once, not duplicated. Token count in the cost log matches `_history` length at switch time.
+2. Switch after compaction: new model receives the compacted summary only. Cost log shows pre-compaction vs post-compaction counts.
+3. Switch to a provider whose adapter doesn't support `tool` role messages with active tool results in history: user sees an actionable error, not a silent API failure.
+4. `/model <name>` prints token count and compatibility status.
+5. Existing compaction tests (`MaybeCompactHistoryAsync`) still pass; new switch-event entries appear in the JSONL metrics log.
+
+### Cross-references
+
+- **Phase 48 — SmartRouter:** health/latency/cost routing; Phase 94 is about context handoff correctness, not routing policy.
+- **Phase 51 — Mission engine `IContextCompactor`:** the reversible compaction path Phase 94 relies on for `needs-compaction` switches.
+- **Phase 55 — Cost tracking:** JSONL metrics log extended with `model_switch` events.
+- **Phase 80 — Mid-conversation context compaction:** the fixed-threshold → percentage-of-window improvement that Phase 94 builds on for pre-switch compaction.
 - **Future admin console (placeholder):** will own the org-settings table that Phase 93's matrix already accounts for.
+
+---
+
+## Phase 95 — Memory System Audit & Hardening
+
+**Status:** Planned
+**Goal:** Verify that both the backend (`SqliteMemoryStore` / `MemoryInjector`) and the session-end extraction pipeline (`SessionEndMemoryHandler`) are working correctly end-to-end, then close the known gaps that make memory injection expensive, noisy, or unreliable.
+
+### Background
+
+Sovrant has two memory subsystems that were built in separate phases and have never been audited together:
+
+- **Backend structured memory** (`V003__memory.sql`): three DB tables — `session_summaries`, `learned_patterns`, `instincts` — injected by `MemoryInjector.BuildMemorySectionAsync()` into the system prompt on every turn.
+- **Session-end extraction** (`SessionEndMemoryHandler`): a hook that fires when a session closes, reads conversation history, and writes new `learned_patterns` and `instincts` rows.
+
+Neither subsystem has integration tests that verify the full round-trip (session → extraction → injection into the next session's prompt). The known gaps below were identified by reading the code; some may already cause silent failures or unnecessary token spend in production dogfood sessions.
+
+### Known gaps
+
+| # | Gap | Where | Impact |
+|---|-----|--------|--------|
+| 1 | **Count-based injection, no token budget** | `MemoryInjector` injects up to 3 + 15 + 10 = 28 items with no per-item or aggregate token cap. A workspace with 15 verbose patterns can blow hundreds of tokens per turn silently. | Token waste / cost |
+| 2 | **No query-aware ranking on backend** | Frontend uses a Sonnet side-query to select up to 5 relevant memories. Backend loads all items for the project, sorted only by confidence — no relevance to the current user message. | Noise in context / cost |
+| 3 | **No confidence decay on learned patterns** | `confidence` is set at creation and updated by `SessionEndMemoryHandler` but never decays over time. A pattern learned six months ago with confidence 0.9 stays at 0.9 even if it contradicts newer patterns. | Stale injection |
+| 4 | **Duplicate patterns across sessions** | Nothing prevents the same pattern text (or near-duplicates) from being written multiple times by `SessionEndMemoryHandler` across different sessions. All copies get injected. | Noise / cost |
+| 5 | **Extraction is fire-and-forget with a 60 s drain** | If the process is killed before the drain completes, the extraction for that session is lost silently. No retry, no dead-letter. | Data loss |
+| 6 | **`workspace_id` nullable in `session_summaries`** | Workspace-scoped memory lookups fall back to a project-only index. Multi-workspace setups get cross-contaminated session context. | Correctness |
+| 7 | **No end-to-end integration test** | The round-trip (conversation → extraction → DB rows → next-session injection) has no test coverage. `MemoryInjector` and `SessionEndMemoryHandler` are only unit-tested in isolation. | Unknown breakage |
+| 8 | **Injection happens even when context window is tight** | `MemoryInjector` is called unconditionally. After compaction (Phase 80/94), the remaining context budget may be small; injecting 28 items could push the model back over threshold. | Cost / compaction churn |
+
+### Scope
+
+**1. Audit pass (read-only, no new features)**
+
+- Run a dogfood session that exercises extraction end-to-end. Verify that `learned_patterns` and `instincts` rows are written to SQLite after session close.
+- Run a second session and confirm those rows appear in the injected system prompt via a debug log or test assertion.
+- Confirm `workspace_id` is populated correctly for workspace-scoped sessions; fix the nullable default if not.
+- Confirm duplicate suppression: if the same pattern text already exists at confidence ≥ threshold, `SessionEndMemoryHandler` updates confidence rather than inserting a new row.
+
+**2. Token-budget cap on injection**
+
+- Add a `MaxMemoryTokens` config (default: 1,500 tokens, ~6 KB) to `MemoryInjector`.
+- Resolve the active model's context window via the Phase 54 capability registry; scale the cap proportionally (e.g. 0.75% of window, min 500, max 3,000).
+- Items are selected in priority order: workspace memory → instincts (by confidence) → learned patterns (by confidence) → session summaries. Stop when the budget is reached.
+- Emit a `memory_injected` entry in the JSONL cost log: `{item_count, estimated_tokens, budget, truncated: bool}`.
+
+**3. Confidence decay**
+
+- Add a `last_used` timestamp to `learned_patterns` (already present in schema).
+- Apply exponential decay in `MemoryInjector` at read time: `effective_confidence = confidence * decay_factor ^ days_since_last_used`. Default half-life: 90 days. Patterns with `effective_confidence < 0.3` are excluded from injection (not deleted; decay is reversible if the pattern is reinforced).
+- Instincts already have an `evidence` trail; apply the same decay.
+
+**4. Duplicate suppression in extraction**
+
+- Before inserting a new `learned_patterns` row, `SessionEndMemoryHandler` checks for an existing row with ≥ 80% string similarity (simple normalized edit distance is sufficient — no LLM call).
+- On match: update `confidence` and `last_used`; do not insert.
+- On no match: insert as new.
+
+**5. Context-budget awareness**
+
+- `MemoryInjector` receives the current session's remaining token budget (already tracked by `ConversationRuntime`). If remaining budget < `MaxMemoryTokens * 1.5`, skip injection and log `memory_skipped_low_budget`.
+- This prevents memory injection from triggering another compaction cycle immediately after a compaction run.
+
+**6. End-to-end integration test**
+
+- One test that:
+  1. Creates a session, sends messages that should produce a learnable pattern, closes the session.
+  2. Asserts a `learned_patterns` row was written to the test DB.
+  3. Opens a new session for the same project, calls `BuildMemorySectionAsync()`.
+  4. Asserts the pattern text appears in the injected section.
+- One test that verifies the token-budget cap truncates injection when the budget is tight.
+- One test that verifies duplicate suppression: same extraction run twice → one DB row, not two.
+
+### Non-goals
+
+- Replacing the structured memory schema with a vector store / embedding-based retrieval — that is a future phase if the confidence-ranked approach proves insufficient at scale.
+- Cross-surface memory sync between CLI/Desktop/Web file-based memories and the DB-backed store — those are separate systems targeting different use cases.
+- Automatic memory pruning or garbage collection — decay handles staleness; hard deletes are a future admin-console feature.
+
+### Verification
+
+1. Dogfood session → close → reopen: patterns from session 1 appear in session 2's system prompt. Verified via debug log or test assertion.
+2. `memory_injected` entries appear in the JSONL cost log with accurate token estimates.
+3. Injecting with a tight budget (< threshold) emits `memory_skipped_low_budget` and does not add items to the prompt.
+4. Running the same extraction twice produces one `learned_patterns` row, not two.
+5. A pattern with `effective_confidence < 0.3` after decay does not appear in the injected section.
+6. All three integration tests pass in CI.
+
+### Cross-references
+
+- **Phase 27 — Multi-Layered Memory System:** original DB schema (`V003__memory.sql`), `IMemoryStore`, `SqliteMemoryStore`.
+- **Phase 32 — SQLite Persistence:** `MemoryInjector`, `SessionEndMemoryHandler` implementation.
+- **Phase 54 — Model capability registry:** used to resolve context window size for proportional budget calculation.
+- **Phase 55 — Cost tracking:** JSONL log extended with `memory_injected` / `memory_skipped_low_budget` events.
+- **Phase 80/94 — Context compaction / model switch:** Phase 95 injection must be context-budget-aware to avoid triggering a compaction immediately after one completes.
+
+---
+
+## Phase 96 — MCP End-to-End Smoke Test & Go-Public Gate
+
+**Status:** Planned — blocks public launch
+**Goal:** Prove that MCP-gated sessions work end-to-end on every surface (Desktop, Web, CLI, HTTP server): a real conversation can discover tools from a connected MCP server, invoke them, and return results — with per-session gating enforced correctly.
+
+### Why this is a launch gate
+
+The infrastructure code path is confirmed wired on all surfaces (same `AddSovrantRuntime()` + `InitializeRuntimeAsync()` DI path). But "wired" is not the same as "working" — the MCP tool proxy, per-session gating filter (`FilterToolsForModel`), Connections UI selection, and `ListMcpResources` → `MCPTool` discovery loop have never been smoke-tested as a complete flow across surfaces. Going public with a broken MCP story undermines the core value prop.
+
+### The discovery loop matters
+
+MCP tools are **not** first-class entries in the model's static tool list. They are discovered dynamically: the model calls `ListMcpResources` to enumerate available servers and tools, then calls `MCPTool` with `{server, tool, input}` to invoke them. The smoke test must verify this full loop — not just that MCP servers are registered at startup.
+
+### Smoke test checklist (must all pass before public launch)
+
+**Surface: Desktop (Avalonia)**
+
+- [ ] Open a new chat session. PixelLab MCP server appears in the Connections panel.
+- [ ] Enable PixelLab for the session. Send: *"What PixelLab tools do you have available?"*
+- [ ] Model calls `ListMcpResources` → response enumerates PixelLab tools.
+- [ ] Send: *"Use PixelLab to list my characters."* Model calls `MCPTool` with correct `server`/`tool` args → result returned in chat.
+- [ ] Disable PixelLab in Connections. Repeat the invocation request. Model does NOT invoke PixelLab tools (gating enforced).
+
+**Surface: Web (Blazor :5100, embedded mode)**
+
+- [ ] Same four steps as Desktop.
+- [ ] Confirm gating: with PixelLab disabled in Connections, `MCPTool` call to PixelLab is filtered out.
+
+**Surface: Web (remote mode — Blazor :5100 → Server :5200)**
+
+- [ ] Start `Sovrant.Server` with PixelLab configured. Start Web in remote mode.
+- [ ] Same four steps. Confirm tools come from the remote server's `McpClientRegistry`, not a local one.
+
+**Surface: CLI**
+
+- [ ] `sovrant chat` with PixelLab configured. Ask model to list PixelLab tools → `ListMcpResources` response.
+- [ ] Ask model to invoke a PixelLab tool → `MCPTool` call succeeds.
+
+**Per-session gating (all surfaces)**
+
+- [ ] Session A: PixelLab enabled. Session B: PixelLab disabled. Both open simultaneously. Session B cannot invoke PixelLab even while Session A can. Verify via `ConversationRuntime.FilterToolsForModel()` — no cross-session bleed.
+
+**Error cases**
+
+- [ ] PixelLab MCP server configured but not reachable (wrong URL). Startup logs a warning but does not crash. Chat session opens. Model reports tool unavailable gracefully (no unhandled exception surfaced to user).
+- [ ] Model calls `MCPTool` with a nonexistent `tool` name on a connected server. Error is returned as a tool result, not an unhandled exception.
+
+### What to fix if a step fails
+
+| Failure | Likely location |
+|---------|----------------|
+| PixelLab does not appear in Connections panel | `McpServerRoutes.cs` `GET /v1/mcp/servers` or `ChatViewModel.RefreshConnectionsAsync` |
+| `ListMcpResources` returns empty or errors | `McpClientRegistry` not populated — check `InitializeRuntimeAsync` log for connection errors |
+| `MCPTool` call never fires (model doesn't try) | System prompt doesn't advertise MCP capability — check that `ListMcpResourcesTool` and `MCPTool` are in the model's tool list |
+| Gating not enforced | `ConversationRuntime.FilterToolsForModel` — `SessionContext.Current?.AllowedMcpServers` not being set from `pooled.Config` |
+| Remote mode tools missing | `AddSovrantClient()` doesn't proxy MCP tool calls — check `ChatRoutes` on the server |
+
+### Deliverables
+
+1. All checklist items above pass and are documented in a brief test-run note (PR body or a `docs/mcp-smoke-test-results.md`).
+2. Any bugs found during the smoke test are fixed before the checklist is marked complete.
+3. A minimal automated integration test (`Sovrant.IntegrationTests`) that spins up an in-process MCP echo server, connects it via `McpToolRegistrar`, sends a chat turn, and asserts `MCPTool` was invoked and returned the echo response.
+
+### Cross-references
+
+- **Phase 15 — MCP Server Mode:** stdio + HTTP/SSE.
+- **Phase 16 — Dynamic MCP Tool Proxy:** `MCPTool`, `McpClientRegistry`, `McpToolRegistrar`.
+- **Phase 17 — MCP OAuth:** OAuth PKCE flow; Phase 96 does not require OAuth to pass, but OAuth flow should be smoke-tested separately before public.
+- **V024 migration — per-session MCP gating:** `sessions.mcp_servers` column; `ConversationRuntime.FilterToolsForModel()`.
+
+---
+
+## Bug — Selected Model Not Persisted Across Desktop/Web Reload
+
+**Status:** Reported (2026-05-05), not yet investigated
+**Symptom:** The model chosen by the user (e.g. via `/model` or the model picker) resets to the default when the Desktop app or Web UI is reloaded. The last-selected model is not restored on startup.
+**Expected:** Per-user selected model is stored in the DB user-settings row (Phase 88 pattern) and re-applied when the session pool initialises on the next launch.
+**Likely location:** `ChatViewModel` (Desktop) / `Chat.razor` (Web) — the model picker writes to an in-memory `SessionConfig` but may not persist the selection to the `IUserSettings` DB store. On reload the pool creates a fresh `SessionConfig` from the stored defaults, losing the in-session override.
+**Fix scope:** Small — wire the model-picker selection through to `IUserSettings.SetModelAsync(...)` (or equivalent) so it survives restarts. Same fix applies to both surfaces.

@@ -43,6 +43,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private string _systemPrompt;
     /// <summary>Once true, all subsequent turns expose tools (session used tools at least once).</summary>
     private bool _sessionHasUsedTools;
+    /// <summary>Once true, the MCP server hint has been baked into _systemPrompt for this session.</summary>
+    private bool _mcpHintInjected;
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Turn started: session={SessionId}, model={Model}")]
     private static partial void LogTurnStart(ILogger logger, string sessionId, string model);
@@ -108,7 +110,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         IWorkspaceSettingsStore? settings = null,
         ILiveSettings<CompactionSettings>? compaction = null,
         Permissions.IPerTurnApprovalCache? approvalCache = null,
-        McpClientRegistry? mcpClients = null)
+        McpClientRegistry? mcpClients = null,
+        Prompt.ICapabilityCatalog? capabilityCatalog = null)
     {
         _router = router;
         _toolExecutor = toolExecutor;
@@ -128,7 +131,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             CompactionSettings.Resolve(settings, fallback: _config.CompactThreshold));
         _approvalCache = approvalCache;
         _mcpClients = mcpClients;
-        _systemPrompt = systemPromptOverride ?? BuildSystemPrompt();
+        _systemPrompt = systemPromptOverride ?? BuildSystemPrompt(capabilityCatalog);
     }
 
     /// <inheritdoc/>
@@ -226,10 +229,13 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             // to the legacy keyword matcher when no gate is registered.
             // Once a session has used tools, always expose them on subsequent turns
             // so the LLM can continue multi-step work.
+            // If the user explicitly enabled MCP servers for this session, bypass
+            // the intent gate entirely — the user opted in via the Connections UI.
             IReadOnlyList<ToolDefinition> tools;
-            if (round > 0 || _sessionHasUsedTools)
+            if (round > 0 || _sessionHasUsedTools || HasActiveMcpServers())
             {
-                // Tool-use rounds and sessions that already used tools always get tools.
+                // Tool-use rounds, sessions that already used tools, and sessions
+                // with MCP servers enabled always get the full tool list.
                 tools = FilterToolsForModel(allTools);
             }
             else if (round == 0)
@@ -259,6 +265,20 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             {
                 tools = FilterToolsForModel(allTools);
             }
+            // Inject the MCP hint into _systemPrompt exactly once per session the
+            // first time MCP servers are active. Baking it in (rather than
+            // appending per-turn) keeps the system prompt stable so the provider
+            // can cache it on all subsequent turns.
+            if (!_mcpHintInjected)
+            {
+                var hint = BuildMcpHint();
+                if (hint is not null)
+                {
+                    _systemPrompt += hint;
+                    _mcpHintInjected = true;
+                }
+            }
+
             var request = new MessagesRequest(
                 _config.Model,
                 CapMaxTokens(_config.Model, _config.MaxTokens),
@@ -914,7 +934,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         return new RuntimeEvent.TurnCost(record.EstimatedUsd, record.Source);
     }
 
-    private string BuildSystemPrompt()
+    private string BuildSystemPrompt(Prompt.ICapabilityCatalog? catalog = null)
     {
         var sb = new StringBuilder(
             "You are a highly capable AI assistant with access to tools. " +
@@ -963,6 +983,31 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
         // Git context: branch, status, recent commits
         AppendGitContext(sb, Directory.GetCurrentDirectory());
+
+        // Skills and agent templates — list names once at construction so the
+        // model knows what's available without spending a tool-call round on discovery.
+        if (catalog is not null)
+        {
+            if (catalog.Skills.Count > 0)
+            {
+                sb.Append("\n\nAvailable skills (invoke via the Skill tool, e.g. Skill name=\"review\"):");
+                foreach (var (name, description, trigger) in catalog.Skills)
+                {
+                    sb.Append("\n- ").Append(name);
+                    if (!string.IsNullOrWhiteSpace(trigger))
+                        sb.Append(" (").Append(trigger).Append(')');
+                    if (!string.IsNullOrWhiteSpace(description))
+                        sb.Append(": ").Append(description);
+                }
+            }
+
+            if (catalog.AgentTemplateNames.Count > 0)
+            {
+                var names = string.Join(", ", catalog.AgentTemplateNames);
+                sb.Append("\n\nAvailable agent templates (pass as 'template' to the Agent tool): ")
+                  .Append(names).Append('.');
+            }
+        }
 
         return sb.ToString();
     }
@@ -1176,6 +1221,42 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             return true;
 
         return false;
+    }
+
+    /// <summary>
+    /// Returns true when at least one MCP server is active for the current session.
+    /// Null allow-list = all connected servers active. Empty list = all disabled.
+    /// </summary>
+    private bool HasActiveMcpServers()
+    {
+        if (_mcpClients is null || !_mcpClients.HasClients)
+            return false;
+        var allowed = SessionContext.Current?.AllowedMcpServers;
+        // Empty list means user explicitly disabled all MCP for this session.
+        return allowed is not { Count: 0 };
+    }
+
+    /// <summary>
+    /// Returns a system-prompt suffix listing the MCP servers active for this
+    /// session, or null when none are active. Appended per-turn so the model
+    /// always knows which external tools are available.
+    /// </summary>
+    private string? BuildMcpHint()
+    {
+        if (_mcpClients is null || !_mcpClients.HasClients)
+            return null;
+        var allowed = SessionContext.Current?.AllowedMcpServers;
+        if (allowed is { Count: 0 })
+            return null;
+
+        var activeServers = allowed is { Count: > 0 }
+            ? (IEnumerable<string>)allowed
+            : _mcpClients.Clients.Keys;
+
+        var list = string.Join(", ", activeServers);
+        return $"\n\nThe following MCP server(s) are enabled for this session: {list}. " +
+               "Their tools are already available in your tool list — call them directly " +
+               "to fulfil any request related to those services.";
     }
 
     /// <summary>
