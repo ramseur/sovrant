@@ -1,5 +1,6 @@
 @using System.Text.Json
 @using Sovrant.Api.Auth
+@using Sovrant.Api.Capabilities
 @using Sovrant.Runtime.Config
 @using Sovrant.Runtime.Mcp
 @using Sovrant.Runtime.Preferences
@@ -52,11 +53,15 @@
                     <div class="model-tree-models">
                         @foreach (var model in _selectedTreeGroup.Models)
                         {
-                            var isActive = model == Config.Model
-                                || model == ShortenModelName(Config.Model);
+                            var isActive = model.Id == Config.Model
+                                || ShortenModelName(model.Id) == ShortenModelName(Config.Model);
                             <button class="model-tree-model-item @(isActive ? "active" : "")"
-                                    @onclick="() => SelectModel(_selectedTreeGroup, model)">
-                                @ShortenModelName(model)
+                                    @onclick="() => SelectModel(_selectedTreeGroup, model.Id)">
+                                <span class="model-tree-model-name">@ShortenModelName(model.Id)</span>
+                                @if (model.IsFree)
+                                {
+                                    <span class="model-free-badge">Free</span>
+                                }
                             </button>
                         }
                     </div>
@@ -101,6 +106,7 @@
     [Inject] private IUserPreferenceStore Prefs { get; set; } = default!;
     [Inject] private IProviderProfileStore ProfileStore { get; set; } = default!;
     [Inject] private ICredentialStore Credentials { get; set; } = default!;
+    [Inject] private IModelCapabilityRegistry CapabilityRegistry { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private ElementReference _triggerRef;
@@ -116,6 +122,8 @@
 
     private TreeGroup? _selectedTreeGroup;
 
+    private record ModelItem(string Id, bool IsFree);
+
     private class TreeGroup
     {
         public string ProfileId { get; set; } = string.Empty;
@@ -124,7 +132,7 @@
         public string ApiKey { get; set; } = string.Empty;
         public string BaseUrl { get; set; } = string.Empty;
         public int MaxTokens { get; set; } = 32000;
-        public List<string> Models { get; set; } = [];
+        public List<ModelItem> Models { get; set; } = [];
         public bool ModelsFetchedLive { get; set; }
     }
 
@@ -198,6 +206,14 @@
         catch { /* best effort */ }
     }
 
+    private bool IsFreeModel(string modelId)
+    {
+        if (modelId.EndsWith(":free", StringComparison.OrdinalIgnoreCase))
+            return true;
+        var caps = CapabilityRegistry.GetCapabilities(modelId);
+        return caps.CostPerMillionInput is 0m && caps.CostPerMillionOutput is 0m;
+    }
+
     private void BuildTreeGroups()
     {
         var groups = new Dictionary<string, TreeGroup>(StringComparer.OrdinalIgnoreCase);
@@ -215,13 +231,13 @@
                     MaxTokens = profile.MaxTokens,
                 };
                 if (StaticProviderModels.TryGetValue(profile.Provider, out var staticModels))
-                    group.Models.AddRange(staticModels);
+                    group.Models.AddRange(staticModels.Select(m => new ModelItem(m, IsFreeModel(m))));
                 groups[profile.Provider] = group;
             }
             if (!string.IsNullOrWhiteSpace(profile.Model) &&
-                !group.Models.Contains(profile.Model, StringComparer.OrdinalIgnoreCase))
+                !group.Models.Any(m => m.Id.Equals(profile.Model, StringComparison.OrdinalIgnoreCase)))
             {
-                group.Models.Insert(0, profile.Model);
+                group.Models.Insert(0, new ModelItem(profile.Model, IsFreeModel(profile.Model)));
             }
         }
         _treeGroups = groups.Values.ToList();
@@ -261,7 +277,7 @@
             if (filtered.Count > 0)
             {
                 group.Models.Clear();
-                group.Models.AddRange(filtered);
+                group.Models.AddRange(filtered.Select(m => new ModelItem(m, IsFreeModel(m))));
                 group.ModelsFetchedLive = true;
                 StateHasChanged();
             }

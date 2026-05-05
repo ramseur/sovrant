@@ -5,6 +5,7 @@ using System.Text.Json;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Api.Capabilities;
 using Sovrant.Desktop.Adapters;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Mcp;
@@ -23,6 +24,7 @@ public partial class SidebarViewModel : ViewModelBase
     private readonly IUserPreferenceStore _prefs;
     private readonly IProviderProfileStore _profileStore;
     private readonly ICredentialStore _credentials;
+    private readonly IModelCapabilityRegistry? _capabilityRegistry;
     private bool _suppressProfileSwitch;
 
     public ActiveContextViewModel ActiveContext { get; }
@@ -91,7 +93,8 @@ public partial class SidebarViewModel : ViewModelBase
         IProviderProfileStore profileStore,
         ICredentialStore credentials,
         MutableAuthProvider? authProvider = null,
-        IHttpClientFactory? httpFactory = null)
+        IHttpClientFactory? httpFactory = null,
+        IModelCapabilityRegistry? capabilityRegistry = null)
     {
         _sessionStore = sessionStore;
         _config = config;
@@ -100,6 +103,7 @@ public partial class SidebarViewModel : ViewModelBase
         _prefs = prefs;
         _profileStore = profileStore;
         _credentials = credentials;
+        _capabilityRegistry = capabilityRegistry;
         ActiveContext = activeContext;
         LoadFromConfig(config);
         _ = LoadProviderProfilesAsync();
@@ -141,7 +145,7 @@ public partial class SidebarViewModel : ViewModelBase
                 {
                     group.Models.Clear();
                     foreach (var m in filtered)
-                        group.Models.Add(new ModelOption(m, group));
+                        group.Models.Add(new ModelOption(m, group, IsFreeModel(m)));
                     group.ModelCount = group.Models.Count;
                     group.ModelsFetchedLive = true;
                 });
@@ -340,6 +344,16 @@ public partial class SidebarViewModel : ViewModelBase
         });
     }
 
+    private bool IsFreeModel(string modelId)
+    {
+        if (modelId.EndsWith(":free", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (_capabilityRegistry is null)
+            return false;
+        var caps = _capabilityRegistry.GetCapabilities(modelId);
+        return caps.CostPerMillionInput is 0m && caps.CostPerMillionOutput is 0m;
+    }
+
     private void BuildTreeGroups()
     {
         TreeGroups.Clear();
@@ -358,13 +372,13 @@ public partial class SidebarViewModel : ViewModelBase
                     MaxTokens = profile.MaxTokens,
                 };
                 if (StaticProviderModels.TryGetValue(profile.Provider, out var staticModels))
-                    foreach (var m in staticModels) group.Models.Add(new ModelOption(m, group));
+                    foreach (var m in staticModels) group.Models.Add(new ModelOption(m, group, IsFreeModel(m)));
                 groups[profile.Provider] = group;
             }
             if (!string.IsNullOrWhiteSpace(profile.Model) &&
                 !group.Models.Any(mo => mo.Model.Equals(profile.Model, StringComparison.OrdinalIgnoreCase)))
             {
-                group.Models.Insert(0, new ModelOption(profile.Model, group));
+                group.Models.Insert(0, new ModelOption(profile.Model, group, IsFreeModel(profile.Model)));
             }
         }
         foreach (var g in groups.Values)
@@ -584,10 +598,11 @@ public partial class ProviderTreeGroup : ViewModelBase
     public override string ToString() => Provider;
 }
 
-public sealed class ModelOption(string model, ProviderTreeGroup group)
+public sealed class ModelOption(string model, ProviderTreeGroup group, bool isFree = false)
 {
     public string Model { get; } = model;
     public ProviderTreeGroup Group { get; } = group;
+    public bool IsFree { get; } = isFree;
 
     /// <summary>Display name with provider prefix stripped and :free/:extended removed.</summary>
     public string DisplayName => SidebarViewModel.ShortenModelName(Model);

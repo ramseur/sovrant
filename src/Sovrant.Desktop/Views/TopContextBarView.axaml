@@ -112,8 +112,23 @@
                                                         Background="Transparent"
                                                         Foreground="{DynamicResource TextSecondary}"
                                                         FontSize="11">
-                                                    <TextBlock Text="{Binding DisplayName}"
-                                                               TextTrimming="CharacterEllipsis" />
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <TextBlock Text="{Binding DisplayName}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   VerticalAlignment="Center" />
+                                                        <Border IsVisible="{Binding IsFree}"
+                                                                Background="#1A22C55E"
+                                                                BorderBrush="#22C55E"
+                                                                BorderThickness="1"
+                                                                CornerRadius="3"
+                                                                Padding="4,1"
+                                                                VerticalAlignment="Center">
+                                                            <TextBlock Text="Free"
+                                                                       FontSize="9"
+                                                                       FontWeight="SemiBold"
+                                                                       Foreground="#22C55E" />
+                                                        </Border>
+                                                    </StackPanel>
                                                 </Button>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
