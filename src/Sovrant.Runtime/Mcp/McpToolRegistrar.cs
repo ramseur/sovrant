@@ -58,11 +58,9 @@ public sealed partial class McpToolRegistrar : IAsyncDisposable
             {
                 throw;
             }
-            catch (InvalidOperationException ex)
-            {
-                LogConnectionFailed(_logger, name, ex);
-            }
-            catch (IOException ex)
+#pragma warning disable CA1031 // a single bad MCP must not crash startup
+            catch (Exception ex)
+#pragma warning restore CA1031
             {
                 LogConnectionFailed(_logger, name, ex);
             }

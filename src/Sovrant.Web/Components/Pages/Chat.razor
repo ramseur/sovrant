@@ -259,10 +259,9 @@
         {
             var configs = await McpServerStore.GetAllAsync();
             _availableConnections = configs.Keys.OrderBy(n => n, StringComparer.Ordinal).ToList();
-            // Default new sessions: every configured server selected. Users uncheck
-            // to scope a session — matches the legacy "all enabled" behaviour but
-            // makes the gate visible.
-            _selectedConnections = new HashSet<string>(_availableConnections, StringComparer.Ordinal);
+            // Opt-in: nothing selected by default. Users explicitly check the
+            // MCPs they want this session to be able to call.
+            _selectedConnections = new HashSet<string>(StringComparer.Ordinal);
             _connectionsLoaded = true;
             await InvokeAsync(StateHasChanged);
         }

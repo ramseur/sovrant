@@ -142,6 +142,24 @@
 @code {
     [Inject] private IMcpServerStore ServerStore { get; set; } = default!;
     [Inject] private McpClientRegistry McpRegistry { get; set; } = default!;
+    [Inject] private McpToolRegistrar McpRegistrar { get; set; } = default!;
+
+    private async Task ConnectAndRefreshAsync(string name, McpServerConfig config)
+    {
+        _status = $"Connecting to '{name}'…";
+        StateHasChanged();
+        try
+        {
+            await McpRegistrar.ReconnectServerAsync(name, config).ConfigureAwait(false);
+            var toolCount = McpRegistry.ToolToServer.Count(kvp => kvp.Value == name);
+            _status = $"Connected to '{name}' ({toolCount} tool{(toolCount == 1 ? "" : "s")}).";
+        }
+        catch (Exception ex)
+        {
+            _status = $"Failed to connect to '{name}': {ex.Message}";
+        }
+        await LoadServersAsync().ConfigureAwait(false);
+    }
 
     private string _addMode = "json";
     private string _newName = string.Empty;
@@ -174,22 +192,23 @@
     {
         var servers = new List<ServerView>();
         var stored = await ServerStore.GetAllAsync().ConfigureAwait(false);
+
+        // Use the registrar's tool→server map instead of calling ListToolsAsync
+        // again per server — a second HTTP MCP listing has been observed to hang.
+        var toolsByServer = McpRegistry.ToolToServer
+            .GroupBy(kv => kv.Value, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Select(kv => kv.Key).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList(), StringComparer.Ordinal);
+
         foreach (var kv in stored)
         {
             var isConnected = McpRegistry.Clients.ContainsKey(kv.Key);
             var toolCount = 0;
             var toolNames = "";
-            if (isConnected)
+            if (isConnected && toolsByServer.TryGetValue(kv.Key, out var tools))
             {
-                try
-                {
-                    var client = McpRegistry.Clients[kv.Key];
-                    var tools = await client.ListToolsAsync().ConfigureAwait(false);
-                    toolCount = tools.Count;
-                    toolNames = string.Join(", ", tools.Select(t => t.Name).Take(10));
-                    if (tools.Count > 10) toolNames += $" +{tools.Count - 10} more";
-                }
-                catch { /* best effort */ }
+                toolCount = tools.Count;
+                toolNames = string.Join(", ", tools.Take(10));
+                if (tools.Count > 10) toolNames += $" +{tools.Count - 10} more";
             }
             servers.Add(new ServerView
             {
@@ -220,16 +239,16 @@
                 ? Array.Empty<string>()
                 : _newArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-            await ServerStore.UpsertAsync(_newName.Trim(), new McpServerConfig
+            var name = _newName.Trim();
+            var config = new McpServerConfig
             {
                 Command = _newCommand.Trim(),
                 Args = args,
                 Env = new Dictionary<string, string>(StringComparer.Ordinal),
-            }).ConfigureAwait(false);
-
-            _status = $"Server '{_newName}' added. Restart to connect.";
+            };
+            await ServerStore.UpsertAsync(name, config).ConfigureAwait(false);
             ResetForm();
-            await LoadServersAsync().ConfigureAwait(false);
+            await ConnectAndRefreshAsync(name, config).ConfigureAwait(false);
         }
         catch (Exception ex) { _status = $"Failed: {ex.Message}"; }
     }
@@ -257,15 +276,15 @@
             if (!string.IsNullOrWhiteSpace(_newBearer))
                 headers["Authorization"] = $"Bearer {_newBearer.Trim()}";
 
-            await ServerStore.UpsertAsync(_newName.Trim(), new McpServerConfig
+            var name = _newName.Trim();
+            var config = new McpServerConfig
             {
                 Url = url,
                 Headers = headers,
-            }).ConfigureAwait(false);
-
-            _status = $"Server '{_newName}' added. Restart to connect.";
+            };
+            await ServerStore.UpsertAsync(name, config).ConfigureAwait(false);
             ResetForm();
-            await LoadServersAsync().ConfigureAwait(false);
+            await ConnectAndRefreshAsync(name, config).ConfigureAwait(false);
         }
         catch (Exception ex) { _status = $"Failed: {ex.Message}"; }
     }
@@ -286,9 +305,9 @@
             foreach (var (name, config) in entries)
                 await ServerStore.UpsertAsync(name, config).ConfigureAwait(false);
 
-            _status = $"Added {entries.Count} server(s): {string.Join(", ", entries.Keys)}. Restart to connect.";
             _jsonInput = string.Empty;
-            await LoadServersAsync().ConfigureAwait(false);
+            foreach (var (name, config) in entries)
+                await ConnectAndRefreshAsync(name, config).ConfigureAwait(false);
         }
         catch (Exception ex) { _status = $"Failed: {ex.Message}"; }
     }

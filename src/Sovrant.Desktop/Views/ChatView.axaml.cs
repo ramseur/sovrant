@@ -14,6 +14,15 @@ public partial class ChatView : UserControl
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+        AttachedToVisualTree += OnAttachedToVisualTree;
+    }
+
+    private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        // MCP servers may have been added via Integrations after this VM was
+        // built — refresh the Connections list each time the view becomes visible.
+        if (DataContext is ChatViewModel vm)
+            _ = vm.RefreshConnectionsAsync();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

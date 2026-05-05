@@ -84,25 +84,30 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         if (_confirmationHandler is not null)
             _confirmationHandler.ConfirmationRequested += OnConfirmationRequested;
 
-        _ = LoadConnectionsAsync();
+        _ = RefreshConnectionsAsync();
     }
 
-    private async Task LoadConnectionsAsync()
+    public async Task RefreshConnectionsAsync()
     {
         if (_mcpStore is null) return;
         try
         {
             var configs = await _mcpStore.GetAllAsync().ConfigureAwait(false);
+            var names = configs.Keys.OrderBy(n => n, StringComparer.Ordinal).ToList();
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                var existing = Connections.ToDictionary(c => c.Name, StringComparer.Ordinal);
                 Connections.Clear();
-                foreach (var name in configs.Keys.OrderBy(n => n, StringComparer.Ordinal))
+                foreach (var name in names)
                 {
-                    var item = new McpConnectionItem(name) { IsSelected = true };
-                    item.PropertyChanged += (_, __) =>
+                    var item = existing.TryGetValue(name, out var prev)
+                        ? prev
+                        : new McpConnectionItem(name) { IsSelected = false };
+                    if (!existing.ContainsKey(name))
                     {
-                        OnPropertyChanged(nameof(ConnectionsLabel));
-                    };
+                        item.PropertyChanged += (_, __) =>
+                            OnPropertyChanged(nameof(ConnectionsLabel));
+                    }
                     Connections.Add(item);
                 }
                 OnPropertyChanged(nameof(HasConnections));

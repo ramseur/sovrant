@@ -13,6 +13,7 @@ public partial class IntegrationsViewModel : ViewModelBase
 {
     private readonly IMcpServerStore _serverStore;
     private readonly McpClientRegistry _clientRegistry;
+    private readonly McpToolRegistrar _registrar;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -61,11 +62,33 @@ public partial class IntegrationsViewModel : ViewModelBase
 
     public ObservableCollection<McpServerItem> FilteredServers { get; } = [];
 
-    public IntegrationsViewModel(IMcpServerStore serverStore, McpClientRegistry clientRegistry)
+    public IntegrationsViewModel(IMcpServerStore serverStore, McpClientRegistry clientRegistry, McpToolRegistrar registrar)
     {
         _serverStore = serverStore;
         _clientRegistry = clientRegistry;
+        _registrar = registrar;
         _ = LoadServersAsync();
+    }
+
+    /// <summary>
+    /// Connects (or reconnects) a single server in-process and updates the UI status
+    /// so users see immediate feedback instead of being told to restart the app.
+    /// </summary>
+    private async Task ConnectAndRefreshAsync(string name, McpServerConfig config)
+    {
+        StatusMessage = $"Connecting to '{name}'…";
+        try
+        {
+            await _registrar.ReconnectServerAsync(name, config).ConfigureAwait(true);
+            var toolCount = _clientRegistry.ToolToServer.Count(kvp => kvp.Value == name);
+            StatusMessage = $"Connected to '{name}' ({toolCount} tool{(toolCount == 1 ? "" : "s")}).";
+            await LoadServersAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Failed to connect to '{name}': {ex.Message}";
+            await LoadServersAsync().ConfigureAwait(true);
+        }
     }
 
     [RelayCommand]
@@ -105,26 +128,15 @@ public partial class IntegrationsViewModel : ViewModelBase
                 ? []
                 : NewServerArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-            await _serverStore.UpsertAsync(name, new McpServerConfig
+            var config = new McpServerConfig
             {
                 Command = command,
                 Args = args,
                 Env = new Dictionary<string, string>(StringComparer.Ordinal),
-            }).ConfigureAwait(true);
-
-            StatusMessage = $"Server '{name}' added. Restart to connect.";
+            };
+            await _serverStore.UpsertAsync(name, config).ConfigureAwait(true);
             ResetAddForm();
-
-            _allServers.Add(new McpServerItem
-            {
-                Name = name,
-                Command = command,
-                ArgsSummary = args.Length > 0 ? string.Join(" ", args) : "",
-                IsConnected = false,
-                ToolCount = 0,
-            });
-            TotalCount = _allServers.Count;
-            ApplyFilter();
+            await ConnectAndRefreshAsync(name, config).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -166,12 +178,10 @@ public partial class IntegrationsViewModel : ViewModelBase
             if (!string.IsNullOrWhiteSpace(NewServerBearer))
                 headers["Authorization"] = $"Bearer {NewServerBearer.Trim()}";
 
-            await _serverStore.UpsertAsync(name, new McpServerConfig { Url = url, Headers = headers })
-                .ConfigureAwait(true);
-
-            StatusMessage = $"Server '{name}' added. Restart to connect.";
+            var config = new McpServerConfig { Url = url, Headers = headers };
+            await _serverStore.UpsertAsync(name, config).ConfigureAwait(true);
             ResetAddForm();
-            await LoadServersAsync().ConfigureAwait(true);
+            await ConnectAndRefreshAsync(name, config).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -197,9 +207,9 @@ public partial class IntegrationsViewModel : ViewModelBase
             foreach (var (name, config) in entries)
                 await _serverStore.UpsertAsync(name, config).ConfigureAwait(true);
 
-            StatusMessage = $"Added {entries.Count} server(s): {string.Join(", ", entries.Keys)}. Restart to connect.";
             ResetAddForm();
-            await LoadServersAsync().ConfigureAwait(true);
+            foreach (var (name, config) in entries)
+                await ConnectAndRefreshAsync(name, config).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -245,37 +255,21 @@ public partial class IntegrationsViewModel : ViewModelBase
         _allServers.Clear();
 
         var servers = await _serverStore.GetAllAsync().ConfigureAwait(true);
+
+        // Tool→server map is the source of truth for what's currently registered.
+        // No need to call ListToolsAsync again — the registrar already did, and
+        // a second call on some HTTP MCPs has been observed to hang/throw.
+        var toolsByServer = _clientRegistry.ToolToServer
+            .GroupBy(kv => kv.Value, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(kv => kv.Key).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList(),
+                StringComparer.Ordinal);
+
         foreach (var (name, server) in servers.OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
         {
             var isConnected = _clientRegistry.Clients.ContainsKey(name);
-
-            if (isConnected && _clientRegistry.Clients.TryGetValue(name, out var client))
-            {
-                // List tools asynchronously
-                _ = Dispatcher.UIThread.InvokeAsync(async () =>
-                {
-                    try
-                    {
-                        var tools = await client.ListToolsAsync();
-                        var item = _allServers.FirstOrDefault(s => s.Name == name);
-                        if (item is not null)
-                        {
-                            item.ToolCount = tools.Count;
-                            item.ToolNames.Clear();
-                            foreach (var t in tools.Select(t => t.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
-                                item.ToolNames.Add(t);
-                            item.Markdown = BuildServerMarkdown(item);
-                            // Refresh detail if this server is selected
-                            if (SelectedServer == item)
-                                DetailMarkdown = BuildServerMarkdown(item);
-                        }
-                    }
-                    catch
-                    {
-                        // Tool listing failed — leave count at 0
-                    }
-                });
-            }
+            var tools = toolsByServer.TryGetValue(name, out var t) ? t : [];
 
             var serverItem = new McpServerItem
             {
@@ -286,10 +280,12 @@ public partial class IntegrationsViewModel : ViewModelBase
                 Transport = server.Url is not null ? "http" : "stdio",
                 HasOAuth = server.OAuthConfig is not null,
                 IsConnected = isConnected,
-                ToolCount = 0,
+                ToolCount = tools.Count,
                 EnvVars = server.Env.ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.Ordinal),
                 Headers = server.Headers.ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.Ordinal),
             };
+            foreach (var toolName in tools)
+                serverItem.ToolNames.Add(toolName);
             serverItem.Markdown = BuildServerMarkdown(serverItem);
             _allServers.Add(serverItem);
         }
@@ -393,7 +389,7 @@ public partial class IntegrationsViewModel : ViewModelBase
         }
         else if (server.IsConnected)
         {
-            sb.AppendLine("**Tools:** Loading...");
+            sb.AppendLine("**Tools:** Connected — server reported no tools.");
         }
         else
         {
