@@ -3,163 +3,244 @@
 @using Sovrant.Runtime.Config
 @using Sovrant.Runtime.Mcp
 
-<div class="settings-page">
-    <div class="diag-header">
-        <h1>Integrations (MCP)</h1>
-        <span class="item-count">@_servers.Count</span>
-    </div>
-
-    <div class="callout-card">
-        <strong>Need scheduled tasks or webhook-driven workflows?</strong>
-        Connect an automation platform (n8n, Zapier, Make) below as an MCP server —
-        Sovrant treats those flows as native tools instead of shipping a built-in scheduler.
-    </div>
-
-    <!-- Add server form -->
-    <div class="card">
-        <div class="form-field">
-            <label>Add via</label>
-            <div style="display:flex;gap:16px;">
-                <label><input type="radio" name="addmode" checked=@(_addMode == "json") @onchange="@(() => _addMode = "json")" /> Paste JSON</label>
-                <label><input type="radio" name="addmode" checked=@(_addMode == "stdio") @onchange="@(() => _addMode = "stdio")" /> stdio (command)</label>
-                <label><input type="radio" name="addmode" checked=@(_addMode == "http") @onchange="@(() => _addMode = "http")" /> HTTP (URL + headers)</label>
+<div class="master-detail">
+    <div class="master-panel">
+        <div class="master-header">
+            <h1>Integrations</h1>
+            <div class="master-header-right">
+                <span class="item-count">@_filtered.Count</span>
+                <button class="btn-sm btn-outline" title="Refresh"
+                        @onclick="LoadServersAsync">&#x21BB;</button>
             </div>
         </div>
 
-        @if (_addMode == "json")
-        {
-            <div class="form-field">
-                <label>MCP Server JSON</label>
-                <textarea @bind="_jsonInput" rows="10" style="font-family:Consolas,monospace;width:100%;"
-                          placeholder='@_jsonPlaceholder'></textarea>
-                <p class="text-muted text-sm">Paste the standard <code>mcpServers</code> block (one or many entries). Both stdio (<code>command</code>/<code>args</code>) and HTTP (<code>url</code>/<code>headers</code>) formats are supported.</p>
-            </div>
-            <button class="btn-primary" style="max-width:200px;" @onclick="AddFromJsonAsync">Add from JSON</button>
-        }
-        else if (_addMode == "stdio")
-        {
-            <div class="form-field">
-                <label>Server Name</label>
-                <input type="text" @bind="_newName" placeholder="e.g. filesystem" />
-            </div>
-            <div class="form-field">
-                <label>Command</label>
-                <input type="text" @bind="_newCommand" placeholder="e.g. npx" />
-            </div>
-            <div class="form-field">
-                <label>Arguments (space-separated)</label>
-                <input type="text" @bind="_newArgs" placeholder="e.g. -y @@modelcontextprotocol/server-filesystem /tmp" />
-            </div>
-            <button class="btn-primary" style="max-width:200px;" @onclick="AddStdioServerAsync">Add Server</button>
-        }
-        else
-        {
-            <div class="form-field">
-                <label>Server Name</label>
-                <input type="text" @bind="_newName" placeholder="e.g. pixellab" />
-            </div>
-            <div class="form-field">
-                <label>URL</label>
-                <input type="text" @bind="_newUrl" placeholder="https://api.example.com/mcp" />
-            </div>
-            <div class="form-field">
-                <label>Bearer Token (optional)</label>
-                <input type="password" @bind="_newBearer" placeholder="Sets Authorization: Bearer …" />
-            </div>
-            <div class="form-field">
-                <label>Extra Headers (JSON, optional)</label>
-                <textarea @bind="_newHeadersJson" rows="3" style="font-family:Consolas,monospace;width:100%;"
-                          placeholder='{"X-Workspace-Id": "abc"}'></textarea>
-            </div>
-            <button class="btn-primary" style="max-width:200px;" @onclick="AddHttpServerAsync">Add Server</button>
-        }
+        <div class="master-search">
+            <input type="text" placeholder="Search servers..."
+                   @bind="_search" @bind:event="oninput" @bind:after="ApplyFilter" />
+        </div>
+
+        <div class="master-list">
+            @if (_filtered.Count == 0)
+            {
+                <p class="text-secondary" style="padding:12px;">
+                    @(string.IsNullOrWhiteSpace(_search) ? "No MCP servers configured." : "No matches.")
+                </p>
+            }
+            else
+            {
+                @foreach (var s in _filtered)
+                {
+                    <button class="master-item @(ReferenceEquals(s, _selected) && !_showAdd ? "active" : "")"
+                            @onclick="() => Select(s)">
+                        <div class="item-title">
+                            <span class="outcome-badge @(s.IsConnected ? "success" : "unknown")">
+                                @(s.IsConnected ? "OK" : "—")
+                            </span>
+                            <span>@s.Name</span>
+                        </div>
+                        <div class="item-subtitle">
+                            @s.Transport@(s.ToolCount > 0 ? $" • {s.ToolCount} tool{(s.ToolCount == 1 ? "" : "s")}" : "")
+                        </div>
+                    </button>
+                }
+            }
+        </div>
+
+        <div style="padding:12px;border-top:1px solid var(--border);">
+            <button class="btn-primary" style="width:100%;"
+                    @onclick="ToggleAdd">@(_showAdd ? "Cancel" : "+ Add Server")</button>
+        </div>
     </div>
 
-    @if (!string.IsNullOrEmpty(_status))
-    {
-        <div class="status-message">@_status</div>
-    }
-
-    <div class="memory-list">
-        @if (_servers.Count == 0)
+    <div class="detail-panel">
+        @if (!string.IsNullOrEmpty(_status))
         {
-            <p class="text-secondary">No MCP servers configured. Add one above.</p>
+            <div class="status-message" style="margin:16px 24px 0;">@_status</div>
         }
-        @foreach (var s in _servers)
+
+        @if (_showAdd)
         {
-            <div class="memory-card">
-                <div class="memory-content">
-                    <div class="memory-text">
-                        <strong>@s.Name</strong>
-                        <span class="outcome-badge @(s.IsConnected ? "success" : "unknown")">
-                            @(s.IsConnected ? "Connected" : "Not Connected")
-                        </span>
-                        <span class="text-muted text-sm">@s.Transport</span>
+            <div class="detail-content">
+                <h2>Add MCP Server</h2>
+                <p class="text-secondary" style="margin:4px 0 16px;">
+                    Connect an MCP server (stdio command or HTTP endpoint) so its tools become available to agents.
+                </p>
+
+                <div class="form-field">
+                    <label>Add via</label>
+                    <div style="display:flex;gap:16px;">
+                        <label><input type="radio" name="addmode" checked=@(_addMode == "json") @onchange="@(() => _addMode = "json")" /> Paste JSON</label>
+                        <label><input type="radio" name="addmode" checked=@(_addMode == "stdio") @onchange="@(() => _addMode = "stdio")" /> stdio (command)</label>
+                        <label><input type="radio" name="addmode" checked=@(_addMode == "http") @onchange="@(() => _addMode = "http")" /> HTTP (URL + headers)</label>
                     </div>
-                    <div class="memory-meta">
-                        @if (s.Url is not null)
+                </div>
+
+                @if (_addMode == "json")
+                {
+                    <div class="form-field">
+                        <label>MCP Server JSON</label>
+                        <textarea @bind="_jsonInput" rows="10" style="font-family:Consolas,monospace;width:100%;"
+                                  placeholder='@_jsonPlaceholder'></textarea>
+                        <p class="text-muted text-sm">Paste the standard <code>mcpServers</code> block. Both stdio and HTTP formats are supported.</p>
+                    </div>
+                    <button class="btn-primary" style="max-width:200px;" @onclick="AddFromJsonAsync">Add from JSON</button>
+                }
+                else if (_addMode == "stdio")
+                {
+                    <div class="form-field">
+                        <label>Server Name</label>
+                        <input type="text" @bind="_newName" placeholder="e.g. filesystem" />
+                    </div>
+                    <div class="form-field">
+                        <label>Command</label>
+                        <input type="text" @bind="_newCommand" placeholder="e.g. npx" />
+                    </div>
+                    <div class="form-field">
+                        <label>Arguments (space-separated)</label>
+                        <input type="text" @bind="_newArgs" placeholder="e.g. -y @@modelcontextprotocol/server-filesystem /tmp" />
+                    </div>
+                    <button class="btn-primary" style="max-width:200px;" @onclick="AddStdioServerAsync">Add Server</button>
+                }
+                else
+                {
+                    <div class="form-field">
+                        <label>Server Name</label>
+                        <input type="text" @bind="_newName" placeholder="e.g. pixellab" />
+                    </div>
+                    <div class="form-field">
+                        <label>URL</label>
+                        <input type="text" @bind="_newUrl" placeholder="https://api.example.com/mcp" />
+                    </div>
+                    <div class="form-field">
+                        <label>Bearer Token (optional)</label>
+                        <input type="password" @bind="_newBearer" placeholder="Sets Authorization: Bearer …" />
+                    </div>
+                    <div class="form-field">
+                        <label>Extra Headers (JSON, optional)</label>
+                        <textarea @bind="_newHeadersJson" rows="3" style="font-family:Consolas,monospace;width:100%;"
+                                  placeholder='{"X-Workspace-Id": "abc"}'></textarea>
+                    </div>
+                    <button class="btn-primary" style="max-width:200px;" @onclick="AddHttpServerAsync">Add Server</button>
+                }
+
+                <div class="callout-card" style="margin-top:24px;">
+                    <strong>Need scheduled tasks or webhook-driven workflows?</strong>
+                    Connect an automation platform (n8n, Zapier, Make) as an MCP server —
+                    Sovrant treats those flows as native tools instead of shipping a built-in scheduler.
+                </div>
+            </div>
+        }
+        else if (_selected is not null)
+        {
+            <div class="detail-content">
+                <div class="orch-detail-header">
+                    <div>
+                        <span class="outcome-badge @(_selected.IsConnected ? "success" : "unknown")">
+                            @(_selected.IsConnected ? "Connected" : "Not Connected")
+                        </span>
+                        <h2>@_selected.Name</h2>
+                        <p class="text-secondary" style="margin:4px 0 0;">@_selected.Transport transport</p>
+                    </div>
+                    <button class="btn-sm btn-danger" @onclick="() => RemoveServerAsync(_selected.Name)">Remove</button>
+                </div>
+
+                <div class="orch-detail-section">
+                    <h3>Endpoint</h3>
+                    <div class="gov-card">
+                        @if (_selected.Url is not null)
                         {
-                            <span class="text-sm">@s.Url</span>
+                            <div class="gov-field-row">
+                                <span>URL</span>
+                                <span class="text-sm" style="font-family:Consolas,monospace;">@_selected.Url</span>
+                            </div>
                         }
                         else
                         {
-                            <span class="text-sm">@s.Command @string.Join(" ", s.Args)</span>
+                            <div class="gov-field-row">
+                                <span>Command</span>
+                                <span class="text-sm" style="font-family:Consolas,monospace;">@_selected.Command</span>
+                            </div>
+                            @if (_selected.Args.Count > 0)
+                            {
+                                <div class="gov-field-row">
+                                    <span>Arguments</span>
+                                    <span class="text-sm" style="font-family:Consolas,monospace;">@string.Join(" ", _selected.Args)</span>
+                                </div>
+                            }
                         }
                     </div>
-                    @if (s.ToolCount > 0)
-                    {
-                        <div class="memory-meta">
-                            <span class="text-muted text-sm">@s.ToolCount tools: @s.ToolNames</span>
-                        </div>
-                    }
-                    @if (s.Headers.Count > 0)
-                    {
-                        <div class="memory-meta">
-                            @foreach (var kv in s.Headers)
+                </div>
+
+                @if (_selected.Headers.Count > 0)
+                {
+                    <div class="orch-detail-section">
+                        <h3>Headers</h3>
+                        <div class="gov-card">
+                            @foreach (var kv in _selected.Headers)
                             {
-                                <span class="text-muted text-sm">@kv.Key: @MaskSecret(kv.Key, kv.Value)</span>
+                                <div class="gov-field-row">
+                                    <span>@kv.Key</span>
+                                    <span class="text-sm" style="font-family:Consolas,monospace;">@MaskSecret(kv.Key, kv.Value)</span>
+                                </div>
                             }
                         </div>
-                    }
-                    @if (s.EnvVars.Count > 0)
-                    {
-                        <div class="memory-meta">
-                            @foreach (var kv in s.EnvVars)
+                    </div>
+                }
+
+                @if (_selected.EnvVars.Count > 0)
+                {
+                    <div class="orch-detail-section">
+                        <h3>Environment</h3>
+                        <div class="gov-card">
+                            @foreach (var kv in _selected.EnvVars)
                             {
-                                <span class="text-muted text-sm">@kv.Key=@MaskSecret(kv.Key, kv.Value)</span>
+                                <div class="gov-field-row">
+                                    <span>@kv.Key</span>
+                                    <span class="text-sm" style="font-family:Consolas,monospace;">@MaskSecret(kv.Key, kv.Value)</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <div class="orch-detail-section">
+                    <h3>Tools (@_selected.ToolCount)</h3>
+                    @if (!_selected.IsConnected)
+                    {
+                        <p class="text-muted text-sm">Not connected — tools unavailable.</p>
+                    }
+                    else if (_selected.ToolList.Count == 0)
+                    {
+                        <p class="text-muted text-sm">Connected, but server reported no tools.</p>
+                    }
+                    else
+                    {
+                        <div class="gov-card">
+                            @foreach (var t in _selected.ToolList)
+                            {
+                                <div class="gov-field-row">
+                                    <span style="font-family:Consolas,monospace;">@t</span>
+                                    <span></span>
+                                </div>
                             }
                         </div>
                     }
                 </div>
-                <button class="btn-sm btn-danger" @onclick="() => RemoveServerAsync(s.Name)">X</button>
+            </div>
+        }
+        else
+        {
+            <div class="detail-empty">
+                <span class="text-muted">Select a server to view details, or add a new one.</span>
             </div>
         }
     </div>
-
-    <p class="text-muted text-sm" style="margin-top:12px;">Changes to MCP servers require an app restart to take effect.</p>
 </div>
 
 @code {
     [Inject] private IMcpServerStore ServerStore { get; set; } = default!;
     [Inject] private McpClientRegistry McpRegistry { get; set; } = default!;
     [Inject] private McpToolRegistrar McpRegistrar { get; set; } = default!;
-
-    private async Task ConnectAndRefreshAsync(string name, McpServerConfig config)
-    {
-        _status = $"Connecting to '{name}'…";
-        StateHasChanged();
-        try
-        {
-            await McpRegistrar.ReconnectServerAsync(name, config).ConfigureAwait(false);
-            var toolCount = McpRegistry.ToolToServer.Count(kvp => kvp.Value == name);
-            _status = $"Connected to '{name}' ({toolCount} tool{(toolCount == 1 ? "" : "s")}).";
-        }
-        catch (Exception ex)
-        {
-            _status = $"Failed to connect to '{name}': {ex.Message}";
-        }
-        await LoadServersAsync().ConfigureAwait(false);
-    }
 
     private string _addMode = "json";
     private string _newName = string.Empty;
@@ -170,7 +251,11 @@
     private string _newHeadersJson = string.Empty;
     private string _jsonInput = string.Empty;
     private string _status = string.Empty;
+    private string _search = string.Empty;
+    private bool _showAdd;
     private List<ServerView> _servers = [];
+    private List<ServerView> _filtered = [];
+    private ServerView? _selected;
 
     private const string _jsonPlaceholder = """
 {
@@ -202,29 +287,71 @@
         foreach (var kv in stored)
         {
             var isConnected = McpRegistry.Clients.ContainsKey(kv.Key);
-            var toolCount = 0;
-            var toolNames = "";
-            if (isConnected && toolsByServer.TryGetValue(kv.Key, out var tools))
-            {
-                toolCount = tools.Count;
-                toolNames = string.Join(", ", tools.Take(10));
-                if (tools.Count > 10) toolNames += $" +{tools.Count - 10} more";
-            }
+            var tools = isConnected && toolsByServer.TryGetValue(kv.Key, out var t) ? t : [];
             servers.Add(new ServerView
             {
                 Name = kv.Key,
                 Command = kv.Value.Command,
                 Args = kv.Value.Args.ToList(),
                 Url = kv.Value.Url,
-                Transport = kv.Value.Url is not null ? "http" : "stdio",
+                Transport = kv.Value.Url is not null ? "HTTP" : "stdio",
                 IsConnected = isConnected,
-                ToolCount = toolCount,
-                ToolNames = toolNames,
+                ToolCount = tools.Count,
+                ToolList = tools,
                 EnvVars = kv.Value.Env.ToDictionary(e => e.Key, e => e.Value),
                 Headers = kv.Value.Headers.ToDictionary(e => e.Key, e => e.Value),
             });
         }
         _servers = servers;
+        if (_selected is not null)
+            _selected = _servers.FirstOrDefault(s => s.Name == _selected.Name);
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        if (string.IsNullOrWhiteSpace(_search))
+        {
+            _filtered = _servers;
+            return;
+        }
+
+        var s = _search.Trim();
+        _filtered = _servers.Where(srv =>
+            srv.Name.Contains(s, StringComparison.OrdinalIgnoreCase) ||
+            srv.Transport.Contains(s, StringComparison.OrdinalIgnoreCase)
+        ).ToList();
+    }
+
+    private void Select(ServerView item)
+    {
+        _showAdd = false;
+        _selected = item;
+    }
+
+    private void ToggleAdd()
+    {
+        _showAdd = !_showAdd;
+        if (_showAdd) _selected = null;
+    }
+
+    private async Task ConnectAndRefreshAsync(string name, McpServerConfig config)
+    {
+        _status = $"Connecting to '{name}'…";
+        StateHasChanged();
+        try
+        {
+            await McpRegistrar.ReconnectServerAsync(name, config).ConfigureAwait(false);
+            var toolCount = McpRegistry.ToolToServer.Count(kvp => kvp.Value == name);
+            _status = $"Connected to '{name}' ({toolCount} tool{(toolCount == 1 ? "" : "s")}).";
+        }
+        catch (Exception ex)
+        {
+            _status = $"Failed to connect to '{name}': {ex.Message}";
+        }
+        await LoadServersAsync().ConfigureAwait(false);
+        _selected = _servers.FirstOrDefault(s => s.Name == name);
+        _showAdd = false;
     }
 
     private async Task AddStdioServerAsync()
@@ -322,8 +449,9 @@
         try
         {
             await ServerStore.DeleteAsync(name).ConfigureAwait(false);
-            _servers.RemoveAll(s => s.Name == name);
-            _status = $"Server '{name}' removed. Restart to apply.";
+            _selected = null;
+            _status = $"Server '{name}' removed.";
+            await LoadServersAsync().ConfigureAwait(false);
         }
         catch (Exception ex) { _status = $"Failed: {ex.Message}"; }
     }
@@ -345,7 +473,7 @@
         public string Transport { get; init; } = "stdio";
         public bool IsConnected { get; init; }
         public int ToolCount { get; init; }
-        public string ToolNames { get; init; } = string.Empty;
+        public List<string> ToolList { get; init; } = [];
         public Dictionary<string, string> EnvVars { get; init; } = [];
         public Dictionary<string, string> Headers { get; init; } = [];
     }
