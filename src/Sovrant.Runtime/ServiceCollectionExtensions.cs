@@ -516,7 +516,7 @@ public static class ServiceCollectionExtensions
             var profile = await profileStore.GetAsync(activeProfileId, ct).ConfigureAwait(false);
             if (profile is not null)
             {
-                if (!string.IsNullOrEmpty(profile.DefaultModel))
+                if (!string.IsNullOrEmpty(profile.DefaultModel) && string.IsNullOrEmpty(model))
                     config.Model = profile.DefaultModel;
                 if (profile.MaxTokens.HasValue)
                     config.MaxTokens = profile.MaxTokens.Value;
