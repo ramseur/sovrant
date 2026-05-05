@@ -53,8 +53,7 @@
                     <div class="model-tree-models">
                         @foreach (var model in _selectedTreeGroup.Models)
                         {
-                            var isActive = model.Id == Config.Model
-                                || ShortenModelName(model.Id) == ShortenModelName(Config.Model);
+                            var isActive = model.Id.Equals(Config.Model, StringComparison.OrdinalIgnoreCase);
                             <button class="model-tree-model-item @(isActive ? "active" : "")"
                                     @onclick="() => SelectModel(_selectedTreeGroup, model.Id)">
                                 <span class="model-tree-model-name">@ShortenModelName(model.Id)</span>
@@ -317,10 +316,11 @@
             response.EnsureSuccessStatusCode();
             using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
             using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var models = new List<string>();
             if (doc.RootElement.TryGetProperty("data", out var data))
                 foreach (var item in data.EnumerateArray())
-                    if (item.TryGetProperty("id", out var id) && id.GetString() is { } modelId)
+                    if (item.TryGetProperty("id", out var id) && id.GetString() is { } modelId && seen.Add(modelId))
                         models.Add(modelId);
             models.Sort(StringComparer.OrdinalIgnoreCase);
             return models;
