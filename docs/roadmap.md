@@ -9474,6 +9474,67 @@ MCP tools are **not** first-class entries in the model's static tool list. They 
 
 ---
 
+---
+
+## Round 4 Security Hardening (2026-05-06) ✅
+
+> **Status: ✅ Complete** — Three passes across all 25 server route files + SDK + Desktop/Web components. Committed on `sovrant-openc-dotnet-port` in three sequential commits.
+
+### What was fixed
+
+#### Phase L — Critical auth and ownership gaps
+
+| Fix | File |
+|---|---|
+| `PUT /v1/config` missing admin guard | `ConfigRoutes.cs` |
+| `POST /v1/engine/runs/recover` missing admin guard | `EngineRoutes.cs` |
+| `DELETE /v1/engine/runs/{id}` no ownership check | `EngineRoutes.cs` |
+| All workspace `{id}` endpoints had no membership check | `WorkspaceRoutes.cs` — added `RequireWorkspaceAccess` helper |
+| All mission endpoints (create/list/get/run/events/export) had no ownership check | `MissionRoutes.cs` |
+| All swarm endpoints had no ownership check; swarm `user_id` never written to DB | `SwarmRoutes.cs`, `SwarmResult`, `ISwarmEventStore`, `SqliteSwarmEventStore`, `SwarmSession`, `SwarmOrchestrator`, migration `V025__swarm_events_user_id.sql` |
+| All team endpoints had no workspace-membership check | `TeamRoutes.cs` — added `RequireTeamAccess` helper |
+| Knowledge authoring POST/DELETE had no auth check | `KnowledgeAuthoringRoutes.cs` |
+| `_mcpHintInjected` bool race on concurrent hint injection | `ConversationRuntime.cs` — `Interlocked.CompareExchange` + `LoggerMessage` delegate |
+| `ApplyUserPreferencesAsync` crash on bad preference value | `ServiceCollectionExtensions.cs` — try-catch |
+| API keys held in Blazor component state (visible in DevTools) | `TopContextBar.razor` — on-demand fetch, never stored in component fields |
+
+#### Phase M — Quality and correctness
+
+| Fix | File |
+|---|---|
+| `BaseUrl` PUT accepted internal/reserved IP addresses (SSRF) | `ConfigRoutes.cs` + new `SsrfGuard.cs` |
+| `callback_url` scheme-only validation, no reserved-IP check (SSRF) | `WebhookRoutes.cs` |
+| `owner_user_id` query param not scoped to caller identity | `CommandCenterRoutes.cs` |
+| `suiteName` path used in file resolution without format validation | `EvalRoutes.cs` |
+| Token `ExpiresAt` not bounds-checked (past/far-future accepted) | `MeRoutes.cs` |
+| `FetchModelIdsAsync` could fire twice concurrently, duplicating models | `SidebarViewModel.cs` — optimistic `ModelsFetchedLive` flag |
+| Fire-and-forget tasks on startup silently swallowed exceptions | `SidebarViewModel.cs` — `.ContinueWith` observers + try-catch |
+| SSRF check duplicated as private methods in `ChatRoutes` | Extracted to `SsrfGuard.cs`; `ChatRoutes` delegates to it |
+
+#### Phase N — SDK coverage gaps
+
+| Added method | Endpoint |
+|---|---|
+| `getCommandCenterState(options?)` | `GET /v1/command-center/state` |
+| `listMcpServers()` | `GET /v1/mcp/servers` |
+| `getKnowledgeSource(kind, slug)` | `GET /v1/knowledge/:kind/:slug/source` |
+| `saveKnowledge(kind, slug, markdown)` | `POST /v1/knowledge/:kind/:slug` |
+| `deleteKnowledge(kind, slug)` | `DELETE /v1/knowledge/:kind/:slug` |
+
+Also fixed a latent `fetchWithRetry` bug where caller-supplied `Content-Type` headers were overwritten by the `application/json` default.
+
+### Still open from the same audit
+
+| Item | File | Notes |
+|---|---|---|
+| R4-M3 | `ChatRoutes.cs:130` | Legacy static `SOVRANT_TOKEN` short-circuits `IsAdmin()` — session ownership bypass |
+| R4-M9 | `StatusRoutes.cs` | Exposes routing info and provider list to all authenticated users |
+| R4-M10 | `Program.cs:106` | CORS allows ports 3000, 5100, 5173, 8080 — untrusted local services can make credentialed requests |
+| 19-C2 | `ChatRoutes.cs:85` | DNS TOCTOU SSRF race (medium effort — needs IP pinning) |
+| 19-C4 / 20-H1 | `ArtifactRoutes.cs` | Path traversal + ownership validation gaps |
+
+---
+
 ## Bug — Selected Model Not Persisted Across Desktop/Web Reload
 
 **Status:** Reported (2026-05-05), not yet investigated
