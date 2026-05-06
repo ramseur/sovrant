@@ -426,7 +426,20 @@ public static class ServiceCollectionExtensions
         // thereafter. Without it, second-boot users would see SovrantConfig
         // defaults instead of their saved settings (settings.json is now
         // .bak).
-        await ApplyUserPreferencesAsync(services, sovrantUserId, ct).ConfigureAwait(false);
+#pragma warning disable CA1031 // Preference load is best-effort; any failure must not abort runtime init
+#pragma warning disable CA1848 // ILoggerFactory may not be registered yet; inline call is intentional fallback
+        try
+        {
+            await ApplyUserPreferencesAsync(services, sovrantUserId, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            services.GetService<ILoggerFactory>()
+                ?.CreateLogger("Sovrant.Runtime.ServiceCollectionExtensions")
+                .LogWarning(ex, "Could not apply user preferences; using defaults");
+        }
+#pragma warning restore CA1848
+#pragma warning restore CA1031
 
         // Load model capability overrides (Phase 54) — bundled + user + env.
         // Must run before live fetch so overrides take priority.

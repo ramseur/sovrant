@@ -116,7 +116,7 @@
     private bool _treeOpen;
     private bool _isConnected;
 
-    private record ProviderProfileItem(string ProfileId, string CredentialId, string Name, string Provider, string Model, string ApiKey, string BaseUrl, int MaxTokens);
+    private record ProviderProfileItem(string ProfileId, string CredentialId, string Name, string Provider, string Model, string BaseUrl, int MaxTokens);
     private List<ProviderProfileItem> _providerProfiles = [];
 
     private TreeGroup? _selectedTreeGroup;
@@ -128,7 +128,6 @@
         public string ProfileId { get; set; } = string.Empty;
         public string CredentialId { get; set; } = string.Empty;
         public string Provider { get; set; } = string.Empty;
-        public string ApiKey { get; set; } = string.Empty;
         public string BaseUrl { get; set; } = string.Empty;
         public int MaxTokens { get; set; } = 32000;
         public List<ModelItem> Models { get; set; } = [];
@@ -188,14 +187,12 @@
             var list = new List<ProviderProfileItem>(rows.Count);
             foreach (var row in rows)
             {
-                var apiKey = await Credentials.RetrieveAsync(row.CredentialId) ?? string.Empty;
                 list.Add(new ProviderProfileItem(
                     ProfileId: row.ProfileId,
                     CredentialId: row.CredentialId,
                     Name: row.Name,
                     Provider: row.ProviderKind,
                     Model: row.DefaultModel ?? string.Empty,
-                    ApiKey: apiKey,
                     BaseUrl: row.BaseUrl ?? string.Empty,
                     MaxTokens: row.MaxTokens ?? 32000));
             }
@@ -225,7 +222,6 @@
                     ProfileId = profile.ProfileId,
                     CredentialId = profile.CredentialId,
                     Provider = profile.Provider,
-                    ApiKey = profile.ApiKey,
                     BaseUrl = profile.BaseUrl,
                     MaxTokens = profile.MaxTokens,
                 };
@@ -269,9 +265,10 @@
     private async Task DrillIntoProvider(TreeGroup group)
     {
         _selectedTreeGroup = group;
-        if (!group.ModelsFetchedLive && !string.IsNullOrWhiteSpace(group.BaseUrl) && !string.IsNullOrWhiteSpace(group.ApiKey))
+        if (!group.ModelsFetchedLive && !string.IsNullOrWhiteSpace(group.BaseUrl))
         {
-            var fetched = await FetchModelIdsAsync(group.BaseUrl, group.ApiKey);
+            var apiKey = await Credentials.RetrieveAsync(group.CredentialId) ?? string.Empty;
+            var fetched = await FetchModelIdsAsync(group.BaseUrl, apiKey);
             var filtered = FilterChatModels(fetched);
             if (filtered.Count > 0)
             {
@@ -330,42 +327,37 @@
 
     private async Task SelectModel(TreeGroup group, string model)
     {
-        Config.ApiKey = group.ApiKey;
+        var apiKey = await Credentials.RetrieveAsync(group.CredentialId) ?? string.Empty;
+
+        Config.ApiKey = apiKey;
         Config.MaxTokens = group.MaxTokens;
         Config.Model = model;
-        AuthProvider.ApiKey = group.ApiKey;
+        AuthProvider.ApiKey = apiKey;
 
         if (!string.IsNullOrWhiteSpace(group.BaseUrl))
         {
             var parsed = new Uri(group.BaseUrl);
             Config.BaseUrl = parsed;
             AuthProvider.BaseUrl = parsed;
-            Environment.SetEnvironmentVariable("LLM_BASE_URL", group.BaseUrl);
         }
         else
         {
             Config.BaseUrl = null;
             AuthProvider.BaseUrl = null;
-            Environment.SetEnvironmentVariable("LLM_BASE_URL", null);
         }
-
-        Environment.SetEnvironmentVariable("LLM_API_KEY", group.ApiKey);
-        Environment.SetEnvironmentVariable("LLM_MODEL", model);
-        if (group.BaseUrl.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
-            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", group.ApiKey);
 
         _currentModel = ShortenModelName(model);
         _currentProvider = group.Provider;
-        _isConnected = !string.IsNullOrWhiteSpace(group.ApiKey);
+        _isConnected = !string.IsNullOrWhiteSpace(apiKey);
         _treeOpen = false;
         _dropdownStyle = string.Empty;
 
         ActiveContext.SetModel(_currentModel, _currentProvider);
 
-        await PersistActiveProfileAsync(group, model);
+        await PersistActiveProfileAsync(group, model, apiKey);
     }
 
-    private async Task PersistActiveProfileAsync(TreeGroup group, string model)
+    private async Task PersistActiveProfileAsync(TreeGroup group, string model, string apiKey)
     {
         try
         {
@@ -379,8 +371,8 @@
                 group.MaxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture));
             if (!string.IsNullOrWhiteSpace(group.BaseUrl))
                 await Prefs.SetAsync(userId, UserPreferenceKeys.BaseUrl, group.BaseUrl);
-            if (!string.IsNullOrWhiteSpace(group.ApiKey))
-                await Credentials.StoreAsync(CredentialKeys.LlmApiKey, group.ApiKey);
+            if (!string.IsNullOrWhiteSpace(apiKey))
+                await Credentials.StoreAsync(CredentialKeys.LlmApiKey, apiKey);
         }
         catch { /* best effort */ }
     }

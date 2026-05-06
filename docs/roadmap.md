@@ -7636,6 +7636,33 @@ Delivered as five sequenced PRs on `sovrant-openc-dotnet-port`:
 
 ---
 
+## Phase 82.1 — DuckDuckGo Free-Tier Web Search + WebFetch Audit
+
+> **Status:** Pending.
+
+**Depends on:** Phase 82 (Web Search Architecture Overhaul ✅)
+
+**Goal:** Let users with no API keys get useful web search results out of the box. DuckDuckGo's HTML search endpoint is publicly accessible with no key, no account, and no usage caps — it's the natural zero-config fallback below Brave/Tavily in the search backend hierarchy. This phase also audits the existing `WebFetch` tool to confirm proxy, redirect, and content-type handling are production-ready.
+
+### Items
+
+| # | Item | Notes |
+|---|---|---|
+| 1 | `DuckDuckGoSearchProvider` | Scrapes/parses DDG HTML (`https://html.duckduckgo.com/html/?q=...`) or uses the unofficial JSON endpoint. Maps to `WebSearchResult` (title, url, snippet). Rate-limit hygiene: respect DDG's rate window; surface 429s clearly. |
+| 2 | Wire into backend selector | `SOVRANT_WEB_SEARCH=duckduckgo` plus automatic selection when no other backend is configured and `LLM_WEB_SEARCH` is false. Visible in Settings backend dropdown. |
+| 3 | WebFetch audit | Confirm: redirect following (3xx chains), timeout per-request, content-type sniffing (HTML → strip tags, JSON → pass-through, binary → refuse gracefully), proxy env var support (`HTTP_PROXY`, `HTTPS_PROXY`). File any gaps as follow-on issues. |
+| 4 | Health check | Add DDG reachability check to `/v1/router/status` alongside existing search backend pings. |
+| 5 | Docs update | `docs/web-search.md` backend matrix: add DDG row. `.env.example`: note DDG as the zero-key option. |
+
+### Acceptance Criteria
+
+- `SOVRANT_WEB_SEARCH=duckduckgo` (or no search env at all) returns results without any API key
+- DDG backend appears in Web/Desktop Settings dropdown and hot-swaps without restart
+- Existing backends (Brave, Tavily, OpenAI Responses, SearXNG) continue to work unchanged
+- `WebFetch` audit produces a written findings list; any Critical/High gaps filed as issues
+
+---
+
 ## Phase 82.5 — OpenTelemetry Observability
 
 > **Status:** Pending. Adds first-class OTel emission so operators can ship Sovrant

@@ -43,8 +43,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private string _systemPrompt;
     /// <summary>Once true, all subsequent turns expose tools (session used tools at least once).</summary>
     private bool _sessionHasUsedTools;
-    /// <summary>Once true, the MCP server hint has been baked into _systemPrompt for this session.</summary>
-    private bool _mcpHintInjected;
+    /// <summary>1 once the MCP hint has been baked into _systemPrompt; 0 until then. Int for Interlocked.</summary>
+    private int _mcpHintInjected;
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Turn started: session={SessionId}, model={Model}")]
     private static partial void LogTurnStart(ILogger logger, string sessionId, string model);
@@ -57,6 +57,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Maximum tool rounds ({Max}) reached for session '{SessionId}'")]
     private static partial void LogMaxRoundsReached(ILogger logger, int max, string sessionId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to build MCP hint; continuing without it")]
+    private static partial void LogMcpHintFailed(ILogger logger, Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Tool call loop detected: '{ToolName}' called {Count} times consecutively for session '{SessionId}' — breaking loop")]
     private static partial void LogToolCallLoop(ILogger logger, string toolName, int count, string sessionId);
@@ -269,14 +272,15 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             // first time MCP servers are active. Baking it in (rather than
             // appending per-turn) keeps the system prompt stable so the provider
             // can cache it on all subsequent turns.
-            if (!_mcpHintInjected)
+            if (Interlocked.CompareExchange(ref _mcpHintInjected, 1, 0) == 0)
             {
-                var hint = BuildMcpHint();
+                string? hint = null;
+#pragma warning disable CA1031 // BuildMcpHint can throw anything; hint injection is best-effort
+                try { hint = BuildMcpHint(); }
+                catch (Exception ex) { LogMcpHintFailed(_logger, ex); }
+#pragma warning restore CA1031
                 if (hint is not null)
-                {
                     _systemPrompt += hint;
-                    _mcpHintInjected = true;
-                }
             }
 
             var request = new MessagesRequest(
