@@ -4,6 +4,8 @@ using Sovrant.Agents.Models;
 using Sovrant.Agents.Orchestration;
 using Sovrant.Agents.Teams;
 using Sovrant.Runtime.Storage;
+using Sovrant.Runtime.Workspaces;
+using Sovrant.Server.Auth;
 
 namespace Sovrant.Server.Routes;
 
@@ -30,6 +32,18 @@ internal static class TeamRoutes
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
+
+    private static async Task<IResult?> RequireTeamAccess(
+        HttpContext ctx, TeamInfo team, IWorkspaceService wsSvc, CancellationToken ct)
+    {
+        if (HttpContextAuthExtensions.IsAdmin(ctx)) return null;
+        if (string.IsNullOrEmpty(team.WorkspaceId))
+            return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
+        var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
+        if (!await wsSvc.IsMemberAsync(team.WorkspaceId, userId, ct).ConfigureAwait(false))
+            return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
+        return null;
+    }
 
     public static void Map(WebApplication app)
     {
@@ -60,16 +74,22 @@ internal static class TeamRoutes
             return Results.Json(new { teams }, s_jsonOptions);
         });
 
-        app.MapGet("/v1/teams/{id}", (string id, ITeamRegistry registry) =>
+        app.MapGet("/v1/teams/{id}", async (string id, HttpContext ctx, ITeamRegistry registry, IWorkspaceService wsSvc, CancellationToken ct) =>
         {
             var team = registry.GetTeam(id);
             if (team is null) return Results.NotFound(new { error = $"team '{id}' not found" });
+            var deny = await RequireTeamAccess(ctx, team, wsSvc, ct).ConfigureAwait(false);
+            if (deny is not null) return deny;
             var members = registry.GetTeamMembers(id);
             return Results.Json(new { team, members }, s_jsonOptions);
         });
 
-        app.MapDelete("/v1/teams/{id}", (string id, ITeamRegistry registry) =>
+        app.MapDelete("/v1/teams/{id}", async (string id, HttpContext ctx, ITeamRegistry registry, IWorkspaceService wsSvc, CancellationToken ct) =>
         {
+            var team = registry.GetTeam(id);
+            if (team is null) return Results.NotFound(new { error = $"team '{id}' not found" });
+            var deny = await RequireTeamAccess(ctx, team, wsSvc, ct).ConfigureAwait(false);
+            if (deny is not null) return deny;
             return registry.RemoveTeam(id)
                 ? Results.Ok(new { deleted = true })
                 : Results.NotFound(new { error = $"team '{id}' not found" });
@@ -80,10 +100,12 @@ internal static class TeamRoutes
         // over HTTP so the inline editor on the Orchestration page can save
         // when the Web frontend runs in remote mode (SOVRANT_RUNTIME_MODE=remote).
         // PATCH-style: any field omitted is left unchanged.
-        app.MapPut("/v1/teams/{id}/profile", (string id, UpdateTeamProfileRequest req, ITeamRegistry registry) =>
+        app.MapPut("/v1/teams/{id}/profile", async (string id, UpdateTeamProfileRequest req, HttpContext ctx, ITeamRegistry registry, IWorkspaceService wsSvc, CancellationToken ct) =>
         {
             var team = registry.GetTeam(id);
             if (team is null) return Results.NotFound(new { error = $"team '{id}' not found" });
+            var deny = await RequireTeamAccess(ctx, team, wsSvc, ct).ConfigureAwait(false);
+            if (deny is not null) return deny;
 
             var runMode = team.RunMode;
             if (req.RunMode is not null)
@@ -118,10 +140,12 @@ internal static class TeamRoutes
 
         // ── Team members ────────────────────────────────────────────────
 
-        app.MapPost("/v1/teams/{id}/members", (string id, AddMemberRequest req, ITeamRegistry registry) =>
+        app.MapPost("/v1/teams/{id}/members", async (string id, AddMemberRequest req, HttpContext ctx, ITeamRegistry registry, IWorkspaceService wsSvc, CancellationToken ct) =>
         {
             var team = registry.GetTeam(id);
             if (team is null) return Results.NotFound(new { error = $"team '{id}' not found" });
+            var deny = await RequireTeamAccess(ctx, team, wsSvc, ct).ConfigureAwait(false);
+            if (deny is not null) return deny;
 
             if (string.IsNullOrWhiteSpace(req.Name))
                 return Results.BadRequest(new { error = "name is required." });
@@ -143,10 +167,12 @@ internal static class TeamRoutes
             return Results.Json(new { member_id = member.Id, name = member.Name }, s_jsonOptions, statusCode: 201);
         });
 
-        app.MapGet("/v1/teams/{id}/members", (string id, ITeamRegistry registry) =>
+        app.MapGet("/v1/teams/{id}/members", async (string id, HttpContext ctx, ITeamRegistry registry, IWorkspaceService wsSvc, CancellationToken ct) =>
         {
             var team = registry.GetTeam(id);
             if (team is null) return Results.NotFound(new { error = $"team '{id}' not found" });
+            var deny = await RequireTeamAccess(ctx, team, wsSvc, ct).ConfigureAwait(false);
+            if (deny is not null) return deny;
             var members = registry.GetTeamMembers(id);
             return Results.Json(new { members }, s_jsonOptions);
         });
@@ -156,12 +182,16 @@ internal static class TeamRoutes
         app.MapPost("/v1/teams/{id}/runs", async (
             string id,
             TeamRunRequest req,
+            HttpContext ctx,
             ITeamRegistry registry,
             IAgentOrchestrator orchestrator,
+            IWorkspaceService wsSvc,
             CancellationToken ct) =>
         {
             var team = registry.GetTeam(id);
             if (team is null) return Results.NotFound(new { error = $"team '{id}' not found" });
+            var deny = await RequireTeamAccess(ctx, team, wsSvc, ct).ConfigureAwait(false);
+            if (deny is not null) return deny;
 
             if (string.IsNullOrWhiteSpace(req.Goal))
                 return Results.BadRequest(new { error = "goal is required." });
@@ -206,9 +236,14 @@ internal static class TeamRoutes
             string? kind,
             string? status,
             int? limit,
+            HttpContext ctx,
             IAgentRunStore store,
             CancellationToken ct) =>
         {
+            // Non-admin callers can only list their own runs.
+            if (!HttpContextAuthExtensions.IsAdmin(ctx))
+                userId = HttpContextAuthExtensions.GetUserId(ctx);
+
             var filter = new AgentRunFilter(
                 WorkspaceId: workspaceId,
                 UserId: userId,

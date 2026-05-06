@@ -1,4 +1,5 @@
 using Sovrant.Runtime.Documents.Templates;
+using Sovrant.Server.Auth;
 using Sovrant.Tools.Skills;
 using Sovrant.Tools.Templates;
 
@@ -37,10 +38,13 @@ internal static class KnowledgeAuthoringRoutes
             string kind,
             string slug,
             HttpRequest request,
+            HttpContext ctx,
             SkillRegistry skills,
             UserDocumentTemplateRegistry docs,
             UserToolTemplateRegistry tools) =>
         {
+            if (!HttpContextAuthExtensions.IsAdmin(ctx))
+                return Results.Json(new { error = "Admin role required to modify knowledge." }, statusCode: StatusCodes.Status403Forbidden);
             if (!IsValidSlug(slug)) return Results.BadRequest(new { error = "Invalid slug." });
 
             using var reader = new StreamReader(request.Body);
@@ -76,10 +80,13 @@ internal static class KnowledgeAuthoringRoutes
         app.MapDelete("/v1/knowledge/{kind}/{slug}", (
             string kind,
             string slug,
+            HttpContext ctx,
             SkillRegistry skills,
             UserDocumentTemplateRegistry docs,
             UserToolTemplateRegistry tools) =>
         {
+            if (!HttpContextAuthExtensions.IsAdmin(ctx))
+                return Results.Json(new { error = "Admin role required to modify knowledge." }, statusCode: StatusCodes.Status403Forbidden);
             if (!IsValidSlug(slug)) return Results.BadRequest(new { error = "Invalid slug." });
 
             var deleted = kind.ToUpperInvariant() switch

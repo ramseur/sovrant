@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Sovrant.Runtime.Missions;
+using Sovrant.Server.Auth;
 
 namespace Sovrant.Server.Routes;
 
@@ -34,14 +35,16 @@ internal static class MissionRoutes
     {
         app.MapPost("/v1/missions", async (
             CreateMissionRequest req,
+            HttpContext ctx,
             IMissionStore store,
             CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Goal))
                 return Results.BadRequest(new { error = "goal is required." });
 
+            var callerId = HttpContextAuthExtensions.GetUserId(ctx);
             var mission = await store.CreateAsync(
-                req.Goal, req.SessionId, req.WorkspaceId, req.ProjectId, req.OwnerUserId, ct);
+                req.Goal, req.SessionId, req.WorkspaceId, req.ProjectId, callerId, ct);
             return Results.Json(mission, s_jsonOptions, statusCode: 201);
         });
 
@@ -49,6 +52,7 @@ internal static class MissionRoutes
             string? ownerUserId,
             string? status,
             int? limit,
+            HttpContext ctx,
             IMissionStore store,
             CancellationToken ct) =>
         {
@@ -60,30 +64,47 @@ internal static class MissionRoutes
                 statusFilter = parsed;
             }
 
+            // Non-admin callers can only see their own missions.
+            if (!HttpContextAuthExtensions.IsAdmin(ctx))
+                ownerUserId = HttpContextAuthExtensions.GetUserId(ctx);
+
             var missions = await store.ListAsync(ownerUserId, statusFilter, limit ?? 100, ct);
             return Results.Json(new { missions }, s_jsonOptions);
         });
 
         app.MapGet("/v1/missions/{id}", async (
             string id,
+            HttpContext ctx,
             IMissionStore store,
             CancellationToken ct) =>
         {
             var mission = await store.GetAsync(id, ct);
-            return mission is null
-                ? Results.NotFound(new { error = $"mission '{id}' not found" })
-                : Results.Json(mission, s_jsonOptions);
+            if (mission is null)
+                return Results.NotFound(new { error = $"mission '{id}' not found" });
+            if (!HttpContextAuthExtensions.IsAdmin(ctx) &&
+                !string.Equals(mission.OwnerUserId, HttpContextAuthExtensions.GetUserId(ctx), StringComparison.Ordinal))
+                return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
+            return Results.Json(mission, s_jsonOptions);
         });
 
         app.MapPost("/v1/missions/{id}/run", async (
             string id,
+            HttpContext ctx,
+            IMissionStore store,
             IMissionExecutor executor,
             CancellationToken ct) =>
         {
+            var mission = await store.GetAsync(id, ct);
+            if (mission is null)
+                return Results.NotFound(new { error = $"mission '{id}' not found" });
+            if (!HttpContextAuthExtensions.IsAdmin(ctx) &&
+                !string.Equals(mission.OwnerUserId, HttpContextAuthExtensions.GetUserId(ctx), StringComparison.Ordinal))
+                return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
+
             try
             {
-                var mission = await executor.RunAsync(id, ct);
-                return Results.Json(mission, s_jsonOptions);
+                var result = await executor.RunAsync(id, ct);
+                return Results.Json(result, s_jsonOptions);
             }
             catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.Ordinal))
             {
@@ -93,9 +114,16 @@ internal static class MissionRoutes
 
         app.MapGet("/v1/missions/{id}/events", async (
             string id,
+            HttpContext ctx,
             IMissionStore store,
             CancellationToken ct) =>
         {
+            var mission = await store.GetAsync(id, ct);
+            if (mission is null)
+                return Results.NotFound(new { error = $"mission '{id}' not found" });
+            if (!HttpContextAuthExtensions.IsAdmin(ctx) &&
+                !string.Equals(mission.OwnerUserId, HttpContextAuthExtensions.GetUserId(ctx), StringComparison.Ordinal))
+                return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
             var events = await store.GetEventsAsync(id, ct);
             return Results.Json(new { events }, s_jsonOptions);
         });
@@ -103,24 +131,26 @@ internal static class MissionRoutes
         app.MapGet("/v1/missions/{id}/export", async (
             string id,
             string? format,
+            HttpContext ctx,
+            IMissionStore store,
             MissionExportService exporter,
             CancellationToken ct) =>
         {
-            try
-            {
-                if (string.Equals(format, "json", StringComparison.OrdinalIgnoreCase))
-                {
-                    var json = await exporter.ExportJsonAsync(id, ct);
-                    return Results.Content(json, "application/json");
-                }
+            var mission = await store.GetAsync(id, ct);
+            if (mission is null)
+                return Results.NotFound(new { error = $"mission '{id}' not found" });
+            if (!HttpContextAuthExtensions.IsAdmin(ctx) &&
+                !string.Equals(mission.OwnerUserId, HttpContextAuthExtensions.GetUserId(ctx), StringComparison.Ordinal))
+                return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
 
-                var md = await exporter.ExportMarkdownAsync(id, ct);
-                return Results.Content(md, "text/markdown");
-            }
-            catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.Ordinal))
+            if (string.Equals(format, "json", StringComparison.OrdinalIgnoreCase))
             {
-                return Results.NotFound(new { error = ex.Message });
+                var json = await exporter.ExportJsonAsync(id, ct);
+                return Results.Content(json, "application/json");
             }
+
+            var md = await exporter.ExportMarkdownAsync(id, ct);
+            return Results.Content(md, "text/markdown");
         });
     }
 

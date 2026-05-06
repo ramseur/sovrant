@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Sovrant.Agents.Swarm;
 using Sovrant.Runtime.Storage;
+using Sovrant.Server.Auth;
 using Sovrant.Server.Middleware;
 
 namespace Sovrant.Server.Routes;
@@ -78,7 +79,7 @@ internal static class SwarmRoutes
             // event written to swarm_events will be stamped with these IDs so the run
             // can later be filtered by workspace / project.
             var swarmContext = new SwarmExecutionContext(
-                UserId: ctx.GetUserId(),
+                UserId: HttpContextAuthExtensions.GetUserId(ctx),
                 WorkspaceId: ctx.GetWorkspaceId(),
                 ProjectId: ctx.Request.Headers["X-Project-Id"].FirstOrDefault());
 
@@ -145,6 +146,10 @@ internal static class SwarmRoutes
             var workspaceId = ctx.Request.Query["workspace_id"].FirstOrDefault();
             var projectId = ctx.Request.Query["project_id"].FirstOrDefault();
             int? limit = int.TryParse(ctx.Request.Query["limit"].FirstOrDefault(), out var n) ? n : null;
+
+            // Non-admin callers are scoped to their own workspace context.
+            if (!HttpContextAuthExtensions.IsAdmin(ctx))
+                workspaceId = ctx.GetWorkspaceId() ?? workspaceId;
 
             var filter = new SwarmListFilter(
                 WorkspaceId: string.IsNullOrEmpty(workspaceId) ? null : workspaceId,
