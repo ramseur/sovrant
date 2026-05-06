@@ -2706,6 +2706,16 @@ Applied in this phase because per-user identity makes ownership enforcement mean
 
 **Goal:** Add external identity providers (OAuth/OIDC, SAML), fine-grained role-based access control (RBAC), and enterprise multi-tenancy on top of the Phase 38 per-user token model. This is where the RBAC tables (created empty in Phase 32) get populated and enforced.
 
+#### Current limitation — role stored on the token, not in the DB
+
+Today `IsAdmin()` has two paths: the static `SOVRANT_TOKEN` (always admin) and a `role` field carried on the per-user bearer token. Both are set at token-issuance time and not re-evaluated at request time. This means:
+
+- Role changes require re-issuing a token, not just updating a DB row.
+- Workspace-level or project-level roles (owner, editor, viewer) don't exist — it's a single binary admin/user flag across the entire server.
+- The server route guards added in Phase L are a stop-gap: they use `IsAdmin()` for destructive ops and `IsMemberAsync()` for read access, but there is no formal workspace-owner role to sit between those two.
+
+**This phase will replace the token-carried role flag with DB-stored roles evaluated at request time**, so role changes take effect immediately without token re-issuance, and workspace/project-scoped roles become possible.
+
 #### When to implement
 
 This phase is deliberately deferred. Phase 38's per-user tokens cover small-to-medium teams. Add this phase when:
