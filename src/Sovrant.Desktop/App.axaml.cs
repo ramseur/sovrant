@@ -9,11 +9,14 @@ using Sovrant.Agents;
 using Sovrant.Api.Auth;
 using Sovrant.Commands;
 using Sovrant.Desktop.Adapters;
+using Sovrant.Desktop.Auth;
 using Sovrant.Desktop.ViewModels;
 using Sovrant.Desktop.Views;
 using Sovrant.Runtime;
+using Sovrant.Runtime.Auth;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Logging;
+using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
@@ -24,8 +27,11 @@ public partial class App : Application
 {
     private ServiceProvider? _serviceProvider;
 
-    /// <summary>Unified user identity — matches the runtime's default (SOVRANT_USER_ID or OS username).</summary>
-    internal static readonly string SovrantUserId =
+    /// <summary>
+    /// The authenticated user's ID after login.
+    /// Falls back to the OS identity for embedded/dev runs without a login flow.
+    /// </summary>
+    internal static string SovrantUserId { get; private set; } =
         Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
 
     public static IServiceProvider Services { get; private set; } = null!;
@@ -101,6 +107,11 @@ public partial class App : Application
             client.Timeout = TimeSpan.FromSeconds(10);
         });
 
+        // IPrincipalAccessor — populated after login.
+        var principalAccessor = new DesktopPrincipalAccessor();
+        services.AddSingleton<IPrincipalAccessor>(principalAccessor);
+        services.AddSingleton(principalAccessor);
+
         // Desktop-specific overrides.
         var mutableAuth = new MutableAuthProvider(config.ApiKey ?? string.Empty);
         var permissionPolicy = new MutableCliPermissionPolicy(config.PermissionMode);
@@ -140,6 +151,8 @@ public partial class App : Application
         // into chat / orchestration.
         services.AddSingleton<CommandCenterViewModel>();
         services.AddSingleton<CommandPaletteViewModel>();
+        services.AddTransient<LoginViewModel>();
+        services.AddTransient<AdminViewModel>();
 
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;
@@ -153,6 +166,17 @@ public partial class App : Application
         // background task below.
         await _serviceProvider.InitializeRuntimeAsync().ConfigureAwait(true);
 
+        // ── Login / token validation ─────────────────────────────────────
+        // Attempt to restore the stored session token. If missing or expired,
+        // show the login window before proceeding.
+        var authenticatedUserId = await TryRestoreSessionAsync(_serviceProvider, principalAccessor).ConfigureAwait(true);
+        if (authenticatedUserId is null)
+        {
+            authenticatedUserId = await RunLoginWindowAsync(desktop, _serviceProvider, principalAccessor).ConfigureAwait(true);
+        }
+        SovrantUserId = authenticatedUserId;
+
+        // ── API key setup ─────────────────────────────────────────────────
         // First-run setup — only after ApplyUserPreferencesAsync has had a
         // chance to populate config.ApiKey from the credential store.
         if (string.IsNullOrWhiteSpace(config.ApiKey))
@@ -211,6 +235,88 @@ public partial class App : Application
                 RuntimeReady.TrySetResult();
             }
         });
+    }
+
+    private const string StoredTokenKey = "sovrant.desktop.auth_token";
+
+    /// <summary>
+    /// Clears the stored session, hides the main window, re-runs the login flow,
+    /// and shows the main window again. Called from Settings → Log out.
+    /// </summary>
+    internal static async Task LogoutAsync()
+    {
+        if (Services is null) return;
+
+        var store = Services.GetRequiredService<ICredentialStore>();
+        await store.DeleteAsync(StoredTokenKey).ConfigureAwait(true);
+
+        var principal = Services.GetRequiredService<DesktopPrincipalAccessor>();
+        principal.UserId = null;
+        principal.Role = null;
+
+        var desktop = (IClassicDesktopStyleApplicationLifetime)Current!.ApplicationLifetime!;
+
+        MainWindow?.Hide();
+
+        var authenticatedUserId = await RunLoginWindowAsync(desktop, Services, principal).ConfigureAwait(true);
+        SovrantUserId = authenticatedUserId;
+
+        MainWindow?.Show();
+    }
+
+    /// <summary>
+    /// Checks the credential store for a valid session token.
+    /// Returns the user ID if the token resolves successfully, otherwise null.
+    /// </summary>
+    private static async Task<string?> TryRestoreSessionAsync(
+        IServiceProvider services, DesktopPrincipalAccessor principal)
+    {
+        var store = services.GetRequiredService<ICredentialStore>();
+        var plaintext = await store.RetrieveAsync(StoredTokenKey).ConfigureAwait(true);
+        if (string.IsNullOrEmpty(plaintext)) return null;
+
+        var tokens = services.GetRequiredService<ITokenService>();
+        var resolved = await tokens.ResolveAsync(plaintext).ConfigureAwait(true);
+        if (resolved is null) return null;
+
+        principal.UserId = resolved.Token.UserId;
+        principal.Role = resolved.Role;
+        return resolved.Token.UserId;
+    }
+
+    /// <summary>
+    /// Shows the login window and waits for the user to authenticate.
+    /// Returns the authenticated user ID.
+    /// </summary>
+    private static async Task<string> RunLoginWindowAsync(
+        IClassicDesktopStyleApplicationLifetime desktop, IServiceProvider services,
+        DesktopPrincipalAccessor principal)
+    {
+        var loginVm = services.GetRequiredService<LoginViewModel>();
+        await loginVm.InitializeAsync().ConfigureAwait(true);
+
+        var tcs = new TaskCompletionSource<(string userId, string role)>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        loginVm.LoginSucceeded += (userId, role) => tcs.TrySetResult((userId, role));
+
+        var loginWindow = new LoginWindow { DataContext = loginVm };
+
+        // Prevent closing without completing login.
+        loginWindow.Closing += (_, e) =>
+        {
+            if (!tcs.Task.IsCompleted)
+                desktop.Shutdown();
+        };
+
+        loginWindow.Show();
+
+        var (userId, role) = await tcs.Task.ConfigureAwait(true);
+        loginWindow.Close();
+
+        principal.UserId = userId;
+        principal.Role = role;
+        return userId;
     }
 
     /// <summary>

@@ -13,6 +13,8 @@ public sealed class MemoryInjectorTests : IAsyncDisposable
     private readonly SqliteWorkspaceStore _workspaceStore;
     private readonly MemoryInjector _injector;
 
+    private readonly string _testUserId = "memory-test-user";
+
     public MemoryInjectorTests()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"sovrant_test_{Guid.NewGuid():N}.db");
@@ -21,6 +23,19 @@ public sealed class MemoryInjectorTests : IAsyncDisposable
         _store = new SqliteMemoryStore((ISqliteConnectionFactory)_provider);
         _workspaceStore = new SqliteWorkspaceStore((ISqliteConnectionFactory)_provider);
         _injector = new MemoryInjector(_store, NullLogger<MemoryInjector>.Instance, _workspaceStore);
+
+        // Seed test user and personal workspace.
+        using var conn = ((ISqliteConnectionFactory)_provider).CreateConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT OR IGNORE INTO users (user_id, username, role, status, created_at, updated_at)
+            VALUES ($id, $id, 'user', 'active',
+                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+            """;
+        cmd.Parameters.AddWithValue("$id", _testUserId);
+        cmd.ExecuteNonQuery();
+        _workspaceStore.CreatePersonalWorkspaceAsync(_testUserId).GetAwaiter().GetResult();
     }
 
     public async ValueTask DisposeAsync()
@@ -165,9 +180,7 @@ public sealed class MemoryInjectorTests : IAsyncDisposable
     [Fact]
     public async Task BuildMemorySection_IncludesWorkspaceMemory_FilteredByProject()
     {
-        var defaultUserId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _workspaceStore.GetPersonalAsync(defaultUserId);
+        var ws = await _workspaceStore.GetPersonalAsync(_testUserId);
         Assert.NotNull(ws);
 
         // Workspace-wide entry — always visible.
@@ -217,9 +230,7 @@ public sealed class MemoryInjectorTests : IAsyncDisposable
     [Fact]
     public async Task BuildMemorySection_OmitsWorkspaceSection_WhenNoWorkspaceId()
     {
-        var defaultUserId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _workspaceStore.GetPersonalAsync(defaultUserId);
+        var ws = await _workspaceStore.GetPersonalAsync(_testUserId);
         Assert.NotNull(ws);
         await _workspaceStore.SaveMemoryAsync(new WorkspaceMemoryEntry
         {

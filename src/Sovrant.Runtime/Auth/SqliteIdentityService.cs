@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.Users;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime.Auth;
 
@@ -14,12 +15,16 @@ namespace Sovrant.Runtime.Auth;
 internal sealed partial class SqliteIdentityService : IIdentityService
 {
     private const string RegistrationOpenKey = "registration_open";
+    private const string RequireApprovalKey = "require_approval";
     private const int ResetTokenExpiryHours = 24;
     private const int MinPasswordLength = 8;
+    private const string StatusPending = "pending";
+    private const string StatusActive = "active";
 
     private readonly IUserService _users;
     private readonly ITokenService _tokens;
     private readonly IPasswordHasher _hasher;
+    private readonly IWorkspaceService _workspaces;
     private readonly ISqliteConnectionFactory _db;
     private readonly ILogger<SqliteIdentityService> _logger;
 
@@ -27,12 +32,14 @@ internal sealed partial class SqliteIdentityService : IIdentityService
         IUserService users,
         ITokenService tokens,
         IPasswordHasher hasher,
+        IWorkspaceService workspaces,
         ISqliteConnectionFactory db,
         ILogger<SqliteIdentityService> logger)
     {
         _users = users;
         _tokens = tokens;
         _hasher = hasher;
+        _workspaces = workspaces;
         _db = db;
         _logger = logger;
     }
@@ -53,6 +60,10 @@ internal sealed partial class SqliteIdentityService : IIdentityService
         Message = "Password reset token generated for user_id={UserId}")]
     private static partial void LogResetTokenGenerated(ILogger logger, string userId);
 
+    [LoggerMessage(EventId = 8504, Level = LogLevel.Information,
+        Message = "User approved: user_id={UserId}")]
+    private static partial void LogUserApproved(ILogger logger, string userId);
+
     // ── IIdentityService ──────────────────────────────────────────────────
 
     public async Task<bool> IsFirstRunAsync(CancellationToken ct = default)
@@ -71,6 +82,27 @@ internal sealed partial class SqliteIdentityService : IIdentityService
 
         var value = await GetSettingAsync(RegistrationOpenKey, ct).ConfigureAwait(false);
         return value == "1";
+    }
+
+    public async Task<bool> IsApprovalRequiredAsync(CancellationToken ct = default)
+    {
+        var value = await GetSettingAsync(RequireApprovalKey, ct).ConfigureAwait(false);
+        // Default: required (null → not yet set → true). Explicitly "0" means disabled.
+        return value != "0";
+    }
+
+    public Task SetApprovalRequiredAsync(bool required, CancellationToken ct = default)
+        => SetSettingAsync(RequireApprovalKey, required ? "1" : "0", ct);
+
+    public async Task<bool> ApproveUserAsync(string userId, CancellationToken ct = default)
+    {
+        var user = await _users.GetAsync(userId, ct).ConfigureAwait(false);
+        if (user is null || user.Status != StatusPending) return false;
+
+        var updated = await _users.UpdateAsync(userId, status: StatusActive, ct: ct).ConfigureAwait(false);
+        if (updated is not null)
+            LogUserApproved(_logger, userId);
+        return updated is not null;
     }
 
     public async Task<RegisterResult> RegisterAsync(string email, string password, CancellationToken ct = default)
@@ -102,22 +134,43 @@ internal sealed partial class SqliteIdentityService : IIdentityService
             return new RegisterResult(false, null, null, "An account with that email already exists.");
         }
 
-        // Store password hash
+        // Store password hash and create personal workspace for every new user.
         await SetPasswordHashAsync(user.UserId, _hasher.Hash(password), ct).ConfigureAwait(false);
+        await _workspaces.CreatePersonalWorkspaceAsync(user.UserId, ct).ConfigureAwait(false);
 
-        // First user closes registration
+        // First user is immediately active admin; registration closes.
         if (isFirst)
+        {
             await SetSettingAsync(RegistrationOpenKey, "0", ct).ConfigureAwait(false);
 
-        // Issue 30-day sliding token
-        var issued = await _tokens.IssueAsync(
+            var issued = await _tokens.IssueAsync(
+                user.UserId,
+                name: "login",
+                expiresAt: DateTimeOffset.UtcNow.AddDays(30),
+                ct: ct).ConfigureAwait(false);
+
+            LogRegistered(_logger, user.UserId, role);
+            return new RegisterResult(true, issued.Plaintext, user.UserId, null);
+        }
+
+        // Subsequent registrations: check approval requirement.
+        if (await IsApprovalRequiredAsync(ct).ConfigureAwait(false))
+        {
+            // Hold account in pending state — no token issued.
+            await _users.UpdateAsync(user.UserId, status: StatusPending, ct: ct).ConfigureAwait(false);
+            LogRegistered(_logger, user.UserId, role);
+            return new RegisterResult(true, null, user.UserId, null, IsPendingApproval: true);
+        }
+
+        // Approval not required — activate immediately and issue token.
+        var directIssued = await _tokens.IssueAsync(
             user.UserId,
             name: "login",
             expiresAt: DateTimeOffset.UtcNow.AddDays(30),
             ct: ct).ConfigureAwait(false);
 
         LogRegistered(_logger, user.UserId, role);
-        return new RegisterResult(true, issued.Plaintext, user.UserId, null);
+        return new RegisterResult(true, directIssued.Plaintext, user.UserId, null);
     }
 
     public async Task<LoginResult> LoginAsync(string email, string password, CancellationToken ct = default)
@@ -129,10 +182,20 @@ internal sealed partial class SqliteIdentityService : IIdentityService
         }
 
         var user = await _users.GetByEmailAsync(email, ct).ConfigureAwait(false);
-        if (user is null || user.Status != "active")
+        if (user is null)
         {
-            LogLoginFailed(_logger, email, "user not found or inactive");
+            LogLoginFailed(_logger, email, "user not found");
             return new LoginResult(false, null, null, null, "Invalid email or password.");
+        }
+        if (user.Status == StatusPending)
+        {
+            LogLoginFailed(_logger, email, "pending approval");
+            return new LoginResult(false, null, null, null, "Your account is pending admin approval.");
+        }
+        if (user.Status != StatusActive)
+        {
+            LogLoginFailed(_logger, email, $"account {user.Status}");
+            return new LoginResult(false, null, null, null, "Your account has been disabled. Contact an administrator.");
         }
 
         var storedHash = await GetPasswordHashAsync(user.UserId, ct).ConfigureAwait(false);

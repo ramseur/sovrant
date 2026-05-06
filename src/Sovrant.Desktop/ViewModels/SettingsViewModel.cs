@@ -718,6 +718,13 @@ public partial class SettingsViewModel : ViewModelBase
         WebSearchBackend.Native,
         WebSearchBackend.Off,
     ];
+
+    [RelayCommand]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822")]
+    private async Task LogoutAsync()
+    {
+        await App.LogoutAsync().ConfigureAwait(true);
+    }
 }
 
 public partial class ProviderProfile : ViewModelBase

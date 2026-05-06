@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using Sovrant.Runtime.Auth;
 using Sovrant.Runtime.Users;
 using Sovrant.Runtime.Workspaces;
 using Sovrant.Server.Auth;
@@ -45,6 +46,9 @@ internal static class UserRoutes
         app.MapGet("/v1/users/{id}/sessions", ListUserSessions);
         app.MapGet("/v1/users/{id}/usage", GetUserUsage);
         app.MapGet("/v1/users/{id}/audit", ListUserAudit);
+
+        app.MapPost("/v1/users/{id}/reset-password", GenerateResetToken);
+        app.MapPost("/v1/users/{id}/approve", ApproveUser);
     }
 
     // ── CRUD ───────────────────────────────────────────────────────────────
@@ -232,6 +236,32 @@ internal static class UserRoutes
         if (!ctx.CanActOnUser(id)) return Forbidden();
         var events = await users.ListAuditEventsAsync(id, limit ?? 100, ct).ConfigureAwait(false);
         return Results.Ok(new { events, count = events.Count });
+    }
+
+    private static async Task<IResult> GenerateResetToken(
+        string id, HttpContext ctx, IIdentityService identity, IUserService users, CancellationToken ct)
+    {
+        if (!ctx.IsAdmin()) return Forbidden();
+
+        var user = await users.GetAsync(id, ct).ConfigureAwait(false);
+        if (user is null) return Results.NotFound(new { error = $"User '{id}' not found." });
+
+        var plaintext = await identity.GenerateResetTokenAsync(id, ct).ConfigureAwait(false);
+        return Results.Ok(new { reset_token = plaintext });
+    }
+
+    private static async Task<IResult> ApproveUser(
+        string id, HttpContext ctx, IIdentityService identity, IUserService users, CancellationToken ct)
+    {
+        if (!ctx.IsAdmin()) return Forbidden();
+
+        var user = await users.GetAsync(id, ct).ConfigureAwait(false);
+        if (user is null) return Results.NotFound(new { error = $"User '{id}' not found." });
+
+        var approved = await identity.ApproveUserAsync(id, ct).ConfigureAwait(false);
+        return approved
+            ? Results.Ok(new { approved = id })
+            : Results.Conflict(new { error = $"User '{id}' is not in pending state." });
     }
 
     // ── Authorization helper ───────────────────────────────────────────────

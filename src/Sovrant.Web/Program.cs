@@ -3,8 +3,10 @@ using Sovrant.Agents;
 using Sovrant.Api.Auth;
 using Sovrant.Commands;
 using Sovrant.Runtime;
+using Sovrant.Runtime.Auth;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Logging;
+using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
@@ -16,11 +18,13 @@ namespace Sovrant.Web;
 
 public static class Program
 {
+    private const string StoredWebTokenKey = "sovrant.web.auth_token";
+
     /// <summary>Signals when runtime initialization (DB, model metadata) is complete.</summary>
     public static TaskCompletionSource RuntimeReady { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    /// <summary>Unified user identity — matches the runtime's default (SOVRANT_USER_ID or OS username).</summary>
-    internal static readonly string SovrantUserId =
+    /// <summary>The authenticated user's ID. Updated after login; falls back to OS identity until then.</summary>
+    public static string SovrantUserId { get; private set; } =
         Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
 
     public static async Task Main(string[] args)
@@ -38,6 +42,13 @@ public static class Program
             consoleMinOverride: LogLevel.Warning,
             logFileOverride: bootstrapConfig.LogFile));
 
+        // WebSessionService is a singleton used by all Blazor circuits.
+        // For embedded mode it is populated after session restore or login.
+        // For remote mode it is pre-populated with the env/OS identity.
+        var webSession = new WebSessionService();
+        builder.Services.AddSingleton(webSession);
+        builder.Services.AddSingleton<IPrincipalAccessor>(webSession);
+
         if (isRemote)
         {
             // ── Remote mode: connect to an existing Sovrant.Server ──────────
@@ -46,6 +57,11 @@ public static class Program
                 Url = Environment.GetEnvironmentVariable("SOVRANT_SERVER_URL") ?? "http://localhost:5200",
                 ApiToken = Environment.GetEnvironmentVariable("SOVRANT_API_TOKEN") ?? string.Empty,
             };
+
+            // Remote mode has no IIdentityService; auto-sign-in with the OS/env identity.
+            var remoteUserId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
+            SovrantUserId = remoteUserId;
+            webSession.SignIn(remoteUserId, "user");
 
             builder.Services.AddSovrantClient(remoteOptions);
             builder.Services.AddSingleton<ActiveContextService>();
@@ -110,6 +126,10 @@ public static class Program
             // Task.Run below re-calls it for model metadata, MCP bootstrap, etc.
             await app.Services.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>()
                 .InitializeAsync().ConfigureAwait(false);
+
+            // Attempt to restore a stored session token before serving any request.
+            // If valid, MainLayout will render normally; otherwise it redirects to /login.
+            await TryRestoreWebSessionAsync(app.Services, webSession).ConfigureAwait(false);
         }
 
         app.MapStaticAssets();
@@ -156,16 +176,10 @@ public static class Program
                     await app.Services.InitializeRuntimeAsync().ConfigureAwait(false);
                     app.Services.GetRequiredService<ToolRegistrar>().RegisterAll();
 
-                    var userService = app.Services.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
-                    var user = await userService.GetAsync(SovrantUserId).ConfigureAwait(false);
-                    if (user is null)
-                        await userService.CreateAsync(SovrantUserId, userId: SovrantUserId).ConfigureAwait(false);
-
-                    // Ensure personal workspace exists (same as desktop's WorkspacesViewModel)
-                    var workspaceService = app.Services.GetRequiredService<Sovrant.Runtime.Workspaces.IWorkspaceService>();
-                    var personal = await workspaceService.GetPersonalAsync(SovrantUserId).ConfigureAwait(false);
-                    if (personal is null)
-                        await workspaceService.CreatePersonalWorkspaceAsync(SovrantUserId).ConfigureAwait(false);
+                    // Only seed user/workspace if a session was restored at startup.
+                    // If not, the user hasn't logged in yet; Login.razor will seed after auth.
+                    if (webSession.IsAuthenticated)
+                        await SeedUserAndWorkspaceAsync(app.Services, webSession.UserId!).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -180,6 +194,42 @@ public static class Program
         }
 
         await app.RunAsync();
+    }
+
+    internal static void SetUserId(string userId) => SovrantUserId = userId;
+
+    private static async Task TryRestoreWebSessionAsync(IServiceProvider services, WebSessionService session)
+    {
+        try
+        {
+            var store = services.GetRequiredService<ICredentialStore>();
+            var plaintext = await store.RetrieveAsync(StoredWebTokenKey).ConfigureAwait(false);
+            if (string.IsNullOrEmpty(plaintext)) return;
+
+            var tokens = services.GetRequiredService<ITokenService>();
+            var resolved = await tokens.ResolveAsync(plaintext).ConfigureAwait(false);
+            if (resolved is null) return;
+
+            session.SignIn(resolved.Token.UserId, resolved.Role);
+            SovrantUserId = resolved.Token.UserId;
+        }
+        catch
+        {
+            // Ignore restore errors — user will be redirected to login.
+        }
+    }
+
+    internal static async Task SeedUserAndWorkspaceAsync(IServiceProvider services, string userId)
+    {
+        var userService = services.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
+        var user = await userService.GetAsync(userId).ConfigureAwait(false);
+        if (user is null)
+            await userService.CreateAsync(userId, userId: userId).ConfigureAwait(false);
+
+        var workspaceService = services.GetRequiredService<Sovrant.Runtime.Workspaces.IWorkspaceService>();
+        var personal = await workspaceService.GetPersonalAsync(userId).ConfigureAwait(false);
+        if (personal is null)
+            await workspaceService.CreatePersonalWorkspaceAsync(userId).ConfigureAwait(false);
     }
 
     // Serves artifact files by workspace/project/run from the LocalArtifactStore

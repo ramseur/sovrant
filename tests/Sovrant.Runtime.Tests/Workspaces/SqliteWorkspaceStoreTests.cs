@@ -9,6 +9,7 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     private readonly string _dbPath;
     private readonly SqliteStorageProvider _provider;
     private readonly IWorkspaceService _store;
+    private readonly string _ownerId = "ws-test-owner";
 
     public SqliteWorkspaceStoreTests()
     {
@@ -16,6 +17,7 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
         _provider = new SqliteStorageProvider(NullLogger<SqliteStorageProvider>.Instance, _dbPath);
         _provider.InitializeAsync().GetAwaiter().GetResult();
         _store = new SqliteWorkspaceStore((ISqliteConnectionFactory)_provider);
+        SeedUser(_ownerId);
     }
 
     public async ValueTask DisposeAsync()
@@ -39,24 +41,24 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
         cmd.ExecuteNonQuery();
     }
 
-    // ── Personal workspace auto-creation ──────────────────────────────────
+    // ── Personal workspace ────────────────────────────────────────────────
 
     [Fact]
-    public async Task SeedDefaultUser_CreatesPersonalWorkspace()
+    public async Task CreatePersonalWorkspace_CreatesAndCanBeRetrieved()
     {
-        // The default user seeded by SqliteStorageProvider should have a personal workspace.
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _store.GetPersonalAsync(userId);
+        var ws = await _store.CreatePersonalWorkspaceAsync(_ownerId);
         Assert.NotNull(ws);
         Assert.Equal(WorkspaceType.Personal, ws.Type);
-        Assert.Equal(userId, ws.OwnerId);
+        Assert.Equal(_ownerId, ws.OwnerId);
+
+        var loaded = await _store.GetPersonalAsync(_ownerId);
+        Assert.NotNull(loaded);
+        Assert.Equal(ws.WorkspaceId, loaded.WorkspaceId);
     }
 
     [Fact]
     public async Task CreatePersonalWorkspace_Idempotent()
     {
-        // Create the user first (FK constraint).
         SeedUser("testuser1");
 
         var ws1 = await _store.CreatePersonalWorkspaceAsync("testuser1");
@@ -69,9 +71,7 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     [Fact]
     public async Task CreateAndGetTeamWorkspace()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _store.CreateTeamWorkspaceAsync("My Team", "my-team", userId);
+        var ws = await _store.CreateTeamWorkspaceAsync("My Team", "my-team", _ownerId);
 
         Assert.Equal(WorkspaceType.Team, ws.Type);
         Assert.Equal("My Team", ws.Name);
@@ -85,13 +85,11 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     [Fact]
     public async Task ListForUser_IncludesPersonalAndTeam()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        await _store.CreateTeamWorkspaceAsync("Team A", "team-a-list", userId);
+        await _store.CreatePersonalWorkspaceAsync(_ownerId);
+        await _store.CreateTeamWorkspaceAsync("Team A", "team-a-list", _ownerId);
 
-        var workspaces = await _store.ListForUserAsync(userId);
+        var workspaces = await _store.ListForUserAsync(_ownerId);
 
-        // At least personal + the team we just created.
         Assert.True(workspaces.Count >= 2);
         Assert.Contains(workspaces, w => w.Type == WorkspaceType.Personal);
         Assert.Contains(workspaces, w => w.Slug == "team-a-list");
@@ -100,22 +98,18 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     [Fact]
     public async Task UpdateWorkspace_ChangesName()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _store.CreateTeamWorkspaceAsync("Old Name", "update-test", userId);
+        var ws = await _store.CreateTeamWorkspaceAsync("Old Name", "update-test", _ownerId);
 
         var updated = await _store.UpdateAsync(ws.WorkspaceId, "New Name", null);
         Assert.NotNull(updated);
         Assert.Equal("New Name", updated.Name);
-        Assert.Equal("update-test", updated.Slug); // slug unchanged
+        Assert.Equal("update-test", updated.Slug);
     }
 
     [Fact]
     public async Task DeleteTeamWorkspace_Succeeds()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _store.CreateTeamWorkspaceAsync("Delete Me", "delete-test", userId);
+        var ws = await _store.CreateTeamWorkspaceAsync("Delete Me", "delete-test", _ownerId);
 
         var deleted = await _store.DeleteAsync(ws.WorkspaceId);
         Assert.True(deleted);
@@ -127,10 +121,7 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     [Fact]
     public async Task DeletePersonalWorkspace_Fails()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var personal = await _store.GetPersonalAsync(userId);
-        Assert.NotNull(personal);
+        var personal = await _store.CreatePersonalWorkspaceAsync(_ownerId);
 
         var deleted = await _store.DeleteAsync(personal.WorkspaceId);
         Assert.False(deleted);
@@ -141,21 +132,16 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     [Fact]
     public async Task OwnerIsMember()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _store.CreateTeamWorkspaceAsync("Member Test", "member-test", userId);
+        var ws = await _store.CreateTeamWorkspaceAsync("Member Test", "member-test", _ownerId);
 
-        Assert.True(await _store.IsMemberAsync(ws.WorkspaceId, userId));
-        Assert.Equal(WorkspaceRole.Owner, await _store.GetMemberRoleAsync(ws.WorkspaceId, userId));
+        Assert.True(await _store.IsMemberAsync(ws.WorkspaceId, _ownerId));
+        Assert.Equal(WorkspaceRole.Owner, await _store.GetMemberRoleAsync(ws.WorkspaceId, _ownerId));
     }
 
     [Fact]
     public async Task AddAndRemoveMember()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _store.CreateTeamWorkspaceAsync("Add Rm Test", "add-rm-test", userId);
-
+        var ws = await _store.CreateTeamWorkspaceAsync("Add Rm Test", "add-rm-test", _ownerId);
         SeedUser("user2");
 
         await _store.AddMemberAsync(ws.WorkspaceId, "user2", WorkspaceRole.Member);
@@ -172,11 +158,9 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     [Fact]
     public async Task CannotRemoveOwner()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _store.CreateTeamWorkspaceAsync("Owner Rm Test", "owner-rm-test", userId);
+        var ws = await _store.CreateTeamWorkspaceAsync("Owner Rm Test", "owner-rm-test", _ownerId);
 
-        var removed = await _store.RemoveMemberAsync(ws.WorkspaceId, userId);
+        var removed = await _store.RemoveMemberAsync(ws.WorkspaceId, _ownerId);
         Assert.False(removed);
     }
 
@@ -185,9 +169,7 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     [Fact]
     public async Task NonMember_IsNotMember()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _store.CreateTeamWorkspaceAsync("Isolation Test", "isolation-test", userId);
+        var ws = await _store.CreateTeamWorkspaceAsync("Isolation Test", "isolation-test", _ownerId);
 
         Assert.False(await _store.IsMemberAsync(ws.WorkspaceId, "nonexistent-user"));
     }
@@ -197,9 +179,7 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     [Fact]
     public async Task CreateAndAcceptInvite()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _store.CreateTeamWorkspaceAsync("Invite Test", "invite-test", userId);
+        var ws = await _store.CreateTeamWorkspaceAsync("Invite Test", "invite-test", _ownerId);
 
         var invite = await _store.CreateInviteAsync(ws.WorkspaceId, "test@example.com", WorkspaceRole.Member);
         Assert.NotNull(invite.Token);
@@ -211,7 +191,6 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
         Assert.True(accepted);
         Assert.True(await _store.IsMemberAsync(ws.WorkspaceId, "invitee"));
 
-        // Cannot accept again.
         var again = await _store.AcceptInviteAsync(invite.Token, "invitee");
         Assert.False(again);
     }
@@ -219,9 +198,7 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     [Fact]
     public async Task DeleteInvite_Succeeds()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _store.CreateTeamWorkspaceAsync("Inv Del", "inv-del-test", userId);
+        var ws = await _store.CreateTeamWorkspaceAsync("Inv Del", "inv-del-test", _ownerId);
 
         var invite = await _store.CreateInviteAsync(ws.WorkspaceId, "del@test.com", WorkspaceRole.Viewer);
         var deleted = await _store.DeleteInviteAsync(invite.InviteId);
@@ -236,9 +213,7 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     [Fact]
     public async Task SetAndGetConfig()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _store.CreateTeamWorkspaceAsync("Config Test", "config-test", userId);
+        var ws = await _store.CreateTeamWorkspaceAsync("Config Test", "config-test", _ownerId);
 
         await _store.SetConfigAsync(ws.WorkspaceId, new Dictionary<string, string>
         {
@@ -255,9 +230,7 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     [Fact]
     public async Task SetConfig_OverwritesExisting()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _store.CreateTeamWorkspaceAsync("Config Overwrite", "config-overwrite", userId);
+        var ws = await _store.CreateTeamWorkspaceAsync("Config Overwrite", "config-overwrite", _ownerId);
 
         await _store.SetConfigAsync(ws.WorkspaceId, new Dictionary<string, string> { ["key"] = "v1" });
         await _store.SetConfigAsync(ws.WorkspaceId, new Dictionary<string, string> { ["key"] = "v2" });
@@ -271,9 +244,7 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     [Fact]
     public async Task SaveAndListMemory()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _store.CreateTeamWorkspaceAsync("Memory Test", "memory-test", userId);
+        var ws = await _store.CreateTeamWorkspaceAsync("Memory Test", "memory-test", _ownerId);
 
         var entry = new WorkspaceMemoryEntry
         {
@@ -295,9 +266,7 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     [Fact]
     public async Task ListMemory_FiltersByLayer()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _store.CreateTeamWorkspaceAsync("Layer Filter", "layer-filter", userId);
+        var ws = await _store.CreateTeamWorkspaceAsync("Layer Filter", "layer-filter", _ownerId);
 
         await _store.SaveMemoryAsync(new WorkspaceMemoryEntry
         {
@@ -320,9 +289,7 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     [Fact]
     public async Task DeleteMemory_Removes()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _store.CreateTeamWorkspaceAsync("Mem Delete", "mem-delete", userId);
+        var ws = await _store.CreateTeamWorkspaceAsync("Mem Delete", "mem-delete", _ownerId);
 
         await _store.SaveMemoryAsync(new WorkspaceMemoryEntry
         {
@@ -341,10 +308,8 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     [Fact]
     public async Task MemoryIsolated_AcrossWorkspaces()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws1 = await _store.CreateTeamWorkspaceAsync("Iso1", "iso-1", userId);
-        var ws2 = await _store.CreateTeamWorkspaceAsync("Iso2", "iso-2", userId);
+        var ws1 = await _store.CreateTeamWorkspaceAsync("Iso1", "iso-1", _ownerId);
+        var ws2 = await _store.CreateTeamWorkspaceAsync("Iso2", "iso-2", _ownerId);
 
         await _store.SaveMemoryAsync(new WorkspaceMemoryEntry
         {
@@ -364,9 +329,7 @@ public sealed class SqliteWorkspaceStoreTests : IAsyncDisposable
     [Fact]
     public async Task GetUsage_ReturnsZerosWhenEmpty()
     {
-        var userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
-            ?? Environment.UserName;
-        var ws = await _store.CreateTeamWorkspaceAsync("Usage Test", "usage-test", userId);
+        var ws = await _store.CreateTeamWorkspaceAsync("Usage Test", "usage-test", _ownerId);
 
         var usage = await _store.GetUsageAsync(ws.WorkspaceId);
         Assert.Equal(0, usage.TotalInputTokens);

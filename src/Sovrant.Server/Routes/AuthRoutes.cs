@@ -19,6 +19,10 @@ internal static class AuthRoutes
         app.MapPost("/v1/auth/registration/open", OpenRegistrationAsync);
         app.MapPost("/v1/auth/registration/close", CloseRegistrationAsync);
         app.MapGet("/v1/auth/registration/status", GetRegistrationStatusAsync);
+        // Admin: approval gate control
+        app.MapGet("/v1/auth/approval/status", GetApprovalStatusAsync);
+        app.MapPost("/v1/auth/approval/enable", EnableApprovalAsync);
+        app.MapPost("/v1/auth/approval/disable", DisableApprovalAsync);
     }
 
     private static async Task<IResult> RegisterAsync(
@@ -32,9 +36,18 @@ internal static class AuthRoutes
         var result = await identity.RegisterAsync(req.Email, req.Password, ctx.RequestAborted)
             .ConfigureAwait(false);
 
-        return result.Success
-            ? Results.Ok(new { token = result.Token, user_id = result.UserId })
-            : Results.Json(new { error = result.Error }, statusCode: 403);
+        if (!result.Success)
+            return Results.Json(new { error = result.Error }, statusCode: 403);
+
+        if (result.IsPendingApproval)
+            return Results.Accepted(value: new
+            {
+                pending_approval = true,
+                user_id = result.UserId,
+                message = "Your account has been created and is awaiting admin approval."
+            });
+
+        return Results.Ok(new { token = result.Token, user_id = result.UserId });
     }
 
     private static async Task<IResult> LoginAsync(
@@ -123,6 +136,27 @@ internal static class AuthRoutes
     {
         var open = await identity.IsRegistrationOpenAsync(ctx.RequestAborted).ConfigureAwait(false);
         return Results.Ok(new { registration_open = open });
+    }
+
+    private static async Task<IResult> GetApprovalStatusAsync(HttpContext ctx, IIdentityService identity)
+    {
+        if (!ctx.IsAdmin()) return Results.Forbid();
+        var required = await identity.IsApprovalRequiredAsync(ctx.RequestAborted).ConfigureAwait(false);
+        return Results.Ok(new { approval_required = required });
+    }
+
+    private static async Task<IResult> EnableApprovalAsync(HttpContext ctx, IIdentityService identity)
+    {
+        if (!ctx.IsAdmin()) return Results.Forbid();
+        await identity.SetApprovalRequiredAsync(true, ctx.RequestAborted).ConfigureAwait(false);
+        return Results.Ok(new { approval_required = true });
+    }
+
+    private static async Task<IResult> DisableApprovalAsync(HttpContext ctx, IIdentityService identity)
+    {
+        if (!ctx.IsAdmin()) return Results.Forbid();
+        await identity.SetApprovalRequiredAsync(false, ctx.RequestAborted).ConfigureAwait(false);
+        return Results.Ok(new { approval_required = false });
     }
 }
 

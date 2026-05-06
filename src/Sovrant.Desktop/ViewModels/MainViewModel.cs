@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Sovrant.Commands;
+using Sovrant.Runtime.Auth;
 
 namespace Sovrant.Desktop.ViewModels;
 
@@ -26,6 +27,7 @@ public partial class MainViewModel : ViewModelBase
     public bool IsWorkspaceGroup => SelectedGroup == "workspace";
     public bool IsConnectGroup => SelectedGroup == "connect";
     public bool IsGovernanceGroup => SelectedGroup == "governance";
+    public bool IsAdminGroup => SelectedGroup == "admin";
 
     partial void OnSelectedGroupChanged(string value)
     {
@@ -35,16 +37,21 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsWorkspaceGroup));
         OnPropertyChanged(nameof(IsConnectGroup));
         OnPropertyChanged(nameof(IsGovernanceGroup));
+        OnPropertyChanged(nameof(IsAdminGroup));
     }
 
     private readonly IServiceProvider _services;
+    private readonly IPrincipalAccessor _principal;
 
-    public MainViewModel(SidebarViewModel sidebar, CommandPaletteViewModel commandPalette, IServiceProvider services)
+    public bool IsAdmin => _principal.IsAdmin;
+
+    public MainViewModel(SidebarViewModel sidebar, CommandPaletteViewModel commandPalette, IServiceProvider services, IPrincipalAccessor principal)
     {
         ArgumentNullException.ThrowIfNull(sidebar);
         _sidebar = sidebar;
         _commandPalette = commandPalette;
         _services = services;
+        _principal = principal;
         var cockpit = services.GetRequiredService<CommandCenterViewModel>();
         _currentPage = cockpit;
         cockpit.RowSelected += OnCockpitRowSelected;
@@ -94,6 +101,10 @@ public partial class MainViewModel : ViewModelBase
         {
             CurrentPage = CreateChatViewModel();
             Sidebar.SelectedNavItem = "Chat";
+        }
+        else if (group == "admin" && _principal.IsAdmin)
+        {
+            CurrentPage = _services.GetRequiredService<AdminViewModel>();
         }
     }
 
@@ -147,6 +158,7 @@ public partial class MainViewModel : ViewModelBase
             "Automations" => _services.GetRequiredService<AutomationsViewModel>(),
             "Orchestration" => _services.GetRequiredService<OrchestrationViewModel>(),
             "CommandCenter" => ResetCockpitToGrid(),
+            "Admin" => _services.GetRequiredService<AdminViewModel>(),
             _ => CurrentPage,
         };
     }

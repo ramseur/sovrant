@@ -121,7 +121,8 @@ The engine is fully functional across five delivery modes with enterprise multi-
 
 | Gap | Phase | Priority |
 |---|---|---|
-| Enterprise auth & multi-tenancy (RBAC, OAuth/OIDC, SSO) | Phase 40 | Deferred |
+| Workspace-scoped roles & tenant enforcement (beta) | Phase 40A | Beta |
+| Enterprise auth & external identity (OAuth/OIDC, SAML, SSO) | Phase 40B | Deferred |
 | VS Code native extension | Phase 42 | Deferred (MCP server covers MCP-aware IDEs) |
 | Embedded terminal panel inside the desktop app | Phase 45 | Deferred |
 | n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |
@@ -142,6 +143,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Pluggable memory backends — abstract `IMemoryStore` so the SQLite implementation can be swapped for distributed/remote stores (mem0, Pinecone-style vector DBs, Redis, Postgres+pgvector); enables shared/team memory across nodes | Phase 83 | Medium |
 | Prompt library: reusable, parameterised prompt templates across CLI / Web / Desktop | Phase 84 | Medium |
 | Identity & login parity across CLI / Web / Desktop / Server | Phase 85 | Medium–High |
+| Local / remote mode selection — CLI + Desktop can run embedded (local DB) or connect to a shared `Sovrant.Server`; setup wizard mode picker; `sovrant connect <url>` | Phase 85.5 | High |
 | Background session continuation across navigation & session switches | Phase 86 | High |
 | Artifacts-by-default for code & documents (with workspace identity unification) | Phase 87 | Medium–High |
 | Knowledge Authoring Revisit — Web + Desktop UX rework: single Edit action on any item, silent copy-on-write for built-ins, no "Duplicate to user" intermediate; fix AvaloniaEdit defects on Desktop | Phase 91 | Medium |
@@ -2700,50 +2702,141 @@ Applied in this phase because per-user identity makes ownership enforcement mean
 
 ---
 
-### Phase 40 — Enterprise Auth & Multi-Tenancy ⏸️ Deferred
+### Phase 40A — Workspace-Scoped Roles & Tenant Enforcement 🔜 Beta
 
-**Depends on:** Phase 38 (per-user token auth), Phase 35 (workspaces — provides tenant boundary)
+**Depends on:** Phase 85 (identity & login — per-user `svt_` tokens, admin gate), Phase 35 (workspaces — data model and role columns already exist)
 
-**Goal:** Add external identity providers (OAuth/OIDC, SAML), fine-grained role-based access control (RBAC), and enterprise multi-tenancy on top of the Phase 38 per-user token model. This is where the RBAC tables (created empty in Phase 32) get populated and enforced.
+**Goal:** Make workspaces the hard multitenant boundary for beta. Workspaces are created and managed by admins only. Members operate strictly within the workspaces they belong to — they cannot create projects with users outside their workspace, cannot see other workspaces' data, and have their actions governed by their workspace role (`owner / admin / member / viewer`). All five interfaces enforce the same rules: Server API, Web UI, Desktop app, CLI, and MCP server.
+
+The data model is already in place from Phase 35 (`workspace_members.role`, `project_members.role`, `IsMemberAsync`, `GetMemberRoleAsync`). This phase wires enforcement everywhere it's missing.
+
+#### Current gap
+
+Phase 35 created the schema and `IWorkspaceService`. Phase 85 added real login. What's missing is **enforcement** — the route guards, UI gates, and CLI/MCP checks that actually prevent a member from doing what their role doesn't allow. Today anyone with a valid token can call `POST /v1/workspaces` and create a workspace; a viewer can call member-management endpoints; a project can be created with a user who isn't in the workspace.
+
+#### Rules for beta
+
+| Rule | Detail |
+|---|---|
+| **Admin-only workspace creation** | Only global admins (`role = 'admin'` on the user) can create team workspaces. Non-admins get 403. Personal workspaces are still auto-created on registration. |
+| **Workspace membership required** | Every non-admin request to a workspace endpoint must pass `IsMemberAsync`. Non-members get 403. |
+| **Workspace role enforcement** | `owner` and `admin` can manage members, update config, delete the workspace. `member` can read and contribute sessions/projects. `viewer` is read-only. |
+| **Project member constraint** | A user can only be added to a project if they are already a member of the parent workspace. Violating this returns 422. |
+| **Cross-workspace isolation** | Sessions, agent runs, artifacts, and memory are always scoped to the resolved workspace. A request cannot reference data from a workspace it is not a member of. |
+| **Workspace context on `IPrincipalAccessor`** | Add `WorkspaceId` so any service layer can ask "what workspace is this request in?" without re-resolving from HTTP headers. |
+
+#### Workspace role reference
+
+| Role | Can do |
+|---|---|
+| `owner` | Everything — rename/delete workspace, manage all members, full config |
+| `admin` | Manage members (cannot remove owner), update config, full project access |
+| `member` | Create/run projects and sessions, contribute to workspace memory |
+| `viewer` | Read sessions, projects, memory — no writes |
+
+Project roles (`lead / contributor / viewer`) mirror this within the project scope and are a subset of workspace membership.
+
+#### Per-surface implementation
+
+**Server (`Sovrant.Server`)**
+- `WorkspaceRoutes`: add `IsAdmin` guard on `POST /v1/workspaces`; add `CanManageWorkspace` helper (owner or admin of workspace, or global admin); gate all mutating member/config/delete routes behind it
+- `ProjectRoutes`: validate that any user being added to a project is already in `workspace_members` for that project's workspace
+- `WorkspaceContextMiddleware`: populate `IPrincipalAccessor.WorkspaceId` from resolved workspace at request time
+
+**Web (`Sovrant.Web`)**
+- Workspace panel: hide "Create workspace" button for non-admins; show workspace list filtered to joined workspaces only
+- Project member add: populate user picker from workspace members only (not all users)
+- Workspace settings page (new): visible to workspace owner/admin; shows member list, roles, invite management
+- Admin page: workspace tab — lists all workspaces, can create/delete, assign members
+
+**Desktop (`Sovrant.Desktop`)**
+- Workspace selector: list only workspaces the logged-in user belongs to
+- Workspace settings view (new tab in settings): member list + role management (owner/admin only)
+- Project member UI: constrain picker to workspace members
+- Hide "New workspace" button for non-admin users
+
+**CLI (`sovrant`)**
+- `sovrant workspace list` — lists workspaces for the authenticated user
+- `sovrant workspace members <workspace-id>` — lists members and roles (owner/admin only)
+- `sovrant workspace invite <workspace-id> <email> [--role member|viewer]` — sends invite (owner/admin only)
+- All existing commands that take `--workspace` validate membership before executing; non-members get a clear error
+
+**MCP server**
+- Tool calls that resolve a workspace context validate membership of the authenticated token's user before executing
+- Agent runs are always stamped with the resolved `workspace_id`; a tool cannot reference data outside the request's workspace
+- `workspace_id` exposed in the MCP session context so tool implementations can scope storage without re-resolving
+
+#### `CanManageWorkspace` helper
+
+Central authorization predicate used across all routes and service calls:
+
+```csharp
+bool CanManageWorkspace(string userId, string workspaceId)
+    => IsGlobalAdmin(userId)
+    || GetMemberRoleAsync(workspaceId, userId) is owner or admin
+```
+
+#### What does NOT change in this phase
+
+- Token format and issuance — still `svt_` tokens, still 30-day sliding TTL
+- The global `admin`/`user` flag on `users.role` — global admins retain full access across all workspaces
+- Role storage — still in `workspace_members.role` (already exists); no new RBAC tables needed yet
+- OAuth/OIDC/SSO — deferred to Phase 40B
+
+#### Implementation plan
+
+1. Add `WorkspaceId` to `IPrincipalAccessor` and populate in `WorkspaceContextMiddleware` (Server) and equivalent session objects (Desktop, Web)
+2. Add `CanManageWorkspace` helper to `HttpContextAuthExtensions` (Server) and `IPrincipalAccessor` implementations
+3. **Server:** gate `POST /v1/workspaces` behind `IsAdmin`; add role guards to all workspace member/config/delete routes; add workspace-membership validation to project member add
+4. **Web:** filter workspace list to memberships; constrain project member picker; add workspace settings page; gate admin workspace management in Admin page
+5. **Desktop:** filter workspace selector; add workspace settings tab; constrain project member picker; hide new-workspace button for non-admins
+6. **CLI:** implement `workspace list`, `workspace members`, `workspace invite`; validate `--workspace` membership on all commands
+7. **MCP:** validate workspace membership on tool calls; stamp agent runs with `workspace_id`
+8. Tests: admin-only creation, membership enforcement, cross-workspace isolation, project member constraint, role hierarchy (owner > admin > member > viewer), all-surface parity
+
+---
+
+### Phase 40B — Enterprise Auth & External Identity ⏸️ Deferred
+
+**Depends on:** Phase 40A (workspace roles enforced), Phase 85 (per-user tokens)
+
+**Goal:** Add external identity providers (OAuth/OIDC, SAML), replace the token-carried role flag with DB-evaluated roles, and add enterprise SSO enforcement and billing isolation on top of the Phase 40A workspace model.
 
 #### Current limitation — role stored on the token, not in the DB
 
-Today `IsAdmin()` has two paths: the static `SOVRANT_TOKEN` (always admin) and a `role` field carried on the per-user bearer token. Both are set at token-issuance time and not re-evaluated at request time. This means:
-
-- Role changes require re-issuing a token, not just updating a DB row.
-- Workspace-level or project-level roles (owner, editor, viewer) don't exist — it's a single binary admin/user flag across the entire server.
-- The server route guards added in Phase L are a stop-gap: they use `IsAdmin()` for destructive ops and `IsMemberAsync()` for read access, but there is no formal workspace-owner role to sit between those two.
-
-**This phase will replace the token-carried role flag with DB-stored roles evaluated at request time**, so role changes take effect immediately without token re-issuance, and workspace/project-scoped roles become possible.
+`IsAdmin()` reads the `role` field carried on the `svt_` token, set at issuance time. Role changes require re-issuing a token. Phase 40B moves role evaluation to a DB lookup at request time so changes take effect immediately.
 
 #### When to implement
 
-This phase is deliberately deferred. Phase 38's per-user tokens cover small-to-medium teams. Add this phase when:
+Add this phase when:
 - External identity providers (Google, GitHub, Azure AD, Okta) are required for login, **or**
-- Fine-grained permissions beyond admin/user/readonly are needed (e.g., "can use tool X but not Y"), **or**
-- Organizational boundaries require tenant isolation (separate data, separate billing)
+- Fine-grained tool-level permissions beyond workspace roles are needed (e.g., "can use tool X but not Y"), **or**
+- Enterprise SSO with SAML is required by a customer
 
-#### What it adds on top of Phase 38 (Per-User Tokens)
+#### What it adds on top of Phase 40A
 
-Phase 38 gives each user their own bearer tokens with admin/user role enforcement. This phase upgrades that model with external identity, granular permissions, and compliance tooling.
-
-| Item | Change |
+| Item | Detail |
 |---|---|
-| External IdP | OAuth 2.0 / OIDC integration — login via Google, GitHub, Azure AD, Okta. Maps external identity to `users.user_id`. |
-| RBAC | Populate `roles` + `permissions` + `role_permissions` + `user_roles` tables. Define granular permissions: `tools:execute`, `config:write`, `sessions:read-all`, etc. |
+| External IdP | OAuth 2.0 / OIDC — login via Google, GitHub, Azure AD, Okta. Maps external identity to `users.user_id`. |
+| SAML | Enterprise SSO via SAML 2.0 for customers with existing IdP infrastructure. |
+| DB-stored role evaluation | Replace token-carried `role` with a DB lookup in `BearerTokenMiddleware` so role changes are immediate. |
+| Granular RBAC | Populate `roles` + `permissions` + `role_permissions` + `user_roles` tables. Define `tools:execute`, `config:write`, `sessions:read-all`, etc. |
 | SSO enforcement | Workspace admins can require SSO login — disable token-only access for their workspace. |
-| Billing isolation | Per-workspace token usage aggregation already exists (Phase 35); this adds billing plan association and usage alerts. |
+| JWT coexistence | `BearerTokenMiddleware` accepts both `svt_` tokens and JWTs from external IdP. |
+| Billing isolation | Per-workspace billing plan association and usage alerts on top of Phase 35 usage aggregation. |
+| Hot reload | `POST /v1/admin/reload` to refresh token registry without restart. |
 | Audit | All auth events (login, token issue, token revoke, permission change) logged to `audit_events`. |
 
-#### Implementation Plan
+#### Implementation plan
 
 1. Add OAuth/OIDC middleware — `Microsoft.AspNetCore.Authentication.OpenIdConnect`
-2. Populate `roles`, `permissions` tables (replace simple role columns in `workspace_members`/`project_members`)
-3. Implement `IRbacService` — permission checks at endpoint and tool-execution level
-4. Update `BearerTokenMiddleware` to also accept JWT from external IdP
-5. Add SSO enforcement flag on workspace config
-6. Add `POST /v1/admin/reload` to hot-reload token registry without restart
-7. Tests: OAuth flow, RBAC permission checks, SSO enforcement, JWT + svt_ token coexistence
+2. Add SAML middleware for enterprise customers
+3. Move role evaluation from token payload to DB lookup in `BearerTokenMiddleware`
+4. Populate `roles`, `permissions`, `role_permissions`, `user_roles` tables
+5. Implement `IRbacService` — permission checks at endpoint and tool-execution level
+6. Add SSO enforcement flag on `workspace_config`
+7. Add `POST /v1/admin/reload`
+8. Tests: OAuth flow, SAML flow, DB role evaluation, RBAC permission checks, SSO enforcement, JWT + svt_ coexistence
 
 ---
 
@@ -7991,16 +8084,16 @@ for security issues", "summarise this conversation as memory".
 
 | Component | File | Notes |
 |---|---|---|
-| Remove `SOVRANT_TOKEN` startup check, register `AuthRoutes`, first-run log hint | `src/Sovrant.Server/Program.cs` | Next up |
-| Remove `X-LLM-Api-Key`/`X-LLM-Base-Url` header processing | `src/Sovrant.Server/Routes/ChatRoutes.cs` | Per-request LLM key injection removed |
-| `POST /v1/users/{id}/reset-password` (admin only) | `src/Sovrant.Server/Routes/UserRoutes.cs` | Returns one-time plaintext reset token |
-| `IPrincipalAccessor` interface + server/embedded impls | `src/Sovrant.Runtime/Auth/` | Replaces `SOVRANT_USER_ID`/os-username implicit identity |
-| Desktop login flow — `LoginWindow`, `LoginViewModel`, `ICredentialStore` token storage | `src/Sovrant.Desktop/` | Boot flow: validate stored token → main window or login screen |
-| Web login/register pages + route guard | `src/Sovrant.Web/Components/Pages/` | Redirect unauthenticated to `/login` |
-| CLI `login` / `logout` / `whoami` commands | `src/Sovrant.Cli/Commands/` | Token stored in `ICredentialStore` |
-| Admin pages (Web + Desktop) | `src/Sovrant.Web/Components/Pages/Admin/`, `src/Sovrant.Desktop/Views/Admin/` | Users, registration toggle, password reset, token list |
-| Unit tests — `IdentityServiceTests`, `PasswordHasherTests` | `tests/Sovrant.Runtime.Tests/Auth/` | |
-| Update `MigrationRunnerTests` expected schema version | `tests/Sovrant.Runtime.Tests/` | 25 → 26 |
+| Remove `SOVRANT_TOKEN` startup check, register `AuthRoutes`, first-run log hint | `src/Sovrant.Server/Program.cs` | ✅ Done |
+| Remove `X-LLM-Api-Key`/`X-LLM-Base-Url` header processing | `src/Sovrant.Server/Routes/ChatRoutes.cs` | ✅ Done — per-request LLM key injection removed |
+| `POST /v1/users/{id}/reset-password` (admin only) | `src/Sovrant.Server/Routes/UserRoutes.cs` | ✅ Done |
+| `IPrincipalAccessor` interface + server/embedded impls | `src/Sovrant.Runtime/Auth/` | ✅ Done |
+| Desktop login flow — `LoginWindow`, `LoginViewModel`, `ICredentialStore` token storage, logout | `src/Sovrant.Desktop/` | ✅ Done |
+| Web login/register pages + route guard + logout | `src/Sovrant.Web/Components/Pages/Login.razor`, `MainLayout.razor` | ✅ Done |
+| CLI `login` / `logout` / `whoami` commands | `src/Sovrant.Cli/Program.cs` | ✅ Done |
+| Update `MigrationRunnerTests` expected schema version | `tests/Sovrant.Runtime.Tests/` | ✅ Done (24 → 26) |
+| Admin pages (Web + Desktop) | `src/Sovrant.Web/Components/Pages/Admin/`, `src/Sovrant.Desktop/Views/Admin/` | ⬜ Pending |
+| Unit tests — `IdentityServiceTests`, `PasswordHasherTests` | `tests/Sovrant.Runtime.Tests/Auth/` | ⬜ Pending |
 
 ### Goal
 
@@ -9634,11 +9727,71 @@ A stuck tool call (infinite loop, hung subprocess, unresponsive MCP server) occu
 - LLM API keys served from keystore; no longer accepted via `X-LLM-Api-Key` headers
 - No backwards-compat migration path (pre-release)
 
+#### Security model (finalized)
+
+- **Admin approval gate**: new registrations start as `status='pending'`; cannot log in until admin approves. Toggle: `POST /v1/auth/approval/enable|disable` (admin only). Default: on.
+- **Registration control**: admin can open/close registration separately from the approval gate.
+- **User management**: admin can approve (`POST /v1/users/{id}/approve`), disable (`DELETE /v1/users/{id}`), or reactivate (`POST /v1/users/{id}/reactivate`) any user. Login returns specific messages for pending vs. disabled accounts.
+
 #### Remaining work
 
-Server plumbing (Program.cs cleanup, ChatRoutes header removal), `IPrincipalAccessor`, Desktop login window, Web login/register pages + route guard, CLI login commands, admin pages (Web + Desktop), unit tests, migration count update.
+Admin pages (Web + Desktop) — user list with approve/disable/reactivate actions, registration toggle, approval gate toggle, password reset, token list. Unit tests (`IdentityServiceTests`, `PasswordHasherTests`).
 
-**Acceptance:** A user registers on Desktop and immediately sees the same workspace data when opening Web against the same DB. CLI `sovrant login` resolves the same `UserId`.
+**Acceptance:** A user registers on Desktop and immediately sees the same workspace data when opening Web against the same DB. CLI `sovrant login` resolves the same `UserId`. Admin can approve or disable users from the admin page.
+
+---
+
+## Phase 85.5 — Local / Remote Mode Selection for CLI & Desktop
+
+**Status:** Planned  
+**Effort:** ~1–2 weeks  
+**Depends on:** Phase 85 (identity + svt_ tokens)
+
+### Problem
+
+CLI and Desktop currently run in **embedded mode only** (the full runtime runs in-process against a local SQLite DB). They have no way to connect to a shared `Sovrant.Server` instance running on another machine or in a container. Web already supports both modes (Phase 61), but CLI and Desktop do not.
+
+The goal is parity: both surfaces can run **local** (embedded, single-user, no server needed) or **remote** (connects to a company-hosted `Sovrant.Server` with shared workspaces and team access), and the user can switch modes.
+
+### Design
+
+**Two modes, user-selectable:**
+
+| Mode | Description | When to use |
+|---|---|---|
+| **Local** | Full runtime embedded in the process; local SQLite DB; single user | Personal use, offline, dev/test |
+| **Remote** | HTTP/SignalR client connecting to `Sovrant.Server`; shared DB on the server | Team / company deployment |
+
+**Connection model:**
+- On first run, Desktop setup wizard offers a choice: "Use local database" vs "Connect to a Sovrant server"
+- Choosing remote shows a server URL field + login form; credentials are validated against the server before setup completes
+- The chosen mode (and server URL if remote) is stored in `ICredentialStore` under `sovrant.desktop.server_url`
+- CLI uses `--server <url>` flag or `SOVRANT_SERVER_URL` env var to select remote mode; `sovrant connect <url>` stores the URL persistently
+- In both cases, the identity flow (Phase 85 login/token) applies regardless of mode
+
+**What already exists:**
+- `AddSovrantClient()` + `SovrantRemoteOptions` — Phase 61; used by Web; provides `RemoteChatService`, `RemoteToolRegistry`, `SignalRStreamingClient`, etc.
+- `ICredentialStore` — AES-256-GCM encrypted; already stores API keys; extend to store server URL
+- `BearerTokenMiddleware` on the server already validates `svt_` tokens
+- Desktop setup wizard (`SetupWizardViewModel`) — extend with a mode-selection step
+- CLI `BuildServices()` function — branch on stored server URL to call `AddSovrantClient()` instead of `AddSovrantRuntime()`
+
+**New work:**
+
+| Item | Notes |
+|---|---|
+| CLI `--server` global option + `sovrant connect <url>` command | Stores server URL; `sovrant disconnect` reverts to local |
+| CLI: auto-detect mode in `BuildServices()` | If `sovrant.cli.server_url` in credential store → `AddSovrantClient()` else embedded |
+| CLI: `sovrant login` works against both local and remote | Local: calls embedded `IIdentityService`; remote: `POST /v1/auth/login` |
+| Desktop: mode-selection step in setup wizard | "Local" (default) vs "Remote — enter server URL"; persist choice |
+| Desktop: boot path branches on stored mode | Local → existing embedded init; remote → `AddSovrantClient()` + show login against server URL |
+| Desktop: Settings — switch mode / change server URL | Allow switching without reinstall; requires re-login |
+| Token refresh / re-login on 401 | Both surfaces detect 401 and prompt re-login rather than crashing |
+
+**Out of scope for 85.5:**
+- Certificate pinning / mutual TLS
+- Auto-discovery (mDNS, DNS-SD)
+- Server-side multi-tenancy (each user already gets their own workspace via Phase 85 user identity)
 
 ---
 

@@ -173,6 +173,11 @@
             }
 
             <p class="text-muted text-sm">Settings auto-save when changed.</p>
+
+            <h2>Account</h2>
+            <div class="settings-section-row">
+                <button class="btn btn-secondary" @onclick="LogoutAsync">Log out</button>
+            </div>
         </div>
     }
 </div>
@@ -187,6 +192,8 @@
     [Inject] private IUserPreferenceStore Prefs { get; set; } = default!;
     [Inject] private IProviderProfileStore ProfileStore { get; set; } = default!;
     [Inject] private ICredentialStore Credentials { get; set; } = default!;
+    [Inject] private WebSessionService Session { get; set; } = default!;
+    [Inject] private NavigationManager Nav { get; set; } = default!;
 
     private ISmartRouter? _router;
     private WebSearchOptions? _webSearchOptions;
@@ -499,6 +506,15 @@
         var slug = $"{provider}-{name}".ToLowerInvariant();
         var sanitized = new string(slug.Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
         return sanitized.Trim('-');
+    }
+
+    private const string StoredWebTokenKey = "sovrant.web.auth_token";
+
+    private async Task LogoutAsync()
+    {
+        await Credentials.DeleteAsync(StoredWebTokenKey).ConfigureAwait(false);
+        Session.SignOut();
+        Nav.NavigateTo("/login", forceLoad: false);
     }
 
     private class ProviderProfileVm

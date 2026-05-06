@@ -283,6 +283,16 @@
                 <TextBlock Text="These settings auto-save when changed."
                            FontSize="11" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextMuted}" />
+
+                <!-- Account -->
+                <TextBlock Text="Account" FontSize="16" FontWeight="SemiBold" Margin="0,12,0,0"/>
+                <Separator/>
+                <StackPanel Spacing="6">
+                    <Button Content="Log out"
+                            Command="{Binding LogoutCommand}"
+                            HorizontalAlignment="Left"
+                            Padding="12,6"/>
+                </StackPanel>
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

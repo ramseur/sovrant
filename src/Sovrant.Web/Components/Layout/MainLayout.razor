@@ -30,6 +30,8 @@
                 case "governance":
                     <GovernancePanel OnNavigate="Navigate" />
                     break;
+                case "admin":
+                    break;
             }
         </div>
 
@@ -58,14 +60,20 @@
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private Sovrant.Web.Services.ActiveContextService ActiveContext { get; set; } = default!;
+    [Inject] private Sovrant.Web.Services.WebSessionService Session { get; set; } = default!;
 
     private string _selectedGroup = "chat";
     private CommandPalette? _palette;
     private DotNetObjectReference<MainLayout>? _dotNetRef;
 
-    private readonly string _userName = Environment.UserName;
-    private readonly string _userInitial = Environment.UserName.Length > 0
-        ? Environment.UserName[..1].ToUpperInvariant() : "U";
+    private string _userName => Session.UserId ?? Environment.UserName;
+    private string _userInitial => (_userName.Length > 0 ? _userName[..1] : "U").ToUpperInvariant();
+
+    protected override void OnInitialized()
+    {
+        if (!Session.IsAuthenticated)
+            Nav.NavigateTo("/login", forceLoad: false);
+    }
 
     private void OnGroupSelected(string group)
     {
@@ -79,6 +87,10 @@
         {
             ActiveContext.StartNewSession();
             Nav.NavigateTo("/", forceLoad: false);
+        }
+        else if (group == "admin")
+        {
+            Nav.NavigateTo("/admin", forceLoad: false);
         }
     }
 

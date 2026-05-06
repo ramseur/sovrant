@@ -1,0 +1,268 @@
+@page "/admin"
+@using Sovrant.Runtime.Auth
+@using Sovrant.Runtime.Users
+@using Sovrant.Web.Services
+
+@inject IIdentityService IdentityService
+@inject IUserService UserService
+@inject ITokenService TokenService
+@inject WebSessionService Session
+@inject NavigationManager Nav
+
+<div class="settings-page">
+    <div class="diag-header">
+        <h1>Admin</h1>
+        <span class="item-count">@_users.Count users</span>
+    </div>
+
+    <div class="tab-bar">
+        <button class="tab-btn @(_tab == 0 ? "active" : "")" @onclick="() => _tab = 0">Users</button>
+        <button class="tab-btn @(_tab == 1 ? "active" : "")" @onclick="() => _tab = 1">Registration</button>
+        <button class="tab-btn @(_tab == 2 ? "active" : "")" @onclick="() => _tab = 2">Password Reset</button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="status-message">@_status</div>
+    }
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="page-error-banner" role="alert">
+            <span>&#9888;</span>
+            <span class="error-message">@_error</span>
+        </div>
+    }
+
+    @if (_tab == 0)
+    {
+        <!-- Users tab -->
+        <div class="settings-section">
+            <div class="input-group" style="margin-bottom:12px">
+                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_userFilter" @bind:after="FilterUsers">
+                    <option value="all">All users</option>
+                    <option value="pending">Pending approval</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Disabled</option>
+                </select>
+            </div>
+
+            @if (_isLoading)
+            {
+                <p class="loading-row">Loading users…</p>
+            }
+            else if (_filtered.Count == 0)
+            {
+                <p class="text-secondary">No users found.</p>
+            }
+            else
+            {
+                <div class="memory-list">
+                    @foreach (var u in _filtered)
+                    {
+                        <div class="memory-card">
+                            <div class="memory-content">
+                                <div class="memory-text">
+                                    <strong>@(u.Email ?? u.Username)</strong>
+                                    <span class="outcome-badge @StatusClass(u.Status)">@u.Status</span>
+                                    @if (u.Role == "admin")
+                                    {
+                                        <span class="outcome-badge info">admin</span>
+                                    }
+                                </div>
+                                <div class="memory-meta">
+                                    <span class="text-muted text-sm">@u.UserId</span>
+                                    <span class="text-muted text-sm">joined @u.CreatedAt.LocalDateTime.ToString("d")</span>
+                                </div>
+                            </div>
+                            <div class="memory-actions">
+                                @if (u.Status == "pending")
+                                {
+                                    <button class="btn btn-sm btn-primary" @onclick="() => ApproveAsync(u.UserId)">Approve</button>
+                                }
+                                @if (u.Status == "active" && u.UserId != Session.UserId)
+                                {
+                                    <button class="btn btn-sm btn-danger" @onclick="() => DisableAsync(u.UserId)">Disable</button>
+                                }
+                                @if (u.Status == "inactive")
+                                {
+                                    <button class="btn btn-sm" @onclick="() => ReactivateAsync(u.UserId)">Reactivate</button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @if (_tab == 1)
+    {
+        <!-- Registration tab -->
+        <div class="settings-section">
+            <h2>Registration</h2>
+            <p class="text-muted text-sm">Controls who can create new accounts.</p>
+
+            <div class="toggle-row" style="margin-top:16px">
+                <div>
+                    <div class="toggle-title">Open registration</div>
+                    <div class="toggle-desc">Allow new users to register. Automatically closed after the first user signs up.</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" checked="@_registrationOpen" @onchange="ToggleRegistrationAsync" />
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <div class="toggle-row" style="margin-top:16px">
+                <div>
+                    <div class="toggle-title">Require admin approval</div>
+                    <div class="toggle-desc">New accounts start as pending and cannot log in until an admin approves them.</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" checked="@_approvalRequired" @onchange="ToggleApprovalAsync" />
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    }
+
+    @if (_tab == 2)
+    {
+        <!-- Password Reset tab -->
+        <div class="settings-section">
+            <h2>Password Reset</h2>
+            <p class="text-muted text-sm">Generate a one-time reset token for a user. Share the token out-of-band — it expires in 24 hours and can only be used once.</p>
+
+            <div class="form-field" style="margin-top:16px">
+                <label>User</label>
+                <select class="login-input" @bind="_resetTargetUserId">
+                    <option value="">— select user —</option>
+                    @foreach (var u in _users.Where(u => u.Status == "active"))
+                    {
+                        <option value="@u.UserId">@(u.Email ?? u.Username)</option>
+                    }
+                </select>
+            </div>
+
+            <button class="btn btn-primary" style="margin-top:8px"
+                    @onclick="GenerateResetTokenAsync"
+                    disabled="@(string.IsNullOrEmpty(_resetTargetUserId))">
+                Generate reset token
+            </button>
+
+            @if (!string.IsNullOrEmpty(_resetToken))
+            {
+                <div class="card" style="margin-top:16px;padding:12px 16px;word-break:break-all">
+                    <div class="text-muted text-sm" style="margin-bottom:6px">One-time reset token (share securely):</div>
+                    <code style="font-size:13px;color:var(--brand-primary)">@_resetToken</code>
+                    <div class="text-muted text-sm" style="margin-top:6px">Expires in 24 hours.</div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private int _tab;
+    private bool _isLoading = true;
+    private string _userFilter = "all";
+    private string _status = string.Empty;
+    private string _error = string.Empty;
+    private string _resetTargetUserId = string.Empty;
+    private string _resetToken = string.Empty;
+    private bool _registrationOpen;
+    private bool _approvalRequired;
+
+    private List<User> _users = [];
+    private List<User> _filtered = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAuthenticated || !Session.IsAdmin)
+        {
+            Nav.NavigateTo("/", forceLoad: false);
+            return;
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _error = string.Empty;
+        try
+        {
+            _users = (await UserService.ListAsync().ConfigureAwait(false)).ToList();
+            FilterUsers();
+            _registrationOpen = await IdentityService.IsRegistrationOpenAsync().ConfigureAwait(false);
+            _approvalRequired = await IdentityService.IsApprovalRequiredAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex) { _error = $"Load failed: {ex.Message}"; }
+        finally { _isLoading = false; }
+    }
+
+    private void FilterUsers()
+    {
+        _filtered = _userFilter == "all"
+            ? _users
+            : _users.Where(u => u.Status == _userFilter).ToList();
+    }
+
+    private async Task ApproveAsync(string userId)
+    {
+        _status = string.Empty;
+        var ok = await IdentityService.ApproveUserAsync(userId).ConfigureAwait(false);
+        _status = ok ? "User approved." : "Approval failed — user may no longer be pending.";
+        await LoadAsync();
+    }
+
+    private async Task DisableAsync(string userId)
+    {
+        _status = string.Empty;
+        await UserService.DeactivateAsync(userId).ConfigureAwait(false);
+        _status = "User disabled.";
+        await LoadAsync();
+    }
+
+    private async Task ReactivateAsync(string userId)
+    {
+        _status = string.Empty;
+        await UserService.ReactivateAsync(userId).ConfigureAwait(false);
+        _status = "User reactivated.";
+        await LoadAsync();
+    }
+
+    private async Task ToggleRegistrationAsync(ChangeEventArgs e)
+    {
+        _registrationOpen = (bool)(e.Value ?? false);
+        await IdentityService.SetRegistrationOpenAsync(_registrationOpen).ConfigureAwait(false);
+        _status = _registrationOpen ? "Registration opened." : "Registration closed.";
+    }
+
+    private async Task ToggleApprovalAsync(ChangeEventArgs e)
+    {
+        _approvalRequired = (bool)(e.Value ?? false);
+        await IdentityService.SetApprovalRequiredAsync(_approvalRequired).ConfigureAwait(false);
+        _status = _approvalRequired ? "Approval requirement enabled." : "Approval requirement disabled.";
+    }
+
+    private async Task GenerateResetTokenAsync()
+    {
+        _resetToken = string.Empty;
+        _status = string.Empty;
+        try
+        {
+            _resetToken = await IdentityService.GenerateResetTokenAsync(_resetTargetUserId).ConfigureAwait(false);
+        }
+        catch (Exception ex) { _error = $"Failed: {ex.Message}"; }
+    }
+
+    private static string StatusClass(string status) => status switch
+    {
+        "active"   => "success",
+        "pending"  => "warn",
+        "inactive" => "fail",
+        _          => "unknown",
+    };
+}

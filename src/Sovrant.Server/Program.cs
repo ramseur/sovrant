@@ -102,6 +102,10 @@ builder.Services.AddSignalR()
 builder.Services.AddSingleton<BearerTokenMiddleware>();
 builder.Services.AddSingleton<RequestLoggingMiddleware>();
 
+// IPrincipalAccessor — reads the authenticated caller from HttpContext.Items.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<Sovrant.Runtime.Auth.IPrincipalAccessor, Sovrant.Server.Auth.HttpContextPrincipalAccessor>();
+
 // CORS — configurable via SOVRANT_CORS_ORIGINS (comma-separated); falls back to localhost defaults.
 var defaultCorsOrigins = new[]
 {

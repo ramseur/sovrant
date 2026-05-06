@@ -43,7 +43,7 @@ internal sealed partial class SqliteUserStore : IUserService
 
     private static readonly HashSet<string> AllowedStatuses = new(StringComparer.Ordinal)
     {
-        "active", "inactive",
+        "active", "inactive", "pending",
     };
 
     private const int MaxTeamLength = 64;

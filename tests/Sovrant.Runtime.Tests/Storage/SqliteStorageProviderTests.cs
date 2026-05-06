@@ -63,30 +63,28 @@ public sealed class SqliteStorageProviderTests : IAsyncDisposable
     [Fact]
     public async Task InitializeAsync_SeedIsIdempotent_NoDuplicateRows()
     {
-        // Phase 42.5 item 2 — verify SeedDefaultUser + SeedPersonalWorkspace
-        // do not create duplicate rows when InitializeAsync is called twice.
+        // Verify repeated InitializeAsync calls are idempotent and don't seed any rows.
         await _provider.InitializeAsync();
         await _provider.InitializeAsync();
 
         using var conn = ((ISqliteConnectionFactory)_provider).CreateReadOnlyConnection();
 
-        // Exactly one user row for the default user.
+        // No users are seeded automatically — registration creates them.
         using var userCmd = conn.CreateCommand();
         userCmd.CommandText = "SELECT COUNT(*) FROM users";
         var userCount = Convert.ToInt64(userCmd.ExecuteScalar());
-        Assert.Equal(1, userCount);
+        Assert.Equal(0, userCount);
 
-        // Exactly one personal workspace.
+        // No workspaces or members seeded automatically.
         using var wsCmd = conn.CreateCommand();
-        wsCmd.CommandText = "SELECT COUNT(*) FROM workspaces WHERE type = 'personal'";
+        wsCmd.CommandText = "SELECT COUNT(*) FROM workspaces";
         var wsCount = Convert.ToInt64(wsCmd.ExecuteScalar());
-        Assert.Equal(1, wsCount);
+        Assert.Equal(0, wsCount);
 
-        // Exactly one workspace_members row linking the two.
         using var memberCmd = conn.CreateCommand();
         memberCmd.CommandText = "SELECT COUNT(*) FROM workspace_members";
         var memberCount = Convert.ToInt64(memberCmd.ExecuteScalar());
-        Assert.Equal(1, memberCount);
+        Assert.Equal(0, memberCount);
     }
 
     [Fact]

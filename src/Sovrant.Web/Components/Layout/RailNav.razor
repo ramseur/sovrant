@@ -3,6 +3,8 @@
     single secondary sidebar. Settings + avatar are rendered separately
     in the sidebar footer to avoid duplicating them at the bottom.
 *@
+@using Sovrant.Web.Services
+@inject WebSessionService Session
 
 <div class="rail-icons-row">
     <button class="rail-icon @(Selected == "chat" ? "active" : "")"
@@ -17,6 +19,11 @@
             title="Connect" @onclick='() => OnSelect.InvokeAsync("connect")'>&#x1F50C;</button>
     <button class="rail-icon @(Selected == "governance" ? "active" : "")"
             title="Governance" @onclick='() => OnSelect.InvokeAsync("governance")'>&#x1F6E1;&#xFE0F;</button>
+    @if (Session.IsAdmin)
+    {
+        <button class="rail-icon @(Selected == "admin" ? "active" : "")"
+                title="Admin" @onclick='() => OnSelect.InvokeAsync("admin")'>&#x2699;&#xFE0F;</button>
+    }
 </div>
 
 @code {

@@ -238,6 +238,7 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<IUserService>(),
                 sp.GetRequiredService<Sovrant.Runtime.Auth.ITokenService>(),
                 sp.GetRequiredService<Sovrant.Runtime.Auth.IPasswordHasher>(),
+                sp.GetRequiredService<Sovrant.Runtime.Workspaces.IWorkspaceService>(),
                 sp.GetRequiredService<ISqliteConnectionFactory>(),
                 sp.GetRequiredService<ILogger<Sovrant.Runtime.Auth.SqliteIdentityService>>()));
 

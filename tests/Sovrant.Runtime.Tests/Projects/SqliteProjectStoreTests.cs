@@ -24,10 +24,10 @@ public sealed class SqliteProjectStoreTests : IAsyncDisposable
         _workspaceService = new SqliteWorkspaceStore(factory);
         _projectService = new SqliteProjectStore(factory, _workspaceService);
 
-        _userId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
+        _userId = "test-project-owner";
 
-        // The default user and personal workspace are seeded by SqliteStorageProvider.
-        // Create a team workspace for tests.
+        // Seed the test user, then create a team workspace.
+        SeedUser(_userId);
         var ws = _workspaceService.CreateTeamWorkspaceAsync("Test Team", $"test-team-{Guid.NewGuid():N}", _userId)
             .GetAwaiter().GetResult();
         _workspaceId = ws.WorkspaceId;

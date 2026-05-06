@@ -960,6 +960,101 @@ root.Add(uninstallCmd);
 // ── 'document' subcommand group ──────────────────────────────────────────────
 root.Add(DocumentCommand.Build(BuildServices));
 
+// ── 'login' subcommand ────────────────────────────────────────────────────────
+const string CliTokenKey = "sovrant.cli.auth_token";
+var loginEmailOpt = new Option<string?>("--email") { Description = "Account email address." };
+var loginPasswordOpt = new Option<string?>("--password") { Description = "Account password." };
+var loginCmd = new Command("login", "Authenticate with a Sovrant server and store a session token.");
+loginCmd.Add(loginEmailOpt);
+loginCmd.Add(loginPasswordOpt);
+loginCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    var email = pr.GetValue(loginEmailOpt)
+        ?? AnsiConsole.Prompt(new TextPrompt<string>("Email:").PromptStyle("cyan"));
+    var password = pr.GetValue(loginPasswordOpt)
+        ?? AnsiConsole.Prompt(new TextPrompt<string>("Password:").PromptStyle("cyan").Secret());
+
+    await using var sp = BuildServices(pr);
+    var storage = sp.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>();
+    await storage.InitializeAsync(ct).ConfigureAwait(false);
+
+    var identity = sp.GetRequiredService<Sovrant.Runtime.Auth.IIdentityService>();
+    var result = await identity.LoginAsync(email, password, ct).ConfigureAwait(false);
+    if (!result.Success || result.Token is null)
+    {
+        AnsiConsole.MarkupLine($"[red]Login failed: {Markup.Escape(result.Error ?? "unknown error")}[/]");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    var store = sp.GetRequiredService<Sovrant.Runtime.Mcp.ICredentialStore>();
+    await store.StoreAsync(CliTokenKey, result.Token, ct).ConfigureAwait(false);
+    AnsiConsole.MarkupLine($"[green]Logged in as {Markup.Escape(result.UserId ?? email)} ({Markup.Escape(result.Role ?? "user")}).[/]");
+});
+root.Add(loginCmd);
+
+// ── 'logout' subcommand ───────────────────────────────────────────────────────
+var logoutCmd = new Command("logout", "Revoke the stored session token.");
+logoutCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    await using var sp = BuildServices(pr);
+    var storage = sp.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>();
+    await storage.InitializeAsync(ct).ConfigureAwait(false);
+
+    var store = sp.GetRequiredService<Sovrant.Runtime.Mcp.ICredentialStore>();
+    var plaintext = await store.RetrieveAsync(CliTokenKey, ct).ConfigureAwait(false);
+    if (string.IsNullOrEmpty(plaintext))
+    {
+        AnsiConsole.MarkupLine("[yellow]No stored session token — already logged out.[/]");
+        return;
+    }
+
+    var tokens = sp.GetRequiredService<Sovrant.Runtime.Auth.ITokenService>();
+    var resolved = await tokens.ResolveAsync(plaintext, ct).ConfigureAwait(false);
+    if (resolved is not null)
+    {
+        var identity = sp.GetRequiredService<Sovrant.Runtime.Auth.IIdentityService>();
+        await identity.LogoutAsync(resolved.Token.TokenId, ct).ConfigureAwait(false);
+    }
+
+    await store.DeleteAsync(CliTokenKey, ct).ConfigureAwait(false);
+    AnsiConsole.MarkupLine("[green]Logged out.[/]");
+});
+root.Add(logoutCmd);
+
+// ── 'whoami' subcommand ───────────────────────────────────────────────────────
+var whoamiCmd = new Command("whoami", "Show the currently authenticated user.");
+whoamiCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    await using var sp = BuildServices(pr);
+    var storage = sp.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>();
+    await storage.InitializeAsync(ct).ConfigureAwait(false);
+
+    var store = sp.GetRequiredService<Sovrant.Runtime.Mcp.ICredentialStore>();
+    var plaintext = await store.RetrieveAsync(CliTokenKey, ct).ConfigureAwait(false);
+    if (string.IsNullOrEmpty(plaintext))
+    {
+        AnsiConsole.MarkupLine("[yellow]Not logged in. Run [bold]sovrant login[/] to authenticate.[/]");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    var tokens = sp.GetRequiredService<Sovrant.Runtime.Auth.ITokenService>();
+    var resolved = await tokens.ResolveAsync(plaintext, ct).ConfigureAwait(false);
+    if (resolved is null)
+    {
+        AnsiConsole.MarkupLine("[red]Stored token is invalid or expired. Run [bold]sovrant login[/] again.[/]");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    AnsiConsole.MarkupLine($"[bold]User:[/] {Markup.Escape(resolved.Token.UserId)}");
+    AnsiConsole.MarkupLine($"[bold]Role:[/] {Markup.Escape(resolved.Role)}");
+    AnsiConsole.MarkupLine($"[bold]Token:[/] {Markup.Escape(resolved.Token.TokenId)}");
+    AnsiConsole.MarkupLine($"[bold]Expires:[/] {Markup.Escape(resolved.Token.ExpiresAt?.ToString("u") ?? "never")}");
+});
+root.Add(whoamiCmd);
+
 // ── REPL (default handler) ────────────────────────────────────────────────────
 root.SetAction(async (ParseResult pr, CancellationToken ct) =>
 {

@@ -65,6 +65,9 @@
         <DataTemplate DataType="vm:PlaceholderViewModel">
             <views:PlaceholderView />
         </DataTemplate>
+        <DataTemplate DataType="vm:AdminViewModel">
+            <views:AdminView />
+        </DataTemplate>
     </Window.DataTemplates>
 
     <Panel>
@@ -96,44 +99,51 @@
                             BorderBrush="{DynamicResource SurfaceBorder}"
                             BorderThickness="0,0,0,1"
                             Padding="6,8">
-                        <UniformGrid Rows="1" Columns="6">
+                        <WrapPanel Orientation="Horizontal">
                             <Button Content="💬" ToolTip.Tip="Chat"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="chat"
-                                    Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
+                                    Width="34" Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
                                     Background="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                     Foreground="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
                             <Button Content="📚" ToolTip.Tip="Knowledge"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="knowledge"
-                                    Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
+                                    Width="34" Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
                                     Background="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                     Foreground="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
                             <Button Content="🤖" ToolTip.Tip="Agents"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="agents"
-                                    Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
+                                    Width="34" Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
                                     Background="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                     Foreground="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
                             <Button Content="🏗" ToolTip.Tip="Workspace"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="workspace"
-                                    Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
+                                    Width="34" Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
                                     Background="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                     Foreground="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
                             <Button Content="🔌" ToolTip.Tip="Connect"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="connect"
-                                    Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
+                                    Width="34" Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
                                     Background="{Binding IsConnectGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                     Foreground="{Binding IsConnectGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
                             <Button Content="🛡" ToolTip.Tip="Governance"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="governance"
-                                    Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
+                                    Width="34" Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
                                     Background="{Binding IsGovernanceGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                     Foreground="{Binding IsGovernanceGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                        </UniformGrid>
+                            <Button Content="⚙" ToolTip.Tip="Admin"
+                                    Command="{Binding SelectGroupCommand}" CommandParameter="admin"
+                                    Width="34" Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
+                                    IsVisible="{Binding IsAdmin}"
+                                    Background="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
+                                    Foreground="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
+                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
+                        </WrapPanel>
                     </Border>
 
                     <!-- Bottom: shared footer — avatar + name on left, settings on the right -->
