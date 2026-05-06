@@ -1,8 +1,8 @@
 # Sovrant Code Review
 
-**Status as of 2026-05-02:** Frozen historical reference. Latest tag: `v0.9.0` (Phase 90 — Public Release Readiness shipped). The findings below were the action list that drove Phases A–K (Round 1/2 fixes) plus the Round 3 UX gap analysis. Everything originally scoped here has been resolved or explicitly deferred — see [roadmap.md](roadmap.md) for current status.
+**Status as of 2026-05-05:** Rounds 1–3 are frozen historical reference (all findings COMPLETE through Phase 90). Round 4 findings (2026-05-05) are the current action list — see Section 15 below.
 
-**Original review timeline:** 2026-04-05 (Round 1) · 2026-04-12 (Round 2 — deep review) · 2026-04-14 (Round 3 — UX gap analysis) · 2026-04-29 (counts refreshed)
+**Original review timeline:** 2026-04-05 (Round 1) · 2026-04-12 (Round 2 — deep review) · 2026-04-14 (Round 3 — UX gap analysis) · 2026-04-29 (counts refreshed) · **2026-05-05 (Round 4 — Web/Server/SDK/recent changes)**
 **Original scope:** Full codebase — Runtime, Providers, Server, Tools, Agents, CLI, Desktop, Web, LSP, MCP, TypeScript SDK
 **Build at time of review:** 1,492 tests passing, 0 warnings (10 test projects). Current build: **1,911 tests passing, 0 failures** post-Phase-90.
 
@@ -1099,3 +1099,144 @@ The following order maximizes perceived quality improvement per unit of effort:
 | 12 | 14.11 File watching | Med–Large | Medium | "Work alongside me" use case enabler. |
 
 **Bottom line:** Items 1–4 can ship in a single sprint and bring the UX from "functional prototype" to "credible tool." Items 5–8 close the remaining visible gap with competitors. Items 9–12 move into "best in class" territory.
+
+---
+
+# Round 4 — Web / Server / SDK / Recent Changes (2026-05-05)
+
+**Scope:** Web (Blazor), Server (ASP.NET Core routes + middleware), TypeScript SDK, and six files modified in the Phase 90+ sessions (MCP intent gate, capability catalog, free-badge model picker, model persistence fix).
+**Build at time of review:** 1,911 tests passing, 0 failures.
+**Prior findings:** All Rounds 1–3 findings verified COMPLETE. No re-reporting of closed items.
+
+---
+
+## 15. HIGH Issues (Round 4)
+
+### 15.1 Plaintext API Keys Written to Global Process Environment
+**Layer:** Web, Desktop
+**Files:** `src/Sovrant.Web/Components/Layout/TopContextBar.razor:343,352` · `src/Sovrant.Desktop/ViewModels/SidebarViewModel.cs:240-243,290-292`
+**Problem:** When a user selects a provider profile, the API key is written to the process environment via `Environment.SetEnvironmentVariable("LLM_API_KEY", ...)`. In Blazor Server (embedded mode), all concurrent user sessions share one process — so session A's API key becomes readable by session B between requests. In Desktop the risk is lower (single user), but env vars persist for the lifetime of the process and are readable by any child process spawned by the agent (Bash, PowerShell, REPL).
+**Fix:** Do not write API keys to global env vars. Pass the key through `SovrantConfig` (singleton) or a scoped `IAuthProvider` only. The `AuthProvider.ApiKey` property already exists for this purpose.
+**Note:** Sovrant.Web is designed as a single-user local app, so the immediate risk is low — but this is a blocker before any hosted/multi-user deployment.
+
+### 15.2 API Keys Persisted in Blazor Component State
+**Layer:** Web
+**File:** `src/Sovrant.Web/Components/Layout/TopContextBar.razor:191-203,228`
+**Problem:** `_providerProfiles` (a `List<ProviderProfileItem>`) holds plaintext API keys retrieved from `ICredentialStore` for all configured providers. This list lives in the Blazor component's render state for the lifetime of the SignalR circuit. If the browser DevTools are open, an attacker with local access can enumerate SignalR messages and see the full list. The `TreeGroup` objects (lines 228, 332) also carry `ApiKey` fields that persist in component state.
+**Fix:** Retrieve credentials on-demand (at model-selection time) rather than loading all of them upfront. Clear `ApiKey` from `TreeGroup` after use. At minimum, use `[JSInvokable]` isolation to avoid exposing the full profile list in component state.
+
+### 15.3 Missing HashSet Deduplication in Desktop FetchModelIdsAsync
+**Layer:** Desktop
+**File:** `src/Sovrant.Desktop/ViewModels/SidebarViewModel.cs` (FetchModelIdsAsync)
+**Problem:** Web's `FetchModelIdsAsync` added a `HashSet`-based dedup (Round 4 fix, commit `13de129`) to handle OpenRouter returning duplicate model IDs. Desktop's equivalent method was not updated with the same fix — it still appends all returned IDs without deduplication, so OpenRouter duplicates produce double entries in the Desktop model dropdown.
+**Fix:** Apply the same `HashSet<string>(StringComparer.OrdinalIgnoreCase)` guard to Desktop's `FetchModelIdsAsync`, identical to the Web implementation.
+
+### 15.4 Race Condition on `_mcpHintInjected` Flag
+**Layer:** Runtime
+**File:** `src/Sovrant.Runtime/Conversation/ConversationRuntime.cs` (`_mcpHintInjected` field, MCP hint injection block)
+**Problem:** `_mcpHintInjected` is a plain `bool` field. `RuntimeSessionPool` reuses `ConversationRuntime` instances per session, and concurrent requests to the same session (possible via parallel API calls) can both see `_mcpHintInjected == false`, both call `BuildMcpHint()`, and both append the hint to `_systemPrompt` — resulting in duplicate MCP hints in the prompt.
+**Fix:** Guard the hint injection with `lock (this)` or use `Interlocked.CompareExchange` on an `int` flag.
+
+### 15.5 `BuildMcpHint()` Exception Not Caught
+**Layer:** Runtime
+**File:** `src/Sovrant.Runtime/Conversation/ConversationRuntime.cs` (hint injection path)
+**Problem:** `BuildMcpHint()` is called without a try-catch. If the MCP server registry throws (e.g., store unavailable), the exception propagates and aborts the turn entirely rather than degrading gracefully (no hint, conversation continues normally).
+**Fix:** Wrap the call:
+```csharp
+string? hint = null;
+try { hint = BuildMcpHint(); }
+catch (Exception ex) { _logger.LogWarning(ex, "Failed to build MCP hint; continuing without it"); }
+```
+
+---
+
+## 16. MEDIUM Issues (Round 4)
+
+### 16.1 `ICapabilityCatalog` Properties Could Be Null at Runtime
+**Layer:** Runtime
+**File:** `src/Sovrant.Runtime/Conversation/ConversationRuntime.cs` (`BuildSystemPrompt`)
+**Problem:** `BuildSystemPrompt` checks `if (catalog is not null)` then accesses `catalog.Skills.Count` and `catalog.AgentTemplateNames.Count`. The `ICapabilityCatalog` interface declares both as `IReadOnlyList<T>`, but a future implementation returning null for either property would cause `NullReferenceException`.
+**Fix:** Add null guards: `catalog.Skills?.Count > 0`. Also ensure `CapabilityCatalog` documents the contract that it must never return null for either property.
+
+### 16.2 `ApplyUserPreferencesAsync` Applies Values Without Validation
+**Layer:** Runtime
+**File:** `src/Sovrant.Runtime/ServiceCollectionExtensions.cs` (ApplyUserPreferencesAsync)
+**Problem:** Values read from `IUserPreferenceStore` (model name, MaxTokens, BaseUrl) are applied directly to `SovrantConfig` with only type-conversion checks (e.g., `int.TryParse` for MaxTokens). A corrupted or malicious preference store can inject an invalid model name (bypassing `InputValidation.IsValidModelName`) or an extreme MaxTokens value.
+**Fix:** Validate with `InputValidation.IsValidModelName(model)` before assigning. Clamp MaxTokens to a reasonable range (e.g., 1–2,000,000).
+
+### 16.3 `ApplyUserPreferencesAsync` Not Wrapped in Try-Catch
+**Layer:** Runtime
+**File:** `src/Sovrant.Runtime/ServiceCollectionExtensions.cs` (startup path)
+**Problem:** `await ApplyUserPreferencesAsync(services, userId, ct)` is awaited directly during runtime initialization with no exception handler. If the preference store or credential store is unavailable at boot, the entire runtime init fails hard. The preference load is a best-effort operation — failure should fall through to defaults.
+**Fix:**
+```csharp
+try { await ApplyUserPreferencesAsync(services, userId, ct); }
+catch (Exception ex) { logger.LogWarning(ex, "Could not apply user preferences; using defaults"); }
+```
+
+### 16.4 Fire-and-Forget Tasks in `SidebarViewModel` Constructor
+**Layer:** Desktop
+**File:** `src/Sovrant.Desktop/ViewModels/SidebarViewModel.cs` (constructor)
+**Problem:** `_ = LoadProviderProfilesAsync()` and similar calls in the ViewModel constructor have no exception handling. If either method throws, the exception becomes an unobserved task exception which can terminate the process under certain `TaskScheduler.UnobservedTaskException` configurations.
+**Fix:** Attach a continuation:
+```csharp
+_ = LoadProviderProfilesAsync().ContinueWith(
+    t => Log.Warning(t.Exception, "Failed to load provider profiles"),
+    TaskContinuationOptions.OnlyOnFaulted);
+```
+
+---
+
+## 17. SDK Endpoint Coverage Gaps (Round 4)
+
+The following server endpoints have no corresponding method in `sdk/js/src/client.ts`. Priority-ordered by user-facing importance:
+
+| Priority | Method | Endpoint | Missing SDK Method |
+|---|---|---|---|
+| HIGH | GET | `/v1/artifacts` | `listArtifacts()` |
+| HIGH | GET | `/v1/artifacts/{runId}/{**path}` | `getArtifact(runId, path)` |
+| HIGH | DELETE | `/v1/artifacts/{runId}` | `deleteArtifact(runId)` |
+| HIGH | POST | `/v1/missions/{id}/run` | `runMission(id)` — create exists, run does not |
+| HIGH | POST | `/v1/teams/{id}/runs` | `startTeamRun(teamId, prompt)` |
+| MED | GET/PUT | `/v1/workspaces/{id}/config` | `getWorkspaceConfig()` / `updateWorkspaceConfig()` |
+| MED | GET/POST/DELETE | `/v1/workspaces/{id}/memory` | `getWorkspaceMemory()` / `addWorkspaceMemory()` / `deleteWorkspaceMemory()` |
+| MED | GET/PUT | `/v1/projects/{id}/config` | `getProjectConfig()` / `updateProjectConfig()` |
+| MED | POST | `/v1/projects/{id}/archive` | `archiveProject(id)` |
+| MED | POST | `/v1/projects/{id}/unarchive` | `unarchiveProject(id)` |
+| LOW | GET | `/v1/engine/runs/{id}/trace` | `getEngineTrace(runId)` |
+| LOW | POST | `/v1/engine/runs/recover` | `recoverEngineRuns()` |
+| LOW | GET | `/v1/evals/{suite}/history` | `getEvalHistory(suite)` |
+| LOW | GET/POST/DELETE | `/v1/knowledge/{kind}/{slug}` | Full knowledge CRUD |
+
+**Total gaps: ~20 endpoints.** The high-priority gaps (artifacts, mission run, team runs) are needed for any SDK consumer building a full orchestration UI.
+
+---
+
+## 18. Recommended Fix Order (Round 4)
+
+### Phase L — Security & Stability (do first)
+
+| # | Issue | Effort | Risk if Unfixed |
+|---|-------|--------|-----------------|
+| 15.1 | Remove env var API key writes | Low | Credential leak in multi-user/hosted scenarios |
+| 15.2 | Credential exposure in Blazor component state | Medium | API keys in browser-accessible circuit state |
+| 15.4 | `_mcpHintInjected` race condition | Low | Duplicate MCP hints under concurrent load |
+| 15.5 | `BuildMcpHint` exception not caught | Low | Turn aborted on MCP registry error |
+| 16.3 | `ApplyUserPreferencesAsync` not try-caught | Low | Hard boot failure if pref store unavailable |
+
+### Phase M — Quality & Correctness
+
+| # | Issue | Effort | Risk if Unfixed |
+|---|-------|--------|-----------------|
+| 15.3 | Desktop FetchModelIdsAsync dedup | Low | Duplicate models in Desktop dropdown |
+| 16.1 | ICapabilityCatalog null guard | Low | NPE on future implementation change |
+| 16.2 | Preference validation before apply | Low | Config corruption via store |
+| 16.4 | Fire-and-forget in SidebarViewModel | Low | Silent startup failures |
+
+### Phase N — SDK Coverage
+
+| # | Issue | Effort | Risk if Unfixed |
+|---|-------|--------|-----------------|
+| 17 (HIGH) | Add `listArtifacts`, `runMission`, `startTeamRun` | Medium | SDK consumers can't use core orchestration features |
+| 17 (MED) | Add workspace/project config + memory methods | Medium | SDK incomplete for workspace management |
+| 17 (LOW) | Add engine trace, eval history, knowledge CRUD | Low | Nice-to-have completeness |
