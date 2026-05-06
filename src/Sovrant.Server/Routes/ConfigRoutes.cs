@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Sovrant.Api.Routing;
 using Sovrant.Runtime.Caching;
 using Sovrant.Runtime.Permissions;
+using Sovrant.Server.Auth;
 using Sovrant.Server.ServerConfig;
 
 namespace Sovrant.Server.Routes;
@@ -45,9 +46,11 @@ internal static class ConfigRoutes
         MutableServerConfig config,
         ISmartRouter router,
         CacheInvalidator cacheInvalidator,
+        HttpContext ctx,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
+        if (!ctx.IsAdmin()) return Results.Forbid();
 
         if (req.Model is not null)
         {

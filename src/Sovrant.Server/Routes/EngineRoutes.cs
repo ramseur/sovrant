@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Sovrant.Runtime.Engine;
 using Sovrant.Runtime.Storage;
+using Sovrant.Server.Auth;
 
 namespace Sovrant.Server.Routes;
 
@@ -57,8 +58,10 @@ internal static class EngineRoutes
         // POST /v1/engine/runs/recover — run EngineRecovery and return what it closed out.
         app.MapPost("/v1/engine/runs/recover", async (
             IEngineRecovery recovery,
+            HttpContext ctx,
             CancellationToken ct) =>
         {
+            if (!ctx.IsAdmin()) return Results.Forbid();
             var recovered = await recovery.RecoverAsync(ct);
             return Results.Json(new { recovered }, s_jsonOptions);
         });
@@ -67,8 +70,10 @@ internal static class EngineRoutes
         app.MapDelete("/v1/engine/runs/{runtimeRunId}", async (
             string runtimeRunId,
             IRuntimeTraceStore traceStore,
+            HttpContext ctx,
             CancellationToken ct) =>
         {
+            if (!ctx.IsAdmin()) return Results.Forbid();
             if (string.IsNullOrWhiteSpace(runtimeRunId))
                 return Results.BadRequest(new { error = "runtimeRunId is required." });
 

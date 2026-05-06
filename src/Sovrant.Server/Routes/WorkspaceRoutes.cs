@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Sovrant.Runtime.Workspaces;
+using Sovrant.Server.Auth;
 using Sovrant.Server.Middleware;
 
 namespace Sovrant.Server.Routes;
@@ -33,12 +34,24 @@ internal static class WorkspaceRoutes
         app.MapDelete("/v1/workspaces/{id}/memory/{memoryId}", DeleteMemory);
     }
 
+    // ── Access control ─────────────────────────────────────────────────────
+
+    private static async Task<IResult?> RequireWorkspaceAccess(
+        HttpContext ctx, string workspaceId, IWorkspaceService svc, CancellationToken ct)
+    {
+        if (ctx.IsAdmin()) return null;
+        var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
+        if (!await svc.IsMemberAsync(workspaceId, userId, ct).ConfigureAwait(false))
+            return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
+        return null;
+    }
+
     // ── Workspace CRUD ─────────────────────────────────────────────────────
 
     private static async Task<IResult> ListWorkspaces(
         HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
-        var userId = ctx.GetUserId() ?? string.Empty;
+        var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
         var workspaces = await svc.ListForUserAsync(userId, ct).ConfigureAwait(false);
         return Results.Ok(new { workspaces });
     }
@@ -52,7 +65,7 @@ internal static class WorkspaceRoutes
         if (string.IsNullOrWhiteSpace(req.Slug))
             return Results.BadRequest(new { error = "Slug is required." });
 
-        var userId = ctx.GetUserId() ?? string.Empty;
+        var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
         try
         {
             var workspace = await svc.CreateTeamWorkspaceAsync(req.Name, req.Slug, userId, ct).ConfigureAwait(false);
@@ -65,16 +78,20 @@ internal static class WorkspaceRoutes
     }
 
     private static async Task<IResult> GetWorkspace(
-        string id, IWorkspaceService svc, CancellationToken ct)
+        string id, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
+        var deny = await RequireWorkspaceAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
         var ws = await svc.GetAsync(id, ct).ConfigureAwait(false);
         return ws is null ? Results.NotFound(new { error = "Workspace not found." }) : Results.Ok(ws);
     }
 
     private static async Task<IResult> UpdateWorkspace(
-        string id, UpdateWorkspaceRequest req, IWorkspaceService svc, CancellationToken ct)
+        string id, UpdateWorkspaceRequest req, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
+        var deny = await RequireWorkspaceAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
         var updated = await svc.UpdateAsync(id, req.Name, req.Slug, ct).ConfigureAwait(false);
         return updated is null
             ? Results.NotFound(new { error = "Workspace not found." })
@@ -82,8 +99,10 @@ internal static class WorkspaceRoutes
     }
 
     private static async Task<IResult> DeleteWorkspace(
-        string id, IWorkspaceService svc, CancellationToken ct)
+        string id, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
+        if (!ctx.IsAdmin())
+            return Results.Json(new { error = "Admin role required to delete workspaces." }, statusCode: StatusCodes.Status403Forbidden);
         var deleted = await svc.DeleteAsync(id, ct).ConfigureAwait(false);
         if (!deleted)
             return Results.BadRequest(new { error = "Cannot delete workspace. It may be a personal workspace or not found." });
@@ -93,16 +112,20 @@ internal static class WorkspaceRoutes
     // ── Membership ─────────────────────────────────────────────────────────
 
     private static async Task<IResult> ListMembers(
-        string id, IWorkspaceService svc, CancellationToken ct)
+        string id, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
+        var deny = await RequireWorkspaceAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
         var members = await svc.ListMembersAsync(id, ct).ConfigureAwait(false);
         return Results.Ok(new { members });
     }
 
     private static async Task<IResult> AddMember(
-        string id, AddMemberRequest req, IWorkspaceService svc, CancellationToken ct)
+        string id, AddMemberRequest req, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
+        if (!ctx.IsAdmin())
+            return Results.Json(new { error = "Admin role required to manage members." }, statusCode: StatusCodes.Status403Forbidden);
         if (string.IsNullOrWhiteSpace(req.UserId))
             return Results.BadRequest(new { error = "user_id is required." });
 
@@ -115,10 +138,12 @@ internal static class WorkspaceRoutes
     }
 
     private static async Task<IResult> RemoveMember(
-        string id, string userId, IWorkspaceService svc, CancellationToken ct)
+        string id, string userId, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
         if (!InputValidation.IsValidResourceId(userId))
             return Results.BadRequest(new { error = "Invalid user ID format." });
+        if (!ctx.IsAdmin())
+            return Results.Json(new { error = "Admin role required to manage members." }, statusCode: StatusCodes.Status403Forbidden);
         var removed = await svc.RemoveMemberAsync(id, userId, ct).ConfigureAwait(false);
         if (!removed)
             return Results.BadRequest(new { error = "Cannot remove member. They may be the owner or not found." });
@@ -128,9 +153,11 @@ internal static class WorkspaceRoutes
     // ── Invites ────────────────────────────────────────────────────────────
 
     private static async Task<IResult> CreateInvite(
-        string id, CreateInviteRequest req, IWorkspaceService svc, CancellationToken ct)
+        string id, CreateInviteRequest req, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
+        if (!ctx.IsAdmin())
+            return Results.Json(new { error = "Admin role required to manage invites." }, statusCode: StatusCodes.Status403Forbidden);
         if (string.IsNullOrWhiteSpace(req.Email))
             return Results.BadRequest(new { error = "Email is required." });
 
@@ -143,8 +170,10 @@ internal static class WorkspaceRoutes
     }
 
     private static async Task<IResult> DeleteInvite(
-        string id, string inviteId, IWorkspaceService svc, CancellationToken ct)
+        string id, string inviteId, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
+        if (!ctx.IsAdmin())
+            return Results.Json(new { error = "Admin role required to manage invites." }, statusCode: StatusCodes.Status403Forbidden);
         var deleted = await svc.DeleteInviteAsync(inviteId, ct).ConfigureAwait(false);
         return deleted
             ? Results.Ok(new { deleted = inviteId })
@@ -158,7 +187,7 @@ internal static class WorkspaceRoutes
         if (string.IsNullOrWhiteSpace(req.Token))
             return Results.BadRequest(new { error = "Token is required." });
 
-        var userId = ctx.GetUserId() ?? string.Empty;
+        var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
         var accepted = await svc.AcceptInviteAsync(req.Token, userId, ct).ConfigureAwait(false);
         return accepted
             ? Results.Ok(new { accepted = true })
@@ -168,16 +197,20 @@ internal static class WorkspaceRoutes
     // ── Config ─────────────────────────────────────────────────────────────
 
     private static async Task<IResult> GetConfig(
-        string id, IWorkspaceService svc, CancellationToken ct)
+        string id, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
+        var deny = await RequireWorkspaceAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
         var config = await svc.GetConfigAsync(id, ct).ConfigureAwait(false);
         return Results.Ok(new { config });
     }
 
     private static async Task<IResult> PutConfig(
-        string id, Dictionary<string, string> values, IWorkspaceService svc, CancellationToken ct)
+        string id, Dictionary<string, string> values, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(values);
+        if (!ctx.IsAdmin())
+            return Results.Json(new { error = "Admin role required to update workspace config." }, statusCode: StatusCodes.Status403Forbidden);
         await svc.SetConfigAsync(id, values, ct).ConfigureAwait(false);
         return Results.Ok(new { updated = true });
     }
@@ -185,8 +218,10 @@ internal static class WorkspaceRoutes
     // ── Usage ──────────────────────────────────────────────────────────────
 
     private static async Task<IResult> GetUsage(
-        string id, IWorkspaceService svc, CancellationToken ct)
+        string id, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
+        var deny = await RequireWorkspaceAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
         var usage = await svc.GetUsageAsync(id, ct).ConfigureAwait(false);
         return Results.Ok(usage);
     }
@@ -194,16 +229,20 @@ internal static class WorkspaceRoutes
     // ── Memory ─────────────────────────────────────────────────────────────
 
     private static async Task<IResult> ListMemory(
-        string id, string? layer, IWorkspaceService svc, CancellationToken ct)
+        string id, string? layer, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
+        var deny = await RequireWorkspaceAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
         var memory = await svc.ListMemoryAsync(id, layer, ct).ConfigureAwait(false);
         return Results.Ok(new { memory });
     }
 
     private static async Task<IResult> SaveMemory(
-        string id, SaveWorkspaceMemoryRequest req, IWorkspaceService svc, CancellationToken ct)
+        string id, SaveWorkspaceMemoryRequest req, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
+        var deny = await RequireWorkspaceAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
         if (string.IsNullOrWhiteSpace(req.Layer))
             return Results.BadRequest(new { error = "Layer is required." });
         if (string.IsNullOrWhiteSpace(req.Content))
@@ -225,8 +264,10 @@ internal static class WorkspaceRoutes
     }
 
     private static async Task<IResult> DeleteMemory(
-        string id, string memoryId, IWorkspaceService svc, CancellationToken ct)
+        string id, string memoryId, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
+        var deny = await RequireWorkspaceAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
         var deleted = await svc.DeleteMemoryAsync(memoryId, ct).ConfigureAwait(false);
         return deleted
             ? Results.Ok(new { deleted = memoryId })
