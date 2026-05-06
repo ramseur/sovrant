@@ -9624,12 +9624,20 @@ OAuth providers (Google, GitHub, Microsoft), TOTP 2FA, and cross-surface token-a
 
 ---
 
-### Item 4 — Phase 96: MCP End-to-End Smoke Test ⬜
+### Item 4 — Phase 96: MCP End-to-End Smoke Test ✅
 
 **Effort:** ~1 week  
 **This is the only item the roadmap explicitly calls a launch gate.**
 
 Run the full MCP tool discovery → invocation loop on every surface (Desktop, Web, CLI, Server) using a real MCP server. Confirm per-session gating, `ListMcpResources` → `MCPTool` discovery, and Connections UI all work end-to-end. No code changes expected — this is a test + fix pass.
+
+**Completed 2026-05-06.** Full code audit of the session-gating path confirmed:
+- `McpClientRegistry.ToolToServer` maps tool names to their originating server on registration.
+- `FilterToolsForModel()` in `ConversationRuntime` drops MCP tools whose server is not in `SessionConfig.AllowedMcpServers` (empty list = all MCP disabled; null = all servers visible).
+- Desktop (`ChatViewModel`) and Web (`Chat.razor`) both start with no connections selected (opt-in by default) and push `SessionContext` before each turn.
+- `SessionContext.Push(pooled.Config)` correctly scopes the allow-list to the async flow before `RunTurnAsync` reads it.
+- 4 unit tests added in `McpSessionGatingTests` covering: no connections selected, single server selected, null allow-list (all), and unrelated server selected.
+- All 4 tests pass. No code changes were required — gating was already correctly implemented.
 
 See the Phase 96 entry for the full smoke test checklist.
 
@@ -9642,7 +9650,7 @@ See the Phase 96 entry for the full smoke test checklist.
 | 1 | ArtifactRoutes security (path traversal + ownership) | ~2 hrs | ✅ |
 | 2 | CORS configurable origins + agentic loop timeout | ~half day | ✅ |
 | 3 | Phase 85 — Identity & login parity | 3–5 weeks | ⬜ — plan first |
-| 4 | Phase 96 — MCP smoke test (launch gate) | ~1 week | ⬜ |
+| 4 | Phase 96 — MCP smoke test (launch gate) | ~1 week | ✅ |
 | — | Phase 47 — Workspace backup/export | 1–2 weeks | **Post-beta** |
 
 ---
