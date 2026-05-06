@@ -102,20 +102,28 @@ builder.Services.AddSignalR()
 builder.Services.AddSingleton<BearerTokenMiddleware>();
 builder.Services.AddSingleton<RequestLoggingMiddleware>();
 
-// CORS — localhost only.
+// CORS — configurable via SOVRANT_CORS_ORIGINS (comma-separated); falls back to localhost defaults.
+var defaultCorsOrigins = new[]
+{
+    "http://localhost",
+    "http://localhost:3000",
+    "http://localhost:5100",
+    "http://localhost:5173",
+    "http://localhost:8080",
+    "http://127.0.0.1",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5100",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8080",
+};
+var corsOriginsEnv = Environment.GetEnvironmentVariable("SOVRANT_CORS_ORIGINS");
+var corsOrigins = !string.IsNullOrWhiteSpace(corsOriginsEnv)
+    ? corsOriginsEnv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    : defaultCorsOrigins;
+
 builder.Services.AddCors(o => o.AddDefaultPolicy(policy =>
     policy
-        .WithOrigins(
-            "http://localhost",
-            "http://localhost:3000",
-            "http://localhost:5100",
-            "http://localhost:5173",
-            "http://localhost:8080",
-            "http://127.0.0.1",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:5100",
-            "http://127.0.0.1:5173",
-            "http://127.0.0.1:8080")
+        .WithOrigins(corsOrigins)
         .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
         .WithHeaders("Content-Type", "Accept", "Authorization", "X-Session-Id", "X-Workspace-Id", "X-Project-Id", "X-LLM-Api-Key", "X-LLM-Base-Url")
         .AllowCredentials()));

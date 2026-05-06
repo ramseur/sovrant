@@ -209,7 +209,15 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         _history.Add(InputMessage.UserText(userMessage));
         await AppendSessionEntryAsync("user", userMessage, ct).ConfigureAwait(false);
 
+        var turnTimeoutSeconds = int.TryParse(
+            Environment.GetEnvironmentVariable("SOVRANT_TURN_TIMEOUT_SECONDS"), out var tts) && tts > 0 ? tts : 300;
+        var originalCt = ct;
+        using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        turnCts.CancelAfter(TimeSpan.FromSeconds(turnTimeoutSeconds));
+        ct = turnCts.Token;
+
         var round = 0;
+        var timedOut = false;
         var consecutiveToolCalls = new Dictionary<string, int>(StringComparer.Ordinal);
         // Tracks (toolName|inputHash) → count for error results. If the same tool
         // is invoked with identical inputs and errors twice, we abort — it's a
@@ -220,6 +228,11 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         string? deterministicFailureMessage = null;
         while (round < MaxToolRounds)
         {
+            if (turnCts.IsCancellationRequested && !originalCt.IsCancellationRequested)
+            {
+                timedOut = true;
+                break;
+            }
             using var turnScope = _logger.BeginScope(
                 new Dictionary<string, object?> { ["turn"] = round });
 
@@ -337,8 +350,18 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             var llmSw = Stopwatch.StartNew();
 
             // Collect all streamed events (buffered to avoid yield-in-try/catch restriction)
-            var (streamEvents, accumulated) = await CollectStreamEventsAsync(resolvedProvider, request, ct)
-                .ConfigureAwait(false);
+            (List<RuntimeEvent> streamEvents, StreamAccumulation accumulated) collectResult = default;
+            try
+            {
+                collectResult = await CollectStreamEventsAsync(resolvedProvider, request, ct)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!originalCt.IsCancellationRequested)
+            {
+                timedOut = true;
+                break;
+            }
+            var (streamEvents, accumulated) = collectResult;
 
             llmSw.Stop();
 
@@ -480,7 +503,16 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 LogToolDispatched(_logger, tu.Name);
                 var toolSw = Stopwatch.StartNew();
 
-                var execResult = await _toolExecutor.ExecuteAsync(tu.Name, toolInput, ct).ConfigureAwait(false);
+                ToolExecutionResult execResult;
+                try
+                {
+                    execResult = await _toolExecutor.ExecuteAsync(tu.Name, toolInput, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!originalCt.IsCancellationRequested)
+                {
+                    timedOut = true;
+                    break;
+                }
 
                 toolSw.Stop();
                 LogToolResult(_logger, tu.Name, toolSw.ElapsedMilliseconds, execResult.IsError);
@@ -526,6 +558,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 }
             }
 
+            if (timedOut) break;
+
             if (deterministicFailureDetected)
             {
                 var raw = deterministicFailureMessage ?? string.Empty;
@@ -548,6 +582,14 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             _history.Add(new InputMessage("user", toolResultInputBlocks));
 
             round++;
+        }
+
+        if (timedOut)
+        {
+            turnSw.Stop();
+            yield return new RuntimeEvent.RuntimeError(
+                $"Turn timed out after {turnTimeoutSeconds} seconds.");
+            yield break;
         }
 
         turnSw.Stop();

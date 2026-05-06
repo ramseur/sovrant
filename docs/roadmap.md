@@ -9563,7 +9563,7 @@ Phase 47 (workspace backup/export) is **post-beta** — the value is clear but i
 
 ---
 
-### Item 2 — CORS Hardening + Agentic Loop Timeout ⬜
+### Item 2 — CORS Hardening + Agentic Loop Timeout ✅
 
 **Effort:** ~half day  
 **Two independent fixes, commit together.**
@@ -9639,8 +9639,8 @@ See the Phase 96 entry for the full smoke test checklist.
 
 | # | Item | Effort | Status |
 |---|---|---|---|
-| 1 | ArtifactRoutes security (path traversal + ownership) | ~2 hrs | ⬜ |
-| 2 | CORS configurable origins + agentic loop timeout | ~half day | ⬜ |
+| 1 | ArtifactRoutes security (path traversal + ownership) | ~2 hrs | ✅ |
+| 2 | CORS configurable origins + agentic loop timeout | ~half day | ✅ |
 | 3 | Phase 85 — Identity & login parity | 3–5 weeks | ⬜ — plan first |
 | 4 | Phase 96 — MCP smoke test (launch gate) | ~1 week | ⬜ |
 | — | Phase 47 — Workspace backup/export | 1–2 weeks | **Post-beta** |
