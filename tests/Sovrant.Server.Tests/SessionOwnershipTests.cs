@@ -22,7 +22,6 @@ public sealed class SessionOwnershipTests : IClassFixture<SovrantWebAppFactory>
 {
     private readonly SovrantWebAppFactory _factory;
     private readonly HttpClient _client;
-    private const string StaticToken = "test-token-123";
 
     public SessionOwnershipTests(SovrantWebAppFactory factory)
     {
@@ -76,13 +75,14 @@ public sealed class SessionOwnershipTests : IClassFixture<SovrantWebAppFactory>
     }
 
     [Fact]
-    public async Task ListSessions_StaticToken_SeesAllSessions()
+    public async Task ListSessions_AdminToken_SeesAllSessions()
     {
-        var bob = await IssueAsync($"sess-static-bob-{Guid.NewGuid():N}", role: "user");
-        var bobSession = $"sess-static-view-{Guid.NewGuid():N}";
+        var admin = await IssueAsync($"sess-admin-{Guid.NewGuid():N}", role: "admin");
+        var bob = await IssueAsync($"sess-admin-bob-{Guid.NewGuid():N}", role: "user");
+        var bobSession = $"sess-admin-view-{Guid.NewGuid():N}";
         _factory.SessionStore.Seed(bobSession, bob.user.UserId, MakeEntry("bob"));
 
-        var resp = await Send(HttpMethod.Get, "/v1/sessions", StaticToken);
+        var resp = await Send(HttpMethod.Get, "/v1/sessions", admin.plaintext);
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
 
         var json = await resp.Content.ReadAsStringAsync();

@@ -155,6 +155,21 @@ internal sealed partial class SqliteUserStore : IUserService
         return await reader.ReadAsync(ct).ConfigureAwait(false) ? ReadUser(reader) : null;
     }
 
+    public async Task<User?> GetByEmailAsync(string email, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(email)) return null;
+
+        using var connection = _connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT user_id, username, email, role, team, status, created_at, updated_at
+            FROM users WHERE email = $email
+            """;
+        cmd.Parameters.AddWithValue("$email", email);
+        using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        return await reader.ReadAsync(ct).ConfigureAwait(false) ? ReadUser(reader) : null;
+    }
+
     public async Task<UserProfile?> GetProfileAsync(string userId, CancellationToken ct = default)
     {
         var user = await GetAsync(userId, ct).ConfigureAwait(false);

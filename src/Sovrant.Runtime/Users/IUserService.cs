@@ -34,6 +34,9 @@ public interface IUserService
     /// <summary>Gets a user by username. Returns <c>null</c> when not found.</summary>
     Task<User?> GetByUsernameAsync(string username, CancellationToken ct = default);
 
+    /// <summary>Gets a user by email address. Returns <c>null</c> when not found.</summary>
+    Task<User?> GetByEmailAsync(string email, CancellationToken ct = default);
+
     /// <summary>Gets the user profile (user + derived stats).</summary>
     Task<UserProfile?> GetProfileAsync(string userId, CancellationToken ct = default);
 

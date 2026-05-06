@@ -112,11 +112,11 @@ public sealed class MeRoutesTests : IClassFixture<SovrantWebAppFactory>
     }
 
     [Fact]
-    public async Task MeRoutes_RejectStaticToken_With400()
+    public async Task MeRoutes_RejectNonSvtToken_With401()
     {
-        // The legacy static token has no associated user, so /me is meaningless.
-        var resp = await Send(HttpMethod.Get, "/v1/users/me", "test-token-123");
-        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+        // Non-svt_ tokens are rejected by BearerTokenMiddleware with 401.
+        var resp = await Send(HttpMethod.Get, "/v1/users/me", "not-a-valid-token");
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────

@@ -1,55 +1,30 @@
-using System.Security.Cryptography;
-using System.Text;
 using Sovrant.Runtime.Auth;
-using Sovrant.Runtime.Config;
 
 namespace Sovrant.Server.Auth;
 
 /// <summary>
-/// Authenticates incoming requests via a bearer token. Phase 38 introduces
-/// per-user tokens alongside the legacy static <c>SOVRANT_TOKEN</c>:
+/// Phase 85 — Authenticates requests via per-user <c>svt_</c> bearer tokens.
+/// The legacy static <c>SOVRANT_TOKEN</c> path has been removed.
 ///
-/// <list type="bullet">
-///   <item>If the bearer value starts with the per-user prefix
-///         (<see cref="ITokenService.TokenPrefix"/>, currently
-///         <c>svt_</c>) it is resolved through <see cref="ITokenService"/>.
-///         A successful resolve attaches <see cref="SovrantHttpContextKeys.UserId"/>,
-///         <see cref="SovrantHttpContextKeys.TokenId"/>, and
-///         <see cref="SovrantHttpContextKeys.AuthMode"/> to <see cref="HttpContext.Items"/>
-///         so downstream routes can scope their data by user.</item>
-///   <item>Otherwise the value is compared in constant time against the
-///         legacy static token from <c>SOVRANT_TOKEN</c> /
-///         <c>Server:Token</c>. On match the request is authenticated as
-///         <see cref="SovrantHttpContextKeys.AuthModeStatic"/> with no user
-///         identity attached — preserving the pre-Phase-38 behaviour for
-///         CI scripts and the local CLI.</item>
-/// </list>
-///
-/// <para><c>/health</c> and <c>OPTIONS</c> preflight remain unauthenticated
-/// so load balancers and browser CORS keep working.</para>
+/// <para>Unauthenticated paths: <c>/health</c>, <c>OPTIONS</c>, and the
+/// auth endpoints (<c>/v1/auth/login</c>, <c>/v1/auth/register</c>,
+/// <c>/v1/auth/use-reset-token</c>, <c>/v1/auth/registration/status</c>).</para>
 /// </summary>
 internal sealed class BearerTokenMiddleware : IMiddleware
 {
-    private readonly byte[] _expectedStaticTokenBytes;
-    private readonly bool _hasStaticToken;
-
-    public BearerTokenMiddleware(BootstrapConfig bootstrap)
+    private static readonly HashSet<string> UnauthenticatedPaths = new(StringComparer.OrdinalIgnoreCase)
     {
-        ArgumentNullException.ThrowIfNull(bootstrap);
-
-        var staticToken = bootstrap.ServerToken ?? string.Empty;
-
-        _hasStaticToken = !string.IsNullOrEmpty(staticToken);
-        _expectedStaticTokenBytes = _hasStaticToken
-            ? Encoding.UTF8.GetBytes(staticToken)
-            : Array.Empty<byte>();
-    }
+        "/v1/auth/login",
+        "/v1/auth/register",
+        "/v1/auth/use-reset-token",
+        "/v1/auth/registration/status",
+    };
 
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
-        // Allow health-check and OPTIONS preflight through unauthenticated.
         if (context.Request.Method == HttpMethods.Options ||
-            context.Request.Path.StartsWithSegments("/health", StringComparison.OrdinalIgnoreCase))
+            context.Request.Path.StartsWithSegments("/health", StringComparison.OrdinalIgnoreCase) ||
+            UnauthenticatedPaths.Contains(context.Request.Path.Value ?? string.Empty))
         {
             await next(context).ConfigureAwait(false);
             return;
@@ -61,62 +36,36 @@ internal sealed class BearerTokenMiddleware : IMiddleware
             return;
         }
 
-        // ── Per-user token path (svt_*) ──────────────────────────────────
-        if (presented.StartsWith(ITokenService.TokenPrefix, StringComparison.Ordinal))
-        {
-            var tokenService = context.RequestServices.GetService<ITokenService>();
-            if (tokenService is null)
-            {
-                // ITokenService is wired by AddSovrantRuntime; if it's missing
-                // the deployment is misconfigured. Fail closed rather than
-                // silently downgrading to the static path.
-                await Reject(context).ConfigureAwait(false);
-                return;
-            }
-
-            var resolved = await tokenService.ResolveAsync(presented, context.RequestAborted).ConfigureAwait(false);
-            if (resolved is null)
-            {
-                await Reject(context).ConfigureAwait(false);
-                return;
-            }
-
-            context.Items[SovrantHttpContextKeys.UserId] = resolved.Token.UserId;
-            context.Items[SovrantHttpContextKeys.TokenId] = resolved.Token.TokenId;
-            context.Items[SovrantHttpContextKeys.Role] = resolved.Role;
-            context.Items[SovrantHttpContextKeys.AuthMode] = SovrantHttpContextKeys.AuthModeToken;
-
-            await next(context).ConfigureAwait(false);
-            return;
-        }
-
-        // ── Legacy static token path ─────────────────────────────────────
-        if (!_hasStaticToken)
+        if (!presented.StartsWith(ITokenService.TokenPrefix, StringComparison.Ordinal))
         {
             await Reject(context).ConfigureAwait(false);
             return;
         }
 
-        var presentedBytes = Encoding.UTF8.GetBytes(presented);
-        if (!CryptographicOperations.FixedTimeEquals(presentedBytes, _expectedStaticTokenBytes))
+        var tokenService = context.RequestServices.GetRequiredService<ITokenService>();
+        var resolved = await tokenService.ResolveAsync(presented, context.RequestAborted).ConfigureAwait(false);
+        if (resolved is null)
         {
             await Reject(context).ConfigureAwait(false);
             return;
         }
 
-        context.Items[SovrantHttpContextKeys.AuthMode] = SovrantHttpContextKeys.AuthModeStatic;
+        context.Items[SovrantHttpContextKeys.UserId] = resolved.Token.UserId;
+        context.Items[SovrantHttpContextKeys.TokenId] = resolved.Token.TokenId;
+        context.Items[SovrantHttpContextKeys.Role] = resolved.Role;
+        context.Items[SovrantHttpContextKeys.AuthMode] = SovrantHttpContextKeys.AuthModeToken;
+
         await next(context).ConfigureAwait(false);
     }
 
-    private static async Task Reject(HttpContext context)
+    private static Task Reject(HttpContext context)
     {
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        await context.Response.WriteAsJsonAsync(new { error = "Unauthorized" }).ConfigureAwait(false);
+        return context.Response.WriteAsJsonAsync(new { error = "Unauthorized" });
     }
 
     private static bool TryExtractToken(HttpContext context, out string token)
     {
-        // Standard Authorization header.
         var header = context.Request.Headers.Authorization.FirstOrDefault();
         if (header is not null && header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {

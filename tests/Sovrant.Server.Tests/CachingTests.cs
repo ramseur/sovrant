@@ -8,14 +8,18 @@ namespace Sovrant.Server.Tests;
 public sealed class CachingTests : IClassFixture<SovrantWebAppFactory>
 {
     private readonly HttpClient _client;
+    private readonly SovrantWebAppFactory _factory;
 
-    public CachingTests(SovrantWebAppFactory factory) =>
+    public CachingTests(SovrantWebAppFactory factory)
+    {
+        _factory = factory;
         _client = factory.CreateClient();
+    }
 
     private HttpRequestMessage AuthGet(string path)
     {
         var req = new HttpRequestMessage(HttpMethod.Get, path);
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "test-token-123");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _factory.TestAdminToken);
         return req;
     }
 
@@ -43,7 +47,7 @@ public sealed class CachingTests : IClassFixture<SovrantWebAppFactory>
     {
         // POST /v1/chat/completions — must never have cache headers.
         var req = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions");
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "test-token-123");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _factory.TestAdminToken);
         req.Content = new StringContent(
             JsonSerializer.Serialize(new
             {
@@ -146,7 +150,7 @@ public sealed class CachingTests : IClassFixture<SovrantWebAppFactory>
 
         // PUT config to change model.
         var putReq = new HttpRequestMessage(HttpMethod.Put, "/v1/config");
-        putReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "test-token-123");
+        putReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _factory.TestAdminToken);
         putReq.Content = new StringContent(
             JsonSerializer.Serialize(new { model = "test-model-changed" }),
             System.Text.Encoding.UTF8,

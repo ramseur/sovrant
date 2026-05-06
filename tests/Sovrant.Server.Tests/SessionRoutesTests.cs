@@ -19,7 +19,7 @@ public sealed class SessionRoutesTests : IClassFixture<SovrantWebAppFactory>
     private HttpRequestMessage Auth(HttpMethod method, string path)
     {
         var req = new HttpRequestMessage(method, path);
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "test-token-123");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _factory.TestAdminToken);
         return req;
     }
 

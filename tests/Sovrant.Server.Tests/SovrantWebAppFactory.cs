@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Api.Providers;
 using Sovrant.Api.Routing;
 using Sovrant.Api.Types;
+using Sovrant.Runtime.Auth;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Governance;
@@ -29,10 +30,38 @@ public sealed class SovrantWebAppFactory : WebApplicationFactory<Program>
     /// <summary>The fake runtime shared across all tests using this factory.</summary>
     public FakeConversationRuntime Runtime { get; } = new();
 
+    private readonly object _tokenLock = new();
+    private volatile string? _testAdminToken;
+
+    /// <summary>
+    /// A valid <c>svt_</c> bearer token for the seeded test admin user.
+    /// Lazily issued on first access using the seed user that <see cref="SqliteStorageProvider"/>
+    /// creates at startup. All tests in the same fixture share one token.
+    /// Thread-safe via double-checked locking.
+    /// </summary>
+    public string TestAdminToken
+    {
+        get
+        {
+            if (_testAdminToken is not null) return _testAdminToken;
+            lock (_tokenLock)
+            {
+                if (_testAdminToken is not null) return _testAdminToken;
+                // SqliteStorageProvider seeds a user from SOVRANT_USER_ID || Environment.UserName.
+                // Issue a token for that user directly via ITokenService.
+                var seedUserId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
+                var tokens = Server.Services.GetRequiredService<ITokenService>();
+                var issued = tokens.IssueAsync(seedUserId, name: "test-admin", expiresAt: DateTimeOffset.UtcNow.AddDays(30))
+                    .GetAwaiter().GetResult();
+                _testAdminToken = issued.Plaintext;
+            }
+            return _testAdminToken!;
+        }
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // Set required env vars before the host builds.
-        Environment.SetEnvironmentVariable("SOVRANT_TOKEN", "test-token-123");
         Environment.SetEnvironmentVariable("LLM_API_KEY", "fake-key");
         Environment.SetEnvironmentVariable("LLM_BASE_URL", "https://api.example.com/v1");
 

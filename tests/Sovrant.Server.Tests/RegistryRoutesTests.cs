@@ -8,14 +8,18 @@ namespace Sovrant.Server.Tests;
 public sealed class RegistryRoutesTests : IClassFixture<SovrantWebAppFactory>
 {
     private readonly HttpClient _client;
+    private readonly SovrantWebAppFactory _factory;
 
-    public RegistryRoutesTests(SovrantWebAppFactory factory) =>
+    public RegistryRoutesTests(SovrantWebAppFactory factory)
+    {
+        _factory = factory;
         _client = factory.CreateClient();
+    }
 
     private HttpRequestMessage AuthGet(string path)
     {
         var req = new HttpRequestMessage(HttpMethod.Get, path);
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "test-token-123");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _factory.TestAdminToken);
         return req;
     }
 

@@ -4,8 +4,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Sovrant.Runtime.Auth;
 using Sovrant.Server.Auth;
-using Sovrant.Runtime.Config;
 
 namespace Sovrant.Server.Tests.Auth;
 
@@ -15,7 +15,8 @@ namespace Sovrant.Server.Tests.Auth;
 /// </summary>
 public sealed class BearerTokenQueryStringTests
 {
-    private const string TestToken = "test-token-123";
+    // A valid svt_-prefixed test token accepted by the FakeTokenService below.
+    private const string TestToken = "svt_test_bearer_query_string_token";
 
     [Fact]
     public async Task Hub_Path_With_QueryString_Token_Is_Authenticated()
@@ -72,10 +73,7 @@ public sealed class BearerTokenQueryStringTests
         var builder = new WebHostBuilder()
             .ConfigureServices(services =>
             {
-                services.AddSingleton(new BootstrapConfig
-                {
-                    ServerToken = TestToken,
-                });
+                services.AddSingleton<ITokenService>(new FakeTokenService(TestToken));
                 services.AddSingleton<BearerTokenMiddleware>();
             })
             .Configure(app =>
@@ -91,4 +89,28 @@ public sealed class BearerTokenQueryStringTests
         return Task.FromResult(new TestServer(builder));
     }
     #pragma warning restore ASPDEPR004
+
+    /// <summary>Accepts a single known plaintext token; rejects all others.</summary>
+    private sealed class FakeTokenService(string acceptedToken) : ITokenService
+    {
+        private static readonly ResolvedToken FakeResolved = new()
+        {
+            Token = new ApiToken { TokenId = "tok_test", UserId = "usr_test", TokenPrefix = "svt_test_bear", CreatedAt = DateTimeOffset.UtcNow },
+            Role = "admin",
+        };
+
+        public Task<TokenIssueResult> IssueAsync(string userId, string? name = null, string? scopes = null, DateTimeOffset? expiresAt = null, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<ApiToken>> ListAsync(string userId, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> RevokeAsync(string tokenId, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<ResolvedToken?> ResolveAsync(string plaintextToken, CancellationToken ct = default) =>
+            Task.FromResult(string.Equals(plaintextToken, acceptedToken, StringComparison.Ordinal)
+                ? FakeResolved
+                : null);
+    }
 }

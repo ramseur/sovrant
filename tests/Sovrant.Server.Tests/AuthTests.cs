@@ -7,9 +7,13 @@ namespace Sovrant.Server.Tests;
 public sealed class AuthTests : IClassFixture<SovrantWebAppFactory>
 {
     private readonly HttpClient _client;
+    private readonly SovrantWebAppFactory _factory;
 
-    public AuthTests(SovrantWebAppFactory factory) =>
+    public AuthTests(SovrantWebAppFactory factory)
+    {
+        _factory = factory;
         _client = factory.CreateClient();
+    }
 
     [Fact]
     public async Task Health_NoAuth_Returns200()
@@ -62,7 +66,7 @@ public sealed class AuthTests : IClassFixture<SovrantWebAppFactory>
     public async Task AuthenticatedRoute_ValidToken_Returns200()
     {
         var req = new HttpRequestMessage(HttpMethod.Get, "/v1/config");
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "test-token-123");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _factory.TestAdminToken);
 
         var resp = await _client.SendAsync(req);
 

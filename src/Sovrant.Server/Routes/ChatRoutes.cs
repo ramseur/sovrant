@@ -34,8 +34,6 @@ internal static class ChatRoutes
         MutableServerConfig serverConfig,
         ISmartRouter router,
         ToolRegistrar toolRegistrar,
-        IHttpClientFactory httpClientFactory,
-        IScopedProviderFactory scopedProviderFactory,
         IToolExecutor toolExecutor,
         IToolRegistry toolRegistry,
         ISessionStore sessionStore,
@@ -47,65 +45,19 @@ internal static class ChatRoutes
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        // Phase 38 — pull the authenticated caller so sessions created by
-        // this request are owner-tagged in SQLite. Null for legacy static
-        // SOVRANT_TOKEN callers (treated as admin; owner stays legacy default).
+        // Pull the authenticated caller so sessions are owner-tagged in SQLite.
         var ownerUserId = ctx.GetUserId();
 
         // Seed tools (no-op if already registered).
         toolRegistrar.RegisterAll();
 
-        // Determine whether per-request credentials override the global provider.
-        // Credentials are passed via headers, never in the request body.
-        var scopedApiKey = ctx.Request.Headers["X-LLM-Api-Key"].FirstOrDefault();
-        var scopedBaseUrl = ctx.Request.Headers["X-LLM-Base-Url"].FirstOrDefault();
-        var hasScopedCredentials = !string.IsNullOrWhiteSpace(scopedApiKey);
+        // Use the global router; credentials come from the server-side keystore.
+        var activeRouter = router;
+        await activeRouter.InitializeAsync(ct).ConfigureAwait(false);
 
-        ISmartRouter activeRouter;
-        if (hasScopedCredentials)
-        {
-            // Build a request-scoped provider + router using the client-supplied credentials.
-            // The server never logs or persists the API key.
-            var baseUrl = !string.IsNullOrWhiteSpace(scopedBaseUrl)
-                ? scopedBaseUrl
-                : serverConfig.LlmBaseUrl;
-            if (!baseUrl.EndsWith('/')) baseUrl += "/";
-
-            // Validate the base URL to prevent SSRF attacks against internal networks.
-            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var parsedUrl)
-                || (parsedUrl.Scheme != "https" && parsedUrl.Scheme != "http"))
-            {
-                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await ctx.Response.WriteAsJsonAsync(
-                    new { error = "Invalid X-LLM-Base-Url: must be an absolute http or https URL." }, ct)
-                    .ConfigureAwait(false);
-                return;
-            }
-
-            if (await IsReservedAddressAsync(parsedUrl.Host).ConfigureAwait(false))
-            {
-                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await ctx.Response.WriteAsJsonAsync(
-                    new { error = "Invalid X-LLM-Base-Url: reserved or private network addresses are not allowed." }, ct)
-                    .ConfigureAwait(false);
-                return;
-            }
-
-            var scopedHttp = httpClientFactory.CreateClient("ScopedProvider");
-            scopedHttp.BaseAddress = parsedUrl;
-
-            activeRouter = scopedProviderFactory.Create(scopedHttp, scopedApiKey!);
-        }
-        else
-        {
-            // Use the global router with normal smart routing.
-            activeRouter = router;
-            await activeRouter.InitializeAsync(ct).ConfigureAwait(false);
-
-            var pinned = serverConfig.PinnedProvider;
-            if (pinned is not null)
-                await activeRouter.PinProviderAsync(pinned, ct).ConfigureAwait(false);
-        }
+        var pinned = serverConfig.PinnedProvider;
+        if (pinned is not null)
+            await activeRouter.PinProviderAsync(pinned, ct).ConfigureAwait(false);
 
         // Resolve the runtime and optional per-session lock for this request.
         IConversationRuntime runtime;
@@ -140,30 +92,11 @@ internal static class ChatRoutes
                 }
             }
 
-            // Session pool key includes the provider tag when per-request credentials are used
-            // so two users with the same session_id but different providers stay isolated.
-            var status = activeRouter.GetStatus();
-            var providerTag = status.Count > 0 ? status[0].Name : "scoped";
-            var poolKey = hasScopedCredentials
-                ? $"{req.SessionId}::{providerTag}"
-                : req.SessionId;
-
-            var pooled = hasScopedCredentials
-                ? await sessionPool.GetOrCreateAsync(poolKey, activeRouter, ownerUserId, ct).ConfigureAwait(false)
-                : await sessionPool.GetOrCreateAsync(poolKey, scopedRouterOverride: null, ownerUserId: ownerUserId, ct: ct).ConfigureAwait(false);
+            var pooled = await sessionPool.GetOrCreateAsync(req.SessionId, scopedRouterOverride: null, ownerUserId: ownerUserId, ct: ct).ConfigureAwait(false);
 
             runtime = pooled.Runtime;
             sessionLock = pooled.Lock;
             sessionConfig = pooled.Config;
-        }
-        else if (hasScopedCredentials)
-        {
-            // Stateless one-shot with scoped credentials — build a transient runtime manually.
-            var runtimeLogger = loggerFactory.CreateLogger<ConversationRuntime>();
-            runtime = new ConversationRuntime(
-                activeRouter, toolExecutor, toolRegistry, sessionStore, sovrantConfig, runtimeLogger, hookRunner,
-                settings: workspaceSettings);
-            await runtime.InitializeSessionAsync(sessionId: null, ownerUserId: ownerUserId, ct).ConfigureAwait(false);
         }
         else
         {
@@ -435,6 +368,4 @@ internal static class ChatRoutes
         await ctx.Response.WriteAsJsonAsync(response, ct).ConfigureAwait(false);
     }
 
-    private static Task<bool> IsReservedAddressAsync(string host) =>
-        SsrfGuard.IsReservedAddressAsync(host);
 }

@@ -9,14 +9,18 @@ namespace Sovrant.Server.Tests;
 public sealed class ConfigRoutesTests : IClassFixture<SovrantWebAppFactory>
 {
     private readonly HttpClient _client;
+    private readonly SovrantWebAppFactory _factory;
 
-    public ConfigRoutesTests(SovrantWebAppFactory factory) =>
+    public ConfigRoutesTests(SovrantWebAppFactory factory)
+    {
+        _factory = factory;
         _client = factory.CreateClient();
+    }
 
     private HttpRequestMessage AuthGet(string path)
     {
         var req = new HttpRequestMessage(HttpMethod.Get, path);
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "test-token-123");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _factory.TestAdminToken);
         return req;
     }
 
@@ -26,7 +30,7 @@ public sealed class ConfigRoutesTests : IClassFixture<SovrantWebAppFactory>
         {
             Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json"),
         };
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "test-token-123");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _factory.TestAdminToken);
         return req;
     }
 

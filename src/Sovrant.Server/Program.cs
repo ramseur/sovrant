@@ -125,7 +125,7 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(policy =>
     policy
         .WithOrigins(corsOrigins)
         .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-        .WithHeaders("Content-Type", "Accept", "Authorization", "X-Session-Id", "X-Workspace-Id", "X-Project-Id", "X-LLM-Api-Key", "X-LLM-Base-Url")
+        .WithHeaders("Content-Type", "Accept", "Authorization", "X-Session-Id", "X-Workspace-Id", "X-Project-Id")
         .AllowCredentials()));
 
 // Per-session rate limiting — keyed on session_id from the request body or "anonymous".
@@ -151,15 +151,6 @@ builder.Services.AddRateLimiter(options =>
         });
     });
 });
-
-// ── Startup validation ────────────────────────────────────────────────────────
-if (string.IsNullOrEmpty(bootstrapConfig.ServerToken))
-{
-    throw new InvalidOperationException(
-        "A server bearer token is required. Set it via SOVRANT_TOKEN, " +
-        "the \"serverToken\" field of sovrant.config, or --config <path>. " +
-        "Clients must supply this token to authenticate requests.");
-}
 
 // ── App pipeline ──────────────────────────────────────────────────────────────
 var app = builder.Build();
@@ -219,7 +210,13 @@ mutableConfig.Model = sovrantConfig.Model;
 if (sovrantConfig.BaseUrl is not null)
     mutableConfig.LlmBaseUrl = sovrantConfig.BaseUrl.ToString();
 
+// First-run hint — log a startup message when no users exist yet.
+var identityService = app.Services.GetRequiredService<Sovrant.Runtime.Auth.IIdentityService>();
+if (await identityService.IsFirstRunAsync().ConfigureAwait(false))
+    app.Logger.LogInformation("No users configured — visit POST /v1/auth/register to create the first admin account.");
+
 // Routes.
+AuthRoutes.Map(app);
 ChatRoutes.Map(app);
 ConfigRoutes.Map(app);
 StatusRoutes.Map(app);

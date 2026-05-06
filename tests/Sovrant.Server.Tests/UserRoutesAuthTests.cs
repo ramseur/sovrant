@@ -16,16 +16,12 @@ namespace Sovrant.Server.Tests;
 ///         403 a non-admin per-user caller and 200 an admin caller.</item>
 ///   <item>Self-or-admin routes (GET single, sessions/usage/audit) must
 ///         403 a non-admin reading another user's row.</item>
-///   <item>Static-token (legacy SOVRANT_TOKEN) callers must keep working
-///         on every route — they are the bootstrap god-token and count as
-///         admin so existing CI scripts don't break.</item>
 /// </list>
 /// </summary>
 public sealed class UserRoutesAuthTests : IClassFixture<SovrantWebAppFactory>
 {
     private readonly SovrantWebAppFactory _factory;
     private readonly HttpClient _client;
-    private const string StaticToken = "test-token-123";
 
     public UserRoutesAuthTests(SovrantWebAppFactory factory)
     {
@@ -48,14 +44,6 @@ public sealed class UserRoutesAuthTests : IClassFixture<SovrantWebAppFactory>
         var admin = await IssueAsync("usr-auth-admin", role: "admin");
 
         var resp = await Send(HttpMethod.Get, "/v1/users", admin.plaintext);
-        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-    }
-
-    [Fact]
-    public async Task AdminRoute_StaticToken_Returns200()
-    {
-        // Legacy bootstrap god-token must still work for CI / local CLI.
-        var resp = await Send(HttpMethod.Get, "/v1/users", StaticToken);
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
     }
 

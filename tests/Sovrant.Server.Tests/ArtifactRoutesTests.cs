@@ -10,16 +10,18 @@ namespace Sovrant.Server.Tests;
 public sealed class ArtifactRoutesTests : IClassFixture<SovrantWebAppFactory>
 {
     private readonly HttpClient _client;
+    private readonly SovrantWebAppFactory _factory;
 
     public ArtifactRoutesTests(SovrantWebAppFactory factory)
     {
+        _factory = factory;
         _client = factory.CreateClient();
     }
 
     private HttpRequestMessage Auth(HttpMethod method, string path)
     {
         var req = new HttpRequestMessage(method, path);
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "test-token-123");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _factory.TestAdminToken);
         return req;
     }
 

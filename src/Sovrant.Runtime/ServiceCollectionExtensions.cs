@@ -230,6 +230,17 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<ISqliteConnectionFactory>(),
                 sp.GetRequiredService<ILogger<Sovrant.Runtime.Auth.SqliteTokenService>>()));
 
+        // Phase 85 — password hasher + identity service
+        services.AddSingleton<Sovrant.Runtime.Auth.IPasswordHasher,
+            Sovrant.Runtime.Auth.Argon2idPasswordHasher>();
+        services.AddSingleton<Sovrant.Runtime.Auth.IIdentityService>(sp =>
+            new Sovrant.Runtime.Auth.SqliteIdentityService(
+                sp.GetRequiredService<IUserService>(),
+                sp.GetRequiredService<Sovrant.Runtime.Auth.ITokenService>(),
+                sp.GetRequiredService<Sovrant.Runtime.Auth.IPasswordHasher>(),
+                sp.GetRequiredService<ISqliteConnectionFactory>(),
+                sp.GetRequiredService<ILogger<Sovrant.Runtime.Auth.SqliteIdentityService>>()));
+
         // Swarm event store (Phase 37.5) — SQLite-backed, replaces the JSONL session store.
         services.AddSingleton<ISwarmEventStore>(sp =>
             new SqliteSwarmEventStore(sp.GetRequiredService<ISqliteConnectionFactory>()));

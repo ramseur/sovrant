@@ -198,6 +198,23 @@ internal sealed partial class SqliteTokenService : ITokenService
         if (token.ExpiresAt.HasValue && token.ExpiresAt.Value <= DateTimeOffset.UtcNow)
             return null;
 
+        // Sliding-window TTL: refresh expires_at if it would expire within 29 days.
+        // Writes at most once per day per token — avoids a write on every request.
+        if (token.ExpiresAt.HasValue && token.ExpiresAt.Value < DateTimeOffset.UtcNow.AddDays(29))
+        {
+            var newExpiry = DateTimeOffset.UtcNow.AddDays(30);
+            using var refreshCmd = connection.CreateCommand();
+            refreshCmd.CommandText = """
+                UPDATE api_tokens
+                SET expires_at = $expires, last_used_at = $now
+                WHERE token_id = $id
+                """;
+            refreshCmd.Parameters.AddWithValue("$expires", Ts(newExpiry));
+            refreshCmd.Parameters.AddWithValue("$now", Ts(DateTimeOffset.UtcNow));
+            refreshCmd.Parameters.AddWithValue("$id", token.TokenId);
+            await refreshCmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+
         return new ResolvedToken { Token = token, Role = role };
     }
 

@@ -7961,12 +7961,46 @@ for security issues", "summarise this conversation as memory".
 
 ## Phase 85 — Identity & Login Parity Across CLI, Web, Desktop & Server
 
-> **Status:** Pending. Aligns how users are identified and authenticated
-> across all four surfaces so a Sovrant install behaves as one product
-> regardless of how the user enters it. Server's existing per-request
-> credential and bearer-token model for data queries stays as-is; this
-> phase is about the **login** side: a single best-practice email +
-> hashed-password identity that the surfaces share.
+> **Status:** In progress (started 2026-05-06). Server-side auth layer complete; Desktop, Web, CLI surface flows + admin pages pending.
+
+### Design decisions (finalised)
+
+- **First registered user becomes admin**; registration closes automatically after first sign-up. Admin can reopen.
+- **Static `SOVRANT_TOKEN` removed entirely** — only per-user `svt_` tokens are accepted. No backwards-compat shim (pre-release).
+- **Password reset is admin-only, no SMTP required** — admin generates a one-time reset token via the admin page and shares it out-of-band.
+- **Token TTL: 30-day sliding window** — each use refreshes `expires_at` forward 30 days (write throttled to at most once per day per token).
+- **LLM API keys are NOT passed over HTTP** — credentials live in the encrypted keystore, resolved server-side via `ICredentialStore`. The `X-LLM-Api-Key` / `X-LLM-Base-Url` per-request headers are being removed.
+- No JWT, no OAuth providers for beta — plain `svt_` bearer tokens throughout.
+
+### Implementation progress
+
+#### ✅ Completed
+
+| Component | File |
+|---|---|
+| DB migration (`V026__auth_credentials.sql`) | `src/Sovrant.Runtime/Storage/Migrations/` |
+| `IPasswordHasher` + `Argon2idPasswordHasher` | `src/Sovrant.Runtime/Auth/` |
+| `IIdentityService` + `SqliteIdentityService` | `src/Sovrant.Runtime/Auth/` |
+| `SqliteTokenService` sliding TTL | `src/Sovrant.Runtime/Auth/` |
+| `IUserService.GetByEmailAsync` + impl | `src/Sovrant.Runtime/Users/` |
+| `AuthRoutes` (register/login/logout/change-password/use-reset-token/registration) | `src/Sovrant.Server/Routes/` |
+| `BearerTokenMiddleware` rewrite — `svt_` tokens only, static token removed | `src/Sovrant.Server/Auth/` |
+| DI registrations for `IPasswordHasher` + `IIdentityService` | `src/Sovrant.Runtime/ServiceCollectionExtensions.cs` |
+
+#### ⬜ Pending
+
+| Component | File | Notes |
+|---|---|---|
+| Remove `SOVRANT_TOKEN` startup check, register `AuthRoutes`, first-run log hint | `src/Sovrant.Server/Program.cs` | Next up |
+| Remove `X-LLM-Api-Key`/`X-LLM-Base-Url` header processing | `src/Sovrant.Server/Routes/ChatRoutes.cs` | Per-request LLM key injection removed |
+| `POST /v1/users/{id}/reset-password` (admin only) | `src/Sovrant.Server/Routes/UserRoutes.cs` | Returns one-time plaintext reset token |
+| `IPrincipalAccessor` interface + server/embedded impls | `src/Sovrant.Runtime/Auth/` | Replaces `SOVRANT_USER_ID`/os-username implicit identity |
+| Desktop login flow — `LoginWindow`, `LoginViewModel`, `ICredentialStore` token storage | `src/Sovrant.Desktop/` | Boot flow: validate stored token → main window or login screen |
+| Web login/register pages + route guard | `src/Sovrant.Web/Components/Pages/` | Redirect unauthenticated to `/login` |
+| CLI `login` / `logout` / `whoami` commands | `src/Sovrant.Cli/Commands/` | Token stored in `ICredentialStore` |
+| Admin pages (Web + Desktop) | `src/Sovrant.Web/Components/Pages/Admin/`, `src/Sovrant.Desktop/Views/Admin/` | Users, registration toggle, password reset, token list |
+| Unit tests — `IdentityServiceTests`, `PasswordHasherTests` | `tests/Sovrant.Runtime.Tests/Auth/` | |
+| Update `MigrationRunnerTests` expected schema version | `tests/Sovrant.Runtime.Tests/` | 25 → 26 |
 
 ### Goal
 
@@ -9584,43 +9618,27 @@ A stuck tool call (infinite loop, hung subprocess, unresponsive MCP server) occu
 
 ---
 
-### Item 3 — Phase 85: Identity & Login Parity ⬜
+### Item 3 — Phase 85: Identity & Login Parity 🔄
 
-**Effort:** 3–5 weeks (largest item — plan before starting)  
+**Effort:** 3–5 weeks  
 **Goal:** A single identity flows through Desktop, Web, CLI, and Server so a user who logs in on any surface sees the same workspaces, sessions, and memories.
 
-#### Scope decision for beta
+**Started 2026-05-06.** See the Phase 85 spec above for design decisions and full progress tracking.
 
-Full email+password+JWT+per-surface flows is the right end state (see Phase 85 spec). For beta, a **simplified first step** ships the auth endpoints and surface login flows without OAuth providers or TOTP:
+#### Beta scope (locked)
 
-- `POST /v1/auth/register` — email + password (Argon2id), returns API token
-- `POST /v1/auth/login` — email + password, returns API token
-- `POST /v1/auth/logout` — revokes token
-- `POST /v1/auth/forgot-password` / `POST /v1/auth/reset-password` — single-use time-bound token via email (or console log for dev mode)
-- **Desktop** — first-run login/register dialog; token in DPAPI store; "continue as local user" option preserved
-- **Web** — `/login` and `/register` pages; cookie session after login
-- **CLI** — `sovrant login --email --password`; token in OS keychain; `sovrant whoami`
-- **Migration** — existing local-user installs adopt a synthetic account on first login; ownership migrates in place
+- Email + password (Argon2id), `svt_` bearer tokens — no JWT, no OAuth for beta
+- First user = admin; registration closed after first sign-up; admin-only password reset (no SMTP)
+- 30-day sliding token TTL
+- Static `SOVRANT_TOKEN` removed — all surfaces use per-user `svt_` tokens
+- LLM API keys served from keystore; no longer accepted via `X-LLM-Api-Key` headers
+- No backwards-compat migration path (pre-release)
 
-OAuth providers (Google, GitHub, Microsoft), TOTP 2FA, and cross-surface token-audience enforcement are deferred to Phase 40 (enterprise auth).
+#### Remaining work
 
-#### Key implementation components
+Server plumbing (Program.cs cleanup, ChatRoutes header removal), `IPrincipalAccessor`, Desktop login window, Web login/register pages + route guard, CLI login commands, admin pages (Web + Desktop), unit tests, migration count update.
 
-| Component | Location |
-|---|---|
-| `V0XX__user_login.sql` | `src/Sovrant.Runtime/Storage/Migrations/` |
-| `IPasswordHasher` (Argon2id) | `src/Sovrant.Runtime/Auth/` |
-| `IIdentityService` (register/login/reset) | `src/Sovrant.Runtime/Auth/` |
-| `AuthRoutes` | `src/Sovrant.Server/Routes/` |
-| `LoginPage.razor` + `RegisterPage.razor` | `src/Sovrant.Web/Components/Pages/` |
-| Desktop `LoginDialog` | `src/Sovrant.Desktop/Views/` |
-| `OsKeychainTokenStore` | `src/Sovrant.Cli/Auth/` |
-| `sovrant login/logout/whoami` | `src/Sovrant.Cli/Commands/` |
-| `IPrincipalAccessor` | `src/Sovrant.Runtime/Auth/` |
-
-**Acceptance:** A user registers on Desktop and immediately sees the same workspace data when opening Web against the same DB. CLI `sovrant login` resolves the same `UserId`. Existing single-user installs continue to work with no migration required.
-
-> **Plan before building:** Before writing code, produce a design doc / conversation covering: DB migration shape, token format and TTL, surface-by-surface login UX sketches, and local-user migration strategy. Phase 85 is the largest item and deserves an aligned design before implementation starts.
+**Acceptance:** A user registers on Desktop and immediately sees the same workspace data when opening Web against the same DB. CLI `sovrant login` resolves the same `UserId`.
 
 ---
 
@@ -9649,7 +9667,7 @@ See the Phase 96 entry for the full smoke test checklist.
 |---|---|---|---|
 | 1 | ArtifactRoutes security (path traversal + ownership) | ~2 hrs | ✅ |
 | 2 | CORS configurable origins + agentic loop timeout | ~half day | ✅ |
-| 3 | Phase 85 — Identity & login parity | 3–5 weeks | ⬜ — plan first |
+| 3 | Phase 85 — Identity & login parity | 3–5 weeks | 🔄 In progress (server layer done; surfaces pending) |
 | 4 | Phase 96 — MCP smoke test (launch gate) | ~1 week | ✅ |
 | — | Phase 47 — Workspace backup/export | 1–2 weeks | **Post-beta** |
 
