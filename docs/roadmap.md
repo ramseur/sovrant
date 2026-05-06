@@ -3055,6 +3055,8 @@ A later phase adds an integrated terminal panel within the desktop app (similar 
 
 ## Phase 47 — Workspace Backup, Import & Export
 
+> **Status: Post-Beta** — Intentionally deferred past initial public release. The value is clear and the spec is solid, but workspace portability is not a launch blocker. Implement once the beta cohort is established and users start asking for it.
+
 **Depends on:** Phase 35 (Workspaces), Phase 32 (SQLite persistence)
 
 **Goal:** Enable full backup, restore, import, and export of Sovrant workspaces so users can snapshot their work, migrate between machines, share workspace templates, and recover from data loss. A workspace export is a self-contained portable archive containing all sessions, memory, config, credentials (encrypted), agent templates, skills, and audit history.
@@ -9532,6 +9534,116 @@ Also fixed a latent `fetchWithRetry` bug where caller-supplied `Content-Type` he
 | R4-M10 | `Program.cs:106` | CORS allows ports 3000, 5100, 5173, 8080 — untrusted local services can make credentialed requests |
 | 19-C2 | `ChatRoutes.cs:85` | DNS TOCTOU SSRF race (medium effort — needs IP pinning) |
 | 19-C4 / 20-H1 | `ArtifactRoutes.cs` | Path traversal + ownership validation gaps |
+
+---
+
+## Pre-Beta Release Plan (2026-05-06)
+
+> This section defines the ordered work items required before Sovrant is released publicly on GitHub for open beta. Items are listed in execution order — each can be started as soon as the previous is committed.
+
+### Context
+
+The codebase currently works well for a single admin user. Post-beta, the shift is to **multi-user** (multiple people sharing one Sovrant server install), and eventually **multi-tenant** (isolated orgs with separate billing, SSO, and data boundaries). The data model for multi-user already exists (Phases 32, 35, 38 are complete). This pre-beta sprint closes the remaining security gaps, wires up the login layer across all surfaces, and validates the MCP story before the repo goes public.
+
+Phase 47 (workspace backup/export) is **post-beta** — the value is clear but it is not a launch blocker. See its entry for the deferred scope.
+
+---
+
+### Item 1 — ArtifactRoutes Security Fixes ⬜
+
+**Effort:** ~2 hours  
+**Scope:** Two targeted fixes left open from the Round 4 audit.
+
+| Finding | File | Fix |
+|---|---|---|
+| 19-C4 Path traversal | `ArtifactRoutes.cs:73` | `Path.GetFullPath` containment check on `path` param before passing to `store.ReadAsync` — reject anything that escapes the run's artifact root |
+| 20-H1 Ownership bypass | `ArtifactRoutes.cs:59,94` | Call `RequireWorkspaceAccess(scope.WorkspaceId, ctx)` after `ScopeFromQuery()` resolves workspace/project — same pattern already used in WorkspaceRoutes |
+
+**Acceptance:** A `../../` path returns 400. A valid `workspace_id` belonging to another user returns 403.
+
+---
+
+### Item 2 — CORS Hardening + Agentic Loop Timeout ⬜
+
+**Effort:** ~half day  
+**Two independent fixes, commit together.**
+
+#### 2a — Configurable CORS origins (R4-M10)
+
+`Program.cs` currently hardcodes ports 3000, 5100, 5173, 8080. Any untrusted service on those ports can make credentialed requests.
+
+**Fix:** Read allowed origins from `SOVRANT_CORS_ORIGINS` env var (comma-separated). Fall back to the current hardcoded list only when the var is unset, so existing single-user installs are unaffected. Document in `.env.example`.
+
+#### 2b — Agentic loop per-turn wall-clock timeout
+
+A stuck tool call (infinite loop, hung subprocess, unresponsive MCP server) occupies a session indefinitely. With multiple real users this starves the session pool.
+
+**Fix:** Add a configurable `SOVRANT_TURN_TIMEOUT_SECONDS` (default: 300) enforced in `ConversationRuntime`. When the turn deadline is exceeded, cancel the in-flight tool call and emit a `RuntimeError` event so the session is released cleanly. The timeout resets at the start of each new turn, not cumulatively across the conversation.
+
+**Acceptance:** Setting `SOVRANT_CORS_ORIGINS=https://myapp.com` allows only that origin. A turn that exceeds the timeout returns a `RuntimeError` and the session becomes available for the next request within 1s.
+
+---
+
+### Item 3 — Phase 85: Identity & Login Parity ⬜
+
+**Effort:** 3–5 weeks (largest item — plan before starting)  
+**Goal:** A single identity flows through Desktop, Web, CLI, and Server so a user who logs in on any surface sees the same workspaces, sessions, and memories.
+
+#### Scope decision for beta
+
+Full email+password+JWT+per-surface flows is the right end state (see Phase 85 spec). For beta, a **simplified first step** ships the auth endpoints and surface login flows without OAuth providers or TOTP:
+
+- `POST /v1/auth/register` — email + password (Argon2id), returns API token
+- `POST /v1/auth/login` — email + password, returns API token
+- `POST /v1/auth/logout` — revokes token
+- `POST /v1/auth/forgot-password` / `POST /v1/auth/reset-password` — single-use time-bound token via email (or console log for dev mode)
+- **Desktop** — first-run login/register dialog; token in DPAPI store; "continue as local user" option preserved
+- **Web** — `/login` and `/register` pages; cookie session after login
+- **CLI** — `sovrant login --email --password`; token in OS keychain; `sovrant whoami`
+- **Migration** — existing local-user installs adopt a synthetic account on first login; ownership migrates in place
+
+OAuth providers (Google, GitHub, Microsoft), TOTP 2FA, and cross-surface token-audience enforcement are deferred to Phase 40 (enterprise auth).
+
+#### Key implementation components
+
+| Component | Location |
+|---|---|
+| `V0XX__user_login.sql` | `src/Sovrant.Runtime/Storage/Migrations/` |
+| `IPasswordHasher` (Argon2id) | `src/Sovrant.Runtime/Auth/` |
+| `IIdentityService` (register/login/reset) | `src/Sovrant.Runtime/Auth/` |
+| `AuthRoutes` | `src/Sovrant.Server/Routes/` |
+| `LoginPage.razor` + `RegisterPage.razor` | `src/Sovrant.Web/Components/Pages/` |
+| Desktop `LoginDialog` | `src/Sovrant.Desktop/Views/` |
+| `OsKeychainTokenStore` | `src/Sovrant.Cli/Auth/` |
+| `sovrant login/logout/whoami` | `src/Sovrant.Cli/Commands/` |
+| `IPrincipalAccessor` | `src/Sovrant.Runtime/Auth/` |
+
+**Acceptance:** A user registers on Desktop and immediately sees the same workspace data when opening Web against the same DB. CLI `sovrant login` resolves the same `UserId`. Existing single-user installs continue to work with no migration required.
+
+> **Plan before building:** Before writing code, produce a design doc / conversation covering: DB migration shape, token format and TTL, surface-by-surface login UX sketches, and local-user migration strategy. Phase 85 is the largest item and deserves an aligned design before implementation starts.
+
+---
+
+### Item 4 — Phase 96: MCP End-to-End Smoke Test ⬜
+
+**Effort:** ~1 week  
+**This is the only item the roadmap explicitly calls a launch gate.**
+
+Run the full MCP tool discovery → invocation loop on every surface (Desktop, Web, CLI, Server) using a real MCP server. Confirm per-session gating, `ListMcpResources` → `MCPTool` discovery, and Connections UI all work end-to-end. No code changes expected — this is a test + fix pass.
+
+See the Phase 96 entry for the full smoke test checklist.
+
+---
+
+### Summary
+
+| # | Item | Effort | Status |
+|---|---|---|---|
+| 1 | ArtifactRoutes security (path traversal + ownership) | ~2 hrs | ⬜ |
+| 2 | CORS configurable origins + agentic loop timeout | ~half day | ⬜ |
+| 3 | Phase 85 — Identity & login parity | 3–5 weeks | ⬜ — plan first |
+| 4 | Phase 96 — MCP smoke test (launch gate) | ~1 week | ⬜ |
+| — | Phase 47 — Workspace backup/export | 1–2 weeks | **Post-beta** |
 
 ---
 
