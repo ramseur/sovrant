@@ -1208,7 +1208,7 @@ The following server endpoints have no corresponding method in `sdk/js/src/clien
 | LOW | GET | `/v1/evals/{suite}/history` | `getEvalHistory(suite)` |
 | LOW | GET/POST/DELETE | `/v1/knowledge/{kind}/{slug}` | Full knowledge CRUD |
 
-**Total gaps: ~20 endpoints.** The high-priority gaps (artifacts, mission run, team runs) are needed for any SDK consumer building a full orchestration UI.
+**Correction (full route audit below):** The initial SDK gap estimate was inaccurate. The full route audit (Section 19) found SDK coverage is near-complete — nearly all endpoints have matching methods. True gaps are limited to Knowledge routes and Command Center.
 
 ---
 
@@ -1223,6 +1223,12 @@ The following server endpoints have no corresponding method in `sdk/js/src/clien
 | 15.4 | `_mcpHintInjected` race condition | Low | Duplicate MCP hints under concurrent load |
 | 15.5 | `BuildMcpHint` exception not caught | Low | Turn aborted on MCP registry error |
 | 16.3 | `ApplyUserPreferencesAsync` not try-caught | Low | Hard boot failure if pref store unavailable |
+| 19-C1 | ConfigRoutes PUT missing admin check | Low | Any token holder can change global model/provider |
+| 19-C3 | EngineRoutes recover missing auth | Low | Any token holder can force-recover engine runs |
+| 19-C5 | WorkspaceRoutes missing access checks | Medium | Any token holder can read/modify any workspace |
+| 19-H3 | MissionRoutes missing ownership checks | Medium | Cross-user mission access |
+| 19-H4 | SwarmRoutes missing ownership checks | Medium | Cross-user swarm access |
+| 19-H5 | TeamRoutes missing ownership checks | Medium | Cross-user team modification |
 
 ### Phase M — Quality & Correctness
 
@@ -1232,11 +1238,162 @@ The following server endpoints have no corresponding method in `sdk/js/src/clien
 | 16.1 | ICapabilityCatalog null guard | Low | NPE on future implementation change |
 | 16.2 | Preference validation before apply | Low | Config corruption via store |
 | 16.4 | Fire-and-forget in SidebarViewModel | Low | Silent startup failures |
+| 19-C2 | ChatRoutes SSRF DNS race | Medium | Internal endpoint probing via timing race |
+| 19-C4 | ArtifactRoutes path traversal | Low | File read outside artifact directory |
+| 19-H2 | EngineRoutes DELETE ownership | Low | Any user deletes any engine trace |
+| 19-H6 | KnowledgeRoutes YAML injection | Low | Malicious YAML saved to disk |
+| 19-M series | Validation gaps (CommandCenter, Config BaseUrl, Webhook SSRF, token expiry) | Low each | Various |
 
 ### Phase N — SDK Coverage
 
 | # | Issue | Effort | Risk if Unfixed |
 |---|-------|--------|-----------------|
-| 17 (HIGH) | Add `listArtifacts`, `runMission`, `startTeamRun` | Medium | SDK consumers can't use core orchestration features |
-| 17 (MED) | Add workspace/project config + memory methods | Medium | SDK incomplete for workspace management |
-| 17 (LOW) | Add engine trace, eval history, knowledge CRUD | Low | Nice-to-have completeness |
+| 19-SDK | Add Command Center SDK method | Low | No SDK access to `/v1/command-center/state` |
+| 19-SDK | Add Knowledge CRUD SDK methods | Low | No SDK access to knowledge routes |
+| 19-SDK | Add MCP server list SDK method | Low | No SDK access to `/v1/mcp/servers` |
+
+---
+
+# Round 4 — Full Server Route Audit (2026-05-05)
+
+**Scope:** All 25 server route files audited line-by-line. BearerTokenMiddleware confirmed solid (constant-time comparison, correct path exclusions). SDK client.ts fully inventoried — coverage is near-complete.
+
+---
+
+## 19. CRITICAL Issues (Route Audit)
+
+### 19-C1 — ConfigRoutes PUT Missing Admin Authorization
+**File:** `src/Sovrant.Server/Routes/ConfigRoutes.cs:43-94`
+**Problem:** `PUT /v1/config` has no `ctx.IsAdmin()` check. Any authenticated user (even a read-only per-user token) can change the global model, base URL, and permission mode — affecting all sessions server-wide.
+**Fix:** Add `if (!ctx.IsAdmin()) return Results.Forbid();` as the first line of the PUT handler.
+
+### 19-C2 — ChatRoutes SSRF DNS Resolution Race (TOCTOU)
+**File:** `src/Sovrant.Server/Routes/ChatRoutes.cs:85-92`
+**Problem:** `IsReservedAddressAsync()` resolves the hostname and checks the IP, but the HTTP client makes a second DNS resolution when the request actually fires. An attacker using dynamic DNS can pass the validation check (DNS points to a public IP) then switch to an internal IP before the actual connection. This is a classic TOCTOU SSRF bypass.
+**Fix:** Pin the resolved IP at validation time and pass it directly to the `HttpClient` via a custom `SocketsHttpHandler` that bypasses DNS on the actual connection, or use a DNS-pinning cache with short TTL.
+
+### 19-C3 — EngineRoutes Recover Endpoint Missing Authorization
+**File:** `src/Sovrant.Server/Routes/EngineRoutes.cs:58-64`
+**Problem:** `POST /v1/engine/runs/recover` has no authorization check. Any authenticated user can force-close or recover crashed engine runs that may belong to other users or system processes.
+**Fix:** Add `if (!ctx.IsAdmin()) return Results.Forbid();`
+
+### 19-C4 — ArtifactRoutes Path Traversal
+**File:** `src/Sovrant.Server/Routes/ArtifactRoutes.cs:73`
+**Problem:** The catch-all route `GET /v1/artifacts/{runId}/{**path}` passes the user-supplied `path` directly to `store.ReadAsync(handle, path, ...)` without normalization. A path like `../../sensitive_file` or URL-encoded variants can escape the artifact directory.
+**Fix:** Validate `path` with `Path.GetFullPath` containment check against the artifact root for the given `runId`. Reject any path that doesn't stay within bounds.
+
+### 19-C5 — WorkspaceRoutes Missing Access Checks on All Instance Endpoints
+**File:** `src/Sovrant.Server/Routes/WorkspaceRoutes.cs:67-234`
+**Problem:** `GET /v1/workspaces` correctly scopes to the caller. But every `{id}` endpoint — GET, PUT, DELETE, members, invites, config, usage, memory — has no ownership or membership validation. Any authenticated user who knows a workspace ID can read its config, members, memory, and usage data, or add/remove members.
+**Fix:** Apply the same `RequireWorkspaceAccess(id, ctx)` pattern used in `ProjectRoutes.cs` to all workspace `{id}` handlers.
+
+---
+
+## 20. HIGH Issues (Route Audit)
+
+### 20-H1 — ArtifactRoutes Missing Ownership Validation
+**File:** `src/Sovrant.Server/Routes/ArtifactRoutes.cs:59,94`
+**Problem:** `ScopeFromQuery()` reads `workspace_id`/`project_id` from query parameters without verifying the caller belongs to that workspace/project. User A can list or delete User B's artifacts by supplying B's workspace ID.
+**Fix:** After resolving scope, call `RequireWorkspaceAccess(scope.WorkspaceId, ctx)`.
+
+### 20-H2 — EngineRoutes DELETE Allows Any User to Delete Any Trace
+**File:** `src/Sovrant.Server/Routes/EngineRoutes.cs:67-77`
+**Problem:** `DELETE /v1/engine/runs/{runtimeRunId}` has no ownership check. Any authenticated user can delete any engine run trace, destroying audit data.
+**Fix:** Either restrict to admin only, or verify the run belongs to `ctx.GetUserId()` before deletion.
+
+### 20-H3 — MissionRoutes Missing Ownership Checks
+**File:** `src/Sovrant.Server/Routes/MissionRoutes.cs:35-125`
+**Problem:** All six mission endpoints (create, list, get, run, events, export) have no ownership validation. User A can view, run, or export User B's missions if they know the mission ID. The `ownerUserId` query parameter on list is not validated against the caller's identity.
+**Fix:** On all `{id}` handlers: verify mission owner matches `ctx.GetUserId()` (or caller is admin). On list: force `ownerUserId = ctx.GetUserId()` unless admin.
+
+### 20-H4 — SwarmRoutes Missing Ownership Checks
+**File:** `src/Sovrant.Server/Routes/SwarmRoutes.cs:33-155`
+**Problem:** All four swarm endpoints have no ownership validation. `ISwarmStateTracker` is queried without owner filter — user A can read user B's swarm results, events, and session history.
+**Fix:** Store swarm owner at creation time. Validate ownership on all `{id}` handlers. Scope `/swarm/sessions` list to caller.
+
+### 20-H5 — TeamRoutes Missing Ownership Checks
+**File:** `src/Sovrant.Server/Routes/TeamRoutes.cs:38-220`
+**Problem:** All team and run endpoints — create, list, get, delete, members, runs, profile update — have no ownership or workspace-membership validation. User A can modify, delete, or run User B's teams. The `workspaceId` and `userId` filter parameters on list/run endpoints are not validated.
+**Fix:** Implement team ownership checks (validate team's `WorkspaceId` caller membership) on all `{id}` handlers. Force `workspaceId` filter to caller's workspaces on list.
+
+### 20-H6 — KnowledgeAuthoringRoutes YAML Injection
+**File:** `src/Sovrant.Server/Routes/KnowledgeAuthoringRoutes.cs:164-183`
+**Problem:** `ValidateFrontmatter()` uses naive string search (`IndexOf("\n---")`) to detect the frontmatter boundary — it doesn't parse YAML. A malicious document body can include `\n---\nname: injected` to pass validation while writing arbitrary YAML to disk. POST and DELETE also have no authorization checks — any user can create or delete knowledge entries.
+**Fix:** Use a proper YAML parser for frontmatter validation. Add `if (!ctx.IsAdmin()) return Results.Forbid();` on write/delete handlers, or at minimum validate workspace membership.
+
+---
+
+## 21. MEDIUM Issues (Route Audit)
+
+| # | File | Issue |
+|---|------|-------|
+| R4-M1 | `CommandCenterRoutes.cs:26` | `owner_user_id` query param not validated — callers can query other users' cockpit state |
+| R4-M2 | `ConfigRoutes.cs:61-63` | `BaseUrl` PUT path doesn't call SSRF check (only `Uri.TryCreate`, no reserved-IP block) |
+| R4-M3 | `ChatRoutes.cs:130-141` | Session ownership bypassed when legacy static `SOVRANT_TOKEN` used (`IsAdmin()` short-circuits) |
+| R4-M4 | `EvalRoutes.cs:90-96` | `suiteName` used in file path resolution without format validation — potential traversal |
+| R4-M5 | `MeRoutes.cs:50-90` | Token `ExpiresAt` not bounds-checked — tokens can be issued with past or far-future expiry |
+| R4-M6 | `MissionRoutes.cs:48-65` | `ownerUserId` list filter accepted from query string, not validated against caller identity |
+| R4-M7 | `TeamRoutes.cs:57-61,202-220` | `workspaceId` and `userId` filter params on list/runs not validated |
+| R4-M8 | `WebhookRoutes.cs:50-61` | `callback_url` validates scheme only — reserved IP addresses not blocked (SSRF) |
+| R4-M9 | `StatusRoutes.cs` | Exposes active provider list, session counts, routing info to any authenticated user |
+| R4-M10 | `Program.cs:106-121` | CORS allows ports 3000, 5100, 5173, 8080 — any untrusted service on those ports can make credentialed requests |
+
+---
+
+## 22. LOW Issues (Route Audit)
+
+| # | File | Issue |
+|---|------|-------|
+| R4-L1 | `ConfigRoutes.cs:30-36` | GET /v1/config returns `PinnedProvider` — internal routing detail exposed to all users |
+| R4-L2 | `CostRoutes.cs:17-23` | Invalid `range` values silently default to daily instead of returning 400 |
+| R4-L3 | `EvalRoutes.cs:12-26` | All eval suites exposed to all authenticated users with no workspace scoping |
+| R4-L4 | `McpServerRoutes.cs:18-36` | Connected MCP server names exposed to all users — helps attackers understand integration surface |
+| R4-L5 | `MeRoutes.cs:50-90` | No per-user limit on number of tokens issued |
+| R4-L6 | `WebhookRoutes.cs:38-47` | No field length validation on `source`, `userId`, `message` |
+
+---
+
+## 23. SDK Coverage — Corrected Inventory (Route Audit)
+
+The initial Round 4 SDK gap estimate was substantially wrong. Full route audit shows SDK coverage is near-complete. **True gaps:**
+
+| Endpoint | SDK Gap |
+|---|---|
+| `GET /v1/command-center/state` | No SDK method — `getCommandCenterState()` missing |
+| `GET /v1/mcp/servers` | No SDK method — `listMcpServers()` missing |
+| `GET /v1/knowledge/{kind}/{slug}/source` | No SDK method |
+| `POST /v1/knowledge/{kind}/{slug}` | No SDK method |
+| `DELETE /v1/knowledge/{kind}/{slug}` | No SDK method |
+
+All other endpoints (workspace memory, project config/archive, mission run, team runs, artifacts, engine trace, eval history) **already have SDK methods** — the first estimate was incorrect.
+
+**BearerTokenMiddleware assessment:** Implementation is solid. Uses `CryptographicOperations.FixedTimeEquals` for constant-time comparison, correctly excludes `/health` and `OPTIONS`, properly routes `svt_*` per-user tokens vs static bearer token. No issues found.
+
+---
+
+## 24. Recommended Fix Order (Route Audit)
+
+### Phase L (updated — add server auth gaps)
+
+| Priority | Finding | File | Effort |
+|---|---|---|---|
+| 1 | 19-C1 ConfigRoutes PUT no admin check | ConfigRoutes.cs:49 | 1 line |
+| 2 | 19-C3 EngineRoutes recover no auth | EngineRoutes.cs:59 | 1 line |
+| 3 | 19-C5 WorkspaceRoutes no access checks | WorkspaceRoutes.cs:67+ | Medium |
+| 4 | 20-H3 MissionRoutes no ownership | MissionRoutes.cs | Medium |
+| 5 | 20-H4 SwarmRoutes no ownership | SwarmRoutes.cs | Medium |
+| 6 | 20-H5 TeamRoutes no ownership | TeamRoutes.cs | Medium |
+| 7 | 20-H6 KnowledgeRoutes YAML + no auth | KnowledgeAuthoringRoutes.cs | Low |
+| 8 | 19-C4 ArtifactRoutes path traversal | ArtifactRoutes.cs:73 | Low |
+| 9 | 20-H2 EngineRoutes DELETE no ownership | EngineRoutes.cs:67 | 1 line |
+
+### Phase M (updated — medium server issues)
+
+| Priority | Finding | File | Effort |
+|---|---|---|---|
+| 1 | R4-M2 ConfigRoutes BaseUrl no SSRF | ConfigRoutes.cs:61 | Low |
+| 2 | R4-M8 WebhookRoutes callback_url SSRF | WebhookRoutes.cs:50 | Low |
+| 3 | R4-M1 CommandCenter owner_user_id validation | CommandCenterRoutes.cs:26 | Low |
+| 4 | R4-M4 EvalRoutes suiteName path validation | EvalRoutes.cs:90 | Low |
+| 5 | R4-M5 MeRoutes token expiry bounds | MeRoutes.cs:50 | Low |
+| 6 | 19-C2 ChatRoutes SSRF DNS TOCTOU | ChatRoutes.cs:85 | Medium |
