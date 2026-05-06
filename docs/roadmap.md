@@ -9549,7 +9549,7 @@ Phase 47 (workspace backup/export) is **post-beta** — the value is clear but i
 
 ---
 
-### Item 1 — ArtifactRoutes Security Fixes ⬜
+### Item 1 — ArtifactRoutes Security Fixes ✅
 
 **Effort:** ~2 hours  
 **Scope:** Two targeted fixes left open from the Round 4 audit.
