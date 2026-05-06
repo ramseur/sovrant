@@ -106,8 +106,16 @@ public partial class SidebarViewModel : ViewModelBase
         _capabilityRegistry = capabilityRegistry;
         ActiveContext = activeContext;
         LoadFromConfig(config);
-        _ = LoadProviderProfilesAsync();
-        _ = LoadSessionsAsync();
+        _ = LoadProviderProfilesAsync().ContinueWith(
+            t => System.Diagnostics.Debug.WriteLine($"[SidebarViewModel] LoadProviderProfilesAsync failed: {t.Exception}"),
+            System.Threading.CancellationToken.None,
+            System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
+        _ = LoadSessionsAsync().ContinueWith(
+            t => System.Diagnostics.Debug.WriteLine($"[SidebarViewModel] LoadSessionsAsync failed: {t.Exception}"),
+            System.Threading.CancellationToken.None,
+            System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
     }
 
     partial void OnSelectedTreeGroupChanged(ProviderTreeGroup? value)
@@ -137,6 +145,8 @@ public partial class SidebarViewModel : ViewModelBase
         if (!group.ModelsFetchedLive && !string.IsNullOrWhiteSpace(group.BaseUrl)
             && !string.IsNullOrWhiteSpace(group.ApiKey) && _httpFactory is not null)
         {
+            // Mark as fetched before the await so concurrent calls don't double-fetch.
+            group.ModelsFetchedLive = true;
             var fetched = await FetchModelIdsAsync(group.BaseUrl, group.ApiKey);
             var filtered = FilterChatModels(group.Provider, fetched);
             if (filtered.Count > 0)
@@ -147,8 +157,12 @@ public partial class SidebarViewModel : ViewModelBase
                     foreach (var m in filtered)
                         group.Models.Add(new ModelOption(m, group, IsFreeModel(m)));
                     group.ModelCount = group.Models.Count;
-                    group.ModelsFetchedLive = true;
                 });
+            }
+            else
+            {
+                // Fetch returned nothing useful — allow a retry next time.
+                group.ModelsFetchedLive = false;
             }
         }
     }
@@ -452,9 +466,16 @@ public partial class SidebarViewModel : ViewModelBase
         // the URL inference is already a usable display value.
         _ = Task.Run(async () =>
         {
-            var saved = await _prefs.GetAsync(App.SovrantUserId, UserPreferenceKeys.Provider);
-            if (!string.IsNullOrEmpty(saved))
-                await Dispatcher.UIThread.InvokeAsync(() => CurrentProvider = saved);
+            try
+            {
+                var saved = await _prefs.GetAsync(App.SovrantUserId, UserPreferenceKeys.Provider);
+                if (!string.IsNullOrEmpty(saved))
+                    await Dispatcher.UIThread.InvokeAsync(() => CurrentProvider = saved);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SidebarViewModel] Provider preference load failed: {ex}");
+            }
         });
 
         IsConnected = !string.IsNullOrWhiteSpace(config.ApiKey);

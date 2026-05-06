@@ -57,6 +57,15 @@ internal static class MeRoutes
         if (!TryGetCallerUserId(ctx, out var userId, out var error))
             return error;
 
+        if (req.ExpiresAt is { } exp)
+        {
+            var now = DateTimeOffset.UtcNow;
+            if (exp <= now)
+                return Results.BadRequest(new { error = "expires_at must be a future date." });
+            if (exp > now.AddYears(2))
+                return Results.BadRequest(new { error = "expires_at must be within 2 years." });
+        }
+
         try
         {
             var result = await tokens.IssueAsync(

@@ -435,51 +435,6 @@ internal static class ChatRoutes
         await ctx.Response.WriteAsJsonAsync(response, ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Returns true if the host resolves to a reserved/private IP range, preventing SSRF
-    /// attacks that target internal infrastructure via user-supplied base URLs.
-    /// DNS names are resolved and all resulting addresses are checked.
-    /// </summary>
-    private static async Task<bool> IsReservedAddressAsync(string host)
-    {
-        if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        if (System.Net.IPAddress.TryParse(host, out var ip))
-            return IsReservedIp(ip);
-
-        // Resolve DNS name and check all resulting addresses.
-        try
-        {
-            var addresses = await System.Net.Dns.GetHostAddressesAsync(host).ConfigureAwait(false);
-            return addresses.Any(IsReservedIp);
-        }
-        catch (System.Net.Sockets.SocketException)
-        {
-            // Unresolvable host — block to be safe.
-            return true;
-        }
-    }
-
-    private static bool IsReservedIp(System.Net.IPAddress ip)
-    {
-        var bytes = ip.GetAddressBytes();
-        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-        {
-            // 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16
-            return bytes[0] == 127
-                || bytes[0] == 10
-                || (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31)
-                || (bytes[0] == 192 && bytes[1] == 168)
-                || (bytes[0] == 169 && bytes[1] == 254)
-                || (bytes[0] == 0); // 0.0.0.0/8
-        }
-
-        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
-        {
-            return System.Net.IPAddress.IsLoopback(ip) || ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal;
-        }
-
-        return false;
-    }
+    private static Task<bool> IsReservedAddressAsync(string host) =>
+        SsrfGuard.IsReservedAddressAsync(host);
 }

@@ -64,6 +64,8 @@ internal static class ConfigRoutes
             if (!Uri.TryCreate(req.BaseUrl, UriKind.Absolute, out var parsed)
                 || (parsed.Scheme != "https" && parsed.Scheme != "http"))
                 return Results.BadRequest(new { error = "Invalid base_url: must be an absolute http or https URL." });
+            if (await SsrfGuard.IsReservedAddressAsync(parsed.Host).ConfigureAwait(false))
+                return Results.BadRequest(new { error = "Invalid base_url: internal/reserved addresses are not allowed." });
             config.LlmBaseUrl = req.BaseUrl;
         }
 

@@ -28,6 +28,8 @@ internal static class EvalRoutes
         // GET /v1/evals/{suiteName}/history — get trend data
         app.MapGet("/v1/evals/{suiteName}/history", (string suiteName, IEvalResultStore resultStore) =>
         {
+            if (!IsValidSuiteName(suiteName))
+                return Results.BadRequest(new { error = "Invalid suite name." });
             var history = resultStore.LoadHistory(suiteName);
             return Results.Ok(history);
         });
@@ -86,6 +88,12 @@ internal static class EvalRoutes
             });
         });
     }
+
+    private static bool IsValidSuiteName(string name) =>
+        !string.IsNullOrWhiteSpace(name)
+        && name.Length <= 128
+        && name.AsSpan().IndexOfAny('/', '\\', '\0') < 0
+        && !name.Contains("..", StringComparison.Ordinal);
 
     private static IReadOnlyList<string> GetSearchPaths()
     {

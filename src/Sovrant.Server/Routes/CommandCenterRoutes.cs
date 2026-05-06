@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Sovrant.Runtime.CommandCenter;
+using Sovrant.Server.Auth;
 
 namespace Sovrant.Server.Routes;
 
@@ -24,8 +25,13 @@ internal static class CommandCenterRoutes
         app.MapGet("/v1/command-center/state", async (
             CommandCenterAggregator aggregator,
             string? owner_user_id,
+            HttpContext ctx,
             CancellationToken ct) =>
         {
+            // Non-admin callers can only see their own cockpit state.
+            if (!HttpContextAuthExtensions.IsAdmin(ctx))
+                owner_user_id = HttpContextAuthExtensions.GetUserId(ctx);
+
             var state = await aggregator.GetActiveStateAsync(owner_user_id, ct).ConfigureAwait(false);
             return Results.Json(state, s_jsonOptions);
         });

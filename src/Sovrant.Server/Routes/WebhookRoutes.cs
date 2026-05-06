@@ -58,6 +58,14 @@ internal static class WebhookRoutes
                     .ConfigureAwait(false);
                 return;
             }
+            if (await SsrfGuard.IsReservedAddressAsync(callbackUri.Host).ConfigureAwait(false))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await ctx.Response.WriteAsJsonAsync(
+                    new { error = "callback_url must not target internal or reserved addresses." }, ct)
+                    .ConfigureAwait(false);
+                return;
+            }
         }
 
         // Seed tools (no-op if already registered).
