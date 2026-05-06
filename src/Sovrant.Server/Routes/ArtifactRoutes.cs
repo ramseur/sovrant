@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Sovrant.Runtime.Artifacts;
 using Sovrant.Runtime.Workspaces;
+using Sovrant.Server.Auth;
 
 namespace Sovrant.Server.Routes;
 
@@ -28,9 +29,13 @@ internal static class ArtifactRoutes
 
         app.MapGet("/v1/artifacts", async (
             HttpContext ctx,
-            IArtifactStore store) =>
+            IArtifactStore store,
+            IWorkspaceService wsSvc,
+            CancellationToken ct) =>
         {
             var scope = ScopeFromQuery(ctx);
+            var deny = await RequireWorkspaceAccess(ctx, scope.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
+            if (deny is not null) return deny;
 
             var entries = new List<object>();
             await foreach (var entry in store.ListAsync(scope, ctx.RequestAborted))
@@ -54,14 +59,21 @@ internal static class ArtifactRoutes
             string runId,
             string path,
             HttpContext ctx,
-            IArtifactStore store) =>
+            IArtifactStore store,
+            IWorkspaceService wsSvc,
+            CancellationToken ct) =>
         {
+            if (!IsValidArtifactPath(path))
+                return Results.BadRequest(new { error = "Invalid artifact path." });
+
             var scope = ScopeFromQuery(ctx, runId);
+            var deny = await RequireWorkspaceAccess(ctx, scope.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
+            if (deny is not null) return deny;
 
             ArtifactHandle handle;
             try
             {
-                handle = await store.CreateRunScopeAsync(scope, ctx.RequestAborted);
+                handle = await store.CreateRunScopeAsync(scope, ct);
             }
             catch (ArgumentException ex)
             {
@@ -70,7 +82,7 @@ internal static class ArtifactRoutes
 
             try
             {
-                var stream = await store.ReadAsync(handle, path, ctx.RequestAborted);
+                var stream = await store.ReadAsync(handle, path, ct);
                 var contentType = MimeTypeFromExtension(path);
                 return Results.Stream(stream, contentType, Path.GetFileName(path));
             }
@@ -89,13 +101,17 @@ internal static class ArtifactRoutes
         app.MapDelete("/v1/artifacts/{runId}", async (
             string runId,
             HttpContext ctx,
-            IArtifactStore store) =>
+            IArtifactStore store,
+            IWorkspaceService wsSvc,
+            CancellationToken ct) =>
         {
             var scope = ScopeFromQuery(ctx, runId);
+            var deny = await RequireWorkspaceAccess(ctx, scope.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
+            if (deny is not null) return deny;
 
             try
             {
-                await store.DeleteAsync(scope, ctx.RequestAborted);
+                await store.DeleteAsync(scope, ct);
                 return Results.Ok(new { deleted = true, run_id = runId });
             }
             catch (ArgumentException ex)
@@ -104,6 +120,26 @@ internal static class ArtifactRoutes
             }
         });
     }
+
+    private static async Task<IResult?> RequireWorkspaceAccess(
+        HttpContext ctx, string workspaceId, IWorkspaceService svc, CancellationToken ct)
+    {
+        if (HttpContextAuthExtensions.IsAdmin(ctx)) return null;
+        var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
+        if (!await svc.IsMemberAsync(workspaceId, userId, ct).ConfigureAwait(false))
+            return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
+        return null;
+    }
+
+    /// <summary>
+    /// Rejects paths containing traversal sequences or null bytes.
+    /// The store's ResolveAndGuard is the enforcement layer; this is an
+    /// explicit route-level gate so bad input is rejected before any disk I/O.
+    /// </summary>
+    private static bool IsValidArtifactPath(string path) =>
+        !string.IsNullOrWhiteSpace(path)
+        && !path.Contains("..", StringComparison.Ordinal)
+        && path.IndexOf('\0', StringComparison.Ordinal) < 0;
 
     /// <summary>
     /// Builds an <see cref="ArtifactScope"/> from query-string parameters and
