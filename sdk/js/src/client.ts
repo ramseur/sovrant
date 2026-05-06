@@ -8,6 +8,9 @@ import type {
   AgentRunFilter,
   AgentTemplateDetail,
   AgentTemplateSummary,
+  CommandCenterState,
+  KnowledgeSaveResponse,
+  McpServerEntry,
   ArtifactEntry,
   ArtifactScope,
   ApiToken,
@@ -1152,6 +1155,75 @@ export class SovrantClient {
     return (await res.json()) as AgentTemplateDetail;
   }
 
+  // ── Command Center ────────────────────────────────────────────────────
+
+  /**
+   * Get the current Command Center cockpit state (GET /v1/command-center/state).
+   * Returns active missions, team runs, agent runs, sessions, and a flat row list.
+   * Non-admin callers are automatically scoped to their own identity on the server.
+   */
+  async getCommandCenterState(options?: {
+    ownerUserId?: string;
+  }): Promise<CommandCenterState> {
+    const params = new URLSearchParams();
+    if (options?.ownerUserId) params.set("owner_user_id", options.ownerUserId);
+    const qs = params.toString();
+    const res = await this.fetchWithRetry(`/v1/command-center/state${qs ? `?${qs}` : ""}`);
+    return (await res.json()) as CommandCenterState;
+  }
+
+  // ── MCP Servers ───────────────────────────────────────────────────────
+
+  /** List connected and configured MCP servers (GET /v1/mcp/servers). */
+  async listMcpServers(): Promise<{ servers: McpServerEntry[] }> {
+    const res = await this.fetchWithRetry("/v1/mcp/servers");
+    return (await res.json()) as { servers: McpServerEntry[] };
+  }
+
+  // ── Knowledge Authoring ───────────────────────────────────────────────
+
+  /**
+   * Get the raw markdown source of a knowledge entry for editor pre-load.
+   * `kind` is one of `"skills"`, `"documents"`, or `"tools"`.
+   */
+  async getKnowledgeSource(kind: string, slug: string): Promise<string> {
+    const res = await this.fetchWithRetry(
+      `/v1/knowledge/${encodeURIComponent(kind)}/${encodeURIComponent(slug)}/source`
+    );
+    return res.text();
+  }
+
+  /**
+   * Save a knowledge entry as markdown (admin only).
+   * Built-in entries are copy-on-write to the user tier.
+   */
+  async saveKnowledge(
+    kind: string,
+    slug: string,
+    markdown: string
+  ): Promise<KnowledgeSaveResponse> {
+    const res = await this.fetchWithRetry(
+      `/v1/knowledge/${encodeURIComponent(kind)}/${encodeURIComponent(slug)}`,
+      {
+        method: "POST",
+        body: markdown,
+        headers: { "Content-Type": "text/markdown; charset=utf-8" },
+      }
+    );
+    return (await res.json()) as KnowledgeSaveResponse;
+  }
+
+  /**
+   * Delete a user-tier knowledge entry (admin only).
+   * Built-in entries remain readable; only user-tier overrides are deleted.
+   */
+  async deleteKnowledge(kind: string, slug: string): Promise<void> {
+    await this.fetchWithRetry(
+      `/v1/knowledge/${encodeURIComponent(kind)}/${encodeURIComponent(slug)}`,
+      { method: "DELETE" }
+    );
+  }
+
   // ── Internal ──────────────────────────────────────────────────────────
 
   private buildRequest(
@@ -1190,9 +1262,9 @@ export class SovrantClient {
       Authorization: `Bearer ${this.token}`,
       ...extraHeaders,
     };
-    // Only set Content-Type when there is a request body to avoid
-    // confusing proxies/servers on GET and DELETE requests.
-    if (init?.body !== undefined) {
+    // Set Content-Type to JSON when there is a body, unless the caller already
+    // specified a content type (e.g. text/markdown for knowledge saves).
+    if (init?.body !== undefined && !headers["Content-Type"]) {
       headers["Content-Type"] = "application/json";
     }
 

@@ -982,3 +982,48 @@ export interface AgentTemplateDetail {
   allowed_tools?: string[];
   system_prompt: string;
 }
+
+// ── Command Center ────────────────────────────────────────────────────────
+
+/** One active item row in the Command Center cockpit. */
+export interface CommandCenterRow {
+  kind: string;
+  id: string;
+  title: string;
+  status: string;
+  started_at: string;
+  last_activity: string;
+  owner_label?: string;
+  preview?: string;
+  cost_usd?: number;
+  detail_route?: string;
+  workspace_id?: string;
+  project_id?: string;
+}
+
+/** Aggregated cockpit state from GET /v1/command-center/state. */
+export interface CommandCenterState {
+  generated_at: string;
+  active_missions: number;
+  active_team_runs: number;
+  active_agent_runs: number;
+  active_sessions: number;
+  active_claws: number;
+  rows: CommandCenterRow[];
+}
+
+// ── MCP Servers ───────────────────────────────────────────────────────────
+
+/** One MCP server entry from GET /v1/mcp/servers. */
+export interface McpServerEntry {
+  name: string;
+  connected: boolean;
+}
+
+// ── Knowledge Authoring ───────────────────────────────────────────────────
+
+/** Response from POST /v1/knowledge/:kind/:slug. */
+export interface KnowledgeSaveResponse {
+  slug: string;
+  path: string;
+}

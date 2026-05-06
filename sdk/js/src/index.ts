@@ -122,5 +122,12 @@ export type {
   SkillDetail,
   AgentTemplateSummary,
   AgentTemplateDetail,
+  // Command Center
+  CommandCenterState,
+  CommandCenterRow,
+  // MCP
+  McpServerEntry,
+  // Knowledge Authoring
+  KnowledgeSaveResponse,
 } from "./types.js";
 export { SwarmStatus, SwarmTaskStatus } from "./types.js";
