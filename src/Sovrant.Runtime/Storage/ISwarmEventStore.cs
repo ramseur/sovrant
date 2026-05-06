@@ -29,6 +29,13 @@ public interface ISwarmEventStore
 
     /// <summary>Deletes all events for the given swarm ID. Returns rows deleted.</summary>
     Task<int> DeleteSwarmAsync(string swarmId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the <c>user_id</c> that owns the given swarm (read from the first
+    /// recorded event), or <c>null</c> if the swarm does not exist or was created
+    /// before V025 (pre-ownership tracking).
+    /// </summary>
+    Task<string?> GetOwnerAsync(string swarmId, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -43,7 +50,8 @@ public sealed record SwarmEventRecord(
     DateTimeOffset Timestamp,
     string? AgentId = null,
     string? WorkspaceId = null,
-    string? ProjectId = null);
+    string? ProjectId = null,
+    string? UserId = null);
 
 /// <summary>Optional filter for <see cref="ISwarmEventStore.ListSwarmsAsync"/>.</summary>
 public sealed record SwarmListFilter(

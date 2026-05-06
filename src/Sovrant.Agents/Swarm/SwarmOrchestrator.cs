@@ -118,6 +118,7 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
             SwarmId = plan.Id,
             Status = SwarmStatus.Executing,
             Tasks = plan.Tasks,
+            UserId = swarmContext.UserId,
         };
 
         _stateTracker.Update(plan.Id, result);

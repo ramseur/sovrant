@@ -52,7 +52,8 @@ public sealed class SwarmSession
             Timestamp: evt.Timestamp,
             AgentId: ExtractAgentName(evt),
             WorkspaceId: context?.WorkspaceId,
-            ProjectId: context?.ProjectId);
+            ProjectId: context?.ProjectId,
+            UserId: context?.UserId);
 
         await _store.RecordEventAsync(record, ct).ConfigureAwait(false);
     }

@@ -20,6 +20,9 @@ public sealed class SwarmResult
     /// <summary>Swarm session identifier.</summary>
     public required string SwarmId { get; init; }
 
+    /// <summary>User who initiated this swarm, from <c>SwarmExecutionContext.UserId</c>.</summary>
+    public string? UserId { get; set; }
+
     /// <summary>Overall swarm status.</summary>
     public required SwarmStatus Status { get; set; }
 

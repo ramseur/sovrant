@@ -116,19 +116,47 @@ internal static class SwarmRoutes
         });
 
         // GET /v1/swarm/{id} — get swarm status
-        app.MapGet("/v1/swarm/{id}", (string id, ISwarmStateTracker tracker) =>
+        app.MapGet("/v1/swarm/{id}", async (
+            string id,
+            HttpContext ctx,
+            ISwarmStateTracker tracker,
+            ISwarmEventStore store,
+            CancellationToken ct) =>
         {
             var result = tracker.Get(id);
-            return result is null
-                ? Results.NotFound(new { error = $"No swarm found with ID '{id}'." })
-                : Results.Ok(result);
+            if (result is null)
+                return Results.NotFound(new { error = $"No swarm found with ID '{id}'." });
+
+            if (!HttpContextAuthExtensions.IsAdmin(ctx))
+            {
+                var callerId = HttpContextAuthExtensions.GetUserId(ctx);
+                // result.UserId is null for swarms started before V025 — fall back to DB lookup
+                var ownerId = result.UserId ?? await store.GetOwnerAsync(id, ct).ConfigureAwait(false);
+                if (!string.Equals(ownerId, callerId, StringComparison.Ordinal))
+                    return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            return Results.Ok(result);
         });
 
         // GET /v1/swarm/{id}/events — replay events from swarm_events
-        app.MapGet("/v1/swarm/{id}/events", async (string id, SwarmSession session, CancellationToken ct) =>
+        app.MapGet("/v1/swarm/{id}/events", async (
+            string id,
+            HttpContext ctx,
+            SwarmSession session,
+            ISwarmEventStore store,
+            CancellationToken ct) =>
         {
             if (!await session.ExistsAsync(id, ct).ConfigureAwait(false))
                 return Results.NotFound(new { error = $"No session found for swarm '{id}'." });
+
+            if (!HttpContextAuthExtensions.IsAdmin(ctx))
+            {
+                var callerId = HttpContextAuthExtensions.GetUserId(ctx);
+                var ownerId = await store.GetOwnerAsync(id, ct).ConfigureAwait(false);
+                if (!string.Equals(ownerId, callerId, StringComparison.Ordinal))
+                    return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
+            }
 
             var events = new List<object>();
             await foreach (var evt in session.ReplayAsync(id, ct))
