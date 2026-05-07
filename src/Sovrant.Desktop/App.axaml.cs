@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sovrant.Agents;
 using Sovrant.Api.Auth;
+using Sovrant.Client.Remote;
 using Sovrant.Commands;
 using Sovrant.Desktop.Adapters;
 using Sovrant.Desktop.Auth;
@@ -18,6 +19,7 @@ using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Logging;
 using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Permissions;
+using Sovrant.Runtime.Storage;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
 
@@ -91,21 +93,43 @@ public partial class App : Application
 
     private async Task BuildAppAsync(SovrantConfig config, IClassicDesktopStyleApplicationLifetime desktop)
     {
-        var services = new ServiceCollection();
         var bootstrap = BootstrapConfigLoader.Load();
+
+        // ── Phase 1: detect runtime mode ──────────────────────────────────────
+        // Build a minimal storage container to read the stored mode before committing
+        // to either the embedded runtime or the remote client stack.
+        var isRemote = false;
+        string? remoteServerUrl = Environment.GetEnvironmentVariable("SOVRANT_SERVER_URL");
+        string? remoteApiToken = null;
+
+        if (string.IsNullOrEmpty(remoteServerUrl))
+        {
+            var minSvc = new ServiceCollection();
+            minSvc.AddSovrantStorage(bootstrap);
+            await using var minSp = minSvc.BuildServiceProvider();
+            var minStorage = minSp.GetRequiredService<IStorageProvider>();
+            await minStorage.InitializeAsync().ConfigureAwait(true);
+            var minStore = minSp.GetRequiredService<ICredentialStore>();
+            var mode = await minStore.RetrieveAsync(CredentialKeys.RuntimeMode).ConfigureAwait(true);
+            if (string.Equals(mode, "remote", StringComparison.OrdinalIgnoreCase))
+            {
+                remoteServerUrl = await minStore.RetrieveAsync(CredentialKeys.RemoteServerUrl).ConfigureAwait(true);
+                remoteApiToken = await minStore.RetrieveAsync(CredentialKeys.RemoteApiToken).ConfigureAwait(true);
+            }
+        }
+        else
+        {
+            remoteApiToken = Environment.GetEnvironmentVariable("SOVRANT_API_TOKEN");
+        }
+
+        isRemote = !string.IsNullOrEmpty(remoteServerUrl);
+
+        // ── Phase 2: build full DI container ─────────────────────────────────
+        var services = new ServiceCollection();
 
         services.AddLogging(b => b.AddSovrantLogging(
             consoleMinOverride: LogLevel.Warning,
             logFileOverride: bootstrap.LogFile));
-
-        services.AddSovrantRuntime(config, bootstrap);
-        services.AddSovrantTools();
-        services.AddOrchestrationSystem();
-        services.AddSovrantCommands();
-        services.AddHttpClient("ProviderProbe", client =>
-        {
-            client.Timeout = TimeSpan.FromSeconds(10);
-        });
 
         // IPrincipalAccessor — populated after login.
         var principalAccessor = new DesktopPrincipalAccessor();
@@ -124,6 +148,25 @@ public partial class App : Application
         services.AddSingleton<IUserInputProvider, DesktopUserInputProvider>();
         services.AddSingleton<IAuthProvider>(mutableAuth);
         services.AddSingleton(mutableAuth);
+
+        if (isRemote)
+        {
+            var remoteOptions = new SovrantRemoteOptions { Url = remoteServerUrl, ApiToken = remoteApiToken };
+            services.AddSovrantClient(remoteOptions);
+            // Also register the credential store (via storage) for token persistence across restarts.
+            services.AddSovrantStorage(bootstrap);
+        }
+        else
+        {
+            services.AddSovrantRuntime(config, bootstrap);
+            services.AddSovrantTools();
+            services.AddOrchestrationSystem();
+            services.AddSovrantCommands();
+            services.AddHttpClient("ProviderProbe", client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(10);
+            });
+        }
 
         // ViewModels.
         services.AddSingleton<ActiveContextViewModel>();
@@ -146,9 +189,6 @@ public partial class App : Application
         services.AddTransient<AutomationsViewModel>();
         services.AddTransient<OrchestrationViewModel>();
         // Singleton: MainViewModel subscribes to RowSelected once at startup.
-        // Transient would hand back a fresh, unwired instance on every nav-rail
-        // click into Command Center, breaking row clicks after the first detour
-        // into chat / orchestration.
         services.AddSingleton<CommandCenterViewModel>();
         services.AddSingleton<CommandPaletteViewModel>();
         services.AddTransient<LoginViewModel>();
@@ -157,38 +197,91 @@ public partial class App : Application
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;
 
-        _serviceProvider.GetRequiredService<ToolRegistrar>().RegisterAll();
+        // ── Phase 3: initialize runtime ───────────────────────────────────────
+        if (!isRemote)
+        {
+            _serviceProvider.GetRequiredService<ToolRegistrar>().RegisterAll();
 
-        // Run DB migrations + the legacy migrator + ApplyUserPreferencesAsync
-        // synchronously so SovrantConfig.ApiKey is hydrated from the DB before
-        // we decide whether to show the setup wizard. Subsequent boot work
-        // (model metadata, MCP servers, user/workspace seeding) runs on a
-        // background task below.
-        await _serviceProvider.InitializeRuntimeAsync().ConfigureAwait(true);
+            // Run DB migrations + the legacy migrator + ApplyUserPreferencesAsync
+            // synchronously so SovrantConfig.ApiKey is hydrated from the DB before
+            // we decide whether to show the setup wizard.
+            await _serviceProvider.InitializeRuntimeAsync().ConfigureAwait(true);
+        }
+        else
+        {
+            // Remote mode: initialize local credential store (for token storage),
+            // then connect SignalR and refresh the remote tool registry.
+            var remoteStorage = _serviceProvider.GetRequiredService<IStorageProvider>();
+            await remoteStorage.InitializeAsync().ConfigureAwait(true);
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var signalR = _serviceProvider.GetRequiredService<SignalRStreamingClient>();
+                    await signalR.EnsureConnectedAsync().ConfigureAwait(false);
+                    var toolRegistry = _serviceProvider.GetRequiredService<RemoteToolRegistry>();
+                    await toolRegistry.RefreshAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    RuntimeReady.TrySetResult();
+                }
+            });
+        }
 
         // ── Login / token validation ─────────────────────────────────────
-        // Attempt to restore the stored session token. If missing or expired,
-        // show the login window before proceeding.
-        var authenticatedUserId = await TryRestoreSessionAsync(_serviceProvider, principalAccessor).ConfigureAwait(true);
+        string? authenticatedUserId;
+        if (isRemote)
+        {
+            // Remote mode: check credential store for stored token, validate against server.
+            authenticatedUserId = await TryRestoreRemoteSessionAsync(_serviceProvider, principalAccessor).ConfigureAwait(true);
+        }
+        else
+        {
+            authenticatedUserId = await TryRestoreSessionAsync(_serviceProvider, principalAccessor).ConfigureAwait(true);
+        }
+
         if (authenticatedUserId is null)
         {
             authenticatedUserId = await RunLoginWindowAsync(desktop, _serviceProvider, principalAccessor).ConfigureAwait(true);
         }
         SovrantUserId = authenticatedUserId;
 
-        // ── API key setup ─────────────────────────────────────────────────
-        // First-run setup — only after ApplyUserPreferencesAsync has had a
-        // chance to populate config.ApiKey from the credential store.
-        if (string.IsNullOrWhiteSpace(config.ApiKey))
+        // ── API key / setup wizard ────────────────────────────────────────────
+        // Skip setup wizard in remote mode — the server handles LLM credentials.
+        if (!isRemote && string.IsNullOrWhiteSpace(config.ApiKey))
         {
             await RunSetupWizardAsync(desktop, _serviceProvider).ConfigureAwait(true);
-            // The wizard hot-swaps SovrantConfig in place; no reload needed.
         }
 
-        // Refresh the auth provider's API key now that the wizard (or the
-        // boot path) has populated config.ApiKey.
-        if (!string.IsNullOrWhiteSpace(config.ApiKey))
+        // Refresh the auth provider's API key (local mode only).
+        if (!isRemote && !string.IsNullOrWhiteSpace(config.ApiKey))
             mutableAuth.ApiKey = config.ApiKey!;
+
+        // ── 401 monitoring in remote mode ─────────────────────────────────────
+        if (isRemote)
+        {
+            var connectionState = _serviceProvider.GetRequiredService<RemoteConnectionState>();
+            connectionState.StatusChanged += async (_, status) =>
+            {
+                if (status != ConnectionStatus.Disconnected) return;
+                await Dispatcher.UIThread.InvokeAsync(async () =>
+                {
+                    var principal = _serviceProvider.GetRequiredService<DesktopPrincipalAccessor>();
+                    MainWindow?.Hide();
+                    var userId = await RunLoginWindowAsync(desktop, _serviceProvider, principal).ConfigureAwait(true);
+                    SovrantUserId = userId;
+                    // Persist and hot-swap the new token.
+                    var store = _serviceProvider.GetRequiredService<ICredentialStore>();
+                    var remoteOpts = _serviceProvider.GetRequiredService<SovrantRemoteOptions>();
+                    var newToken = await store.RetrieveAsync(StoredTokenKey).ConfigureAwait(true);
+                    if (!string.IsNullOrEmpty(newToken))
+                        remoteOpts.ApiToken = newToken;
+                    MainWindow?.Show();
+                });
+            };
+        }
 
         var mainVm = _serviceProvider.GetRequiredService<MainViewModel>();
         var window = new MainWindow { DataContext = mainVm };
@@ -196,45 +289,36 @@ public partial class App : Application
         desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
         desktop.ShutdownRequested += (_, _) => Environment.Exit(0);
         MainWindow = window;
-        // Avalonia's classic desktop lifetime calls Start() once the initial
-        // sync part of OnFrameworkInitializationCompleted returns, and would
-        // normally Show() MainWindow at that point. Because BuildAppAsync
-        // awaits, the lifetime has already Started before we set MainWindow,
-        // so we Show() explicitly. On first-run paths the setup wizard's own
-        // Show() kept the pump alive and masked this; with an existing
-        // API key no wizard runs and the bug surfaces.
         window.Show();
 
-        // Background user/workspace seeding — InitializeRuntimeAsync above
-        // already covered storage migrations, the legacy migrator, the
-        // preference apply step, and model-metadata fetching. The remaining
-        // work just needs to happen before the user starts a chat session.
-        _ = Task.Run(async () =>
+        // Background user/workspace seeding (local mode only — server handles this in remote mode).
+        if (!isRemote)
         {
-            try
+            _ = Task.Run(async () =>
             {
-                // Ensure the desktop user exists (required by workspace FK constraints).
-                var userService = _serviceProvider.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
-                var user = await userService.GetAsync(SovrantUserId).ConfigureAwait(false);
-                if (user is null)
-                    await userService.CreateAsync(SovrantUserId, userId: SovrantUserId).ConfigureAwait(false);
+                try
+                {
+                    var userService = _serviceProvider.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
+                    var user = await userService.GetAsync(SovrantUserId).ConfigureAwait(false);
+                    if (user is null)
+                        await userService.CreateAsync(SovrantUserId, userId: SovrantUserId).ConfigureAwait(false);
 
-                // Ensure a personal workspace exists for the desktop user.
-                var workspaceService = _serviceProvider.GetRequiredService<Sovrant.Runtime.Workspaces.IWorkspaceService>();
-                var personal = await workspaceService.GetPersonalAsync(SovrantUserId).ConfigureAwait(false);
-                if (personal is null)
-                    await workspaceService.CreatePersonalWorkspaceAsync(SovrantUserId).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                var logger = _serviceProvider.GetRequiredService<ILogger<App>>();
-                logger.LogError(ex, "User/workspace seeding failed");
-            }
-            finally
-            {
-                RuntimeReady.TrySetResult();
-            }
-        });
+                    var workspaceService = _serviceProvider.GetRequiredService<Sovrant.Runtime.Workspaces.IWorkspaceService>();
+                    var personal = await workspaceService.GetPersonalAsync(SovrantUserId).ConfigureAwait(false);
+                    if (personal is null)
+                        await workspaceService.CreatePersonalWorkspaceAsync(SovrantUserId).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    var logger = _serviceProvider.GetRequiredService<ILogger<App>>();
+                    logger.LogError(ex, "User/workspace seeding failed");
+                }
+                finally
+                {
+                    RuntimeReady.TrySetResult();
+                }
+            });
+        }
     }
 
     private const string StoredTokenKey = "sovrant.desktop.auth_token";
@@ -262,6 +346,50 @@ public partial class App : Application
         SovrantUserId = authenticatedUserId;
 
         MainWindow?.Show();
+    }
+
+    /// <summary>
+    /// In remote mode: checks the credential store for a stored bearer token,
+    /// validates it against the server's /v1/auth/me endpoint.
+    /// Returns the user ID on success, null if login is needed.
+    /// </summary>
+    private static async Task<string?> TryRestoreRemoteSessionAsync(
+        IServiceProvider services, DesktopPrincipalAccessor principal)
+    {
+        var store = services.GetRequiredService<ICredentialStore>();
+        var token = await store.RetrieveAsync(StoredTokenKey).ConfigureAwait(true)
+            ?? services.GetRequiredService<SovrantRemoteOptions>().ApiToken;
+        if (string.IsNullOrEmpty(token)) return null;
+
+        var remoteOpts = services.GetRequiredService<SovrantRemoteOptions>();
+        using var http = new System.Net.Http.HttpClient
+        {
+            BaseAddress = new Uri(remoteOpts.Url!.TrimEnd('/'))
+        };
+        http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        try
+        {
+            var resp = await http.GetAsync(new Uri("/v1/auth/me", UriKind.Relative)).ConfigureAwait(true);
+            if (!resp.IsSuccessStatusCode) return null;
+
+            var json = await resp.Content.ReadAsStringAsync().ConfigureAwait(true);
+            var doc = System.Text.Json.JsonDocument.Parse(json);
+            var userId = doc.RootElement.TryGetProperty("user_id", out var u) ? u.GetString() : null;
+            var role = doc.RootElement.TryGetProperty("role", out var r) ? r.GetString() : "user";
+            if (userId is null) return null;
+
+            // Hot-swap the stored token into the running options.
+            remoteOpts.ApiToken = token;
+            principal.UserId = userId;
+            principal.Role = role;
+            return userId;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>

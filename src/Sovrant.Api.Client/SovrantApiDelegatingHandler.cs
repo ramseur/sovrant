@@ -1,6 +1,6 @@
 using System.Net.Http.Headers;
 
-namespace Sovrant.Web.Services.Remote;
+namespace Sovrant.Client.Remote;
 
 /// <summary>
 /// Injects <c>Authorization: Bearer {token}</c> on every outgoing HTTP request

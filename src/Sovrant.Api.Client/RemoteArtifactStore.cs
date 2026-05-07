@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Sovrant.Runtime.Artifacts;
 
-namespace Sovrant.Web.Services.Remote;
+namespace Sovrant.Client.Remote;
 
 /// <summary>
 /// <see cref="IArtifactStore"/> backed by the Sovrant server <c>/v1/artifacts</c> endpoints.

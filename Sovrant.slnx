@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Sovrant.Api/Sovrant.Api.csproj" />
+    <Project Path="src/Sovrant.Api.Client/Sovrant.Api.Client.csproj" />
     <Project Path="src/Sovrant.Cli/Sovrant.Cli.csproj" />
     <Project Path="src/Sovrant.Commands/Sovrant.Commands.csproj" />
     <Project Path="src/Sovrant.Runtime/Sovrant.Runtime.csproj" />

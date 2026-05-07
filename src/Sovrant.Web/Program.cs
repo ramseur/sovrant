@@ -12,7 +12,7 @@ using Sovrant.Tools;
 using Sovrant.Tools.Extended;
 using Sovrant.Web.Adapters;
 using Sovrant.Web.Services;
-using Sovrant.Web.Services.Remote;
+using Sovrant.Client.Remote;
 
 namespace Sovrant.Web;
 

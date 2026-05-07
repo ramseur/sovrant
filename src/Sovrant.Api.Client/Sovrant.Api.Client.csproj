@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- CA2007: ConfigureAwait(false) is wrong inside SignalR callbacks that must resume on the calling context.
+         CA1848: LoggerMessage delegates are overkill for a thin client library. -->
+    <NoWarn>$(NoWarn);CA2007;CA1848;CA1003;CA1062;CA1716;CA1002;CA1031</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.4" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sovrant.Api\Sovrant.Api.csproj" />
+    <ProjectReference Include="..\Sovrant.Runtime\Sovrant.Runtime.csproj" />
+    <ProjectReference Include="..\Sovrant.Tools\Sovrant.Tools.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -559,4 +559,27 @@ public static class ServiceCollectionExtensions
         if (!string.IsNullOrEmpty(apiKey))
             config.ApiKey = apiKey;
     }
+
+    /// <summary>
+    /// Registers only the storage and credential-store layer — a lightweight subset of
+    /// <see cref="AddSovrantRuntime"/> used for startup pre-checks (e.g. reading runtime mode
+    /// before the full DI container is built).
+    /// </summary>
+    public static IServiceCollection AddSovrantStorage(
+        this IServiceCollection services,
+        BootstrapConfig? bootstrap = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        bootstrap ??= BootstrapConfigLoader.Load();
+
+        services.AddLogging();
+        services.AddSingleton(sp => new Storage.SqliteStorageProvider(
+            sp.GetRequiredService<ILogger<Storage.SqliteStorageProvider>>(), bootstrap.DbPath));
+        services.AddSingleton<IStorageProvider>(sp => sp.GetRequiredService<Storage.SqliteStorageProvider>());
+        services.AddSingleton<Storage.ISqliteConnectionFactory>(sp => sp.GetRequiredService<Storage.SqliteStorageProvider>());
+        services.AddSingleton<Mcp.ICredentialStore>(sp =>
+            new Storage.SqliteCredentialStore(sp.GetRequiredService<Storage.ISqliteConnectionFactory>(), bootstrap.KeystorePath));
+
+        return services;
+    }
 }

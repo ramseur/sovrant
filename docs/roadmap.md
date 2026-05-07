@@ -2706,7 +2706,7 @@ Applied in this phase because per-user identity makes ownership enforcement mean
 
 **Depends on:** Phase 85 (identity & login — per-user `svt_` tokens, admin gate), Phase 35 (workspaces — data model and role columns already exist)
 
-**Goal:** Make workspaces the hard multitenant boundary for beta. Workspaces are created and managed by admins only. Members operate strictly within the workspaces they belong to — they cannot create projects with users outside their workspace, cannot see other workspaces' data, and have their actions governed by their workspace role (`owner / admin / member / viewer`). All five interfaces enforce the same rules: Server API, Web UI, Desktop app, CLI, and MCP server.
+**Goal:** Make workspaces the hard multitenant boundary for beta. Workspaces are created and managed by admins only. Members operate strictly within the workspaces they belong to — they cannot create projects with users outside their workspace, cannot see other workspaces' data, and have their actions governed by their workspace role (`owner / admin / member / viewer`). Server API, Web UI, Desktop app, and MCP server enforce the same rules. CLI membership is admin-managed (no self-serve invite flow needed at beta).
 
 The data model is already in place from Phase 35 (`workspace_members.role`, `project_members.role`, `IsMemberAsync`, `GetMemberRoleAsync`). This phase wires enforcement everywhere it's missing.
 
@@ -2744,22 +2744,23 @@ Project roles (`lead / contributor / viewer`) mirror this within the project sco
 - `WorkspaceContextMiddleware`: populate `IPrincipalAccessor.WorkspaceId` from resolved workspace at request time
 
 **Web (`Sovrant.Web`)**
-- Workspace panel: hide "Create workspace" button for non-admins; show workspace list filtered to joined workspaces only
+- **Top-left workspace switcher** (replaces any existing workspace nav section): shows current workspace name + dropdown; lists Personal first, then joined team workspaces in order; if no team workspaces, no dropdown — just the personal label
+- Switching workspace updates the URL to `/w/{workspaceId}/...` and re-scopes all navigation
 - Project member add: populate user picker from workspace members only (not all users)
-- Workspace settings page (new): visible to workspace owner/admin; shows member list, roles, invite management
-- Admin page: workspace tab — lists all workspaces, can create/delete, assign members
+- Workspace settings page (new, linked from switcher): visible to workspace owner/admin only; shows member list and roles; admin can add/remove members by user ID or email
+- Admin page — Workspaces tab: lists all workspaces, create/delete, assign members and roles
 
 **Desktop (`Sovrant.Desktop`)**
-- Workspace selector: list only workspaces the logged-in user belongs to
-- Workspace settings view (new tab in settings): member list + role management (owner/admin only)
+- **Top-left workspace switcher** (same behaviour as Web): Personal first, then joined workspaces; switching re-scopes navigation and reflects in the route/navigation state (e.g. `workspace/{workspaceId}/...`)
+- No "New workspace" control for non-admin users anywhere in the Desktop UI
+- Workspace settings view (accessible from switcher, owner/admin only): member list + role management
 - Project member UI: constrain picker to workspace members
-- Hide "New workspace" button for non-admin users
 
 **CLI (`sovrant`)**
-- `sovrant workspace list` — lists workspaces for the authenticated user
+- No self-serve invite or workspace creation at beta — workspace membership is managed by admins via the Web or Desktop UI
+- `sovrant workspace list` — lists workspaces the authenticated user belongs to
 - `sovrant workspace members <workspace-id>` — lists members and roles (owner/admin only)
-- `sovrant workspace invite <workspace-id> <email> [--role member|viewer]` — sends invite (owner/admin only)
-- All existing commands that take `--workspace` validate membership before executing; non-members get a clear error
+- All commands that take `--workspace` validate membership before executing; non-members get a clear 403 error
 
 **MCP server**
 - Tool calls that resolve a workspace context validate membership of the authenticated token's user before executing
@@ -2788,9 +2789,9 @@ bool CanManageWorkspace(string userId, string workspaceId)
 1. Add `WorkspaceId` to `IPrincipalAccessor` and populate in `WorkspaceContextMiddleware` (Server) and equivalent session objects (Desktop, Web)
 2. Add `CanManageWorkspace` helper to `HttpContextAuthExtensions` (Server) and `IPrincipalAccessor` implementations
 3. **Server:** gate `POST /v1/workspaces` behind `IsAdmin`; add role guards to all workspace member/config/delete routes; add workspace-membership validation to project member add
-4. **Web:** filter workspace list to memberships; constrain project member picker; add workspace settings page; gate admin workspace management in Admin page
-5. **Desktop:** filter workspace selector; add workspace settings tab; constrain project member picker; hide new-workspace button for non-admins
-6. **CLI:** implement `workspace list`, `workspace members`, `workspace invite`; validate `--workspace` membership on all commands
+4. **Web:** replace workspace nav with top-left workspace switcher (`/w/{workspaceId}/...` routing); filter list to memberships; add workspace settings page (owner/admin); gate workspace creation in Admin page only
+5. **Desktop:** replace workspace nav with top-left workspace switcher (route-reflected); filter list to memberships; add workspace settings tab (owner/admin); remove new-workspace control for non-admins
+6. **CLI:** implement `workspace list`, `workspace members`; validate `--workspace` membership on all commands (no self-serve invite at beta)
 7. **MCP:** validate workspace membership on tool calls; stamp agent runs with `workspace_id`
 8. Tests: admin-only creation, membership enforcement, cross-workspace isolation, project member constraint, role hierarchy (owner > admin > member > viewer), all-surface parity
 
@@ -8054,7 +8055,7 @@ for security issues", "summarise this conversation as memory".
 
 ## Phase 85 — Identity & Login Parity Across CLI, Web, Desktop & Server
 
-> **Status:** In progress (started 2026-05-06). Server-side auth layer complete; Desktop, Web, CLI surface flows + admin pages pending.
+> **Status:** ✅ Complete (2026-05-07). All surfaces shipped: server auth layer, Desktop login, Web login, CLI login/logout/whoami, admin pages (Web + Desktop), auth unit tests (59 passing).
 
 ### Design decisions (finalised)
 
@@ -8092,8 +8093,8 @@ for security issues", "summarise this conversation as memory".
 | Web login/register pages + route guard + logout | `src/Sovrant.Web/Components/Pages/Login.razor`, `MainLayout.razor` | ✅ Done |
 | CLI `login` / `logout` / `whoami` commands | `src/Sovrant.Cli/Program.cs` | ✅ Done |
 | Update `MigrationRunnerTests` expected schema version | `tests/Sovrant.Runtime.Tests/` | ✅ Done (24 → 26) |
-| Admin pages (Web + Desktop) | `src/Sovrant.Web/Components/Pages/Admin/`, `src/Sovrant.Desktop/Views/Admin/` | ⬜ Pending |
-| Unit tests — `IdentityServiceTests`, `PasswordHasherTests` | `tests/Sovrant.Runtime.Tests/Auth/` | ⬜ Pending |
+| Admin pages (Web + Desktop) | `src/Sovrant.Web/Components/Pages/Admin.razor`, `src/Sovrant.Desktop/Views/AdminView.axaml` | ✅ Done |
+| Unit tests — `IdentityServiceTests`, `PasswordHasherTests`, `SqliteTokenServiceTests` | `tests/Sovrant.Runtime.Tests/Auth/` | ✅ Done (59 tests passing) |
 
 ### Goal
 
@@ -9711,7 +9712,7 @@ A stuck tool call (infinite loop, hung subprocess, unresponsive MCP server) occu
 
 ---
 
-### Item 3 — Phase 85: Identity & Login Parity 🔄
+### Item 3 — Phase 85: Identity & Login Parity ✅
 
 **Effort:** 3–5 weeks  
 **Goal:** A single identity flows through Desktop, Web, CLI, and Server so a user who logs in on any surface sees the same workspaces, sessions, and memories.
@@ -9743,9 +9744,9 @@ Admin pages (Web + Desktop) — user list with approve/disable/reactivate action
 
 ## Phase 85.5 — Local / Remote Mode Selection for CLI & Desktop
 
-**Status:** Planned  
+**Status:** ✅ Complete (2026-05-07).  
 **Effort:** ~1–2 weeks  
-**Depends on:** Phase 85 (identity + svt_ tokens)
+**Depends on:** Phase 85 (identity + svt_ tokens) ✅
 
 ### Problem
 
@@ -9770,23 +9771,32 @@ The goal is parity: both surfaces can run **local** (embedded, single-user, no s
 - In both cases, the identity flow (Phase 85 login/token) applies regardless of mode
 
 **What already exists:**
-- `AddSovrantClient()` + `SovrantRemoteOptions` — Phase 61; used by Web; provides `RemoteChatService`, `RemoteToolRegistry`, `SignalRStreamingClient`, etc.
+- `AddSovrantClient()` + `SovrantRemoteOptions` — Phase 61; used by Web; provides `RemoteRuntimeSessionPool`, `RemoteSessionStore`, `RemoteToolRegistry`, `RemoteArtifactStore`, `SignalRStreamingClient`, `SovrantApiDelegatingHandler` (bearer token injection), `RemoteConnectionState`
 - `ICredentialStore` — AES-256-GCM encrypted; already stores API keys; extend to store server URL
 - `BearerTokenMiddleware` on the server already validates `svt_` tokens
 - Desktop setup wizard (`SetupWizardViewModel`) — extend with a mode-selection step
 - CLI `BuildServices()` function — branch on stored server URL to call `AddSovrantClient()` instead of `AddSovrantRuntime()`
 
+**Important constraint — client library is Web-only today:**  
+All remote proxy implementations (`RemoteRuntimeSessionPool`, `RemoteSessionStore`, etc.) currently live in `Sovrant.Web/Services/Remote/`. Desktop and CLI have no reference to that project. Before `AddSovrantClient()` can be called from CLI or Desktop, these must be moved into a shared library — proposed as `Sovrant.Api.Client` or similar. This is the largest single piece of new work in this phase.
+
 **New work:**
 
 | Item | Notes |
 |---|---|
-| CLI `--server` global option + `sovrant connect <url>` command | Stores server URL; `sovrant disconnect` reverts to local |
-| CLI: auto-detect mode in `BuildServices()` | If `sovrant.cli.server_url` in credential store → `AddSovrantClient()` else embedded |
-| CLI: `sovrant login` works against both local and remote | Local: calls embedded `IIdentityService`; remote: `POST /v1/auth/login` |
-| Desktop: mode-selection step in setup wizard | "Local" (default) vs "Remote — enter server URL"; persist choice |
-| Desktop: boot path branches on stored mode | Local → existing embedded init; remote → `AddSovrantClient()` + show login against server URL |
-| Desktop: Settings — switch mode / change server URL | Allow switching without reinstall; requires re-login |
-| Token refresh / re-login on 401 | Both surfaces detect 401 and prompt re-login rather than crashing |
+| ✅ Extract `Sovrant.Web/Services/Remote/` into shared `Sovrant.Api.Client` project | Done: new `src/Sovrant.Api.Client/` lib; `Sovrant.Web` references it; namespace → `Sovrant.Client.Remote` |
+| ✅ `sovrant connect <url>` + `sovrant disconnect` commands | Stores `RuntimeMode` / `RemoteServerUrl` / `RemoteApiToken` in credential store |
+| ✅ CLI: auto-detect mode in `BuildServices()` | Checks env `SOVRANT_SERVER_URL` then credential store; calls `AddSovrantClient()` or `AddSovrantRuntime()` |
+| ✅ CLI: `sovrant login` works against both local and remote | Local: embedded `IIdentityService`; remote: `POST /v1/auth/login` via HTTP |
+| ✅ CLI: `sovrant logout` / `whoami` work in remote mode | Logout: deletes local token only; whoami: calls `GET /v1/auth/me` |
+| ✅ `AddSovrantStorage` extracted from `AddSovrantRuntime` | Lightweight storage-only registration for startup mode detection |
+| ✅ `RemoteIdentityService` in `Sovrant.Api.Client` | Implements `IIdentityService` via server REST; `LoginViewModel` works unchanged in both modes |
+| ✅ Desktop: two-phase boot — read mode before building DI container | Phase 1: `AddSovrantStorage` → read mode; Phase 2: `AddSovrantClient` or `AddSovrantRuntime` |
+| ✅ Desktop: remote login / session restore | `TryRestoreRemoteSessionAsync` validates stored token via `GET /v1/auth/me` |
+| ✅ Desktop: 401 re-auth via `RemoteConnectionState.StatusChanged` | Fires login window on 401; hot-swaps token in `SovrantRemoteOptions` |
+| ✅ Token refresh / re-login on 401 (Desktop) | Handled via `RemoteConnectionState` subscription |
+| ✅ Desktop: mode-selection step in setup wizard | Three-step wizard: Mode → Local provider/key or Remote server URL; `ChooseLocalCommand`, `ChooseRemoteCommand`, `SaveRemoteAndStartCommand` |
+| ✅ Desktop: Settings — switch mode / change server URL | Connection tab with `IsRemoteMode` toggle + `ConnectionServerUrl` field; `SaveConnectionCommand` persists to credential store + fires `RestartRequired` |
 
 **Out of scope for 85.5:**
 - Certificate pinning / mutual TLS
@@ -9820,9 +9830,46 @@ See the Phase 96 entry for the full smoke test checklist.
 |---|---|---|---|
 | 1 | ArtifactRoutes security (path traversal + ownership) | ~2 hrs | ✅ |
 | 2 | CORS configurable origins + agentic loop timeout | ~half day | ✅ |
-| 3 | Phase 85 — Identity & login parity | 3–5 weeks | 🔄 In progress (server layer done; surfaces pending) |
+| 3 | Phase 85 — Identity & login parity | 3–5 weeks | ✅ Complete |
 | 4 | Phase 96 — MCP smoke test (launch gate) | ~1 week | ✅ |
 | — | Phase 47 — Workspace backup/export | 1–2 weeks | **Post-beta** |
+
+---
+
+## Phase 97 — TLS/SSL Support for Server, Web & MCP
+
+**Status:** Planned
+**Goal:** All three network-facing surfaces (HTTP server, Blazor Web frontend, MCP server) support HTTPS/TLS so that traffic between clients and Sovrant is encrypted in transit. No plaintext HTTP in any production or beta deployment.
+
+### Scope
+
+| Surface | What changes |
+|---|---|
+| **Server (`Sovrant.Server`)** | Kestrel configured to bind HTTPS on a configurable port (default `5443`); certificate path + password (or Let's Encrypt / ACME) configurable via `sovrant.config`; plaintext HTTP either disabled or redirected to HTTPS |
+| **Web (`Sovrant.Web`)** | Blazor Server host honours the same Kestrel TLS config; SignalR WebSocket connection (remote mode) requires `wss://`; HTTP → HTTPS redirect middleware enabled |
+| **MCP server** | MCP HTTP transport binds HTTPS; clients connecting to the MCP endpoint must use `https://` / `wss://`; existing MCP session auth unchanged |
+
+### Certificate strategy
+
+- **Development / local:** self-signed via `dotnet dev-certs https` — documented in setup guide, not managed by Sovrant
+- **Self-hosted beta:** PEM/PFX path + passphrase configured in `sovrant.config` (`server.tls.cert`, `server.tls.key`); loaded by Kestrel at startup
+- **ACME / Let's Encrypt:** deferred — noted as a follow-on once the self-hosted path is validated
+
+### What does NOT change
+
+- Desktop app (Avalonia) — no network listener; not in scope
+- CLI — connects to the server as a client; picks up TLS automatically once the server endpoint is HTTPS
+- Internal service-to-service calls (e.g. Web → Server in embedded mode) — loopback only, no TLS required
+- Token format, auth flow, or workspace enforcement — unchanged
+
+### Implementation plan
+
+1. Add `server.tls` section to `sovrant.config` schema (`enabled`, `cert`, `key`, `port`)
+2. Wire Kestrel `ListenAnyIP(httpsPort, o => o.UseHttps(...))` in `Sovrant.Server` and `Sovrant.Web` host builders, driven by config
+3. Add HTTP → HTTPS redirect middleware (both hosts) when TLS is enabled
+4. Update MCP server transport to use the same Kestrel TLS binding
+5. Update README / setup guide with dev-certs and self-hosted cert instructions
+6. Smoke test: HTTPS handshake on Server, Web (including SignalR), and MCP endpoint; verify HTTP redirects; verify CLI connects cleanly
 
 ---
 

@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 using Sovrant.Runtime.Conversation;
 
-namespace Sovrant.Web.Services.Remote;
+namespace Sovrant.Client.Remote;
 
 /// <summary>
 /// Manages the SignalR connection to the Sovrant server's <c>/hubs/chat</c> endpoint.
@@ -28,6 +28,7 @@ public sealed class SignalRStreamingClient : IAsyncDisposable
         _connection = new HubConnectionBuilder()
             .WithUrl(hubUrl, httpOptions =>
             {
+                // Lambda reads options.ApiToken at call time so token hot-swap works after re-auth.
                 httpOptions.AccessTokenProvider = () => Task.FromResult(options.ApiToken);
             })
             .WithAutomaticReconnect(BuildRetryPolicy(options.SignalR))

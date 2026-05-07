@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Sovrant.Runtime.Session;
 
-namespace Sovrant.Web.Services.Remote;
+namespace Sovrant.Client.Remote;
 
 /// <summary>
 /// <see cref="ISessionStore"/> implementation backed by the Sovrant server REST API.

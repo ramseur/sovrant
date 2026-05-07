@@ -36,6 +36,16 @@ public partial class SetupWizardViewModel : ViewModelBase
         ["Azure OpenAI"] = "gpt-4o",
     };
 
+    // ── Wizard step state ────────────────────────────────────────────────────────
+    [ObservableProperty] private bool _isModeStep = true;
+    [ObservableProperty] private bool _isProviderStep;
+    [ObservableProperty] private bool _isRemoteStep;
+
+    // ── Remote step ──────────────────────────────────────────────────────────────
+    [ObservableProperty] private string _remoteServerUrl = string.Empty;
+    [ObservableProperty] private string _remoteStatusMessage = string.Empty;
+
+    // ── Provider step ────────────────────────────────────────────────────────────
     [ObservableProperty]
     private bool _isVisible;
 
@@ -56,6 +66,9 @@ public partial class SetupWizardViewModel : ViewModelBase
 
     /// <summary>Raised after settings are saved successfully.</summary>
     public event Action? SetupCompleted;
+
+    /// <summary>Raised when remote mode is saved and a restart is required.</summary>
+    public event Action? RestartRequired;
 
     public SetupWizardViewModel(
         SovrantConfig config,
@@ -78,6 +91,67 @@ public partial class SetupWizardViewModel : ViewModelBase
     partial void OnSelectedProviderChanged(string value)
     {
         BaseUrl = ProviderBaseUrls.GetValueOrDefault(value, string.Empty);
+    }
+
+    [RelayCommand]
+    private void ChooseLocal()
+    {
+        IsModeStep = false;
+        IsProviderStep = true;
+        IsRemoteStep = false;
+    }
+
+    [RelayCommand]
+    private void ChooseRemote()
+    {
+        IsModeStep = false;
+        IsProviderStep = false;
+        IsRemoteStep = true;
+    }
+
+    [RelayCommand]
+    private void BackToMode()
+    {
+        IsModeStep = true;
+        IsProviderStep = false;
+        IsRemoteStep = false;
+    }
+
+    [RelayCommand]
+    private async Task SaveRemoteAndStartAsync()
+    {
+        if (string.IsNullOrWhiteSpace(RemoteServerUrl))
+        {
+            RemoteStatusMessage = "Please enter a server URL.";
+            return;
+        }
+
+        if (!Uri.TryCreate(RemoteServerUrl.Trim(), UriKind.Absolute, out _))
+        {
+            RemoteStatusMessage = "Please enter a valid URL (e.g. http://localhost:5200).";
+            return;
+        }
+
+        IsSaving = true;
+        RemoteStatusMessage = string.Empty;
+
+        try
+        {
+            await _credentials.StoreAsync(CredentialKeys.RuntimeMode, "remote");
+            await _credentials.StoreAsync(CredentialKeys.RemoteServerUrl, RemoteServerUrl.Trim());
+            await _credentials.StoreAsync(CredentialKeys.RemoteApiToken, string.Empty);
+
+            IsVisible = false;
+            RestartRequired?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            RemoteStatusMessage = $"Failed to save: {ex.Message}";
+        }
+        finally
+        {
+            IsSaving = false;
+        }
     }
 
     [RelayCommand]

@@ -26,4 +26,13 @@ public static class CredentialKeys
 
     /// <summary>FireCrawl API key. Env override: <c>FIRECRAWL_API_KEY</c>.</summary>
     public const string FirecrawlApiKey = "websearch.firecrawl_api_key";
+
+    /// <summary>Runtime mode: "local" (embedded) or "remote" (connect to Sovrant.Server).</summary>
+    public const string RuntimeMode = "sovrant.runtime_mode";
+
+    /// <summary>Base URL of the remote Sovrant server (e.g. <c>http://my-server:5200</c>).</summary>
+    public const string RemoteServerUrl = "sovrant.remote.server_url";
+
+    /// <summary>Bearer token for authenticating with the remote server.</summary>
+    public const string RemoteApiToken = "sovrant.remote.api_token";
 }

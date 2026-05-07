@@ -1,12 +1,11 @@
 using System.Text.Json;
 using Sovrant.Runtime.Permissions;
 
-namespace Sovrant.Web.Services.Remote;
+namespace Sovrant.Client.Remote;
 
 /// <summary>
 /// <see cref="IToolConfirmationHandler"/> that relays confirmation requests
-/// to the user via the Blazor UI (same event pattern as <c>BlazorConfirmationHandler</c>)
-/// but with an additional path to forward the response back to the server via SignalR.
+/// to the user via the UI and forwards the response back to the server via SignalR.
 /// </summary>
 public sealed class RemoteToolConfirmationHandler : IToolConfirmationHandler
 {
@@ -14,9 +13,7 @@ public sealed class RemoteToolConfirmationHandler : IToolConfirmationHandler
 
     /// <summary>
     /// Fires when the server requests tool confirmation. The UI subscribes to this
-    /// to show the confirmation dialog. The returned decision is forwarded back
-    /// to the server so the executor can either run the tool, remember the
-    /// approval for the rest of the turn, or deny the call.
+    /// to show the confirmation dialog.
     /// </summary>
     public event Func<string, JsonElement, Task<ConfirmationDecision>>? ConfirmationRequested;
 
@@ -27,7 +24,6 @@ public sealed class RemoteToolConfirmationHandler : IToolConfirmationHandler
 
     public async Task<ConfirmationDecision> RequestConfirmationAsync(string toolName, JsonElement input, CancellationToken ct)
     {
-        // If the UI has subscribed, show the dialog and relay the answer.
         if (ConfirmationRequested is not null)
         {
             var decision = await ConfirmationRequested.Invoke(toolName, input);

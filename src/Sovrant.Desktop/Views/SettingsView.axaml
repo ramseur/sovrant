@@ -39,6 +39,19 @@
                         Background="{DynamicResource SurfaceCard}"
                         Foreground="{DynamicResource TextSecondary}"
                         IsVisible="{Binding !IsProvidersTab}" />
+
+                <Button Content="Connection"
+                        Command="{Binding SelectTabCommand}" CommandParameter="2"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource BrandPrimary}"
+                        Foreground="White"
+                        IsVisible="{Binding IsConnectionTab}" />
+                <Button Content="Connection"
+                        Command="{Binding SelectTabCommand}" CommandParameter="2"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource SurfaceCard}"
+                        Foreground="{DynamicResource TextSecondary}"
+                        IsVisible="{Binding !IsConnectionTab}" />
             </StackPanel>
 
             <!-- ═══════════════════════════════════════════════ -->
@@ -294,6 +307,70 @@
                             Padding="12,6"/>
                 </StackPanel>
             </StackPanel>
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- TAB 2: Connection                               -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <StackPanel Spacing="20" IsVisible="{Binding IsConnectionTab}">
+
+                <TextBlock Text="Runtime Mode" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="Choose whether Sovrant runs its AI runtime in-process (Local) or delegates to a shared Sovrant Server (Remote)."
+                           FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                           TextWrapping="Wrap" />
+
+                <!-- Mode toggle -->
+                <Border Padding="12" CornerRadius="8"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <ToggleSwitch DockPanel.Dock="Right"
+                                      IsChecked="{Binding IsRemoteMode}"
+                                      OnContent="" OffContent="" />
+                        <StackPanel>
+                            <TextBlock Text="Mode: Remote" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       IsVisible="{Binding IsRemoteMode}" />
+                            <TextBlock Text="Mode: Local (embedded)" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       IsVisible="{Binding !IsRemoteMode}" />
+                            <TextBlock Text="Toggle to switch between local and remote mode"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- Server URL (only shown in remote mode) -->
+                <StackPanel Spacing="6" IsVisible="{Binding IsRemoteMode}">
+                    <TextBlock Text="Server URL" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <TextBox Text="{Binding ConnectionServerUrl}"
+                             Watermark="http://localhost:5200"
+                             CornerRadius="8"
+                             Padding="12,8" />
+                    <TextBlock Text="The URL of your Sovrant Server instance."
+                               FontSize="10" Foreground="{DynamicResource TextMuted}" />
+                </StackPanel>
+
+                <!-- Status -->
+                <TextBlock Text="{Binding ConnectionStatusMessage}"
+                           FontSize="12"
+                           Foreground="{DynamicResource StatusPass}"
+                           IsVisible="{Binding ConnectionStatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                <Button Content="Save &amp; Restart"
+                        Command="{Binding SaveConnectionCommand}"
+                        HorizontalAlignment="Left"
+                        Padding="14,10" CornerRadius="8" FontSize="13"
+                        Background="{DynamicResource BrandPrimary}"
+                        Foreground="White" FontWeight="SemiBold" />
+
+                <TextBlock FontSize="11" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextMuted}">
+                    Switching mode requires a restart. In remote mode, you log in with your server credentials and no local API key is needed.
+                </TextBlock>
+            </StackPanel>
+
         </StackPanel>
     </ScrollViewer>
 </UserControl>

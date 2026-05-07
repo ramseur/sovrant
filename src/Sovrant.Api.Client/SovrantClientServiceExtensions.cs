@@ -1,23 +1,23 @@
 using Microsoft.Extensions.DependencyInjection;
 using Sovrant.Runtime.Artifacts;
+using Sovrant.Runtime.Auth;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Tools;
 using Sovrant.Tools.Extended;
 
-namespace Sovrant.Web.Services.Remote;
+namespace Sovrant.Client.Remote;
 
 /// <summary>
 /// Registers all services needed for remote Sovrant server mode.
-/// The web frontend connects to a running Sovrant.Server via HTTP + SignalR
-/// instead of running the runtime in-process.
+/// Call <see cref="AddSovrantClient"/> instead of <c>AddSovrantRuntime()</c> when connecting
+/// to a shared <c>Sovrant.Server</c> instance.
 /// </summary>
 public static class SovrantClientServiceExtensions
 {
     /// <summary>
     /// Registers remote-mode service implementations that proxy to a Sovrant server.
-    /// Call this instead of <c>AddSovrantRuntime()</c> when <c>SOVRANT_RUNTIME_MODE=remote</c>.
     /// </summary>
     public static IServiceCollection AddSovrantClient(
         this IServiceCollection services,
@@ -27,7 +27,7 @@ public static class SovrantClientServiceExtensions
 
         if (string.IsNullOrWhiteSpace(options.Url))
             throw new InvalidOperationException(
-                "SOVRANT_SERVER_URL or Sovrant:Server:Url must be set when RuntimeMode is 'remote'.");
+                "Server URL must be set when RuntimeMode is 'remote'.");
 
         // Options + connection state (singletons).
         services.AddSingleton(options);
@@ -61,6 +61,9 @@ public static class SovrantClientServiceExtensions
 
         // User input — not available in remote mode (server handles it).
         services.AddSingleton<IUserInputProvider, RemoteUserInputProvider>();
+
+        // Identity adapter — lets existing login/register UI work against the server.
+        services.AddSingleton<IIdentityService, RemoteIdentityService>();
 
         return services;
     }

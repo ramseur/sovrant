@@ -1,12 +1,15 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Sovrant.Api.Auth;
 using Sovrant.Api.Routing;
+using Sovrant.Client.Remote;
 using Sovrant.Runtime.Logging;
 using Sovrant.Cli;
 using Sovrant.Commands;
 using Sovrant.Runtime;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Conversation;
+using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Storage;
 using Sovrant.Agents;
@@ -290,7 +293,7 @@ promptCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
     var message = pr.GetValue(messageArg);
     var ciMode = pr.GetValue(ciOpt);
 
-    if (!ciMode)
+    if (!ciMode && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("SOVRANT_SERVER_URL")))
     {
         var config = ConfigLoader.Load();
         var keyError = ApiKeyValidator.Validate(config);
@@ -960,6 +963,55 @@ root.Add(uninstallCmd);
 // ── 'document' subcommand group ──────────────────────────────────────────────
 root.Add(DocumentCommand.Build(BuildServices));
 
+// ── 'connect' subcommand ─────────────────────────────────────────────────────
+var connectUrlArg = new Argument<string>("url") { Description = "Base URL of the Sovrant server (e.g. http://my-server:5200)." };
+var connectTokenOpt = new Option<string?>("--token") { Description = "Bearer token for the server. If omitted, run 'sovrant login' after connecting." };
+var connectCmd = new Command("connect", "Switch to remote mode and connect to a shared Sovrant server.");
+connectCmd.Add(connectUrlArg);
+connectCmd.Add(connectTokenOpt);
+connectCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    var url = pr.GetValue(connectUrlArg)!;
+    var token = pr.GetValue(connectTokenOpt);
+    var bootstrap = BootstrapConfigLoader.Load(args);
+
+    var minServices = new ServiceCollection();
+    minServices.AddSovrantStorage(bootstrap);
+    await using var minSp = minServices.BuildServiceProvider();
+    var storage = minSp.GetRequiredService<IStorageProvider>();
+    await storage.InitializeAsync(ct).ConfigureAwait(false);
+    var store = minSp.GetRequiredService<ICredentialStore>();
+
+    await store.StoreAsync(CredentialKeys.RuntimeMode, "remote", ct).ConfigureAwait(false);
+    await store.StoreAsync(CredentialKeys.RemoteServerUrl, url, ct).ConfigureAwait(false);
+    if (token is not null)
+        await store.StoreAsync(CredentialKeys.RemoteApiToken, token, ct).ConfigureAwait(false);
+
+    AnsiConsole.MarkupLine($"[green]Connected to [bold]{Markup.Escape(url)}[/].[/]");
+    AnsiConsole.MarkupLine("[grey]Run [bold]sovrant login[/] to authenticate with the server.[/]");
+});
+root.Add(connectCmd);
+
+// ── 'disconnect' subcommand ───────────────────────────────────────────────────
+var disconnectCmd = new Command("disconnect", "Switch back to local (embedded) mode.");
+disconnectCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    var bootstrap = BootstrapConfigLoader.Load(args);
+    var minServices = new ServiceCollection();
+    minServices.AddSovrantStorage(bootstrap);
+    await using var minSp = minServices.BuildServiceProvider();
+    var storage = minSp.GetRequiredService<IStorageProvider>();
+    await storage.InitializeAsync(ct).ConfigureAwait(false);
+    var store = minSp.GetRequiredService<ICredentialStore>();
+
+    await store.StoreAsync(CredentialKeys.RuntimeMode, "local", ct).ConfigureAwait(false);
+    await store.DeleteAsync(CredentialKeys.RemoteServerUrl, ct).ConfigureAwait(false);
+    await store.DeleteAsync(CredentialKeys.RemoteApiToken, ct).ConfigureAwait(false);
+
+    AnsiConsole.MarkupLine("[green]Disconnected. Switched to local (embedded) mode.[/]");
+});
+root.Add(disconnectCmd);
+
 // ── 'login' subcommand ────────────────────────────────────────────────────────
 const string CliTokenKey = "sovrant.cli.auth_token";
 var loginEmailOpt = new Option<string?>("--email") { Description = "Account email address." };
@@ -975,9 +1027,43 @@ loginCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
         ?? AnsiConsole.Prompt(new TextPrompt<string>("Password:").PromptStyle("cyan").Secret());
 
     await using var sp = BuildServices(pr);
-    var storage = sp.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>();
+    var storage = sp.GetRequiredService<IStorageProvider>();
     await storage.InitializeAsync(ct).ConfigureAwait(false);
+    var store = sp.GetRequiredService<ICredentialStore>();
 
+    // Remote mode: authenticate against the server via HTTP.
+    var remoteOpts = sp.GetService<SovrantRemoteOptions>();
+    if (remoteOpts is not null)
+    {
+        using var http = new HttpClient { BaseAddress = new Uri(remoteOpts.Url!.TrimEnd('/')) };
+        var body = JsonSerializer.Serialize(new { email, password });
+        using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        var resp = await http.PostAsync(new Uri("/v1/auth/login", UriKind.Relative), content, ct).ConfigureAwait(false);
+        if (!resp.IsSuccessStatusCode)
+        {
+            AnsiConsole.MarkupLine($"[red]Login failed ({(int)resp.StatusCode}). Check your credentials.[/]");
+            Environment.ExitCode = 1;
+            return;
+        }
+        var json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        var doc = JsonDocument.Parse(json);
+        var token = doc.RootElement.TryGetProperty("token", out var t) ? t.GetString() : null;
+        var userId = doc.RootElement.TryGetProperty("user_id", out var u) ? u.GetString() : email;
+        if (string.IsNullOrEmpty(token))
+        {
+            AnsiConsole.MarkupLine("[red]Login failed: server returned no token.[/]");
+            Environment.ExitCode = 1;
+            return;
+        }
+        await store.StoreAsync(CredentialKeys.RemoteApiToken, token, ct).ConfigureAwait(false);
+        await store.StoreAsync(CliTokenKey, token, ct).ConfigureAwait(false);
+        // Hot-swap the token in the options so subsequent commands in this process use the new token.
+        remoteOpts.ApiToken = token;
+        AnsiConsole.MarkupLine($"[green]Logged in as {Markup.Escape(userId ?? email)}.[/]");
+        return;
+    }
+
+    // Local mode: authenticate via embedded IIdentityService.
     var identity = sp.GetRequiredService<Sovrant.Runtime.Auth.IIdentityService>();
     var result = await identity.LoginAsync(email, password, ct).ConfigureAwait(false);
     if (!result.Success || result.Token is null)
@@ -987,7 +1073,6 @@ loginCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
         return;
     }
 
-    var store = sp.GetRequiredService<Sovrant.Runtime.Mcp.ICredentialStore>();
     await store.StoreAsync(CliTokenKey, result.Token, ct).ConfigureAwait(false);
     AnsiConsole.MarkupLine($"[green]Logged in as {Markup.Escape(result.UserId ?? email)} ({Markup.Escape(result.Role ?? "user")}).[/]");
 });
@@ -998,10 +1083,10 @@ var logoutCmd = new Command("logout", "Revoke the stored session token.");
 logoutCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
 {
     await using var sp = BuildServices(pr);
-    var storage = sp.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>();
+    var storage = sp.GetRequiredService<IStorageProvider>();
     await storage.InitializeAsync(ct).ConfigureAwait(false);
 
-    var store = sp.GetRequiredService<Sovrant.Runtime.Mcp.ICredentialStore>();
+    var store = sp.GetRequiredService<ICredentialStore>();
     var plaintext = await store.RetrieveAsync(CliTokenKey, ct).ConfigureAwait(false);
     if (string.IsNullOrEmpty(plaintext))
     {
@@ -1009,12 +1094,18 @@ logoutCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
         return;
     }
 
-    var tokens = sp.GetRequiredService<Sovrant.Runtime.Auth.ITokenService>();
-    var resolved = await tokens.ResolveAsync(plaintext, ct).ConfigureAwait(false);
-    if (resolved is not null)
+    // Remote mode: just delete the local token; server-side revocation is not required.
+    var remoteOpts = sp.GetService<SovrantRemoteOptions>();
+    if (remoteOpts is null)
     {
-        var identity = sp.GetRequiredService<Sovrant.Runtime.Auth.IIdentityService>();
-        await identity.LogoutAsync(resolved.Token.TokenId, ct).ConfigureAwait(false);
+        // Local mode: revoke the token in the embedded database.
+        var tokens = sp.GetRequiredService<Sovrant.Runtime.Auth.ITokenService>();
+        var resolved = await tokens.ResolveAsync(plaintext, ct).ConfigureAwait(false);
+        if (resolved is not null)
+        {
+            var identity = sp.GetRequiredService<Sovrant.Runtime.Auth.IIdentityService>();
+            await identity.LogoutAsync(resolved.Token.TokenId, ct).ConfigureAwait(false);
+        }
     }
 
     await store.DeleteAsync(CliTokenKey, ct).ConfigureAwait(false);
@@ -1027,10 +1118,43 @@ var whoamiCmd = new Command("whoami", "Show the currently authenticated user.");
 whoamiCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
 {
     await using var sp = BuildServices(pr);
-    var storage = sp.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>();
+    var storage = sp.GetRequiredService<IStorageProvider>();
     await storage.InitializeAsync(ct).ConfigureAwait(false);
 
-    var store = sp.GetRequiredService<Sovrant.Runtime.Mcp.ICredentialStore>();
+    var store = sp.GetRequiredService<ICredentialStore>();
+    var remoteOpts = sp.GetService<SovrantRemoteOptions>();
+
+    if (remoteOpts is not null)
+    {
+        // Remote mode: call the server's /v1/auth/me endpoint.
+        var token = await store.RetrieveAsync(CliTokenKey, ct).ConfigureAwait(false)
+            ?? remoteOpts.ApiToken;
+        if (string.IsNullOrEmpty(token))
+        {
+            AnsiConsole.MarkupLine("[yellow]Not logged in. Run [bold]sovrant login[/] to authenticate.[/]");
+            Environment.ExitCode = 1;
+            return;
+        }
+        using var http = new HttpClient { BaseAddress = new Uri(remoteOpts.Url!.TrimEnd('/')) };
+        http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        var resp = await http.GetAsync(new Uri("/v1/auth/me", UriKind.Relative), ct).ConfigureAwait(false);
+        if (!resp.IsSuccessStatusCode)
+        {
+            AnsiConsole.MarkupLine("[red]Stored token is invalid or expired. Run [bold]sovrant login[/] again.[/]");
+            Environment.ExitCode = 1;
+            return;
+        }
+        var json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        var doc = JsonDocument.Parse(json);
+        var userId = doc.RootElement.TryGetProperty("user_id", out var u) ? u.GetString() : "unknown";
+        var role = doc.RootElement.TryGetProperty("role", out var r) ? r.GetString() : "user";
+        AnsiConsole.MarkupLine($"[bold]User:[/] {Markup.Escape(userId ?? "unknown")}");
+        AnsiConsole.MarkupLine($"[bold]Role:[/] {Markup.Escape(role ?? "user")}");
+        AnsiConsole.MarkupLine($"[bold]Server:[/] {Markup.Escape(remoteOpts.Url ?? "")}");
+        return;
+    }
+
+    // Local mode: resolve via embedded token service.
     var plaintext = await store.RetrieveAsync(CliTokenKey, ct).ConfigureAwait(false);
     if (string.IsNullOrEmpty(plaintext))
     {
@@ -1059,14 +1183,30 @@ root.Add(whoamiCmd);
 root.SetAction(async (ParseResult pr, CancellationToken ct) =>
 {
     var config = ConfigLoader.Load();
-    var keyError = ApiKeyValidator.Validate(config);
-    if (keyError is not null)
+    // Skip API-key check in remote mode — the server handles LLM credentials.
+    var remoteUrl = Environment.GetEnvironmentVariable("SOVRANT_SERVER_URL");
+    if (string.IsNullOrEmpty(remoteUrl))
     {
-        AnsiConsole.MarkupLine("[red bold]Configuration Error[/]");
-        AnsiConsole.WriteLine();
-        AnsiConsole.WriteLine(keyError);
-        Environment.ExitCode = 1;
-        return;
+        var bootstrap = BootstrapConfigLoader.Load(args);
+        var minSvc = new ServiceCollection();
+        minSvc.AddSovrantStorage(bootstrap);
+        await using var minSp2 = minSvc.BuildServiceProvider();
+        var st = minSp2.GetRequiredService<IStorageProvider>();
+        await st.InitializeAsync(ct).ConfigureAwait(false);
+        var cr = minSp2.GetRequiredService<ICredentialStore>();
+        var storedMode = await cr.RetrieveAsync(CredentialKeys.RuntimeMode, ct).ConfigureAwait(false);
+        if (!string.Equals(storedMode, "remote", StringComparison.OrdinalIgnoreCase))
+        {
+            var keyError = ApiKeyValidator.Validate(config);
+            if (keyError is not null)
+            {
+                AnsiConsole.MarkupLine("[red bold]Configuration Error[/]");
+                AnsiConsole.WriteLine();
+                AnsiConsole.WriteLine(keyError);
+                Environment.ExitCode = 1;
+                return;
+            }
+        }
     }
 
     await using var sp = BuildServices(pr);
@@ -1115,6 +1255,35 @@ ServiceProvider BuildServices(ParseResult pr)
     if (dbPath is not null)
         bootstrap = bootstrap with { DbPath = dbPath };
 
+    // ── Remote mode detection ─────────────────────────────────────────────────
+    // Fast path: env var overrides credential store.
+    var envServerUrl = Environment.GetEnvironmentVariable("SOVRANT_SERVER_URL");
+    var remoteServerUrl = envServerUrl;
+    string? remoteApiToken = null;
+
+    if (string.IsNullOrEmpty(remoteServerUrl))
+    {
+        // Check credential store via minimal storage container.
+        var minServices = new ServiceCollection();
+        minServices.AddSovrantStorage(bootstrap);
+        using var minSp = minServices.BuildServiceProvider();
+        var storage = minSp.GetRequiredService<IStorageProvider>();
+        storage.InitializeAsync().GetAwaiter().GetResult();
+        var store = minSp.GetRequiredService<ICredentialStore>();
+        var mode = store.RetrieveAsync(CredentialKeys.RuntimeMode).GetAwaiter().GetResult();
+        if (string.Equals(mode, "remote", StringComparison.OrdinalIgnoreCase))
+        {
+            remoteServerUrl = store.RetrieveAsync(CredentialKeys.RemoteServerUrl).GetAwaiter().GetResult();
+            remoteApiToken = store.RetrieveAsync(CredentialKeys.RemoteApiToken).GetAwaiter().GetResult();
+        }
+    }
+    else
+    {
+        remoteApiToken = Environment.GetEnvironmentVariable("SOVRANT_API_TOKEN");
+    }
+
+    var isRemote = !string.IsNullOrEmpty(remoteServerUrl);
+
     var services = new ServiceCollection();
 
     if (ciMode)
@@ -1135,39 +1304,63 @@ ServiceProvider BuildServices(ParseResult pr)
             logFileOverride: bootstrap.LogFile));
     }
 
-    services.AddSovrantRuntime(config, bootstrap);
-    services.AddSovrantTools();
-    services.AddOrchestrationSystem();
-    services.AddSovrantCommands();
-
-    if (ciMode)
+    if (isRemote)
     {
-        // CI mode uses CiPermissionPolicy — auto-approves edits and shell, denies unknown destructive ops.
-        services.AddSingleton<IPermissionPolicy>(new CiPermissionPolicy());
-        // No interactive input in CI — use a no-op provider that returns empty strings.
-        services.AddSingleton<IUserInputProvider, CiUserInputProvider>();
+        var remoteOptions = new SovrantRemoteOptions { Url = remoteServerUrl, ApiToken = remoteApiToken };
+        services.AddSovrantClient(remoteOptions);
+        // Also register storage so login/logout/whoami can access the credential store.
+        services.AddSovrantStorage(bootstrap);
     }
     else
     {
-        // Replace the null input provider with the real console one.
-        services.AddSingleton<IUserInputProvider, ConsoleUserInputProvider>();
-        // Replace the default deny-all confirmation handler with the interactive one.
-        services.AddSingleton<IToolConfirmationHandler, InteractiveConfirmationHandler>();
-        // Replace the null swarm reporter with the CLI one for live progress.
-        services.AddSingleton<Sovrant.Tools.Swarm.ISwarmProgressReporter, CliSwarmProgressReporter>();
+        services.AddSovrantRuntime(config, bootstrap);
+        services.AddSovrantTools();
+        services.AddOrchestrationSystem();
+        services.AddSovrantCommands();
+
+        if (ciMode)
+        {
+            // CI mode uses CiPermissionPolicy — auto-approves edits and shell, denies unknown destructive ops.
+            services.AddSingleton<IPermissionPolicy>(new CiPermissionPolicy());
+            // No interactive input in CI — use a no-op provider that returns empty strings.
+            services.AddSingleton<IUserInputProvider, CiUserInputProvider>();
+        }
+        else
+        {
+            // Replace the null input provider with the real console one.
+            services.AddSingleton<IUserInputProvider, ConsoleUserInputProvider>();
+            // Replace the default deny-all confirmation handler with the interactive one.
+            services.AddSingleton<IToolConfirmationHandler, InteractiveConfirmationHandler>();
+            // Replace the null swarm reporter with the CLI one for live progress.
+            services.AddSingleton<Sovrant.Tools.Swarm.ISwarmProgressReporter, CliSwarmProgressReporter>();
+        }
     }
 
     var sp = services.BuildServiceProvider();
 
-    // Seed the tool registry with all discovered ITool implementations.
-    sp.GetRequiredService<ToolRegistrar>().RegisterAll();
+    if (!isRemote)
+    {
+        // Seed the tool registry with all discovered ITool implementations.
+        sp.GetRequiredService<ToolRegistrar>().RegisterAll();
+    }
 
     return sp;
 }
 
 async Task InitAsync(ServiceProvider sp, ParseResult pr, CancellationToken ct)
 {
-    // Ping all providers, populate health and latency data.
+    var signalR = sp.GetService<SignalRStreamingClient>();
+    if (signalR is not null)
+    {
+        // Remote mode: connect to server and refresh tool list.
+        await signalR.EnsureConnectedAsync(ct).ConfigureAwait(false);
+        var toolRegistry = sp.GetService<RemoteToolRegistry>();
+        if (toolRegistry is not null)
+            await toolRegistry.RefreshAsync(ct).ConfigureAwait(false);
+        return;
+    }
+
+    // Local mode: ping all providers, populate health and latency data.
     var router = sp.GetRequiredService<ISmartRouter>();
     await router.InitializeAsync(ct).ConfigureAwait(false);
 
@@ -1178,7 +1371,6 @@ async Task InitAsync(ServiceProvider sp, ParseResult pr, CancellationToken ct)
 
     // Connect to MCP servers and register their tools.
     await sp.InitializeRuntimeAsync(ct).ConfigureAwait(false);
-
 }
 
 async Task RunReplAsync(IConversationRuntime runtime, SlashCommandDispatcher dispatcher, CancellationToken ct)

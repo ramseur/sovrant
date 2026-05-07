@@ -174,6 +174,16 @@ public partial class SettingsViewModel : ViewModelBase
             });
         }
 
+        // Load connection mode from credential store.
+        var runtimeMode = await _credentials.RetrieveAsync(CredentialKeys.RuntimeMode);
+        var remoteUrl = await _credentials.RetrieveAsync(CredentialKeys.RemoteServerUrl);
+        var isRemote = string.Equals(runtimeMode, "remote", StringComparison.OrdinalIgnoreCase);
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            IsRemoteMode = isRemote;
+            ConnectionServerUrl = remoteUrl ?? string.Empty;
+        });
+
         await LoadProfilesAsync();
         await Dispatcher.UIThread.InvokeAsync(() => _ = LoadModelsForProviderAsync(SelectedProvider));
     }
@@ -222,13 +232,23 @@ public partial class SettingsViewModel : ViewModelBase
         ScheduleAutoSave();
     }
 
+    // ── Connection tab ─────────────────────────────────────────────────────────
+    [ObservableProperty] private bool _isRemoteMode;
+    [ObservableProperty] private string _connectionServerUrl = string.Empty;
+    [ObservableProperty] private string _connectionStatusMessage = string.Empty;
+
+    /// <summary>Raised when the user switches mode and the app must restart.</summary>
+    public event Action? RestartRequired;
+
     public bool IsGeneralTab => SelectedTab == 0;
     public bool IsProvidersTab => SelectedTab == 1;
+    public bool IsConnectionTab => SelectedTab == 2;
 
     partial void OnSelectedTabChanged(int value)
     {
         OnPropertyChanged(nameof(IsGeneralTab));
         OnPropertyChanged(nameof(IsProvidersTab));
+        OnPropertyChanged(nameof(IsConnectionTab));
     }
 
     [RelayCommand]
@@ -718,6 +738,44 @@ public partial class SettingsViewModel : ViewModelBase
         WebSearchBackend.Native,
         WebSearchBackend.Off,
     ];
+
+    [RelayCommand]
+    private async Task SaveConnectionAsync()
+    {
+        if (IsRemoteMode && string.IsNullOrWhiteSpace(ConnectionServerUrl))
+        {
+            ConnectionStatusMessage = "Please enter a server URL.";
+            return;
+        }
+
+        if (IsRemoteMode && !Uri.TryCreate(ConnectionServerUrl.Trim(), UriKind.Absolute, out _))
+        {
+            ConnectionStatusMessage = "Please enter a valid URL (e.g. http://localhost:5200).";
+            return;
+        }
+
+        try
+        {
+            if (IsRemoteMode)
+            {
+                await _credentials.StoreAsync(CredentialKeys.RuntimeMode, "remote");
+                await _credentials.StoreAsync(CredentialKeys.RemoteServerUrl, ConnectionServerUrl.Trim());
+            }
+            else
+            {
+                await _credentials.StoreAsync(CredentialKeys.RuntimeMode, "local");
+                await _credentials.DeleteAsync(CredentialKeys.RemoteServerUrl);
+                await _credentials.DeleteAsync(CredentialKeys.RemoteApiToken);
+            }
+
+            ConnectionStatusMessage = "Saved. Restart the app to apply changes.";
+            RestartRequired?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatusMessage = $"Save failed: {ex.Message}";
+        }
+    }
 
     [RelayCommand]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822")]

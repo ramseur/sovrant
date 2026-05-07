@@ -1,4 +1,4 @@
-namespace Sovrant.Web.Services.Remote;
+namespace Sovrant.Client.Remote;
 
 /// <summary>Observable connection state for the remote Sovrant server.</summary>
 public sealed class RemoteConnectionState

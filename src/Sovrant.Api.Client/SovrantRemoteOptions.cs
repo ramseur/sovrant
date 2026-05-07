@@ -1,4 +1,4 @@
-namespace Sovrant.Web.Services.Remote;
+namespace Sovrant.Client.Remote;
 
 /// <summary>Configuration for connecting to a remote Sovrant server.</summary>
 public sealed class SovrantRemoteOptions

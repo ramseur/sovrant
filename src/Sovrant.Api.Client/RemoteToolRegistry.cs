@@ -2,7 +2,7 @@ using System.Text.Json;
 using Sovrant.Api.Types;
 using Sovrant.Runtime.Tools;
 
-namespace Sovrant.Web.Services.Remote;
+namespace Sovrant.Client.Remote;
 
 /// <summary>
 /// Read-only <see cref="IToolRegistry"/> backed by <c>GET /v1/tools</c>.

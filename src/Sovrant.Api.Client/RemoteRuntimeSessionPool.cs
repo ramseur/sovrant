@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 using Sovrant.Api.Routing;
 using Sovrant.Runtime.Conversation;
 
-namespace Sovrant.Web.Services.Remote;
+namespace Sovrant.Client.Remote;
 
 /// <summary>
 /// <see cref="IRuntimeSessionPool"/> that delegates to a remote Sovrant server via SignalR.
