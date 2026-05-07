@@ -14,6 +14,7 @@ internal static class AuthRoutes
         app.MapPost("/v1/auth/register", RegisterAsync);
         app.MapPost("/v1/auth/login", LoginAsync);
         app.MapPost("/v1/auth/logout", LogoutAsync);
+        app.MapGet("/v1/auth/me", MeAsync);
         app.MapPost("/v1/auth/change-password", ChangePasswordAsync);
         app.MapPost("/v1/auth/use-reset-token", UseResetTokenAsync);
         app.MapPost("/v1/auth/registration/open", OpenRegistrationAsync);
@@ -23,6 +24,14 @@ internal static class AuthRoutes
         app.MapGet("/v1/auth/approval/status", GetApprovalStatusAsync);
         app.MapPost("/v1/auth/approval/enable", EnableApprovalAsync);
         app.MapPost("/v1/auth/approval/disable", DisableApprovalAsync);
+    }
+
+    private static IResult MeAsync(HttpContext ctx)
+    {
+        var userId = ctx.GetUserId();
+        if (userId is null) return Results.Unauthorized();
+        var role = ctx.GetRole() ?? "user";
+        return Results.Ok(new { user_id = userId, role });
     }
 
     private static async Task<IResult> RegisterAsync(

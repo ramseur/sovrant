@@ -72,20 +72,17 @@ public sealed class RemoteIdentityService : IIdentityService
 
     public async Task<bool> IsRegistrationOpenAsync(CancellationToken ct = default)
     {
-        var resp = await _http.GetAsync(new Uri("/v1/auth/registration", UriKind.Relative), ct).ConfigureAwait(false);
+        var resp = await _http.GetAsync(new Uri("/v1/auth/registration/status", UriKind.Relative), ct).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode) return false;
         var json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         var doc = JsonDocument.Parse(json);
-        return doc.RootElement.TryGetProperty("open", out var o) && o.GetBoolean();
+        return doc.RootElement.TryGetProperty("registration_open", out var o) && o.GetBoolean();
     }
 
     public async Task<bool> IsFirstRunAsync(CancellationToken ct = default)
     {
-        var resp = await _http.GetAsync(new Uri("/v1/auth/registration", UriKind.Relative), ct).ConfigureAwait(false);
-        if (!resp.IsSuccessStatusCode) return false;
-        var json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        var doc = JsonDocument.Parse(json);
-        return doc.RootElement.TryGetProperty("first_run", out var f) && f.GetBoolean();
+        // Server doesn't expose first-run state directly; treat open registration as first-run proxy.
+        return await IsRegistrationOpenAsync(ct).ConfigureAwait(false);
     }
 
     public Task LogoutAsync(string tokenId, CancellationToken ct = default)
