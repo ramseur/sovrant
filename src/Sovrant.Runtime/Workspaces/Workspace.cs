@@ -58,10 +58,17 @@ public sealed record WorkspaceMember
 [JsonConverter(typeof(JsonStringEnumConverter<WorkspaceRole>))]
 public enum WorkspaceRole
 {
-    Owner,
-    Admin,
-    Member,
-    Viewer,
+    Owner,   // = 0, highest privilege
+    Admin,   // = 1
+    Member,  // = 2
+    Viewer,  // = 3, lowest privilege
+}
+
+/// <summary>Role comparison helpers. Lower enum value = more privilege.</summary>
+public static class WorkspaceRoleExtensions
+{
+    /// <summary>Returns true when <paramref name="actual"/> grants at least the <paramref name="minimum"/> privilege.</summary>
+    public static bool IsAtLeast(this WorkspaceRole actual, WorkspaceRole minimum) => actual <= minimum;
 }
 
 /// <summary>An invite to join a workspace.</summary>

@@ -11,4 +11,5 @@ public sealed class DesktopPrincipalAccessor : IPrincipalAccessor
     public string? UserId { get; set; }
     public string? Role { get; set; }
     public bool IsAdmin => string.Equals(Role, "admin", StringComparison.OrdinalIgnoreCase);
+    public string? WorkspaceId { get; set; }
 }

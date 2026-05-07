@@ -40,4 +40,10 @@ internal static class SovrantHttpContextKeys
     public const string AuthModeStatic = "static";
 
     public const string RoleAdmin = "admin";
+
+    /// <summary>
+    /// The workspace ID resolved by <see cref="Sovrant.Server.Middleware.WorkspaceContextMiddleware"/>
+    /// for this request. Present after middleware runs; absent for health/options requests.
+    /// </summary>
+    public const string WorkspaceId = "sovrant.workspace_id";
 }

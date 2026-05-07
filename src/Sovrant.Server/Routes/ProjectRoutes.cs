@@ -108,6 +108,18 @@ internal static class ProjectRoutes
         return null;
     }
 
+    /// <summary>Workspace owner, workspace admin, or global admin may manage project membership.</summary>
+    private static async Task<IResult?> RequireWorkspaceManage(
+        HttpContext ctx, string workspaceId, IWorkspaceService wsSvc, CancellationToken ct)
+    {
+        if (ctx.IsAdmin()) return null;
+        var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
+        var role = await wsSvc.GetMemberRoleAsync(workspaceId, userId, ct).ConfigureAwait(false);
+        if (role is null || !role.Value.IsAtLeast(WorkspaceRole.Admin))
+            return Results.Json(new { error = "Workspace admin role required." }, statusCode: StatusCodes.Status403Forbidden);
+        return null;
+    }
+
     // ── Project CRUD ───────────────────────────────────────────────────────
 
     private static async Task<IResult> GetProject(
@@ -134,10 +146,13 @@ internal static class ProjectRoutes
     }
 
     private static async Task<IResult> DeleteProject(
-        HttpContext ctx, string id, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string id, IProjectService svc, IWorkspaceService wsSvc, CancellationToken ct)
     {
-        if (!ctx.IsAdmin())
-            return Results.Json(new { error = "Admin role required to delete projects." }, statusCode: StatusCodes.Status403Forbidden);
+        // Resolve workspace for this project to check workspace-level manage role.
+        var project = await svc.GetAsync(id, ct).ConfigureAwait(false);
+        if (project is null) return Results.NotFound(new { error = "Project not found." });
+        var deny = await RequireWorkspaceManage(ctx, project.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
 
         var deleted = await svc.DeleteAsync(id, ct).ConfigureAwait(false);
         return deleted
@@ -182,10 +197,12 @@ internal static class ProjectRoutes
     }
 
     private static async Task<IResult> AddMember(
-        HttpContext ctx, string id, AddProjectMemberRequest req, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string id, AddProjectMemberRequest req, IProjectService svc, IWorkspaceService wsSvc, CancellationToken ct)
     {
-        if (!ctx.IsAdmin())
-            return Results.Json(new { error = "Admin role required to manage members." }, statusCode: StatusCodes.Status403Forbidden);
+        var project = await svc.GetAsync(id, ct).ConfigureAwait(false);
+        if (project is null) return Results.NotFound(new { error = "Project not found." });
+        var deny = await RequireWorkspaceManage(ctx, project.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
 
         ArgumentNullException.ThrowIfNull(req);
         if (string.IsNullOrWhiteSpace(req.UserId))
@@ -202,12 +219,14 @@ internal static class ProjectRoutes
     }
 
     private static async Task<IResult> RemoveMember(
-        HttpContext ctx, string id, string userId, IProjectService svc, CancellationToken ct)
+        HttpContext ctx, string id, string userId, IProjectService svc, IWorkspaceService wsSvc, CancellationToken ct)
     {
         if (!InputValidation.IsValidResourceId(userId))
             return Results.BadRequest(new { error = "Invalid user ID format." });
-        if (!ctx.IsAdmin())
-            return Results.Json(new { error = "Admin role required to manage members." }, statusCode: StatusCodes.Status403Forbidden);
+        var project = await svc.GetAsync(id, ct).ConfigureAwait(false);
+        if (project is null) return Results.NotFound(new { error = "Project not found." });
+        var deny = await RequireWorkspaceManage(ctx, project.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
+        if (deny is not null) return deny;
 
         var removed = await svc.RemoveMemberAsync(id, userId, ct).ConfigureAwait(false);
         return removed

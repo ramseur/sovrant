@@ -1,4 +1,5 @@
 using Sovrant.Runtime.Projects;
+using Sovrant.Server.Auth;
 
 namespace Sovrant.Server.Middleware;
 
@@ -25,7 +26,7 @@ internal sealed class ProjectContextMiddleware(RequestDelegate next)
         var projectId = context.Request.Headers["X-Project-Id"].FirstOrDefault();
         if (!string.IsNullOrEmpty(projectId))
         {
-            var userId = context.GetUserId() ?? string.Empty;
+            var userId = HttpContextAuthExtensions.GetUserId(context) ?? string.Empty;
             var hasAccess = await projectService.HasAccessAsync(projectId, userId).ConfigureAwait(false);
             if (!hasAccess)
             {

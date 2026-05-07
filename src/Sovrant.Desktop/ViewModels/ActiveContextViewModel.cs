@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Desktop.Auth;
+using Sovrant.Runtime.Auth;
 using Sovrant.Runtime.Projects;
 using Sovrant.Runtime.Workspaces;
 
@@ -16,9 +18,11 @@ public partial class ActiveContextViewModel : ViewModelBase
 {
     private readonly IWorkspaceService _workspaceService;
     private readonly IProjectService _projectService;
+    private readonly IPrincipalAccessor _principal;
 
-    private static readonly string UserId =
-        Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
+    private string UserId => _principal.UserId
+        ?? Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
+        ?? Environment.UserName;
 
     [ObservableProperty]
     private string _activeWorkspaceId = string.Empty;
@@ -52,10 +56,14 @@ public partial class ActiveContextViewModel : ViewModelBase
         ? $"{ActiveWorkspaceName} > {ActiveProjectName}"
         : ActiveWorkspaceName;
 
-    public ActiveContextViewModel(IWorkspaceService workspaceService, IProjectService projectService)
+    public ActiveContextViewModel(
+        IWorkspaceService workspaceService,
+        IProjectService projectService,
+        IPrincipalAccessor principal)
     {
         _workspaceService = workspaceService;
         _projectService = projectService;
+        _principal = principal;
         _ = InitializeAsync();
     }
 
@@ -88,6 +96,7 @@ public partial class ActiveContextViewModel : ViewModelBase
         ActiveProjectId = string.Empty;
         ActiveProjectName = "No Project";
         HasActiveProject = false;
+        if (_principal is DesktopPrincipalAccessor dpa) dpa.WorkspaceId = value.Id;
         Environment.SetEnvironmentVariable("SOVRANT_WORKSPACE_ID", value.Id);
         Environment.SetEnvironmentVariable("SOVRANT_PROJECT_ID", null);
         OnPropertyChanged(nameof(ContextDisplay));

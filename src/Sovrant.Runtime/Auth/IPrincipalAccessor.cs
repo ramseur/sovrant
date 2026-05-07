@@ -14,4 +14,7 @@ public interface IPrincipalAccessor
 
     /// <summary>True when the caller is authenticated and has the <c>"admin"</c> role.</summary>
     bool IsAdmin { get; }
+
+    /// <summary>The active workspace ID resolved from the request context, or <c>null</c>.</summary>
+    string? WorkspaceId { get; }
 }

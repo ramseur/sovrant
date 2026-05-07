@@ -2702,7 +2702,7 @@ Applied in this phase because per-user identity makes ownership enforcement mean
 
 ---
 
-### Phase 40A — Workspace-Scoped Roles & Tenant Enforcement 🔜 Beta
+### Phase 40A — Workspace-Scoped Roles & Tenant Enforcement ✅ Complete (2026-05-07)
 
 **Depends on:** Phase 85 (identity & login — per-user `svt_` tokens, admin gate), Phase 35 (workspaces — data model and role columns already exist)
 

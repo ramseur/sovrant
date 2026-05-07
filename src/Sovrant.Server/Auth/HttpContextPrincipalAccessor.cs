@@ -22,4 +22,7 @@ internal sealed class HttpContextPrincipalAccessor : IPrincipalAccessor
 
     public bool IsAdmin =>
         string.Equals(Role, "admin", StringComparison.OrdinalIgnoreCase);
+
+    public string? WorkspaceId =>
+        _httpContextAccessor.HttpContext?.Items[SovrantHttpContextKeys.WorkspaceId] as string;
 }
