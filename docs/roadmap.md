@@ -2702,7 +2702,7 @@ Applied in this phase because per-user identity makes ownership enforcement mean
 
 ---
 
-### Phase 40A — Workspace-Scoped Roles & Tenant Enforcement ✅ Complete (2026-05-07)
+### Phase 40A — Workspace-Scoped Roles & Tenant Enforcement 🔄 Partial (server enforcement ✅, UI ⬜)
 
 **Depends on:** Phase 85 (identity & login — per-user `svt_` tokens, admin gate), Phase 35 (workspaces — data model and role columns already exist)
 
@@ -9534,7 +9534,7 @@ Neither subsystem has integration tests that verify the full round-trip (session
 
 ## Phase 96 — MCP End-to-End Smoke Test & Go-Public Gate
 
-**Status:** Planned — blocks public launch
+**Status:** ✅ Complete (2026-05-06)
 **Goal:** Prove that MCP-gated sessions work end-to-end on every surface (Desktop, Web, CLI, HTTP server): a real conversation can discover tools from a connected MCP server, invoke them, and return results — with per-session gating enforced correctly.
 
 ### Why this is a launch gate
@@ -9824,7 +9824,7 @@ See the Phase 96 entry for the full smoke test checklist.
 
 ---
 
-### Summary
+### Summary — Original Pre-Beta Items
 
 | # | Item | Effort | Status |
 |---|---|---|---|
@@ -9833,6 +9833,25 @@ See the Phase 96 entry for the full smoke test checklist.
 | 3 | Phase 85 — Identity & login parity | 3–5 weeks | ✅ Complete |
 | 4 | Phase 96 — MCP smoke test (launch gate) | ~1 week | ✅ |
 | — | Phase 47 — Workspace backup/export | 1–2 weeks | **Post-beta** |
+
+### Additional work completed after original plan (2026-05-07/08)
+
+| Item | Status | Notes |
+|---|---|---|
+| Phase 85.5 — Local/Remote mode selection (CLI + Desktop) | ✅ Complete | `Sovrant.Api.Client` extracted; `sovrant connect/disconnect`; two-phase Desktop boot; setup wizard mode picker; Settings connection tab |
+| Phase 40A — Workspace-scoped roles & tenant enforcement (server) | ✅ Complete | `WorkspaceContextMiddleware` fixed to use authenticated identity; `POST /v1/workspaces` admin-only; workspace owner/admin can manage members; project membership gated on workspace role |
+| Auth review fixes — `GET /v1/auth/me` + registration URL | ✅ Complete | Desktop/CLI remote session restore and `whoami` now work; `RemoteIdentityService` path and property names corrected |
+| Web remote mode session persistence | ✅ Complete | `AddSovrantStorage` registered in remote branch; `TryRestoreWebRemoteSessionAsync` validates stored token via `/v1/auth/me` on restart |
+
+### Remaining before beta (recommended order)
+
+| Priority | Item | Effort | Status |
+|---|---|---|---|
+| 1 | Phase 40A UI — workspace switcher (Web + Desktop) + `sovrant workspace list/members` (CLI) | ~1–2 days | ⬜ Not started |
+| 2 | Bug — model selection not persisted across restart | ~half day | ⬜ Not started |
+| 3 | Phase 97 — TLS/SSL for Server, Web & MCP | ~1 day | ⬜ Not started |
+| 4 | Phase 93 — Configuration boundary audit | ~half day | ⬜ Not started |
+| — | Phases 94, 95 (model switch continuity, memory audit) | — | **Post-beta** |
 
 ---
 
@@ -9875,7 +9894,7 @@ See the Phase 96 entry for the full smoke test checklist.
 
 ## Bug — Selected Model Not Persisted Across Desktop/Web Reload
 
-**Status:** Reported (2026-05-05), not yet investigated
+**Status:** Confirmed (2026-05-08), fix queued as pre-beta item 2
 **Symptom:** The model chosen by the user (e.g. via `/model` or the model picker) resets to the default when the Desktop app or Web UI is reloaded. The last-selected model is not restored on startup.
 **Expected:** Per-user selected model is stored in the DB user-settings row (Phase 88 pattern) and re-applied when the session pool initialises on the next launch.
 **Likely location:** `ChatViewModel` (Desktop) / `Chat.razor` (Web) — the model picker writes to an in-memory `SessionConfig` but may not persist the selection to the `IUserSettings` DB store. On reload the pool creates a fresh `SessionConfig` from the stored defaults, losing the in-session override.
