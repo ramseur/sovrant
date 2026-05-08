@@ -27,6 +27,9 @@ public static class Program
     public static string SovrantUserId { get; private set; } =
         Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
 
+    /// <summary>True when running in remote mode (connecting to an external Sovrant.Server).</summary>
+    public static bool IsRemoteMode { get; private set; }
+
     public static async Task Main(string[] args)
     {
         var runtimeMode = Environment.GetEnvironmentVariable("SOVRANT_RUNTIME_MODE") ?? "embedded";
@@ -52,17 +55,16 @@ public static class Program
         if (isRemote)
         {
             // ── Remote mode: connect to an existing Sovrant.Server ──────────
+            IsRemoteMode = true;
             var remoteOptions = new SovrantRemoteOptions
             {
                 Url = Environment.GetEnvironmentVariable("SOVRANT_SERVER_URL") ?? "http://localhost:5200",
                 ApiToken = Environment.GetEnvironmentVariable("SOVRANT_API_TOKEN") ?? string.Empty,
             };
 
-            // Remote mode has no IIdentityService; auto-sign-in with the OS/env identity.
-            var remoteUserId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
-            SovrantUserId = remoteUserId;
-            webSession.SignIn(remoteUserId, "user");
-
+            // Register local credential store so Login.razor can persist the token
+            // and we can restore the session on restart.
+            builder.Services.AddSovrantStorage(bootstrapConfig);
             builder.Services.AddSovrantClient(remoteOptions);
             builder.Services.AddSingleton<ActiveContextService>();
         }
@@ -117,7 +119,17 @@ public static class Program
 
         var app = builder.Build();
 
-        if (!isRemote)
+        if (isRemote)
+        {
+            // Initialize local credential store (for token persistence) before serving requests.
+            await app.Services.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>()
+                .InitializeAsync().ConfigureAwait(false);
+
+            // Restore a previously stored session token from the local credential store.
+            // Validates via GET /v1/auth/me on the remote server; redirects to /login if missing/invalid.
+            await TryRestoreWebRemoteSessionAsync(app.Services, webSession).ConfigureAwait(false);
+        }
+        else
         {
             // Run DB migrations synchronously before app.RunAsync() so any page
             // that synchronously touches the DB on render (e.g. TrustBoundaryPage
@@ -197,6 +209,38 @@ public static class Program
     }
 
     internal static void SetUserId(string userId) => SovrantUserId = userId;
+
+    private static async Task TryRestoreWebRemoteSessionAsync(IServiceProvider services, WebSessionService session)
+    {
+        try
+        {
+            var store = services.GetRequiredService<ICredentialStore>();
+            var token = await store.RetrieveAsync(StoredWebTokenKey).ConfigureAwait(false);
+            if (string.IsNullOrEmpty(token)) return;
+
+            var remoteOptions = services.GetRequiredService<SovrantRemoteOptions>();
+            remoteOptions.ApiToken = token;
+
+            // Validate against the server's /v1/auth/me endpoint.
+            var httpFactory = services.GetRequiredService<IHttpClientFactory>();
+            using var http = httpFactory.CreateClient("SovrantApi");
+            var resp = await http.GetAsync(new Uri("/v1/auth/me", UriKind.Relative)).ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode) return;
+
+            var json = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var userId = doc.RootElement.TryGetProperty("user_id", out var u) ? u.GetString() : null;
+            var role = doc.RootElement.TryGetProperty("role", out var r) ? r.GetString() : "user";
+            if (string.IsNullOrEmpty(userId)) return;
+
+            session.SignIn(userId, role ?? "user");
+            SovrantUserId = userId;
+        }
+        catch
+        {
+            // Ignore restore errors — user will be redirected to login.
+        }
+    }
 
     private static async Task TryRestoreWebSessionAsync(IServiceProvider services, WebSessionService session)
     {

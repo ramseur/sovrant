@@ -101,7 +101,8 @@
             await CredentialStore.StoreAsync(StoredTokenKey, result.Token).ConfigureAwait(false);
             Program.SetUserId(result.UserId!);
             Session.SignIn(result.UserId!, result.Role ?? "user");
-            _ = Task.Run(() => Program.SeedUserAndWorkspaceAsync(Services, result.UserId!));
+            if (!Program.IsRemoteMode)
+                _ = Task.Run(() => Program.SeedUserAndWorkspaceAsync(Services, result.UserId!));
             Nav.NavigateTo("/", forceLoad: false);
         }
         finally
@@ -135,7 +136,8 @@
             await CredentialStore.StoreAsync(StoredTokenKey, result.Token!).ConfigureAwait(false);
             Program.SetUserId(result.UserId!);
             Session.SignIn(result.UserId!, "admin");
-            _ = Task.Run(() => Program.SeedUserAndWorkspaceAsync(Services, result.UserId!));
+            if (!Program.IsRemoteMode)
+                _ = Task.Run(() => Program.SeedUserAndWorkspaceAsync(Services, result.UserId!));
             Nav.NavigateTo("/", forceLoad: false);
         }
         finally
