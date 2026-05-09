@@ -16,16 +16,26 @@
   ],
 
   "_comment_fields": {
-    "dbPath":        "Override SQLite database path. Default: ~/.sovrant/data/sovrant.db",
-    "logFile":       "Override rolling log file path. Default: ~/.sovrant/logs/sovrant-{Date}.log",
-    "artifactsRoot": "Override artifacts directory. Default: ~/.sovrant/artifacts",
-    "keystorePath":  "Override keystore master-key file. Default: ~/.sovrant/credentials/.keystore",
-    "serverToken":   "Static bearer token for Sovrant.Server (also settable via SOVRANT_TOKEN env)."
+    "dbPath":          "Override SQLite database path. Default: ~/.sovrant/data/sovrant.db",
+    "logFile":         "Override rolling log file path. Default: ~/.sovrant/logs/sovrant-{Date}.log",
+    "artifactsRoot":   "Override artifacts directory. Default: ~/.sovrant/artifacts",
+    "keystorePath":    "Override keystore master-key file. Default: ~/.sovrant/credentials/.keystore",
+    "serverToken":     "Static bearer token for Sovrant.Server (also settable via SOVRANT_TOKEN env).",
+    "tlsCertPath":     "Path to a TLS certificate file (.pfx, or .pem when tlsKeyPath is also set). When set, the server and web host bind an HTTPS listener in addition to HTTP. Env: SOVRANT_TLS_CERT.",
+    "tlsCertPassword": "Passphrase for a PFX certificate. Omit when using separate PEM cert + key files. Env: SOVRANT_TLS_CERT_PASSWORD.",
+    "tlsKeyPath":      "Path to the PEM private-key file. Required when tlsCertPath is a .pem/.crt (not a .pfx). Env: SOVRANT_TLS_KEY.",
+    "tlsHttpsPort":    "HTTPS port for the Kestrel listener. Defaults to 5443 (Server) or 5101 (Web). Env: SOVRANT_TLS_HTTPS_PORT."
   },
 
   "dbPath": null,
   "logFile": null,
   "artifactsRoot": null,
   "keystorePath": null,
-  "serverToken": null
+  "serverToken": null,
+
+  "_comment_tls": "TLS is disabled by default. Set tlsCertPath to enable HTTPS. For development, use `dotnet dev-certs https --trust` (no config needed). For self-hosted: point to a PFX or PEM+key pair.",
+  "tlsCertPath": null,
+  "tlsCertPassword": null,
+  "tlsKeyPath": null,
+  "tlsHttpsPort": null
 }

@@ -939,6 +939,10 @@ API-key variables marked **(stored)** below can alternatively be saved with `sov
 | `SOVRANT_LOG_FORMAT` | No | `text` (default) or `json` (structured) |
 | `SOVRANT_MCP_TOKEN` | No | Required bearer token for MCP server mode |
 | `SOVRANT_MCP_TOOLS` | No | Comma-separated allow-list of tools for MCP server mode |
+| `SOVRANT_TLS_CERT` | No | Path to TLS certificate (`.pfx`, or `.pem` when `SOVRANT_TLS_KEY` is also set). Enables HTTPS listener. |
+| `SOVRANT_TLS_CERT_PASSWORD` | No | Passphrase for a PFX certificate. Omit when using separate PEM cert + key files. |
+| `SOVRANT_TLS_KEY` | No | Path to PEM private-key file. Required when `SOVRANT_TLS_CERT` is a `.pem`/`.crt`. |
+| `SOVRANT_TLS_HTTPS_PORT` | No | HTTPS port (default: `5443` for Server, `5101` for Web). |
 | `OPENROUTER_API_KEY` | No | Enables live model metadata discovery from OpenRouter — **(stored)** as `openrouter` |
 
 > **Desktop and Web apps** store provider configuration in `~/.sovrant/settings.json` via the Settings UI — no environment variables needed for basic usage.

@@ -207,6 +207,10 @@ container builds. Layers (highest precedence first):
 | `artifactsRoot` | `~/.sovrant/artifacts` | `SOVRANT_ARTIFACTS_ROOT` | — |
 | `keystorePath` | `~/.sovrant/credentials/.keystore` | `SOVRANT_KEYSTORE_PATH` (new) | — |
 | `serverToken` | `""` (no auth) | `SOVRANT_TOKEN` | — |
+| `tlsCertPath` | `null` (TLS disabled) | `SOVRANT_TLS_CERT` | — |
+| `tlsCertPassword` | `null` | `SOVRANT_TLS_CERT_PASSWORD` | — |
+| `tlsKeyPath` | `null` | `SOVRANT_TLS_KEY` | — |
+| `tlsHttpsPort` | `5443` (Server) / `5101` (Web) | `SOVRANT_TLS_HTTPS_PORT` | — |
 
 The keystore path is currently hardcoded inside `AesGcmCredentialStore`; this
 plan promotes it to a real configurable so site admins can move keystores
@@ -233,13 +237,18 @@ between machines or onto a mounted secret volume.
   "logFile": "~/.sovrant/logs/sovrant-{Date}.log",
   "artifactsRoot": "~/.sovrant/artifacts",
   "keystorePath": "~/.sovrant/credentials/.keystore",
-  "serverToken": ""
+  "serverToken": "",
+  "tlsCertPath": null,
+  "tlsCertPassword": null,
+  "tlsKeyPath": null,
+  "tlsHttpsPort": null
 }
 ```
 
 `~` expands to the user's home directory; `{Date}` in `logFile` is replaced at
-write time by the logging framework. All five fields are optional — omit any
-to fall back to the default.
+write time by the logging framework. All fields are optional — omit any to fall
+back to the default. TLS is disabled by default; set `tlsCertPath` to enable
+HTTPS. For development use `dotnet dev-certs https --trust` (no config needed).
 
 ## Bucket-C Credential Store ✅ DONE
 
