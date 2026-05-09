@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-05-04 (post-90 housekeeping: Web Knowledge authoring buttons hidden pending Phase 91 UX rework; rail order on Web aligned with Desktop; Phases 91–93 authored — Knowledge Authoring Revisit, Active Sessions cap with Settings UI + DB-backed config, and Configuration Boundary Audit; duplicate Phase 82 disambiguated — OTel renumbered to 82.5)
+**Last updated:** 2026-05-09 (Phase 40A UI ✅ — workspace member management across Web/Desktop/CLI; Phase 85 Identity & Login Parity ✅; Phase 93 Configuration Boundary Audit ✅ — sovrant.config removed, .env consolidation, routing.json→env vars, swarm.json→DB; Phase 91 Knowledge Authoring deferred; TLS added to Server + Web; model persistence bug fixed)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -16,7 +16,8 @@ The engine is fully functional across five delivery modes with enterprise multi-
 - **97 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
-- SQLite persistence layer with 22 versioned migrations (V001–V022) — adds hooks, workspace settings, MCP/LSP servers, user preferences, provider profiles, workspace identity unification on top of the Phase 32/42.5/51/52/57/78 foundation
+- SQLite persistence layer with 26 versioned migrations (V001–V026) — adds hooks, workspace settings, MCP/LSP servers, user preferences, provider profiles, workspace identity unification, auth credentials on top of the Phase 32/42.5/51/52/57/78 foundation
+- Single `.env` file configuration — `sovrant.config` removed; all bootstrap knobs are env vars; routing and swarm config fully DB-backed
 - **Command Center cockpit** at `/command` on Web and Desktop — read-only live grid aggregating active missions, team runs, agent runs, and sessions with click-through to existing detail pages (Phase 89/90 ✅)
 - Mission engine with durable goals, re-planning, acceptance gates, and event journal (Phase 51 ✅)
 - Unified agent orchestration: SQLite-backed teams + swarm + agent run ledger (Phase 52 ✅)
@@ -112,16 +113,18 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | 57 | Inter-agent communication — PM agents, GroupMailbox, PMCoordinator, CoordinationStatus tool, V013 migration (30 tests) |
 | 61 | Remote server mode — SignalR ChatHub, `RuntimeEventDto`, `AddSovrantClient()`, 8 remote service implementations, bearer auth query string for WebSocket, dual embedded/remote mode (20 tests) |
 | 63 | DI audit & pluggability hardening — MCP v1.2.0 protocol additions |
+| 40A | Workspace member management UI — Web inline member panel, Desktop detail pane, CLI `workspace list/members`; server-side role enforcement was already complete |
+| 85 | Identity & login parity — per-user `svt_` tokens, Argon2id password hashing, admin pages (Web + Desktop), CLI login/logout/whoami, first-user admin bootstrap |
+| 93 | Configuration boundary audit — `sovrant.config` removed entirely; `.env` + env vars only; `routing.json` → env vars; `swarm.json` → `workspace_settings` DB table; `config-audit.md` policy doc complete |
 
 ### Still pending
 
-> **Last audited:** 2026-05-04. Tagged `v0.9.0`. Counting only "gap" phases (not partial-polish or quality-audit phases): **17 pending** (3 deferred, 14 active). Shipped since the prior 2026-04-30 audit: Phase 78 Teams Parity ✅, Phase 81 Unified Memory ✅, Phase 82 Web Search Architecture Overhaul ✅, Phase 88 Settings & Provider Consolidation ✅, Phase 89 Command Center ✅, Phase 90 Public Release Readiness ✅. Authored since: Phase 91 Knowledge Authoring Revisit, Phase 92 Active Sessions, Phase 93 Configuration Boundary Audit. Duplicate Phase 82 number resolved — OTel observability is now Phase 82.5.
+> **Last audited:** 2026-05-09. Tagged `v0.9.0`. Shipped since the prior 2026-05-04 audit: Phase 40A Workspace Member Management UI ✅, Phase 85 Identity & Login Parity ✅, Phase 93 Configuration Boundary Audit ✅. Phase 91 Knowledge Authoring deferred. Config consolidation: `sovrant.config` removed (`.env` + env vars only), `routing.json` → env vars, `swarm.json` → `workspace_settings` DB table. TLS added to Server + Web (Phase 97). Model persistence bug fixed.
 >
 > Quality / polish / audit phases (62, 68, 69, 70, 71, 72, 75) and partial-completion phases (56) are tracked in their own sections below; this table is gap-only.
 
 | Gap | Phase | Priority |
 |---|---|---|
-| Workspace-scoped roles & tenant enforcement (beta) | Phase 40A | Beta |
 | Enterprise auth & external identity (OAuth/OIDC, SAML, SSO) | Phase 40B | Deferred |
 | VS Code native extension | Phase 42 | Deferred (MCP server covers MCP-aware IDEs) |
 | Embedded terminal panel inside the desktop app | Phase 45 | Deferred |
@@ -142,13 +145,11 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | OpenTelemetry observability — emit traces/metrics/logs for runs, turns, tool calls, router decisions, and provider HTTP via OTLP so operators can ship to any OTel-compatible backend (Honeycomb, Tempo, Jaeger, Datadog, etc.) | Phase 82.5 | Medium–High |
 | Pluggable memory backends — abstract `IMemoryStore` so the SQLite implementation can be swapped for distributed/remote stores (mem0, Pinecone-style vector DBs, Redis, Postgres+pgvector); enables shared/team memory across nodes | Phase 83 | Medium |
 | Prompt library: reusable, parameterised prompt templates across CLI / Web / Desktop | Phase 84 | Medium |
-| Identity & login parity across CLI / Web / Desktop / Server | Phase 85 | Medium–High |
 | Local / remote mode selection — CLI + Desktop can run embedded (local DB) or connect to a shared `Sovrant.Server`; setup wizard mode picker; `sovrant connect <url>` | Phase 85.5 | High |
 | Background session continuation across navigation & session switches | Phase 86 | High |
 | Artifacts-by-default for code & documents (with workspace identity unification) | Phase 87 | Medium–High |
-| Knowledge Authoring Revisit — Web + Desktop UX rework: single Edit action on any item, silent copy-on-write for built-ins, no "Duplicate to user" intermediate; fix AvaloniaEdit defects on Desktop | Phase 91 | Medium |
+| Knowledge Authoring Revisit — Web + Desktop UX rework: single Edit action on any item, silent copy-on-write for built-ins, no "Duplicate to user" intermediate; fix AvaloniaEdit defects on Desktop | Phase 91 | Deferred |
 | Active Sessions: up to 5 concurrent live tasks with return-anytime results; Settings UI on Web + Desktop, DB-backed; future admin console fallback | Phase 92 | High |
-| Configuration Boundary Audit: codify `sovrant.config` vs DB vs keystore with policy doc, audit pass, and CI guards | Phase 93 | Medium |
 
 ### v1.0 release polish (in progress)
 
@@ -2702,7 +2703,7 @@ Applied in this phase because per-user identity makes ownership enforcement mean
 
 ---
 
-### Phase 40A — Workspace-Scoped Roles & Tenant Enforcement 🔄 Partial (server enforcement ✅, UI ⬜)
+### Phase 40A — Workspace-Scoped Roles & Tenant Enforcement ✅ Complete
 
 **Depends on:** Phase 85 (identity & login — per-user `svt_` tokens, admin gate), Phase 35 (workspaces — data model and role columns already exist)
 
@@ -9293,9 +9294,9 @@ Phase 86 already plans the infrastructure (event broker, session status, evictio
 - **Phase 89 — Command Center:** the cockpit surfaces multi-session steering at a higher level (teams/missions); active-sessions slots are the per-user, single-task version.
 - **Future admin console (placeholder, not yet phased):** will own org-level policy and write to a DB-backed `org.settings.*` row that Phase 92's config layer reads as a fallback. Phase 92 is the per-user setting; the admin console is the org-level setting on top.
 
-## Phase 93 — Configuration Boundary Audit: `sovrant.config` vs DB vs Keystore — Codify the Rules
+## Phase 93 — Configuration Boundary Audit: `sovrant.config` vs DB vs Keystore — Codify the Rules ✅
 
-**Status:** Pending. A short, focused audit + governance phase. No new product feature — the deliverable is a written policy, a decision matrix, and lint/test guards that keep future work from drifting back into multi-file disk config or DB/file confusion.
+**Status:** ✅ Complete (2026-05-09). `sovrant.config` removed entirely — the file and all file-loading code are gone. Bootstrap config reads exclusively from env vars + optional `.env` file in CWD. `routing.json` migrated to env vars (`SOVRANT_ROUTING_*`, `SOVRANT_TIER_MODELS`, `SOVRANT_ROUTING_RULES`). `swarm.json` migrated to `workspace_settings` DB table via `ISwarmConfigStore`. `docs/config-audit.md` updated as the canonical policy doc with all Bucket-A/B/C/D decisions and open-items tracking. The enforced rule: `.env` file only on disk; everything else in DB or keystore.
 
 ### Goal
 
