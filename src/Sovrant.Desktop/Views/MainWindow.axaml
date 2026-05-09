@@ -153,7 +153,7 @@
                             BorderBrush="{DynamicResource SurfaceBorder}">
                         <DockPanel LastChildFill="True">
                             <Button DockPanel.Dock="Right"
-                                    Content="⚙" ToolTip.Tip="Settings"
+                                    Content="🔧" ToolTip.Tip="Settings"
                                     Command="{Binding OpenSettingsCommand}"
                                     Width="32" Height="32" CornerRadius="8"
                                     FontSize="16" Background="Transparent"

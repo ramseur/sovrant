@@ -93,6 +93,11 @@ public partial class App : Application
 
     private async Task BuildAppAsync(SovrantConfig config, IClassicDesktopStyleApplicationLifetime desktop)
     {
+        // Prevent Avalonia from auto-exiting when a transient window (login, setup wizard)
+        // closes before the main window is assigned. We switch to OnMainWindowClose at the
+        // point we set desktop.MainWindow.
+        desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
         var bootstrap = BootstrapConfigLoader.Load();
 
         // ── Phase 1: detect runtime mode ──────────────────────────────────────
@@ -247,6 +252,10 @@ public partial class App : Application
             authenticatedUserId = await RunLoginWindowAsync(desktop, _serviceProvider, principalAccessor).ConfigureAwait(true);
         }
         SovrantUserId = authenticatedUserId;
+
+        // Update sidebar user chip with the authenticated email.
+        _serviceProvider.GetRequiredService<SidebarViewModel>()
+            .SetCurrentUser(principalAccessor.Email ?? authenticatedUserId);
 
         // Re-apply preferences for the authenticated user. InitializeRuntimeAsync ran
         // earlier using the OS identity (SOVRANT_USER_ID env var), which may differ from
@@ -429,10 +438,10 @@ public partial class App : Application
         var loginVm = services.GetRequiredService<LoginViewModel>();
         await loginVm.InitializeAsync().ConfigureAwait(true);
 
-        var tcs = new TaskCompletionSource<(string userId, string role)>(
+        var tcs = new TaskCompletionSource<(string userId, string role, string email)>(
             TaskCreationOptions.RunContinuationsAsynchronously);
 
-        loginVm.LoginSucceeded += (userId, role) => tcs.TrySetResult((userId, role));
+        loginVm.LoginSucceeded += (userId, role, email) => tcs.TrySetResult((userId, role, email));
 
         var loginWindow = new LoginWindow { DataContext = loginVm };
 
@@ -445,11 +454,12 @@ public partial class App : Application
 
         loginWindow.Show();
 
-        var (userId, role) = await tcs.Task.ConfigureAwait(true);
+        var (userId, role, email) = await tcs.Task.ConfigureAwait(true);
         loginWindow.Close();
 
         principal.UserId = userId;
         principal.Role = role;
+        principal.Email = email;
         return userId;
     }
 

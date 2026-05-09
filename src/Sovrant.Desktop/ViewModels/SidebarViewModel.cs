@@ -85,6 +85,15 @@ public partial class SidebarViewModel : ViewModelBase
     public event EventHandler<string>? NavigationRequested;
     public event EventHandler<string>? SessionResumeRequested;
 
+    /// <summary>Updates the user chip in the sidebar after login.</summary>
+    public void SetCurrentUser(string emailOrId)
+    {
+        // Use the local part of the email (before @) as the display name if it's an email.
+        var atIdx = emailOrId.IndexOf('@', StringComparison.Ordinal);
+        CurrentUserName = atIdx > 0 ? emailOrId[..atIdx] : emailOrId;
+        UserInitial = CurrentUserName.Length > 0 ? CurrentUserName[..1].ToUpperInvariant() : "U";
+    }
+
     public SidebarViewModel(
         ISessionStore sessionStore,
         SovrantConfig config,

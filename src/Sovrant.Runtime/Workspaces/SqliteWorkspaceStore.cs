@@ -17,7 +17,7 @@ internal sealed class SqliteWorkspaceStore(ISqliteConnectionFactory connectionFa
         {
             WorkspaceId = WorkspaceIdentity.DefaultPersonalFor(userId),
             Type = WorkspaceType.Personal,
-            Name = $"{userId}'s Workspace",
+            Name = "Personal",
             Slug = $"personal-{userId}",
             OwnerId = userId,
             CreatedAt = DateTimeOffset.UtcNow,

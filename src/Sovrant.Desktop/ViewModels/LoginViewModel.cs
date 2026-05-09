@@ -20,7 +20,7 @@ public partial class LoginViewModel : ObservableObject
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private bool _isRegistrationOpen;
 
-    public event Action<string, string>? LoginSucceeded; // (userId, role)
+    public event Action<string, string, string>? LoginSucceeded; // (userId, role, email)
 
     public LoginViewModel(IIdentityService identity, ITokenService tokens, ICredentialStore credentialStore)
     {
@@ -55,7 +55,7 @@ public partial class LoginViewModel : ObservableObject
             }
 
             await _credentialStore.StoreAsync(StoredTokenKey, result.Token).ConfigureAwait(true);
-            LoginSucceeded?.Invoke(result.UserId!, result.Role ?? "user");
+            LoginSucceeded?.Invoke(result.UserId!, result.Role ?? "user", Email.Trim());
         }
         finally
         {
@@ -90,7 +90,7 @@ public partial class LoginViewModel : ObservableObject
             }
 
             await _credentialStore.StoreAsync(StoredTokenKey, result.Token!).ConfigureAwait(true);
-            LoginSucceeded?.Invoke(result.UserId!, "admin");
+            LoginSucceeded?.Invoke(result.UserId!, "admin", Email.Trim());
         }
         finally
         {
