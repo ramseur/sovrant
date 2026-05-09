@@ -23,7 +23,7 @@ current session via `SovrantConfig.WebSearchOverride`.
 | `firecrawl` | FireCrawl only | Off | `FIRECRAWL_API_KEY` |
 | `native` | Guidance message — model handles search | On (warns if model lacks support) | none |
 | `off` | Disabled message | Off | none |
-| `searxng-future` | Behaves like `auto` until Phase 49 lands | Same as `auto` | none |
+| `searxng-future` | Behaves like `auto` (deferred backend, not yet implemented) | Same as `auto` | none |
 
 When native injection is on, the function-tool form of `WebSearch` is
 suppressed in the request so the model picks the server tool.

@@ -1,6 +1,6 @@
 # Sovrant — Persistence Layer
 
-**Phases 32, 35, 36, 37, 37.5, 42.5, 51, 52, 55, 57, 78, 87, 88, 90** | **Last updated:** 2026-05-02
+**Phases 32, 35, 36, 37, 37.5, 42.5, 51, 52, 55, 57, 78, 85, 87, 88, 90, 93** | **Last updated:** 2026-05-09
 
 This document describes how Sovrant stores durable operational data. All persistent state (sessions, memory, audit, credentials, token usage, workspaces, projects, users) is managed by a SQLite database. Flat-file stores (JSONL, JSON) remain available as a dual-write option during migration, but they are now considered legacy and will be consolidated as part of Phase 42.5.
 
@@ -70,7 +70,7 @@ Migrations are embedded SQL resources named `V{NNN}__{description}.sql` inside t
 | V012 | `V012__unified_orchestration.sql` | Phase 52 unified agent orchestration: `teams` (DB-backed team registry replacing `InMemoryTeamRegistry`), `team_members` (persistent members with role, template, tools, model level), `agent_runs` (unified run ledger for delegations, swarm tasks, and mission steps). Extends `swarm_events` with `kind` and `run_id` columns. |
 | V013 | `V013__coordination_mailbox.sql` | Phase 57 inter-agent coordination: `coordination_events` (typed mailbox for PM-to-PM messages between agent groups, with status tracking and delivery/acknowledgement timestamps), `group_pm_assignments` (maps each agent group to its PM agent template). Both workspace/project-scoped. |
 | V014 | `V014__session_titles.sql` | Adds `sessions.title` column for nameable conversations (auto-generated from the first user message when not explicitly set via `/rename`). Adds `ix_sessions_title` partial index where `title IS NOT NULL`. |
-| V015 | `V015__teams_run_profile.sql` | Phase 78 Path 2 — per-team run profile. Adds six columns to `teams`: `run_mode` (`sequential`/`parallel`/`swarm`, default `sequential`), `max_concurrent` (default 1), `file_locks_enabled` (default 0), `quality_gate_enabled` (default 0), `quality_gate_threshold` (0–10, default 7), `decomposition_mode` (`off`/`role-aware`/`open`, default `off`). Pessimistic defaults preserve single-member-at-a-time semantics for pre-existing teams; new teams inherit from `.sovrant/swarm.json`. |
+| V015 | `V015__teams_run_profile.sql` | Phase 78 Path 2 — per-team run profile. Adds six columns to `teams`: `run_mode` (`sequential`/`parallel`/`swarm`, default `sequential`), `max_concurrent` (default 1), `file_locks_enabled` (default 0), `quality_gate_enabled` (default 0), `quality_gate_threshold` (0–10, default 7), `decomposition_mode` (`off`/`role-aware`/`open`, default `off`). Pessimistic defaults preserve single-member-at-a-time semantics for pre-existing teams; new teams inherit from global swarm defaults (stored in `workspace_settings` as `swarm.*` keys, editable via the Swarm Defaults panel in Web/Desktop). |
 | V016 | `V016__session_entry_provider.sql` | Adds `session_entries.provider` column so loaded chats can render "Provider · Model" on assistant bubbles (parity with live streaming). |
 | V017 | `V017__hooks.sql` | `hooks` table — one row per hook definition; replaces `.sovrant/hooks.json`. Web/Desktop UI is the canonical edit surface. |
 | V018 | `V018__workspace_settings.sql` | `workspace_settings` table — workspace-scoped budgets, session TTL/cap, and runtime-mutable knobs that previously lived in env vars only. Convention: `workspace_id = ''` means "global / server default". |
@@ -78,6 +78,10 @@ Migrations are embedded SQL resources named `V{NNN}__{description}.sql` inside t
 | V020 | `V020__user_preferences.sql` | Phase 88-A — `user_preferences` table. Replaces `~/.sovrant/settings.json` fields (`Model`, `BaseUrl`, `Provider`, `MaxTokens`, `PermissionMode`, `IntentRouting`, `WebSearch`, …). Thin TEXT key/value store with last-write-wins. |
 | V021 | `V021__provider_profiles.sql` | Phase 88-B — `provider_profiles` table. One row per saved provider configuration (OpenAI, OpenRouter, Anthropic, Ollama, …). API keys are **never** stored here — only a `credential_id` reference into the encrypted `ICredentialStore`. Phase 90-G plaintext-key migration completes this: any pre-existing plaintext keys move to the keystore on first launch. |
 | V022 | `V022__workspace_identity_unification.sql` | Phase 87 Track D — workspace identity unification. Pre-Phase-87 callers wrote artifacts and DB rows under the bare sentinel `personal`; this migration normalizes those rows to the canonical `ws-personal-{user_id}` form minted by `SqliteWorkspaceStore.CreatePersonalWorkspaceAsync`. |
+| V023 | `V023__mcp_http_transport.sql` | HTTP transport support for MCP servers. Adds `url` (TEXT) and `headers_json` (TEXT, default `{}`) columns to `mcp_servers` so a server can be stdio (url IS NULL) or HTTP (endpoint URL with optional masked auth headers). |
+| V024 | `V024__session_mcp_connections.sql` | Per-session MCP connection gating. Adds `mcp_servers` (TEXT JSON array) to `sessions`. NULL = no gating; `[]` = all MCP tools disabled; `["a","b"]` = only tools from named servers exposed. Applied per-turn by the runtime. |
+| V025 | `V025__swarm_events_user_id.sql` | Phase L security — adds `user_id` column to `swarm_events` for ownership verification on `GET /v1/swarm/{id}` and `GET /v1/swarm/{id}/events`. Existing rows get NULL; new rows stamped from `SwarmExecutionContext.UserId`. Adds `ix_swarm_events_user` index. |
+| V026 | `V026__auth_credentials.sql` | Phase 85 Identity & Login Parity — adds `password_hash` to `users`, `last_used_at` to `api_tokens` for sliding-window TTL, and creates `server_settings` (key/value store bootstrapped by `IIdentityService`) and `password_reset_tokens` (admin-generated one-time tokens, 24-hour TTL) tables. |
 
 All V006/V007 statements are **additive** (`CREATE TABLE`, `CREATE INDEX IF NOT EXISTS`), so a database created at V005 or earlier upgrades cleanly on next boot — no manual intervention. V008 then backfills any orphan rows from those upgraded databases, and V009 backfills any empty-string `user_id` rows left over from the pre-Phase-38 seeding flow.
 
@@ -96,7 +100,7 @@ The schema is designed upfront so that Phases 33–37 can ship without `ALTER TA
 
 ## DB Upgrades (Phase 42.5)
 
-This section covers the lifecycle of an in-place upgrade from any prior schema version to the current one. Every operational guarantee below is enforced by an automated test in `tests/Sovrant.Runtime.Tests/Storage/OldDbUpgradeTests.cs` — the "V005 → current (V016)" path is the one we exercise on every CI run, which transitively covers V001–V005 since the runner always applies migrations in order.
+This section covers the lifecycle of an in-place upgrade from any prior schema version to the current one. Every operational guarantee below is enforced by an automated test in `tests/Sovrant.Runtime.Tests/Storage/OldDbUpgradeTests.cs` — the "V005 → current (V026)" path is the one we exercise on every CI run, which transitively covers V001–V005 since the runner always applies migrations in order.
 
 ### When migrations run
 
@@ -189,7 +193,7 @@ If the DB probe fails (disk full, permissions change, corrupt file), `db.status`
 
 ## Database Inventory (authoritative)
 
-The list below is generated from the migration scripts in `src/Sovrant.Runtime/Storage/Migrations/V0*.sql`. The current schema spans 22 migrations (V001–V022). V008, V009, V015, V016, and V022 ship no new application tables — V008/V009/V022 are data backfills/normalizations, V015 adds columns to `teams`, V016 adds a column to `session_entries`. The remaining migrations (V017–V021) add the hooks, workspace settings, MCP/LSP server registry, user preferences, and provider profile tables that completed the move of all on-disk JSON config to SQLite (per the "one disk config file" convention — only `sovrant.config` remains on disk).
+The list below is generated from the migration scripts in `src/Sovrant.Runtime/Storage/Migrations/V0*.sql`. The current schema spans 26 migrations (V001–V026). V008, V009, V015, V016, V022, V025 ship no new application tables — V008/V009/V022 are data backfills/normalizations, V015 adds columns to `teams`, V016 adds a column to `session_entries`, V023 adds columns to `mcp_servers`, V024 adds a column to `sessions`, V025 adds a column to `swarm_events`. The migrations V017–V021 and V026 add the hooks, workspace settings, MCP/LSP server registry, user preferences, provider profiles, and auth credential tables that completed the move of all on-disk JSON config to SQLite (per the `.env`-only convention introduced in Phase 93).
 
 ### Tables by purpose
 
@@ -580,7 +584,7 @@ The following concerns were surfaced during the Phase 37 audit of the SQLite lay
 
 ## Testing
 
-The persistence layer is exercised by the full solution test suite (**1,911 tests** across 10 projects, all green as of 2026-05-02). Storage-focused suites include:
+The persistence layer is exercised by the full solution test suite (**1,689 tests** across 13 projects, all green as of 2026-05-09). Storage-focused suites include:
 
 | Test Class | Validates |
 |---|---|

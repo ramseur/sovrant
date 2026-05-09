@@ -11,8 +11,8 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 > **Architecture note:** The CLI, Server, Desktop, and Web are independent frontends. All consume the runtime layer (`Sovrant.Runtime`) directly — the server does **not** depend on the CLI, and the desktop/web apps run the runtime in-process. You can deploy any frontend independently.
 
 **Runtime:** .NET 10 / C# 14
-**License:** Business Source License 1.1 — source-available, converts to Apache 2.0 on 2030-04-29. See [LICENSE](LICENSE).
-**Status:** 56 tools. 25 agent templates. 32 built-in skills. 97 server endpoints + SignalR hub. Command Center cockpit (Web + Desktop). Team orchestration with per-team run profiles. Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 1,911 tests passing across 10 projects.
+**License:** Business Source License 1.1 — source-available, converts to Apache 2.0 on 2029-05-10. See [LICENSE](LICENSE).
+**Status:** 56 tools. 25 agent templates. 32 built-in skills. 115 server endpoints + SignalR hub. Command Center cockpit (Web + Desktop). Team orchestration with per-team run profiles. Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 1,689 tests passing across 13 projects.
 
 ---
 
@@ -382,7 +382,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 | Project | Description |
 |---|---|
 | `Sovrant.Cli` | Interactive REPL and one-shot `prompt` CLI. Entry point for local use. |
-| `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus management APIs. 97 endpoints + SignalR hub. |
+| `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus management APIs. 115 endpoints + SignalR hub. |
 | `Sovrant.Desktop` | Avalonia desktop app — full GUI with streaming chat, tool use, settings, and management pages. |
 | `Sovrant.Web` | Blazor Server web app — browser-based UI with embedded or remote runtime. Port 5100. Dual-mode: `SOVRANT_RUNTIME_MODE=embedded` (default) or `remote` (connects to Sovrant.Server via SignalR). |
 | `Sovrant.Runtime` | Core agentic loop, mission engine, planner/executor, SQLite persistence (22 migrations V001–V022), permission system, tool executor, MCP client, cost tracking. |
@@ -667,7 +667,7 @@ The `SmartRouter` pings all configured providers on startup, scores them by late
 
 ## Server API
 
-The server exposes an OpenAI-compatible chat completions endpoint plus comprehensive management APIs. 97 endpoints + SignalR hub across 23 route groups:
+The server exposes an OpenAI-compatible chat completions endpoint plus comprehensive management APIs. 115 endpoints + SignalR hub across 23 route groups:
 
 | Group | Endpoints | Description |
 |---|---|---|
@@ -1039,7 +1039,7 @@ Replace `-r linux-x64` with `-r win-x64` for Windows deployments.
 ## Tests
 
 ```bash
-dotnet test Sovrant.slnx   # 1,911 tests across 10 projects
+dotnet test Sovrant.slnx   # 1,689 tests across 13 projects
 ```
 
 Test projects: `Sovrant.Runtime.Tests`, `Sovrant.Agents.Tests`, `Sovrant.Tools.Tests`, `Sovrant.Server.Tests`, `Sovrant.Api.Tests`, `Sovrant.Runtime.Documents.Tests`, `Sovrant.Commands.Tests`, `Sovrant.Mcp.Tests`, `Sovrant.Lsp.Tests`, `Sovrant.Integration.Tests`.
@@ -1052,7 +1052,7 @@ All tests use isolated in-memory SQLite databases. No external services or API k
 
 | Document | Contents |
 |---|---|
-| [`docs/server.md`](docs/server.md) | Full server API reference — all 97 endpoints + SignalR hub, Command Center, auth, CORS, streaming format, cost tracking, remote mode |
+| [`docs/server.md`](docs/server.md) | Full server API reference — all 115 endpoints + SignalR hub, Command Center, auth, CORS, streaming format, cost tracking, remote mode |
 | [`docs/frontend-integration.md`](docs/frontend-integration.md) | SDK reference, proxy setup, browser SSE, multi-tenant LLM keys, React hook, remote mode (dual-mode web frontend) |
 | [`docs/persistence.md`](docs/persistence.md) | SQLite schema reference — 22 migrations (V001–V022), domain stores, security model, keystore integration |
 | [`docs/agent-systems.md`](docs/agent-systems.md) | Team vs Swarm deep dive — architecture, value analysis, unified orchestration, inter-agent coordination |

@@ -12,8 +12,8 @@ This document tracks planned features, architectural decisions, and the reasonin
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
 - **56 tools** across 17 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, missions, artifacts, documents, quality, swarm, coordination, LSP)
-- **1,911 tests** across 10 projects, 0 failures
-- **97 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
+- **1,689 tests** across 13 projects, 0 failures
+- **115 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
 - SQLite persistence layer with 26 versioned migrations (V001–V026) — adds hooks, workspace settings, MCP/LSP servers, user preferences, provider profiles, workspace identity unification, auth credentials on top of the Phase 32/42.5/51/52/57/78 foundation
@@ -36,7 +36,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 - Context auto-compaction at configurable token threshold
 - Security hardening: BashTool 256 KB cap + env stripping, WebFetch SSRF protection, provider retry 3×
 - Webhook integration (Slack, Teams, Discord, custom)
-- Frontend SDK (TypeScript, ~97 endpoint methods, SSE streaming, React hook)
+- Frontend SDK (TypeScript, ~115 endpoint methods, SSE streaming, React hook)
 - MCP server mode (stdio JSON-RPC 2.0) + dynamic MCP tool proxy + MCP OAuth
 - LSP integration (5 tools, 18 languages)
 - CI/CD integration (`--ci` flag, GitHub Actions action, GitLab CI template)

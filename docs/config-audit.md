@@ -1,6 +1,6 @@
 # Sovrant Config Audit
 
-**Date:** 2026-04-30
+**Date:** 2026-05-09
 **Branch:** `sovrant-openc-dotnet-port`
 **Scope:** Every typed config class, settings.json key, and `SOVRANT_*` / `LLM_*` / `ROUTER_*` env var.
 
@@ -12,6 +12,8 @@
 - **D. Env-var only** — CI/operator/bootstrap knobs that should never persist (port, rate limit, runtime mode, deployment topology, NO_COLOR).
 
 ## Inventory
+
+> **Note:** The "Current location(s)" column reflects where each item lived at the time of the audit. Items marked ✅ in the Open/Resolved sections have since been migrated. Specifically: RoutingConfig (rows 27–34) now reads env vars only (no `routing.json`); SwarmConfig (rows 68–78) now reads/writes `workspace_settings` in the DB (no `swarm.json`). See [Resolved Items](#resolved-items-historical--all-complete-by-phase-93) for details.
 
 | # | Item | Current location(s) | Recommend | Reasoning |
 |---|------|-------------------|-----------|-----------|
