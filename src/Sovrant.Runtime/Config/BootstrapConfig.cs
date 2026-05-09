@@ -3,8 +3,8 @@ namespace Sovrant.Runtime.Config;
 /// <summary>
 /// Bootstrap-only configuration: the minimum set of paths and secrets that
 /// must be resolved before the DI container is built. Loaded by
-/// <see cref="BootstrapConfigLoader"/> with layered precedence
-/// (CLI &gt; env vars &gt; project file &gt; user file &gt; defaults).
+/// <see cref="BootstrapConfigLoader"/> from environment variables and an
+/// optional <c>.env</c> file in the current working directory.
 /// </summary>
 /// <remarks>
 /// Unlike <see cref="SovrantConfig"/>, which carries runtime preferences and is

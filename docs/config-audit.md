@@ -178,43 +178,36 @@ The following items were tracked as open during Phase 87/88 and have all shipped
 
 Bucket-A items must be available *before* SQLite opens, so they live in a single
 physical JSON file rather than the DB. They're now consolidated into
-`BootstrapConfig` / `BootstrapConfigLoader` and a single user-facing JSON file
-`sovrant.config` (bare basename — JSON contents, no `.json` extension; the
-extension was dropped in Phase 88 to make this file the canonical "the only
-on-disk config" marker). Previously scattered across `SovrantConfig.DbPath`,
-env vars (`SOVRANT_LOG_FILE`, `SOVRANT_ARTIFACTS_ROOT`, `SOVRANT_TOKEN`,
-`SOVRANT_DB_PATH`), an embedded `IConfiguration` key (`Server:Token`), and
-hardcoded paths (credential store keystore).
+`BootstrapConfig` / `BootstrapConfigLoader` backed purely by environment
+variables and an optional `.env` file. Previously scattered across
+`SovrantConfig.DbPath`, env vars (`SOVRANT_LOG_FILE`, `SOVRANT_ARTIFACTS_ROOT`,
+`SOVRANT_TOKEN`, `SOVRANT_DB_PATH`), an embedded `IConfiguration` key
+(`Server:Token`), and hardcoded paths (credential store keystore).
 
-### Target file: `sovrant.config`
+### Configuration source: environment variables + `.env`
 
-One typed, layered config holding only the bootstrap-critical paths and the
-server bootstrap token. Loaded by a new `BootstrapConfigLoader` before the DI
-container builds. Layers (highest precedence first):
+Bootstrap config reads from environment variables only. A `.env` file in the
+current working directory is loaded first; variables already set in the process
+environment take precedence (so CI secrets always win). Layers (highest precedence first):
 
-1. CLI flags (`--db-path`, `--config`)
-2. Environment variables (existing names retained for 12-factor parity)
-3. Project file: `./.sovrant/sovrant.config` (workspace override)
-4. User file: `~/.sovrant/sovrant.config` (user default)
-5. Built-in defaults
+1. CLI flag: `--db-path <path>`
+2. Process environment variables
+3. `.env` file in the current working directory
+4. Built-in defaults
 
 ### Fields
 
-| Field | Default | Env override | CLI override |
-|-------|---------|--------------|--------------|
-| `dbPath` | `~/.sovrant/data/sovrant.db` | `SOVRANT_DB_PATH` | `--db-path` |
-| `logFile` | `~/.sovrant/logs/sovrant-{Date}.log` | `SOVRANT_LOG_FILE` | — |
-| `artifactsRoot` | `~/.sovrant/artifacts` | `SOVRANT_ARTIFACTS_ROOT` | — |
-| `keystorePath` | `~/.sovrant/credentials/.keystore` | `SOVRANT_KEYSTORE_PATH` (new) | — |
-| `serverToken` | `""` (no auth) | `SOVRANT_TOKEN` | — |
-| `tlsCertPath` | `null` (TLS disabled) | `SOVRANT_TLS_CERT` | — |
-| `tlsCertPassword` | `null` | `SOVRANT_TLS_CERT_PASSWORD` | — |
-| `tlsKeyPath` | `null` | `SOVRANT_TLS_KEY` | — |
-| `tlsHttpsPort` | `5443` (Server) / `5101` (Web) | `SOVRANT_TLS_HTTPS_PORT` | — |
-
-The keystore path is currently hardcoded inside `AesGcmCredentialStore`; this
-plan promotes it to a real configurable so site admins can move keystores
-between machines or onto a mounted secret volume.
+| Variable | Default | CLI override |
+|----------|---------|--------------|
+| `SOVRANT_DB_PATH` | `~/.sovrant/data/sovrant.db` | `--db-path` |
+| `SOVRANT_LOG_FILE` | `~/.sovrant/logs/sovrant-{Date}.log` | — |
+| `SOVRANT_ARTIFACTS_ROOT` | `~/.sovrant/artifacts` | — |
+| `SOVRANT_KEYSTORE_PATH` | `~/.sovrant/credentials/.keystore` | — |
+| `SOVRANT_TOKEN` | `""` (no auth) | — |
+| `SOVRANT_TLS_CERT` | `null` (TLS disabled) | — |
+| `SOVRANT_TLS_CERT_PASSWORD` | `null` | — |
+| `SOVRANT_TLS_KEY` | `null` | — |
+| `SOVRANT_TLS_HTTPS_PORT` | `5443` (Server) / `5101` (Web) | — |
 
 ### What we delete / replace
 
@@ -227,28 +220,30 @@ between machines or onto a mounted secret volume.
 - `LocalArtifactStore` constructor `artifactsRoot` parameter — wired from
   `BootstrapConfig.ArtifactsRoot` instead of reading the env var directly.
 - `AesGcmCredentialStore` keystore path — accepts a path parameter; default
-  behaviour preserved when `keystorePath` is unset.
+  behaviour preserved when `SOVRANT_KEYSTORE_PATH` is unset.
+- `sovrant.config` JSON file and `BootstrapConfigLoader` file-loading code —
+  replaced by `.env` file support.
 
-### Example file (ships at `sovrant.config.example` in the repo root; copy to `~/.sovrant/sovrant.config` or `./.sovrant/sovrant.config`)
+### Example (`.env.example` ships in the repo root)
 
-```json
-{
-  "dbPath": "~/.sovrant/data/sovrant.db",
-  "logFile": "~/.sovrant/logs/sovrant-{Date}.log",
-  "artifactsRoot": "~/.sovrant/artifacts",
-  "keystorePath": "~/.sovrant/credentials/.keystore",
-  "serverToken": "",
-  "tlsCertPath": null,
-  "tlsCertPassword": null,
-  "tlsKeyPath": null,
-  "tlsHttpsPort": null
-}
+```dotenv
+LLM_API_KEY=
+SOVRANT_TOKEN=
+
+# Storage paths — uncomment to override defaults
+# SOVRANT_DB_PATH=~/.sovrant/data/sovrant.db
+# SOVRANT_LOG_FILE=~/.sovrant/logs/sovrant-{Date}.log
+# SOVRANT_ARTIFACTS_ROOT=~/.sovrant/artifacts
+# SOVRANT_KEYSTORE_PATH=~/.sovrant/credentials/.keystore
+
+# TLS — disabled by default; set SOVRANT_TLS_CERT to enable HTTPS
+# SOVRANT_TLS_CERT=/etc/sovrant/certs/server.pfx
+# SOVRANT_TLS_HTTPS_PORT=5443
 ```
 
-`~` expands to the user's home directory; `{Date}` in `logFile` is replaced at
-write time by the logging framework. All fields are optional — omit any to fall
-back to the default. TLS is disabled by default; set `tlsCertPath` to enable
-HTTPS. For development use `dotnet dev-certs https --trust` (no config needed).
+`{Date}` in `SOVRANT_LOG_FILE` is replaced at write time by the logging
+framework. TLS is disabled by default; for development use
+`dotnet dev-certs https --trust` (no env vars needed).
 
 ## Bucket-C Credential Store ✅ DONE
 

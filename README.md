@@ -133,18 +133,18 @@ dotnet run --project src/Sovrant.Cli -- --ci --model gpt-4o-mini prompt "Fix the
 
 ### Server
 
-**Linux / macOS / WSL:**
+Copy `.env.example` to `.env` in your working directory and fill in the required values:
+
+```bash
+cp .env.example .env
+# edit .env — set LLM_API_KEY and SOVRANT_TOKEN at minimum
+```
+
+Or export the variables directly (CI / container environments):
+
 ```bash
 export LLM_API_KEY="sk-..."
 export SOVRANT_TOKEN="your-secret-token"
-export SOVRANT_PORT=5200    # optional, default 5200
-```
-
-**Windows (PowerShell):**
-```powershell
-$env:LLM_API_KEY = "sk-..."
-$env:SOVRANT_TOKEN = "your-secret-token"
-$env:SOVRANT_PORT = 5200    # optional, default 5200
 ```
 
 **Then run:**
@@ -955,7 +955,7 @@ API-key variables marked **(stored)** below can alternatively be saved with `sov
 | `~/.sovrant/settings.json` | User settings (model, default provider, permissions) |
 | `~/.sovrant/governance.json` | Governance config (blocked commands, protected files, secrets) |
 | `~/.sovrant/logs/` | Rolling application log files |
-| `~/.sovrant/credentials/.keystore` | AES-256-GCM master key (auto-generated). Decrypts the `credentials` table and provider profile API keys in SQLite. Override path via `SOVRANT_KEYSTORE_PATH` or `keystorePath` in `sovrant.config`. |
+| `~/.sovrant/credentials/.keystore` | AES-256-GCM master key (auto-generated). Decrypts the `credentials` table and provider profile API keys in SQLite. Override path via `SOVRANT_KEYSTORE_PATH` (env var or `.env` file). |
 | `~/.sovrant/memory.md` | Global memory (human-edited, injected into system prompt) |
 | `.sovrant/memory.md` | Project memory (human-edited, injected into system prompt) |
 | `.sovrant/settings.json` | Project-level settings overrides |
