@@ -1,7 +1,6 @@
 @page "/orchestration"
 @using Sovrant.Agents.Teams
 @using Sovrant.Agents.Swarm
-@using System.Text.Json
 
 <div class="master-detail">
     <div class="master-panel">
@@ -115,7 +114,7 @@
 
                 <button class="btn-primary" style="max-width:200px;margin-top:12px;"
                         @onclick="SaveSwarmConfig">Save Defaults</button>
-                <p class="text-muted text-sm">Defaults saved to .sovrant/swarm.json</p>
+                <p class="text-muted text-sm">Defaults persisted to the database.</p>
             </div>
         }
         else if (_selected is not null)
@@ -240,6 +239,7 @@
 
 @code {
     [Inject] private ITeamRegistry TeamRegistry { get; set; } = default!;
+    [Inject] private ISwarmConfigStore SwarmConfigStore { get; set; } = default!;
 
     private string _search = string.Empty;
     private string _status = string.Empty;
@@ -256,9 +256,9 @@
     private int _swarmTimeout = 300;
     private string _swarmPermissions = "ask";
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        LoadSwarmConfig();
+        await LoadSwarmConfigAsync().ConfigureAwait(false);
         LoadAll();
     }
 
@@ -361,9 +361,9 @@
         }
     }
 
-    private void LoadSwarmConfig()
+    private async Task LoadSwarmConfigAsync()
     {
-        var config = SwarmConfigLoader.Load();
+        var config = await SwarmConfigStore.GetAsync().ConfigureAwait(false);
         _swarmEnabled = config.Enabled;
         _swarmQualityGate = config.QualityGateEnabled;
         _swarmMaxConcurrent = config.MaxConcurrent;
@@ -372,22 +372,20 @@
         _swarmPermissions = config.Permissions;
     }
 
-    private void SaveSwarmConfig()
+    private async Task SaveSwarmConfig()
     {
         try
         {
-            var path = Path.Combine(Directory.GetCurrentDirectory(), ".sovrant", "swarm.json");
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var config = new SwarmConfig
             {
-                Enabled = _swarmEnabled,
-                MaxConcurrent = _swarmMaxConcurrent,
-                MaxTokenBudget = _swarmMaxTokenBudget,
+                Enabled            = _swarmEnabled,
+                QualityGateEnabled = _swarmQualityGate,
+                MaxConcurrent      = _swarmMaxConcurrent,
+                MaxTokenBudget     = _swarmMaxTokenBudget,
                 TaskTimeoutSeconds = _swarmTimeout,
-                Permissions = _swarmPermissions,
+                Permissions        = _swarmPermissions,
             };
-            var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(path, json);
+            await SwarmConfigStore.SetAsync(string.Empty, config).ConfigureAwait(false);
             _status = "Swarm defaults saved.";
             LoadAll();
         }

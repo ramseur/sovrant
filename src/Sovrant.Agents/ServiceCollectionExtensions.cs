@@ -73,7 +73,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<AdHocAgentRunner>();
 
         // Swarm orchestrator infrastructure
-        services.AddSingleton(_ => SwarmConfigLoader.Load());
+        services.AddSingleton<ISwarmConfigStore, WorkspaceSwarmConfigStore>();
+        services.AddSingleton<SwarmConfig>(sp =>
+            sp.GetRequiredService<ISwarmConfigStore>().GetAsync().GetAwaiter().GetResult());
         services.AddSingleton<Sovrant.Agents.Shared.FileLockManager>();
         services.AddSingleton<Sovrant.Agents.Shared.IFileLockManager>(sp => sp.GetRequiredService<Sovrant.Agents.Shared.FileLockManager>());
         services.AddSingleton<SwarmStateTracker>();

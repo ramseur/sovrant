@@ -76,6 +76,7 @@ public sealed partial class LegacyConfigMigrator
         if (await TryMigrateSettingsAsync(userId, ct).ConfigureAwait(false)) migrated++;
         if (await TryMigrateProvidersAsync(userId, ct).ConfigureAwait(false)) migrated++;
         if (await TryMigrateGovernanceAsync(ct).ConfigureAwait(false)) migrated++;
+        if (await TryMigrateSwarmConfigAsync(ct).ConfigureAwait(false)) migrated++;
         return migrated;
     }
 
@@ -234,6 +235,76 @@ public sealed partial class LegacyConfigMigrator
             LogFailure(_logger, path, ex.Message);
             return false;
         }
+    }
+
+    // ── swarm.json ──────────────────────────────────────────────────────
+
+    private async Task<bool> TryMigrateSwarmConfigAsync(CancellationToken ct)
+    {
+        // swarm.json lives next to the workspace (CWD/.sovrant/), not in _baseDir.
+        var path = Path.Combine(Directory.GetCurrentDirectory(), ".sovrant", "swarm.json");
+        if (!File.Exists(path)) return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(await File.ReadAllTextAsync(path, ct).ConfigureAwait(false));
+            var root = doc.RootElement;
+            var ws = WorkspaceSettingsKeys.GlobalWorkspaceId;
+            var fields = 0;
+
+            fields += await MigrateSwarmBoolAsync(root, "enabled",                ws, WorkspaceSettingsKeys.SwarmEnabled,               ct).ConfigureAwait(false);
+            fields += await MigrateSwarmIntAsync (root, "max_concurrent",          ws, WorkspaceSettingsKeys.SwarmMaxConcurrent,          ct).ConfigureAwait(false);
+            fields += await MigrateSwarmIntAsync (root, "max_token_budget",        ws, WorkspaceSettingsKeys.SwarmMaxTokenBudget,         ct).ConfigureAwait(false);
+            fields += await MigrateSwarmIntAsync (root, "max_retries",             ws, WorkspaceSettingsKeys.SwarmMaxRetries,             ct).ConfigureAwait(false);
+            fields += await MigrateSwarmBoolAsync(root, "quality_gate",            ws, WorkspaceSettingsKeys.SwarmQualityGate,            ct).ConfigureAwait(false);
+            fields += await MigrateSwarmIntAsync (root, "quality_gate_threshold",  ws, WorkspaceSettingsKeys.SwarmQualityGateThreshold,   ct).ConfigureAwait(false);
+            fields += await MigrateSwarmBoolAsync(root, "file_locks_enabled",      ws, WorkspaceSettingsKeys.SwarmFileLocks,              ct).ConfigureAwait(false);
+            fields += await MigrateSwarmStringAsync(root, "decomposer_level",      ws, WorkspaceSettingsKeys.SwarmDecomposerLevel,        ct).ConfigureAwait(false);
+            fields += await MigrateSwarmStringAsync(root, "worker_level",          ws, WorkspaceSettingsKeys.SwarmWorkerLevel,            ct).ConfigureAwait(false);
+            fields += await MigrateSwarmIntAsync (root, "task_timeout_seconds",    ws, WorkspaceSettingsKeys.SwarmTaskTimeoutSeconds,     ct).ConfigureAwait(false);
+            fields += await MigrateSwarmStringAsync(root, "permissions",           ws, WorkspaceSettingsKeys.SwarmPermissions,            ct).ConfigureAwait(false);
+            fields += await CopyJsonObjectAsync(root, "templates",                 ws, WorkspaceSettingsKeys.SwarmTemplateOverrides,      ct).ConfigureAwait(false);
+
+            LogMigrating(_logger, path, fields, 0);
+            RenameToBak(path);
+            return true;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            LogFailure(_logger, path, ex.Message);
+            return false;
+        }
+    }
+
+    private async Task<int> MigrateSwarmBoolAsync(JsonElement root, string source, string ws, string key, CancellationToken ct)
+    {
+        if (!root.TryGetProperty(source, out var el) || el.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return 0;
+        if (await _workspaceSettings.GetAsync(ws, key, ct).ConfigureAwait(false) is not null) return 0;
+        await _workspaceSettings.SetAsync(ws, key, el.GetBoolean() ? "true" : "false", ct).ConfigureAwait(false);
+        return 1;
+    }
+
+    private async Task<int> MigrateSwarmIntAsync(JsonElement root, string source, string ws, string key, CancellationToken ct)
+    {
+        if (!root.TryGetProperty(source, out var el) || el.ValueKind != JsonValueKind.Number || !el.TryGetInt32(out var v)) return 0;
+        if (await _workspaceSettings.GetAsync(ws, key, ct).ConfigureAwait(false) is not null) return 0;
+        await _workspaceSettings.SetAsync(ws, key, v.ToString(CultureInfo.InvariantCulture), ct).ConfigureAwait(false);
+        return 1;
+    }
+
+    private async Task<int> MigrateSwarmStringAsync(JsonElement root, string source, string ws, string key, CancellationToken ct)
+    {
+        if (TryReadString(root, source) is not { Length: > 0 } v) return 0;
+        if (await _workspaceSettings.GetAsync(ws, key, ct).ConfigureAwait(false) is not null) return 0;
+        await _workspaceSettings.SetAsync(ws, key, v, ct).ConfigureAwait(false);
+        return 1;
+    }
+
+    private async Task<int> CopyJsonObjectAsync(JsonElement root, string source, string ws, string targetKey, CancellationToken ct)
+    {
+        if (!root.TryGetProperty(source, out var el) || el.ValueKind != JsonValueKind.Object) return 0;
+        if (await _workspaceSettings.GetAsync(ws, targetKey, ct).ConfigureAwait(false) is not null) return 0;
+        await _workspaceSettings.SetAsync(ws, targetKey, el.GetRawText(), ct).ConfigureAwait(false);
+        return 1;
     }
 
     // ── helpers ─────────────────────────────────────────────────────────

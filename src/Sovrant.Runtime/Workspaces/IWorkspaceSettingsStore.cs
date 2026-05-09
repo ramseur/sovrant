@@ -107,4 +107,42 @@ public static class WorkspaceSettingsKeys
 
     /// <summary>Reserved workspace ID for global / server-default rows.</summary>
     public const string GlobalWorkspaceId = "";
+
+    // ── Swarm orchestrator ────────────────────────────────────────────────
+
+    /// <summary>Whether the swarm orchestrator is enabled (bool). Default false.</summary>
+    public const string SwarmEnabled = "swarm.enabled";
+
+    /// <summary>Maximum agents running concurrently within a wave (int). Default 4.</summary>
+    public const string SwarmMaxConcurrent = "swarm.max_concurrent";
+
+    /// <summary>Token budget ceiling across all tasks (int). Default 500000.</summary>
+    public const string SwarmMaxTokenBudget = "swarm.max_token_budget";
+
+    /// <summary>Per-task retry count on failure (int). Default 1.</summary>
+    public const string SwarmMaxRetries = "swarm.max_retries";
+
+    /// <summary>Whether to run a quality gate review after execution (bool). Default true.</summary>
+    public const string SwarmQualityGate = "swarm.quality_gate";
+
+    /// <summary>Minimum score (0–10) required for quality gate to pass without retry (int). Default 7.</summary>
+    public const string SwarmQualityGateThreshold = "swarm.quality_gate_threshold";
+
+    /// <summary>Whether to acquire per-file locks during parallel execution (bool). Default true.</summary>
+    public const string SwarmFileLocks = "swarm.file_locks";
+
+    /// <summary>Recommended model level for the decomposer agent (string). Default "High".</summary>
+    public const string SwarmDecomposerLevel = "swarm.decomposer_level";
+
+    /// <summary>Recommended model level for worker agents (string). Default "Standard".</summary>
+    public const string SwarmWorkerLevel = "swarm.worker_level";
+
+    /// <summary>Per-task timeout in seconds (int). Default 300.</summary>
+    public const string SwarmTaskTimeoutSeconds = "swarm.task_timeout_seconds";
+
+    /// <summary>Permission mode for swarm agents: "ask", "accept-edits", or "yolo". Default "ask".</summary>
+    public const string SwarmPermissions = "swarm.permissions";
+
+    /// <summary>JSON-encoded dict of task-type → agent-template overrides (e.g. <c>{"code_change":"coder"}</c>).</summary>
+    public const string SwarmTemplateOverrides = "swarm.templates";
 }

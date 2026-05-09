@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Agents.Swarm;
@@ -10,6 +9,7 @@ namespace Sovrant.Desktop.ViewModels;
 public partial class OrchestrationViewModel : ViewModelBase
 {
     private readonly ITeamRegistry _teamRegistry;
+    private readonly ISwarmConfigStore _swarmConfigStore;
 
     [ObservableProperty] private int _teamCount;
     [ObservableProperty] private string _statusMessage = string.Empty;
@@ -37,17 +37,10 @@ public partial class OrchestrationViewModel : ViewModelBase
     [ObservableProperty] private string _workerLevel = "Standard";
     [ObservableProperty] private int _taskTimeoutSeconds = 300;
 
-    private static readonly string SwarmConfigPath = Path.Combine(
-        Directory.GetCurrentDirectory(), ".sovrant", "swarm.json");
-
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        WriteIndented = true,
-    };
-
-    public OrchestrationViewModel(ITeamRegistry teamRegistry)
+    public OrchestrationViewModel(ITeamRegistry teamRegistry, ISwarmConfigStore swarmConfigStore)
     {
         _teamRegistry = teamRegistry;
+        _swarmConfigStore = swarmConfigStore;
         LoadSwarmConfig();
         LoadAll();
     }
@@ -195,31 +188,31 @@ public partial class OrchestrationViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void ToggleSwarm()
+    private async Task ToggleSwarmAsync()
     {
         SwarmEnabled = !SwarmEnabled;
-        SaveSwarmConfig();
+        await SaveSwarmConfigAsync().ConfigureAwait(true);
         LoadAll();
     }
 
     [RelayCommand]
-    private void ToggleQualityGate()
+    private async Task ToggleQualityGateAsync()
     {
         QualityGateEnabled = !QualityGateEnabled;
-        SaveSwarmConfig();
+        await SaveSwarmConfigAsync().ConfigureAwait(true);
     }
 
     [RelayCommand]
-    private void SaveSwarm()
+    private async Task SaveSwarmAsync()
     {
-        SaveSwarmConfig();
+        await SaveSwarmConfigAsync().ConfigureAwait(true);
         StatusMessage = "Swarm defaults saved.";
         LoadAll();
     }
 
     private void LoadSwarmConfig()
     {
-        var config = SwarmConfigLoader.Load();
+        var config = _swarmConfigStore.GetAsync().GetAwaiter().GetResult();
         SwarmEnabled = config.Enabled;
         MaxConcurrent = config.MaxConcurrent;
         MaxTokenBudget = config.MaxTokenBudget;
@@ -231,27 +224,23 @@ public partial class OrchestrationViewModel : ViewModelBase
         TaskTimeoutSeconds = config.TaskTimeoutSeconds;
     }
 
-    private void SaveSwarmConfig()
+    private async Task SaveSwarmConfigAsync()
     {
         try
         {
-            var dict = new Dictionary<string, object?>(StringComparer.Ordinal)
+            var config = new SwarmConfig
             {
-                ["enabled"] = SwarmEnabled,
-                ["max_concurrent"] = MaxConcurrent,
-                ["max_token_budget"] = MaxTokenBudget,
-                ["max_retries"] = MaxRetries,
-                ["quality_gate"] = QualityGateEnabled,
-                ["permissions"] = SwarmPermissions,
-                ["decomposer_level"] = DecomposerLevel,
-                ["worker_level"] = WorkerLevel,
-                ["task_timeout_seconds"] = TaskTimeoutSeconds,
+                Enabled              = SwarmEnabled,
+                MaxConcurrent        = MaxConcurrent,
+                MaxTokenBudget       = MaxTokenBudget,
+                MaxRetries           = MaxRetries,
+                QualityGateEnabled   = QualityGateEnabled,
+                Permissions          = SwarmPermissions,
+                DecomposerLevel      = DecomposerLevel,
+                WorkerLevel          = WorkerLevel,
+                TaskTimeoutSeconds   = TaskTimeoutSeconds,
             };
-
-            var dir = Path.GetDirectoryName(SwarmConfigPath)!;
-            Directory.CreateDirectory(dir);
-            var json = JsonSerializer.Serialize(dict, SerializerOptions);
-            File.WriteAllText(SwarmConfigPath, json);
+            await _swarmConfigStore.SetAsync(string.Empty, config).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
