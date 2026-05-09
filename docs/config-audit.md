@@ -159,7 +159,7 @@
 
 The following Bucket-B items are still read from disk JSON files (not yet migrated to the DB):
 
-- **`RoutingConfig`** (rows 27–34): `RoutingConfigLoader` still reads `.sovrant/routing.json`. Target: migrate to `workspace_settings` table.
+- ~~**`RoutingConfig`** (rows 27–34)~~ ✅ DONE — `RoutingConfigLoader` now reads env vars only (`SOVRANT_INTENT_ROUTING`, `SOVRANT_FREE_MODELS_ONLY`, `SOVRANT_ROUTING_*`, `SOVRANT_TIER_MODELS`, `SOVRANT_ROUTING_RULES`). `.sovrant/routing.json` no longer read.
 - **`SwarmConfig`** (rows 68–78): `SwarmConfigLoader` still reads `.sovrant/swarm.json`; Web/Desktop UI writes to the same file. Target: migrate to `workspace_settings` table.
 
 ## Resolved Items (historical — all complete by Phase 93)

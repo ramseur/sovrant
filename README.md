@@ -921,8 +921,14 @@ API-key variables marked **(stored)** below can alternatively be saved with `sov
 | `ROUTER_STRATEGY` | No | `Balanced` (default), `Latency`, or `Cost` |
 | `AGENT_MODE` | No | `isolated` (default, process-per-agent) or `shared` (in-process) |
 | `SOVRANT_COMPACT_THRESHOLD` | No | Token count that triggers context auto-compaction (default: `80000`). `0` to disable. |
+| `SOVRANT_INTENT_ROUTING` | No | `true` to enable intent-aware tier selection (default: `false`) |
 | `SOVRANT_FREE_MODELS_ONLY` | No | `true` to restrict routing to free/zero-cost models only |
-| `SOVRANT_INTENT_ROUTING` | No | `true` (default) or `false` — enables/disables intent-aware model routing |
+| `SOVRANT_ROUTING_DEFAULT_TIER` | No | Default tier when no intent match: `fast`, `standard` (default), `high` |
+| `SOVRANT_ROUTING_AUTO_TIER` | No | `true` (default) to auto-assign models to tiers from pricing data |
+| `SOVRANT_ROUTING_ESCALATION` | No | `true` (default) to retry with higher tier on low-quality responses |
+| `SOVRANT_ROUTING_MAX_ESCALATIONS` | No | Max tier escalations per turn (default: `1`) |
+| `SOVRANT_TIER_MODELS` | No | JSON object mapping tier → model ID, e.g. `{"fast":"gpt-4o-mini","standard":"auto","high":"claude-opus-4-6"}` |
+| `SOVRANT_ROUTING_RULES` | No | JSON array of custom routing rules, e.g. `[{"pattern":"fix.*bug","tier":"high"}]` |
 | `SOVRANT_WEB_SEARCH` | No | Backend selector: `auto` (default), `brave`, `firecrawl`, `native`, `off`. See [docs/web-search.md](docs/web-search.md). |
 | `LLM_WEB_SEARCH` | No | Deprecated alias — `true` is treated as `SOVRANT_WEB_SEARCH=native` and emits a warning |
 | `BRAVE_API_KEY` | No | Enables WebSearch via Brave Search API — **(stored)** as `brave` |

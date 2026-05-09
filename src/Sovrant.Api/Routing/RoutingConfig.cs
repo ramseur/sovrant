@@ -1,140 +1,166 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 
 namespace Sovrant.Api.Routing;
 
 /// <summary>
-/// Configuration for intent-aware model routing. Loaded from
-/// <c>.sovrant/routing.json</c> with env var overrides.
+/// Configuration for intent-aware model routing. All fields are loaded from
+/// environment variables (or a <c>.env</c> file pre-loaded by
+/// <c>BootstrapConfigLoader</c>).
 /// </summary>
 public sealed class RoutingConfig
 {
-    /// <summary>Whether intent-based routing is enabled. Default: false (use the configured model as-is).</summary>
-    [JsonPropertyName("intent_routing")]
+    /// <summary>Whether intent-based routing is enabled. Env: <c>SOVRANT_INTENT_ROUTING</c>.</summary>
     public bool IntentRouting { get; init; }
 
-    /// <summary>Default tier when no intent match or classification fails.</summary>
-    [JsonPropertyName("default_tier")]
+    /// <summary>Default tier when no intent match or classification fails. Env: <c>SOVRANT_ROUTING_DEFAULT_TIER</c>.</summary>
     public string DefaultTier { get; init; } = ModelTier.Standard;
 
-    /// <summary>Whether to auto-assign models to tiers from pricing data.</summary>
-    [JsonPropertyName("auto_tier_assignment")]
+    /// <summary>Whether to auto-assign models to tiers from pricing data. Env: <c>SOVRANT_ROUTING_AUTO_TIER</c>.</summary>
     public bool AutoTierAssignment { get; init; } = true;
 
     /// <summary>
-    /// When <c>true</c>, only models with zero cost (e.g. OpenRouter <c>:free</c> variants)
-    /// are eligible for tier assignment. Paid models are excluded from auto-routing.
-    /// Useful for users on OpenRouter's free tier who want to avoid accidental charges.
-    /// Override via <c>SOVRANT_FREE_MODELS_ONLY=true</c>.
+    /// When <c>true</c>, only models with zero cost are eligible for tier assignment.
+    /// Env: <c>SOVRANT_FREE_MODELS_ONLY</c>.
     /// </summary>
-    [JsonPropertyName("free_models_only")]
     public bool FreeModelsOnly { get; init; }
 
     /// <summary>
     /// Explicit tier → model ID mappings. Use <c>"auto"</c> for auto-assignment.
-    /// Example: <c>{ "fast": "gpt-4o-mini", "standard": "auto", "high": "claude-opus-4-6" }</c>
+    /// Env: <c>SOVRANT_TIER_MODELS</c> (JSON object, e.g. <c>{"fast":"gpt-4o-mini","standard":"auto"}</c>).
     /// </summary>
-    [JsonPropertyName("tier_models")]
     public IReadOnlyDictionary<string, string> TierModels { get; init; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            [ModelTier.Fast] = "auto",
+            [ModelTier.Fast]     = "auto",
             [ModelTier.Standard] = "auto",
-            [ModelTier.High] = "auto",
+            [ModelTier.High]     = "auto",
         };
 
-    /// <summary>Whether to retry with a higher-tier model on low-quality responses.</summary>
-    [JsonPropertyName("escalation")]
+    /// <summary>Whether to retry with a higher-tier model on low-quality responses. Env: <c>SOVRANT_ROUTING_ESCALATION</c>.</summary>
     public bool Escalation { get; init; } = true;
 
-    /// <summary>Maximum number of tier escalations per turn.</summary>
-    [JsonPropertyName("max_escalations_per_turn")]
+    /// <summary>Maximum number of tier escalations per turn. Env: <c>SOVRANT_ROUTING_MAX_ESCALATIONS</c>.</summary>
     public int MaxEscalationsPerTurn { get; init; } = 1;
 
     /// <summary>
-    /// Custom routing rules. Patterns are matched against the user message text.
-    /// Rules are checked in order; the first match wins.
+    /// Custom routing rules matched against user message text in order; first match wins.
+    /// Env: <c>SOVRANT_ROUTING_RULES</c> (JSON array, e.g. <c>[{"pattern":"fix.*bug","tier":"high"}]</c>).
     /// </summary>
-    [JsonPropertyName("custom_rules")]
     public IReadOnlyList<CustomRoutingRule> CustomRules { get; init; } = [];
 }
 
 /// <summary>A user-defined pattern → tier routing rule.</summary>
 public sealed class CustomRoutingRule
 {
-    /// <summary>Regex pattern to match against user input.</summary>
-    [JsonPropertyName("pattern")]
+    /// <summary>Regex pattern matched against user input.</summary>
     public string Pattern { get; init; } = string.Empty;
 
     /// <summary>The tier to use when the pattern matches.</summary>
-    [JsonPropertyName("tier")]
     public string Tier { get; init; } = ModelTier.Standard;
 }
 
-/// <summary>Loads <see cref="RoutingConfig"/> from <c>.sovrant/routing.json</c>.</summary>
+/// <summary>
+/// Loads <see cref="RoutingConfig"/> from environment variables.
+/// The <c>.env</c> file (if present) is pre-loaded by <c>BootstrapConfigLoader</c>
+/// before DI resolves this singleton, so all env var reads here see its values.
+/// </summary>
 public static class RoutingConfigLoader
 {
-    private static readonly string[] SearchPaths =
-    [
-        Path.Combine(Environment.CurrentDirectory, ".sovrant", "routing.json"),
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".sovrant", "routing.json"),
-    ];
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
         ReadCommentHandling = JsonCommentHandling.Skip,
     };
 
-    private static readonly Action<ILogger, string, Exception?> LogLoadFailed =
-        LoggerMessage.Define<string>(LogLevel.Warning, new EventId(1, "RoutingConfigLoadFailed"),
-            "Failed to load routing config from {Path}, using defaults");
+    private static readonly Action<ILogger, string, string, Exception?> LogParseFailed =
+        LoggerMessage.Define<string, string>(LogLevel.Warning, new EventId(1, "RoutingConfigParseFailed"),
+            "Failed to parse {Variable} as {Type}, using default");
 
-    /// <summary>
-    /// Loads routing config from the first <c>.sovrant/routing.json</c> found
-    /// in the current directory or home directory. Returns defaults if no file exists.
-    /// </summary>
-    public static RoutingConfig Load(ILogger? logger = null)
+    private static readonly Action<ILogger, Exception?> LogTierModelsFailed =
+        LoggerMessage.Define(LogLevel.Warning, new EventId(2, "TierModelsParseError"),
+            "Failed to parse SOVRANT_TIER_MODELS as JSON object, using defaults");
+
+    private static readonly Action<ILogger, Exception?> LogRulesFailed =
+        LoggerMessage.Define(LogLevel.Warning, new EventId(3, "RoutingRulesParseError"),
+            "Failed to parse SOVRANT_ROUTING_RULES as JSON array, using empty rules");
+
+    /// <summary>Builds a <see cref="RoutingConfig"/> from the current process environment.</summary>
+    public static RoutingConfig Load(ILogger? logger = null) => new()
     {
-        foreach (var path in SearchPaths)
-        {
-            if (!File.Exists(path))
-                continue;
+        IntentRouting        = ReadBool("SOVRANT_INTENT_ROUTING",          false),
+        FreeModelsOnly       = ReadBool("SOVRANT_FREE_MODELS_ONLY",         false),
+        DefaultTier          = Env("SOVRANT_ROUTING_DEFAULT_TIER")          ?? ModelTier.Standard,
+        AutoTierAssignment   = ReadBool("SOVRANT_ROUTING_AUTO_TIER",        true),
+        Escalation           = ReadBool("SOVRANT_ROUTING_ESCALATION",       true),
+        MaxEscalationsPerTurn = ReadInt("SOVRANT_ROUTING_MAX_ESCALATIONS",  1, logger),
+        TierModels           = ReadTierModels(logger),
+        CustomRules          = ReadCustomRules(logger),
+    };
 
-            try
-            {
-                var json = File.ReadAllText(path);
-                var parsed = JsonSerializer.Deserialize<RoutingConfig>(json, JsonOptions);
-                return parsed ?? new RoutingConfig();
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                if (logger is not null)
-                    LogLoadFailed(logger, path, ex);
-            }
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static Dictionary<string, string> ReadTierModels(ILogger? logger)
+    {
+        var defaults = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            [ModelTier.Fast]     = "auto",
+            [ModelTier.Standard] = "auto",
+            [ModelTier.High]     = "auto",
+        };
+
+        var raw = Env("SOVRANT_TIER_MODELS");
+        if (raw is null) return defaults;
+
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(raw, JsonOptions);
+            if (parsed is not null)
+                return new Dictionary<string, string>(parsed, StringComparer.OrdinalIgnoreCase);
+        }
+        catch (JsonException ex)
+        {
+            if (logger is not null) LogTierModelsFailed(logger, ex);
         }
 
-        var intentRouting = false;
-        var freeModelsOnly = false;
+        return defaults;
+    }
 
-        // Check env var overrides
-        var envToggle = Environment.GetEnvironmentVariable("SOVRANT_INTENT_ROUTING");
-        if (envToggle is not null)
+    private static List<CustomRoutingRule> ReadCustomRules(ILogger? logger)
+    {
+        var raw = Env("SOVRANT_ROUTING_RULES");
+        if (raw is null) return [];
+
+        try
         {
-            intentRouting = envToggle.Equals("true", StringComparison.OrdinalIgnoreCase)
-                || envToggle.Equals("1", StringComparison.Ordinal);
+            return JsonSerializer.Deserialize<List<CustomRoutingRule>>(raw, JsonOptions) ?? [];
         }
-
-        var freeOnly = Environment.GetEnvironmentVariable("SOVRANT_FREE_MODELS_ONLY");
-        if (freeOnly is not null)
+        catch (JsonException ex)
         {
-            freeModelsOnly = freeOnly.Equals("true", StringComparison.OrdinalIgnoreCase)
-                || freeOnly.Equals("1", StringComparison.Ordinal);
+            if (logger is not null) LogRulesFailed(logger, ex);
+            return [];
         }
+    }
 
-        return new RoutingConfig { IntentRouting = intentRouting, FreeModelsOnly = freeModelsOnly };
+    private static bool ReadBool(string name, bool defaultValue)
+    {
+        var v = Env(name);
+        if (v is null) return defaultValue;
+        return v.Equals("true", StringComparison.OrdinalIgnoreCase) || v.Equals("1", StringComparison.Ordinal);
+    }
+
+    private static int ReadInt(string name, int defaultValue, ILogger? logger)
+    {
+        var v = Env(name);
+        if (v is null) return defaultValue;
+        if (int.TryParse(v, out var i)) return i;
+        if (logger is not null) LogParseFailed(logger, name, "integer", null);
+        return defaultValue;
+    }
+
+    private static string? Env(string name)
+    {
+        var v = Environment.GetEnvironmentVariable(name);
+        return string.IsNullOrEmpty(v) ? null : v;
     }
 }
