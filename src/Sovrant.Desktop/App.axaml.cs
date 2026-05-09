@@ -61,8 +61,8 @@ public partial class App : Application
         // Build DI first; ApplyUserPreferencesAsync (Phase 88-C) runs inside
         // InitializeRuntimeAsync and hydrates SovrantConfig from the DB +
         // credential store, so we can't decide whether to show the setup
-        // wizard until that step has run. ConfigLoader.Load() now only reads
-        // sovrant.config / env vars — never per-user settings — so its
+        // wizard until that step has run. ConfigLoader.Load() only reads
+        // env vars / .env file — never per-user settings — so its
         // ApiKey is empty for everyone except the env-var bootstrap path.
         var config = ConfigLoader.Load();
 

@@ -155,9 +155,16 @@
 | 121 | OLLAMA_BASE_URL | `CredentialConfig.cs` | D | Operator override |
 | 122 | LLM_WEB_SEARCH | `CredentialConfig.cs` (deprecated) | D | Legacy; migrate to `SOVRANT_WEB_SEARCH` |
 
-## Resolved Items (historical — all complete by Phase 90)
+## Open Items
 
-The following items were tracked as open during Phase 87/88 and have all shipped:
+The following Bucket-B items are still read from disk JSON files (not yet migrated to the DB):
+
+- **`RoutingConfig`** (rows 27–34): `RoutingConfigLoader` still reads `.sovrant/routing.json`. Target: migrate to `workspace_settings` table.
+- **`SwarmConfig`** (rows 68–78): `SwarmConfigLoader` still reads `.sovrant/swarm.json`; Web/Desktop UI writes to the same file. Target: migrate to `workspace_settings` table.
+
+## Resolved Items (historical — all complete by Phase 93)
+
+The following items were tracked as open during Phase 87/88–93 and have all shipped:
 
 1. **MCP/LSP server entries** (rows 13, 14, 83, 84): ✅ DONE (V019) — `mcp_servers` and `lsp_servers` tables; `IMcpServerStore` + `ILspServerStore`. `SovrantConfig.McpServers` / `LspServers` removed entirely.
 2. **`RouterMode` / `RouterStrategy`** (rows 4, 5, 115, 116): ✅ DONE — extracted into a singleton `RouterOptions` (`Sovrant.Api.Config`) with mutable `Mode`/`Strategy` setters. `SmartRouter` reads from the singleton on every routing decision so the Settings UI can hot-swap values without rebuilding DI. Removed from `SovrantConfig`.
@@ -166,6 +173,7 @@ The following items were tracked as open during Phase 87/88 and have all shipped
 5. **Budgets** (rows 97, 98): ✅ DONE (V018) — `workspace_settings` table keys `budget.session_usd` / `budget.project_usd`. Env vars override DB.
 6. **Session/Project TTL & caps** (rows 88, 89): ✅ DONE (V018) — `workspace_settings` keys `session.ttl_seconds` / `session.max_sessions`. Env vars override DB.
 7. **OAuth secrets in MCP config** (row 84): ✅ DONE (V019) — `client_secret` removed from `McpOAuthConfig`; `McpOAuthService` reads it from `ICredentialStore` under `mcp.{name}.client_secret` at token-exchange time.
+8. **Bucket-A bootstrap config file** (Phase 93): ✅ DONE — `sovrant.config` JSON file removed entirely. `BootstrapConfigLoader` now reads env vars only, with optional `.env` file in CWD as a default layer. `sovrant.config.example` replaced by `.env.example`.
 
 ## Bucket totals
 

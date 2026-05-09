@@ -50,7 +50,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Workspaces.LiveSettingsRegistry>();
 
         // Storage provider (Phase 32) — SQLite by default.
-        // The DB path comes from BootstrapConfig (CLI > env > sovrant.config > default).
+        // The DB path comes from BootstrapConfig (CLI > env > .env file > default).
         services.AddSingleton(sp => new SqliteStorageProvider(
             sp.GetRequiredService<ILogger<SqliteStorageProvider>>(), bootstrap.DbPath));
         services.AddSingleton<IStorageProvider>(sp => sp.GetRequiredService<SqliteStorageProvider>());
