@@ -951,20 +951,18 @@ API-key variables marked **(stored)** below can alternatively be saved with `sov
 | `SOVRANT_TLS_HTTPS_PORT` | No | HTTPS port (default: `5443` for Server, `5101` for Web). |
 | `OPENROUTER_API_KEY` | No | Enables live model metadata discovery from OpenRouter — **(stored)** as `openrouter` |
 
-> **Desktop and Web apps** store provider configuration in `~/.sovrant/settings.json` via the Settings UI — no environment variables needed for basic usage.
+> **Desktop and Web apps** store provider configuration in the SQLite database via the Settings UI — no environment variables needed for basic usage.
 
 ### File Locations
 
 | Path | Purpose |
 |---|---|
 | `~/.sovrant/data/sovrant.db` | SQLite database (sessions, memory, audit, credentials, teams, missions, provider profiles, etc.) |
-| `~/.sovrant/settings.json` | User settings (model, default provider, permissions) |
-| `~/.sovrant/governance.json` | Governance config (blocked commands, protected files, secrets) |
+| `~/.sovrant/governance.json` | Legacy governance config — migrated to DB on first boot, renamed to `.bak` |
 | `~/.sovrant/logs/` | Rolling application log files |
 | `~/.sovrant/credentials/.keystore` | AES-256-GCM master key (auto-generated). Decrypts the `credentials` table and provider profile API keys in SQLite. Override path via `SOVRANT_KEYSTORE_PATH` (env var or `.env` file). |
 | `~/.sovrant/memory.md` | Global memory (human-edited, injected into system prompt) |
 | `.sovrant/memory.md` | Project memory (human-edited, injected into system prompt) |
-| `.sovrant/settings.json` | Project-level settings overrides |
 | `.sovrant/agents/*.md` | Custom agent templates |
 | `.sovrant/skills/*.md` | Custom skills |
 | `.sovrant/commands/*.md` | Custom slash commands |
