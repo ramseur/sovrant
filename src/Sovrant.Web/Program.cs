@@ -191,7 +191,12 @@ public static class Program
                     // Only seed user/workspace if a session was restored at startup.
                     // If not, the user hasn't logged in yet; Login.razor will seed after auth.
                     if (webSession.IsAuthenticated)
+                    {
                         await SeedUserAndWorkspaceAsync(app.Services, webSession.UserId!).ConfigureAwait(false);
+                        // Re-apply preferences for the authenticated user. InitializeRuntimeAsync
+                        // used the OS identity; this pass corrects it to the token's actual userId.
+                        await app.Services.ApplyUserPreferencesForUserAsync(webSession.UserId!).ConfigureAwait(false);
+                    }
                 }
                 catch (Exception ex)
                 {

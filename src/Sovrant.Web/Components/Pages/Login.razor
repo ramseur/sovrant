@@ -1,5 +1,6 @@
 @page "/login"
 @layout Layout.LoginLayout
+@using Sovrant.Runtime
 @using Sovrant.Runtime.Auth
 @using Sovrant.Runtime.Mcp
 @using Sovrant.Web.Services
@@ -102,7 +103,11 @@
             Program.SetUserId(result.UserId!);
             Session.SignIn(result.UserId!, result.Role ?? "user");
             if (!Program.IsRemoteMode)
-                _ = Task.Run(() => Program.SeedUserAndWorkspaceAsync(Services, result.UserId!));
+                _ = Task.Run(async () =>
+                {
+                    await Program.SeedUserAndWorkspaceAsync(Services, result.UserId!).ConfigureAwait(false);
+                    await Services.ApplyUserPreferencesForUserAsync(result.UserId!).ConfigureAwait(false);
+                });
             Nav.NavigateTo("/", forceLoad: false);
         }
         finally
@@ -137,7 +142,11 @@
             Program.SetUserId(result.UserId!);
             Session.SignIn(result.UserId!, "admin");
             if (!Program.IsRemoteMode)
-                _ = Task.Run(() => Program.SeedUserAndWorkspaceAsync(Services, result.UserId!));
+                _ = Task.Run(async () =>
+                {
+                    await Program.SeedUserAndWorkspaceAsync(Services, result.UserId!).ConfigureAwait(false);
+                    await Services.ApplyUserPreferencesForUserAsync(result.UserId!).ConfigureAwait(false);
+                });
             Nav.NavigateTo("/", forceLoad: false);
         }
         finally

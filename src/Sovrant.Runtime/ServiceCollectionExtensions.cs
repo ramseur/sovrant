@@ -499,6 +499,15 @@ public static class ServiceCollectionExtensions
     /// migrator. The DB is the source of truth — ConfigLoader's JSON-file
     /// values are now only the bootstrap default before this step runs.
     /// </summary>
+    /// <summary>
+    /// Public overload — call this after authentication to re-apply preferences for the
+    /// authenticated user ID, which may differ from the OS identity used during
+    /// <see cref="InitializeRuntimeAsync"/>.
+    /// </summary>
+    public static Task ApplyUserPreferencesForUserAsync(
+        this IServiceProvider services, string userId, CancellationToken ct = default)
+        => ApplyUserPreferencesAsync(services, userId, ct);
+
     internal static async Task ApplyUserPreferencesAsync(
         IServiceProvider services, string userId, CancellationToken ct)
     {

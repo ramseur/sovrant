@@ -248,6 +248,12 @@ public partial class App : Application
         }
         SovrantUserId = authenticatedUserId;
 
+        // Re-apply preferences for the authenticated user. InitializeRuntimeAsync ran
+        // earlier using the OS identity (SOVRANT_USER_ID env var), which may differ from
+        // the token-authenticated userId. This second pass loads the correct model/provider.
+        if (!isRemote)
+            await _serviceProvider.ApplyUserPreferencesForUserAsync(authenticatedUserId).ConfigureAwait(true);
+
         // ── API key / setup wizard ────────────────────────────────────────────
         // Skip setup wizard in remote mode — the server handles LLM credentials.
         if (!isRemote && string.IsNullOrWhiteSpace(config.ApiKey))
