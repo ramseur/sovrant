@@ -103,20 +103,86 @@
                         Padding="20,16"
                         IsVisible="{Binding !!SelectedWorkspace}">
                     <DockPanel>
-                        <Button DockPanel.Dock="Top"
-                                Content="Delete" HorizontalAlignment="Right"
-                                Command="{Binding DeleteWorkspaceCommand}"
-                                CommandParameter="{Binding SelectedWorkspace}"
-                                Padding="10,5" CornerRadius="4" FontSize="11"
-                                Background="#44F44336" Foreground="{DynamicResource StatusFail}"
-                                IsVisible="{Binding SelectedWorkspace.IsPersonal, Converter={x:Static BoolConverters.Not}, FallbackValue=False}" />
-                        <ContentControl Content="{Binding SelectedWorkspace}">
+                        <!-- Action buttons -->
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,0,0,12">
+                            <Button Content="Delete"
+                                    Command="{Binding DeleteWorkspaceCommand}"
+                                    CommandParameter="{Binding SelectedWorkspace}"
+                                    Padding="10,5" CornerRadius="4" FontSize="11"
+                                    Background="#44F44336" Foreground="{DynamicResource StatusFail}"
+                                    IsVisible="{Binding SelectedWorkspace.IsPersonal, Converter={x:Static BoolConverters.Not}, FallbackValue=False}" />
+                        </StackPanel>
+
+                        <!-- Workspace markdown info -->
+                        <ContentControl DockPanel.Dock="Top" Content="{Binding SelectedWorkspace}" Margin="0,0,0,16">
                             <ContentControl.ContentTemplate>
                                 <DataTemplate DataType="vm:WorkspaceItemViewModel">
                                     <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
                                 </DataTemplate>
                             </ContentControl.ContentTemplate>
                         </ContentControl>
+
+                        <!-- Members section -->
+                        <ScrollViewer>
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Members" FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}" />
+
+                                <TextBlock Text="Loading members…" FontSize="12"
+                                           Foreground="{DynamicResource TextMuted}"
+                                           IsVisible="{Binding MembersLoading}" />
+
+                                <ItemsControl ItemsSource="{Binding Members}"
+                                              IsVisible="{Binding !MembersLoading}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="vm:WorkspaceMemberViewModel">
+                                            <Border Padding="10,8" Margin="0,2" CornerRadius="6"
+                                                    Background="{DynamicResource SurfaceBackground}"
+                                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                                <DockPanel>
+                                                    <Button DockPanel.Dock="Right"
+                                                            Content="Remove"
+                                                            Command="{Binding $parent[ItemsControl].((vm:WorkspacesViewModel)DataContext).RemoveMemberCommand}"
+                                                            CommandParameter="{Binding}"
+                                                            Padding="8,4" CornerRadius="4" FontSize="10"
+                                                            Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
+                                                    <StackPanel Spacing="2">
+                                                        <TextBlock Text="{Binding UserId}" FontSize="12" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource TextPrimary}" />
+                                                        <TextBlock FontSize="10" Foreground="{DynamicResource TextMuted}">
+                                                            <Run Text="{Binding Role}" />
+                                                            <Run Text=" · Joined " />
+                                                            <Run Text="{Binding JoinedAt, StringFormat='{}{0:MMM d, yyyy}'}" />
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                </DockPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- Add member form -->
+                                <Border Padding="12" CornerRadius="8" Margin="0,4,0,0"
+                                        Background="{DynamicResource SurfaceBackground}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Add Member" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}" />
+                                        <TextBox Text="{Binding AddMemberUserId}"
+                                                 Watermark="User ID"
+                                                 FontSize="12" Padding="8,6" CornerRadius="6" />
+                                        <ComboBox ItemsSource="{Binding RoleOptions}"
+                                                  SelectedItem="{Binding AddMemberRole}"
+                                                  HorizontalAlignment="Stretch" FontSize="12" />
+                                        <Button Content="Add Member"
+                                                Command="{Binding AddMemberCommand}"
+                                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                                Padding="8,6" CornerRadius="6"
+                                                Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
                     </DockPanel>
                 </Border>
             </Grid>

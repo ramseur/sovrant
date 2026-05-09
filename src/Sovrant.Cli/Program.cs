@@ -1179,6 +1179,102 @@ whoamiCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
 });
 root.Add(whoamiCmd);
 
+// ── 'workspace' subcommand group ─────────────────────────────────────────────
+var workspaceCmd = new Command("workspace", "Inspect and manage workspaces.");
+
+var wsListCmd = new Command("list", "List workspaces the current user belongs to.");
+wsListCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    await using var sp = BuildServices(pr);
+    var storage = sp.GetRequiredService<IStorageProvider>();
+    await storage.InitializeAsync(ct).ConfigureAwait(false);
+
+    var wsSvc = sp.GetService<Sovrant.Runtime.Workspaces.IWorkspaceService>();
+    if (wsSvc is null)
+    {
+        AnsiConsole.MarkupLine("[yellow]workspace commands are only available in embedded (local) mode.[/]");
+        Environment.ExitCode = 1;
+        return;
+    }
+    var userId = ResolveCliUserId(sp);
+
+    var list = await wsSvc.ListForUserAsync(userId, ct).ConfigureAwait(false);
+    if (list.Count == 0)
+    {
+        AnsiConsole.MarkupLine("[grey]No workspaces found.[/]");
+        return;
+    }
+
+    var table = new Table().AddColumns("Name", "Slug", "Type", "ID", "Created");
+    foreach (var w in list)
+    {
+        table.AddRow(
+            Markup.Escape(w.Name),
+            Markup.Escape(w.Slug),
+            Markup.Escape(w.Type.ToString()),
+            Markup.Escape(w.WorkspaceId),
+            w.CreatedAt.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+    }
+    AnsiConsole.Write(table);
+});
+workspaceCmd.Add(wsListCmd);
+
+var wsMembersWorkspaceIdArg = new Argument<string>("workspace-id") { Description = "Workspace ID or slug." };
+var wsMembersCmd = new Command("members", "List members of a workspace.");
+wsMembersCmd.Add(wsMembersWorkspaceIdArg);
+wsMembersCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+{
+    var workspaceId = pr.GetValue(wsMembersWorkspaceIdArg)!;
+
+    await using var sp = BuildServices(pr);
+    var storage = sp.GetRequiredService<IStorageProvider>();
+    await storage.InitializeAsync(ct).ConfigureAwait(false);
+
+    var wsSvc = sp.GetService<Sovrant.Runtime.Workspaces.IWorkspaceService>();
+    if (wsSvc is null)
+    {
+        AnsiConsole.MarkupLine("[yellow]workspace commands are only available in embedded (local) mode.[/]");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    var workspace = await wsSvc.GetAsync(workspaceId, ct).ConfigureAwait(false);
+    if (workspace is null)
+    {
+        var userId = ResolveCliUserId(sp);
+        var all = await wsSvc.ListForUserAsync(userId, ct).ConfigureAwait(false);
+        workspace = all.FirstOrDefault(w =>
+            string.Equals(w.Slug, workspaceId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    if (workspace is null)
+    {
+        AnsiConsole.MarkupLine($"[red]Workspace '{Markup.Escape(workspaceId)}' not found.[/]");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    var members = await wsSvc.ListMembersAsync(workspace.WorkspaceId, ct).ConfigureAwait(false);
+    if (members.Count == 0)
+    {
+        AnsiConsole.MarkupLine("[grey]No members found.[/]");
+        return;
+    }
+
+    AnsiConsole.MarkupLine($"[bold]{Markup.Escape(workspace.Name)}[/] [grey]({Markup.Escape(workspace.WorkspaceId)})[/]");
+    var wsTable = new Table().AddColumns("User ID", "Role", "Joined");
+    foreach (var m in members)
+    {
+        wsTable.AddRow(
+            Markup.Escape(m.UserId),
+            Markup.Escape(m.Role.ToString()),
+            m.JoinedAt.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+    }
+    AnsiConsole.Write(wsTable);
+});
+workspaceCmd.Add(wsMembersCmd);
+root.Add(workspaceCmd);
+
 // ── REPL (default handler) ────────────────────────────────────────────────────
 root.SetAction(async (ParseResult pr, CancellationToken ct) =>
 {
@@ -1224,6 +1320,27 @@ return await parseResult.InvokeAsync(parseResult.InvocationConfiguration, Cancel
     .ConfigureAwait(false);
 
 // ── Local helpers ─────────────────────────────────────────────────────────────
+
+string ResolveCliUserId(IServiceProvider sp)
+{
+    // In remote mode there is no local ITokenService; use the stored token's user.
+    // In embedded mode try the credential store, fall back to OS identity.
+    var store = sp.GetService<Sovrant.Runtime.Mcp.ICredentialStore>();
+    if (store is not null)
+    {
+        var plaintext = store.RetrieveAsync(CliTokenKey).GetAwaiter().GetResult();
+        if (!string.IsNullOrEmpty(plaintext))
+        {
+            var tokens = sp.GetService<Sovrant.Runtime.Auth.ITokenService>();
+            if (tokens is not null)
+            {
+                var resolved = tokens.ResolveAsync(plaintext).GetAwaiter().GetResult();
+                if (resolved is not null) return resolved.Token.UserId;
+            }
+        }
+    }
+    return Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
+}
 
 ServiceProvider BuildServices(ParseResult pr)
 {
