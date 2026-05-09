@@ -964,7 +964,7 @@ root.Add(uninstallCmd);
 root.Add(DocumentCommand.Build(BuildServices));
 
 // ── 'connect' subcommand ─────────────────────────────────────────────────────
-var connectUrlArg = new Argument<string>("url") { Description = "Base URL of the Sovrant server (e.g. http://my-server:5200)." };
+var connectUrlArg = new Argument<string>("url") { Description = "Base URL of the Sovrant server (e.g. https://my-server:5443 or http://localhost:5200)." };
 var connectTokenOpt = new Option<string?>("--token") { Description = "Bearer token for the server. If omitted, run 'sovrant login' after connecting." };
 var connectCmd = new Command("connect", "Switch to remote mode and connect to a shared Sovrant server.");
 connectCmd.Add(connectUrlArg);

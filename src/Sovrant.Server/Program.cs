@@ -1,3 +1,4 @@
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.RateLimiting;
 using Sovrant.Api.Auth;
 using Sovrant.Api.Config;
@@ -25,17 +26,33 @@ var credentials = CredentialConfig.Resolve(apiConfig);
 var serverPort = int.TryParse(
     Environment.GetEnvironmentVariable("SOVRANT_PORT"), out var p) ? p : 5200;
 
+const int DefaultServerHttpsPort = 5443;
+var serverHttpsPort = bootstrapConfig.GetHttpsPort(DefaultServerHttpsPort);
+
 // ── Builder ───────────────────────────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
 
 builder.WebHost.ConfigureKestrel(o =>
 {
-    o.ListenLocalhost(serverPort);
+    o.ListenAnyIP(serverPort);
+    if (bootstrapConfig.HasTls)
+    {
+        o.ListenAnyIP(serverHttpsPort, listenOpts =>
+        {
+            if (!string.IsNullOrEmpty(bootstrapConfig.TlsKeyPath))
+                listenOpts.UseHttps(X509Certificate2.CreateFromPemFile(bootstrapConfig.TlsCertPath!, bootstrapConfig.TlsKeyPath));
+            else
+                listenOpts.UseHttps(bootstrapConfig.TlsCertPath!, bootstrapConfig.TlsCertPassword);
+        });
+    }
     o.Limits.MaxRequestBodySize = 10 * 1024 * 1024; // 10 MB
     o.Limits.MaxRequestLineSize = 16 * 1024;         // 16 KB
 });
 
 builder.Services.AddLogging(b => b.AddSovrantLogging(logFileOverride: bootstrapConfig.LogFile));
+
+if (bootstrapConfig.HasTls)
+    builder.Services.AddHttpsRedirection(o => o.HttpsPort = serverHttpsPort);
 
 // Mutable runtime config — single source of truth for live config changes.
 // LlmApiKey lives in the encrypted credential store, not here.
@@ -117,6 +134,8 @@ var defaultCorsOrigins = new[]
     "http://127.0.0.1",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5100",
+    $"https://localhost:{serverHttpsPort}",
+    $"https://127.0.0.1:{serverHttpsPort}",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:8080",
 };
@@ -158,6 +177,9 @@ builder.Services.AddRateLimiter(options =>
 
 // ── App pipeline ──────────────────────────────────────────────────────────────
 var app = builder.Build();
+
+if (bootstrapConfig.HasTls)
+    app.UseHttpsRedirection();
 
 app.UseCors();
 app.UseRateLimiter();

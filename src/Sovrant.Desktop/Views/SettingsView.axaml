@@ -345,7 +345,7 @@
                     <TextBlock Text="Server URL" FontSize="13" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextSecondary}" />
                     <TextBox Text="{Binding ConnectionServerUrl}"
-                             Watermark="http://localhost:5200"
+                             Watermark="https://my-server:5443 or http://localhost:5200"
                              CornerRadius="8"
                              Padding="12,8" />
                     <TextBlock Text="The URL of your Sovrant Server instance."

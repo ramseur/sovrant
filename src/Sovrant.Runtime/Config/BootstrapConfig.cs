@@ -39,4 +39,41 @@ public sealed record BootstrapConfig
     /// (suitable only for local development).
     /// </summary>
     public string? ServerToken { get; init; }
+
+    // ── TLS ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Path to a PFX certificate file (or PEM certificate when <see cref="TlsKeyPath"/> is also set).
+    /// When set, Kestrel binds an additional HTTPS listener on <see cref="TlsHttpsPort"/>.
+    /// TLS is disabled when this is null or empty.
+    /// </summary>
+    public string? TlsCertPath { get; init; }
+
+    /// <summary>
+    /// Passphrase for a PFX certificate file. Ignored when using PEM+key.
+    /// </summary>
+    public string? TlsCertPassword { get; init; }
+
+    /// <summary>
+    /// Path to the PEM private-key file when using separate cert/key PEM files
+    /// instead of a combined PFX. Leave null when <see cref="TlsCertPath"/> is a PFX.
+    /// </summary>
+    public string? TlsKeyPath { get; init; }
+
+    /// <summary>
+    /// HTTPS port for the Kestrel listener. Defaults to 5443 (Server) or 5101 (Web)
+    /// when null. Ignored when <see cref="TlsCertPath"/> is not set.
+    /// </summary>
+    public string? TlsHttpsPort { get; init; }
+
+    /// <summary>Returns true when a certificate path is configured and the file exists.</summary>
+    public bool HasTls =>
+        !string.IsNullOrEmpty(TlsCertPath) && File.Exists(TlsCertPath);
+
+    /// <summary>
+    /// Returns the configured HTTPS port, or <paramref name="defaultPort"/> when
+    /// <see cref="TlsHttpsPort"/> is null or unparseable.
+    /// </summary>
+    public int GetHttpsPort(int defaultPort) =>
+        int.TryParse(TlsHttpsPort, out var port) && port > 0 ? port : defaultPort;
 }

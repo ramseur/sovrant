@@ -58,6 +58,10 @@ public static class BootstrapConfigLoader
             ArtifactsRoot = FirstNonNull(cli.ArtifactsRoot, env.ArtifactsRoot, configFile.ArtifactsRoot, projectFile.ArtifactsRoot, userFile.ArtifactsRoot),
             KeystorePath = FirstNonNull(cli.KeystorePath, env.KeystorePath, configFile.KeystorePath, projectFile.KeystorePath, userFile.KeystorePath),
             ServerToken = FirstNonNull(cli.ServerToken, env.ServerToken, configFile.ServerToken, projectFile.ServerToken, userFile.ServerToken),
+            TlsCertPath = FirstNonNull(env.TlsCertPath, configFile.TlsCertPath, projectFile.TlsCertPath, userFile.TlsCertPath),
+            TlsCertPassword = FirstNonNull(env.TlsCertPassword, configFile.TlsCertPassword, projectFile.TlsCertPassword, userFile.TlsCertPassword),
+            TlsKeyPath = FirstNonNull(env.TlsKeyPath, configFile.TlsKeyPath, projectFile.TlsKeyPath, userFile.TlsKeyPath),
+            TlsHttpsPort = FirstNonNull(env.TlsHttpsPort, configFile.TlsHttpsPort, projectFile.TlsHttpsPort, userFile.TlsHttpsPort),
         };
     }
 
@@ -122,6 +126,10 @@ public static class BootstrapConfigLoader
         ArtifactsRoot = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT")),
         KeystorePath = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_KEYSTORE_PATH")),
         ServerToken = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_TOKEN")),
+        TlsCertPath = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_TLS_CERT")),
+        TlsCertPassword = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_TLS_CERT_PASSWORD")),
+        TlsKeyPath = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_TLS_KEY")),
+        TlsHttpsPort = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_TLS_HTTPS_PORT")),
     };
 
     private static (BootstrapConfig Cli, BootstrapConfig ConfigFile) ParseCli(string[]? args)

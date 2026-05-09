@@ -1,3 +1,4 @@
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Sovrant.Agents;
 using Sovrant.Api.Auth;
@@ -37,13 +38,33 @@ public static class Program
 
         var bootstrapConfig = BootstrapConfigLoader.Load(args);
 
+        const int WebHttpPort = 5100;
+        const int WebHttpsPortDefault = 5101;
+        var webHttpsPort = bootstrapConfig.GetHttpsPort(WebHttpsPortDefault);
+
         var builder = WebApplication.CreateBuilder(args);
-        builder.WebHost.UseUrls("http://localhost:5100");
+        builder.WebHost.ConfigureKestrel(o =>
+        {
+            o.ListenAnyIP(WebHttpPort);
+            if (bootstrapConfig.HasTls)
+            {
+                o.ListenAnyIP(webHttpsPort, listenOpts =>
+                {
+                    if (!string.IsNullOrEmpty(bootstrapConfig.TlsKeyPath))
+                        listenOpts.UseHttps(X509Certificate2.CreateFromPemFile(bootstrapConfig.TlsCertPath!, bootstrapConfig.TlsKeyPath));
+                    else
+                        listenOpts.UseHttps(bootstrapConfig.TlsCertPath!, bootstrapConfig.TlsCertPassword);
+                });
+            }
+        });
         builder.WebHost.UseStaticWebAssets();
 
         builder.Services.AddLogging(b => b.AddSovrantLogging(
             consoleMinOverride: LogLevel.Warning,
             logFileOverride: bootstrapConfig.LogFile));
+
+        if (bootstrapConfig.HasTls)
+            builder.Services.AddHttpsRedirection(o => o.HttpsPort = webHttpsPort);
 
         // WebSessionService is a singleton used by all Blazor circuits.
         // For embedded mode it is populated after session restore or login.
@@ -143,6 +164,9 @@ public static class Program
             // If valid, MainLayout will render normally; otherwise it redirects to /login.
             await TryRestoreWebSessionAsync(app.Services, webSession).ConfigureAwait(false);
         }
+
+        if (bootstrapConfig.HasTls)
+            app.UseHttpsRedirection();
 
         app.MapStaticAssets();
         app.UseAntiforgery();
