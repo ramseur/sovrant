@@ -352,6 +352,7 @@ public partial class App : Application
         var principal = Services.GetRequiredService<DesktopPrincipalAccessor>();
         principal.UserId = null;
         principal.Role = null;
+        principal.Email = null;
 
         var desktop = (IClassicDesktopStyleApplicationLifetime)Current!.ApplicationLifetime!;
 
@@ -359,6 +360,9 @@ public partial class App : Application
 
         var authenticatedUserId = await RunLoginWindowAsync(desktop, Services, principal).ConfigureAwait(true);
         SovrantUserId = authenticatedUserId;
+
+        Services.GetRequiredService<SidebarViewModel>()
+            .SetCurrentUser(principal.Email ?? authenticatedUserId);
 
         MainWindow?.Show();
     }
@@ -393,12 +397,14 @@ public partial class App : Application
             var doc = System.Text.Json.JsonDocument.Parse(json);
             var userId = doc.RootElement.TryGetProperty("user_id", out var u) ? u.GetString() : null;
             var role = doc.RootElement.TryGetProperty("role", out var r) ? r.GetString() : "user";
+            var email = doc.RootElement.TryGetProperty("email", out var e) ? e.GetString() : null;
             if (userId is null) return null;
 
             // Hot-swap the stored token into the running options.
             remoteOpts.ApiToken = token;
             principal.UserId = userId;
             principal.Role = role;
+            principal.Email = email;
             return userId;
         }
         catch
@@ -424,6 +430,11 @@ public partial class App : Application
 
         principal.UserId = resolved.Token.UserId;
         principal.Role = resolved.Role;
+
+        var userService = services.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
+        var user = await userService.GetAsync(resolved.Token.UserId).ConfigureAwait(true);
+        principal.Email = user?.Email;
+
         return resolved.Token.UserId;
     }
 
