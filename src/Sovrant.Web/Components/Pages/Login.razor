@@ -13,6 +13,11 @@
 <div class="login-card">
     <div class="login-title">Sovrant</div>
 
+    @if (_registrationOpen)
+    {
+        <div class="login-sub" style="margin-bottom:8px">Welcome! Create your admin account to get started.</div>
+    }
+
     @if (_errorMessage is not null)
     {
         <div class="login-error">@_errorMessage</div>
@@ -39,16 +44,21 @@
                @onkeydown="OnKeyDown" />
     </div>
 
-    <button class="login-btn" @onclick="LoginAsync" disabled="@_busy">
-        @(_busy ? "Signing in…" : "Sign in")
-    </button>
-
     @if (_registrationOpen)
     {
+        <button class="login-btn" @onclick="RegisterAsync" disabled="@_busy">
+            @(_busy ? "Creating account…" : "Create account")
+        </button>
         <div class="login-divider"></div>
-        <div class="login-sub">No account yet?</div>
-        <button class="login-btn login-btn-secondary" @onclick="RegisterAsync" disabled="@_busy">
-            Create account
+        <div class="login-sub">Already have an account?</div>
+        <button class="login-btn login-btn-secondary" @onclick="LoginAsync" disabled="@_busy">
+            Sign in instead
+        </button>
+    }
+    else
+    {
+        <button class="login-btn" @onclick="LoginAsync" disabled="@_busy">
+            @(_busy ? "Signing in…" : "Sign in")
         </button>
     }
 
@@ -101,7 +111,7 @@
             }
             await CredentialStore.StoreAsync(StoredTokenKey, result.Token).ConfigureAwait(false);
             Program.SetUserId(result.UserId!);
-            Session.SignIn(result.UserId!, result.Role ?? "user");
+            Session.SignIn(result.UserId!, result.Role ?? "user", _email.Trim());
             if (!Program.IsRemoteMode)
                 _ = Task.Run(async () =>
                 {
@@ -140,7 +150,7 @@
             }
             await CredentialStore.StoreAsync(StoredTokenKey, result.Token!).ConfigureAwait(false);
             Program.SetUserId(result.UserId!);
-            Session.SignIn(result.UserId!, "admin");
+            Session.SignIn(result.UserId!, "admin", _email.Trim());
             if (!Program.IsRemoteMode)
                 _ = Task.Run(async () =>
                 {

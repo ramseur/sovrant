@@ -44,7 +44,7 @@
                 </div>
             </div>
             <button class="rail-footer-settings" title="Settings"
-                    @onclick='() => Navigate("/settings")'>&#9881;</button>
+                    @onclick='() => Navigate("/settings")'>&#x1F527;</button>
         </div>
     </aside>
 
@@ -66,8 +66,15 @@
     private CommandPalette? _palette;
     private DotNetObjectReference<MainLayout>? _dotNetRef;
 
-    private string _userName => Session.UserId ?? Environment.UserName;
+    private string _userName => LocalPart(Session.Email) ?? Session.UserId ?? "user";
     private string _userInitial => (_userName.Length > 0 ? _userName[..1] : "U").ToUpperInvariant();
+
+    private static string? LocalPart(string? email)
+    {
+        if (email is null) return null;
+        var idx = email.IndexOf('@', StringComparison.Ordinal);
+        return idx > 0 ? email[..idx] : email;
+    }
 
     protected override void OnInitialized()
     {
