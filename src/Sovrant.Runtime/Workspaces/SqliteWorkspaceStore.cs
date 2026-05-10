@@ -141,6 +141,22 @@ internal sealed class SqliteWorkspaceStore(ISqliteConnectionFactory connectionFa
         return results;
     }
 
+    public async Task<IReadOnlyList<Workspace>> ListAllAsync(CancellationToken ct = default)
+    {
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT workspace_id, type, name, slug, owner_id, created_at, updated_at
+            FROM workspaces
+            ORDER BY type ASC, name ASC
+            """;
+        using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        var results = new List<Workspace>();
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            results.Add(ReadWorkspace(reader));
+        return results;
+    }
+
     public async Task<Workspace?> UpdateAsync(string workspaceId, string? name, string? slug, CancellationToken ct = default)
     {
         using var connection = connectionFactory.CreateConnection();

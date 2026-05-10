@@ -1,6 +1,7 @@
 @page "/workspaces"
 @using Sovrant.Runtime.Workspaces
 @using Sovrant.Web.Services
+@inject NavigationManager Nav
 
 <div class="settings-page">
     <div class="diag-header">
@@ -148,6 +149,7 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        if (!Session.IsAdmin) { Nav.NavigateTo("/", forceLoad: false); return; }
         await Sovrant.Web.Program.RuntimeReady.Task;
         await LoadAsync();
         StateHasChanged();

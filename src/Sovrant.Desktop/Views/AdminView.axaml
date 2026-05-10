@@ -3,6 +3,7 @@
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              xmlns:conv="using:Sovrant.Desktop.Converters"
              xmlns:users="using:Sovrant.Runtime.Users"
+             xmlns:ws="using:Sovrant.Runtime.Workspaces"
              x:Class="Sovrant.Desktop.Views.AdminView"
              x:DataType="vm:AdminViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -185,6 +186,78 @@
 
                     </StackPanel>
                 </ScrollViewer>
+            </TabItem>
+
+            <!-- ── Workspaces tab ─────────────────────────────────────────── -->
+            <TabItem Header="Workspaces">
+                <DockPanel Margin="0,16,0,0">
+
+                    <!-- Create form -->
+                    <Border DockPanel.Dock="Bottom" Padding="14,12" CornerRadius="10" Margin="0,8,0,0"
+                            Background="{DynamicResource SurfaceMuted}"
+                            BorderBrush="{DynamicResource SurfaceBorder}"
+                            BorderThickness="1"
+                            MaxWidth="800">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="New team workspace" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <TextBox Text="{Binding NewWorkspaceName}"
+                                     Watermark="Name"
+                                     FontSize="13" Padding="8,6" CornerRadius="6" />
+                            <Button Content="Create"
+                                    Command="{Binding CreateWorkspaceCommand}"
+                                    HorizontalAlignment="Left"
+                                    Padding="16,7" CornerRadius="8"
+                                    Background="{DynamicResource BrandPrimary}"
+                                    Foreground="White" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Border>
+
+                    <ScrollViewer>
+                        <StackPanel MaxWidth="800" Spacing="6">
+
+                            <TextBlock Text="No workspaces found." FontSize="13"
+                                       Foreground="{DynamicResource TextSecondary}"
+                                       IsVisible="{Binding !AdminWorkspaces.Count}" />
+
+                            <ItemsControl ItemsSource="{Binding AdminWorkspaces}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="ws:Workspace">
+                                        <Border Padding="14,10" CornerRadius="10" Margin="0,0,0,4"
+                                                Background="{DynamicResource SurfaceMuted}"
+                                                BorderBrush="{DynamicResource SurfaceBorder}"
+                                                BorderThickness="1">
+                                            <DockPanel>
+                                                <Button DockPanel.Dock="Right"
+                                                        Content="Delete"
+                                                        Command="{Binding $parent[ItemsControl].((vm:AdminViewModel)DataContext).DeleteWorkspaceCommand}"
+                                                        CommandParameter="{Binding}"
+                                                        IsVisible="{Binding Type, Converter={StaticResource EqConv}, ConverterParameter=Team}"
+                                                        Padding="10,5" CornerRadius="6" FontSize="12"
+                                                        Background="#EF4444" Foreground="White" />
+                                                <StackPanel Spacing="2">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                                                   FontSize="14" Foreground="{DynamicResource TextPrimary}" />
+                                                        <Border Padding="6,2" CornerRadius="4"
+                                                                Background="{DynamicResource SurfaceBorder}">
+                                                            <TextBlock Text="{Binding Type}" FontSize="11"
+                                                                       Foreground="{DynamicResource TextSecondary}" />
+                                                        </Border>
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding Slug}" FontSize="11"
+                                                               FontFamily="Consolas,monospace"
+                                                               Foreground="{DynamicResource TextMuted}" />
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
             </TabItem>
 
             <!-- ── Password Reset tab ──────────────────────────────────── -->

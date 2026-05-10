@@ -118,7 +118,7 @@
                                     Background="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                     Foreground="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                            <Button Content="🏗" ToolTip.Tip="Workspace"
+                            <Button Content="🏗" ToolTip.Tip="Projects"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="workspace"
                                     Width="34" Height="36" CornerRadius="8" FontSize="16" Margin="1,0"
                                     Background="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
@@ -172,7 +172,7 @@
                                 <StackPanel VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Sidebar.CurrentUserName}" FontSize="11"
                                                Foreground="{DynamicResource TextPrimary}" />
-                                    <TextBlock Text="Personal workspace" FontSize="9"
+                                    <TextBlock Text="Personal" FontSize="9"
                                                Foreground="{DynamicResource TextSecondary}" />
                                 </StackPanel>
                             </StackPanel>

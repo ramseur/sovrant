@@ -1,11 +1,13 @@
 @page "/admin"
 @using Sovrant.Runtime.Auth
 @using Sovrant.Runtime.Users
+@using Sovrant.Runtime.Workspaces
 @using Sovrant.Web.Services
 
 @inject IIdentityService IdentityService
 @inject IUserService UserService
 @inject ITokenService TokenService
+@inject IWorkspaceService WorkspaceService
 @inject WebSessionService Session
 @inject NavigationManager Nav
 
@@ -19,6 +21,7 @@
         <button class="tab-btn @(_tab == 0 ? "active" : "")" @onclick="() => _tab = 0">Users</button>
         <button class="tab-btn @(_tab == 1 ? "active" : "")" @onclick="() => _tab = 1">Registration</button>
         <button class="tab-btn @(_tab == 2 ? "active" : "")" @onclick="() => _tab = 2">Password Reset</button>
+        <button class="tab-btn @(_tab == 3 ? "active" : "")" @onclick="() => _tab = 3">Workspaces</button>
     </div>
 
     @if (!string.IsNullOrEmpty(_status))
@@ -127,6 +130,55 @@
         </div>
     }
 
+    @if (_tab == 3)
+    {
+        <!-- Workspaces tab -->
+        <div class="settings-section">
+            <div class="form-field" style="margin-bottom:16px">
+                <label>New team workspace</label>
+                <div class="input-group">
+                    <input type="text" @bind="_newWsName" placeholder="Name..." />
+                    <button class="btn-primary btn-sm btn-inline-add" @onclick="CreateWorkspaceAsync">Create</button>
+                </div>
+            </div>
+
+            @if (_wsLoading)
+            {
+                <p class="loading-row">Loading workspaces…</p>
+            }
+            else if (_workspaces.Count == 0)
+            {
+                <p class="text-secondary">No workspaces found.</p>
+            }
+            else
+            {
+                <div class="memory-list">
+                    @foreach (var w in _workspaces)
+                    {
+                        <div class="memory-card">
+                            <div class="memory-content">
+                                <div class="memory-text">
+                                    <strong>@w.Name</strong>
+                                    <span class="outcome-badge @(w.Type == WorkspaceType.Personal ? "success" : "unknown")">@w.Type</span>
+                                </div>
+                                <div class="memory-meta">
+                                    <span class="text-muted text-sm">@w.Slug</span>
+                                    <span class="text-muted text-sm">@w.CreatedAt.LocalDateTime.ToString("d")</span>
+                                </div>
+                            </div>
+                            @if (w.Type != WorkspaceType.Personal)
+                            {
+                                <div class="memory-actions">
+                                    <button class="btn btn-sm btn-danger" @onclick="() => DeleteWorkspaceAsync(w)">Delete</button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
     @if (_tab == 2)
     {
         <!-- Password Reset tab -->
@@ -177,6 +229,11 @@
     private List<User> _users = [];
     private List<User> _filtered = [];
 
+    // Workspaces tab
+    private bool _wsLoading;
+    private string _newWsName = string.Empty;
+    private List<Workspace> _workspaces = [];
+
     protected override async Task OnInitializedAsync()
     {
         if (!Session.IsAuthenticated || !Session.IsAdmin)
@@ -200,6 +257,41 @@
         }
         catch (Exception ex) { _error = $"Load failed: {ex.Message}"; }
         finally { _isLoading = false; }
+        await LoadWorkspacesAsync();
+    }
+
+    private async Task LoadWorkspacesAsync()
+    {
+        _wsLoading = true;
+        try { _workspaces = (await WorkspaceService.ListAllAsync().ConfigureAwait(false)).ToList(); }
+        catch (Exception ex) { _error = $"Failed to load workspaces: {ex.Message}"; }
+        finally { _wsLoading = false; }
+    }
+
+    private async Task CreateWorkspaceAsync()
+    {
+        var name = _newWsName.Trim();
+        if (string.IsNullOrEmpty(name)) { _status = "Enter a name."; return; }
+        var slug = name.ToLowerInvariant().Replace(' ', '-');
+        try
+        {
+            await WorkspaceService.CreateTeamWorkspaceAsync(name, slug, Session.UserId!).ConfigureAwait(false);
+            _newWsName = string.Empty;
+            _status = $"Workspace '{name}' created.";
+            await LoadWorkspacesAsync();
+        }
+        catch (Exception ex) { _error = $"Failed: {ex.Message}"; }
+    }
+
+    private async Task DeleteWorkspaceAsync(Workspace w)
+    {
+        try
+        {
+            await WorkspaceService.DeleteAsync(w.WorkspaceId).ConfigureAwait(false);
+            _status = $"'{w.Name}' deleted.";
+            await LoadWorkspacesAsync();
+        }
+        catch (Exception ex) { _error = $"Cannot delete: {ex.Message}"; }
     }
 
     private void FilterUsers()

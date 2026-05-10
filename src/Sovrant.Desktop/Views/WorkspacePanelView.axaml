@@ -6,14 +6,9 @@
              Background="{DynamicResource SidebarBackground}">
     <ScrollViewer>
         <StackPanel Margin="10">
-            <TextBlock Text="WORKSPACE" FontSize="11" FontWeight="Bold"
+            <TextBlock Text="PROJECTS" FontSize="11" FontWeight="Bold"
                        Foreground="{DynamicResource TextMuted}"
                        Margin="6,4,0,10" />
-            <Button Content="🏢  Workspaces"
-                    Command="{Binding NavigateCommand}" CommandParameter="Workspaces"
-                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
             <Button Content="📁  Projects"
                     Command="{Binding NavigateCommand}" CommandParameter="Projects"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"

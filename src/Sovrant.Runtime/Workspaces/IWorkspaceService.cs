@@ -22,6 +22,9 @@ public interface IWorkspaceService
     /// <summary>Lists workspaces the user belongs to (always includes personal).</summary>
     Task<IReadOnlyList<Workspace>> ListForUserAsync(string userId, CancellationToken ct = default);
 
+    /// <summary>Lists all workspaces in the system. Admin-only use.</summary>
+    Task<IReadOnlyList<Workspace>> ListAllAsync(CancellationToken ct = default);
+
     /// <summary>Updates workspace name/slug. Personal workspaces can be renamed but not deleted.</summary>
     Task<Workspace?> UpdateAsync(string workspaceId, string? name, string? slug, CancellationToken ct = default);
 
