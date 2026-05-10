@@ -145,7 +145,9 @@ public partial class AdminViewModel : ViewModelBase
         Status = string.Empty;
         try
         {
+#pragma warning disable CA1308
             var slug = name.ToLowerInvariant().Replace(' ', '-');
+#pragma warning restore CA1308
             await _workspaces.CreateTeamWorkspaceAsync(name, slug, _principal.UserId!).ConfigureAwait(true);
             NewWorkspaceName = string.Empty;
             Status = $"Project '{name}' created.";
