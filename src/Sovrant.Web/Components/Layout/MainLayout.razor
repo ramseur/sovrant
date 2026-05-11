@@ -50,6 +50,8 @@
                 <button class="rail-footer-settings" title="Admin"
                         @onclick='() => { _selectedGroup = "admin"; Nav.NavigateTo("/admin", forceLoad: false); }'>&#x1F511;</button>
             }
+            <button class="rail-footer-settings" title="Log out"
+                    @onclick="LogoutAsync">&#x21AA;</button>
         </div>
     </aside>
 
@@ -133,6 +135,12 @@
 
     private void OnCommandOutput(string output) { /* could show toast */ }
     private void OnInjectMessage(string msg) => Nav.NavigateTo($"/?inject={Uri.EscapeDataString(msg)}");
+
+    private void LogoutAsync()
+    {
+        Session.SignOut();
+        Nav.NavigateTo("/login", forceLoad: false);
+    }
 
     public void Dispose() => _dotNetRef?.Dispose();
 }

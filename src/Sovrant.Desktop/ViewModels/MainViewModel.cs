@@ -111,6 +111,9 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void OpenSettings() => OnNavigationRequested(this, "Settings");
 
+    [RelayCommand]
+    private static Task LogoutAsync() => App.LogoutAsync();
+
     private void OnCommandExecuted(object? sender, SlashCommandResult result)
     {
         if (CurrentPage is not ChatViewModel chat) return;
