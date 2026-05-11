@@ -32,6 +32,8 @@
                     break;
                 case "admin":
                     break;
+                case "settings":
+                    break;
             }
         </div>
 
@@ -43,8 +45,11 @@
                     <div class="rail-footer-sub">Personal</div>
                 </div>
             </div>
-            <button class="rail-footer-settings" title="Settings"
-                    @onclick='() => Navigate("/settings")'>&#x1F527;</button>
+            @if (Session.IsAdmin)
+            {
+                <button class="rail-footer-settings" title="Admin"
+                        @onclick='() => { _selectedGroup = "admin"; Nav.NavigateTo("/admin", forceLoad: false); }'>&#x1F511;</button>
+            }
         </div>
     </aside>
 
@@ -98,6 +103,10 @@
         else if (group == "admin")
         {
             Nav.NavigateTo("/admin", forceLoad: false);
+        }
+        else if (group == "settings")
+        {
+            Nav.NavigateTo("/settings", forceLoad: false);
         }
     }
 
