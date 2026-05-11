@@ -74,6 +74,16 @@ public partial class SidebarViewModel : ViewModelBase
     private static readonly Dictionary<string, string[]> StaticProviderModels = new(StringComparer.Ordinal)
     {
         ["OpenAI"] = ["gpt-5", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini", "o4-mini", "o3", "o3-mini", "o1", "o1-mini"],
+        ["OpenRouter"] = [
+            "anthropic/claude-sonnet-4-5:free", "anthropic/claude-3.5-haiku:free",
+            "google/gemini-2.0-flash-exp:free", "google/gemma-3-27b-it:free",
+            "meta-llama/llama-4-maverick:free", "meta-llama/llama-4-scout:free",
+            "meta-llama/llama-3.3-70b-instruct:free", "meta-llama/llama-3.1-8b-instruct:free",
+            "mistralai/mistral-7b-instruct:free", "mistralai/mistral-nemo:free",
+            "qwen/qwen3-235b-a22b:free", "qwen/qwen3-32b:free",
+            "deepseek/deepseek-chat-v3-0324:free", "deepseek/deepseek-r1:free",
+            "microsoft/phi-4-reasoning-plus:free", "nousresearch/hermes-3-llama-3.1-405b:free",
+        ],
         ["DeepSeek"] = ["deepseek-chat", "deepseek-reasoner"],
         ["Groq"] = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"],
         ["Mistral"] = ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest", "open-mixtral-8x22b"],

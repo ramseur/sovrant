@@ -268,6 +268,11 @@ public partial class App : Application
         if (!isRemote && string.IsNullOrWhiteSpace(config.ApiKey))
         {
             await RunSetupWizardAsync(desktop, _serviceProvider).ConfigureAwait(true);
+            // Wizard hot-swapped config; refresh sidebar so it shows the new provider
+            // instead of "No model / Add a provider" on first run.
+            var sidebar = _serviceProvider.GetRequiredService<SidebarViewModel>();
+            sidebar.LoadFromConfig(config);
+            _ = sidebar.LoadProviderProfilesAsync();
         }
 
         // Refresh the auth provider's API key (local mode only).

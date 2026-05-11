@@ -11,7 +11,21 @@ public partial class MemoryViewModel : ViewModelBase
     private readonly IMemoryStore _memoryStore;
 
     [ObservableProperty]
-    private string _selectedTab = "Patterns";
+    private int _selectedTab;
+
+    public bool IsPatternsTab => SelectedTab == 0;
+    public bool IsInstinctsTab => SelectedTab == 1;
+    public bool IsSummariesTab => SelectedTab == 2;
+
+    partial void OnSelectedTabChanged(int value)
+    {
+        OnPropertyChanged(nameof(IsPatternsTab));
+        OnPropertyChanged(nameof(IsInstinctsTab));
+        OnPropertyChanged(nameof(IsSummariesTab));
+    }
+
+    [RelayCommand]
+    private void SelectTab(string tab) => SelectedTab = int.Parse(tab, System.Globalization.CultureInfo.InvariantCulture);
 
     [ObservableProperty]
     private int _patternCount;

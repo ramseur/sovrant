@@ -18,6 +18,24 @@ public partial class AdminViewModel : ViewModelBase
     [ObservableProperty] private string _status = string.Empty;
     [ObservableProperty] private string _error = string.Empty;
 
+    // Tab state
+    [ObservableProperty] private int _selectedTab;
+    public bool IsUsersTab => SelectedTab == 0;
+    public bool IsRegistrationTab => SelectedTab == 1;
+    public bool IsWorkspacesTab => SelectedTab == 2;
+    public bool IsPasswordResetTab => SelectedTab == 3;
+
+    partial void OnSelectedTabChanged(int value)
+    {
+        OnPropertyChanged(nameof(IsUsersTab));
+        OnPropertyChanged(nameof(IsRegistrationTab));
+        OnPropertyChanged(nameof(IsWorkspacesTab));
+        OnPropertyChanged(nameof(IsPasswordResetTab));
+    }
+
+    [RelayCommand]
+    private void SelectTab(string tab) => SelectedTab = int.Parse(tab, System.Globalization.CultureInfo.InvariantCulture);
+
     // Users tab
     [ObservableProperty] private string _userFilter = "all";
     public ObservableCollection<User> FilteredUsers { get; } = [];

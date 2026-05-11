@@ -21,7 +21,7 @@
         <button class="tab-btn @(_tab == 0 ? "active" : "")" @onclick="() => _tab = 0">Users</button>
         <button class="tab-btn @(_tab == 1 ? "active" : "")" @onclick="() => _tab = 1">Registration</button>
         <button class="tab-btn @(_tab == 2 ? "active" : "")" @onclick="() => _tab = 2">Password Reset</button>
-        <button class="tab-btn @(_tab == 3 ? "active" : "")" @onclick="() => _tab = 3">Workspaces</button>
+        <button class="tab-btn @(_tab == 3 ? "active" : "")" @onclick="() => _tab = 3">Projects</button>
     </div>
 
     @if (!string.IsNullOrEmpty(_status))
