@@ -152,12 +152,20 @@ public partial class SidebarViewModel : ViewModelBase
         SelectedTreeGroup = group;
         // Always prefer the provider's live model list — the static dictionary is just an offline
         // fallback. Fetch once per session per provider; static list stays visible until live arrives.
-        if (!group.ModelsFetchedLive && !string.IsNullOrWhiteSpace(group.BaseUrl)
-            && !string.IsNullOrWhiteSpace(group.ApiKey) && _httpFactory is not null)
+        if (!group.ModelsFetchedLive && !string.IsNullOrWhiteSpace(group.BaseUrl) && _httpFactory is not null)
         {
+            // Re-retrieve the credential in case it wasn't available at startup.
+            var apiKey = group.ApiKey;
+            if (string.IsNullOrWhiteSpace(apiKey) && !string.IsNullOrWhiteSpace(group.CredentialId))
+            {
+                var raw = await _credentials.RetrieveAsync(group.CredentialId) ?? string.Empty;
+                apiKey = new string(raw.Where(c => c < 128).ToArray()).Trim();
+            }
+            if (string.IsNullOrWhiteSpace(apiKey)) return;
+
             // Mark as fetched before the await so concurrent calls don't double-fetch.
             group.ModelsFetchedLive = true;
-            var fetched = await FetchModelIdsAsync(group.BaseUrl, group.ApiKey);
+            var fetched = await FetchModelIdsAsync(group.BaseUrl, apiKey);
             var filtered = FilterChatModels(group.Provider, fetched);
             if (filtered.Count > 0)
             {
@@ -209,7 +217,8 @@ public partial class SidebarViewModel : ViewModelBase
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
             var modelsUrl = baseUrl.TrimEnd('/') + "/models";
             using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(modelsUrl));
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey.Trim());
+            var safeKey = new string(apiKey.Where(c => c < 128).ToArray()).Trim();
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", safeKey);
             var response = await http.SendAsync(request, cts.Token);
             response.EnsureSuccessStatusCode();
             using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
@@ -336,7 +345,8 @@ public partial class SidebarViewModel : ViewModelBase
         var entries = new List<ProviderProfileEntry>(rows.Count);
         foreach (var row in rows)
         {
-            var apiKey = await _credentials.RetrieveAsync(row.CredentialId) ?? string.Empty;
+            var rawKey = await _credentials.RetrieveAsync(row.CredentialId) ?? string.Empty;
+            var apiKey = new string(rawKey.Where(c => c < 128).ToArray()).Trim();
             entries.Add(new ProviderProfileEntry
             {
                 ProfileId = row.ProfileId,
@@ -655,3 +665,4 @@ public partial class SessionListItem : ViewModelBase
     [ObservableProperty]
     private int _messageCount;
 }
+
