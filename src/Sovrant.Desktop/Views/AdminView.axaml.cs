@@ -10,10 +10,10 @@ public partial class AdminView : UserControl
         InitializeComponent();
     }
 
-    protected override async void OnInitialized()
+    protected override void OnDataContextChanged(EventArgs e)
     {
-        base.OnInitialized();
+        base.OnDataContextChanged(e);
         if (DataContext is AdminViewModel vm)
-            await vm.LoadAsync().ConfigureAwait(true);
+            _ = vm.LoadAsync();
     }
 }

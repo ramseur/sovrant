@@ -74,12 +74,12 @@
                         Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
                         IsVisible="{Binding !IsRegistrationTab}" />
 
-                <Button Content="Projects"
+                <Button Content="Workspaces"
                         Command="{Binding SelectTabCommand}" CommandParameter="2"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
                         Background="{DynamicResource BrandPrimary}" Foreground="White"
                         IsVisible="{Binding IsWorkspacesTab}" />
-                <Button Content="Projects"
+                <Button Content="Workspaces"
                         Command="{Binding SelectTabCommand}" CommandParameter="2"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
                         Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
@@ -275,7 +275,7 @@
                         BorderBrush="{DynamicResource SurfaceBorder}"
                         BorderThickness="1">
                     <StackPanel Spacing="8">
-                        <TextBlock Text="New team project" FontSize="13" FontWeight="SemiBold"
+                        <TextBlock Text="New team workspace" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" />
                         <TextBox Text="{Binding NewWorkspaceName}"
                                  Watermark="Name"

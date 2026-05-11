@@ -13,6 +13,7 @@ public partial class AdminViewModel : ViewModelBase
     private readonly IUserService _users;
     private readonly IPrincipalAccessor _principal;
     private readonly IWorkspaceService _workspaces;
+    private readonly ActiveContextViewModel _activeContext;
 
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private string _status = string.Empty;
@@ -56,12 +57,13 @@ public partial class AdminViewModel : ViewModelBase
     public ObservableCollection<Workspace> AdminWorkspaces { get; } = [];
 
     public AdminViewModel(IIdentityService identity, IUserService users, IPrincipalAccessor principal,
-        IWorkspaceService workspaces)
+        IWorkspaceService workspaces, ActiveContextViewModel activeContext)
     {
         _identity = identity;
         _users = users;
         _principal = principal;
         _workspaces = workspaces;
+        _activeContext = activeContext;
     }
 
     [RelayCommand]
@@ -168,8 +170,9 @@ public partial class AdminViewModel : ViewModelBase
 #pragma warning restore CA1308
             await _workspaces.CreateTeamWorkspaceAsync(name, slug, _principal.UserId!).ConfigureAwait(true);
             NewWorkspaceName = string.Empty;
-            Status = $"Project '{name}' created.";
+            Status = $"Workspace '{name}' created.";
             await LoadAsync().ConfigureAwait(true);
+            await _activeContext.RefreshCommand.ExecuteAsync(null).ConfigureAwait(true);
         }
         catch (Exception ex) { Error = $"Failed: {ex.Message}"; }
     }
@@ -186,6 +189,7 @@ public partial class AdminViewModel : ViewModelBase
             if (SelectedWorkspace?.WorkspaceId == ws.WorkspaceId)
                 SelectedWorkspace = null;
             await LoadAsync().ConfigureAwait(true);
+            await _activeContext.RefreshCommand.ExecuteAsync(null).ConfigureAwait(true);
         }
         catch (Exception ex) { Error = $"Failed: {ex.Message}"; }
     }
