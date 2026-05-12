@@ -245,15 +245,16 @@ public partial class SidebarViewModel : ViewModelBase
     {
         if (option.Group is null) return;
         var group = option.Group;
+        var apiKey = new string(group.ApiKey.Where(c => c < 128).ToArray()).Trim();
 
         // Hot-swap runtime config.
-        _config.ApiKey = group.ApiKey;
+        _config.ApiKey = apiKey;
         _config.MaxTokens = group.MaxTokens;
         _config.Model = option.Model;
 
         if (_authProvider is not null)
         {
-            _authProvider.ApiKey = group.ApiKey;
+            _authProvider.ApiKey = apiKey;
         }
 
         if (!string.IsNullOrWhiteSpace(group.BaseUrl))
@@ -273,12 +274,12 @@ public partial class SidebarViewModel : ViewModelBase
         Environment.SetEnvironmentVariable("LLM_API_KEY", group.ApiKey);
         Environment.SetEnvironmentVariable("LLM_MODEL", option.Model);
         if (group.BaseUrl.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
-            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", group.ApiKey);
+            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", apiKey);
 
         // Update display.
         CurrentModel = ShortenModelName(option.Model);
         CurrentProvider = group.Provider;
-        IsConnected = !string.IsNullOrWhiteSpace(group.ApiKey);
+        IsConnected = !string.IsNullOrWhiteSpace(apiKey);
         ConnectionStatus = IsConnected ? "Connected" : "No API key";
         IsDropdownOpen = false;
         SelectedTreeGroup = null;
@@ -289,7 +290,7 @@ public partial class SidebarViewModel : ViewModelBase
             CredentialId = group.CredentialId,
             Provider = group.Provider,
             Model = option.Model,
-            ApiKey = group.ApiKey,
+            ApiKey = apiKey,
             BaseUrl = group.BaseUrl,
             MaxTokens = group.MaxTokens,
         });
@@ -297,13 +298,15 @@ public partial class SidebarViewModel : ViewModelBase
 
     private void SwitchToProfile(ProviderProfileEntry profile)
     {
+        var apiKey = new string(profile.ApiKey.Where(c => c < 128).ToArray()).Trim();
+
         // Hot-swap runtime config.
-        _config.ApiKey = profile.ApiKey;
+        _config.ApiKey = apiKey;
         _config.MaxTokens = profile.MaxTokens;
 
         if (_authProvider is not null)
         {
-            _authProvider.ApiKey = profile.ApiKey;
+            _authProvider.ApiKey = apiKey;
         }
 
         if (!string.IsNullOrWhiteSpace(profile.BaseUrl))
@@ -320,9 +323,9 @@ public partial class SidebarViewModel : ViewModelBase
             Environment.SetEnvironmentVariable("LLM_BASE_URL", null);
         }
 
-        Environment.SetEnvironmentVariable("LLM_API_KEY", profile.ApiKey);
+        Environment.SetEnvironmentVariable("LLM_API_KEY", apiKey);
         if (profile.BaseUrl.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
-            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", profile.ApiKey);
+            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", apiKey);
 
         if (!string.IsNullOrWhiteSpace(profile.Model))
         {
@@ -333,7 +336,7 @@ public partial class SidebarViewModel : ViewModelBase
         // Update display.
         CurrentModel = ShortenModelName(_config.Model);
         CurrentProvider = profile.Provider;
-        IsConnected = !string.IsNullOrWhiteSpace(profile.ApiKey);
+        IsConnected = !string.IsNullOrWhiteSpace(apiKey);
         ConnectionStatus = IsConnected ? "Connected" : "No API key";
 
         _ = PersistActiveProfileAsync(profile);
@@ -409,8 +412,11 @@ public partial class SidebarViewModel : ViewModelBase
                     foreach (var m in staticModels) group.Models.Add(new ModelOption(m, group, IsFreeModel(m)));
                 groups[profile.Provider] = group;
             }
-            if (!string.IsNullOrWhiteSpace(profile.Model) &&
-                !group.Models.Any(mo => mo.Model.Equals(profile.Model, StringComparison.OrdinalIgnoreCase)))
+            // Only seed the saved model as a fallback for providers with a static list.
+            // Providers like OpenRouter will fetch live — their list should start empty.
+            if (!string.IsNullOrWhiteSpace(profile.Model)
+                && StaticProviderModels.ContainsKey(profile.Provider)
+                && !group.Models.Any(mo => mo.Model.Equals(profile.Model, StringComparison.OrdinalIgnoreCase)))
             {
                 group.Models.Insert(0, new ModelOption(profile.Model, group, IsFreeModel(profile.Model)));
             }

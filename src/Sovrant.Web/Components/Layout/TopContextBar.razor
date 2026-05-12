@@ -229,8 +229,11 @@
                     group.Models.AddRange(staticModels.Select(m => new ModelItem(m, IsFreeModel(m))));
                 groups[profile.Provider] = group;
             }
-            if (!string.IsNullOrWhiteSpace(profile.Model) &&
-                !group.Models.Any(m => m.Id.Equals(profile.Model, StringComparison.OrdinalIgnoreCase)))
+            // Only seed the saved model as a fallback for providers with a static list.
+            // Providers like OpenRouter will fetch live — their list should start empty.
+            if (!string.IsNullOrWhiteSpace(profile.Model)
+                && StaticProviderModels.ContainsKey(profile.Provider)
+                && !group.Models.Any(m => m.Id.Equals(profile.Model, StringComparison.OrdinalIgnoreCase)))
             {
                 group.Models.Insert(0, new ModelItem(profile.Model, IsFreeModel(profile.Model)));
             }
