@@ -284,9 +284,18 @@
                     <StackPanel Spacing="16">
 
                         <!-- Panel header -->
-                        <TextBlock Text="{Binding ConfigWorkspace.Name, StringFormat='Configure: {0}'}"
-                                   FontSize="15" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextPrimary}" />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="✕ Close"
+                                    Command="{Binding ConfigureWorkspaceCommand}"
+                                    CommandParameter="{Binding ConfigWorkspace}"
+                                    Padding="10,5" CornerRadius="6" FontSize="12"
+                                    Background="{DynamicResource SurfaceBorder}"
+                                    Foreground="{DynamicResource TextSecondary}" />
+                            <TextBlock Text="{Binding ConfigWorkspace.Name, StringFormat='Configure: {0}'}"
+                                       FontSize="15" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       VerticalAlignment="Center" />
+                        </DockPanel>
 
                         <!-- ─── General Settings ─── -->
                         <TextBlock Text="General" FontSize="13" FontWeight="SemiBold"

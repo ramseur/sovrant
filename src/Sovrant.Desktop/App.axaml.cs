@@ -306,6 +306,7 @@ public partial class App : Application
         desktop.MainWindow = window;
         desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
         desktop.ShutdownRequested += (_, _) => Environment.Exit(0);
+        window.Closed += (_, _) => Environment.Exit(0);
         MainWindow = window;
         window.Show();
 

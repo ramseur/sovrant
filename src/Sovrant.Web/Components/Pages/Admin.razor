@@ -186,7 +186,10 @@
             @if (_configWorkspace is not null)
             {
                 <div class="admin-config-panel">
-                    <h4>Configure: @_configWorkspace.Name</h4>
+                    <div class="config-panel-header">
+                        <h4>Configure: @_configWorkspace.Name</h4>
+                        <button class="btn btn-sm" @onclick="() => _configWorkspace = null">✕ Close</button>
+                    </div>
 
                     <h5>General Settings</h5>
                     <div class="form-group">
