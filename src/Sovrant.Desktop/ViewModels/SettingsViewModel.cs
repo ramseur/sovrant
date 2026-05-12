@@ -190,8 +190,8 @@ public partial class SettingsViewModel : ViewModelBase
 
     private void UpdateWebSearchStatus()
     {
-        var braveSet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BRAVE_API_KEY"));
-        var firecrawlSet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FIRECRAWL_API_KEY"));
+        var braveSet = !string.IsNullOrWhiteSpace(_credentials?.RetrieveAsync(Sovrant.Api.Auth.CredentialKeys.BraveApiKey).GetAwaiter().GetResult());
+        var firecrawlSet = !string.IsNullOrWhiteSpace(_credentials?.RetrieveAsync(Sovrant.Api.Auth.CredentialKeys.FirecrawlApiKey).GetAwaiter().GetResult());
 
         if (WebSearchBackend == WebSearchBackend.Native)
         {
@@ -382,7 +382,7 @@ public partial class SettingsViewModel : ViewModelBase
 
             var modelsUrl = baseUrl.TrimEnd('/') + "/models";
             using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(modelsUrl));
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey.Trim());
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", new string(apiKey.Where(c => c < 128).ToArray()).Trim());
 
             var response = await http.SendAsync(request, cts.Token);
             response.EnsureSuccessStatusCode();
@@ -480,7 +480,7 @@ public partial class SettingsViewModel : ViewModelBase
         var credentialId = $"provider.{profileId}.api_key";
 
         // Persist secret to credential store first so the row's reference is valid.
-        await _credentials.StoreAsync(credentialId, ApiKey.Trim());
+        await _credentials.StoreAsync(credentialId, new string(ApiKey.Where(c => c < 128).ToArray()).Trim());
 
         var now = DateTimeOffset.UtcNow;
         var runtimeProfile = new RuntimeProfile(
@@ -618,7 +618,7 @@ public partial class SettingsViewModel : ViewModelBase
             // CredentialKeys.LlmApiKey, so writing here keeps the running process
             // and the next boot in agreement.
             if (!string.IsNullOrWhiteSpace(ApiKey))
-                await _credentials.StoreAsync(CredentialKeys.LlmApiKey, ApiKey.Trim());
+                await _credentials.StoreAsync(CredentialKeys.LlmApiKey, new string(ApiKey.Where(c => c < 128).ToArray()).Trim());
 
             // Hot-swap runtime config, env vars, and auth provider.
             _config.Model = ModelName.Trim();
@@ -628,10 +628,7 @@ public partial class SettingsViewModel : ViewModelBase
             if (!string.IsNullOrWhiteSpace(ApiKey))
             {
                 _config.ApiKey = ApiKey.Trim();
-                Environment.SetEnvironmentVariable("LLM_API_KEY", ApiKey.Trim());
                 _authProvider.ApiKey = ApiKey.Trim();
-                if (BaseUrl.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
-                    Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", ApiKey.Trim());
             }
 
             if (!string.IsNullOrWhiteSpace(BaseUrl))
@@ -639,17 +636,12 @@ public partial class SettingsViewModel : ViewModelBase
                 var parsedUrl = new Uri(BaseUrl.Trim());
                 _config.BaseUrl = parsedUrl;
                 _authProvider.BaseUrl = parsedUrl;
-                Environment.SetEnvironmentVariable("LLM_BASE_URL", BaseUrl.Trim());
             }
             else
             {
                 _config.BaseUrl = null;
                 _authProvider.BaseUrl = null;
-                Environment.SetEnvironmentVariable("LLM_BASE_URL", null);
             }
-
-            if (!string.IsNullOrWhiteSpace(ModelName))
-                Environment.SetEnvironmentVariable("LLM_MODEL", ModelName.Trim());
 
             // Update sidebar display immediately.
             _sidebar.CurrentModel = SidebarViewModel.ShortenModelName(ModelName);

@@ -262,19 +262,12 @@ public partial class SidebarViewModel : ViewModelBase
             var parsed = new Uri(group.BaseUrl);
             _config.BaseUrl = parsed;
             if (_authProvider is not null) _authProvider.BaseUrl = parsed;
-            Environment.SetEnvironmentVariable("LLM_BASE_URL", group.BaseUrl);
         }
         else
         {
             _config.BaseUrl = null;
             if (_authProvider is not null) _authProvider.BaseUrl = null;
-            Environment.SetEnvironmentVariable("LLM_BASE_URL", null);
         }
-
-        Environment.SetEnvironmentVariable("LLM_API_KEY", group.ApiKey);
-        Environment.SetEnvironmentVariable("LLM_MODEL", option.Model);
-        if (group.BaseUrl.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
-            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", apiKey);
 
         // Update display.
         CurrentModel = ShortenModelName(option.Model);
@@ -314,24 +307,15 @@ public partial class SidebarViewModel : ViewModelBase
             var parsed = new Uri(profile.BaseUrl);
             _config.BaseUrl = parsed;
             if (_authProvider is not null) _authProvider.BaseUrl = parsed;
-            Environment.SetEnvironmentVariable("LLM_BASE_URL", profile.BaseUrl);
         }
         else
         {
             _config.BaseUrl = null;
             if (_authProvider is not null) _authProvider.BaseUrl = null;
-            Environment.SetEnvironmentVariable("LLM_BASE_URL", null);
         }
-
-        Environment.SetEnvironmentVariable("LLM_API_KEY", apiKey);
-        if (profile.BaseUrl.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
-            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", apiKey);
 
         if (!string.IsNullOrWhiteSpace(profile.Model))
-        {
             _config.Model = profile.Model;
-            Environment.SetEnvironmentVariable("LLM_MODEL", profile.Model);
-        }
 
         // Update display.
         CurrentModel = ShortenModelName(_config.Model);

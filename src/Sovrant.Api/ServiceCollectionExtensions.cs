@@ -52,7 +52,7 @@ public static class ServiceCollectionExtensions
         // Bootstrap-time API-key resolver — env > snapshot. Sovrant.Runtime
         // overrides this with a credential-store-aware adapter once the encrypted
         // store is open (see CredentialStoreApiKeyResolver).
-        services.AddSingleton<IApiKeyResolver, EnvApiKeyResolver>();
+        services.AddSingleton<IApiKeyResolver, FallbackApiKeyResolver>();
 
         // Model capability registry (Phase 54) — layered resolution:
         // user overrides > bundled overrides > live metadata > defaults.

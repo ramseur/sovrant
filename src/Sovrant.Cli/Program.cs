@@ -232,30 +232,20 @@ authListCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
     await storage.InitializeAsync(ct).ConfigureAwait(false);
     var store = sp.GetRequiredService<Sovrant.Runtime.Mcp.ICredentialStore>();
 
-    var rows = new List<(string Name, string Key, bool Stored, string? EnvOverride)>();
-    foreach (var (name, key, envVars) in AuthCommandRegistry.Names)
+    var rows = new List<(string Name, string Key, bool Stored)>();
+    foreach (var (name, key) in AuthCommandRegistry.Names)
     {
         var stored = await store.RetrieveAsync(key, ct).ConfigureAwait(false) is { Length: > 0 };
-        string? envHit = null;
-        foreach (var ev in envVars)
-        {
-            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(ev)))
-            {
-                envHit = ev;
-                break;
-            }
-        }
-        rows.Add((name, key, stored, envHit));
+        rows.Add((name, key, stored));
     }
 
-    var table = new Table().AddColumns("Name", "Key", "Stored", "Env override");
-    foreach (var (name, key, stored, envHit) in rows)
+    var table = new Table().AddColumns("Name", "Key", "Stored");
+    foreach (var (name, key, stored) in rows)
     {
         table.AddRow(
             Markup.Escape(name),
             $"[grey]{Markup.Escape(key)}[/]",
-            stored ? "[green]\u2713[/]" : "[grey]—[/]",
-            envHit is null ? "[grey]—[/]" : $"[yellow]{Markup.Escape(envHit)}[/]");
+            stored ? "[green]\u2713[/]" : "[grey]—[/]");
     }
     AnsiConsole.Write(table);
 });
@@ -1949,22 +1939,22 @@ static class CiJsonOptions
     };
 }
 
-// Bucket-C: logical name → credential-store key + env-var aliases.
-// Used by the `sovrant auth` subcommand group.
+// Logical name → credential-store key mapping for the `sovrant auth` subcommand group.
+// Keys live exclusively in the encrypted credential store — no env var aliases.
 static class AuthCommandRegistry
 {
-    public static readonly (string Name, string Key, string[] EnvVars)[] Names =
+    public static readonly (string Name, string Key)[] Names =
     [
-        ("llm",        Sovrant.Api.Auth.CredentialKeys.LlmApiKey,         new[] { "LLM_API_KEY", "OPENAI_API_KEY" }),
-        ("provider",   Sovrant.Api.Auth.CredentialKeys.ProviderApiKey,    new[] { "PROVIDER_API_KEY" }),
-        ("brave",      Sovrant.Api.Auth.CredentialKeys.BraveApiKey,       new[] { "BRAVE_API_KEY" }),
-        ("firecrawl",  Sovrant.Api.Auth.CredentialKeys.FirecrawlApiKey,   new[] { "FIRECRAWL_API_KEY" }),
-        ("openrouter", Sovrant.Api.Auth.CredentialKeys.OpenRouterApiKey,  new[] { "OPENROUTER_API_KEY" }),
+        ("llm",        Sovrant.Api.Auth.CredentialKeys.LlmApiKey),
+        ("provider",   Sovrant.Api.Auth.CredentialKeys.ProviderApiKey),
+        ("brave",      Sovrant.Api.Auth.CredentialKeys.BraveApiKey),
+        ("firecrawl",  Sovrant.Api.Auth.CredentialKeys.FirecrawlApiKey),
+        ("openrouter", Sovrant.Api.Auth.CredentialKeys.OpenRouterApiKey),
     ];
 
     public static string? ResolveKey(string name)
     {
-        foreach (var (n, k, _) in Names)
+        foreach (var (n, k) in Names)
             if (string.Equals(n, name, StringComparison.OrdinalIgnoreCase))
                 return k;
         return null;

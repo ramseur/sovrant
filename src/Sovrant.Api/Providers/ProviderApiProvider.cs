@@ -141,7 +141,7 @@ public sealed class ProviderApiProvider : ILlmProvider
         if (_keyResolver is not null)
         {
             apiKey = await _keyResolver.ResolveAsync(
-                CredentialKeys.ProviderApiKey, "PROVIDER_API_KEY",
+                CredentialKeys.ProviderApiKey,
                 _providerKeyFallback, ct).ConfigureAwait(false);
         }
         if (string.IsNullOrEmpty(apiKey))

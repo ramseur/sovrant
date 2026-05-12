@@ -47,9 +47,9 @@ public sealed partial class LiveModelMetadataFetcher
         // no resolver is present (very early bootstrap).
         var openRouterKey = _keyResolver is not null
             ? await _keyResolver.ResolveAsync(
-                CredentialKeys.OpenRouterApiKey, "OPENROUTER_API_KEY",
+                CredentialKeys.OpenRouterApiKey,
                 _credentials?.OpenRouterApiKey, ct).ConfigureAwait(false)
-            : Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ?? _credentials?.OpenRouterApiKey;
+            : _credentials?.OpenRouterApiKey;
         if (string.IsNullOrEmpty(openRouterKey))
             return;
 

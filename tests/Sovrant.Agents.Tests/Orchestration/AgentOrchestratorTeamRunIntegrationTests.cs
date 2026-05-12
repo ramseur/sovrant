@@ -299,6 +299,9 @@ public sealed class AgentOrchestratorTeamRunIntegrationTests
 
         public Task<int> DeleteSwarmAsync(string swarmId, CancellationToken ct = default) =>
             Task.FromResult(0);
+
+        public Task<string?> GetOwnerAsync(string swarmId, CancellationToken ct = default) =>
+            Task.FromResult<string?>(null);
     }
 
     /// <summary>Minimal in-memory registry that supports team-level operations.</summary>

@@ -3,28 +3,15 @@ using Sovrant.Api.Auth;
 namespace Sovrant.Runtime.Mcp;
 
 /// <summary>
-/// <see cref="IAuthProvider"/> that resolves the primary LLM API key on every request
-/// using the layered precedence chain: environment variable &gt; encrypted credential store
-/// &gt; static fallback (the env-time snapshot captured by <see cref="Config.CredentialConfig"/>).
+/// <see cref="IAuthProvider"/> that resolves the primary LLM API key from the encrypted
+/// credential store on every request. API keys are never read from environment variables.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The env-var lookup happens on every call so operators can rotate keys without
-/// restarting. The store value is read once on startup and refreshed lazily when the
-/// env var is unset — this keeps Settings UI hot-swap fast for the Web/Desktop
-/// surfaces (which override <see cref="IAuthProvider"/> with their own mutable
-/// implementations) while still working in the CLI / Server cases that rely on this
-/// provider directly.
-/// </para>
-/// <para>
-/// The fallback value lets the bootstrap path keep working before migrations have
-/// run (the credential store is unusable until SQLite is open).
-/// </para>
+/// The store value is read once and cached after the first successful read. Call
+/// <see cref="Invalidate"/> after writing a new key via the settings UI or CLI.
 /// </remarks>
 public sealed class CredentialStoreAuthProvider : IAuthProvider
 {
-    private static readonly string[] s_envVars = ["LLM_API_KEY", "OPENAI_API_KEY", "PROVIDER_API_KEY"];
-
     private readonly ICredentialStore _store;
     private readonly string _credentialKey;
     private readonly string _fallback;
@@ -39,13 +26,6 @@ public sealed class CredentialStoreAuthProvider : IAuthProvider
 
     public async ValueTask<string> GetAuthHeaderAsync(CancellationToken ct)
     {
-        foreach (var name in s_envVars)
-        {
-            var env = Environment.GetEnvironmentVariable(name);
-            if (!string.IsNullOrEmpty(env))
-                return env;
-        }
-
         if (_cachedStoreValue is null)
         {
             try
@@ -67,8 +47,8 @@ public sealed class CredentialStoreAuthProvider : IAuthProvider
     }
 
     /// <summary>
-    /// Drops the cached store value so the next request re-reads from the credential
-    /// store. Call this after writing a new value via <c>sovrant auth set</c>.
+    /// Drops the cached store value so the next request re-reads from the credential store.
+    /// Call this after writing a new value via <c>sovrant auth set</c> or the settings UI.
     /// </summary>
     public void Invalidate() => _cachedStoreValue = null;
 }

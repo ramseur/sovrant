@@ -181,5 +181,8 @@ public sealed class SwarmOrchestratorFileLockTests
 
         public Task<int> DeleteSwarmAsync(string swarmId, CancellationToken ct = default) =>
             Task.FromResult(0);
+
+        public Task<string?> GetOwnerAsync(string swarmId, CancellationToken ct = default) =>
+            Task.FromResult<string?>(null);
     }
 }

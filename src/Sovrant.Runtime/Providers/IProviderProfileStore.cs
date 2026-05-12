@@ -8,8 +8,14 @@ namespace Sovrant.Runtime.Providers;
 /// </summary>
 public interface IProviderProfileStore
 {
-    /// <summary>Returns all profiles owned by <paramref name="userId"/>, ordered by created-at ascending.</summary>
+    /// <summary>Returns all personal profiles owned by <paramref name="userId"/>, ordered by created-at ascending.</summary>
     Task<IReadOnlyList<ProviderProfile>> ListAsync(string userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns all workspace-level profiles for <paramref name="workspaceId"/>.
+    /// Admin-managed: the credential value is not exposed to non-admin members.
+    /// </summary>
+    Task<IReadOnlyList<ProviderProfile>> ListByWorkspaceAsync(string workspaceId, CancellationToken ct = default);
 
     /// <summary>Returns the profile with the given id, or null if not found.</summary>
     Task<ProviderProfile?> GetAsync(string profileId, CancellationToken ct = default);

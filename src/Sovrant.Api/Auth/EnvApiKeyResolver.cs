@@ -1,19 +1,20 @@
 namespace Sovrant.Api.Auth;
 
 /// <summary>
-/// Default <see cref="IApiKeyResolver"/> for the bootstrap window before the credential
-/// store is available. Reads the environment variable, then falls back to the supplied
-/// snapshot value. <c>Sovrant.Runtime</c> overrides this with a store-aware implementation
-/// once <c>AddSovrantRuntime</c> has run.
+/// Bootstrap-window <see cref="IApiKeyResolver"/> used before the credential store is open.
+/// Returns the static fallback value only. <c>Sovrant.Runtime</c> replaces this with
+/// <c>CredentialStoreApiKeyResolver</c> once <see cref="AddSovrantRuntime"/> has run.
 /// </summary>
+public sealed class FallbackApiKeyResolver : IApiKeyResolver
+{
+    public Task<string?> ResolveAsync(string credentialKey, string? fallback, CancellationToken ct = default)
+        => Task.FromResult(string.IsNullOrEmpty(fallback) ? null : fallback);
+}
+
+/// <summary>Kept for source compatibility; redirects to <see cref="FallbackApiKeyResolver"/>.</summary>
+[Obsolete("Use FallbackApiKeyResolver. EnvApiKeyResolver is removed — API keys live in the credential store only.")]
 public sealed class EnvApiKeyResolver : IApiKeyResolver
 {
-    public Task<string?> ResolveAsync(string credentialKey, string envVar, string? fallback, CancellationToken ct = default)
-    {
-        var env = Environment.GetEnvironmentVariable(envVar);
-        if (!string.IsNullOrEmpty(env))
-            return Task.FromResult<string?>(env);
-
-        return Task.FromResult(string.IsNullOrEmpty(fallback) ? null : fallback);
-    }
+    public Task<string?> ResolveAsync(string credentialKey, string? fallback, CancellationToken ct = default)
+        => Task.FromResult(string.IsNullOrEmpty(fallback) ? null : fallback);
 }

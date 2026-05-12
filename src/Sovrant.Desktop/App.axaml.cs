@@ -66,17 +66,6 @@ public partial class App : Application
         // ApiKey is empty for everyone except the env-var bootstrap path.
         var config = ConfigLoader.Load();
 
-        // Bridge env-var bootstrap values (rare; mostly CI / dev) so the API
-        // layer sees them immediately. Real per-user values come from
-        // InitializeRuntimeAsync below.
-        if (!string.IsNullOrWhiteSpace(config.ApiKey))
-        {
-            Environment.SetEnvironmentVariable("LLM_API_KEY", config.ApiKey);
-            if (config.BaseUrl?.ToString().Contains("openrouter", StringComparison.OrdinalIgnoreCase) == true)
-                Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", config.ApiKey);
-        }
-        if (config.BaseUrl is not null)
-            Environment.SetEnvironmentVariable("LLM_BASE_URL", config.BaseUrl.ToString());
 
         try
         {
@@ -151,8 +140,6 @@ public partial class App : Application
         services.AddSingleton<IToolConfirmationHandler>(confirmationHandler);
         services.AddSingleton(confirmationHandler);
         services.AddSingleton<IUserInputProvider, DesktopUserInputProvider>();
-        services.AddSingleton<IAuthProvider>(mutableAuth);
-        services.AddSingleton(mutableAuth);
 
         if (isRemote)
         {
@@ -172,6 +159,13 @@ public partial class App : Application
                 client.Timeout = TimeSpan.FromSeconds(10);
             });
         }
+
+        // Register mutableAuth AFTER AddSovrantRuntime so it wins as the final IAuthProvider.
+        // AddSovrantRuntime registers CredentialStoreAuthProvider (Bucket-C) which would otherwise
+        // override this — and CredentialStoreAuthProvider doesn't implement IBaseUrlOverride,
+        // causing OpenAiCompatProvider to fall back to its hardcoded HttpClient.BaseAddress.
+        services.AddSingleton<IAuthProvider>(mutableAuth);
+        services.AddSingleton(mutableAuth);
 
         // ViewModels.
         services.AddSingleton<ActiveContextViewModel>();
@@ -273,11 +267,15 @@ public partial class App : Application
             var sidebar = _serviceProvider.GetRequiredService<SidebarViewModel>();
             sidebar.LoadFromConfig(config);
             _ = sidebar.LoadProviderProfilesAsync();
+            mutableAuth.BaseUrl = config.BaseUrl;
         }
 
-        // Refresh the auth provider's API key (local mode only).
+        // Refresh the auth provider's key and base URL (local mode only).
         if (!isRemote && !string.IsNullOrWhiteSpace(config.ApiKey))
+        {
             mutableAuth.ApiKey = config.ApiKey!;
+            mutableAuth.BaseUrl = config.BaseUrl;
+        }
 
         // ── 401 monitoring in remote mode ─────────────────────────────────────
         if (isRemote)

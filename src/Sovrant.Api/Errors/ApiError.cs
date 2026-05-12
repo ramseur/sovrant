@@ -14,8 +14,8 @@ public sealed class ApiError : SovrantException
     /// <summary>Indicates whether the operation can be retried.</summary>
     public bool IsRetryable { get; private init; }
     /// <summary>Creates an error for missing API credentials.</summary>
-    public static ApiError MissingCredentials(string provider, params string[] envVars) =>
-        new($"Missing credentials for {provider}. Set one of: {string.Join(", ", envVars)}");
+    public static ApiError MissingCredentials(string provider) =>
+        new($"Missing credentials for {provider}. Configure a provider via the admin settings or 'sovrant auth set'.");
     /// <summary>Creates an authentication error.</summary>
     public static ApiError Auth(string message) => new($"Authentication failed: {message}");
     /// <summary>Creates an error wrapping an <see cref="HttpRequestException"/>.</summary>

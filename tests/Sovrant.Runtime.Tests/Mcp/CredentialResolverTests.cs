@@ -3,43 +3,26 @@ using Sovrant.Runtime.Mcp;
 namespace Sovrant.Runtime.Tests.Mcp;
 
 /// <summary>
-/// Tests for <see cref="CredentialResolver"/> — the env &gt; store &gt; fallback chain
-/// used by Brave / FireCrawl / OpenRouter / Provider key consumers.
+/// Tests for <see cref="CredentialResolver"/> — store → fallback chain.
+/// API keys are never read from environment variables.
 /// </summary>
-public sealed class CredentialResolverTests : IDisposable
+public sealed class CredentialResolverTests
 {
-    private const string Env = "SOVRANT_TEST_KEY";
-    private readonly string? _orig = Environment.GetEnvironmentVariable(Env);
-
-    public CredentialResolverTests() => Environment.SetEnvironmentVariable(Env, null);
-    public void Dispose() => Environment.SetEnvironmentVariable(Env, _orig);
-
-    [Fact]
-    public async Task EnvVar_BeatsStoreAndFallback()
-    {
-        var store = new InMemoryCredentialStore();
-        await store.StoreAsync("k", "from-store");
-        Environment.SetEnvironmentVariable(Env, "from-env");
-
-        var result = await CredentialResolver.ResolveAsync(store, "k", Env, fallback: "from-fallback");
-        Assert.Equal("from-env", result);
-    }
-
     [Fact]
     public async Task StoreValue_BeatsFallback()
     {
         var store = new InMemoryCredentialStore();
         await store.StoreAsync("k", "from-store");
 
-        var result = await CredentialResolver.ResolveAsync(store, "k", Env, fallback: "from-fallback");
+        var result = await CredentialResolver.ResolveAsync(store, "k", fallback: "from-fallback");
         Assert.Equal("from-store", result);
     }
 
     [Fact]
-    public async Task Fallback_UsedWhenNothingElseSet()
+    public async Task Fallback_UsedWhenStoreEmpty()
     {
         var store = new InMemoryCredentialStore();
-        var result = await CredentialResolver.ResolveAsync(store, "k", Env, fallback: "from-fallback");
+        var result = await CredentialResolver.ResolveAsync(store, "k", fallback: "from-fallback");
         Assert.Equal("from-fallback", result);
     }
 
@@ -47,38 +30,25 @@ public sealed class CredentialResolverTests : IDisposable
     public async Task ReturnsNull_WhenNothingResolves()
     {
         var store = new InMemoryCredentialStore();
-        var result = await CredentialResolver.ResolveAsync(store, "k", Env, fallback: null);
+        var result = await CredentialResolver.ResolveAsync(store, "k", fallback: null);
         Assert.Null(result);
     }
 
     [Fact]
-    public async Task NullStore_StillReadsEnvAndFallback()
+    public async Task NullStore_ReturnsFallback()
     {
-        Environment.SetEnvironmentVariable(Env, "from-env");
-        var result = await CredentialResolver.ResolveAsync(store: null, "k", Env, fallback: "from-fallback");
-        Assert.Equal("from-env", result);
-
-        Environment.SetEnvironmentVariable(Env, null);
-        result = await CredentialResolver.ResolveAsync(store: null, "k", Env, fallback: "from-fallback");
+        var result = await CredentialResolver.ResolveAsync(store: null, "k", fallback: "from-fallback");
         Assert.Equal("from-fallback", result);
-    }
 
-    [Fact]
-    public async Task EmptyEnvVar_TreatedAsUnset()
-    {
-        var store = new InMemoryCredentialStore();
-        await store.StoreAsync("k", "from-store");
-        Environment.SetEnvironmentVariable(Env, string.Empty);
-
-        var result = await CredentialResolver.ResolveAsync(store, "k", Env, fallback: "from-fallback");
-        Assert.Equal("from-store", result);
+        result = await CredentialResolver.ResolveAsync(store: null, "k", fallback: null);
+        Assert.Null(result);
     }
 
     [Fact]
     public async Task StoreThrowing_FallsThroughToFallback()
     {
         var store = new ThrowingCredentialStore();
-        var result = await CredentialResolver.ResolveAsync(store, "k", Env, fallback: "from-fallback");
+        var result = await CredentialResolver.ResolveAsync(store, "k", fallback: "from-fallback");
         Assert.Equal("from-fallback", result);
     }
 

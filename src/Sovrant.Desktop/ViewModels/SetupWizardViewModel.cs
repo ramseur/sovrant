@@ -168,7 +168,7 @@ public partial class SetupWizardViewModel : ViewModelBase
 
         try
         {
-            var trimmedKey = ApiKey.Trim();
+            var trimmedKey = new string(ApiKey.Where(c => c < 128).ToArray()).Trim();
             var trimmedBase = (BaseUrl ?? string.Empty).Trim();
             var defaultModel = DefaultModels.GetValueOrDefault(SelectedProvider, "gpt-4o");
 
@@ -222,15 +222,6 @@ public partial class SetupWizardViewModel : ViewModelBase
                 if (_config.BaseUrl is not null)
                     _authProvider.BaseUrl = _config.BaseUrl;
             }
-
-            // Env-var bridge for any provider clients still reading from the
-            // environment (LiveModelMetadataFetcher, OpenRouter API key probe).
-            Environment.SetEnvironmentVariable("LLM_API_KEY", trimmedKey);
-            Environment.SetEnvironmentVariable("LLM_MODEL", defaultModel);
-            if (!string.IsNullOrWhiteSpace(trimmedBase))
-                Environment.SetEnvironmentVariable("LLM_BASE_URL", trimmedBase);
-            if (trimmedBase.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
-                Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", trimmedKey);
 
             IsVisible = false;
             SetupCompleted?.Invoke();

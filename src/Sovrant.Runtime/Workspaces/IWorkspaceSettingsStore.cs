@@ -108,6 +108,15 @@ public static class WorkspaceSettingsKeys
     /// <summary>Reserved workspace ID for global / server-default rows.</summary>
     public const string GlobalWorkspaceId = "";
 
+    // ── Provider / LLM ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Profile ID of the workspace-level active provider, set by an admin.
+    /// Overrides each member's personal <c>provider.active_profile_id</c> user-preference.
+    /// The API key for this profile is never exposed to non-admin members.
+    /// </summary>
+    public const string ActiveProviderProfileId = "provider.active_profile_id";
+
     // ── Swarm orchestrator ────────────────────────────────────────────────
 
     /// <summary>Whether the swarm orchestrator is enabled (bool). Default false.</summary>

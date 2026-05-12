@@ -100,16 +100,6 @@ public static class Program
                 Environment.SetEnvironmentVariable("SOVRANT_ARTIFACTS_URL_PREFIX", "/artifacts");
             var config = ConfigLoader.Load();
 
-            // Bridge config into env vars so the API layer picks them up.
-            if (!string.IsNullOrWhiteSpace(config.ApiKey))
-            {
-                Environment.SetEnvironmentVariable("LLM_API_KEY", config.ApiKey);
-                if (config.BaseUrl?.ToString().Contains("openrouter", StringComparison.OrdinalIgnoreCase) == true)
-                    Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", config.ApiKey);
-            }
-            if (config.BaseUrl is not null)
-                Environment.SetEnvironmentVariable("LLM_BASE_URL", config.BaseUrl.ToString());
-
             // Core runtime — same as Desktop's App.axaml.cs BuildApp()
             builder.Services.AddSovrantRuntime(config, bootstrapConfig);
             builder.Services.AddSovrantTools();
@@ -220,6 +210,14 @@ public static class Program
                         // Re-apply preferences for the authenticated user. InitializeRuntimeAsync
                         // used the OS identity; this pass corrects it to the token's actual userId.
                         await app.Services.ApplyUserPreferencesForUserAsync(webSession.UserId!).ConfigureAwait(false);
+                        // Sync mutableAuth with the DB-loaded config so the provider routes correctly.
+                        var auth = app.Services.GetService<Sovrant.Web.Adapters.MutableAuthProvider>();
+                        var cfg = app.Services.GetService<Sovrant.Runtime.Config.SovrantConfig>();
+                        if (auth is not null && cfg is not null && !string.IsNullOrWhiteSpace(cfg.ApiKey))
+                        {
+                            auth.ApiKey = cfg.ApiKey!;
+                            auth.BaseUrl = cfg.BaseUrl;
+                        }
                     }
                 }
                 catch (Exception ex)

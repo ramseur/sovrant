@@ -3,11 +3,9 @@ using Sovrant.Api.Auth;
 namespace Sovrant.Runtime.Mcp;
 
 /// <summary>
-/// <see cref="IApiKeyResolver"/> implementation that consults the encrypted
-/// <see cref="ICredentialStore"/> between env-var and static fallback, completing
-/// the env &gt; store &gt; fallback chain for non-LLM provider keys (OpenRouter,
-/// Brave, FireCrawl, Provider). Registered by <c>AddSovrantRuntime</c> as an
-/// override for the bootstrap-time <see cref="EnvApiKeyResolver"/>.
+/// <see cref="IApiKeyResolver"/> that reads exclusively from the encrypted
+/// <see cref="ICredentialStore"/>. Registered by <c>AddSovrantRuntime</c> to replace
+/// the bootstrap-time <see cref="FallbackApiKeyResolver"/> once the store is open.
 /// </summary>
 public sealed class CredentialStoreApiKeyResolver : IApiKeyResolver
 {
@@ -15,6 +13,6 @@ public sealed class CredentialStoreApiKeyResolver : IApiKeyResolver
 
     public CredentialStoreApiKeyResolver(ICredentialStore store) => _store = store;
 
-    public Task<string?> ResolveAsync(string credentialKey, string envVar, string? fallback, CancellationToken ct = default)
-        => CredentialResolver.ResolveAsync(_store, credentialKey, envVar, fallback, ct);
+    public Task<string?> ResolveAsync(string credentialKey, string? fallback, CancellationToken ct = default)
+        => CredentialResolver.ResolveAsync(_store, credentialKey, fallback, ct);
 }

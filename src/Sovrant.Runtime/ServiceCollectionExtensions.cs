@@ -538,13 +538,28 @@ public static class ServiceCollectionExtensions
         if (Enum.TryParse<Sovrant.Api.Config.WebSearchBackend>(webSearchRaw, ignoreCase: true, out var webSearch))
             config.WebSearchOverride = webSearch;
 
-        // Active provider profile → API key (and BaseUrl/Model/MaxTokens
-        // overrides if set on the profile). Falls back to the global
-        // CredentialKeys.LlmApiKey entry for installs that came in via the
-        // settings.json migrator path (no profile id pinned).
+        // Active provider profile resolution (tiered):
+        //   1. Workspace-level profile (admin-set, overrides user preference)
+        //   2. User's personal profile preference
+        //   3. Global llm.api_key fallback (legacy / single-key installs)
         string? apiKey = null;
-        var activeProfileId = await prefs.GetAsync(
-            userId, Preferences.UserPreferenceKeys.ActiveProviderProfileId, ct).ConfigureAwait(false);
+        string? activeProfileId = null;
+
+        var wsSettings = services.GetService<Workspaces.IWorkspaceSettingsStore>();
+        if (wsSettings is not null)
+        {
+            var wsProfileId = await wsSettings.GetGlobalAsync(
+                Workspaces.WorkspaceSettingsKeys.ActiveProviderProfileId, ct).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(wsProfileId))
+                activeProfileId = wsProfileId;
+        }
+
+        if (string.IsNullOrEmpty(activeProfileId))
+        {
+            activeProfileId = await prefs.GetAsync(
+                userId, Preferences.UserPreferenceKeys.ActiveProviderProfileId, ct).ConfigureAwait(false);
+        }
+
         if (!string.IsNullOrEmpty(activeProfileId))
         {
             var profile = await profileStore.GetAsync(activeProfileId, ct).ConfigureAwait(false);

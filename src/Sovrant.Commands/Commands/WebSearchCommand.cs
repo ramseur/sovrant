@@ -58,10 +58,10 @@ public sealed class WebSearchCommand : ISlashCommand
     private async Task<string> BuildStatusAsync(CancellationToken ct)
     {
         var braveKey = await CredentialResolver.ResolveAsync(
-            _credentialStore, CredentialKeys.BraveApiKey, "BRAVE_API_KEY",
+            _credentialStore, CredentialKeys.BraveApiKey,
             _credentials?.BraveApiKey, ct).ConfigureAwait(false);
         var firecrawlKey = await CredentialResolver.ResolveAsync(
-            _credentialStore, CredentialKeys.FirecrawlApiKey, "FIRECRAWL_API_KEY",
+            _credentialStore, CredentialKeys.FirecrawlApiKey,
             _credentials?.FirecrawlApiKey, ct).ConfigureAwait(false);
         var braveSet = !string.IsNullOrWhiteSpace(braveKey);
         var firecrawlSet = !string.IsNullOrWhiteSpace(firecrawlKey);

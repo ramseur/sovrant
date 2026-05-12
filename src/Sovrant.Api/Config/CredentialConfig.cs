@@ -3,77 +3,64 @@ using Microsoft.Extensions.Configuration;
 namespace Sovrant.Api.Config;
 
 /// <summary>
-/// Centralised, read-once snapshot of all external credentials.
-/// Resolves the multi-source priority chain (env var > config file > default) exactly once
-/// at startup so that no consumer needs to repeat the look-up logic.
+/// Centralised bootstrap snapshot of structural configuration (base URLs, feature flags).
+/// API keys are never read from environment variables — they live exclusively in the
+/// encrypted <see cref="Sovrant.Runtime.Mcp.ICredentialStore"/> (SQLite, AES-256-GCM)
+/// and are resolved at request time by <c>CredentialStoreAuthProvider</c>.
 /// </summary>
 public sealed class CredentialConfig
 {
-    /// <summary>Primary LLM API key (LLM_API_KEY > OPENAI_API_KEY > PROVIDER_API_KEY > config).</summary>
+    /// <summary>
+    /// Primary LLM API key — always empty in this snapshot.
+    /// Actual key is resolved at request time from the credential store.
+    /// </summary>
     public string LlmApiKey { get; init; } = string.Empty;
 
-    /// <summary>Primary LLM base URL (LLM_BASE_URL > OPENAI_BASE_URL > config). Trailing-slash normalised.</summary>
+    /// <summary>Bootstrap default base URL for the HttpClient used before the credential store loads.
+    /// The running value is overridden per-request by <c>MutableAuthProvider.BaseUrl</c>.</summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "String form used throughout for trailing-slash normalisation and HttpClient.BaseAddress construction.")]
-    public string LlmBaseUrl { get; init; } = "https://api.openai.com/v1";
+    public string LlmBaseUrl { get; init; } = "https://api.openai.com/v1/";
 
-    /// <summary>Anthropic-style provider API key (PROVIDER_API_KEY > config).</summary>
+    /// <summary>Anthropic-style provider API key — always empty; credential store only.</summary>
     public string ProviderApiKey { get; init; } = string.Empty;
 
-    /// <summary>Anthropic-style provider base URL (PROVIDER_BASE_URL > config). Empty means not configured.</summary>
+    /// <summary>Anthropic-style provider base URL (PROVIDER_BASE_URL env var — infrastructure config, not a secret).</summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "String form used throughout for trailing-slash normalisation and HttpClient.BaseAddress construction.")]
     public string ProviderBaseUrl { get; init; } = string.Empty;
 
-    /// <summary>Ollama base URL (OLLAMA_BASE_URL > config).</summary>
+    /// <summary>Ollama base URL (OLLAMA_BASE_URL env var — local service endpoint, not a secret).</summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "String form used throughout for trailing-slash normalisation and HttpClient.BaseAddress construction.")]
-    public string OllamaBaseUrl { get; init; } = "http://localhost:11434/v1";
+    public string OllamaBaseUrl { get; init; } = "http://localhost:11434/v1/";
 
-    /// <summary>Brave Search API key (BRAVE_API_KEY).</summary>
+    /// <summary>Brave Search API key — always empty; credential store only.</summary>
     public string BraveApiKey { get; init; } = string.Empty;
 
-    /// <summary>FireCrawl API key (FIRECRAWL_API_KEY).</summary>
+    /// <summary>FireCrawl API key — always empty; credential store only.</summary>
     public string FirecrawlApiKey { get; init; } = string.Empty;
 
-    /// <summary>OpenRouter API key for model metadata fetching (OPENROUTER_API_KEY).</summary>
+    /// <summary>OpenRouter API key — always empty; credential store only.</summary>
     public string OpenRouterApiKey { get; init; } = string.Empty;
 
-    /// <summary>Whether web search via the Responses API is enabled (LLM_WEB_SEARCH=true).</summary>
+    /// <summary>Whether web search via the Responses API is enabled (SOVRANT_WEB_SEARCH env var).</summary>
     public bool WebSearchEnabled { get; init; }
 
     /// <summary>Whether a dedicated Anthropic-style provider endpoint is configured.</summary>
     public bool HasProviderApi => !string.IsNullOrWhiteSpace(ProviderBaseUrl);
 
     /// <summary>
-    /// Builds a <see cref="CredentialConfig"/> by resolving the standard priority chain:
-    /// environment variables > <see cref="IConfiguration"/> values > defaults.
+    /// Builds a <see cref="CredentialConfig"/> from structural environment variables only.
+    /// No API keys are read from the environment — they live in the credential store.
     /// </summary>
     public static CredentialConfig Resolve(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
-        var llmApiKey = Environment.GetEnvironmentVariable("LLM_API_KEY")
-            ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")
-            ?? Environment.GetEnvironmentVariable("PROVIDER_API_KEY")
-            ?? configuration["Llm:ApiKey"]
-            ?? configuration["ApiKey"]
-            ?? string.Empty;
-
-        var llmBaseUrl = Environment.GetEnvironmentVariable("LLM_BASE_URL")
-            ?? Environment.GetEnvironmentVariable("OPENAI_BASE_URL")
-            ?? configuration["Llm:BaseUrl"]
-            ?? configuration["BaseUrl"]
-            ?? "https://api.openai.com/v1";
-
-        if (!llmBaseUrl.EndsWith('/')) llmBaseUrl += "/";
-
+        // Infrastructure endpoints (not secrets — these are service addresses, not API keys).
         var providerBaseUrl = Environment.GetEnvironmentVariable("PROVIDER_BASE_URL")
             ?? configuration["Llm:ProviderBaseUrl"]
             ?? string.Empty;
         if (!string.IsNullOrWhiteSpace(providerBaseUrl) && !providerBaseUrl.EndsWith('/'))
             providerBaseUrl += "/";
-
-        var providerApiKey = Environment.GetEnvironmentVariable("PROVIDER_API_KEY")
-            ?? configuration["Llm:ProviderApiKey"]
-            ?? string.Empty;
 
         var ollamaUrl = Environment.GetEnvironmentVariable("OLLAMA_BASE_URL")
             ?? configuration["Llm:OllamaBaseUrl"]
@@ -82,15 +69,12 @@ public sealed class CredentialConfig
 
         return new CredentialConfig
         {
-            LlmApiKey = llmApiKey,
-            LlmBaseUrl = llmBaseUrl,
-            ProviderApiKey = providerApiKey,
+            LlmBaseUrl = "https://api.openai.com/v1/",
             ProviderBaseUrl = providerBaseUrl,
             OllamaBaseUrl = ollamaUrl,
-            BraveApiKey = Environment.GetEnvironmentVariable("BRAVE_API_KEY") ?? string.Empty,
-            FirecrawlApiKey = Environment.GetEnvironmentVariable("FIRECRAWL_API_KEY") ?? string.Empty,
-            OpenRouterApiKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ?? string.Empty,
             WebSearchEnabled = string.Equals(
+                Environment.GetEnvironmentVariable("SOVRANT_WEB_SEARCH"), "native", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
                 Environment.GetEnvironmentVariable("LLM_WEB_SEARCH"), "true", StringComparison.OrdinalIgnoreCase),
         };
     }

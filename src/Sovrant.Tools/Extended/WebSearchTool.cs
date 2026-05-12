@@ -68,10 +68,10 @@ public sealed class WebSearchTool : ITool
         var count = Math.Clamp(input.GetIntProp("count", 5), 1, 20);
 
         var braveKey = await CredentialResolver.ResolveAsync(
-            _credentialStore, CredentialKeys.BraveApiKey, "BRAVE_API_KEY",
+            _credentialStore, CredentialKeys.BraveApiKey,
             _credentials?.BraveApiKey, ct).ConfigureAwait(false);
         var firecrawlKey = await CredentialResolver.ResolveAsync(
-            _credentialStore, CredentialKeys.FirecrawlApiKey, "FIRECRAWL_API_KEY",
+            _credentialStore, CredentialKeys.FirecrawlApiKey,
             _credentials?.FirecrawlApiKey, ct).ConfigureAwait(false);
         var hasBrave = !string.IsNullOrWhiteSpace(braveKey);
         var hasFirecrawl = !string.IsNullOrWhiteSpace(firecrawlKey);
