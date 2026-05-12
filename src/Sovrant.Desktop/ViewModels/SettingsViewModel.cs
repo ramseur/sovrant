@@ -286,6 +286,9 @@ public partial class SettingsViewModel : ViewModelBase
     {
         if (_suppressAutoSave) return;
 
+        // Changing provider starts a fresh add-profile flow — clear the key field.
+        ApiKey = string.Empty;
+
         // Update base URL for known providers.
         if (ProviderBaseUrls.TryGetValue(value, out var url))
             BaseUrl = url;

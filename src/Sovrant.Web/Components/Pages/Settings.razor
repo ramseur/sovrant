@@ -287,14 +287,13 @@
     {
         if (ProviderBaseUrls.TryGetValue(_selectedProvider, out var url))
             _baseUrl = url;
-        // Auto-apply saved profile credentials for this provider.
+        // Changing provider starts a fresh add-profile flow — clear the key field.
+        _apiKey = string.Empty;
+        // Still auto-fill the base URL from a matching saved profile if present.
         var profile = _savedProfiles.FirstOrDefault(p =>
             p.Provider.Equals(_selectedProvider, StringComparison.OrdinalIgnoreCase));
         if (profile is not null)
-        {
-            _apiKey = profile.ApiKey;
             _baseUrl = profile.BaseUrl;
-        }
     }
 
     private async Task AddProvider()
