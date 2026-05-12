@@ -516,13 +516,49 @@ public static class ServiceCollectionExtensions
         var credentials = services.GetRequiredService<Mcp.ICredentialStore>();
         var config = services.GetRequiredService<SovrantConfig>();
 
+        // Active provider profile resolution (tiered):
+        //   1. Workspace-level profile (admin-set, overrides user preference)
+        //   2. User's personal profile preference
+        //   3. Global llm.api_key fallback (legacy / single-key installs)
+        string? apiKey = null;
+        string? activeProfileId = null;
+
+        // Apply workspace-level general settings first; they take precedence over user prefs.
+        var wsSettings = services.GetService<Workspaces.IWorkspaceSettingsStore>();
+        bool wsMaxTokensSet = false;
+        bool wsWebSearchSet = false;
+        if (wsSettings is not null)
+        {
+            var wsProfileId = await wsSettings.GetGlobalAsync(
+                Workspaces.WorkspaceSettingsKeys.ActiveProviderProfileId, ct).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(wsProfileId))
+                activeProfileId = wsProfileId;
+
+            var wsMaxTokensRaw = await wsSettings.GetGlobalAsync(
+                Workspaces.WorkspaceSettingsKeys.GeneralMaxTokens, ct).ConfigureAwait(false);
+            if (int.TryParse(wsMaxTokensRaw, System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out var wsMaxTokens))
+            {
+                config.MaxTokens = wsMaxTokens;
+                wsMaxTokensSet = true;
+            }
+
+            var wsWebSearchRaw = await wsSettings.GetGlobalAsync(
+                Workspaces.WorkspaceSettingsKeys.GeneralWebSearchBackend, ct).ConfigureAwait(false);
+            if (Enum.TryParse<Sovrant.Api.Config.WebSearchBackend>(wsWebSearchRaw, ignoreCase: true, out var wsWebSearch))
+            {
+                config.WebSearchOverride = wsWebSearch;
+                wsWebSearchSet = true;
+            }
+        }
+
         // Scalar prefs.
         var model = await prefs.GetAsync(userId, Preferences.UserPreferenceKeys.Model, ct).ConfigureAwait(false);
         if (!string.IsNullOrEmpty(model))
             config.Model = model;
 
         var maxTokensRaw = await prefs.GetAsync(userId, Preferences.UserPreferenceKeys.MaxTokens, ct).ConfigureAwait(false);
-        if (int.TryParse(maxTokensRaw, System.Globalization.NumberStyles.Integer,
+        if (!wsMaxTokensSet && int.TryParse(maxTokensRaw, System.Globalization.NumberStyles.Integer,
                 System.Globalization.CultureInfo.InvariantCulture, out var maxTokens))
             config.MaxTokens = maxTokens;
 
@@ -535,24 +571,8 @@ public static class ServiceCollectionExtensions
             config.PermissionMode = permMode;
 
         var webSearchRaw = await prefs.GetAsync(userId, Preferences.UserPreferenceKeys.WebSearch, ct).ConfigureAwait(false);
-        if (Enum.TryParse<Sovrant.Api.Config.WebSearchBackend>(webSearchRaw, ignoreCase: true, out var webSearch))
+        if (!wsWebSearchSet && Enum.TryParse<Sovrant.Api.Config.WebSearchBackend>(webSearchRaw, ignoreCase: true, out var webSearch))
             config.WebSearchOverride = webSearch;
-
-        // Active provider profile resolution (tiered):
-        //   1. Workspace-level profile (admin-set, overrides user preference)
-        //   2. User's personal profile preference
-        //   3. Global llm.api_key fallback (legacy / single-key installs)
-        string? apiKey = null;
-        string? activeProfileId = null;
-
-        var wsSettings = services.GetService<Workspaces.IWorkspaceSettingsStore>();
-        if (wsSettings is not null)
-        {
-            var wsProfileId = await wsSettings.GetGlobalAsync(
-                Workspaces.WorkspaceSettingsKeys.ActiveProviderProfileId, ct).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(wsProfileId))
-                activeProfileId = wsProfileId;
-        }
 
         if (string.IsNullOrEmpty(activeProfileId))
         {

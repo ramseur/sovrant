@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.Auth;
+using Sovrant.Runtime.Mcp;
+using Sovrant.Runtime.Providers;
 using Sovrant.Runtime.Users;
 using Sovrant.Runtime.Workspaces;
 
@@ -14,6 +16,9 @@ public partial class AdminViewModel : ViewModelBase
     private readonly IPrincipalAccessor _principal;
     private readonly IWorkspaceService _workspaces;
     private readonly ActiveContextViewModel _activeContext;
+    private readonly IWorkspaceSettingsStore _wsSettings;
+    private readonly IProviderProfileStore _profileStore;
+    private readonly ICredentialStore _credentials;
 
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private string _status = string.Empty;
@@ -56,14 +61,55 @@ public partial class AdminViewModel : ViewModelBase
     [ObservableProperty] private Workspace? _selectedWorkspace;
     public ObservableCollection<Workspace> AdminWorkspaces { get; } = [];
 
+    // ── Per-workspace configuration panel ────────────────────────────────────
+
+    // Which workspace is currently being configured (null = panel hidden)
+    [ObservableProperty] private Workspace? _configWorkspace;
+
+    // General settings for the config workspace
+    [ObservableProperty] private int _wsMaxTokens = 32000;
+    [ObservableProperty] private bool _wsStreaming = true;
+    [ObservableProperty] private bool _wsIntentRouting;
+    [ObservableProperty] private string _wsWebSearchBackend = "Auto";
+
+    // Member management
+    [ObservableProperty] private string _newMemberEmail = string.Empty;
+    [ObservableProperty] private string _newMemberRole = "Member"; // "Admin" or "Member"
+
+    // Provider profile management
+    [ObservableProperty] private string _wsNewProviderName = string.Empty;
+    [ObservableProperty] private string _wsNewProviderKind = "OpenRouter";
+    [ObservableProperty] private string _wsNewProviderApiKey = string.Empty;
+    [ObservableProperty] private string _wsNewProviderBaseUrl = string.Empty;
+
+    public ObservableCollection<WorkspaceMember> ConfigWorkspaceMembers { get; } = [];
+    public ObservableCollection<WorkspaceProviderProfile> ConfigWorkspaceProfiles { get; } = [];
+
+    public bool IsConfigPanelVisible => ConfigWorkspace is not null;
+
+    partial void OnConfigWorkspaceChanged(Workspace? value) => OnPropertyChanged(nameof(IsConfigPanelVisible));
+
+    public IReadOnlyList<string> WebSearchBackends { get; } = ["Auto", "Brave", "Firecrawl", "Native", "Off"];
+    public IReadOnlyList<string> MemberRoles { get; } = ["Member", "Admin"];
+    public IReadOnlyList<string> Providers { get; } =
+    [
+        "OpenAI", "DeepSeek", "Groq", "Mistral", "Together AI",
+        "Azure OpenAI", "Google", "OpenRouter", "Ollama", "LM Studio", "Custom"
+    ];
+
     public AdminViewModel(IIdentityService identity, IUserService users, IPrincipalAccessor principal,
-        IWorkspaceService workspaces, ActiveContextViewModel activeContext)
+        IWorkspaceService workspaces, ActiveContextViewModel activeContext,
+        IWorkspaceSettingsStore wsSettings, IProviderProfileStore profileStore,
+        ICredentialStore credentials)
     {
         _identity = identity;
         _users = users;
         _principal = principal;
         _workspaces = workspaces;
         _activeContext = activeContext;
+        _wsSettings = wsSettings;
+        _profileStore = profileStore;
+        _credentials = credentials;
     }
 
     [RelayCommand]
@@ -194,4 +240,148 @@ public partial class AdminViewModel : ViewModelBase
         catch (Exception ex) { Error = $"Failed: {ex.Message}"; }
     }
 
+    // ── Per-workspace configuration commands ──────────────────────────────────
+
+    [RelayCommand]
+    private async Task ConfigureWorkspaceAsync(Workspace ws)
+    {
+        if (ConfigWorkspace?.WorkspaceId == ws.WorkspaceId)
+        {
+            // Toggle off — hide panel
+            ConfigWorkspace = null;
+            return;
+        }
+        ConfigWorkspace = ws;
+        Status = string.Empty;
+
+        // Load general settings
+        var maxRaw = await _wsSettings.GetAsync(ws.WorkspaceId, WorkspaceSettingsKeys.GeneralMaxTokens);
+        WsMaxTokens = int.TryParse(maxRaw, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var t) ? t : 32000;
+        var streamRaw = await _wsSettings.GetAsync(ws.WorkspaceId, WorkspaceSettingsKeys.GeneralStreaming);
+        WsStreaming = !string.Equals(streamRaw, "false", StringComparison.OrdinalIgnoreCase);
+        var intentRaw = await _wsSettings.GetAsync(ws.WorkspaceId, WorkspaceSettingsKeys.GeneralIntentRouting);
+        WsIntentRouting = string.Equals(intentRaw, "true", StringComparison.OrdinalIgnoreCase);
+        var wsRaw = await _wsSettings.GetAsync(ws.WorkspaceId, WorkspaceSettingsKeys.GeneralWebSearchBackend);
+        WsWebSearchBackend = string.IsNullOrEmpty(wsRaw) ? "Auto" : wsRaw;
+
+        // Load members
+        await LoadConfigMembersAsync(ws.WorkspaceId);
+
+        // Load workspace provider profiles
+        await LoadConfigProfilesAsync(ws.WorkspaceId);
+    }
+
+    [RelayCommand]
+    private async Task SaveWorkspaceGeneralAsync()
+    {
+        if (ConfigWorkspace is null) return;
+        var wsId = ConfigWorkspace.WorkspaceId;
+        await _wsSettings.SetAsync(wsId, WorkspaceSettingsKeys.GeneralMaxTokens,
+            WsMaxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        await _wsSettings.SetAsync(wsId, WorkspaceSettingsKeys.GeneralStreaming,
+            WsStreaming ? "true" : "false");
+        await _wsSettings.SetAsync(wsId, WorkspaceSettingsKeys.GeneralIntentRouting,
+            WsIntentRouting ? "true" : "false");
+        await _wsSettings.SetAsync(wsId, WorkspaceSettingsKeys.GeneralWebSearchBackend,
+            WsWebSearchBackend);
+        Status = "General settings saved.";
+    }
+
+    [RelayCommand]
+    private async Task AddWorkspaceMemberAsync()
+    {
+        if (ConfigWorkspace is null || string.IsNullOrWhiteSpace(NewMemberEmail)) return;
+        var allUsers = await _users.ListAsync();
+        var user = allUsers.FirstOrDefault(u =>
+            string.Equals(u.Email, NewMemberEmail.Trim(), StringComparison.OrdinalIgnoreCase)
+            || string.Equals(u.UserId, NewMemberEmail.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (user is null) { Status = $"User '{NewMemberEmail}' not found."; return; }
+        var role = string.Equals(NewMemberRole, "Admin", StringComparison.OrdinalIgnoreCase)
+            ? WorkspaceRole.Admin : WorkspaceRole.Member;
+        await _workspaces.AddMemberAsync(ConfigWorkspace.WorkspaceId, user.UserId, role);
+        NewMemberEmail = string.Empty;
+        await LoadConfigMembersAsync(ConfigWorkspace.WorkspaceId);
+        Status = $"{user.Email ?? user.UserId} added as {role}.";
+    }
+
+    [RelayCommand]
+    private async Task RemoveWorkspaceMemberAsync(WorkspaceMember member)
+    {
+        if (ConfigWorkspace is null) return;
+        await _workspaces.RemoveMemberAsync(ConfigWorkspace.WorkspaceId, member.UserId);
+        await LoadConfigMembersAsync(ConfigWorkspace.WorkspaceId);
+        Status = $"{member.UserId} removed.";
+    }
+
+    [RelayCommand]
+    private async Task AddWorkspaceProviderAsync()
+    {
+        if (ConfigWorkspace is null || string.IsNullOrWhiteSpace(WsNewProviderApiKey)) return;
+        var name = string.IsNullOrWhiteSpace(WsNewProviderName) ? WsNewProviderKind : WsNewProviderName.Trim();
+#pragma warning disable CA1308
+        var profileId = $"ws-{ConfigWorkspace.WorkspaceId}-{WsNewProviderKind.ToLowerInvariant()}-{name.ToLowerInvariant().Replace(' ', '-')}";
+#pragma warning restore CA1308
+        var credId = $"provider.{profileId}.api_key";
+        await _credentials.StoreAsync(credId, WsNewProviderApiKey.Trim());
+        var now = DateTimeOffset.UtcNow;
+        var profile = new Sovrant.Runtime.Providers.ProviderProfile(
+            ProfileId: profileId,
+            UserId: _principal.UserId!,
+            Name: name,
+            ProviderKind: WsNewProviderKind,
+            BaseUrl: string.IsNullOrWhiteSpace(WsNewProviderBaseUrl) ? GetDefaultBaseUrl(WsNewProviderKind) : WsNewProviderBaseUrl.Trim(),
+            DefaultModel: null,
+            MaxTokens: null,
+            CredentialId: credId,
+            CreatedAt: now,
+            UpdatedAt: now,
+            WorkspaceId: ConfigWorkspace.WorkspaceId);
+        var existing = await _profileStore.GetAsync(profileId);
+        if (existing is null) await _profileStore.CreateAsync(profile);
+        else await _profileStore.UpdateAsync(profile with { CreatedAt = existing.CreatedAt });
+        WsNewProviderApiKey = string.Empty;
+        WsNewProviderName = string.Empty;
+        await LoadConfigProfilesAsync(ConfigWorkspace.WorkspaceId);
+        Status = $"Provider '{name}' added to workspace.";
+    }
+
+    private static string GetDefaultBaseUrl(string kind) => kind switch
+    {
+        "OpenRouter" => "https://openrouter.ai/api/v1/",
+        "Ollama" => "http://localhost:11434/v1/",
+        "Anthropic" => "https://api.anthropic.com/v1/",
+        _ => "https://api.openai.com/v1/",
+    };
+
+    [RelayCommand]
+    private async Task RemoveWorkspaceProviderAsync(WorkspaceProviderProfile profile)
+    {
+        await _profileStore.DeleteAsync(profile.ProfileId);
+        await _credentials.DeleteAsync(profile.CredentialId);
+        if (ConfigWorkspace is not null)
+            await LoadConfigProfilesAsync(ConfigWorkspace.WorkspaceId);
+        Status = $"Provider '{profile.Name}' removed.";
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    private async Task LoadConfigMembersAsync(string workspaceId)
+    {
+        var members = await _workspaces.ListMembersAsync(workspaceId);
+        ConfigWorkspaceMembers.Clear();
+        foreach (var m in members) ConfigWorkspaceMembers.Add(m);
+    }
+
+    private async Task LoadConfigProfilesAsync(string workspaceId)
+    {
+        var profiles = await _profileStore.ListByWorkspaceAsync(workspaceId);
+        ConfigWorkspaceProfiles.Clear();
+        foreach (var p in profiles)
+            ConfigWorkspaceProfiles.Add(new WorkspaceProviderProfile(p.ProfileId, p.Name, p.ProviderKind, p.BaseUrl, p.CredentialId));
+    }
 }
+
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "BaseUrl persisted as TEXT in SQLite.")]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1054:URI-like parameters should not be strings", Justification = "BaseUrl persisted as TEXT in SQLite.")]
+public sealed record WorkspaceProviderProfile(string ProfileId, string Name, string ProviderKind, string BaseUrl, string CredentialId);

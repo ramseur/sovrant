@@ -33,8 +33,6 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly IProviderProfileStore _profileStore;
     private readonly ICredentialStore _credentials;
     private readonly ISmartRouter? _router;
-    private readonly WebSearchOptions? _webSearchOptions;
-    private readonly IModelCapabilityRegistry? _capabilities;
     private CancellationTokenSource? _autoSaveCts;
     private bool _initialized;
     private bool _suppressAutoSave;
@@ -87,22 +85,7 @@ public partial class SettingsViewModel : ViewModelBase
     private string _baseUrl = string.Empty;
 
     [ObservableProperty]
-    private int _maxOutputTokens = 32000;
-
-    [ObservableProperty]
-    private bool _streaming = true;
-
-    [ObservableProperty]
     private PermissionMode _permissionMode;
-
-    [ObservableProperty]
-    private bool _intentRoutingEnabled;
-
-    [ObservableProperty]
-    private WebSearchBackend _webSearchBackend = WebSearchBackend.Auto;
-
-    [ObservableProperty]
-    private string _webSearchStatus = string.Empty;
 
     [ObservableProperty]
     private string _statusMessage = string.Empty;
@@ -137,25 +120,18 @@ public partial class SettingsViewModel : ViewModelBase
         _profileStore = profileStore;
         _credentials = credentials;
         _router = router;
-        _webSearchOptions = webSearchOptions;
-        _capabilities = capabilities;
 
         // Load current values from runtime config (already populated by
         // ApplyUserPreferencesAsync at boot).
         _modelName = config.Model;
-        _maxOutputTokens = config.MaxTokens;
         _apiKey = config.ApiKey ?? string.Empty;
         _baseUrl = config.BaseUrl?.ToString() ?? string.Empty;
         _permissionMode = permissionModeAccessor.Mode;
-        _intentRoutingEnabled = router?.IntentRoutingEnabled ?? false;
-        _webSearchBackend = config.WebSearchOverride ?? webSearchOptions?.Backend ?? WebSearchBackend.Auto;
 
         // Provider name + saved profile list need DB reads — fire and forget;
         // the UI will populate as the await chain completes.
         _selectedProvider = InferProviderFromBaseUrl(config.BaseUrl);
         _ = HydrateFromStoresAsync();
-
-        UpdateWebSearchStatus();
 
         _initialized = true;
     }
@@ -186,50 +162,6 @@ public partial class SettingsViewModel : ViewModelBase
 
         await LoadProfilesAsync();
         await Dispatcher.UIThread.InvokeAsync(() => _ = LoadModelsForProviderAsync(SelectedProvider));
-    }
-
-    private void UpdateWebSearchStatus()
-    {
-        var braveSet = !string.IsNullOrWhiteSpace(_credentials?.RetrieveAsync(Sovrant.Api.Auth.CredentialKeys.BraveApiKey).GetAwaiter().GetResult());
-        var firecrawlSet = !string.IsNullOrWhiteSpace(_credentials?.RetrieveAsync(Sovrant.Api.Auth.CredentialKeys.FirecrawlApiKey).GetAwaiter().GetResult());
-
-        if (WebSearchBackend == WebSearchBackend.Native)
-        {
-            var caps = _capabilities?.GetCapabilities(_config.Model);
-            if (caps?.SupportsNativeWebSearch != true)
-            {
-                WebSearchStatus = $"Warning: '{_config.Model}' may not support native web search.";
-                return;
-            }
-        }
-        if (WebSearchBackend == WebSearchBackend.Brave && !braveSet)
-        {
-            WebSearchStatus = "Brave selected but BRAVE_API_KEY is not set.";
-            return;
-        }
-        if (WebSearchBackend == WebSearchBackend.Firecrawl && !firecrawlSet)
-        {
-            WebSearchStatus = "Firecrawl selected but FIRECRAWL_API_KEY is not set.";
-            return;
-        }
-
-        WebSearchStatus = WebSearchBackend switch
-        {
-            WebSearchBackend.Auto => "Auto: prefer Brave > Firecrawl > native.",
-            WebSearchBackend.Brave => "Using Brave Search.",
-            WebSearchBackend.Firecrawl => "Using FireCrawl.",
-            WebSearchBackend.Native => "Delegating to the model's built-in web search.",
-            WebSearchBackend.Off => "Web search disabled.",
-            _ => string.Empty,
-        };
-    }
-
-    partial void OnWebSearchBackendChanged(WebSearchBackend value)
-    {
-        if (_webSearchOptions is not null) _webSearchOptions.Backend = value;
-        _config.WebSearchOverride = value;
-        UpdateWebSearchStatus();
-        ScheduleAutoSave();
     }
 
     // ── Connection tab ─────────────────────────────────────────────────────────
@@ -320,8 +252,6 @@ public partial class SettingsViewModel : ViewModelBase
 
         ScheduleAutoSave();
     }
-    partial void OnMaxOutputTokensChanged(int value) => ScheduleAutoSave();
-    partial void OnStreamingChanged(bool value) => ScheduleAutoSave();
 
     private async Task LoadModelsForProviderAsync(string provider)
     {
@@ -457,13 +387,6 @@ public partial class SettingsViewModel : ViewModelBase
         ScheduleAutoSave();
     }
 
-    partial void OnIntentRoutingEnabledChanged(bool value)
-    {
-        if (_router is not null)
-            _router.IntentRoutingEnabled = value;
-        ScheduleAutoSave();
-    }
-
     // ─── Provider Profiles ─────────────────────────────
 
     [RelayCommand]
@@ -493,7 +416,7 @@ public partial class SettingsViewModel : ViewModelBase
             ProviderKind: SelectedProvider,
             BaseUrl: BaseUrl ?? string.Empty,
             DefaultModel: string.IsNullOrWhiteSpace(ModelName) ? null : ModelName.Trim(),
-            MaxTokens: MaxOutputTokens,
+            MaxTokens: _config.MaxTokens,
             CredentialId: credentialId,
             CreatedAt: now,
             UpdatedAt: now);
@@ -527,7 +450,6 @@ public partial class SettingsViewModel : ViewModelBase
             SelectedProvider = profile.Provider;
             ApiKey = profile.ApiKey;
             BaseUrl = profile.BaseUrl;
-            MaxOutputTokens = profile.MaxTokens;
             if (!string.IsNullOrWhiteSpace(profile.Model))
                 ModelName = profile.Model;
             SelectedProfile = profile;
@@ -604,12 +526,7 @@ public partial class SettingsViewModel : ViewModelBase
             // Persist scalar prefs to the per-user store.
             await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.Provider, SelectedProvider);
             await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.Model, ModelName.Trim());
-            await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.MaxTokens,
-                MaxOutputTokens.ToString(CultureInfo.InvariantCulture));
             await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.PermissionMode, PermissionMode.ToString());
-            await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.IntentRouting,
-                IntentRoutingEnabled ? "true" : "false");
-            await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.WebSearch, WebSearchBackend.ToString());
 
             if (!string.IsNullOrWhiteSpace(BaseUrl))
                 await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.BaseUrl, BaseUrl.Trim());
@@ -625,7 +542,6 @@ public partial class SettingsViewModel : ViewModelBase
 
             // Hot-swap runtime config, env vars, and auth provider.
             _config.Model = ModelName.Trim();
-            _config.MaxTokens = MaxOutputTokens;
             _config.PermissionMode = PermissionMode;
 
             if (!string.IsNullOrWhiteSpace(ApiKey))
@@ -725,14 +641,11 @@ public partial class SettingsViewModel : ViewModelBase
         PermissionMode.BypassPermissions,
     ];
 
-    public IReadOnlyList<WebSearchBackend> WebSearchBackends { get; } =
-    [
-        WebSearchBackend.Auto,
-        WebSearchBackend.Brave,
-        WebSearchBackend.Firecrawl,
-        WebSearchBackend.Native,
-        WebSearchBackend.Off,
-    ];
+    /// <summary>Read-only view of the admin-managed max tokens setting.</summary>
+    public int MaxOutputTokens => _config.MaxTokens;
+
+    /// <summary>Read-only view of the admin-managed intent routing setting.</summary>
+    public bool IntentRoutingEnabled => _router?.IntentRoutingEnabled ?? false;
 
     [RelayCommand]
     private async Task SaveConnectionAsync()

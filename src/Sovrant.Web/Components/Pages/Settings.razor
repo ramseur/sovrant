@@ -90,56 +90,6 @@
     {
         <!-- General tab -->
         <div class="settings-section">
-            <div class="form-field">
-                <label>Max Output Tokens</label>
-                <input type="number" @bind="_maxOutputTokens" min="256" max="128000" step="1000" />
-            </div>
-
-            <div class="toggle-card">
-                <div>
-                    <div class="toggle-title">Streaming</div>
-                    <div class="toggle-desc">Stream response tokens as they arrive</div>
-                </div>
-                <label class="switch">
-                    <input type="checkbox" @bind="_streaming" />
-                    <span class="slider"></span>
-                </label>
-            </div>
-
-            <div class="toggle-card">
-                <div>
-                    <div class="toggle-title">Intent Routing</div>
-                    <div class="toggle-desc">Auto-select model tier based on message intent (fast/standard/high)</div>
-                </div>
-                <label class="switch">
-                    <input type="checkbox" @bind="_intentRoutingEnabled" @bind:after="OnIntentRoutingChanged" />
-                    <span class="slider"></span>
-                </label>
-            </div>
-
-            <h2>Web Search</h2>
-            <div class="form-field">
-                <label>Backend</label>
-                <select @bind="_webSearchBackend" @bind:after="OnWebSearchBackendChanged">
-                    <option value="Auto">Auto — prefer Brave > Firecrawl > native</option>
-                    <option value="Brave">Brave Search@(_braveKeySet ? "" : " (no key)")</option>
-                    <option value="Firecrawl">FireCrawl@(_firecrawlKeySet ? "" : " (no key)")</option>
-                    <option value="Native">Native (model's built-in search)</option>
-                    <option value="Off">Off</option>
-                </select>
-                <span class="text-muted text-sm">
-                    @if (_webSearchBackend == "Native" && !_modelSupportsNative)
-                    {
-                        <strong style="color: var(--color-warning, #d97706)">Warning:</strong>
-                        @($" '{Config.Model}' may not support native web search; the request may fail or fall back silently.")
-                    }
-                    else
-                    {
-                        <text>Selects which backend powers the WebSearch tool. Native delegates to the model's built-in search.</text>
-                    }
-                </span>
-            </div>
-
             <h2>Permissions</h2>
             <div class="form-field">
                 <label>Permission Mode</label>
@@ -196,23 +146,15 @@
     [Inject] private NavigationManager Nav { get; set; } = default!;
 
     private ISmartRouter? _router;
-    private WebSearchOptions? _webSearchOptions;
     private IModelCapabilityRegistry? _capabilities;
     private int _selectedTab;
     private string _selectedProvider = "OpenAI";
     private string _apiKey = string.Empty;
     private string _baseUrl = string.Empty;
-    private int _maxOutputTokens = 32000;
-    private bool _streaming = true;
     private string _permissionMode = "Default";
     private bool _isDarkMode = true;
     private string _statusMessage = string.Empty;
     private string _newProfileName = string.Empty;
-    private bool _intentRoutingEnabled;
-    private string _webSearchBackend = "Auto";
-    private bool _braveKeySet;
-    private bool _firecrawlKeySet;
-    private bool _modelSupportsNative;
     private List<ProviderProfileVm> _savedProfiles = [];
 
     private CancellationTokenSource? _autoSaveCts;
@@ -238,39 +180,12 @@
     protected override async Task OnInitializedAsync()
     {
         _router = Services.GetService<ISmartRouter>();
-        _webSearchOptions = Services.GetService<WebSearchOptions>();
         _capabilities = Services.GetService<IModelCapabilityRegistry>();
-        _maxOutputTokens = Config.MaxTokens;
         _apiKey = Config.ApiKey ?? string.Empty;
         _baseUrl = Config.BaseUrl?.ToString() ?? string.Empty;
         _permissionMode = PermissionModeAccessor.Mode.ToString();
-        _intentRoutingEnabled = _router?.IntentRoutingEnabled ?? false;
-        _webSearchBackend = (Config.WebSearchOverride ?? _webSearchOptions?.Backend ?? WebSearchBackend.Auto).ToString();
-        _braveKeySet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BRAVE_API_KEY"));
-        _firecrawlKeySet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FIRECRAWL_API_KEY"));
-        RefreshNativeSupportFlag();
         _selectedProvider = await InferProviderAsync();
         await LoadProfilesAsync();
-    }
-
-    private void RefreshNativeSupportFlag()
-    {
-        var caps = _capabilities?.GetCapabilities(Config.Model);
-        _modelSupportsNative = caps?.SupportsNativeWebSearch ?? false;
-    }
-
-    private void OnWebSearchBackendChanged()
-    {
-        RefreshNativeSupportFlag();
-        if (Enum.TryParse<WebSearchBackend>(_webSearchBackend, out var backend))
-        {
-            // Hot-swap both the global default and the per-session override
-            // so the change takes effect immediately across providers and
-            // the WebSearchTool itself.
-            if (_webSearchOptions is not null) _webSearchOptions.Backend = backend;
-            Config.WebSearchOverride = backend;
-        }
-        ScheduleAutoSave();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -322,7 +237,7 @@
                 ProviderKind: _selectedProvider,
                 BaseUrl: trimmedBase,
                 DefaultModel: existingRow?.DefaultModel ?? Config.Model,
-                MaxTokens: _maxOutputTokens,
+                MaxTokens: Config.MaxTokens,
                 CredentialId: credentialId,
                 CreatedAt: existingRow?.CreatedAt ?? now,
                 UpdatedAt: now);
@@ -346,7 +261,6 @@
         _selectedProvider = profile.Provider;
         _apiKey = profile.ApiKey;
         _baseUrl = profile.BaseUrl;
-        _maxOutputTokens = profile.MaxTokens;
 
         await Prefs.SetAsync(Sovrant.Web.Program.SovrantUserId,
             UserPreferenceKeys.ActiveProviderProfileId, profile.ProfileId);
@@ -400,13 +314,6 @@
         ScheduleAutoSave();
     }
 
-    private void OnIntentRoutingChanged()
-    {
-        if (_router is not null)
-            _router.IntentRoutingEnabled = _intentRoutingEnabled;
-        ScheduleAutoSave();
-    }
-
     private async Task ToggleTheme(ChangeEventArgs e)
     {
         _isDarkMode = (bool)(e.Value ?? true);
@@ -434,12 +341,7 @@
             await Prefs.SetAsync(userId, UserPreferenceKeys.Provider, _selectedProvider);
             if (!string.IsNullOrWhiteSpace(Config.Model))
                 await Prefs.SetAsync(userId, UserPreferenceKeys.Model, Config.Model);
-            await Prefs.SetAsync(userId, UserPreferenceKeys.MaxTokens,
-                _maxOutputTokens.ToString(System.Globalization.CultureInfo.InvariantCulture));
             await Prefs.SetAsync(userId, UserPreferenceKeys.PermissionMode, _permissionMode);
-            await Prefs.SetAsync(userId, UserPreferenceKeys.IntentRouting,
-                _intentRoutingEnabled ? "true" : "false");
-            await Prefs.SetAsync(userId, UserPreferenceKeys.WebSearch, _webSearchBackend);
             if (!string.IsNullOrWhiteSpace(_baseUrl))
                 await Prefs.SetAsync(userId, UserPreferenceKeys.BaseUrl, _baseUrl.Trim());
             else
@@ -452,7 +354,6 @@
 
             // Hot-swap runtime config, env vars, and auth provider.
             // Model is managed by sidebar dropdown, not settings.
-            Config.MaxTokens = _maxOutputTokens;
             if (Enum.TryParse<PermissionMode>(_permissionMode, out var pm))
                 Config.PermissionMode = pm;
 

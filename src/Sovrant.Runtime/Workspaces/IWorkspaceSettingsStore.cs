@@ -117,6 +117,20 @@ public static class WorkspaceSettingsKeys
     /// </summary>
     public const string ActiveProviderProfileId = "provider.active_profile_id";
 
+    // ── General / LLM behaviour ──────────────────────────────────────────────
+
+    /// <summary>Max tokens per LLM response, workspace-wide override (int). Overrides user preference.</summary>
+    public const string GeneralMaxTokens = "general.max_tokens";
+
+    /// <summary>Whether response streaming is enabled workspace-wide (bool: true/false).</summary>
+    public const string GeneralStreaming = "general.streaming";
+
+    /// <summary>Whether semantic intent routing is enabled workspace-wide (bool: true/false).</summary>
+    public const string GeneralIntentRouting = "general.intent_routing";
+
+    /// <summary>Web search backend workspace-wide (string: Auto/Brave/Firecrawl/Native/Off).</summary>
+    public const string GeneralWebSearchBackend = "general.web_search_backend";
+
     // ── Swarm orchestrator ────────────────────────────────────────────────
 
     /// <summary>Whether the swarm orchestrator is enabled (bool). Default false.</summary>
