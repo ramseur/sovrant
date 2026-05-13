@@ -1,8 +1,11 @@
 @page "/diagnostics"
 @using Sovrant.Api.Routing
 @using Sovrant.Runtime.Config
+@using Sovrant.Web.Services
 @using System.Reflection
 @using System.Runtime.InteropServices
+@inject WebSessionService Session
+@inject NavigationManager Nav
 
 <div class="diagnostics-page">
     <div class="diag-header">
@@ -149,6 +152,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (!Session.IsAdmin) { Nav.NavigateTo("/", forceLoad: false); return; }
         LoadSystemInfo();
         await RunAllChecksAsync();
     }

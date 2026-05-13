@@ -1,8 +1,11 @@
 @page "/governance"
 @using Sovrant.Runtime.Governance
 @using Sovrant.Runtime.Workspaces
+@using Sovrant.Web.Services
 @inject IWorkspaceSettingsStore SettingsStore
 @inject LiveSettingsRegistry LiveSettings
+@inject WebSessionService Session
+@inject NavigationManager Nav
 
 <div class="settings-page">
     <h1>Governance</h1>
@@ -108,6 +111,7 @@
 
     protected override void OnInitialized()
     {
+        if (!Session.IsAdmin) { Nav.NavigateTo("/", forceLoad: false); return; }
         var config = GovernanceConfig.Load(SettingsStore);
         _level = config.GovernanceLevelName;
         _auditLog = config.AuditLog;

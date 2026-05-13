@@ -2,7 +2,10 @@
 @using Sovrant.Runtime.Config
 @using Sovrant.Runtime.TrustBoundary
 @using Sovrant.Runtime.Workspaces
+@using Sovrant.Web.Services
 @inject IWorkspaceSettingsStore SettingsStore
+@inject WebSessionService Session
+@inject NavigationManager Nav
 @inject SovrantConfig Config
 @inject LiveSettingsRegistry LiveSettings
 
@@ -225,7 +228,11 @@
     private string _newPatternAction = "redact";
     private string _status = string.Empty;
 
-    protected override void OnInitialized() => ReloadFromStore();
+    protected override void OnInitialized()
+    {
+        if (!Session.IsAdmin) { Nav.NavigateTo("/", forceLoad: false); return; }
+        ReloadFromStore();
+    }
 
     private void ReloadFromStore()
     {
