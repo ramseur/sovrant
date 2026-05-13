@@ -281,7 +281,10 @@ public static class Program
             var resolved = await tokens.ResolveAsync(plaintext).ConfigureAwait(false);
             if (resolved is null) return;
 
-            session.SignIn(resolved.Token.UserId, resolved.Role);
+            // Hydrate email so the sidebar shows the friendly name, not the raw usr_... ID.
+            var userService = services.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
+            var user = await userService.GetAsync(resolved.Token.UserId).ConfigureAwait(false);
+            session.SignIn(resolved.Token.UserId, resolved.Role, user?.Email);
             SovrantUserId = resolved.Token.UserId;
         }
         catch
