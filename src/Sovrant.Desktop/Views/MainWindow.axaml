@@ -86,25 +86,14 @@
                             BorderBrush="{DynamicResource SurfaceBorder}"
                             BorderThickness="0,0,0,1"
                             Padding="14,0">
-                        <DockPanel VerticalAlignment="Center">
-                            <Button DockPanel.Dock="Right"
-                                    Content="🔑" ToolTip.Tip="Admin"
-                                    Command="{Binding SelectGroupCommand}" CommandParameter="admin"
-                                    Width="30" Height="30" CornerRadius="7"
-                                    FontSize="14" Padding="0"
-                                    IsVisible="{Binding IsAdmin}"
-                                    Background="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <TextBlock Text="⚡" FontSize="18"
-                                           Foreground="{DynamicResource BrandPrimary}"
-                                           VerticalAlignment="Center" />
-                                <TextBlock Text="Sovrant" FontSize="14" FontWeight="SemiBold"
-                                           Foreground="{DynamicResource TextPrimary}"
-                                           VerticalAlignment="Center" />
-                            </StackPanel>
-                        </DockPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <TextBlock Text="⚡" FontSize="18"
+                                       Foreground="{DynamicResource BrandPrimary}"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="Sovrant" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
                     </Border>
                     <Border DockPanel.Dock="Top"
                             BorderBrush="{DynamicResource SurfaceBorder}"
@@ -141,17 +130,18 @@
                                     Background="{Binding IsConnectGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                     Foreground="{Binding IsConnectGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                            <Button Content="🛡" ToolTip.Tip="Governance"
-                                    Command="{Binding SelectGroupCommand}" CommandParameter="governance"
-                                    Width="31" Height="32" CornerRadius="7" FontSize="14" Padding="0"
-                                    Background="{Binding IsGovernanceGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsGovernanceGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
                             <Button Content="⚙" ToolTip.Tip="Settings"
                                     Command="{Binding OpenSettingsCommand}"
                                     Width="31" Height="32" CornerRadius="7" FontSize="14" Padding="0"
                                     Background="Transparent"
                                     Foreground="{DynamicResource TextSecondary}"
+                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
+                            <Button Content="🔑" ToolTip.Tip="Admin"
+                                    Command="{Binding SelectGroupCommand}" CommandParameter="admin"
+                                    Width="31" Height="32" CornerRadius="7" FontSize="14" Padding="0"
+                                    IsVisible="{Binding IsAdmin}"
+                                    Background="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
+                                    Foreground="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
                         </StackPanel>
                     </Border>
@@ -200,8 +190,8 @@
                                                   IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsWorkspaceGroup}" />
                         <views:ConnectPanelView DataContext="{Binding Sidebar}"
                                                 IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsConnectGroup}" />
-                        <views:GovernancePanelView DataContext="{Binding Sidebar}"
-                                                   IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsGovernanceGroup}" />
+                        <views:AdminPanelView DataContext="{Binding Sidebar}"
+                                             IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsAdminGroup}" />
                     </Panel>
                 </DockPanel>
             </Border>

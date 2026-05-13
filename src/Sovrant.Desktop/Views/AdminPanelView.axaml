@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.AdminPanelView"
+             x:DataType="vm:SidebarViewModel"
+             Background="{DynamicResource SidebarBackground}">
+    <ScrollViewer>
+        <StackPanel Margin="10">
+            <TextBlock Text="ADMIN" FontSize="11" FontWeight="Bold"
+                       Foreground="{DynamicResource TextMuted}"
+                       Margin="6,4,0,10" />
+            <Button Content="&#x1F465;  Users &amp; Workspaces"
+                    Command="{Binding NavigateCommand}" CommandParameter="Admin"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="&#x1F6E1;  Governance"
+                    Command="{Binding NavigateCommand}" CommandParameter="Governance"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="&#x1F512;  Trust Boundary"
+                    Command="{Binding NavigateCommand}" CommandParameter="TrustBoundary"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="&#x1F527;  Diagnostics"
+                    Command="{Binding NavigateCommand}" CommandParameter="Diagnostics"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

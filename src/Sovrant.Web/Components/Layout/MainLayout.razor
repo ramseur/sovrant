@@ -27,10 +27,8 @@
                 case "connect":
                     <ConnectPanel OnNavigate="Navigate" />
                     break;
-                case "governance":
-                    <GovernancePanel OnNavigate="Navigate" />
-                    break;
                 case "admin":
+                    <AdminPanel OnNavigate="Navigate" />
                     break;
                 case "settings":
                     break;
@@ -45,11 +43,6 @@
                     <div class="rail-footer-sub">Personal</div>
                 </div>
             </div>
-            @if (Session.IsAdmin)
-            {
-                <button class="rail-footer-settings" title="Admin"
-                        @onclick='() => { _selectedGroup = "admin"; Nav.NavigateTo("/admin", forceLoad: false); }'>&#x1F511;</button>
-            }
             <button class="rail-footer-settings" title="Log out"
                     @onclick="LogoutAsync">&#x21AA;</button>
         </div>
@@ -101,10 +94,6 @@
         {
             ActiveContext.StartNewSession();
             Nav.NavigateTo("/", forceLoad: false);
-        }
-        else if (group == "admin")
-        {
-            Nav.NavigateTo("/admin", forceLoad: false);
         }
         else if (group == "settings")
         {

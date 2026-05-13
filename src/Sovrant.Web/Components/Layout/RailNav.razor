@@ -17,10 +17,13 @@
             title="Projects" @onclick='() => OnSelect.InvokeAsync("workspace")'>&#x1F3D7;&#xFE0F;</button>
     <button class="rail-icon @(Selected == "connect" ? "active" : "")"
             title="Connect" @onclick='() => OnSelect.InvokeAsync("connect")'>&#x1F50C;</button>
-    <button class="rail-icon @(Selected == "governance" ? "active" : "")"
-            title="Governance" @onclick='() => OnSelect.InvokeAsync("governance")'>&#x1F6E1;&#xFE0F;</button>
     <button class="rail-icon @(Selected == "settings" ? "active" : "")"
             title="Settings" @onclick='() => OnSelect.InvokeAsync("settings")'>&#9881;</button>
+    @if (Session.IsAdmin)
+    {
+        <button class="rail-icon @(Selected == "admin" ? "active" : "")"
+                title="Admin" @onclick='() => OnSelect.InvokeAsync("admin")'>&#x1F511;</button>
+    }
 </div>
 
 @code {
