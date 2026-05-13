@@ -2972,3 +2972,25 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .login-sub { font-size: 13px; color: var(--text-secondary); text-align: center; }
 .login-progress { height: 3px; background: var(--brand-primary); border-radius: 2px; animation: login-pulse 1s ease-in-out infinite; }
 @keyframes login-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+/* ===== Admin workspace configure panel ===== */
+.admin-config-panel { margin-top: 16px; padding: 16px; background: var(--surface-card); border: 1px solid var(--brand-primary); border-radius: 10px; display: flex; flex-direction: column; gap: 12px; }
+.config-panel-header { display: flex; align-items: center; justify-content: space-between; }
+.config-panel-header h4 { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.admin-config-panel h5 { margin: 8px 0 4px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.workspace-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--surface-muted); border: 1px solid var(--surface-border); border-radius: 6px; font-size: 13px; color: var(--text-primary); }
+.inline-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.inline-form input, .inline-form select { flex: 1; min-width: 120px; }
+.provider-add-form { display: flex; flex-direction: column; gap: 8px; }
+.provider-add-form input, .provider-add-form select { width: 100%; }
+.form-group { display: flex; flex-direction: column; gap: 4px; }
+.form-group label { font-size: 12px; color: var(--text-secondary); }
+.form-group input, .form-group select { background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 6px; padding: 7px 10px; font-size: 13px; color: var(--text-primary); outline: none; }
+.form-group input:focus, .form-group select:focus { border-color: var(--brand-primary); }
+.toggle-row { flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--surface-muted); border: 1px solid var(--surface-border); border-radius: 8px; }
+.toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-switch .slider { position: absolute; cursor: pointer; inset: 0; background: var(--surface-border); border-radius: 22px; transition: 0.2s; }
+.toggle-switch .slider:before { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.2s; }
+.toggle-switch input:checked + .slider { background: var(--brand-primary); }
+.toggle-switch input:checked + .slider:before { transform: translateX(18px); }
