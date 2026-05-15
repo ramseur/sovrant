@@ -10,9 +10,9 @@ This document explains the choice in plain English. It is not a substitute for t
 |---|---|
 | Licensor | Anant Corporation |
 | Licensed Work | Sovrant |
-| Change Date | 2029-05-10 |
+| Change Date | 2029-05-15 |
 | Change License | Apache License, Version 2.0 |
-| Initial release | 2026-05-10 |
+| Initial release | 2026-05-15 |
 
 After the Change Date, each version of the Licensed Work covered by this license automatically converts to Apache 2.0.
 
