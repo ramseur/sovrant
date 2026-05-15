@@ -104,7 +104,7 @@ public partial class MainViewModel : ViewModelBase
         }
         else if (group == "admin" && _principal.IsAdmin)
         {
-            CurrentPage = _services.GetRequiredService<AdminViewModel>();
+            CurrentPage = ResolveAdmin("users");
         }
     }
 
@@ -161,9 +161,17 @@ public partial class MainViewModel : ViewModelBase
             "Automations" => _services.GetRequiredService<AutomationsViewModel>(),
             "Orchestration" => _services.GetRequiredService<OrchestrationViewModel>(),
             "CommandCenter" => ResetCockpitToGrid(),
-            "Admin" => _services.GetRequiredService<AdminViewModel>(),
+            "Admin" => ResolveAdmin("users"),
+            "AdminWorkspaces" => ResolveAdmin("workspaces"),
             _ => CurrentPage,
         };
+    }
+
+    private AdminViewModel ResolveAdmin(string section)
+    {
+        var vm = _services.GetRequiredService<AdminViewModel>();
+        vm.Section = section;
+        return vm;
     }
 
     private async void OnSessionResumeRequested(object? sender, string sessionId)

@@ -24,18 +24,27 @@ public partial class AdminViewModel : ViewModelBase
     [ObservableProperty] private string _status = string.Empty;
     [ObservableProperty] private string _error = string.Empty;
 
-    // Tab state
+    // Top-level section ("users" = Users/Registration/PW-Reset, "workspaces" = Workspaces).
+    [ObservableProperty] private string _section = "users";
+    public bool IsUsersSection => Section == "users";
+    public bool IsWorkspacesSection => Section == "workspaces";
+
+    partial void OnSectionChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsUsersSection));
+        OnPropertyChanged(nameof(IsWorkspacesSection));
+    }
+
+    // Sub-tab state within the Users section (0 = Users, 1 = Registration, 2 = Password Reset).
     [ObservableProperty] private int _selectedTab;
     public bool IsUsersTab => SelectedTab == 0;
     public bool IsRegistrationTab => SelectedTab == 1;
-    public bool IsWorkspacesTab => SelectedTab == 2;
-    public bool IsPasswordResetTab => SelectedTab == 3;
+    public bool IsPasswordResetTab => SelectedTab == 2;
 
     partial void OnSelectedTabChanged(int value)
     {
         OnPropertyChanged(nameof(IsUsersTab));
         OnPropertyChanged(nameof(IsRegistrationTab));
-        OnPropertyChanged(nameof(IsWorkspacesTab));
         OnPropertyChanged(nameof(IsPasswordResetTab));
     }
 

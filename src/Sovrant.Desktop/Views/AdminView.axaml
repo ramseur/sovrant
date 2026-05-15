@@ -24,9 +24,16 @@
                         Background="{DynamicResource SurfaceMuted}"
                         Foreground="{DynamicResource TextPrimary}"
                         FontWeight="SemiBold" />
-                <TextBlock Text="Admin" FontSize="24" FontWeight="Bold"
+                <TextBlock FontSize="24" FontWeight="Bold"
                            Foreground="{DynamicResource TextPrimary}"
-                           VerticalAlignment="Center" />
+                           VerticalAlignment="Center"
+                           Text="Users"
+                           IsVisible="{Binding IsUsersSection}" />
+                <TextBlock FontSize="24" FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimary}"
+                           VerticalAlignment="Center"
+                           Text="Workspaces"
+                           IsVisible="{Binding IsWorkspacesSection}" />
             </DockPanel>
 
             <!-- Status / Error banners -->
@@ -48,9 +55,9 @@
                        Foreground="{DynamicResource TextSecondary}"
                        IsVisible="{Binding IsLoading}" />
 
-            <!-- Tab bar -->
+            <!-- Tab bar (Users section only) -->
             <StackPanel Orientation="Horizontal" Spacing="4"
-                        IsVisible="{Binding !IsLoading}">
+                        IsVisible="{Binding IsUsersSection}">
 
                 <Button Content="Users"
                         Command="{Binding SelectTabCommand}" CommandParameter="0"
@@ -74,24 +81,13 @@
                         Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
                         IsVisible="{Binding !IsRegistrationTab}" />
 
-                <Button Content="Workspaces"
-                        Command="{Binding SelectTabCommand}" CommandParameter="2"
-                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
-                        Background="{DynamicResource BrandPrimary}" Foreground="White"
-                        IsVisible="{Binding IsWorkspacesTab}" />
-                <Button Content="Workspaces"
-                        Command="{Binding SelectTabCommand}" CommandParameter="2"
-                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
-                        Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
-                        IsVisible="{Binding !IsWorkspacesTab}" />
-
                 <Button Content="Password Reset"
-                        Command="{Binding SelectTabCommand}" CommandParameter="3"
+                        Command="{Binding SelectTabCommand}" CommandParameter="2"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
                         Background="{DynamicResource BrandPrimary}" Foreground="White"
                         IsVisible="{Binding IsPasswordResetTab}" />
                 <Button Content="Password Reset"
-                        Command="{Binding SelectTabCommand}" CommandParameter="3"
+                        Command="{Binding SelectTabCommand}" CommandParameter="2"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
                         Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
                         IsVisible="{Binding !IsPasswordResetTab}" />
@@ -99,9 +95,15 @@
             </StackPanel>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- TAB 0: Users                                    -->
+            <!-- USERS section · TAB 0: Users                    -->
             <!-- ═══════════════════════════════════════════════ -->
-            <StackPanel Spacing="12" IsVisible="{Binding IsUsersTab}">
+            <StackPanel Spacing="12">
+                <StackPanel.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="IsUsersSection" />
+                        <Binding Path="IsUsersTab" />
+                    </MultiBinding>
+                </StackPanel.IsVisible>
 
                 <ComboBox SelectedItem="{Binding UserFilter}"
                           Width="200" Padding="8,6" CornerRadius="8">
@@ -178,9 +180,15 @@
             </StackPanel>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- TAB 1: Registration                             -->
+            <!-- USERS section · TAB 1: Registration             -->
             <!-- ═══════════════════════════════════════════════ -->
-            <StackPanel Spacing="12" IsVisible="{Binding IsRegistrationTab}">
+            <StackPanel Spacing="12">
+                <StackPanel.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="IsUsersSection" />
+                        <Binding Path="IsRegistrationTab" />
+                    </MultiBinding>
+                </StackPanel.IsVisible>
 
                 <TextBlock Text="Controls who can create new accounts."
                            FontSize="13" Foreground="{DynamicResource TextSecondary}" />
@@ -226,9 +234,9 @@
             </StackPanel>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- TAB 2: Projects (Workspaces)                    -->
+            <!-- WORKSPACES section                              -->
             <!-- ═══════════════════════════════════════════════ -->
-            <StackPanel Spacing="12" IsVisible="{Binding IsWorkspacesTab}">
+            <StackPanel Spacing="12" IsVisible="{Binding IsWorkspacesSection}">
 
                 <TextBlock Text="No projects found." FontSize="13"
                            Foreground="{DynamicResource TextSecondary}"
@@ -469,9 +477,15 @@
             </StackPanel>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- TAB 3: Password Reset                           -->
+            <!-- USERS section · TAB 2: Password Reset           -->
             <!-- ═══════════════════════════════════════════════ -->
-            <StackPanel Spacing="12" IsVisible="{Binding IsPasswordResetTab}">
+            <StackPanel Spacing="12">
+                <StackPanel.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="IsUsersSection" />
+                        <Binding Path="IsPasswordResetTab" />
+                    </MultiBinding>
+                </StackPanel.IsVisible>
 
                 <TextBlock Text="Generate a one-time reset token for a user. Share it out-of-band — expires in 24 hours."
                            FontSize="13" Foreground="{DynamicResource TextSecondary}" />
