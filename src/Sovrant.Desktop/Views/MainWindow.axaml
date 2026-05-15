@@ -80,25 +80,6 @@
                     BorderBrush="{DynamicResource SurfaceBorder}"
                     BorderThickness="0,0,1,0">
                 <DockPanel>
-                    <!-- Top: Sovrant brand mark, then horizontal row of group icons.
-                         Height matches TopContextBarView so the bottom borders line up across the window. -->
-                    <Border DockPanel.Dock="Top"
-                            Height="50"
-                            BorderBrush="{DynamicResource SurfaceBorder}"
-                            BorderThickness="0,0,0,1"
-                            Padding="14,0">
-                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <Border Width="28" Height="28" CornerRadius="7"
-                                    Background="{DynamicResource BrandPrimary}">
-                                <TextBlock Text="⚡" FontSize="16"
-                                           Foreground="{DynamicResource StatusWarn}"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
-                            <TextBlock Text="Sovrant" FontSize="14" FontWeight="SemiBold"
-                                       Foreground="{DynamicResource TextPrimary}"
-                                       VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Border>
                     <Border DockPanel.Dock="Top"
                             BorderBrush="{DynamicResource SurfaceBorder}"
                             BorderThickness="0,0,0,1"
