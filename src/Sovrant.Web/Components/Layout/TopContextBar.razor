@@ -40,7 +40,13 @@
                         <button class="model-tree-provider-item @(isCurrent ? "active" : "")"
                                 @onclick="() => DrillIntoProvider(group)">
                             <span class="model-tree-provider-name">@group.Provider</span>
-                            <span class="model-tree-group-badge">@(group.Models.Count > 0 ? group.Models.Count.ToString() : "...")</span>
+                            <div class="model-tree-provider-badges">
+                                @if (group.IsWorkspaceProfile)
+                                {
+                                    <span class="model-workspace-badge">Workspace</span>
+                                }
+                                <span class="model-tree-group-badge">@(group.Models.Count > 0 ? group.Models.Count.ToString() : "...")</span>
+                            </div>
                         </button>
                     }
                 }
@@ -117,7 +123,7 @@
     private bool _treeOpen;
     private bool _isConnected;
 
-    private record ProviderProfileItem(string ProfileId, string CredentialId, string Name, string Provider, string Model, string BaseUrl, int MaxTokens);
+    private record ProviderProfileItem(string ProfileId, string CredentialId, string Name, string Provider, string Model, string BaseUrl, int MaxTokens, bool IsWorkspaceProfile = false);
     private List<ProviderProfileItem> _providerProfiles = [];
 
     private TreeGroup? _selectedTreeGroup;
@@ -133,6 +139,7 @@
         public int MaxTokens { get; set; } = 32000;
         public List<ModelItem> Models { get; set; } = [];
         public bool ModelsFetchedLive { get; set; }
+        public bool IsWorkspaceProfile { get; set; }
     }
 
     private List<TreeGroup> _treeGroups = [];
@@ -202,6 +209,27 @@
                     BaseUrl: row.BaseUrl ?? string.Empty,
                     MaxTokens: row.MaxTokens ?? 32000));
             }
+
+            // Include workspace-level profiles so all workspace members can use them.
+            var workspaceId = ActiveContext.WorkspaceId;
+            if (!string.IsNullOrEmpty(workspaceId))
+            {
+                var wsRows = await ProfileStore.ListByWorkspaceAsync(workspaceId);
+                foreach (var row in wsRows)
+                {
+                    if (list.Any(p => p.ProfileId == row.ProfileId)) continue;
+                    list.Add(new ProviderProfileItem(
+                        ProfileId: row.ProfileId,
+                        CredentialId: row.CredentialId,
+                        Name: row.Name,
+                        Provider: row.ProviderKind,
+                        Model: row.DefaultModel ?? string.Empty,
+                        BaseUrl: row.BaseUrl ?? string.Empty,
+                        MaxTokens: row.MaxTokens ?? 32000,
+                        IsWorkspaceProfile: true));
+                }
+            }
+
             _providerProfiles = list;
             BuildTreeGroups();
         }
@@ -230,6 +258,7 @@
                     Provider = profile.Provider,
                     BaseUrl = profile.BaseUrl,
                     MaxTokens = profile.MaxTokens,
+                    IsWorkspaceProfile = profile.IsWorkspaceProfile,
                 };
                 if (StaticProviderModels.TryGetValue(profile.Provider, out var staticModels))
                     group.Models.AddRange(staticModels.Select(m => new ModelItem(m, IsFreeModel(m))));

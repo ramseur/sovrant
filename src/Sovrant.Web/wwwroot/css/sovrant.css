@@ -434,13 +434,29 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
 .model-tree-provider-name { flex: 1; }
 
-.model-tree-group-badge {
+.model-tree-provider-badges {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     margin-left: auto;
+}
+
+.model-tree-group-badge {
     font-size: 10px;
     font-weight: 500;
     color: var(--text-muted);
     background: var(--surface-background);
     padding: 1px 6px;
+    border-radius: 8px;
+}
+
+.model-workspace-badge {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--brand-primary);
+    border: 1px solid var(--brand-primary);
+    background: rgba(109, 82, 198, 0.10);
+    padding: 1px 5px;
     border-radius: 8px;
 }
 

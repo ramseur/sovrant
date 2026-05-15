@@ -347,6 +347,31 @@ public partial class SidebarViewModel : ViewModelBase
             });
         }
 
+        // Include workspace-level profiles so all workspace members can use them.
+        var workspaceId = ActiveContext.ActiveWorkspaceId;
+        if (!string.IsNullOrEmpty(workspaceId))
+        {
+            var wsRows = await _profileStore.ListByWorkspaceAsync(workspaceId);
+            foreach (var row in wsRows)
+            {
+                if (entries.Any(e => e.ProfileId == row.ProfileId)) continue;
+                var rawKey = await _credentials.RetrieveAsync(row.CredentialId) ?? string.Empty;
+                var apiKey = new string(rawKey.Where(c => c < 128).ToArray()).Trim();
+                entries.Add(new ProviderProfileEntry
+                {
+                    ProfileId = row.ProfileId,
+                    CredentialId = row.CredentialId,
+                    Name = row.Name,
+                    Provider = row.ProviderKind,
+                    Model = row.DefaultModel ?? string.Empty,
+                    ApiKey = apiKey,
+                    BaseUrl = row.BaseUrl,
+                    MaxTokens = row.MaxTokens ?? 32000,
+                    IsWorkspaceProfile = true,
+                });
+            }
+        }
+
         var savedProfileId = await _prefs.GetAsync(App.SovrantUserId, UserPreferenceKeys.ActiveProviderProfileId)
             .ConfigureAwait(false);
 
@@ -406,6 +431,7 @@ public partial class SidebarViewModel : ViewModelBase
                     ApiKey = profile.ApiKey,
                     BaseUrl = profile.BaseUrl,
                     MaxTokens = profile.MaxTokens,
+                    IsWorkspaceProfile = profile.IsWorkspaceProfile,
                 };
                 if (StaticProviderModels.TryGetValue(profile.Provider, out var staticModels))
                     foreach (var m in staticModels) group.Models.Add(new ModelOption(m, group, IsFreeModel(m)));
@@ -612,6 +638,7 @@ public sealed class ProviderProfileEntry
     [SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "Persisted as TEXT in SQLite")]
     public string BaseUrl { get; set; } = string.Empty;
     public int MaxTokens { get; set; } = 32000;
+    public bool IsWorkspaceProfile { get; set; }
 
     public override string ToString() => Name;
 }
@@ -640,6 +667,8 @@ public partial class ProviderTreeGroup : ViewModelBase
 
     /// <summary>True once we've successfully fetched the live model list for this provider in this session.</summary>
     public bool ModelsFetchedLive { get; set; }
+
+    public bool IsWorkspaceProfile { get; set; }
 
     public override string ToString() => Provider;
 }
