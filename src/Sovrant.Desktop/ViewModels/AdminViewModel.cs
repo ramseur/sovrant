@@ -91,7 +91,7 @@ public partial class AdminViewModel : ViewModelBase
     [ObservableProperty] private string _wsNewProviderApiKey = string.Empty;
     [ObservableProperty] private string _wsNewProviderBaseUrl = string.Empty;
 
-    public ObservableCollection<WorkspaceMember> ConfigWorkspaceMembers { get; } = [];
+    public ObservableCollection<ConfigWorkspaceMemberRow> ConfigWorkspaceMembers { get; } = [];
     public ObservableCollection<WorkspaceProviderProfile> ConfigWorkspaceProfiles { get; } = [];
 
     public bool IsConfigPanelVisible => ConfigWorkspace is not null;
@@ -315,12 +315,12 @@ public partial class AdminViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task RemoveWorkspaceMemberAsync(WorkspaceMember member)
+    private async Task RemoveWorkspaceMemberAsync(ConfigWorkspaceMemberRow member)
     {
         if (ConfigWorkspace is null) return;
         await _workspaces.RemoveMemberAsync(ConfigWorkspace.WorkspaceId, member.UserId);
         await LoadConfigMembersAsync(ConfigWorkspace.WorkspaceId);
-        Status = $"{member.UserId} removed.";
+        Status = $"{member.DisplayName} removed.";
     }
 
     [RelayCommand]
@@ -379,7 +379,15 @@ public partial class AdminViewModel : ViewModelBase
     {
         var members = await _workspaces.ListMembersAsync(workspaceId);
         ConfigWorkspaceMembers.Clear();
-        foreach (var m in members) ConfigWorkspaceMembers.Add(m);
+        foreach (var m in members)
+        {
+            var user = await _users.GetAsync(m.UserId);
+            ConfigWorkspaceMembers.Add(new ConfigWorkspaceMemberRow(
+                UserId: m.UserId,
+                DisplayName: user?.Email ?? user?.Username ?? m.UserId,
+                Email: user?.Email ?? string.Empty,
+                Role: m.Role));
+        }
     }
 
     private async Task LoadConfigProfilesAsync(string workspaceId)
@@ -394,3 +402,5 @@ public partial class AdminViewModel : ViewModelBase
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "BaseUrl persisted as TEXT in SQLite.")]
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1054:URI-like parameters should not be strings", Justification = "BaseUrl persisted as TEXT in SQLite.")]
 public sealed record WorkspaceProviderProfile(string ProfileId, string Name, string ProviderKind, string BaseUrl, string CredentialId);
+
+public sealed record ConfigWorkspaceMemberRow(string UserId, string DisplayName, string Email, WorkspaceRole Role);

@@ -147,7 +147,7 @@
                                                             Padding="8,4" CornerRadius="4" FontSize="10"
                                                             Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
                                                     <StackPanel Spacing="2">
-                                                        <TextBlock Text="{Binding UserId}" FontSize="12" FontWeight="SemiBold"
+                                                        <TextBlock Text="{Binding DisplayName}" FontSize="12" FontWeight="SemiBold"
                                                                    Foreground="{DynamicResource TextPrimary}" />
                                                         <TextBlock FontSize="10" Foreground="{DynamicResource TextMuted}">
                                                             <Run Text="{Binding Role}" />
@@ -169,7 +169,7 @@
                                         <TextBlock Text="Add Member" FontSize="12" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource TextPrimary}" />
                                         <TextBox Text="{Binding AddMemberUserId}"
-                                                 Watermark="User ID"
+                                                 Watermark="Email or username"
                                                  FontSize="12" Padding="8,6" CornerRadius="6" />
                                         <ComboBox ItemsSource="{Binding RoleOptions}"
                                                   SelectedItem="{Binding AddMemberRole}"

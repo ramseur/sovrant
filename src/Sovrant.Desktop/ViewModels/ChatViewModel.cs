@@ -306,7 +306,27 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void Stop()
     {
-        _sendCts?.Cancel();
+        // Immediate visual feedback. The cancellation may take time to propagate
+        // through HTTP streams and tool execution; flipping IsSending here keeps
+        // the UI from feeling stuck while the cancel unwinds. The send task's
+        // finally block also sets this to false — that becomes a no-op.
+        IsSending = false;
+
+        if (_sendCts is null || _sendCts.IsCancellationRequested)
+        {
+            System.Diagnostics.Debug.WriteLine("[ChatViewModel] Stop: no active send to cancel");
+            return;
+        }
+
+        try
+        {
+            _sendCts.Cancel();
+            System.Diagnostics.Debug.WriteLine("[ChatViewModel] Stop: cancellation requested");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ChatViewModel] Stop failed: {ex}");
+        }
     }
 
     protected virtual void Dispose(bool disposing)

@@ -1,7 +1,9 @@
 @page "/workspaces"
+@using Sovrant.Runtime.Users
 @using Sovrant.Runtime.Workspaces
 @using Sovrant.Web.Services
 @inject NavigationManager Nav
+@inject IUserService UserService
 
 <div class="settings-page">
     <div class="diag-header">
@@ -90,7 +92,7 @@
                                 <div class="memory-card">
                                     <div class="memory-content">
                                         <div class="memory-text">
-                                            <span>@m.UserId</span>
+                                            <span>@m.DisplayName</span>
                                             <span class="outcome-badge info">@m.Role</span>
                                         </div>
                                         <div class="memory-meta">
@@ -110,7 +112,7 @@
                             <div class="form-field">
                                 <label>Add Member</label>
                                 <div class="input-group">
-                                    <input type="text" @bind="_addMemberUserId" placeholder="User ID..." style="flex:2" />
+                                    <input type="text" @bind="_addMemberUserId" placeholder="Email or username" style="flex:2" />
                                     <select @bind="_addMemberRole" style="padding:6px 8px;border-radius:6px;border:1px solid var(--surface-border);background:var(--surface-input);color:var(--text-primary);font-size:12px">
                                         <option value="Member">Member</option>
                                         <option value="Admin">Admin</option>
@@ -197,11 +199,7 @@
         _membersLoading = true;
         try
         {
-            var members = await WorkspaceService.ListMembersAsync(w.Id);
-            _members = members.Select(m => new MemberItem
-            {
-                UserId = m.UserId, Role = m.Role.ToString(), JoinedAt = m.JoinedAt,
-            }).ToList();
+            _members = await BuildMemberItemsAsync(w.Id);
         }
         catch (Exception ex) { _status = $"Could not load members: {ex.Message}"; }
         finally { _membersLoading = false; }
@@ -247,14 +245,19 @@
 
     private async Task AddMemberAsync(WorkspaceItem w)
     {
-        var uid = _addMemberUserId.Trim();
-        if (string.IsNullOrEmpty(uid)) { _status = "Enter a user ID."; return; }
+        var input = _addMemberUserId.Trim();
+        if (string.IsNullOrEmpty(input)) { _status = "Enter an email or username."; return; }
         if (!Enum.TryParse<WorkspaceRole>(_addMemberRole, out var role)) role = WorkspaceRole.Member;
         try
         {
-            await WorkspaceService.AddMemberAsync(w.Id, uid, role);
+            var user = await UserService.GetByEmailAsync(input)
+                       ?? await UserService.GetByUsernameAsync(input)
+                       ?? await UserService.GetAsync(input);
+            if (user is null) { _status = $"User '{input}' not found."; return; }
+
+            await WorkspaceService.AddMemberAsync(w.Id, user.UserId, role);
             _addMemberUserId = string.Empty;
-            _status = $"Added {uid} as {role}.";
+            _status = $"Added {user.Email ?? user.Username} as {role}.";
             await ReloadMembersAsync(w);
         }
         catch (Exception ex) { _status = $"Failed to add member: {ex.Message}"; }
@@ -265,7 +268,7 @@
         try
         {
             await WorkspaceService.RemoveMemberAsync(w.Id, userId);
-            _status = $"Removed {userId}.";
+            _status = "Member removed.";
             await ReloadMembersAsync(w);
         }
         catch (Exception ex) { _status = $"Failed to remove: {ex.Message}"; }
@@ -274,16 +277,27 @@
     private async Task ReloadMembersAsync(WorkspaceItem w)
     {
         _membersLoading = true;
-        try
-        {
-            var members = await WorkspaceService.ListMembersAsync(w.Id);
-            _members = members.Select(m => new MemberItem
-            {
-                UserId = m.UserId, Role = m.Role.ToString(), JoinedAt = m.JoinedAt,
-            }).ToList();
-        }
+        try { _members = await BuildMemberItemsAsync(w.Id); }
         catch (Exception ex) { _status = $"Could not reload members: {ex.Message}"; }
         finally { _membersLoading = false; }
+    }
+
+    private async Task<List<MemberItem>> BuildMemberItemsAsync(string workspaceId)
+    {
+        var members = await WorkspaceService.ListMembersAsync(workspaceId);
+        var list = new List<MemberItem>(members.Count);
+        foreach (var m in members)
+        {
+            var user = await UserService.GetAsync(m.UserId);
+            list.Add(new MemberItem
+            {
+                UserId = m.UserId,
+                DisplayName = user?.Email ?? user?.Username ?? m.UserId,
+                Role = m.Role.ToString(),
+                JoinedAt = m.JoinedAt,
+            });
+        }
+        return list;
     }
 
     private sealed class WorkspaceItem
@@ -299,6 +313,7 @@
     private sealed class MemberItem
     {
         public string UserId { get; init; } = string.Empty;
+        public string DisplayName { get; init; } = string.Empty;
         public string Role { get; init; } = string.Empty;
         public DateTimeOffset JoinedAt { get; init; }
     }

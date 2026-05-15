@@ -415,7 +415,11 @@ public partial class SettingsViewModel : ViewModelBase
             Name: displayName,
             ProviderKind: SelectedProvider,
             BaseUrl: BaseUrl ?? string.Empty,
-            DefaultModel: string.IsNullOrWhiteSpace(ModelName) ? null : ModelName.Trim(),
+            // Always null at create time. The form's ModelName field is shared
+            // with the current-session model selection; using it here would
+            // carry over the user's previous pick and auto-stamp the new
+            // provider with a model they never chose for it.
+            DefaultModel: null,
             MaxTokens: _config.MaxTokens,
             CredentialId: credentialId,
             CreatedAt: now,
@@ -427,6 +431,18 @@ public partial class SettingsViewModel : ViewModelBase
         else
             await _profileStore.UpdateAsync(runtimeProfile with { CreatedAt = existing.CreatedAt });
 
+        // Clear the in-form model so it isn't echoed back via LoadProfileAsync/SaveAsync.
+        // Suppress auto-save so the OnModelNameChanged debounce doesn't fire a
+        // delayed SaveAsync that overwrites the sidebar's "Select a model" display.
+        _suppressAutoSave = true;
+        try { ModelName = string.Empty; }
+        finally { _suppressAutoSave = false; }
+
+        // Clear the user's previously-saved Model pref — the new provider
+        // hasn't had a model chosen yet, and the old pref likely points to a
+        // model the new provider does not offer.
+        await _prefs.DeleteAsync(App.SovrantUserId, UserPreferenceKeys.Model);
+
         // Refresh the UI list so the new profile appears immediately.
         await LoadProfilesAsync();
 
@@ -436,8 +452,18 @@ public partial class SettingsViewModel : ViewModelBase
         if (added is not null)
             await LoadProfileAsync(added);
 
-        NewProfileName = string.Empty;
-        StatusMessage = $"Provider '{SelectedProvider}' added and activated.";
+        // Clear the form so the next add starts from a clean slate. Suppress
+        // auto-save so OnApiKeyChanged/NewProfileNameChanged don't trigger a
+        // delayed SaveAsync.
+        _suppressAutoSave = true;
+        try
+        {
+            NewProfileName = string.Empty;
+            ApiKey = string.Empty;
+        }
+        finally { _suppressAutoSave = false; }
+
+        StatusMessage = $"Provider '{SelectedProvider}' added.";
     }
 
     [RelayCommand]
@@ -446,12 +472,15 @@ public partial class SettingsViewModel : ViewModelBase
         _suppressAutoSave = true;
         try
         {
-            // Set everything from the saved profile exactly as stored.
+            // Set everything from the saved profile exactly as stored. If the
+            // profile has no DefaultModel, clear ModelName explicitly — leaving
+            // the previous form value in place would cause SaveAsync to write
+            // it to the user's Model preference, making the sidebar show a
+            // model the user never picked for this provider.
             SelectedProvider = profile.Provider;
             ApiKey = profile.ApiKey;
             BaseUrl = profile.BaseUrl;
-            if (!string.IsNullOrWhiteSpace(profile.Model))
-                ModelName = profile.Model;
+            ModelName = profile.Model ?? string.Empty;
             SelectedProfile = profile;
         }
         finally
@@ -476,6 +505,19 @@ public partial class SettingsViewModel : ViewModelBase
         await _credentials.DeleteAsync(profile.CredentialId);
         SavedProfiles.Remove(profile);
         if (SelectedProfile == profile) SelectedProfile = null;
+
+        // Clear the active-profile + model prefs if we just removed the active
+        // one — otherwise the next boot would resurrect a model selection that
+        // belongs to a profile that no longer exists.
+        var activeProfileId = await _prefs.GetAsync(App.SovrantUserId, UserPreferenceKeys.ActiveProviderProfileId);
+        if (string.Equals(activeProfileId, profile.ProfileId, StringComparison.Ordinal))
+        {
+            await _prefs.DeleteAsync(App.SovrantUserId, UserPreferenceKeys.ActiveProviderProfileId);
+            await _prefs.DeleteAsync(App.SovrantUserId, UserPreferenceKeys.Model);
+        }
+
+        // Refresh the sidebar so the dropdown reflects the new state.
+        await _sidebar.LoadProviderProfilesAsync();
         StatusMessage = $"Profile '{profile.Name}' deleted.";
     }
 

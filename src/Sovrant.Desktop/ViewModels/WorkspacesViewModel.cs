@@ -104,14 +104,19 @@ public partial class WorkspacesViewModel : ViewModelBase
     private async Task AddMemberAsync()
     {
         if (SelectedWorkspace is null) return;
-        var uid = AddMemberUserId.Trim();
-        if (string.IsNullOrEmpty(uid)) { StatusMessage = "Enter a user ID."; return; }
+        var input = AddMemberUserId.Trim();
+        if (string.IsNullOrEmpty(input)) { StatusMessage = "Enter an email or username."; return; }
 
         try
         {
-            await _workspaceService.AddMemberAsync(SelectedWorkspace.Id, uid, AddMemberRole);
+            var user = await _userService.GetByEmailAsync(input)
+                       ?? await _userService.GetByUsernameAsync(input)
+                       ?? await _userService.GetAsync(input);
+            if (user is null) { StatusMessage = $"User '{input}' not found."; return; }
+
+            await _workspaceService.AddMemberAsync(SelectedWorkspace.Id, user.UserId, AddMemberRole);
             AddMemberUserId = string.Empty;
-            StatusMessage = $"Added {uid} as {AddMemberRole}.";
+            StatusMessage = $"Added {user.Email ?? user.Username} as {AddMemberRole}.";
             await LoadMembersAsync(SelectedWorkspace);
         }
         catch (Exception ex) { StatusMessage = $"Failed to add member: {ex.Message}"; }
@@ -124,7 +129,7 @@ public partial class WorkspacesViewModel : ViewModelBase
         try
         {
             await _workspaceService.RemoveMemberAsync(SelectedWorkspace.Id, member.UserId);
-            StatusMessage = $"Removed {member.UserId}.";
+            StatusMessage = $"Removed {member.DisplayName}.";
             await LoadMembersAsync(SelectedWorkspace);
         }
         catch (Exception ex) { StatusMessage = $"Failed to remove member: {ex.Message}"; }
@@ -186,16 +191,24 @@ public partial class WorkspacesViewModel : ViewModelBase
         try
         {
             var list = await _workspaceService.ListMembersAsync(workspace.Id);
+            var rows = new List<WorkspaceMemberViewModel>(list.Count);
+            foreach (var m in list)
+            {
+                var user = await _userService.GetAsync(m.UserId);
+                rows.Add(new WorkspaceMemberViewModel
+                {
+                    UserId = m.UserId,
+                    Email = user?.Email ?? string.Empty,
+                    Username = user?.Username ?? string.Empty,
+                    DisplayName = user?.Email ?? user?.Username ?? m.UserId,
+                    Role = m.Role,
+                    JoinedAt = m.JoinedAt,
+                });
+            }
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 Members.Clear();
-                foreach (var m in list)
-                    Members.Add(new WorkspaceMemberViewModel
-                    {
-                        UserId = m.UserId,
-                        Role = m.Role,
-                        JoinedAt = m.JoinedAt,
-                    });
+                foreach (var row in rows) Members.Add(row);
             });
         }
         catch (Exception ex) { StatusMessage = $"Could not load members: {ex.Message}"; }
@@ -242,6 +255,9 @@ public partial class WorkspaceItemViewModel : ViewModelBase
 public partial class WorkspaceMemberViewModel : ViewModelBase
 {
     [ObservableProperty] private string _userId = string.Empty;
+    [ObservableProperty] private string _email = string.Empty;
+    [ObservableProperty] private string _username = string.Empty;
+    [ObservableProperty] private string _displayName = string.Empty;
     [ObservableProperty] private WorkspaceRole _role;
     [ObservableProperty] private DateTimeOffset _joinedAt;
 }

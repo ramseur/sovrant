@@ -117,6 +117,8 @@
 
     private ElementReference _triggerRef;
     private string _dropdownStyle = string.Empty;
+    private DotNetObjectReference<TopContextBar>? _selfRef;
+    private int _dismissBindingId;
 
     private string _currentModel = string.Empty;
     private string _currentProvider = string.Empty;
@@ -166,28 +168,55 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _isConnected = !string.IsNullOrWhiteSpace(Config.ApiKey);
         await InferProviderAsync();
         await LoadProviderProfilesAsync();
-
-        if (_providerProfiles.Count == 0 && !_isConnected)
-        {
-            _currentModel = "No model";
-            _currentProvider = "Add a provider";
-        }
-        else if (!_isConnected && _providerProfiles.Count > 0)
-        {
-            _currentModel = "No model";
-            _currentProvider = "Select a provider";
-        }
-        else
-        {
-            _currentModel = ShortenModelName(Config.Model);
-        }
+        await ApplyDisplayStateAsync();
 
         ActiveContext.SetModel(_currentModel, _currentProvider);
         ActiveContext.OnChanged += OnActiveContextChanged;
         ActiveContext.OnDataChanged += OnDataChanged;
+    }
+
+    // Drives the trigger label from stored prefs (ActiveProviderProfileId + Model)
+    // rather than Config.Model, which carries the hardcoded "gpt-4o-mini" default
+    // and a legacy LlmApiKey credential — both can falsely imply a configured state.
+    private async Task ApplyDisplayStateAsync()
+    {
+        var userId = Session.UserId;
+        var savedProfileId = string.Empty;
+        var savedModel = string.Empty;
+        if (!string.IsNullOrEmpty(userId))
+        {
+            try
+            {
+                savedProfileId = await Prefs.GetAsync(userId, UserPreferenceKeys.ActiveProviderProfileId) ?? string.Empty;
+                savedModel = await Prefs.GetAsync(userId, UserPreferenceKeys.Model) ?? string.Empty;
+            }
+            catch { /* best effort */ }
+        }
+
+        var matched = !string.IsNullOrEmpty(savedProfileId)
+            ? _providerProfiles.FirstOrDefault(p => p.ProfileId == savedProfileId)
+            : null;
+
+        if (matched is null)
+        {
+            _currentModel = "No model";
+            _currentProvider = _providerProfiles.Count == 0 ? "Add a provider" : "Select a provider";
+            _isConnected = false;
+        }
+        else if (string.IsNullOrWhiteSpace(savedModel))
+        {
+            _currentModel = "Select a model";
+            _currentProvider = matched.Provider;
+            _isConnected = false;
+        }
+        else
+        {
+            _currentModel = ShortenModelName(savedModel);
+            _currentProvider = matched.Provider;
+            _isConnected = !string.IsNullOrWhiteSpace(Config.ApiKey);
+        }
     }
 
     private async Task LoadProviderProfilesAsync()
@@ -264,6 +293,7 @@
         {
             _selectedTreeGroup = null;
             _dropdownStyle = string.Empty;
+            await UnbindLightDismissAsync();
             return;
         }
         try
@@ -277,6 +307,37 @@
             }
         }
         catch { /* fall back to CSS-only positioning */ }
+
+        try
+        {
+            _selfRef ??= DotNetObjectReference.Create(this);
+            _dismissBindingId = await JS.InvokeAsync<int>(
+                "sovrantInterop.bindLightDismiss", _triggerRef, ".model-tree-dropdown", _selfRef, nameof(CloseTreeDropdown));
+        }
+        catch { /* without JS interop the dropdown still closes on chevron click */ }
+    }
+
+    [JSInvokable]
+    public Task CloseTreeDropdown()
+    {
+        return InvokeAsync(async () =>
+        {
+            if (!_treeOpen) return;
+            _treeOpen = false;
+            _selectedTreeGroup = null;
+            _dropdownStyle = string.Empty;
+            await UnbindLightDismissAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task UnbindLightDismissAsync()
+    {
+        if (_dismissBindingId == 0) return;
+        var id = _dismissBindingId;
+        _dismissBindingId = 0;
+        try { await JS.InvokeVoidAsync("sovrantInterop.unbindLightDismiss", id); }
+        catch { /* best effort */ }
     }
 
     private sealed record DropdownRect(double Top, double Left, double Width, double Height, double Bottom, double Right);
@@ -371,10 +432,13 @@
         _isConnected = !string.IsNullOrWhiteSpace(apiKey);
         _treeOpen = false;
         _dropdownStyle = string.Empty;
+        await UnbindLightDismissAsync();
+
+        // Persist prefs first so ApplyDisplayStateAsync — triggered by the
+        // OnChanged event below — reads the new values instead of the stale ones.
+        await PersistActiveProfileAsync(group, model, apiKey);
 
         ActiveContext.SetModel(_currentModel, _currentProvider);
-
-        await PersistActiveProfileAsync(group, model, apiKey);
     }
 
     private async Task PersistActiveProfileAsync(TreeGroup group, string model, string apiKey)
@@ -418,23 +482,9 @@
     {
         InvokeAsync(async () =>
         {
-            _isConnected = !string.IsNullOrWhiteSpace(Config.ApiKey);
             await InferProviderAsync();
             await LoadProviderProfilesAsync();
-            if (_providerProfiles.Count == 0 && !_isConnected)
-            {
-                _currentModel = "No model";
-                _currentProvider = "Add a provider";
-            }
-            else if (!_isConnected && _providerProfiles.Count > 0)
-            {
-                _currentModel = "No model";
-                _currentProvider = "Select a provider";
-            }
-            else
-            {
-                _currentModel = ShortenModelName(Config.Model);
-            }
+            await ApplyDisplayStateAsync();
             StateHasChanged();
         });
     }
@@ -443,6 +493,14 @@
     {
         ActiveContext.OnChanged -= OnActiveContextChanged;
         ActiveContext.OnDataChanged -= OnDataChanged;
+        if (_dismissBindingId != 0)
+        {
+            try { _ = JS.InvokeVoidAsync("sovrantInterop.unbindLightDismiss", _dismissBindingId); }
+            catch { /* component is unmounting; best effort */ }
+            _dismissBindingId = 0;
+        }
+        _selfRef?.Dispose();
+        _selfRef = null;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

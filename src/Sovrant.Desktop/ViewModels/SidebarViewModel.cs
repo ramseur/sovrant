@@ -71,6 +71,10 @@ public partial class SidebarViewModel : ViewModelBase
     /// <summary>True when showing providers list (step 1), false when showing models (step 2).</summary>
     public bool IsProviderStep => SelectedTreeGroup is null;
 
+    /// <summary>True when at least one provider profile is configured. Drives the
+    /// empty-state shown in the dropdown when the user has not added any provider yet.</summary>
+    public bool HasProviderProfiles => ProviderProfiles.Count > 0;
+
     private static readonly Dictionary<string, string[]> StaticProviderModels = new(StringComparer.Ordinal)
     {
         ["OpenAI"] = ["gpt-5", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini", "o4-mini", "o3", "o3-mini", "o1", "o1-mini"],
@@ -115,6 +119,9 @@ public partial class SidebarViewModel : ViewModelBase
         _credentials = credentials;
         _capabilityRegistry = capabilityRegistry;
         ActiveContext = activeContext;
+        // Re-fire PropertyChanged for HasProviderProfiles whenever the collection
+        // changes so the dropdown's empty-state toggles correctly.
+        ProviderProfiles.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasProviderProfiles));
         LoadFromConfig(config);
         _ = LoadProviderProfilesAsync().ContinueWith(
             t => System.Diagnostics.Debug.WriteLine($"[SidebarViewModel] LoadProviderProfilesAsync failed: {t.Exception}"),
@@ -364,6 +371,8 @@ public partial class SidebarViewModel : ViewModelBase
 
         var savedProfileId = await _prefs.GetAsync(App.SovrantUserId, UserPreferenceKeys.ActiveProviderProfileId)
             .ConfigureAwait(false);
+        var savedModel = await _prefs.GetAsync(App.SovrantUserId, UserPreferenceKeys.Model)
+            .ConfigureAwait(false);
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
@@ -373,22 +382,40 @@ public partial class SidebarViewModel : ViewModelBase
                 ProviderProfiles.Add(p);
 
             _suppressProfileSwitch = true;
-            // Prefer the last explicitly chosen profile; never auto-pick if none was saved.
-            if (!string.IsNullOrEmpty(savedProfileId))
-                SelectedProfile = ProviderProfiles.FirstOrDefault(p => p.ProfileId == savedProfileId)
-                    ?? ProviderProfiles.FirstOrDefault(p => p.Provider.Equals(CurrentProvider, StringComparison.OrdinalIgnoreCase));
+
+            // Match the saved profile id against the loaded set. No fallback by
+            // provider name — that auto-picks across deletions which surprises users.
+            var matched = !string.IsNullOrEmpty(savedProfileId)
+                ? ProviderProfiles.FirstOrDefault(p => p.ProfileId == savedProfileId)
+                : null;
+            SelectedProfile = matched;
+
+            // Three-state display, driven by profile + model-pref state (NOT
+            // SovrantConfig.Model — that carries the hardcoded "gpt-4o-mini"
+            // bootstrap default and a stale legacy LlmApiKey credential can keep
+            // ApiKey populated even after the user deletes their provider).
+            if (matched is null)
+            {
+                CurrentModel = "No model";
+                CurrentProvider = ProviderProfiles.Count == 0 ? "Add a provider" : "Select a provider";
+                IsConnected = false;
+                ConnectionStatus = ProviderProfiles.Count == 0 ? "No provider" : "No provider selected";
+            }
+            else if (string.IsNullOrWhiteSpace(savedModel))
+            {
+                CurrentModel = "Select a model";
+                CurrentProvider = matched.Provider;
+                IsConnected = false;
+                ConnectionStatus = "Choose a model";
+            }
             else
             {
-                SelectedProfile = null;
-                // Profiles exist but none was ever explicitly chosen — prompt the user to select.
-                if (ProviderProfiles.Count > 0 && string.IsNullOrWhiteSpace(_config.ApiKey))
-                {
-                    CurrentModel = "No model";
-                    CurrentProvider = "Select a provider";
-                    IsConnected = false;
-                    ConnectionStatus = "No provider selected";
-                }
+                CurrentModel = ShortenModelName(savedModel);
+                CurrentProvider = matched.Provider;
+                IsConnected = !string.IsNullOrWhiteSpace(_config.ApiKey);
+                ConnectionStatus = IsConnected ? "Connected" : "No API key";
             }
+
             _suppressProfileSwitch = false;
 
             BuildTreeGroups();
@@ -474,56 +501,18 @@ public partial class SidebarViewModel : ViewModelBase
         catch { /* best effort */ }
     }
 
-    /// <summary>Reads model and provider info from the current config.</summary>
+    /// <summary>Sets a safe initial display state. The real values are populated
+    /// by <see cref="LoadProviderProfilesAsync"/> once profile + model-pref state
+    /// is loaded from the DB. We deliberately don't read <c>config.Model</c> /
+    /// <c>config.ApiKey</c> here: the former carries a hardcoded "gpt-4o-mini"
+    /// bootstrap default and the latter can be a stale legacy <c>LlmApiKey</c>
+    /// credential that outlives an active provider profile.</summary>
     public void LoadFromConfig(SovrantConfig config)
     {
-        // First-run / clean-install state: no API key AND no configured model means
-        // there's no provider yet. Show a placeholder instead of inferring "OpenAI"
-        // from an empty URL.
-        if (string.IsNullOrWhiteSpace(config.ApiKey) && string.IsNullOrWhiteSpace(config.Model))
-        {
-            CurrentModel = "No model";
-            CurrentProvider = "Add a provider";
-            IsConnected = false;
-            ConnectionStatus = "No API key";
-            return;
-        }
-
-        CurrentModel = ShortenModelName(config.Model);
-
-        // Infer provider from base URL.
-        var url = config.BaseUrl?.ToString() ?? string.Empty;
-        CurrentProvider = url switch
-        {
-            _ when url.Contains("openrouter", StringComparison.OrdinalIgnoreCase) => "OpenRouter",
-            _ when url.Contains("deepseek", StringComparison.OrdinalIgnoreCase) => "DeepSeek",
-            _ when url.Contains("groq", StringComparison.OrdinalIgnoreCase) => "Groq",
-            _ when url.Contains("mistral", StringComparison.OrdinalIgnoreCase) => "Mistral",
-            _ when url.Contains("together", StringComparison.OrdinalIgnoreCase) => "Together AI",
-            _ when url.Contains("localhost:11434", StringComparison.Ordinal) => "Ollama",
-            _ when url.Contains("localhost:1234", StringComparison.Ordinal) => "LM Studio",
-            _ when string.IsNullOrEmpty(url) => "OpenAI",
-            _ => "Custom",
-        };
-
-        // Refine from saved preference if one exists. Async fire-and-forget;
-        // the URL inference is already a usable display value.
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                var saved = await _prefs.GetAsync(App.SovrantUserId, UserPreferenceKeys.Provider);
-                if (!string.IsNullOrEmpty(saved))
-                    await Dispatcher.UIThread.InvokeAsync(() => CurrentProvider = saved);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[SidebarViewModel] Provider preference load failed: {ex}");
-            }
-        });
-
-        IsConnected = !string.IsNullOrWhiteSpace(config.ApiKey);
-        ConnectionStatus = IsConnected ? "Connected" : "No API key";
+        CurrentModel = "No model";
+        CurrentProvider = "Loading...";
+        IsConnected = false;
+        ConnectionStatus = "Loading...";
     }
 
     /// <summary>
@@ -560,6 +549,15 @@ public partial class SidebarViewModel : ViewModelBase
     {
         SelectedNavItem = pageName;
         NavigationRequested?.Invoke(this, pageName);
+    }
+
+    /// <summary>Empty-state action in the model dropdown: close the popup and
+    /// navigate the user to the Settings page so they can configure a provider.</summary>
+    [RelayCommand]
+    private void AddProvider()
+    {
+        IsDropdownOpen = false;
+        Navigate("Settings");
     }
 
     [RelayCommand]

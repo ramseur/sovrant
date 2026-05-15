@@ -79,12 +79,6 @@
                                 <DockPanel>
                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4"
                                                 VerticalAlignment="Center">
-                                        <Button Content="Activate"
-                                                Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).LoadProfileCommand}"
-                                                CommandParameter="{Binding}"
-                                                Padding="10,4" CornerRadius="4" FontSize="11"
-                                                Background="{DynamicResource BrandPrimary}"
-                                                Foreground="White" FontWeight="SemiBold" />
                                         <Button Content="X"
                                                 Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).DeleteProfileCommand}"
                                                 CommandParameter="{Binding}"
@@ -165,7 +159,7 @@
                            FontSize="12"
                            Foreground="{DynamicResource StatusPass}" />
 
-                <TextBlock Text="Provider profiles are stored in the local database; API keys are stored in the OS keystore (Windows Credential Manager / macOS Keychain / libsecret). Click Activate to switch the active provider."
+                <TextBlock Text="Provider profiles are stored in the local database; API keys are stored in the OS keystore (Windows Credential Manager / macOS Keychain / libsecret). Switch between providers from the sidebar dropdown above."
                            FontSize="11" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextMuted}" />
             </StackPanel>
