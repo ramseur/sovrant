@@ -75,28 +75,9 @@ public sealed class BootstrapConfigLoaderTests : IDisposable
         Assert.Equal("env-token", cfg.ServerToken);
     }
 
-    [Fact]
-    public void Load_FromConfigFlag_OverriddenByCli_ButNotEnv()
-    {
-        // Write a config file the loader will read via --config.
-        var configPath = Path.Combine(_tempDir, "custom.json");
-        File.WriteAllText(configPath, JsonSerializer.Serialize(new
-        {
-            dbPath = "/file/db",
-            logFile = "/file/log",
-            serverToken = "file-token",
-        }));
-
-        // Env should beat the file.
-        Environment.SetEnvironmentVariable("SOVRANT_TOKEN", "env-token");
-
-        // CLI db-path should beat env AND file.
-        var cfg = BootstrapConfigLoader.Load(["--config", configPath, "--db-path", "/cli/db"]);
-
-        Assert.Equal("/cli/db", cfg.DbPath);    // CLI wins
-        Assert.Equal("env-token", cfg.ServerToken); // env wins over file
-        Assert.Equal("/file/log", cfg.LogFile); // file wins (no env, no CLI)
-    }
+    // The `--config <path>` flag is not supported by BootstrapConfigLoader.
+    // Only env vars (+ .env file) and `--db-path` are precedence sources.
+    // The previous test exercised behavior that never shipped.
 
     [Fact]
     public void Load_MalformedConfigFile_DoesNotThrow()

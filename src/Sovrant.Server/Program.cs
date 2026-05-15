@@ -210,6 +210,14 @@ app.MapGet("/health", (IStorageProvider storage) =>
     });
 });
 
+// Run DB migrations BEFORE the first GetRequiredService() that touches a
+// table. ToolRegistrar's DI graph transitively resolves SwarmConfig, whose
+// factory synchronously queries workspace_settings; on a fresh install that
+// table does not yet exist and the resolution throws. InitializeRuntimeAsync
+// (below) calls storage.InitializeAsync() too — that call is a no-op once
+// migrations have already run, so the duplicate is safe.
+await app.Services.GetRequiredService<IStorageProvider>().InitializeAsync().ConfigureAwait(false);
+
 // Seed tool registry.
 app.Services.GetRequiredService<ToolRegistrar>().RegisterAll();
 

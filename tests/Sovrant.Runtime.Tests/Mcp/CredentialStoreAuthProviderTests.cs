@@ -4,8 +4,10 @@ namespace Sovrant.Runtime.Tests.Mcp;
 
 /// <summary>
 /// Tests for <see cref="CredentialStoreAuthProvider"/>. Verifies the
-/// env &gt; store &gt; static-fallback precedence chain that the CLI / Server
-/// rely on when no Web/Desktop <c>MutableAuthProvider</c> overrides it.
+/// store &gt; static-fallback precedence chain that the CLI / Server rely on
+/// when no Web/Desktop <c>MutableAuthProvider</c> overrides it. Phase 88-C
+/// removed environment-variable reads — keys live only in the encrypted
+/// credential store. These tests guard that contract.
 /// </summary>
 public sealed class CredentialStoreAuthProviderTests : IDisposable
 {
@@ -32,8 +34,9 @@ public sealed class CredentialStoreAuthProviderTests : IDisposable
     }
 
     [Fact]
-    public async Task EnvVar_BeatsStore()
+    public async Task EnvVar_IsIgnored_StoreWins()
     {
+        // Phase 88-C: API keys must never be read from process environment.
         var store = new InMemoryCredentialStore();
         await store.StoreAsync(CredKey, "from-store");
         Environment.SetEnvironmentVariable(EnvVar, "from-env");
@@ -41,7 +44,7 @@ public sealed class CredentialStoreAuthProviderTests : IDisposable
         var provider = new CredentialStoreAuthProvider(store, CredKey, fallback: "from-fallback");
         var token = await provider.GetAuthHeaderAsync(CancellationToken.None);
 
-        Assert.Equal("from-env", token);
+        Assert.Equal("from-store", token);
     }
 
     [Fact]
@@ -81,8 +84,9 @@ public sealed class CredentialStoreAuthProviderTests : IDisposable
     }
 
     [Fact]
-    public async Task SecondaryEnvAlias_AlsoChecked()
+    public async Task SecondaryEnvAlias_IsAlsoIgnored()
     {
+        // Phase 88-C: neither LLM_API_KEY nor any alias is consulted.
         var store = new InMemoryCredentialStore();
         await store.StoreAsync(CredKey, "from-store");
         Environment.SetEnvironmentVariable(AltEnv, "from-openai-alias");
@@ -90,7 +94,7 @@ public sealed class CredentialStoreAuthProviderTests : IDisposable
         var provider = new CredentialStoreAuthProvider(store, CredKey, fallback: "from-fallback");
         var token = await provider.GetAuthHeaderAsync(CancellationToken.None);
 
-        Assert.Equal("from-openai-alias", token);
+        Assert.Equal("from-store", token);
     }
 
     [Fact]

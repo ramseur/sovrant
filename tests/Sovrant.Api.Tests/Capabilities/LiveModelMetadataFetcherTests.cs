@@ -33,52 +33,46 @@ public sealed class LiveModelMetadataFetcherTests
     [Fact]
     public async Task FetchAsync_RegistersModelsFromResponse()
     {
-        var original = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY");
-        try
+        // Phase 88-C: keys are passed via CredentialConfig (or resolver),
+        // not read from process environment. Pass the test key explicitly.
+        var json = """
         {
-            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", "test-key");
-
-            var json = """
+          "data": [
             {
-              "data": [
-                {
-                  "id": "google/gemma-4-27b",
-                  "context_length": 131072,
-                  "supported_parameters": ["tools", "tool_choice", "response_format"],
-                  "architecture": { "modality": "text" }
-                },
-                {
-                  "id": "meta/llama-3-70b",
-                  "context_length": 8192,
-                  "supported_parameters": ["temperature"]
-                }
-              ]
+              "id": "google/gemma-4-27b",
+              "context_length": 131072,
+              "supported_parameters": ["tools", "tool_choice", "response_format"],
+              "architecture": { "modality": "text" }
+            },
+            {
+              "id": "meta/llama-3-70b",
+              "context_length": 8192,
+              "supported_parameters": ["temperature"]
             }
-            """;
-
-            var http = new HttpClient(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonOk(json)));
-            var fetcher = new LiveModelMetadataFetcher(_registry, http, NullLogger<LiveModelMetadataFetcher>.Instance);
-
-            await fetcher.FetchAsync();
-
-            var all = _registry.GetAll();
-            Assert.Equal(2, all.Count);
-
-            var gemma = _registry.GetCapabilities("google/gemma-4-27b");
-            Assert.True(gemma.NativeTools);
-            Assert.True(gemma.StructuredOutput);
-            Assert.Equal(131072, gemma.MaxContext);
-            Assert.Equal(CapabilitySource.Live, gemma.Source);
-
-            var llama = _registry.GetCapabilities("meta/llama-3-70b");
-            Assert.False(llama.NativeTools);
-            Assert.False(llama.StructuredOutput);
-            Assert.Equal(8192, llama.MaxContext);
+          ]
         }
-        finally
-        {
-            Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", original);
-        }
+        """;
+
+        var http = new HttpClient(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonOk(json)));
+        var credentials = new Sovrant.Api.Config.CredentialConfig { OpenRouterApiKey = "test-key" };
+        var fetcher = new LiveModelMetadataFetcher(
+            _registry, http, NullLogger<LiveModelMetadataFetcher>.Instance, credentials);
+
+        await fetcher.FetchAsync();
+
+        var all = _registry.GetAll();
+        Assert.Equal(2, all.Count);
+
+        var gemma = _registry.GetCapabilities("google/gemma-4-27b");
+        Assert.True(gemma.NativeTools);
+        Assert.True(gemma.StructuredOutput);
+        Assert.Equal(131072, gemma.MaxContext);
+        Assert.Equal(CapabilitySource.Live, gemma.Source);
+
+        var llama = _registry.GetCapabilities("meta/llama-3-70b");
+        Assert.False(llama.NativeTools);
+        Assert.False(llama.StructuredOutput);
+        Assert.Equal(8192, llama.MaxContext);
     }
 
     [Fact]

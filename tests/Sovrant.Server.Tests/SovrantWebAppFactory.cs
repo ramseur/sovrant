@@ -35,9 +35,10 @@ public sealed class SovrantWebAppFactory : WebApplicationFactory<Program>
 
     /// <summary>
     /// A valid <c>svt_</c> bearer token for the seeded test admin user.
-    /// Lazily issued on first access using the seed user that <see cref="SqliteStorageProvider"/>
-    /// creates at startup. All tests in the same fixture share one token.
-    /// Thread-safe via double-checked locking.
+    /// Lazily issued on first access. The seed user is created on demand because
+    /// neither <see cref="SqliteStorageProvider"/> nor <c>Sovrant.Server.Program</c>
+    /// seed one — that is the Web frontend's responsibility in production.
+    /// All tests in the same fixture share one token. Thread-safe via double-checked locking.
     /// </summary>
     public string TestAdminToken
     {
@@ -47,9 +48,22 @@ public sealed class SovrantWebAppFactory : WebApplicationFactory<Program>
             lock (_tokenLock)
             {
                 if (_testAdminToken is not null) return _testAdminToken;
-                // SqliteStorageProvider seeds a user from SOVRANT_USER_ID || Environment.UserName.
-                // Issue a token for that user directly via ITokenService.
                 var seedUserId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
+
+                // Ensure the admin user row exists. TokenService.IssueAsync has a
+                // FK to users(user_id); without this, fresh-DB test fixtures fail.
+                var users = Server.Services.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
+                var existing = users.GetAsync(seedUserId).GetAwaiter().GetResult();
+                if (existing is null)
+                {
+                    users.CreateAsync(
+                        username: seedUserId,
+                        email: null,
+                        role: "admin",
+                        team: null,
+                        userId: seedUserId).GetAwaiter().GetResult();
+                }
+
                 var tokens = Server.Services.GetRequiredService<ITokenService>();
                 var issued = tokens.IssueAsync(seedUserId, name: "test-admin", expiresAt: DateTimeOffset.UtcNow.AddDays(30))
                     .GetAwaiter().GetResult();
