@@ -135,6 +135,19 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private static Task LogoutAsync() => App.LogoutAsync();
 
+    /// <summary>
+    /// Called by App after a new user logs in to flush all stale per-user state.
+    /// Resets the nav group, content page, and re-notifies IsAdmin so Avalonia
+    /// re-evaluates the admin icon visibility binding.
+    /// </summary>
+    internal void ResetForUser()
+    {
+        SelectedGroup = "agents";
+        Sidebar.SelectedNavItem = "Agents";
+        OnNavigationRequested(this, "Agents");
+        OnPropertyChanged(nameof(IsAdmin));
+    }
+
     private void OnCommandExecuted(object? sender, SlashCommandResult result)
     {
         if (CurrentPage is not ChatViewModel chat) return;

@@ -22,6 +22,8 @@ public sealed class WebSessionService : IPrincipalAccessor
 
     public void SignIn(string userId, string role, string? email = null)
     {
+        // Reset all state first so no previous user's context leaks into the new session.
+        _workspaceId = null;
         _userId = userId;
         _role = role;
         _email = email;

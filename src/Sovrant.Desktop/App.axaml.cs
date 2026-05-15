@@ -368,6 +368,13 @@ public partial class App : Application
         Services.GetRequiredService<SidebarViewModel>()
             .SetCurrentUser(principal.Email ?? authenticatedUserId);
 
+        // Flush all stale per-user state in the singleton MainViewModel so the new
+        // user's role and nav state are applied before the window becomes visible.
+        Services.GetRequiredService<MainViewModel>().ResetForUser();
+
+        // Re-apply preferences so the new user's model/provider is loaded.
+        await Services.ApplyUserPreferencesForUserAsync(authenticatedUserId).ConfigureAwait(true);
+
         MainWindow?.Show();
     }
 

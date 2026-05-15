@@ -73,7 +73,7 @@
     {
         if (Session.IsAuthenticated)
         {
-            Nav.NavigateTo("/", forceLoad: false);
+            Nav.NavigateTo("/", forceLoad: true);
             return;
         }
         _registrationOpen = await IdentityService.IsRegistrationOpenAsync().ConfigureAwait(false);
@@ -110,7 +110,7 @@
                     await Program.SeedUserAndWorkspaceAsync(Services, result.UserId!).ConfigureAwait(false);
                     await Services.ApplyUserPreferencesForUserAsync(result.UserId!).ConfigureAwait(false);
                 });
-            Nav.NavigateTo("/", forceLoad: false);
+            Nav.NavigateTo("/", forceLoad: true);
         }
         finally
         {
@@ -152,7 +152,7 @@
                     await Program.SeedUserAndWorkspaceAsync(Services, result.UserId!).ConfigureAwait(false);
                     await Services.ApplyUserPreferencesForUserAsync(result.UserId!).ConfigureAwait(false);
                 });
-            Nav.NavigateTo("/", forceLoad: false);
+            Nav.NavigateTo("/", forceLoad: true);
         }
         finally
         {
