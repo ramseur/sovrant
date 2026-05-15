@@ -88,9 +88,12 @@
                             BorderThickness="0,0,0,1"
                             Padding="14,0">
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <TextBlock Text="⚡" FontSize="18"
-                                       Foreground="{DynamicResource BrandPrimary}"
-                                       VerticalAlignment="Center" />
+                            <Border Width="28" Height="28" CornerRadius="7"
+                                    Background="{DynamicResource BrandPrimary}">
+                                <TextBlock Text="⚡" FontSize="16"
+                                           Foreground="{DynamicResource StatusWarn}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
                             <TextBlock Text="Sovrant" FontSize="14" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextPrimary}"
                                        VerticalAlignment="Center" />

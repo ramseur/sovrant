@@ -687,11 +687,19 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     text-align: left;
 }
 
-.rail-brand:hover { color: var(--brand-primary); }
+.rail-brand:hover .rail-brand-text { color: var(--brand-primary); }
 
 .rail-brand-icon {
-    font-size: 18px;
-    color: var(--brand-primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: var(--brand-primary);
+    font-size: 16px;
+    color: #FF9800;
+    flex-shrink: 0;
 }
 
 .rail-brand-text {
