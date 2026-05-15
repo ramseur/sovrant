@@ -31,7 +31,7 @@
                     <span>&#9889;</span>
                 </div>
                 <h1 class="hero-title">What are you working on?</h1>
-                <p class="hero-subtitle">Sovrant can read your files, run shell commands, and write code.</p>
+                <p class="hero-subtitle">Create agents, build teams, and orchestrate missions to automate your work.</p>
                 <div class="hero-suggestions">
                     @foreach (var s in _suggestions)
                     {
@@ -168,12 +168,12 @@
     private record Suggestion(string Icon, string Text);
     private static readonly Suggestion[] _suggestions =
     [
-        new("\U0001F41B", "Debug a failing test"),
-        new("\u2728", "Refactor for readability"),
-        new("\u270F\uFE0F", "Write unit tests"),
-        new("\U0001F50D", "Review my diff"),
-        new("\u2699\uFE0F", "Set up an Express route"),
-        new("\U0001F4A1", "Explain this code"),
+        new("🤖", "Create a custom agent with tools for web research and summarization"),
+        new("🤝", "Create a team that researches a topic and produces a structured report"),
+        new("🌀", "Build a best-practice swarm that parallelizes tasks across agents"),
+        new("🎯", "Set up a mission that monitors a project and sends daily updates"),
+        new("🎼", "Orchestrate a multi-agent pipeline for code review and testing"),
+        new("🔗", "Connect an MCP server and create an agent that uses its tools"),
     ];
 
     private bool CanSend => !_isSending && !string.IsNullOrWhiteSpace(_inputText);

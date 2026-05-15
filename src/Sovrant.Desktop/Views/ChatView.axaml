@@ -184,7 +184,7 @@
                            FontSize="24" FontWeight="Bold"
                            Foreground="{DynamicResource TextPrimary}"
                            HorizontalAlignment="Center" />
-                <TextBlock Text="Sovrant can read your files, run shell commands, and write code."
+                <TextBlock Text="Create agents, build teams, and orchestrate missions to automate your work."
                            FontSize="14"
                            Foreground="{DynamicResource TextSecondary}"
                            HorizontalAlignment="Center"
@@ -196,10 +196,10 @@
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                             Background="{DynamicResource SurfaceCard}"
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
-                            Command="{Binding SuggestionCommand}" CommandParameter="Debug a failing test">
+                            Command="{Binding SuggestionCommand}" CommandParameter="Create a custom agent with tools for web research and summarization">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="🐛" FontSize="14" VerticalAlignment="Center" />
-                            <TextBlock Text="Debug a failing test" FontSize="13"
+                            <TextBlock Text="🤖" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Create a custom agent" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
                     </Button>
@@ -207,10 +207,10 @@
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                             Background="{DynamicResource SurfaceCard}"
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
-                            Command="{Binding SuggestionCommand}" CommandParameter="Refactor for readability">
+                            Command="{Binding SuggestionCommand}" CommandParameter="Create a team that researches a topic and produces a structured report">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="✨" FontSize="14" VerticalAlignment="Center" />
-                            <TextBlock Text="Refactor for readability" FontSize="13"
+                            <TextBlock Text="🤝" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Build a team of agents" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
                     </Button>
@@ -218,10 +218,10 @@
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                             Background="{DynamicResource SurfaceCard}"
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
-                            Command="{Binding SuggestionCommand}" CommandParameter="Write unit tests">
+                            Command="{Binding SuggestionCommand}" CommandParameter="Build a best-practice swarm that parallelizes tasks across agents">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="✏️" FontSize="14" VerticalAlignment="Center" />
-                            <TextBlock Text="Write unit tests" FontSize="13"
+                            <TextBlock Text="🌀" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Design an agent swarm" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
                     </Button>
@@ -229,10 +229,10 @@
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                             Background="{DynamicResource SurfaceCard}"
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
-                            Command="{Binding SuggestionCommand}" CommandParameter="Review my diff">
+                            Command="{Binding SuggestionCommand}" CommandParameter="Set up a mission that monitors a project and sends daily updates">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="🔍" FontSize="14" VerticalAlignment="Center" />
-                            <TextBlock Text="Review my diff" FontSize="13"
+                            <TextBlock Text="🎯" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Set up a mission" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
                     </Button>
@@ -240,10 +240,10 @@
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                             Background="{DynamicResource SurfaceCard}"
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
-                            Command="{Binding SuggestionCommand}" CommandParameter="Set up an Express route">
+                            Command="{Binding SuggestionCommand}" CommandParameter="Orchestrate a multi-agent pipeline for code review and testing">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="⚙️" FontSize="14" VerticalAlignment="Center" />
-                            <TextBlock Text="Set up an Express route" FontSize="13"
+                            <TextBlock Text="🎼" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Orchestrate a pipeline" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
                     </Button>
@@ -251,10 +251,10 @@
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                             Background="{DynamicResource SurfaceCard}"
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
-                            Command="{Binding SuggestionCommand}" CommandParameter="Explain this code">
+                            Command="{Binding SuggestionCommand}" CommandParameter="Connect an MCP server and create an agent that uses its tools">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="💡" FontSize="14" VerticalAlignment="Center" />
-                            <TextBlock Text="Explain this code" FontSize="13"
+                            <TextBlock Text="🔗" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Connect an MCP server" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
                     </Button>
