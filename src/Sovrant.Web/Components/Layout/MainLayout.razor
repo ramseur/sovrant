@@ -85,20 +85,23 @@
     private void OnGroupSelected(string group)
     {
         _selectedGroup = group;
-        // Clicking the chat icon also starts a new chat — replaces the
-        // dedicated "New Chat" button and saves the user a click. We have
-        // to both navigate (covers the "currently on /settings" case) AND
-        // fire a reset event (covers the "already on /" case where Blazor
-        // reuses the component instance and OnInitialized doesn't re-run).
-        if (group == "chat")
+        // Clicking a top-level icon should land on the first sub-nav item so the
+        // main content is never blank. Chat starts a fresh session; we both
+        // navigate (covers "currently on /settings") AND fire a reset (covers
+        // "already on /" where Blazor reuses the component instance).
+        var url = group switch
         {
-            ActiveContext.StartNewSession();
-            Nav.NavigateTo("/", forceLoad: false);
-        }
-        else if (group == "settings")
-        {
-            Nav.NavigateTo("/settings", forceLoad: false);
-        }
+            "chat" => "/",
+            "knowledge" => "/artifacts",
+            "agents" => "/agents",
+            "workspace" => "/projects",
+            "connect" => "/integrations",
+            "admin" => "/admin",
+            "settings" => "/settings",
+            _ => null,
+        };
+        if (group == "chat") ActiveContext.StartNewSession();
+        if (url is not null) Nav.NavigateTo(url, forceLoad: false);
     }
 
     private void Navigate(string url)

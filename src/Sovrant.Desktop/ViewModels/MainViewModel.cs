@@ -95,16 +95,29 @@ public partial class MainViewModel : ViewModelBase
     private void SelectGroup(string group)
     {
         SelectedGroup = group;
-        // Clicking the chat icon also starts a new chat — replaces the
-        // dedicated "New Chat" button and saves the user a click.
-        if (group == "chat")
+        // Clicking a top-level icon should land on the first sub-nav item so the
+        // main area is never blank. Chat starts a fresh session; admin guards on role.
+        switch (group)
         {
-            CurrentPage = CreateChatViewModel();
-            Sidebar.SelectedNavItem = "Chat";
-        }
-        else if (group == "admin" && _principal.IsAdmin)
-        {
-            CurrentPage = ResolveAdmin("users");
+            case "chat":
+                CurrentPage = CreateChatViewModel();
+                Sidebar.SelectedNavItem = "Chat";
+                break;
+            case "knowledge":
+                OnNavigationRequested(this, "Artifacts");
+                break;
+            case "agents":
+                OnNavigationRequested(this, "Agents");
+                break;
+            case "workspace":
+                OnNavigationRequested(this, "Projects");
+                break;
+            case "connect":
+                OnNavigationRequested(this, "Integrations");
+                break;
+            case "admin" when _principal.IsAdmin:
+                CurrentPage = ResolveAdmin("users");
+                break;
         }
     }
 
