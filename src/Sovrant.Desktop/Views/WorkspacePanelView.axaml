@@ -13,7 +13,8 @@
                     Command="{Binding NavigateCommand}" CommandParameter="Projects"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Projects}"
+                    Foreground="{DynamicResource TextPrimary}" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

@@ -13,10 +13,8 @@
                     Command="{Binding NavigateCommand}" CommandParameter="Integrations"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-            <!-- Automations entry hidden: workflow automation will be delivered through MCP-connected
-                 platforms (n8n, etc.) rather than a built-in surface. VM/View/route remain wired. -->
-
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Integrations}"
+                    Foreground="{DynamicResource TextPrimary}" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

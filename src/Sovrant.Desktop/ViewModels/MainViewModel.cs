@@ -106,21 +106,27 @@ public partial class MainViewModel : ViewModelBase
                 Sidebar.SelectedNavItem = "Chat";
                 break;
             case "knowledge":
+                Sidebar.SelectedNavItem = "Artifacts";
                 OnNavigationRequested(this, "Artifacts");
                 break;
             case "agents":
+                Sidebar.SelectedNavItem = "Agents";
                 OnNavigationRequested(this, "Agents");
                 break;
             case "workspace":
+                Sidebar.SelectedNavItem = "Projects";
                 OnNavigationRequested(this, "Projects");
                 break;
             case "connect":
+                Sidebar.SelectedNavItem = "Integrations";
                 OnNavigationRequested(this, "Integrations");
                 break;
             case "settings":
+                Sidebar.SelectedNavItem = "Settings";
                 OnNavigationRequested(this, "Settings");
                 break;
             case "admin" when _principal.IsAdmin:
+                Sidebar.SelectedNavItem = "Admin";
                 CurrentPage = ResolveAdmin("users");
                 break;
         }

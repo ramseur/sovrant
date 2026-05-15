@@ -13,12 +13,14 @@
                     Command="{Binding NavigateCommand}" CommandParameter="Agents"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Agents}"
+                    Foreground="{DynamicResource TextPrimary}" />
             <Button Content="🎼  Orchestration"
                     Command="{Binding NavigateCommand}" CommandParameter="Orchestration"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Orchestration}"
+                    Foreground="{DynamicResource TextPrimary}" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>
