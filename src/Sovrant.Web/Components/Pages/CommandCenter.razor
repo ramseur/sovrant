@@ -4,6 +4,8 @@
 @using Sovrant.Runtime.CommandCenter
 @using Sovrant.Runtime.Session
 @using Sovrant.Runtime.Storage
+@using Sovrant.Web.Services
+@inject WebSessionService Session
 @implements IDisposable
 
 <div class="settings-page">
@@ -225,6 +227,12 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (!Session.IsAuthenticated || !Session.IsAdmin)
+        {
+            Nav.NavigateTo("/", forceLoad: false);
+            return;
+        }
+
         // Decide focus mode BEFORE any await so the first render commits to the
         // correct branch — otherwise the grid flashes before we resolve the run.
         var initialRunId = ReadRunId(Nav.Uri);

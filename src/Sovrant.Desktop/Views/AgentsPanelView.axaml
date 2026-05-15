@@ -19,11 +19,6 @@
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-            <Button Content="🎯  Command Center"
-                    Command="{Binding NavigateCommand}" CommandParameter="CommandCenter"
-                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

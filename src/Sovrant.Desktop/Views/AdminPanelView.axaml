@@ -19,6 +19,11 @@
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="&#x1F3AF;  Command Center"
+                    Command="{Binding NavigateCommand}" CommandParameter="CommandCenter"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
             <Button Content="&#x1F6E1;  Governance"
                     Command="{Binding NavigateCommand}" CommandParameter="Governance"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
