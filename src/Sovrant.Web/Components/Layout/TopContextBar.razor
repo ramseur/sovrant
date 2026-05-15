@@ -107,6 +107,7 @@
     [Inject] private ICredentialStore Credentials { get; set; } = default!;
     [Inject] private IModelCapabilityRegistry CapabilityRegistry { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private WebSessionService Session { get; set; } = default!;
 
     private ElementReference _triggerRef;
     private string _dropdownStyle = string.Empty;
@@ -188,7 +189,7 @@
         _treeGroups = [];
         try
         {
-            var rows = await ProfileStore.ListAsync(Sovrant.Web.Program.SovrantUserId);
+            var rows = await ProfileStore.ListAsync(Session.UserId!);
             var list = new List<ProviderProfileItem>(rows.Count);
             foreach (var row in rows)
             {
@@ -370,7 +371,7 @@
     {
         try
         {
-            var userId = Sovrant.Web.Program.SovrantUserId;
+            var userId = Session.UserId!;
             if (!string.IsNullOrWhiteSpace(group.ProfileId))
                 await Prefs.SetAsync(userId, UserPreferenceKeys.ActiveProviderProfileId, group.ProfileId);
             await Prefs.SetAsync(userId, UserPreferenceKeys.Provider, group.Provider);
@@ -460,7 +461,7 @@
 
         try
         {
-            var saved = await Prefs.GetAsync(Sovrant.Web.Program.SovrantUserId, UserPreferenceKeys.Provider);
+            var saved = await Prefs.GetAsync(Session.UserId!, UserPreferenceKeys.Provider);
             if (!string.IsNullOrWhiteSpace(saved))
                 _currentProvider = saved;
         }
@@ -488,7 +489,7 @@
     {
         try
         {
-            var list = await WorkspaceService.ListForUserAsync(Sovrant.Web.Program.SovrantUserId);
+            var list = await WorkspaceService.ListForUserAsync(Session.UserId!);
             _workspaces = list.Select(w => new WorkspaceItem(w.WorkspaceId, w.Name, w.Type.ToString())).ToList();
             Console.WriteLine($"[TopContextBar] Loaded {_workspaces.Count} workspace(s).");
             var personal = _workspaces.FirstOrDefault(w => w.Type.Equals("Personal", StringComparison.OrdinalIgnoreCase));

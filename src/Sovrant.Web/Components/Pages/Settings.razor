@@ -222,7 +222,7 @@
         var trimmedBase = (_baseUrl ?? string.Empty).Trim();
         var profileId = MakeProfileId(_selectedProvider, displayName);
         var credentialId = $"provider.{profileId}.api_key";
-        var userId = Sovrant.Web.Program.SovrantUserId;
+        var userId = Session.UserId!;
 
         try
         {
@@ -262,7 +262,7 @@
         _apiKey = profile.ApiKey;
         _baseUrl = profile.BaseUrl;
 
-        await Prefs.SetAsync(Sovrant.Web.Program.SovrantUserId,
+        await Prefs.SetAsync(Session.UserId!,
             UserPreferenceKeys.ActiveProviderProfileId, profile.ProfileId);
 
         await SaveAsync();
@@ -286,7 +286,7 @@
     {
         try
         {
-            var rows = await ProfileStore.ListAsync(Sovrant.Web.Program.SovrantUserId);
+            var rows = await ProfileStore.ListAsync(Session.UserId!);
             var list = new List<ProviderProfileVm>(rows.Count);
             foreach (var row in rows)
             {
@@ -337,7 +337,7 @@
     {
         try
         {
-            var userId = Sovrant.Web.Program.SovrantUserId;
+            var userId = Session.UserId!;
             await Prefs.SetAsync(userId, UserPreferenceKeys.Provider, _selectedProvider);
             if (!string.IsNullOrWhiteSpace(Config.Model))
                 await Prefs.SetAsync(userId, UserPreferenceKeys.Model, Config.Model);
@@ -391,7 +391,7 @@
     {
         try
         {
-            var saved = await Prefs.GetAsync(Sovrant.Web.Program.SovrantUserId, UserPreferenceKeys.Provider);
+            var saved = await Prefs.GetAsync(Session.UserId!, UserPreferenceKeys.Provider);
             if (!string.IsNullOrWhiteSpace(saved)) return saved;
         }
         catch { /* fall through */ }

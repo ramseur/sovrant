@@ -136,7 +136,7 @@ public partial class SettingsViewModel : ViewModelBase
         _initialized = true;
     }
 
-    private async Task HydrateFromStoresAsync()
+    internal async Task HydrateFromStoresAsync()
     {
         // Provider name is stored in user preferences when explicitly set.
         var savedProvider = await _prefs.GetAsync(App.SovrantUserId, UserPreferenceKeys.Provider);

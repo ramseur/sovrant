@@ -375,6 +375,12 @@ public partial class App : Application
         // Re-apply preferences so the new user's model/provider is loaded.
         await Services.ApplyUserPreferencesForUserAsync(authenticatedUserId).ConfigureAwait(true);
 
+        // Reload provider profiles in every singleton that caches them so the
+        // new user never sees the previous user's providers.
+        var sidebar = Services.GetRequiredService<SidebarViewModel>();
+        await sidebar.LoadProviderProfilesAsync().ConfigureAwait(true);
+        await Services.GetRequiredService<SettingsViewModel>().HydrateFromStoresAsync().ConfigureAwait(true);
+
         MainWindow?.Show();
     }
 
