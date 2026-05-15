@@ -124,7 +124,7 @@ public partial class SettingsViewModel : ViewModelBase
         // Load current values from runtime config (already populated by
         // ApplyUserPreferencesAsync at boot).
         _modelName = config.Model;
-        _apiKey = config.ApiKey ?? string.Empty;
+        _apiKey = string.Empty; // Never pre-fill; user must enter or load a saved profile explicitly.
         _baseUrl = config.BaseUrl?.ToString() ?? string.Empty;
         _permissionMode = permissionModeAccessor.Mode;
 

@@ -181,7 +181,7 @@
     {
         _router = Services.GetService<ISmartRouter>();
         _capabilities = Services.GetService<IModelCapabilityRegistry>();
-        _apiKey = Config.ApiKey ?? string.Empty;
+        _apiKey = string.Empty; // Never pre-fill; user must enter or load a saved profile explicitly.
         _baseUrl = Config.BaseUrl?.ToString() ?? string.Empty;
         _permissionMode = PermissionModeAccessor.Mode.ToString();
         _selectedProvider = await InferProviderAsync();
