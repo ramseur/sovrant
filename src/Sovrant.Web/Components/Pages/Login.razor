@@ -150,7 +150,10 @@
             }
             await CredentialStore.StoreAsync(StoredTokenKey, result.Token!).ConfigureAwait(false);
             Program.SetUserId(result.UserId!);
-            Session.SignIn(result.UserId!, "admin", _email.Trim());
+            // Honor the role the identity service assigned. Only the first registrant
+            // is "admin"; everyone else is "user" and must not inherit admin powers
+            // just because they happened to register through this form.
+            Session.SignIn(result.UserId!, result.Role ?? "user", _email.Trim());
             if (!Program.IsRemoteMode)
                 _ = Task.Run(async () =>
                 {

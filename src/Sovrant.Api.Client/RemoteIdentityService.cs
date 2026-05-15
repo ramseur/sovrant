@@ -55,19 +55,20 @@ public sealed class RemoteIdentityService : IIdentityService
         {
             var errBody = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             var errMsg = TryExtractError(errBody) ?? $"Registration failed ({(int)resp.StatusCode}).";
-            return new RegisterResult(false, null, null, errMsg);
+            return new RegisterResult(false, null, null, null, errMsg);
         }
 
         var json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         var doc = JsonDocument.Parse(json);
         var token = doc.RootElement.TryGetProperty("token", out var t) ? t.GetString() : null;
         var userId = doc.RootElement.TryGetProperty("user_id", out var u) ? u.GetString() : null;
+        var role = doc.RootElement.TryGetProperty("role", out var r) ? r.GetString() : null;
         var isPending = doc.RootElement.TryGetProperty("pending_approval", out var p) && p.GetBoolean();
 
         if (!string.IsNullOrEmpty(token))
             _options.ApiToken = token;
 
-        return new RegisterResult(true, token, userId, null, isPending);
+        return new RegisterResult(true, token, userId, role, null, isPending);
     }
 
     public async Task<bool> IsRegistrationOpenAsync(CancellationToken ct = default)

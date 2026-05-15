@@ -5,7 +5,7 @@ namespace Sovrant.Runtime.Auth;
 /// True when registration succeeded but the account requires admin approval before login.
 /// In this case <see cref="Token"/> is null; the caller should show a "pending approval" message.
 /// </param>
-public sealed record RegisterResult(bool Success, string? Token, string? UserId, string? Error, bool IsPendingApproval = false);
+public sealed record RegisterResult(bool Success, string? Token, string? UserId, string? Role, string? Error, bool IsPendingApproval = false);
 public sealed record LoginResult(bool Success, string? Token, string? UserId, string? Role, string? Error);
 public sealed record ResetPasswordResult(bool Success, string? Error);
 

@@ -53,10 +53,11 @@ internal static class AuthRoutes
             {
                 pending_approval = true,
                 user_id = result.UserId,
+                role = result.Role,
                 message = "Your account has been created and is awaiting admin approval."
             });
 
-        return Results.Ok(new { token = result.Token, user_id = result.UserId });
+        return Results.Ok(new { token = result.Token, user_id = result.UserId, role = result.Role });
     }
 
     private static async Task<IResult> LoginAsync(

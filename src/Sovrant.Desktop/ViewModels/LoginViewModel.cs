@@ -90,7 +90,10 @@ public partial class LoginViewModel : ObservableObject
             }
 
             await _credentialStore.StoreAsync(StoredTokenKey, result.Token!).ConfigureAwait(true);
-            LoginSucceeded?.Invoke(result.UserId!, "admin", Email.Trim());
+            // Honor the role the identity service assigned. Only the first registrant
+            // is "admin"; subsequent registrants are "user" and must not inherit
+            // admin powers just because they used the register form.
+            LoginSucceeded?.Invoke(result.UserId!, result.Role ?? "user", Email.Trim());
         }
         finally
         {

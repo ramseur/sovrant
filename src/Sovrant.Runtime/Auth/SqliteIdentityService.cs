@@ -108,13 +108,13 @@ internal sealed partial class SqliteIdentityService : IIdentityService
     public async Task<RegisterResult> RegisterAsync(string email, string password, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(email))
-            return new RegisterResult(false, null, null, "Email is required.");
+            return new RegisterResult(false, null, null, null, "Email is required.");
         if (string.IsNullOrWhiteSpace(password) || password.Length < MinPasswordLength)
-            return new RegisterResult(false, null, null, $"Password must be at least {MinPasswordLength} characters.");
+            return new RegisterResult(false, null, null, null, $"Password must be at least {MinPasswordLength} characters.");
 
         var isFirst = await IsFirstRunAsync(ct).ConfigureAwait(false);
         if (!isFirst && !await IsRegistrationOpenAsync(ct).ConfigureAwait(false))
-            return new RegisterResult(false, null, null, "Registration is closed.");
+            return new RegisterResult(false, null, null, null, "Registration is closed.");
 
         // Derive a username from the email local part
         var username = SanitizeUsername(email.Split('@')[0]);
@@ -131,7 +131,7 @@ internal sealed partial class SqliteIdentityService : IIdentityService
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode == 19) // SQLITE_CONSTRAINT (unique)
         {
-            return new RegisterResult(false, null, null, "An account with that email already exists.");
+            return new RegisterResult(false, null, null, null, "An account with that email already exists.");
         }
 
         // Store password hash and create personal workspace for every new user.
@@ -150,7 +150,7 @@ internal sealed partial class SqliteIdentityService : IIdentityService
                 ct: ct).ConfigureAwait(false);
 
             LogRegistered(_logger, user.UserId, role);
-            return new RegisterResult(true, issued.Plaintext, user.UserId, null);
+            return new RegisterResult(true, issued.Plaintext, user.UserId, role, null);
         }
 
         // Subsequent registrations: check approval requirement.
@@ -159,7 +159,7 @@ internal sealed partial class SqliteIdentityService : IIdentityService
             // Hold account in pending state — no token issued.
             await _users.UpdateAsync(user.UserId, status: StatusPending, ct: ct).ConfigureAwait(false);
             LogRegistered(_logger, user.UserId, role);
-            return new RegisterResult(true, null, user.UserId, null, IsPendingApproval: true);
+            return new RegisterResult(true, null, user.UserId, role, null, IsPendingApproval: true);
         }
 
         // Approval not required — activate immediately and issue token.
@@ -170,7 +170,7 @@ internal sealed partial class SqliteIdentityService : IIdentityService
             ct: ct).ConfigureAwait(false);
 
         LogRegistered(_logger, user.UserId, role);
-        return new RegisterResult(true, directIssued.Plaintext, user.UserId, null);
+        return new RegisterResult(true, directIssued.Plaintext, user.UserId, role, null);
     }
 
     public async Task<LoginResult> LoginAsync(string email, string password, CancellationToken ct = default)
