@@ -13,10 +13,7 @@
 <div class="login-card">
     <div class="login-title">Sovrant</div>
 
-    @if (_registrationOpen)
-    {
-        <div class="login-sub" style="margin-bottom:8px">Welcome! Create your admin account to get started.</div>
-    }
+    <div class="login-sub" style="margin-bottom:8px">Sign in to continue.</div>
 
     @if (_errorMessage is not null)
     {
@@ -44,21 +41,16 @@
                @onkeydown="OnKeyDown" />
     </div>
 
+    <button class="login-btn" @onclick="LoginAsync" disabled="@_busy">
+        @(_busy ? "Signing in…" : "Sign in")
+    </button>
+
     @if (_registrationOpen)
     {
-        <button class="login-btn" @onclick="RegisterAsync" disabled="@_busy">
-            @(_busy ? "Creating account…" : "Create account")
-        </button>
         <div class="login-divider"></div>
-        <div class="login-sub">Already have an account?</div>
-        <button class="login-btn login-btn-secondary" @onclick="LoginAsync" disabled="@_busy">
-            Sign in instead
-        </button>
-    }
-    else
-    {
-        <button class="login-btn" @onclick="LoginAsync" disabled="@_busy">
-            @(_busy ? "Signing in…" : "Sign in")
+        <div class="login-sub">Don't have an account?</div>
+        <button class="login-btn login-btn-secondary" @onclick="RegisterAsync" disabled="@_busy">
+            @(_busy ? "Creating account…" : "Create account")
         </button>
     }
 

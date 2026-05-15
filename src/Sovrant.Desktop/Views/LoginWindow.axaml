@@ -14,17 +14,9 @@
       <TextBlock Text="Sovrant" FontSize="28" FontWeight="Bold"
                  HorizontalAlignment="Center" Margin="0,0,0,4"/>
 
-      <!-- Subtitle changes based on whether first-boot registration is open -->
-      <TextBlock Text="Create your local account to get started."
-                 FontSize="12" Opacity="0.6"
-                 HorizontalAlignment="Center"
-                 TextWrapping="Wrap" TextAlignment="Center"
-                 IsVisible="{Binding IsRegistrationOpen}"
-                 Margin="0,0,0,4"/>
       <TextBlock Text="Sign in to continue."
                  FontSize="12" Opacity="0.6"
                  HorizontalAlignment="Center"
-                 IsVisible="{Binding !IsRegistrationOpen}"
                  Margin="0,0,0,4"/>
 
       <!-- Email -->
@@ -50,32 +42,22 @@
                  TextWrapping="Wrap"
                  IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 
-      <!-- Primary action: first-boot shows Create account prominently, sign-in is secondary -->
-      <Button Content="Create account"
-              HorizontalAlignment="Stretch"
-              HorizontalContentAlignment="Center"
-              Command="{Binding RegisterCommand}"
-              IsEnabled="{Binding !IsBusy}"
-              IsVisible="{Binding IsRegistrationOpen}"
-              Padding="0,10"/>
-
       <Button Content="Sign in"
               HorizontalAlignment="Stretch"
               HorizontalContentAlignment="Center"
               Command="{Binding LoginCommand}"
               IsEnabled="{Binding !IsBusy}"
-              IsVisible="{Binding !IsRegistrationOpen}"
               Padding="0,10"/>
 
-      <!-- On first boot, show sign-in as a secondary option in case an account already exists -->
+      <!-- Registration option shown only when open -->
       <StackPanel Spacing="6" IsVisible="{Binding IsRegistrationOpen}">
         <Separator/>
-        <TextBlock Text="Already have an account?"
+        <TextBlock Text="Don't have an account?"
                    HorizontalAlignment="Center" Opacity="0.55" FontSize="12"/>
-        <Button Content="Sign in instead"
+        <Button Content="Create account"
                 HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Center"
-                Command="{Binding LoginCommand}"
+                Command="{Binding RegisterCommand}"
                 IsEnabled="{Binding !IsBusy}"
                 Padding="0,8"/>
       </StackPanel>
