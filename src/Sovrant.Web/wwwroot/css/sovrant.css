@@ -3013,10 +3013,14 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .form-group label { font-size: 12px; color: var(--text-secondary); }
 .form-group input, .form-group select { background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 6px; padding: 7px 10px; font-size: 13px; color: var(--text-primary); outline: none; }
 .form-group input:focus, .form-group select:focus { border-color: var(--brand-primary); }
-.toggle-row { flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--surface-hover); border: 1px solid var(--surface-border); border-radius: 8px; }
+.toggle-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--surface-hover); border: 1px solid var(--surface-border); border-radius: 8px; }
 .toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
 .toggle-switch input { opacity: 0; width: 0; height: 0; }
-.toggle-switch .slider { position: absolute; cursor: pointer; inset: 0; background: var(--surface-border); border-radius: 22px; transition: 0.2s; }
-.toggle-switch .slider:before { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.2s; }
-.toggle-switch input:checked + .slider { background: var(--brand-primary); }
-.toggle-switch input:checked + .slider:before { transform: translateX(18px); }
+.toggle-switch .slider,
+.toggle-switch .toggle-slider { position: absolute; cursor: pointer; inset: 0; background: var(--surface-border); border-radius: 22px; transition: 0.2s; }
+.toggle-switch .slider:before,
+.toggle-switch .toggle-slider:before { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.2s; }
+.toggle-switch input:checked + .slider,
+.toggle-switch input:checked + .toggle-slider { background: var(--brand-primary); }
+.toggle-switch input:checked + .slider:before,
+.toggle-switch input:checked + .toggle-slider:before { transform: translateX(18px); }
