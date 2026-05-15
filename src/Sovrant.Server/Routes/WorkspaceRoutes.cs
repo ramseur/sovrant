@@ -36,40 +36,8 @@ internal static class WorkspaceRoutes
 
     // ── Access control ─────────────────────────────────────────────────────
 
-    /// <summary>Any workspace member (or global admin) may read.</summary>
-    private static async Task<IResult?> RequireWorkspaceAccess(
-        HttpContext ctx, string workspaceId, IWorkspaceService svc, CancellationToken ct)
-    {
-        if (ctx.IsAdmin()) return null;
-        var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
-        if (!await svc.IsMemberAsync(workspaceId, userId, ct).ConfigureAwait(false))
-            return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
-        return null;
-    }
-
-    /// <summary>Workspace owner, workspace admin, or global admin may manage members/config.</summary>
-    private static async Task<IResult?> RequireWorkspaceManage(
-        HttpContext ctx, string workspaceId, IWorkspaceService svc, CancellationToken ct)
-    {
-        if (ctx.IsAdmin()) return null;
-        var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
-        var role = await svc.GetMemberRoleAsync(workspaceId, userId, ct).ConfigureAwait(false);
-        if (role is null || !role.Value.IsAtLeast(WorkspaceRole.Admin))
-            return Results.Json(new { error = "Workspace admin role required." }, statusCode: StatusCodes.Status403Forbidden);
-        return null;
-    }
-
-    /// <summary>Only the workspace owner or global admin may delete the workspace.</summary>
-    private static async Task<IResult?> RequireWorkspaceOwner(
-        HttpContext ctx, string workspaceId, IWorkspaceService svc, CancellationToken ct)
-    {
-        if (ctx.IsAdmin()) return null;
-        var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
-        var role = await svc.GetMemberRoleAsync(workspaceId, userId, ct).ConfigureAwait(false);
-        if (role is null || role.Value != WorkspaceRole.Owner)
-            return Results.Json(new { error = "Workspace owner role required." }, statusCode: StatusCodes.Status403Forbidden);
-        return null;
-    }
+    // Workspace access guards live in Sovrant.Server.Auth.WorkspaceAuthGuards
+    // so ProjectRoutes and ArtifactRoutes can share the same implementation.
 
     // ── Workspace CRUD ─────────────────────────────────────────────────────
 
@@ -107,7 +75,7 @@ internal static class WorkspaceRoutes
     private static async Task<IResult> GetWorkspace(
         string id, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
-        var deny = await RequireWorkspaceAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, id, svc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
         var ws = await svc.GetAsync(id, ct).ConfigureAwait(false);
         return ws is null ? Results.NotFound(new { error = "Workspace not found." }) : Results.Ok(ws);
@@ -117,7 +85,7 @@ internal static class WorkspaceRoutes
         string id, UpdateWorkspaceRequest req, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        var deny = await RequireWorkspaceAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, id, svc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
         var updated = await svc.UpdateAsync(id, req.Name, req.Slug, ct).ConfigureAwait(false);
         return updated is null
@@ -128,7 +96,7 @@ internal static class WorkspaceRoutes
     private static async Task<IResult> DeleteWorkspace(
         string id, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
-        var deny = await RequireWorkspaceOwner(ctx, id, svc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceOwnerAsync(ctx, id, svc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
         var deleted = await svc.DeleteAsync(id, ct).ConfigureAwait(false);
         if (!deleted)
@@ -141,7 +109,7 @@ internal static class WorkspaceRoutes
     private static async Task<IResult> ListMembers(
         string id, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
-        var deny = await RequireWorkspaceAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, id, svc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
         var members = await svc.ListMembersAsync(id, ct).ConfigureAwait(false);
         return Results.Ok(new { members });
@@ -151,7 +119,7 @@ internal static class WorkspaceRoutes
         string id, AddMemberRequest req, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        var deny = await RequireWorkspaceManage(ctx, id, svc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceManageAsync(ctx, id, svc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
         if (string.IsNullOrWhiteSpace(req.UserId))
             return Results.BadRequest(new { error = "user_id is required." });
@@ -169,7 +137,7 @@ internal static class WorkspaceRoutes
     {
         if (!InputValidation.IsValidResourceId(userId))
             return Results.BadRequest(new { error = "Invalid user ID format." });
-        var deny = await RequireWorkspaceManage(ctx, id, svc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceManageAsync(ctx, id, svc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
         var removed = await svc.RemoveMemberAsync(id, userId, ct).ConfigureAwait(false);
         if (!removed)
@@ -183,7 +151,7 @@ internal static class WorkspaceRoutes
         string id, CreateInviteRequest req, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        var deny = await RequireWorkspaceManage(ctx, id, svc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceManageAsync(ctx, id, svc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
         if (string.IsNullOrWhiteSpace(req.Email))
             return Results.BadRequest(new { error = "Email is required." });
@@ -199,7 +167,7 @@ internal static class WorkspaceRoutes
     private static async Task<IResult> DeleteInvite(
         string id, string inviteId, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
-        var deny = await RequireWorkspaceManage(ctx, id, svc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceManageAsync(ctx, id, svc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
         var deleted = await svc.DeleteInviteAsync(inviteId, ct).ConfigureAwait(false);
         return deleted
@@ -226,7 +194,7 @@ internal static class WorkspaceRoutes
     private static async Task<IResult> GetConfig(
         string id, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
-        var deny = await RequireWorkspaceAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, id, svc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
         var config = await svc.GetConfigAsync(id, ct).ConfigureAwait(false);
         return Results.Ok(new { config });
@@ -236,7 +204,7 @@ internal static class WorkspaceRoutes
         string id, Dictionary<string, string> values, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(values);
-        var deny = await RequireWorkspaceManage(ctx, id, svc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceManageAsync(ctx, id, svc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
         await svc.SetConfigAsync(id, values, ct).ConfigureAwait(false);
         return Results.Ok(new { updated = true });
@@ -247,7 +215,7 @@ internal static class WorkspaceRoutes
     private static async Task<IResult> GetUsage(
         string id, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
-        var deny = await RequireWorkspaceAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, id, svc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
         var usage = await svc.GetUsageAsync(id, ct).ConfigureAwait(false);
         return Results.Ok(usage);
@@ -258,7 +226,7 @@ internal static class WorkspaceRoutes
     private static async Task<IResult> ListMemory(
         string id, string? layer, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
-        var deny = await RequireWorkspaceAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, id, svc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
         var memory = await svc.ListMemoryAsync(id, layer, ct).ConfigureAwait(false);
         return Results.Ok(new { memory });
@@ -268,7 +236,7 @@ internal static class WorkspaceRoutes
         string id, SaveWorkspaceMemoryRequest req, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        var deny = await RequireWorkspaceAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, id, svc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
         if (string.IsNullOrWhiteSpace(req.Layer))
             return Results.BadRequest(new { error = "Layer is required." });
@@ -293,7 +261,7 @@ internal static class WorkspaceRoutes
     private static async Task<IResult> DeleteMemory(
         string id, string memoryId, HttpContext ctx, IWorkspaceService svc, CancellationToken ct)
     {
-        var deny = await RequireWorkspaceAccess(ctx, id, svc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, id, svc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
         var deleted = await svc.DeleteMemoryAsync(memoryId, ct).ConfigureAwait(false);
         return deleted

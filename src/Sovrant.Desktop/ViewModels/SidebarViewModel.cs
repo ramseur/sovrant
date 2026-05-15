@@ -223,10 +223,11 @@ public partial class SidebarViewModel : ViewModelBase
             response.EnsureSuccessStatusCode();
             using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
             using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var models = new List<string>();
             if (doc.RootElement.TryGetProperty("data", out var data))
                 foreach (var item in data.EnumerateArray())
-                    if (item.TryGetProperty("id", out var id) && id.GetString() is { } modelId)
+                    if (item.TryGetProperty("id", out var id) && id.GetString() is { } modelId && seen.Add(modelId))
                         models.Add(modelId);
             models.Sort(StringComparer.OrdinalIgnoreCase);
             return models;
@@ -241,11 +242,16 @@ public partial class SidebarViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void SelectModel(ModelOption option)
+    private async Task SelectModelAsync(ModelOption option)
     {
         if (option.Group is null) return;
         var group = option.Group;
-        var apiKey = new string(group.ApiKey.Where(c => c < 128).ToArray()).Trim();
+
+        // Retrieve credential on demand — never carried in view-model state.
+        var rawKey = string.IsNullOrWhiteSpace(group.CredentialId)
+            ? string.Empty
+            : await _credentials.RetrieveAsync(group.CredentialId) ?? string.Empty;
+        var apiKey = new string(rawKey.Where(c => c < 128).ToArray()).Trim();
 
         // Hot-swap runtime config.
         _config.ApiKey = apiKey;
@@ -253,9 +259,7 @@ public partial class SidebarViewModel : ViewModelBase
         _config.Model = option.Model;
 
         if (_authProvider is not null)
-        {
             _authProvider.ApiKey = apiKey;
-        }
 
         if (!string.IsNullOrWhiteSpace(group.BaseUrl))
         {
@@ -277,63 +281,73 @@ public partial class SidebarViewModel : ViewModelBase
         IsDropdownOpen = false;
         SelectedTreeGroup = null;
 
-        _ = PersistActiveProfileAsync(new ProviderProfileEntry
+        await PersistActiveProfileAsync(new ProviderProfileEntry
         {
             ProfileId = group.ProfileId,
             CredentialId = group.CredentialId,
             Provider = group.Provider,
             Model = option.Model,
-            ApiKey = apiKey,
             BaseUrl = group.BaseUrl,
             MaxTokens = group.MaxTokens,
         });
     }
 
-    private void SwitchToProfile(ProviderProfileEntry profile)
+    private async void SwitchToProfile(ProviderProfileEntry profile)
     {
-        var apiKey = new string(profile.ApiKey.Where(c => c < 128).ToArray()).Trim();
-
-        // Hot-swap runtime config.
-        _config.ApiKey = apiKey;
-        _config.MaxTokens = profile.MaxTokens;
-
-        if (_authProvider is not null)
+        try
         {
-            _authProvider.ApiKey = apiKey;
-        }
+            // Retrieve the credential on demand — view-model state never carries
+            // a plaintext key between user interactions.
+            var rawKey = string.IsNullOrWhiteSpace(profile.CredentialId)
+                ? string.Empty
+                : await _credentials.RetrieveAsync(profile.CredentialId) ?? string.Empty;
+            var apiKey = new string(rawKey.Where(c => c < 128).ToArray()).Trim();
 
-        if (!string.IsNullOrWhiteSpace(profile.BaseUrl))
+            // Hot-swap runtime config.
+            _config.ApiKey = apiKey;
+            _config.MaxTokens = profile.MaxTokens;
+
+            if (_authProvider is not null)
+                _authProvider.ApiKey = apiKey;
+
+            if (!string.IsNullOrWhiteSpace(profile.BaseUrl))
+            {
+                var parsed = new Uri(profile.BaseUrl);
+                _config.BaseUrl = parsed;
+                if (_authProvider is not null) _authProvider.BaseUrl = parsed;
+            }
+            else
+            {
+                _config.BaseUrl = null;
+                if (_authProvider is not null) _authProvider.BaseUrl = null;
+            }
+
+            if (!string.IsNullOrWhiteSpace(profile.Model))
+                _config.Model = profile.Model;
+
+            // Update display.
+            CurrentModel = ShortenModelName(_config.Model);
+            CurrentProvider = profile.Provider;
+            IsConnected = !string.IsNullOrWhiteSpace(apiKey);
+            ConnectionStatus = IsConnected ? "Connected" : "No API key";
+
+            await PersistActiveProfileAsync(profile);
+        }
+        catch (Exception ex)
         {
-            var parsed = new Uri(profile.BaseUrl);
-            _config.BaseUrl = parsed;
-            if (_authProvider is not null) _authProvider.BaseUrl = parsed;
+            System.Diagnostics.Debug.WriteLine($"[SidebarViewModel] SwitchToProfile failed: {ex}");
         }
-        else
-        {
-            _config.BaseUrl = null;
-            if (_authProvider is not null) _authProvider.BaseUrl = null;
-        }
-
-        if (!string.IsNullOrWhiteSpace(profile.Model))
-            _config.Model = profile.Model;
-
-        // Update display.
-        CurrentModel = ShortenModelName(_config.Model);
-        CurrentProvider = profile.Provider;
-        IsConnected = !string.IsNullOrWhiteSpace(apiKey);
-        ConnectionStatus = IsConnected ? "Connected" : "No API key";
-
-        _ = PersistActiveProfileAsync(profile);
     }
 
     public async Task LoadProviderProfilesAsync()
     {
-        var rows = await _profileStore.ListAsync(App.SovrantUserId);
+        // Credentials are NOT loaded here — retrieved on demand at activate-time
+        // so plaintext keys don't sit in view-model state for the process lifetime.
+        var rows = await _profileStore.ListUserAndWorkspaceAsync(
+            App.SovrantUserId, ActiveContext.ActiveWorkspaceId);
         var entries = new List<ProviderProfileEntry>(rows.Count);
         foreach (var row in rows)
         {
-            var rawKey = await _credentials.RetrieveAsync(row.CredentialId) ?? string.Empty;
-            var apiKey = new string(rawKey.Where(c => c < 128).ToArray()).Trim();
             entries.Add(new ProviderProfileEntry
             {
                 ProfileId = row.ProfileId,
@@ -341,35 +355,11 @@ public partial class SidebarViewModel : ViewModelBase
                 Name = row.Name,
                 Provider = row.ProviderKind,
                 Model = row.DefaultModel ?? string.Empty,
-                ApiKey = apiKey,
+                ApiKey = string.Empty,
                 BaseUrl = row.BaseUrl,
                 MaxTokens = row.MaxTokens ?? 32000,
+                IsWorkspaceProfile = row.IsAdminManaged,
             });
-        }
-
-        // Include workspace-level profiles so all workspace members can use them.
-        var workspaceId = ActiveContext.ActiveWorkspaceId;
-        if (!string.IsNullOrEmpty(workspaceId))
-        {
-            var wsRows = await _profileStore.ListByWorkspaceAsync(workspaceId);
-            foreach (var row in wsRows)
-            {
-                if (entries.Any(e => e.ProfileId == row.ProfileId)) continue;
-                var rawKey = await _credentials.RetrieveAsync(row.CredentialId) ?? string.Empty;
-                var apiKey = new string(rawKey.Where(c => c < 128).ToArray()).Trim();
-                entries.Add(new ProviderProfileEntry
-                {
-                    ProfileId = row.ProfileId,
-                    CredentialId = row.CredentialId,
-                    Name = row.Name,
-                    Provider = row.ProviderKind,
-                    Model = row.DefaultModel ?? string.Empty,
-                    ApiKey = apiKey,
-                    BaseUrl = row.BaseUrl,
-                    MaxTokens = row.MaxTokens ?? 32000,
-                    IsWorkspaceProfile = true,
-                });
-            }
         }
 
         var savedProfileId = await _prefs.GetAsync(App.SovrantUserId, UserPreferenceKeys.ActiveProviderProfileId)
@@ -428,7 +418,6 @@ public partial class SidebarViewModel : ViewModelBase
                     Provider = profile.Provider,
                     ProfileId = profile.ProfileId,
                     CredentialId = profile.CredentialId,
-                    ApiKey = profile.ApiKey,
                     BaseUrl = profile.BaseUrl,
                     MaxTokens = profile.MaxTokens,
                     IsWorkspaceProfile = profile.IsWorkspaceProfile,
@@ -475,8 +464,12 @@ public partial class SidebarViewModel : ViewModelBase
 
             // Refresh the credential under the global key so the next boot's
             // fallback path (no profile) finds the same value too.
-            if (!string.IsNullOrWhiteSpace(profile.ApiKey))
-                await _credentials.StoreAsync(Sovrant.Api.Auth.CredentialKeys.LlmApiKey, profile.ApiKey);
+            if (!string.IsNullOrWhiteSpace(profile.CredentialId))
+            {
+                var stored = await _credentials.RetrieveAsync(profile.CredentialId);
+                if (!string.IsNullOrWhiteSpace(stored))
+                    await _credentials.StoreAsync(Sovrant.Api.Auth.CredentialKeys.LlmApiKey, stored);
+            }
         }
         catch { /* best effort */ }
     }

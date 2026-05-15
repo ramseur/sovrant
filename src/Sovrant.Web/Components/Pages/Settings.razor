@@ -360,10 +360,7 @@
             if (!string.IsNullOrWhiteSpace(_apiKey))
             {
                 Config.ApiKey = _apiKey.Trim();
-                Environment.SetEnvironmentVariable("LLM_API_KEY", _apiKey.Trim());
                 AuthProvider.ApiKey = _apiKey.Trim();
-                if (_baseUrl.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
-                    Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", _apiKey.Trim());
             }
 
             if (!string.IsNullOrWhiteSpace(_baseUrl))
@@ -371,13 +368,11 @@
                 var parsed = new Uri(_baseUrl.Trim());
                 Config.BaseUrl = parsed;
                 AuthProvider.BaseUrl = parsed;
-                Environment.SetEnvironmentVariable("LLM_BASE_URL", _baseUrl.Trim());
             }
             else
             {
                 Config.BaseUrl = null;
                 AuthProvider.BaseUrl = null;
-                Environment.SetEnvironmentVariable("LLM_BASE_URL", null);
             }
 
             ActiveContext.SetModel(Config.Model, _selectedProvider);

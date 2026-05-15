@@ -539,7 +539,7 @@ public static class ServiceCollectionExtensions
             if (int.TryParse(wsMaxTokensRaw, System.Globalization.NumberStyles.Integer,
                     System.Globalization.CultureInfo.InvariantCulture, out var wsMaxTokens))
             {
-                config.MaxTokens = wsMaxTokens;
+                config.MaxTokens = PreferenceValidation.ClampMaxTokens(wsMaxTokens);
                 wsMaxTokensSet = true;
             }
 
@@ -554,16 +554,18 @@ public static class ServiceCollectionExtensions
 
         // Scalar prefs.
         var model = await prefs.GetAsync(userId, Preferences.UserPreferenceKeys.Model, ct).ConfigureAwait(false);
-        if (!string.IsNullOrEmpty(model))
+        if (!string.IsNullOrEmpty(model) && PreferenceValidation.IsValidModelName(model))
             config.Model = model;
 
         var maxTokensRaw = await prefs.GetAsync(userId, Preferences.UserPreferenceKeys.MaxTokens, ct).ConfigureAwait(false);
         if (!wsMaxTokensSet && int.TryParse(maxTokensRaw, System.Globalization.NumberStyles.Integer,
                 System.Globalization.CultureInfo.InvariantCulture, out var maxTokens))
-            config.MaxTokens = maxTokens;
+            config.MaxTokens = PreferenceValidation.ClampMaxTokens(maxTokens);
 
         var baseUrlRaw = await prefs.GetAsync(userId, Preferences.UserPreferenceKeys.BaseUrl, ct).ConfigureAwait(false);
-        if (!string.IsNullOrEmpty(baseUrlRaw) && Uri.TryCreate(baseUrlRaw, UriKind.Absolute, out var baseUrl))
+        if (!string.IsNullOrEmpty(baseUrlRaw)
+            && Uri.TryCreate(baseUrlRaw, UriKind.Absolute, out var baseUrl)
+            && PreferenceValidation.IsAllowedBaseUrlScheme(baseUrl))
             config.BaseUrl = baseUrl;
 
         var permModeRaw = await prefs.GetAsync(userId, Preferences.UserPreferenceKeys.PermissionMode, ct).ConfigureAwait(false);
@@ -585,12 +587,15 @@ public static class ServiceCollectionExtensions
             var profile = await profileStore.GetAsync(activeProfileId, ct).ConfigureAwait(false);
             if (profile is not null)
             {
-                if (!string.IsNullOrEmpty(profile.DefaultModel) && string.IsNullOrEmpty(model))
+                if (!string.IsNullOrEmpty(profile.DefaultModel)
+                    && string.IsNullOrEmpty(model)
+                    && PreferenceValidation.IsValidModelName(profile.DefaultModel))
                     config.Model = profile.DefaultModel;
                 if (profile.MaxTokens.HasValue)
-                    config.MaxTokens = profile.MaxTokens.Value;
+                    config.MaxTokens = PreferenceValidation.ClampMaxTokens(profile.MaxTokens.Value);
                 if (!string.IsNullOrEmpty(profile.BaseUrl)
-                    && Uri.TryCreate(profile.BaseUrl, UriKind.Absolute, out var profileBaseUrl))
+                    && Uri.TryCreate(profile.BaseUrl, UriKind.Absolute, out var profileBaseUrl)
+                    && PreferenceValidation.IsAllowedBaseUrlScheme(profileBaseUrl))
                     config.BaseUrl = profileBaseUrl;
                 apiKey = await credentials.RetrieveAsync(profile.CredentialId, ct).ConfigureAwait(false);
             }

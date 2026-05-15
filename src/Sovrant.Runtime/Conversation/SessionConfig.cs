@@ -12,6 +12,7 @@ public sealed class SessionConfig
     private volatile string? _model;
     private volatile int _permissionModeInt = -1; // -1 = use global default
     private IReadOnlyList<string>? _allowedMcpServers;
+    private HashSet<string>? _allowedMcpServersSet;
 
     /// <summary>
     /// Names of MCP servers whose tools are exposed to the LLM for this session.
@@ -21,8 +22,20 @@ public sealed class SessionConfig
     public IReadOnlyList<string>? AllowedMcpServers
     {
         get => _allowedMcpServers;
-        set => _allowedMcpServers = value;
+        set
+        {
+            _allowedMcpServers = value;
+            _allowedMcpServersSet = value is null
+                ? null
+                : new HashSet<string>(value, StringComparer.Ordinal);
+        }
     }
+
+    /// <summary>
+    /// Set-backed view of <see cref="AllowedMcpServers"/> for O(1) membership
+    /// tests in hot paths. Rebuilt only when the list is reassigned.
+    /// </summary>
+    internal IReadOnlySet<string>? AllowedMcpServersSet => _allowedMcpServersSet;
 
     /// <summary>
     /// Per-session model override. <see langword="null"/> means use the global default.

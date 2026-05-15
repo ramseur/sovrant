@@ -196,7 +196,8 @@
         _treeGroups = [];
         try
         {
-            var rows = await ProfileStore.ListAsync(Session.UserId!);
+            var rows = await ProfileStore.ListUserAndWorkspaceAsync(
+                Session.UserId!, ActiveContext.WorkspaceId);
             var list = new List<ProviderProfileItem>(rows.Count);
             foreach (var row in rows)
             {
@@ -207,29 +208,9 @@
                     Provider: row.ProviderKind,
                     Model: row.DefaultModel ?? string.Empty,
                     BaseUrl: row.BaseUrl ?? string.Empty,
-                    MaxTokens: row.MaxTokens ?? 32000));
+                    MaxTokens: row.MaxTokens ?? 32000,
+                    IsWorkspaceProfile: row.IsAdminManaged));
             }
-
-            // Include workspace-level profiles so all workspace members can use them.
-            var workspaceId = ActiveContext.WorkspaceId;
-            if (!string.IsNullOrEmpty(workspaceId))
-            {
-                var wsRows = await ProfileStore.ListByWorkspaceAsync(workspaceId);
-                foreach (var row in wsRows)
-                {
-                    if (list.Any(p => p.ProfileId == row.ProfileId)) continue;
-                    list.Add(new ProviderProfileItem(
-                        ProfileId: row.ProfileId,
-                        CredentialId: row.CredentialId,
-                        Name: row.Name,
-                        Provider: row.ProviderKind,
-                        Model: row.DefaultModel ?? string.Empty,
-                        BaseUrl: row.BaseUrl ?? string.Empty,
-                        MaxTokens: row.MaxTokens ?? 32000,
-                        IsWorkspaceProfile: true));
-                }
-            }
-
             _providerProfiles = list;
             BuildTreeGroups();
         }
