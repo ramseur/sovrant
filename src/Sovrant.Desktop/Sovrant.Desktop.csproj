@@ -4,6 +4,7 @@
     <OutputType>WinExe</OutputType>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- Tmds.DBus.Protocol is a transitive Avalonia dependency (Linux D-Bus); suppress known vuln. -->
     <NoWarn>$(NoWarn);NU1903</NoWarn>
@@ -13,6 +14,11 @@
          CA1848: LoggerMessage delegates are overkill for a desktop app's handful of log sites. -->
     <NoWarn>$(NoWarn);CA1515;CA2007;CA1031;CA1848;CA1003;CA1062;CA1716</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\icon.png" />
+    <None Include="Assets\icon.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.0" />

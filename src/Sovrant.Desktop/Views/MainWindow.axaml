@@ -5,6 +5,7 @@
         x:Class="Sovrant.Desktop.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="Sovrant"
+        Icon="avares://Sovrant.Desktop/Assets/icon.png"
         Width="1280" Height="800"
         MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen"
