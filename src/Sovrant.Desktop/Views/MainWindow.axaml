@@ -131,10 +131,10 @@
                                     Foreground="{Binding IsConnectGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
                             <Button Content="⚙" ToolTip.Tip="Settings"
-                                    Command="{Binding OpenSettingsCommand}"
+                                    Command="{Binding SelectGroupCommand}" CommandParameter="settings"
                                     Width="31" Height="32" CornerRadius="7" FontSize="14" Padding="0"
-                                    Background="Transparent"
-                                    Foreground="{DynamicResource TextSecondary}"
+                                    Background="{Binding IsSettingsGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
+                                    Foreground="{Binding IsSettingsGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
                             <Button Content="🔑" ToolTip.Tip="Admin"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="admin"

@@ -28,6 +28,7 @@ public partial class MainViewModel : ViewModelBase
     public bool IsConnectGroup => SelectedGroup == "connect";
     public bool IsGovernanceGroup => SelectedGroup == "governance";
     public bool IsAdminGroup => SelectedGroup == "admin";
+    public bool IsSettingsGroup => SelectedGroup == "settings";
 
     partial void OnSelectedGroupChanged(string value)
     {
@@ -38,6 +39,7 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsConnectGroup));
         OnPropertyChanged(nameof(IsGovernanceGroup));
         OnPropertyChanged(nameof(IsAdminGroup));
+        OnPropertyChanged(nameof(IsSettingsGroup));
     }
 
     private readonly IServiceProvider _services;
@@ -115,14 +117,14 @@ public partial class MainViewModel : ViewModelBase
             case "connect":
                 OnNavigationRequested(this, "Integrations");
                 break;
+            case "settings":
+                OnNavigationRequested(this, "Settings");
+                break;
             case "admin" when _principal.IsAdmin:
                 CurrentPage = ResolveAdmin("users");
                 break;
         }
     }
-
-    [RelayCommand]
-    private void OpenSettings() => OnNavigationRequested(this, "Settings");
 
     [RelayCommand]
     private static Task LogoutAsync() => App.LogoutAsync();
