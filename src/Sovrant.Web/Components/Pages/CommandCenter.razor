@@ -294,7 +294,7 @@
             {
                 try
                 {
-                    var entries = await Sessions.LoadAsync(runId, Sovrant.Web.Program.SovrantUserId);
+                    var entries = await Sessions.LoadAsync(runId, ownerUserId: null);
                     _focusedTurns = entries.ToList();
                 }
                 catch
@@ -336,7 +336,10 @@
         _loading = true;
         try
         {
-            _state = await Aggregator.GetActiveStateAsync(Sovrant.Web.Program.SovrantUserId);
+            // Match desktop behavior: show every session and run, not just the
+            // current user's. Pre-login chats land under a legacy owner ID and
+            // would otherwise be invisible here.
+            _state = await Aggregator.GetActiveStateAsync(ownerUserId: null);
             _error = string.Empty;
         }
         catch (Exception ex)
