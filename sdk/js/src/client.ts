@@ -8,12 +8,22 @@ import type {
   AgentRunFilter,
   AgentTemplateDetail,
   AgentTemplateSummary,
+  ApprovalStatus,
+  AuthIdentity,
+  AuthTokenResponse,
+  ChangePasswordRequest,
   CommandCenterState,
+  IssueResetTokenResponse,
   KnowledgeSaveResponse,
+  LoginRequest,
   McpServerEntry,
   ArtifactEntry,
   ArtifactScope,
   ApiToken,
+  RegisterRequest,
+  RegisterResponse,
+  RegistrationStatus,
+  UseResetTokenRequest,
   ChatCallOptions,
   ChatCompletionChunk,
   ChatCompletionRequest,
@@ -412,6 +422,118 @@ export class SovrantClient {
     }
   }
 
+  // ── Auth (Phase 85 — Identity & Login Parity) ─────────────────────────
+
+  /**
+   * Register a new user with email + password (POST /v1/auth/register).
+   * Unauthenticated.
+   *
+   * Returns either an `AuthTokenResponse` (auto-approve path — call
+   * `setToken()` to start authenticating subsequent requests) or a
+   * pending-approval acknowledgement when the admin approval gate is on.
+   * Use `isPendingApproval()` to discriminate.
+   */
+  async register(request: RegisterRequest): Promise<RegisterResponse> {
+    const res = await this.fetchWithRetry("/v1/auth/register", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as RegisterResponse;
+  }
+
+  /**
+   * Log in with email + password (POST /v1/auth/login). Unauthenticated.
+   * Returns an `svt_*` token the caller should use for subsequent requests.
+   */
+  async login(request: LoginRequest): Promise<AuthTokenResponse> {
+    const res = await this.fetchWithRetry("/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as AuthTokenResponse;
+  }
+
+  /**
+   * Log out (POST /v1/auth/logout). Revokes the current bearer token on
+   * the server. The local SDK token is unchanged — call `setToken("")` if
+   * you want the client to stop sending it.
+   */
+  async logout(): Promise<void> {
+    await this.fetchWithRetry("/v1/auth/logout", { method: "POST" });
+  }
+
+  /**
+   * Cheap identity probe (GET /v1/auth/me). Returns `{ user_id, role }` only.
+   * For the full profile + derived stats use `getMe()`.
+   */
+  async getAuthIdentity(): Promise<AuthIdentity> {
+    const res = await this.fetchWithRetry("/v1/auth/me");
+    return (await res.json()) as AuthIdentity;
+  }
+
+  /** Change the caller's own password (POST /v1/auth/change-password). */
+  async changePassword(request: ChangePasswordRequest): Promise<void> {
+    await this.fetchWithRetry("/v1/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+  }
+
+  /**
+   * Consume an admin-issued reset token to set a new password
+   * (POST /v1/auth/use-reset-token). Unauthenticated.
+   */
+  async useResetToken(request: UseResetTokenRequest): Promise<void> {
+    await this.fetchWithRetry("/v1/auth/use-reset-token", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+  }
+
+  /** Is open registration enabled? (GET /v1/auth/registration/status). */
+  async getRegistrationStatus(): Promise<RegistrationStatus> {
+    const res = await this.fetchWithRetry("/v1/auth/registration/status");
+    return (await res.json()) as RegistrationStatus;
+  }
+
+  /** Admin: open registration (POST /v1/auth/registration/open). */
+  async openRegistration(): Promise<RegistrationStatus> {
+    const res = await this.fetchWithRetry("/v1/auth/registration/open", {
+      method: "POST",
+    });
+    return (await res.json()) as RegistrationStatus;
+  }
+
+  /** Admin: close registration (POST /v1/auth/registration/close). */
+  async closeRegistration(): Promise<RegistrationStatus> {
+    const res = await this.fetchWithRetry("/v1/auth/registration/close", {
+      method: "POST",
+    });
+    return (await res.json()) as RegistrationStatus;
+  }
+
+  /** Admin: read approval-gate status (GET /v1/auth/approval/status). */
+  async getApprovalStatus(): Promise<ApprovalStatus> {
+    const res = await this.fetchWithRetry("/v1/auth/approval/status");
+    return (await res.json()) as ApprovalStatus;
+  }
+
+  /** Admin: require admin approval for new registrations. */
+  async enableApproval(): Promise<ApprovalStatus> {
+    const res = await this.fetchWithRetry("/v1/auth/approval/enable", {
+      method: "POST",
+    });
+    return (await res.json()) as ApprovalStatus;
+  }
+
+  /** Admin: stop requiring admin approval for new registrations. */
+  async disableApproval(): Promise<ApprovalStatus> {
+    const res = await this.fetchWithRetry("/v1/auth/approval/disable", {
+      method: "POST",
+    });
+    return (await res.json()) as ApprovalStatus;
+  }
+
   // ── Users (Me) ────────────────────────────────────────────────────────
 
   /** Get the authenticated user's profile. */
@@ -494,6 +616,31 @@ export class SovrantClient {
     await this.fetchWithRetry(`/v1/users/${encodeURIComponent(userId)}/reactivate`, {
       method: "POST",
     });
+  }
+
+  /**
+   * Issue a one-time password reset token for a user (admin only).
+   * The plaintext token has a 24-hour TTL and is returned exactly once.
+   * The user redeems it via `useResetToken()`.
+   */
+  async issueResetToken(userId: string): Promise<IssueResetTokenResponse> {
+    const res = await this.fetchWithRetry(
+      `/v1/users/${encodeURIComponent(userId)}/reset-password`,
+      { method: "POST" }
+    );
+    return (await res.json()) as IssueResetTokenResponse;
+  }
+
+  /**
+   * Approve a pending registration (admin only). Returns 409 if the user is
+   * not in pending state.
+   */
+  async approveUser(userId: string): Promise<{ approved: string }> {
+    const res = await this.fetchWithRetry(
+      `/v1/users/${encodeURIComponent(userId)}/approve`,
+      { method: "POST" }
+    );
+    return (await res.json()) as { approved: string };
   }
 
   /** List session IDs owned by a user (admin or self). */

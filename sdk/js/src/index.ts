@@ -45,6 +45,17 @@ export type {
   ApiToken,
   IssueTokenRequest,
   IssueTokenResponse,
+  // Auth (Phase 85)
+  RegisterRequest,
+  RegisterResponse,
+  LoginRequest,
+  AuthTokenResponse,
+  AuthIdentity,
+  ChangePasswordRequest,
+  UseResetTokenRequest,
+  RegistrationStatus,
+  ApprovalStatus,
+  IssueResetTokenResponse,
   // Cost
   CostSummary,
   CostDisabled,
@@ -130,4 +141,4 @@ export type {
   // Knowledge Authoring
   KnowledgeSaveResponse,
 } from "./types.js";
-export { SwarmStatus, SwarmTaskStatus } from "./types.js";
+export { SwarmStatus, SwarmTaskStatus, isPendingApproval } from "./types.js";

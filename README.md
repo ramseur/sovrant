@@ -406,7 +406,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 | `Sovrant.Agents` | Orchestration: team registry (SQLite-backed), agent factory, dual backends (isolated + shared), 25 agent templates, swarm orchestrator, unified run ledger, inter-agent coordination (PM agents + mailbox). |
 | `Sovrant.Mcp` | Shared MCP protocol handlers (tools/list, tools/call, resources, prompts, completions). Consumed by both the CLI's `mcp-server` stdio subcommand and `Sovrant.Server`'s HTTP/SSE MCP transport. |
 | `Sovrant.Lsp` | Language Server Protocol client: JSON-RPC over stdio, manages language server lifecycle, 5 LSP tools. |
-| `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient` covering the 115-endpoint server (incl. `getCommandCenterState` and `updateTeamProfile`), SSE streaming, React `useChat()` hook, 75+ TypeScript interfaces. |
+| `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient` covering the 116-endpoint server (incl. `login` / `register` / `getCommandCenterState` / `updateTeamProfile`), SSE streaming, React `useChat()` hook, 85+ TypeScript interfaces. |
 
 ### Key Design Decisions
 
@@ -749,7 +749,7 @@ dotnet run --project src/Sovrant.Web
 
 The TypeScript/JavaScript SDK (`sdk/js`) provides a typed client for building custom frontends against the Sovrant server.
 
-- **`SovrantClient`** — covers the 115-endpoint server: chat, command center, sessions, users, workspaces, projects, teams (incl. `updateTeamProfile`), missions, swarm, engine, evals, artifacts, and registries
+- **`SovrantClient`** — covers the 116-endpoint server: chat, **auth (login, register, password reset, registration / approval toggles)**, command center, sessions, users (incl. admin `issueResetToken` / `approveUser`), workspaces, projects, teams (incl. `updateTeamProfile`), missions, swarm, engine, evals, artifacts, and registries
 - **SSE streaming** — real-time token-by-token responses with `streamChat()`
 - **React `useChat()` hook** — drop-in conversational UI component
 - **75+ TypeScript interfaces** — full type coverage for all request/response shapes

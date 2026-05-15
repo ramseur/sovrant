@@ -288,6 +288,85 @@ export interface IssueTokenResponse {
   plaintext: string;
 }
 
+// ── Auth (Phase 85 — Identity & Login Parity) ────────────────────────────
+
+/** Body for POST /v1/auth/register. */
+export interface RegisterRequest {
+  email: string;
+  password: string;
+}
+
+/** Body for POST /v1/auth/login. */
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+/**
+ * Result of a successful login or auto-approved register.
+ * The token is an `svt_*` bearer the client should use for subsequent
+ * Authorization headers.
+ */
+export interface AuthTokenResponse {
+  token: string;
+  user_id: string;
+  role: string;
+}
+
+/**
+ * Returned by POST /v1/auth/register. Either an immediate token (auto-approve
+ * path) or a pending-approval acknowledgement (when admin approval is required).
+ */
+export type RegisterResponse =
+  | AuthTokenResponse
+  | {
+      pending_approval: true;
+      user_id: string;
+      role: string;
+      message: string;
+    };
+
+/** Type guard to discriminate the two RegisterResponse variants. */
+export function isPendingApproval(
+  response: RegisterResponse
+): response is Extract<RegisterResponse, { pending_approval: true }> {
+  return (response as { pending_approval?: boolean }).pending_approval === true;
+}
+
+/** Result of GET /v1/auth/me — lightweight identity probe. */
+export interface AuthIdentity {
+  user_id: string;
+  role: string;
+}
+
+/** Body for POST /v1/auth/change-password. */
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+}
+
+/** Body for POST /v1/auth/use-reset-token. */
+export interface UseResetTokenRequest {
+  token: string;
+  new_password: string;
+}
+
+/** Response shape for /v1/auth/registration/* endpoints. */
+export interface RegistrationStatus {
+  registration_open: boolean;
+}
+
+/** Response shape for /v1/auth/approval/* endpoints. */
+export interface ApprovalStatus {
+  approval_required: boolean;
+}
+
+/** Response from admin-issued POST /v1/users/{id}/reset-password. */
+export interface IssueResetTokenResponse {
+  /** The one-time plaintext reset token (24h TTL). Returned once. */
+  reset_token: string;
+}
+
 // ── Workspaces ───────────────────────────────────────────────────────────
 
 /** Workspace record. */
