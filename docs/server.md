@@ -414,34 +414,25 @@ Every LLM provider interaction is optionally wrapped by the **Sovrant Trust Boun
 2. **Ethical Harness** — Sovrant-level content policy enforcement independent of model safety (works with uncensored models)
 3. **Data Sanitizer** — strips PII and corporate data from outbound prompts, restores placeholders on response
 
-Configure via `trust_boundary` in `settings.json`:
+Configure via the **Settings UI** (`/trust-boundary` on Web, **Governance → Trust Boundary** on Desktop). Values persist to the `workspace_settings` table under `trustboundary.*` keys (V018 schema) and hot-reload on save through `LiveSettingsRegistry.ReloadAll()` — no restart needed (Phase 93 Bucket-B steps 3–5).
 
-```json
-{
-  "trust_boundary": {
-    "enabled": true,
-    "sanitizer": {
-      "enabled": true,
-      "mode": "redact",
-      "corporate_domains": ["acme.com", "internal.corp"],
-      "custom_patterns": [{ "name": "codenames", "regex": "\\bProject Titan\\b", "action": "redact" }],
-      "allow_list": ["github.com"],
-      "exempt_providers": ["ollama"]
-    },
-    "ethical_harness": {
-      "enabled": true,
-      "strictness": "standard",
-      "response_scanning": true,
-      "audit_log": true
-    },
-    "intent_verification": {
-      "enabled": true,
-      "clarify_ambiguous": true,
-      "block_harmful_intent": true
-    }
-  }
-}
-```
+Resolution chain (env → DB → snapshot → defaults):
+
+| Setting | DB key (`workspace_settings`) | Env override |
+|---|---|---|
+| Master toggle | `trustboundary.enabled` | — |
+| Sanitizer enabled | `trustboundary.sanitizer.enabled` | — |
+| Sanitizer mode | `trustboundary.sanitizer.mode` | — |
+| Corporate domains | `trustboundary.sanitizer.corporate_domains` (JSON array) | — |
+| Custom patterns | `trustboundary.sanitizer.custom_patterns` (JSON `List<CustomPattern>`) | — |
+| Allow list | `trustboundary.sanitizer.allow_list` | — |
+| Exempt providers | `trustboundary.sanitizer.exempt_providers` | — |
+| Log redactions | `trustboundary.sanitizer.log_redactions` | — |
+| Intent enabled | `trustboundary.intent.enabled` | — |
+| Clarify ambiguous | `trustboundary.intent.clarify_ambiguous` | — |
+| Block harmful intent | `trustboundary.intent.block_harmful` | — |
+
+`TrustBoundaryConfig.SaveToStoreAsync` validates each value (sanitizer mode in the enum, custom regexes compile) before writing — invalid input throws `ArgumentException` instead of half-persisting. The legacy `settings.json` `trust_boundary` block still loads as a snapshot fallback so pre-Phase-93 installs keep working until the first save through the UI.
 
 Blocked responses include `StopReason = "trust_boundary_block"` and a clear explanation of what was blocked and why. The ethical audit log records all blocks and flags for compliance reporting.
 

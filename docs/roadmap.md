@@ -12,7 +12,7 @@ This document tracks planned features, architectural decisions, and the reasonin
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
 - **56 tools** across 17 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, missions, artifacts, documents, quality, swarm, coordination, LSP)
-- **1,689 tests** across 13 projects, 0 failures
+- **1,689 tests** across 10 projects, 0 failures
 - **115 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
