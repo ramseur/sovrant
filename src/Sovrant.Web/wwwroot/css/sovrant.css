@@ -2978,7 +2978,9 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .config-panel-header { display: flex; align-items: center; justify-content: space-between; }
 .config-panel-header h4 { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
 .admin-config-panel h5 { margin: 8px 0 4px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
-.workspace-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--surface-muted); border: 1px solid var(--surface-border); border-radius: 6px; font-size: 13px; color: var(--text-primary); }
+.admin-config-panel input:not([type="checkbox"]), .admin-config-panel select { background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 6px; padding: 7px 10px; font-size: 13px; color: var(--text-primary); outline: none; }
+.admin-config-panel input:not([type="checkbox"]):focus, .admin-config-panel select:focus { border-color: var(--brand-primary); }
+.workspace-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--surface-hover); border: 1px solid var(--surface-border); border-radius: 6px; font-size: 13px; color: var(--text-primary); }
 .inline-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .inline-form input, .inline-form select { flex: 1; min-width: 120px; }
 .provider-add-form { display: flex; flex-direction: column; gap: 8px; }
@@ -2987,7 +2989,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .form-group label { font-size: 12px; color: var(--text-secondary); }
 .form-group input, .form-group select { background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 6px; padding: 7px 10px; font-size: 13px; color: var(--text-primary); outline: none; }
 .form-group input:focus, .form-group select:focus { border-color: var(--brand-primary); }
-.toggle-row { flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--surface-muted); border: 1px solid var(--surface-border); border-radius: 8px; }
+.toggle-row { flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--surface-hover); border: 1px solid var(--surface-border); border-radius: 8px; }
 .toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
 .toggle-switch input { opacity: 0; width: 0; height: 0; }
 .toggle-switch .slider { position: absolute; cursor: pointer; inset: 0; background: var(--surface-border); border-radius: 22px; transition: 0.2s; }

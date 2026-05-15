@@ -347,6 +347,9 @@ public partial class SidebarViewModel : ViewModelBase
             });
         }
 
+        var savedProfileId = await _prefs.GetAsync(App.SovrantUserId, UserPreferenceKeys.ActiveProviderProfileId)
+            .ConfigureAwait(false);
+
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             ProviderProfiles.Clear();
@@ -354,11 +357,23 @@ public partial class SidebarViewModel : ViewModelBase
             foreach (var p in entries)
                 ProviderProfiles.Add(p);
 
-            // Select the profile matching current provider without triggering a switch.
             _suppressProfileSwitch = true;
-            SelectedProfile = ProviderProfiles.FirstOrDefault(p =>
-                p.Provider.Equals(CurrentProvider, StringComparison.OrdinalIgnoreCase))
-                ?? ProviderProfiles.FirstOrDefault();
+            // Prefer the last explicitly chosen profile; never auto-pick if none was saved.
+            if (!string.IsNullOrEmpty(savedProfileId))
+                SelectedProfile = ProviderProfiles.FirstOrDefault(p => p.ProfileId == savedProfileId)
+                    ?? ProviderProfiles.FirstOrDefault(p => p.Provider.Equals(CurrentProvider, StringComparison.OrdinalIgnoreCase));
+            else
+            {
+                SelectedProfile = null;
+                // Profiles exist but none was ever explicitly chosen — prompt the user to select.
+                if (ProviderProfiles.Count > 0 && string.IsNullOrWhiteSpace(_config.ApiKey))
+                {
+                    CurrentModel = "No model";
+                    CurrentProvider = "Select a provider";
+                    IsConnected = false;
+                    ConnectionStatus = "No provider selected";
+                }
+            }
             _suppressProfileSwitch = false;
 
             BuildTreeGroups();

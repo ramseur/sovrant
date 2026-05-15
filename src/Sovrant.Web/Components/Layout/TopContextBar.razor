@@ -167,6 +167,11 @@
             _currentModel = "No model";
             _currentProvider = "Add a provider";
         }
+        else if (!_isConnected && _providerProfiles.Count > 0)
+        {
+            _currentModel = "No model";
+            _currentProvider = "Select a provider";
+        }
         else
         {
             _currentModel = ShortenModelName(Config.Model);
@@ -409,6 +414,11 @@
             {
                 _currentModel = "No model";
                 _currentProvider = "Add a provider";
+            }
+            else if (!_isConnected && _providerProfiles.Count > 0)
+            {
+                _currentModel = "No model";
+                _currentProvider = "Select a provider";
             }
             else
             {
