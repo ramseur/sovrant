@@ -1,0 +1,429 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.OrchestrationView"
+             x:DataType="vm:OrchestrationViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="8">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{Binding TeamCount}" FontSize="12"
+                               Foreground="{DynamicResource TextSecondary}"
+                               VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <Button Content="&#x2699;" ToolTip.Tip="Swarm defaults"
+                            Command="{Binding ToggleSwarmConfigCommand}"
+                            Padding="10,5" CornerRadius="6" FontSize="14"
+                            Background="Transparent" Foreground="{DynamicResource TextPrimary}"
+                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" />
+                    <Button Content="+ New" ToolTip.Tip="New team"
+                            Command="{Binding HintNewCommand}"
+                            Padding="10,5" CornerRadius="6" FontSize="12" FontWeight="SemiBold"
+                            Background="{DynamicResource BrandPrimary}" Foreground="White" />
+                    <Button Content="Refresh"
+                            Command="{Binding RefreshCommand}"
+                            Padding="10,5" CornerRadius="6" FontSize="12"
+                            Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="Orchestration" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                               Text="Teams run solo, sequentially, or as a swarm when Swarm is enabled." />
+                </StackPanel>
+            </DockPanel>
+            <TextBlock Text="{Binding StatusMessage}" FontSize="11"
+                       Foreground="{DynamicResource TextMuted}"
+                       IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+
+        <Grid Margin="32,12,32,24" ColumnDefinitions="320,12,*">
+
+            <!-- Master: teams list -->
+            <Border Grid.Column="0" CornerRadius="10"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                    Padding="8">
+                <ScrollViewer>
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="No teams yet. Use /team create in chat to set one up."
+                                   FontSize="12" TextWrapping="Wrap" Margin="8"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   IsVisible="{Binding !TeamCount}" />
+
+                        <ItemsControl ItemsSource="{Binding Teams}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:TeamItemViewModel">
+                                    <Button Command="{Binding $parent[UserControl].((vm:OrchestrationViewModel)DataContext).SelectTeamCommand}"
+                                            CommandParameter="{Binding}"
+                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                            Padding="10,8" Margin="0,2" CornerRadius="6"
+                                            Background="Transparent" BorderThickness="0" Cursor="Hand">
+                                        <StackPanel Spacing="4">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <Border Padding="6,2" CornerRadius="4"
+                                                        Background="{DynamicResource BrandPrimary}">
+                                                    <TextBlock Text="{Binding ModeLabel}"
+                                                               FontSize="10" FontWeight="SemiBold"
+                                                               Foreground="White" />
+                                                </Border>
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextPrimary}"
+                                                           VerticalAlignment="Center" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Subtitle}"
+                                                       FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Detail pane -->
+            <Grid Grid.Column="2">
+
+                <!-- Empty state -->
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding HasNoSelection}">
+                    <TextBlock Text="Select a team to view details"
+                               FontSize="14" Foreground="{DynamicResource TextMuted}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+
+                <!-- Team detail -->
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding HasSelection}">
+                    <ScrollViewer>
+                        <StackPanel Spacing="16" DataContext="{Binding SelectedTeam}">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="Delete"
+                                        Command="{Binding $parent[UserControl].((vm:OrchestrationViewModel)DataContext).RemoveTeamCommand}"
+                                        CommandParameter="{Binding}"
+                                        Padding="10,5" CornerRadius="4" FontSize="11"
+                                        Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
+                                <StackPanel Spacing="4">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Border Padding="6,2" CornerRadius="4"
+                                                Background="{DynamicResource BrandPrimary}">
+                                            <TextBlock Text="{Binding ModeLabel}"
+                                                       FontSize="10" FontWeight="SemiBold"
+                                                       Foreground="White" />
+                                        </Border>
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontSize="18" FontWeight="Bold"
+                                                   Foreground="{DynamicResource TextPrimary}" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Description}"
+                                               FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                               TextWrapping="Wrap"
+                                               IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                </StackPanel>
+                            </DockPanel>
+
+                            <TextBlock Text="Run Profile" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+
+                            <Border Padding="14,14" CornerRadius="8"
+                                    Background="{DynamicResource SurfaceBackground}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                <StackPanel Spacing="12">
+                                    <DockPanel>
+                                        <ComboBox DockPanel.Dock="Right" Width="140"
+                                                  ItemsSource="{Binding $parent[UserControl].((vm:OrchestrationViewModel)DataContext).RunModeOptions}"
+                                                  SelectedItem="{Binding RunModeName}"
+                                                  FontSize="12" />
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="Run Mode"
+                                                       Foreground="{DynamicResource TextPrimary}" />
+                                            <TextBlock Text="Sequential, Parallel, or Swarm"
+                                                       FontSize="10" Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+                                    </DockPanel>
+
+                                    <DockPanel>
+                                        <NumericUpDown DockPanel.Dock="Right" Width="120"
+                                                       Value="{Binding MaxConcurrent}"
+                                                       Minimum="1" Maximum="16" Increment="1"
+                                                       FormatString="0" FontSize="12" />
+                                        <TextBlock Text="Max Concurrent"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+
+                                    <DockPanel>
+                                        <CheckBox DockPanel.Dock="Right"
+                                                  IsChecked="{Binding FileLocksEnabled}" />
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="File Locks"
+                                                       Foreground="{DynamicResource TextPrimary}" />
+                                            <TextBlock Text="Serialize concurrent writes to the same file"
+                                                       FontSize="10" Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+                                    </DockPanel>
+
+                                    <DockPanel>
+                                        <CheckBox DockPanel.Dock="Right"
+                                                  IsChecked="{Binding QualityGateEnabled}" />
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="Quality Gate"
+                                                       Foreground="{DynamicResource TextPrimary}" />
+                                            <TextBlock Text="Post-run review + optional retry"
+                                                       FontSize="10" Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+                                    </DockPanel>
+
+                                    <DockPanel IsVisible="{Binding QualityGateEnabled}">
+                                        <NumericUpDown DockPanel.Dock="Right" Width="120"
+                                                       Value="{Binding QualityGateThreshold}"
+                                                       Minimum="0" Maximum="10" Increment="1"
+                                                       FormatString="0" FontSize="12" />
+                                        <TextBlock Text="Quality Threshold (0–10)"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+
+                                    <DockPanel>
+                                        <ComboBox DockPanel.Dock="Right" Width="140"
+                                                  ItemsSource="{Binding $parent[UserControl].((vm:OrchestrationViewModel)DataContext).DecompositionModeOptions}"
+                                                  SelectedItem="{Binding DecompositionModeName}"
+                                                  FontSize="12" />
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="Decomposition"
+                                                       Foreground="{DynamicResource TextPrimary}" />
+                                            <TextBlock Text="Off, RoleAware, or Open"
+                                                       FontSize="10" Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+                                    </DockPanel>
+
+                                    <Button Content="Save Profile"
+                                            Command="{Binding $parent[UserControl].((vm:OrchestrationViewModel)DataContext).SaveTeamProfileCommand}"
+                                            CommandParameter="{Binding}"
+                                            HorizontalAlignment="Left"
+                                            Padding="14,6" CornerRadius="6"
+                                            Background="{DynamicResource BrandPrimary}"
+                                            Foreground="White" FontWeight="SemiBold" />
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Text="Members" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+
+                            <TextBlock Text="No members." FontSize="12"
+                                       Foreground="{DynamicResource TextMuted}"
+                                       IsVisible="{Binding !Members.Count}" />
+
+                            <ItemsControl ItemsSource="{Binding Members}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vm:TeamMemberItemViewModel">
+                                        <Border Margin="0,3" Padding="10,8" CornerRadius="6"
+                                                Background="{DynamicResource SurfaceBackground}"
+                                                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                            <DockPanel>
+                                                <Button DockPanel.Dock="Right" Content="X"
+                                                        Command="{Binding $parent[UserControl].((vm:OrchestrationViewModel)DataContext).RemoveMemberCommand}"
+                                                        CommandParameter="{Binding}"
+                                                        Padding="8,2" CornerRadius="4" FontSize="10"
+                                                        Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
+                                                <StackPanel Spacing="3">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <TextBlock Text="{Binding Name}"
+                                                                   FontSize="13" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource TextPrimary}" />
+                                                        <Border Padding="5,1" CornerRadius="3"
+                                                                Background="{DynamicResource BrandPrimary}">
+                                                            <TextBlock Text="{Binding Role}"
+                                                                       FontSize="10" Foreground="White" />
+                                                        </Border>
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                                        <TextBlock Text="{Binding Model}"
+                                                                   FontSize="10" Foreground="{DynamicResource TextMuted}"
+                                                                   IsVisible="{Binding Model, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                        <TextBlock Text="{Binding ToolsSummary}"
+                                                                   FontSize="10" Foreground="{DynamicResource TextMuted}" />
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- Swarm Defaults drawer -->
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding ShowSwarmConfig}">
+                    <ScrollViewer>
+                        <StackPanel Spacing="16">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="Close"
+                                        Command="{Binding ToggleSwarmConfigCommand}"
+                                        Padding="10,5" CornerRadius="4" FontSize="11"
+                                        Background="Transparent" Foreground="{DynamicResource TextPrimary}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" />
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Swarm Defaults" FontSize="18" FontWeight="Bold"
+                                               Foreground="{DynamicResource TextPrimary}" />
+                                    <TextBlock Text="Default run settings inherited by new teams. Override per-team from each team's settings page."
+                                               FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </DockPanel>
+
+                            <Border Padding="14,14" CornerRadius="8"
+                                    Background="{DynamicResource SurfaceBackground}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                <StackPanel Spacing="14">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Content="Toggle"
+                                                Command="{Binding ToggleSwarmCommand}"
+                                                Padding="8,4" CornerRadius="4" FontSize="11"
+                                                Background="Transparent" Foreground="{DynamicResource TextSecondary}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="Swarm Enabled" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextPrimary}" />
+                                            <TextBlock Text="Yes" Foreground="{DynamicResource StatusPass}"
+                                                       IsVisible="{Binding SwarmEnabled}" />
+                                            <TextBlock Text="No" Foreground="{DynamicResource StatusFail}"
+                                                       IsVisible="{Binding !SwarmEnabled}" />
+                                        </StackPanel>
+                                    </DockPanel>
+
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Content="Toggle"
+                                                Command="{Binding ToggleQualityGateCommand}"
+                                                Padding="8,4" CornerRadius="4" FontSize="11"
+                                                Background="Transparent" Foreground="{DynamicResource TextSecondary}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="Quality Gate" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextPrimary}" />
+                                            <TextBlock Text="Enabled" Foreground="{DynamicResource StatusPass}"
+                                                       IsVisible="{Binding QualityGateEnabled}" />
+                                            <TextBlock Text="Disabled" Foreground="{DynamicResource StatusFail}"
+                                                       IsVisible="{Binding !QualityGateEnabled}" />
+                                        </StackPanel>
+                                    </DockPanel>
+
+                                    <DockPanel>
+                                        <TextBox DockPanel.Dock="Right" Width="80"
+                                                 Text="{Binding MaxConcurrent}"
+                                                 FontSize="12" Padding="8,4" CornerRadius="4"
+                                                 HorizontalContentAlignment="Center" />
+                                        <TextBlock Text="Max Concurrent Agents"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+
+                                    <DockPanel>
+                                        <TextBox DockPanel.Dock="Right" Width="100"
+                                                 Text="{Binding MaxTokenBudget}"
+                                                 FontSize="12" Padding="8,4" CornerRadius="4"
+                                                 HorizontalContentAlignment="Center" />
+                                        <TextBlock Text="Token Budget"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+
+                                    <DockPanel>
+                                        <TextBox DockPanel.Dock="Right" Width="80"
+                                                 Text="{Binding MaxRetries}"
+                                                 FontSize="12" Padding="8,4" CornerRadius="4"
+                                                 HorizontalContentAlignment="Center" />
+                                        <TextBlock Text="Max Retries"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+
+                                    <DockPanel>
+                                        <TextBox DockPanel.Dock="Right" Width="80"
+                                                 Text="{Binding TaskTimeoutSeconds}"
+                                                 FontSize="12" Padding="8,4" CornerRadius="4"
+                                                 HorizontalContentAlignment="Center" />
+                                        <TextBlock Text="Task Timeout (seconds)"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Text="Model Levels" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+
+                            <Border Padding="14,14" CornerRadius="8"
+                                    Background="{DynamicResource SurfaceBackground}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                <StackPanel Spacing="14">
+                                    <DockPanel>
+                                        <TextBox DockPanel.Dock="Right" Width="120"
+                                                 Text="{Binding DecomposerLevel}"
+                                                 FontSize="12" Padding="8,4" CornerRadius="4"
+                                                 HorizontalContentAlignment="Center" />
+                                        <TextBlock Text="Decomposer Level"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+                                    <DockPanel>
+                                        <TextBox DockPanel.Dock="Right" Width="120"
+                                                 Text="{Binding WorkerLevel}"
+                                                 FontSize="12" Padding="8,4" CornerRadius="4"
+                                                 HorizontalContentAlignment="Center" />
+                                        <TextBlock Text="Worker Level"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Text="Permissions" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+
+                            <Border Padding="14,14" CornerRadius="8"
+                                    Background="{DynamicResource SurfaceBackground}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                <DockPanel>
+                                    <TextBox DockPanel.Dock="Right" Width="140"
+                                             Text="{Binding SwarmPermissions}"
+                                             FontSize="12" Padding="8,4" CornerRadius="4"
+                                             HorizontalContentAlignment="Center" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Agent Permissions"
+                                                   Foreground="{DynamicResource TextPrimary}" />
+                                        <TextBlock Text="ask, accept-edits, or yolo"
+                                                   FontSize="10" Foreground="{DynamicResource TextMuted}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <Button Content="Save Defaults"
+                                    Command="{Binding SaveSwarmCommand}"
+                                    HorizontalAlignment="Left"
+                                    Padding="16,8" CornerRadius="8"
+                                    Background="{DynamicResource BrandPrimary}"
+                                    Foreground="White" FontWeight="SemiBold" />
+
+                            <TextBlock Text="Defaults saved to .sovrant/swarm.json"
+                                       FontSize="11" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextMuted}" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</UserControl>

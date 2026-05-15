@@ -1,0 +1,176 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.TopContextBarView"
+             x:DataType="vm:SidebarViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <Border Height="50"
+            Padding="12,0"
+            BorderBrush="{DynamicResource SurfaceBorder}"
+            BorderThickness="0,0,0,1">
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+
+            <!-- Provider/Model two-step switcher -->
+            <Panel Width="280">
+                <Button Command="{Binding ToggleDropdownCommand}"
+                        HorizontalAlignment="Stretch"
+                        Padding="8,5" CornerRadius="6"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" Text="▾" FontSize="12"
+                                   Foreground="{DynamicResource TextMuted}"
+                                   VerticalAlignment="Center" Margin="4,0,0,0" />
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                                     Fill="{DynamicResource StatusPass}"
+                                     IsVisible="{Binding IsConnected}" />
+                            <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                                     Fill="{DynamicResource StatusWarn}"
+                                     IsVisible="{Binding !IsConnected}" />
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding CurrentModel}" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}"
+                                           TextTrimming="CharacterEllipsis" MaxWidth="150"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Text="·" FontSize="12"
+                                           Foreground="{DynamicResource TextMuted}"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding CurrentProvider}" FontSize="11"
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </StackPanel>
+                    </DockPanel>
+                </Button>
+
+                <Popup IsOpen="{Binding IsDropdownOpen, Mode=TwoWay}"
+                       Placement="BottomEdgeAlignedLeft"
+                       IsLightDismissEnabled="True"
+                       MaxHeight="340">
+                    <Border Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}"
+                            BorderThickness="1" CornerRadius="8"
+                            Padding="4" MinWidth="240"
+                            BoxShadow="0 8 24 0 #59000000">
+                        <StackPanel>
+                            <StackPanel IsVisible="{Binding IsProviderStep}">
+                                <TextBlock Text="SELECT PROVIDER" FontSize="9" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextMuted}"
+                                           Margin="8,4,0,4" />
+                                <ItemsControl ItemsSource="{Binding TreeGroups}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ProviderTreeGroup">
+                                            <Button Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).SelectProviderCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Left"
+                                                    Padding="8,5" Margin="0,1" CornerRadius="5"
+                                                    Background="Transparent"
+                                                    Foreground="{DynamicResource TextPrimary}">
+                                                <DockPanel>
+                                                    <Border DockPanel.Dock="Right"
+                                                            Padding="5,1" CornerRadius="8"
+                                                            Background="{DynamicResource SurfaceBackground}"
+                                                            VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding ModelCount}" FontSize="9"
+                                                                   Foreground="{DynamicResource TextMuted}" />
+                                                    </Border>
+                                                    <TextBlock Text="{Binding Provider}" FontSize="12" FontWeight="Medium"
+                                                               VerticalAlignment="Center" />
+                                                </DockPanel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                            <StackPanel IsVisible="{Binding !IsProviderStep}">
+                                <Button Command="{Binding BackToProvidersCommand}"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Left"
+                                        Padding="8,4" CornerRadius="5"
+                                        Background="Transparent"
+                                        Foreground="{DynamicResource TextSecondary}"
+                                        FontSize="11">
+                                    <TextBlock Text="◂ Back to providers" />
+                                </Button>
+                                <TextBlock Text="{Binding SelectedTreeGroup.Provider, StringFormat='{}{0} models'}"
+                                           FontSize="9" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextMuted}"
+                                           Margin="8,4,0,4" />
+                                <ScrollViewer MaxHeight="260">
+                                    <ItemsControl ItemsSource="{Binding SelectedTreeGroup.Models}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:ModelOption">
+                                                <Button Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).SelectModelCommand}"
+                                                        CommandParameter="{Binding}"
+                                                        HorizontalAlignment="Stretch"
+                                                        HorizontalContentAlignment="Left"
+                                                        Padding="10,4" Margin="0,1" CornerRadius="4"
+                                                        Background="Transparent"
+                                                        Foreground="{DynamicResource TextSecondary}"
+                                                        FontSize="11">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <TextBlock Text="{Binding DisplayName}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   VerticalAlignment="Center" />
+                                                        <Border IsVisible="{Binding IsFree}"
+                                                                Background="#1A22C55E"
+                                                                BorderBrush="#22C55E"
+                                                                BorderThickness="1"
+                                                                CornerRadius="3"
+                                                                Padding="4,1"
+                                                                VerticalAlignment="Center">
+                                                            <TextBlock Text="Free"
+                                                                       FontSize="9"
+                                                                       FontWeight="SemiBold"
+                                                                       Foreground="#22C55E" />
+                                                        </Border>
+                                                    </StackPanel>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Popup>
+            </Panel>
+
+            <!-- Vertical separator -->
+            <Border Width="1" Height="22"
+                    Background="{DynamicResource SurfaceBorder}"
+                    Margin="2,0" />
+
+            <!-- Workspace -->
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <TextBlock Text="🏢" FontSize="12" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextMuted}" />
+                <ComboBox ItemsSource="{Binding ActiveContext.Workspaces}"
+                          SelectedItem="{Binding ActiveContext.SelectedWorkspace}"
+                          DisplayMemberBinding="{Binding Name}"
+                          MinWidth="140"
+                          CornerRadius="6"
+                          Padding="8,4"
+                          FontSize="12" />
+            </StackPanel>
+
+            <!-- Project -->
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <TextBlock Text="📁" FontSize="12" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextMuted}" />
+                <ComboBox ItemsSource="{Binding ActiveContext.ProjectChoices}"
+                          SelectedItem="{Binding ActiveContext.SelectedProjectChoice}"
+                          DisplayMemberBinding="{Binding Name}"
+                          MinWidth="160"
+                          CornerRadius="6"
+                          Padding="8,4"
+                          FontSize="12" />
+            </StackPanel>
+
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -1,0 +1,335 @@
+@page "/admin/workspaces"
+@using Sovrant.Runtime.Auth
+@using Sovrant.Runtime.Mcp
+@using Sovrant.Runtime.Providers
+@using Sovrant.Runtime.Users
+@using Sovrant.Runtime.Workspaces
+@using Sovrant.Web.Services
+
+@inject IUserService UserService
+@inject IWorkspaceService WorkspaceService
+@inject IWorkspaceSettingsStore WsSettings
+@inject IProviderProfileStore ProfileStore
+@inject ICredentialStore CredentialStore
+@inject WebSessionService Session
+@inject NavigationManager Nav
+
+<div class="settings-page">
+    <div class="diag-header">
+        <h1>Workspaces</h1>
+        <span class="item-count">@_workspaces.Count workspaces</span>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="status-message">@_status</div>
+    }
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="page-error-banner" role="alert">
+            <span>&#9888;</span>
+            <span class="error-message">@_error</span>
+        </div>
+    }
+
+    <div class="settings-section">
+        <div class="form-field" style="margin-bottom:16px">
+            <label>New team workspace</label>
+            <div class="input-group">
+                <input type="text" @bind="_newWsName" placeholder="Name..." />
+                <button class="btn-primary btn-sm btn-inline-add" @onclick="CreateWorkspaceAsync">Create</button>
+            </div>
+        </div>
+
+        @if (_wsLoading)
+        {
+            <p class="loading-row">Loading workspaces…</p>
+        }
+        else if (_workspaces.Count == 0)
+        {
+            <p class="text-secondary">No workspaces found.</p>
+        }
+        else
+        {
+            <div class="memory-list">
+                @foreach (var w in _workspaces)
+                {
+                    <div class="memory-card">
+                        <div class="memory-content">
+                            <div class="memory-text">
+                                <strong>@w.Name</strong>
+                                <span class="outcome-badge @(w.Type == WorkspaceType.Personal ? "success" : "unknown")">@w.Type</span>
+                            </div>
+                            <div class="memory-meta">
+                                <span class="text-muted text-sm">@w.Slug</span>
+                                <span class="text-muted text-sm">@w.CreatedAt.LocalDateTime.ToString("d")</span>
+                            </div>
+                        </div>
+                        <div class="memory-actions">
+                            <button class="btn btn-sm btn-primary" @onclick="() => ToggleConfigureWorkspace(w)">Configure</button>
+                            @if (w.Type != WorkspaceType.Personal)
+                            {
+                                <button class="btn btn-sm btn-danger" @onclick="() => DeleteWorkspaceAsync(w)">Delete</button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (_configWorkspace is not null)
+        {
+            <div class="admin-config-panel">
+                <div class="config-panel-header">
+                    <h4>Configure: @_configWorkspace.Name</h4>
+                    <button class="btn btn-sm" @onclick="() => _configWorkspace = null">✕ Close</button>
+                </div>
+
+                <h5>General Settings</h5>
+                <div class="form-group">
+                    <label>Max Output Tokens</label>
+                    <input type="number" @bind="_wsMaxTokens" min="256" max="128000" step="1000" />
+                </div>
+                <div class="form-group toggle-row">
+                    <div>
+                        <div class="toggle-title">Streaming</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_wsStreaming" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="form-group toggle-row">
+                    <div>
+                        <div class="toggle-title">Intent Routing</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_wsIntentRouting" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Web Search Backend</label>
+                    <select @bind="_wsWebSearchBackend">
+                        <option>Auto</option>
+                        <option>Brave</option>
+                        <option>Firecrawl</option>
+                        <option>Native</option>
+                        <option>Off</option>
+                    </select>
+                </div>
+                <button class="btn-primary btn-sm" @onclick="SaveWorkspaceGeneralAsync">Save General Settings</button>
+
+                <h5>Members</h5>
+                @if (_configMembers.Count == 0)
+                {
+                    <p class="text-secondary">No members.</p>
+                }
+                else
+                {
+                    @foreach (var m in _configMembers)
+                    {
+                        <div class="workspace-row">
+                            <span>@m.UserId (@m.Role)</span>
+                            <button class="btn btn-sm btn-danger" @onclick="() => RemoveMemberAsync(m)">Remove</button>
+                        </div>
+                    }
+                }
+                <div class="inline-form">
+                    <input type="text" @bind="_newMemberEmail" placeholder="User email or ID" />
+                    <select @bind="_newMemberRole">
+                        <option>Member</option>
+                        <option>Admin</option>
+                    </select>
+                    <button class="btn-primary btn-sm btn-inline-add" @onclick="AddMemberAsync">Add</button>
+                </div>
+
+                <h5>Provider Profiles</h5>
+                @if (_configProfiles.Count == 0)
+                {
+                    <p class="text-secondary">No workspace providers.</p>
+                }
+                else
+                {
+                    @foreach (var p in _configProfiles)
+                    {
+                        <div class="workspace-row">
+                            <span>@p.Name (@p.ProviderKind)</span>
+                            <button class="btn btn-sm btn-danger" @onclick="() => RemoveWorkspaceProviderAsync(p)">Remove</button>
+                        </div>
+                    }
+                }
+                <div class="provider-add-form">
+                    <input type="text" @bind="_wsNewProviderName" placeholder="Name (optional)" />
+                    <select @bind="_wsNewProviderKind">
+                        <option>OpenAI</option>
+                        <option>OpenRouter</option>
+                        <option>Anthropic</option>
+                        <option>Ollama</option>
+                    </select>
+                    <input type="password" @bind="_wsNewProviderApiKey" placeholder="API Key" />
+                    <input type="text" @bind="_wsNewProviderBaseUrl" placeholder="Base URL (optional)" />
+                    <button class="btn-primary btn-sm btn-inline-add" @onclick="AddWorkspaceProviderAsync">Add Provider</button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private string _status = string.Empty;
+    private string _error = string.Empty;
+
+    private bool _wsLoading;
+    private string _newWsName = string.Empty;
+    private List<Workspace> _workspaces = [];
+
+    private Workspace? _configWorkspace;
+    private int _wsMaxTokens = 32000;
+    private bool _wsStreaming = true;
+    private bool _wsIntentRouting;
+    private string _wsWebSearchBackend = "Auto";
+    private string _newMemberEmail = string.Empty;
+    private string _newMemberRole = "Member";
+    private List<WorkspaceMember> _configMembers = [];
+    private string _wsNewProviderName = string.Empty;
+    private string _wsNewProviderKind = "OpenRouter";
+    private string _wsNewProviderApiKey = string.Empty;
+    private string _wsNewProviderBaseUrl = string.Empty;
+    private List<WorkspaceProviderProfile> _configProfiles = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAuthenticated || !Session.IsAdmin)
+        {
+            Nav.NavigateTo("/", forceLoad: false);
+            return;
+        }
+        await LoadWorkspacesAsync();
+    }
+
+    private async Task LoadWorkspacesAsync()
+    {
+        _wsLoading = true;
+        try { _workspaces = (await WorkspaceService.ListAllAsync().ConfigureAwait(false)).ToList(); }
+        catch (Exception ex) { _error = $"Failed to load workspaces: {ex.Message}"; }
+        finally { _wsLoading = false; }
+    }
+
+    private async Task CreateWorkspaceAsync()
+    {
+        var name = _newWsName.Trim();
+        if (string.IsNullOrEmpty(name)) { _status = "Enter a name."; return; }
+        var slug = name.ToLowerInvariant().Replace(' ', '-');
+        try
+        {
+            await WorkspaceService.CreateTeamWorkspaceAsync(name, slug, Session.UserId!).ConfigureAwait(false);
+            _newWsName = string.Empty;
+            _status = $"Workspace '{name}' created.";
+            await LoadWorkspacesAsync();
+        }
+        catch (Exception ex) { _error = $"Failed: {ex.Message}"; }
+    }
+
+    private async Task DeleteWorkspaceAsync(Workspace w)
+    {
+        try
+        {
+            await WorkspaceService.DeleteAsync(w.WorkspaceId).ConfigureAwait(false);
+            _status = $"'{w.Name}' deleted.";
+            await LoadWorkspacesAsync();
+        }
+        catch (Exception ex) { _error = $"Cannot delete: {ex.Message}"; }
+    }
+
+    private async Task ToggleConfigureWorkspace(Workspace ws)
+    {
+        if (_configWorkspace?.WorkspaceId == ws.WorkspaceId) { _configWorkspace = null; return; }
+        _configWorkspace = ws;
+        var maxRaw = await WsSettings.GetAsync(ws.WorkspaceId, WorkspaceSettingsKeys.GeneralMaxTokens);
+        _wsMaxTokens = int.TryParse(maxRaw, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var t) ? t : 32000;
+        var streamRaw = await WsSettings.GetAsync(ws.WorkspaceId, WorkspaceSettingsKeys.GeneralStreaming);
+        _wsStreaming = !string.Equals(streamRaw, "false", StringComparison.OrdinalIgnoreCase);
+        var intentRaw = await WsSettings.GetAsync(ws.WorkspaceId, WorkspaceSettingsKeys.GeneralIntentRouting);
+        _wsIntentRouting = string.Equals(intentRaw, "true", StringComparison.OrdinalIgnoreCase);
+        var wsRaw = await WsSettings.GetAsync(ws.WorkspaceId, WorkspaceSettingsKeys.GeneralWebSearchBackend);
+        _wsWebSearchBackend = string.IsNullOrEmpty(wsRaw) ? "Auto" : wsRaw;
+        _configMembers = (await WorkspaceService.ListMembersAsync(ws.WorkspaceId)).ToList();
+        var profiles = await ProfileStore.ListByWorkspaceAsync(ws.WorkspaceId);
+        _configProfiles = profiles.Select(p => new WorkspaceProviderProfile(p.ProfileId, p.Name, p.ProviderKind, p.BaseUrl, p.CredentialId)).ToList();
+    }
+
+    private async Task SaveWorkspaceGeneralAsync()
+    {
+        if (_configWorkspace is null) return;
+        var wsId = _configWorkspace.WorkspaceId;
+        await WsSettings.SetAsync(wsId, WorkspaceSettingsKeys.GeneralMaxTokens, _wsMaxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        await WsSettings.SetAsync(wsId, WorkspaceSettingsKeys.GeneralStreaming, _wsStreaming ? "true" : "false");
+        await WsSettings.SetAsync(wsId, WorkspaceSettingsKeys.GeneralIntentRouting, _wsIntentRouting ? "true" : "false");
+        await WsSettings.SetAsync(wsId, WorkspaceSettingsKeys.GeneralWebSearchBackend, _wsWebSearchBackend);
+        _status = "General settings saved.";
+    }
+
+    private async Task AddMemberAsync()
+    {
+        if (_configWorkspace is null || string.IsNullOrWhiteSpace(_newMemberEmail)) return;
+        var allUsers = await UserService.ListAsync();
+        var user = allUsers.FirstOrDefault(u =>
+            string.Equals(u.Email, _newMemberEmail.Trim(), StringComparison.OrdinalIgnoreCase)
+            || string.Equals(u.UserId, _newMemberEmail.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (user is null) { _status = $"User '{_newMemberEmail}' not found."; return; }
+        var role = string.Equals(_newMemberRole, "Admin", StringComparison.OrdinalIgnoreCase)
+            ? WorkspaceRole.Admin : WorkspaceRole.Member;
+        await WorkspaceService.AddMemberAsync(_configWorkspace.WorkspaceId, user.UserId, role);
+        _newMemberEmail = string.Empty;
+        _configMembers = (await WorkspaceService.ListMembersAsync(_configWorkspace.WorkspaceId)).ToList();
+        _status = $"Member added.";
+    }
+
+    private async Task RemoveMemberAsync(WorkspaceMember member)
+    {
+        if (_configWorkspace is null) return;
+        await WorkspaceService.RemoveMemberAsync(_configWorkspace.WorkspaceId, member.UserId);
+        _configMembers = (await WorkspaceService.ListMembersAsync(_configWorkspace.WorkspaceId)).ToList();
+    }
+
+    private async Task AddWorkspaceProviderAsync()
+    {
+        if (_configWorkspace is null || string.IsNullOrWhiteSpace(_wsNewProviderApiKey)) return;
+        var name = string.IsNullOrWhiteSpace(_wsNewProviderName) ? _wsNewProviderKind : _wsNewProviderName.Trim();
+        var profileId = $"ws-{_configWorkspace.WorkspaceId}-{_wsNewProviderKind.ToLowerInvariant()}-{name.ToLowerInvariant().Replace(' ', '-')}";
+        var credId = $"provider.{profileId}.api_key";
+        await CredentialStore.StoreAsync(credId, _wsNewProviderApiKey.Trim());
+        var now = DateTimeOffset.UtcNow;
+        var baseUrl = string.IsNullOrWhiteSpace(_wsNewProviderBaseUrl)
+            ? (_wsNewProviderKind == "OpenRouter" ? "https://openrouter.ai/api/v1/" :
+               _wsNewProviderKind == "Ollama" ? "http://localhost:11434/v1/" :
+               _wsNewProviderKind == "Anthropic" ? "https://api.anthropic.com/v1/" : "https://api.openai.com/v1/")
+            : _wsNewProviderBaseUrl.Trim();
+        var profile = new ProviderProfile(profileId, Session.UserId!, name, _wsNewProviderKind,
+            baseUrl, null, null, credId, now, now, _configWorkspace.WorkspaceId);
+        var existing = await ProfileStore.GetAsync(profileId);
+        if (existing is null) await ProfileStore.CreateAsync(profile);
+        else await ProfileStore.UpdateAsync(profile with { CreatedAt = existing.CreatedAt });
+        _wsNewProviderApiKey = string.Empty;
+        _wsNewProviderName = string.Empty;
+        var profiles = await ProfileStore.ListByWorkspaceAsync(_configWorkspace.WorkspaceId);
+        _configProfiles = profiles.Select(p => new WorkspaceProviderProfile(p.ProfileId, p.Name, p.ProviderKind, p.BaseUrl, p.CredentialId)).ToList();
+        _status = $"Provider '{name}' added.";
+    }
+
+    private async Task RemoveWorkspaceProviderAsync(WorkspaceProviderProfile profile)
+    {
+        await ProfileStore.DeleteAsync(profile.ProfileId);
+        await CredentialStore.DeleteAsync(profile.CredentialId);
+        if (_configWorkspace is not null)
+        {
+            var profiles = await ProfileStore.ListByWorkspaceAsync(_configWorkspace.WorkspaceId);
+            _configProfiles = profiles.Select(p => new WorkspaceProviderProfile(p.ProfileId, p.Name, p.ProviderKind, p.BaseUrl, p.CredentialId)).ToList();
+        }
+    }
+
+    private sealed record WorkspaceProviderProfile(string ProfileId, string Name, string ProviderKind, string BaseUrl, string CredentialId);
+}

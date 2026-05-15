@@ -1,0 +1,79 @@
+using System.Text.Json;
+using Microsoft.Extensions.FileSystemGlobbing;
+using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
+using Sovrant.Api.Types;
+
+namespace Sovrant.Tools.Core;
+
+/// <summary>Finds files matching a glob pattern, sorted by modification time.</summary>
+public sealed class GlobTool : ITool
+{
+    private static readonly ToolDefinition s_definition = new("Glob", CreateSchema())
+    {
+        Description =
+            "Finds files matching a glob pattern (e.g. \"**/*.cs\", \"src/**/*.ts\"). " +
+            "Results are sorted by modification time, most recent first. " +
+            "Use the path parameter to restrict the search to a specific directory.",
+    };
+
+    public ToolDefinition Definition => s_definition;
+
+    public Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
+    {
+        var pattern = input.GetStringProp("pattern");
+        if (string.IsNullOrWhiteSpace(pattern))
+            return Task.FromResult("Error: pattern is required.");
+
+        var searchPath = input.GetStringProp("path", Directory.GetCurrentDirectory());
+        if (!Directory.Exists(searchPath))
+            return Task.FromResult($"Error: directory not found: {searchPath}");
+
+        ct.ThrowIfCancellationRequested();
+
+        var matcher = new Matcher();
+        matcher.AddInclude(pattern);
+
+        var dirInfo = new DirectoryInfoWrapper(new DirectoryInfo(searchPath));
+        var result = matcher.Execute(dirInfo);
+
+        if (!result.HasMatches)
+            return Task.FromResult("No files found.");
+
+        const int MaxResults = 1000;
+        var allPaths = result.Files
+            .Select(f => Path.Combine(searchPath, f.Path))
+            .ToList();
+
+        var totalCount = allPaths.Count;
+
+        // Only stat+sort when the result set is manageable (avoids O(n) stat calls on huge matches).
+        List<string> files;
+        if (totalCount <= MaxResults)
+        {
+            files = [.. allPaths.OrderByDescending(File.GetLastWriteTimeUtc)];
+        }
+        else
+        {
+            // Too many to stat — return unsorted and truncated.
+            files = allPaths.Take(MaxResults).ToList();
+        }
+
+        var output = string.Join(Environment.NewLine, files);
+        if (totalCount > MaxResults)
+            output += $"\n\n[Truncated — showing {MaxResults} of {totalCount} matches. Narrow your pattern to see more.]";
+
+        return Task.FromResult(output);
+    }
+
+
+    private static JsonElement CreateSchema() => JsonDocument.Parse("""
+        {
+            "type": "object",
+            "properties": {
+                "pattern": {"type": "string", "description": "Glob pattern, e.g. \"**/*.cs\"."},
+                "path":    {"type": "string", "description": "Root directory to search (defaults to cwd)."}
+            },
+            "required": ["pattern"]
+        }
+        """).RootElement;
+}

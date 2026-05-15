@@ -1,0 +1,15 @@
+@*
+    Phase 90 — Command Center stat tile. Tiny readonly KPI used in
+    the four-stat row at the top of the cockpit page.
+*@
+
+<div class="cc-stat" title="@Tooltip">
+    <div class="cc-stat-label">@Label</div>
+    <div class="cc-stat-value">@Value</div>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = string.Empty;
+    [Parameter] public int Value { get; set; }
+    [Parameter] public string? Tooltip { get; set; }
+}

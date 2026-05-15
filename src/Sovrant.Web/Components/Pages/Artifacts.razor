@@ -1,0 +1,255 @@
+@page "/artifacts"
+@using Sovrant.Runtime.Artifacts
+@using Sovrant.Web.Services
+@using Markdig
+
+@if (!string.IsNullOrEmpty(_loadError))
+{
+    <div class="page-error-banner" role="alert">
+        <span>&#9888;</span>
+        <span class="error-message">@_loadError</span>
+        <button class="btn-sm" @onclick="LoadAsync">Retry</button>
+    </div>
+}
+
+<MasterDetailLayout TItem="ArtifactItem"
+                    Title="Artifacts"
+                    ItemCount="@_filtered.Count"
+                    Items="@_filtered"
+                    SelectedItem="@_selected"
+                    EmptyMessage="No artifacts found."
+                    OnRefresh="LoadAsync"
+                    OnItemSelected="SelectItem"
+                    OnSearch="Search"
+                    GroupKeySelector="@(a => $"{a.WorkspaceId}|{a.ProjectId}|{a.RunId}")">
+    <GroupHeaderTemplate>
+        <span>@context.WorkspaceId / @context.ProjectId
+            @if (!string.IsNullOrEmpty(context.RunId))
+            {
+                <text> &middot; run @context.RunId[..Math.Min(8, context.RunId.Length)]</text>
+            }
+        </span>
+        @if (!string.IsNullOrEmpty(context.RunZipUrl))
+        {
+            <a href="@context.RunZipUrl" download="@($"{context.RunId}.zip")" class="btn-outline btn-sm">Download zip</a>
+        }
+    </GroupHeaderTemplate>
+    <ItemTemplate>
+        <div class="item-title">@context.FileName</div>
+        <div class="item-subtitle">@context.SizeDisplay &middot; @context.ContentType</div>
+    </ItemTemplate>
+    <DetailTemplate>
+        <div class="detail-content">
+            <h2>@context.FileName</h2>
+            <div class="detail-meta">
+                <span>@context.Path</span>
+                <span>@context.SizeDisplay</span>
+                <span>@context.ContentType</span>
+                <span>@context.LastModified.LocalDateTime.ToString("g")</span>
+                <span>@context.WorkspaceId / @context.ProjectId</span>
+                @if (context.RunId is not null)
+                {
+                    <span>Run: @context.RunId[..Math.Min(8, context.RunId.Length)]</span>
+                }
+            </div>
+            @if (!string.IsNullOrEmpty(context.AccessUrl))
+            {
+                <div class="detail-meta" style="margin-top: 6px; gap: 10px;">
+                    <a href="@context.AccessUrl" target="_blank" rel="noopener" class="btn-outline btn-sm">Open</a>
+                    <a href="@context.AccessUrl" target="_blank" rel="noopener" download="@context.FileName" class="btn-outline btn-sm">Download</a>
+                    <code style="font-size: 12px; background: var(--surface-card); padding: 2px 6px; border-radius: 4px; user-select: all;">@context.AccessUrl</code>
+                </div>
+            }
+            @if (context.IsPdf && !string.IsNullOrEmpty(context.AccessUrl))
+            {
+                <iframe src="@context.AccessUrl" title="@context.FileName"
+                        style="width: 100%; height: 520px; border: 1px solid var(--surface-border); border-radius: 6px; margin-top: 10px; background: #fff;"></iframe>
+            }
+            else if (context.IsMarkdown && !string.IsNullOrEmpty(context.Preview))
+            {
+                <div class="detail-preview message-markdown">
+                    @((MarkupString)Markdown.ToHtml(context.Preview, _pipeline))
+                </div>
+            }
+            else if (!string.IsNullOrEmpty(context.Preview))
+            {
+                <pre class="detail-preview" style="white-space: pre-wrap; font-size: 13px; font-family: Consolas, monospace;">@context.Preview</pre>
+            }
+            else if (!context.IsPdf)
+            {
+                <p class="text-muted">No preview available for this file type.</p>
+            }
+        </div>
+    </DetailTemplate>
+</MasterDetailLayout>
+
+@code {
+    [Inject] private IArtifactStore ArtifactStore { get; set; } = default!;
+
+    private List<ArtifactItem> _all = [];
+    private List<ArtifactItem> _filtered = [];
+    private ArtifactItem? _selected;
+    private string _search = string.Empty;
+
+    private static readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
+        .UseAdvancedExtensions().Build();
+
+    private static readonly HashSet<string> TextExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".md", ".txt", ".json", ".xml", ".html", ".css", ".js", ".ts", ".cs", ".py",
+        ".yaml", ".yml", ".toml", ".csv", ".log", ".sh", ".ps1", ".sql",
+    };
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private string _loadError = string.Empty;
+
+    private Task LoadAsync()
+    {
+        _loadError = string.Empty;
+
+        try
+        {
+            // Scan the entire artifact root to find artifacts across ALL workspaces
+            var root = (ArtifactStore as LocalArtifactStore)?.Root;
+            if (root is null || !Directory.Exists(root))
+            {
+                _all = [];
+                ApplyFilter();
+                return Task.CompletedTask;
+            }
+
+            var items = new List<ArtifactItem>();
+            foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+            {
+                var fileName = System.IO.Path.GetFileName(file);
+                if (string.Equals(fileName, "_manifest.json", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var relativePath = System.IO.Path.GetRelativePath(root, file).Replace('\\', '/');
+                var info = new FileInfo(file);
+                var ext = System.IO.Path.GetExtension(file);
+
+                // Parse workspace/project/run from path: {workspace}/{project}/{run}/{rest}
+                var segments = relativePath.Split('/');
+                var workspaceId = segments.Length > 0 ? segments[0] : "";
+                var projectId = segments.Length > 1 ? segments[1] : "";
+                var runId = segments.Length > 2 ? segments[2] : "";
+                var artifactPath = segments.Length > 3
+                    ? string.Join('/', segments[3..])
+                    : fileName;
+
+                var accessUrl = string.Empty;
+                var runZipUrl = string.Empty;
+                if (!string.IsNullOrEmpty(workspaceId) && !string.IsNullOrEmpty(projectId) && !string.IsNullOrEmpty(runId))
+                {
+                    var escapedTail = string.Join('/', artifactPath.Split('/').Select(Uri.EscapeDataString));
+                    accessUrl = $"/artifacts/{Uri.EscapeDataString(workspaceId)}/{Uri.EscapeDataString(projectId)}/{Uri.EscapeDataString(runId)}/{escapedTail}";
+                    runZipUrl = $"/artifacts/{Uri.EscapeDataString(workspaceId)}/{Uri.EscapeDataString(projectId)}/{Uri.EscapeDataString(runId)}.zip";
+                }
+
+                items.Add(new ArtifactItem
+                {
+                    FullDiskPath = file,
+                    RelativePath = relativePath,
+                    Path = artifactPath,
+                    FileName = fileName,
+                    Extension = ext,
+                    SizeBytes = info.Length,
+                    SizeDisplay = FormatSize(info.Length),
+                    ContentType = GuessMime(ext),
+                    LastModified = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
+                    WorkspaceId = workspaceId,
+                    ProjectId = projectId,
+                    RunId = runId,
+                    IsMarkdown = ext.Equals(".md", StringComparison.OrdinalIgnoreCase),
+                    IsPdf = ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase),
+                    AccessUrl = accessUrl,
+                    RunZipUrl = runZipUrl,
+                });
+            }
+
+            // Group rows so that artifacts from the same run are visually clustered,
+            // newest run first, then newest file within the run.
+            _all = items
+                .GroupBy(a => (a.WorkspaceId, a.ProjectId, a.RunId))
+                .OrderByDescending(g => g.Max(a => a.LastModified))
+                .SelectMany(g => g.OrderByDescending(a => a.LastModified))
+                .ToList();
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Failed to load artifacts: {ex.Message}";
+            _all = [];
+            ApplyFilter();
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task SelectItem(ArtifactItem item)
+    {
+        _selected = item;
+        if (string.IsNullOrEmpty(item.Preview) && TextExtensions.Contains(item.Extension) && item.SizeBytes < 512 * 1024)
+        {
+            try
+            {
+                if (File.Exists(item.FullDiskPath))
+                {
+                    var content = await File.ReadAllTextAsync(item.FullDiskPath);
+
+                    if (content.Length > 20000)
+                        content = content[..20000] + "\n\n... (truncated at 20,000 chars)";
+
+                    item.Preview = content;
+                    StateHasChanged();
+                }
+            }
+            catch { item.Preview = "(Could not load preview)"; }
+        }
+    }
+
+    private void Search(string text) { _search = text; ApplyFilter(); }
+
+    private void ApplyFilter()
+    {
+        _filtered = string.IsNullOrWhiteSpace(_search)
+            ? _all
+            : _all.Where(a =>
+                a.FileName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                a.Path.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                a.WorkspaceId.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                (a.RunId?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false)
+            ).ToList();
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    private static string GuessMime(string ext) => ArtifactMime.For(ext);
+
+    private sealed class ArtifactItem
+    {
+        public string FullDiskPath { get; init; } = string.Empty;
+        public string RelativePath { get; init; } = string.Empty;
+        public string Path { get; init; } = string.Empty;
+        public string FileName { get; init; } = string.Empty;
+        public string Extension { get; init; } = string.Empty;
+        public long SizeBytes { get; init; }
+        public string SizeDisplay { get; init; } = string.Empty;
+        public string ContentType { get; init; } = string.Empty;
+        public DateTimeOffset LastModified { get; init; }
+        public string WorkspaceId { get; init; } = string.Empty;
+        public string ProjectId { get; init; } = string.Empty;
+        public string? RunId { get; init; }
+        public bool IsMarkdown { get; init; }
+        public bool IsPdf { get; init; }
+        public string AccessUrl { get; init; } = string.Empty;
+        public string RunZipUrl { get; init; } = string.Empty;
+        public string? Preview { get; set; }
+    }
+}

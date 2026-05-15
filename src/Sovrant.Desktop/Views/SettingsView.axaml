@@ -1,0 +1,308 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:perm="using:Sovrant.Runtime.Permissions"
+             x:Class="Sovrant.Desktop.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <ScrollViewer Padding="32,24">
+        <StackPanel MaxWidth="640" Spacing="20">
+            <!-- Header -->
+            <TextBlock Text="Settings" FontSize="24" FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimary}" />
+
+            <!-- Tab bar -->
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <Button Content="General"
+                        Command="{Binding SelectTabCommand}" CommandParameter="0"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource BrandPrimary}"
+                        Foreground="White"
+                        IsVisible="{Binding IsGeneralTab}" />
+                <Button Content="General"
+                        Command="{Binding SelectTabCommand}" CommandParameter="0"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource SurfaceCard}"
+                        Foreground="{DynamicResource TextSecondary}"
+                        IsVisible="{Binding !IsGeneralTab}" />
+
+                <Button Content="Providers"
+                        Command="{Binding SelectTabCommand}" CommandParameter="1"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource BrandPrimary}"
+                        Foreground="White"
+                        IsVisible="{Binding IsProvidersTab}" />
+                <Button Content="Providers"
+                        Command="{Binding SelectTabCommand}" CommandParameter="1"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource SurfaceCard}"
+                        Foreground="{DynamicResource TextSecondary}"
+                        IsVisible="{Binding !IsProvidersTab}" />
+
+                <Button Content="Connection"
+                        Command="{Binding SelectTabCommand}" CommandParameter="2"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource BrandPrimary}"
+                        Foreground="White"
+                        IsVisible="{Binding IsConnectionTab}" />
+                <Button Content="Connection"
+                        Command="{Binding SelectTabCommand}" CommandParameter="2"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource SurfaceCard}"
+                        Foreground="{DynamicResource TextSecondary}"
+                        IsVisible="{Binding !IsConnectionTab}" />
+            </StackPanel>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- TAB 1: Providers                                -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <StackPanel Spacing="20" IsVisible="{Binding IsProvidersTab}">
+
+                <!-- Saved Providers list -->
+                <TextBlock Text="Your Providers" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="Configure API keys and endpoints. Switch providers from the sidebar dropdown."
+                           FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="Add a provider below to get started."
+                           FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                           IsVisible="{Binding !SavedProfiles.Count}" />
+
+                <ItemsControl ItemsSource="{Binding SavedProfiles}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:ProviderProfile">
+                            <Border Margin="0,2" Padding="12,8" CornerRadius="8"
+                                    Background="{DynamicResource SurfaceCard}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4"
+                                                VerticalAlignment="Center">
+                                        <Button Content="Activate"
+                                                Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).LoadProfileCommand}"
+                                                CommandParameter="{Binding}"
+                                                Padding="10,4" CornerRadius="4" FontSize="11"
+                                                Background="{DynamicResource BrandPrimary}"
+                                                Foreground="White" FontWeight="SemiBold" />
+                                        <Button Content="X"
+                                                Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).DeleteProfileCommand}"
+                                                CommandParameter="{Binding}"
+                                                Padding="8,4" CornerRadius="4" FontSize="11"
+                                                Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
+                                    </StackPanel>
+                                    <StackPanel Spacing="2">
+                                        <TextBlock Text="{Binding Provider}" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}" />
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}"
+                                                   Text="{Binding BaseUrl}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- ─── Add Provider form ─── -->
+                <TextBlock Text="Add Provider" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}"
+                           Margin="0,8,0,0" />
+
+                <!-- Provider selection -->
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Provider" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <ComboBox ItemsSource="{Binding Providers}"
+                              SelectedItem="{Binding SelectedProvider}"
+                              HorizontalAlignment="Stretch"
+                              CornerRadius="8"
+                              Padding="12,8" />
+                </StackPanel>
+
+                <!-- API Key -->
+                <StackPanel Spacing="6">
+                    <TextBlock Text="API Key" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <TextBox Text="{Binding ApiKey}"
+                             PasswordChar="*"
+                             Watermark="sk-..."
+                             CornerRadius="8"
+                             Padding="12,8" />
+                </StackPanel>
+
+                <!-- Base URL -->
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Base URL" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <TextBox Text="{Binding BaseUrl}"
+                             Watermark="https://api.openai.com/v1"
+                             CornerRadius="8"
+                             Padding="12,8" />
+                    <TextBlock Text="Auto-filled when you select a provider. Edit for custom endpoints."
+                               FontSize="10" Foreground="{DynamicResource TextMuted}" />
+                </StackPanel>
+
+                <!-- Profile name + Add button -->
+                <Border Padding="12" CornerRadius="8"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                    <StackPanel Spacing="8">
+                        <TextBox Text="{Binding NewProfileName}"
+                                 Watermark="Display name (or leave blank for auto)"
+                                 CornerRadius="8" Padding="10,6" FontSize="12" />
+                        <Button Content="Add Provider"
+                                Command="{Binding AddProviderCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                Padding="12,8" CornerRadius="8" FontSize="13"
+                                Background="{DynamicResource BrandPrimary}"
+                                Foreground="White" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Status message -->
+                <TextBlock Text="{Binding StatusMessage}"
+                           FontSize="12"
+                           Foreground="{DynamicResource StatusPass}" />
+
+                <TextBlock Text="Provider profiles are stored in the local database; API keys are stored in the OS keystore (Windows Credential Manager / macOS Keychain / libsecret). Click Activate to switch the active provider."
+                           FontSize="11" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextMuted}" />
+            </StackPanel>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- TAB 0: General                                  -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <StackPanel Spacing="20" IsVisible="{Binding IsGeneralTab}">
+
+                <!-- Permissions section -->
+                <TextBlock Text="Permissions" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}"
+                           Margin="0,4,0,0" />
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Permission Mode" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <ComboBox ItemsSource="{Binding PermissionModes}"
+                              SelectedItem="{Binding PermissionMode}"
+                              HorizontalAlignment="Stretch"
+                              CornerRadius="8"
+                              Padding="12,8" />
+                    <TextBlock FontSize="11" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextMuted}">
+                        <Run Text="Default" FontWeight="SemiBold" /> — ask before destructive ops.
+                        <Run Text="AcceptEdits" FontWeight="SemiBold" /> — auto-approve edits, ask for bash.
+                        <Run Text="BypassPermissions" FontWeight="SemiBold" /> — allow all.
+                    </TextBlock>
+                </StackPanel>
+
+                <!-- Appearance section -->
+                <TextBlock Text="Appearance" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}"
+                           Margin="0,4,0,0" />
+
+                <!-- Dark mode toggle -->
+                <Border Padding="12" CornerRadius="8"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <ToggleSwitch DockPanel.Dock="Right"
+                                      IsChecked="{Binding IsDarkMode}"
+                                      OnContent="" OffContent="" />
+                        <StackPanel>
+                            <TextBlock Text="Dark Mode" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="Switch between dark and light theme"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondary}" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- Status message -->
+                <TextBlock Text="{Binding StatusMessage}"
+                           FontSize="12"
+                           Foreground="{DynamicResource StatusPass}" />
+
+                <TextBlock Text="These settings auto-save when changed."
+                           FontSize="11" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextMuted}" />
+
+                <!-- Account -->
+                <TextBlock Text="Account" FontSize="16" FontWeight="SemiBold" Margin="0,12,0,0"/>
+                <Separator/>
+                <StackPanel Spacing="6">
+                    <Button Content="Log out"
+                            Command="{Binding LogoutCommand}"
+                            HorizontalAlignment="Left"
+                            Padding="12,6"/>
+                </StackPanel>
+            </StackPanel>
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- TAB 2: Connection                               -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <StackPanel Spacing="20" IsVisible="{Binding IsConnectionTab}">
+
+                <TextBlock Text="Runtime Mode" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="Choose whether Sovrant runs its AI runtime in-process (Local) or delegates to a shared Sovrant Server (Remote)."
+                           FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                           TextWrapping="Wrap" />
+
+                <!-- Mode toggle -->
+                <Border Padding="12" CornerRadius="8"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <ToggleSwitch DockPanel.Dock="Right"
+                                      IsChecked="{Binding IsRemoteMode}"
+                                      OnContent="" OffContent="" />
+                        <StackPanel>
+                            <TextBlock Text="Mode: Remote" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       IsVisible="{Binding IsRemoteMode}" />
+                            <TextBlock Text="Mode: Local (embedded)" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       IsVisible="{Binding !IsRemoteMode}" />
+                            <TextBlock Text="Toggle to switch between local and remote mode"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- Server URL (only shown in remote mode) -->
+                <StackPanel Spacing="6" IsVisible="{Binding IsRemoteMode}">
+                    <TextBlock Text="Server URL" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <TextBox Text="{Binding ConnectionServerUrl}"
+                             Watermark="https://my-server:5443 or http://localhost:5200"
+                             CornerRadius="8"
+                             Padding="12,8" />
+                    <TextBlock Text="The URL of your Sovrant Server instance."
+                               FontSize="10" Foreground="{DynamicResource TextMuted}" />
+                </StackPanel>
+
+                <!-- Status -->
+                <TextBlock Text="{Binding ConnectionStatusMessage}"
+                           FontSize="12"
+                           Foreground="{DynamicResource StatusPass}"
+                           IsVisible="{Binding ConnectionStatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                <Button Content="Save &amp; Restart"
+                        Command="{Binding SaveConnectionCommand}"
+                        HorizontalAlignment="Left"
+                        Padding="14,10" CornerRadius="8" FontSize="13"
+                        Background="{DynamicResource BrandPrimary}"
+                        Foreground="White" FontWeight="SemiBold" />
+
+                <TextBlock FontSize="11" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextMuted}">
+                    Switching mode requires a restart. In remote mode, you log in with your server credentials and no local API key is needed.
+                </TextBlock>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,162 @@
+@page "/login"
+@layout Layout.LoginLayout
+@using Sovrant.Runtime
+@using Sovrant.Runtime.Auth
+@using Sovrant.Runtime.Mcp
+@using Sovrant.Web.Services
+@inject IIdentityService IdentityService
+@inject ICredentialStore CredentialStore
+@inject WebSessionService Session
+@inject NavigationManager Nav
+@inject IServiceProvider Services
+
+<div class="login-card">
+    <div class="login-title">Sovrant</div>
+
+    <div class="login-sub" style="margin-bottom:8px">Sign in to continue.</div>
+
+    @if (_errorMessage is not null)
+    {
+        <div class="login-error">@_errorMessage</div>
+    }
+
+    <div class="login-field">
+        <label class="login-label">Email</label>
+        <input class="login-input"
+               type="email"
+               @bind="_email"
+               @bind:event="oninput"
+               placeholder="you@example.com"
+               disabled="@_busy" />
+    </div>
+
+    <div class="login-field">
+        <label class="login-label">Password</label>
+        <input class="login-input"
+               type="password"
+               @bind="_password"
+               @bind:event="oninput"
+               placeholder="Password"
+               disabled="@_busy"
+               @onkeydown="OnKeyDown" />
+    </div>
+
+    <button class="login-btn" @onclick="LoginAsync" disabled="@_busy">
+        @(_busy ? "Signing in…" : "Sign in")
+    </button>
+
+    @if (_registrationOpen)
+    {
+        <div class="login-divider"></div>
+        <div class="login-sub">Don't have an account?</div>
+        <button class="login-btn login-btn-secondary" @onclick="RegisterAsync" disabled="@_busy">
+            @(_busy ? "Creating account…" : "Create account")
+        </button>
+    }
+
+    @if (_busy)
+    {
+        <div class="login-progress"></div>
+    }
+</div>
+
+@code {
+    private const string StoredTokenKey = "sovrant.web.auth_token";
+
+    private string _email = string.Empty;
+    private string _password = string.Empty;
+    private string? _errorMessage;
+    private bool _busy;
+    private bool _registrationOpen;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.IsAuthenticated)
+        {
+            Nav.NavigateTo("/", forceLoad: true);
+            return;
+        }
+        _registrationOpen = await IdentityService.IsRegistrationOpenAsync().ConfigureAwait(false);
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await LoginAsync();
+    }
+
+    private async Task LoginAsync()
+    {
+        _errorMessage = null;
+        if (string.IsNullOrWhiteSpace(_email) || string.IsNullOrWhiteSpace(_password))
+        {
+            _errorMessage = "Email and password are required.";
+            return;
+        }
+        _busy = true;
+        try
+        {
+            var result = await IdentityService.LoginAsync(_email, _password).ConfigureAwait(false);
+            if (!result.Success || result.Token is null)
+            {
+                _errorMessage = result.Error ?? "Login failed.";
+                return;
+            }
+            await CredentialStore.StoreAsync(StoredTokenKey, result.Token).ConfigureAwait(false);
+            Program.SetUserId(result.UserId!);
+            Session.SignIn(result.UserId!, result.Role ?? "user", _email.Trim());
+            if (!Program.IsRemoteMode)
+                _ = Task.Run(async () =>
+                {
+                    await Program.SeedUserAndWorkspaceAsync(Services, result.UserId!).ConfigureAwait(false);
+                    await Services.ApplyUserPreferencesForUserAsync(result.UserId!).ConfigureAwait(false);
+                });
+            Nav.NavigateTo("/", forceLoad: true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RegisterAsync()
+    {
+        _errorMessage = null;
+        if (string.IsNullOrWhiteSpace(_email) || string.IsNullOrWhiteSpace(_password))
+        {
+            _errorMessage = "Email and password are required.";
+            return;
+        }
+        _busy = true;
+        try
+        {
+            var result = await IdentityService.RegisterAsync(_email, _password).ConfigureAwait(false);
+            if (!result.Success)
+            {
+                _errorMessage = result.Error ?? "Registration failed.";
+                return;
+            }
+            if (result.IsPendingApproval)
+            {
+                _errorMessage = "Account created. An administrator must approve it before you can sign in.";
+                return;
+            }
+            await CredentialStore.StoreAsync(StoredTokenKey, result.Token!).ConfigureAwait(false);
+            Program.SetUserId(result.UserId!);
+            // Honor the role the identity service assigned. Only the first registrant
+            // is "admin"; everyone else is "user" and must not inherit admin powers
+            // just because they happened to register through this form.
+            Session.SignIn(result.UserId!, result.Role ?? "user", _email.Trim());
+            if (!Program.IsRemoteMode)
+                _ = Task.Run(async () =>
+                {
+                    await Program.SeedUserAndWorkspaceAsync(Services, result.UserId!).ConfigureAwait(false);
+                    await Services.ApplyUserPreferencesForUserAsync(result.UserId!).ConfigureAwait(false);
+                });
+            Nav.NavigateTo("/", forceLoad: true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

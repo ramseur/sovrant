@@ -1,0 +1,36 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Brand -->
+    <Color x:Key="BrandPrimaryColor">#6D52C6</Color>
+    <SolidColorBrush x:Key="BrandPrimary" Color="#6D52C6" />
+
+    <!-- Surfaces -->
+    <SolidColorBrush x:Key="SurfaceBackground" Color="#F5F5F5" />
+    <SolidColorBrush x:Key="SidebarBackground" Color="#EBEBEB" />
+    <SolidColorBrush x:Key="SurfaceCard" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="SurfaceBorder" Color="#D0D0D0" />
+    <SolidColorBrush x:Key="SurfaceHover" Color="#E0E0E0" />
+
+    <!-- Text -->
+    <SolidColorBrush x:Key="TextPrimary" Color="#1A1A1A" />
+    <SolidColorBrush x:Key="TextSecondary" Color="#666666" />
+    <SolidColorBrush x:Key="TextMuted" Color="#999999" />
+
+    <!-- Status -->
+    <SolidColorBrush x:Key="StatusPass" Color="#4CAF50" />
+    <SolidColorBrush x:Key="StatusWarn" Color="#FF9800" />
+    <SolidColorBrush x:Key="StatusFail" Color="#F44336" />
+
+    <!-- Chat -->
+    <SolidColorBrush x:Key="UserMessageBackground" Color="#6D52C6" />
+    <SolidColorBrush x:Key="AssistantMessageBackground" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="ToolUseBackground" Color="#F0F0FA" />
+    <SolidColorBrush x:Key="ToolUseBorder" Color="#D0D0E0" />
+    <SolidColorBrush x:Key="InputBackground" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="InputBorder" Color="#D0D0D0" />
+
+    <!-- Markdown -->
+    <SolidColorBrush x:Key="CodeBlockBackground" Color="#F5F5F5" />
+
+</ResourceDictionary>

@@ -1,0 +1,305 @@
+@page "/workspaces"
+@using Sovrant.Runtime.Workspaces
+@using Sovrant.Web.Services
+@inject NavigationManager Nav
+
+<div class="settings-page">
+    <div class="diag-header">
+        <h1>Workspaces</h1>
+        <span class="item-count">@_workspaces.Count</span>
+    </div>
+
+    @if (Session.Role == "admin")
+    {
+        <div class="card">
+            <div class="form-field">
+                <label>New Team Workspace</label>
+                <div class="input-group">
+                    <input type="text" @bind="_newName" placeholder="Workspace name..." />
+                    <button class="btn-primary btn-sm btn-inline-add" @onclick="CreateAsync">Create</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="status-message">@_status</div>
+    }
+
+    @if (!string.IsNullOrEmpty(_loadError))
+    {
+        <div class="page-error-banner" role="alert">
+            <span>&#9888;</span>
+            <span class="error-message">@_loadError</span>
+            <button class="btn-sm" @onclick="LoadAsync">Retry</button>
+        </div>
+    }
+
+    @if (_isLoading)
+    {
+        <p class="loading-row">Loading workspaces…</p>
+    }
+    else
+    {
+    <div class="memory-list">
+        @if (_workspaces.Count == 0)
+        {
+            <p class="text-secondary">No workspaces found.</p>
+        }
+        @foreach (var w in _workspaces)
+        {
+            <div class="memory-card @(_selectedWorkspace?.Id == w.Id ? "memory-card-selected" : "")">
+                <div class="memory-content" style="cursor:pointer" @onclick="() => SelectWorkspace(w)">
+                    <div class="memory-text">
+                        <strong>@w.Name</strong>
+                        <span class="outcome-badge @(w.Type == "Personal" ? "success" : "unknown")">@w.Type</span>
+                        @if (w.MyRole is not null)
+                        {
+                            <span class="outcome-badge info">@w.MyRole</span>
+                        }
+                    </div>
+                    <div class="memory-meta">
+                        <span class="text-muted text-sm">@w.Slug</span>
+                        <span class="text-muted text-sm">@w.CreatedAt.LocalDateTime.ToString("d")</span>
+                    </div>
+                </div>
+                @if (w.Type != "Personal" && (Session.Role == "admin" || w.MyRole is "Owner"))
+                {
+                    <button class="btn-sm btn-danger" @onclick="() => DeleteAsync(w)">X</button>
+                }
+            </div>
+
+            @if (_selectedWorkspace?.Id == w.Id)
+            {
+                <div class="card" style="margin-bottom:12px">
+                    <div class="diag-header" style="margin-bottom:8px">
+                        <strong>Members</strong>
+                        <span class="item-count">@_members.Count</span>
+                    </div>
+
+                    @if (_membersLoading)
+                    {
+                        <p class="loading-row">Loading members…</p>
+                    }
+                    else
+                    {
+                        <div class="memory-list" style="margin-bottom:12px">
+                            @foreach (var m in _members)
+                            {
+                                <div class="memory-card">
+                                    <div class="memory-content">
+                                        <div class="memory-text">
+                                            <span>@m.UserId</span>
+                                            <span class="outcome-badge info">@m.Role</span>
+                                        </div>
+                                        <div class="memory-meta">
+                                            <span class="text-muted text-sm">Joined @m.JoinedAt.LocalDateTime.ToString("d")</span>
+                                        </div>
+                                    </div>
+                                    @if (CanManage(w) && m.Role != "Owner")
+                                    {
+                                        <button class="btn-sm btn-danger" @onclick="() => RemoveMemberAsync(w, m.UserId)">Remove</button>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @if (CanManage(w))
+                        {
+                            <div class="form-field">
+                                <label>Add Member</label>
+                                <div class="input-group">
+                                    <input type="text" @bind="_addMemberUserId" placeholder="User ID..." style="flex:2" />
+                                    <select @bind="_addMemberRole" style="padding:6px 8px;border-radius:6px;border:1px solid var(--surface-border);background:var(--surface-input);color:var(--text-primary);font-size:12px">
+                                        <option value="Member">Member</option>
+                                        <option value="Admin">Admin</option>
+                                        <option value="Viewer">Viewer</option>
+                                    </select>
+                                    <button class="btn-primary btn-sm btn-inline-add" @onclick="() => AddMemberAsync(w)">Add</button>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        }
+    </div>
+    }
+</div>
+
+@code {
+    [Inject] private IWorkspaceService WorkspaceService { get; set; } = default!;
+    [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
+    [Inject] private WebSessionService Session { get; set; } = default!;
+
+    private static string UserId => Sovrant.Web.Program.SovrantUserId;
+    private string _newName = string.Empty;
+    private string _status = string.Empty;
+    private bool _isLoading = true;
+    private string _loadError = string.Empty;
+    private List<WorkspaceItem> _workspaces = [];
+
+    private WorkspaceItem? _selectedWorkspace;
+    private List<MemberItem> _members = [];
+    private bool _membersLoading;
+    private string _addMemberUserId = string.Empty;
+    private string _addMemberRole = "Member";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!Session.IsAdmin) { Nav.NavigateTo("/", forceLoad: false); return; }
+        await Sovrant.Web.Program.RuntimeReady.Task;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = string.Empty;
+        try
+        {
+            var list = await WorkspaceService.ListForUserAsync(UserId);
+            var myRoles = new Dictionary<string, WorkspaceRole?>();
+            foreach (var ws in list)
+                myRoles[ws.WorkspaceId] = await WorkspaceService.GetMemberRoleAsync(ws.WorkspaceId, UserId);
+
+            _workspaces = list.Select(w => new WorkspaceItem
+            {
+                Id = w.WorkspaceId, Name = w.Name, Slug = w.Slug,
+                Type = w.Type.ToString(), CreatedAt = w.CreatedAt,
+                MyRole = myRoles.TryGetValue(w.WorkspaceId, out var r) ? r?.ToString() : null,
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Failed to load workspaces: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SelectWorkspace(WorkspaceItem w)
+    {
+        if (_selectedWorkspace?.Id == w.Id)
+        {
+            _selectedWorkspace = null;
+            _members = [];
+            return;
+        }
+        _selectedWorkspace = w;
+        _members = [];
+        _addMemberUserId = string.Empty;
+        _membersLoading = true;
+        try
+        {
+            var members = await WorkspaceService.ListMembersAsync(w.Id);
+            _members = members.Select(m => new MemberItem
+            {
+                UserId = m.UserId, Role = m.Role.ToString(), JoinedAt = m.JoinedAt,
+            }).ToList();
+        }
+        catch (Exception ex) { _status = $"Could not load members: {ex.Message}"; }
+        finally { _membersLoading = false; }
+    }
+
+    private bool CanManage(WorkspaceItem w) =>
+        Session.Role == "admin" || w.MyRole is "Owner" or "Admin";
+
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newName)) { _status = "Enter a name."; return; }
+        var name = _newName.Trim();
+        var slug = name.ToLowerInvariant().Replace(' ', '-');
+        if (_workspaces.Any(w => w.Name.Equals(name, StringComparison.OrdinalIgnoreCase)
+                              || w.Slug.Equals(slug, StringComparison.OrdinalIgnoreCase)))
+        {
+            _status = $"A workspace named '{name}' already exists.";
+            return;
+        }
+        try
+        {
+            await WorkspaceService.CreateTeamWorkspaceAsync(name, slug, UserId);
+            _newName = string.Empty;
+            _status = "Workspace created.";
+            await LoadAsync();
+            ActiveContext.NotifyDataChanged();
+        }
+        catch (Exception ex) { _status = $"Failed: {ex.Message}"; }
+    }
+
+    private async Task DeleteAsync(WorkspaceItem w)
+    {
+        try
+        {
+            await WorkspaceService.DeleteAsync(w.Id);
+            if (_selectedWorkspace?.Id == w.Id) { _selectedWorkspace = null; _members = []; }
+            _status = $"'{w.Name}' deleted.";
+            await LoadAsync();
+            ActiveContext.NotifyDataChanged();
+        }
+        catch (Exception ex) { _status = $"Cannot delete: {ex.Message}"; }
+    }
+
+    private async Task AddMemberAsync(WorkspaceItem w)
+    {
+        var uid = _addMemberUserId.Trim();
+        if (string.IsNullOrEmpty(uid)) { _status = "Enter a user ID."; return; }
+        if (!Enum.TryParse<WorkspaceRole>(_addMemberRole, out var role)) role = WorkspaceRole.Member;
+        try
+        {
+            await WorkspaceService.AddMemberAsync(w.Id, uid, role);
+            _addMemberUserId = string.Empty;
+            _status = $"Added {uid} as {role}.";
+            await ReloadMembersAsync(w);
+        }
+        catch (Exception ex) { _status = $"Failed to add member: {ex.Message}"; }
+    }
+
+    private async Task RemoveMemberAsync(WorkspaceItem w, string userId)
+    {
+        try
+        {
+            await WorkspaceService.RemoveMemberAsync(w.Id, userId);
+            _status = $"Removed {userId}.";
+            await ReloadMembersAsync(w);
+        }
+        catch (Exception ex) { _status = $"Failed to remove: {ex.Message}"; }
+    }
+
+    private async Task ReloadMembersAsync(WorkspaceItem w)
+    {
+        _membersLoading = true;
+        try
+        {
+            var members = await WorkspaceService.ListMembersAsync(w.Id);
+            _members = members.Select(m => new MemberItem
+            {
+                UserId = m.UserId, Role = m.Role.ToString(), JoinedAt = m.JoinedAt,
+            }).ToList();
+        }
+        catch (Exception ex) { _status = $"Could not reload members: {ex.Message}"; }
+        finally { _membersLoading = false; }
+    }
+
+    private sealed class WorkspaceItem
+    {
+        public string Id { get; init; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
+        public string Slug { get; init; } = string.Empty;
+        public string Type { get; init; } = string.Empty;
+        public DateTimeOffset CreatedAt { get; init; }
+        public string? MyRole { get; init; }
+    }
+
+    private sealed class MemberItem
+    {
+        public string UserId { get; init; } = string.Empty;
+        public string Role { get; init; } = string.Empty;
+        public DateTimeOffset JoinedAt { get; init; }
+    }
+}

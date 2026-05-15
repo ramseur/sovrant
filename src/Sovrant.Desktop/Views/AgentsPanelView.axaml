@@ -1,0 +1,26 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.AgentsPanelView"
+             x:DataType="vm:SidebarViewModel"
+             Background="{DynamicResource SidebarBackground}">
+    <ScrollViewer>
+        <StackPanel Margin="10">
+            <TextBlock Text="AGENTS" FontSize="11" FontWeight="Bold"
+                       Foreground="{DynamicResource TextMuted}"
+                       Margin="6,4,0,10" />
+            <Button Content="🤖  Templates"
+                    Command="{Binding NavigateCommand}" CommandParameter="Agents"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Agents}"
+                    Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="🎼  Orchestration"
+                    Command="{Binding NavigateCommand}" CommandParameter="Orchestration"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Orchestration}"
+                    Foreground="{DynamicResource TextPrimary}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

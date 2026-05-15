@@ -1,0 +1,125 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             x:Class="Sovrant.Desktop.Views.SkillsView"
+             x:DataType="vm:SkillsViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel>
+        <!-- Header -->
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="12">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+                    <Button Content="Refresh"
+                            Command="{Binding RefreshCommand}"
+                            Padding="12,6"
+                            CornerRadius="6"
+                            Background="Transparent"
+                            Foreground="{DynamicResource TextPrimary}" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="Skills" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
+                        <Run Text="{Binding TotalCount}" />
+                        <Run Text=" skills available — select one to view details" />
+                    </TextBlock>
+                </StackPanel>
+            </DockPanel>
+
+            <TextBox Text="{Binding SearchText}"
+                     Watermark="Search skills..."
+                     CornerRadius="8"
+                     Padding="12,8" />
+        </StackPanel>
+
+        <!-- Master-detail -->
+        <Grid Margin="32,12,32,24" ColumnDefinitions="300,12,*">
+            <!-- List -->
+            <ScrollViewer Grid.Column="0">
+                <ItemsControl ItemsSource="{Binding FilteredSkills}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:SkillItemViewModel">
+                            <Button Command="{Binding $parent[ItemsControl].((vm:SkillsViewModel)DataContext).SelectSkillCommand}"
+                                    CommandParameter="{Binding}"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Padding="0" Margin="0,2"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Cursor="Hand">
+                                <Border Padding="12,8"
+                                        CornerRadius="8"
+                                        Background="{DynamicResource SurfaceCard}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                        BorderThickness="1">
+                                    <StackPanel Spacing="4">
+                                        <DockPanel>
+                                            <Border DockPanel.Dock="Right"
+                                                    Padding="5,2" CornerRadius="4"
+                                                    Background="{DynamicResource BrandPrimary}"
+                                                    IsVisible="{Binding Trigger, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                <TextBlock Text="{Binding Trigger}"
+                                                           FontSize="10" Foreground="White" FontWeight="SemiBold" />
+                                            </Border>
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontSize="13"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource BrandPrimary}" />
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding Description}"
+                                                   FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxLines="2"
+                                                   Foreground="{DynamicResource TextSecondary}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock FontSize="10" Foreground="{DynamicResource TextMuted}">
+                                                <Run Text="{Binding AgentCount}" />
+                                                <Run Text=" agents" />
+                                            </TextBlock>
+                                            <TextBlock FontSize="10" Foreground="{DynamicResource TextMuted}">
+                                                <Run Text="{Binding ToolCount}" />
+                                                <Run Text=" tools" />
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Detail pane -->
+            <Grid Grid.Column="2">
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding !SelectedSkill}">
+                    <TextBlock Text="Select a skill to view its details"
+                               FontSize="14"
+                               Foreground="{DynamicResource TextMuted}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding !!SelectedSkill}">
+                    <ContentControl Content="{Binding SelectedSkill}">
+                        <ContentControl.ContentTemplate>
+                            <DataTemplate DataType="vm:SkillItemViewModel">
+                                <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
+                            </DataTemplate>
+                        </ContentControl.ContentTemplate>
+                    </ContentControl>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</UserControl>

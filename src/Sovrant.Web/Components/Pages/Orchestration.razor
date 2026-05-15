@@ -1,0 +1,447 @@
+@page "/orchestration"
+@using Sovrant.Agents.Teams
+@using Sovrant.Agents.Swarm
+
+<div class="master-detail">
+    <div class="master-panel">
+        <div class="master-header">
+            <h1>Orchestration</h1>
+            <div class="master-header-right">
+                <span class="item-count">@_filtered.Count</span>
+                <button class="btn-sm btn-outline" title="Swarm defaults"
+                        @onclick="ToggleSwarmConfig">&#x2699;</button>
+                <button class="btn-sm btn-primary" title="New team"
+                        @onclick="HintNew">+ New</button>
+            </div>
+        </div>
+
+        <div class="master-search">
+            <input type="text" placeholder="Search teams..."
+                   @bind="_search" @bind:event="oninput" @bind:after="ApplyFilter" />
+        </div>
+
+        <div class="master-list">
+            @if (_filtered.Count == 0)
+            {
+                <p class="text-secondary" style="padding:12px;">@EmptyMessage()</p>
+            }
+            else
+            {
+                @foreach (var item in _filtered)
+                {
+                    <button class="master-item @(ReferenceEquals(item, _selected) && !_showSwarmConfig ? "active" : "")"
+                            @onclick="() => Select(item)">
+                        <div class="item-title">
+                            <span class="orch-shape-badge shape-@item.RunMode.ToString().ToLowerInvariant()">
+                                @ModeIcon(item.RunMode) @item.RunMode
+                            </span>
+                            <span>@item.Name</span>
+                        </div>
+                        <div class="item-subtitle">@item.Subtitle</div>
+                    </button>
+                }
+            }
+        </div>
+    </div>
+
+    <div class="detail-panel">
+        @if (!string.IsNullOrEmpty(_status))
+        {
+            <div class="status-message" style="margin:16px 24px 0;">@_status</div>
+        }
+
+        @if (_showSwarmConfig)
+        {
+            <div class="detail-content">
+                <div class="orch-detail-header">
+                    <div>
+                        <span class="orch-shape-badge shape-swarm">&#x1F41D; Defaults</span>
+                        <h2>Swarm Defaults</h2>
+                        <p class="text-secondary" style="margin:4px 0 0;">
+                            Default run settings inherited by new teams. Per-team overrides live on each team's detail pane.
+                        </p>
+                    </div>
+                    <button class="btn-sm btn-outline" @onclick="ToggleSwarmConfig">Close</button>
+                </div>
+
+                <div class="gov-card">
+                    <div class="toggle-card" style="border:none;padding:0;">
+                        <div>
+                            <div class="toggle-title">Swarm Enabled</div>
+                            <div class="toggle-desc">Enable swarm orchestrator for parallel agent execution</div>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" @bind="_swarmEnabled" />
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="toggle-card" style="border:none;padding:0;">
+                        <div>
+                            <div class="toggle-title">Quality Gate</div>
+                            <div class="toggle-desc">Run quality review after execution</div>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" @bind="_swarmQualityGate" />
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="gov-field-row">
+                        <span>Max Concurrent Agents</span>
+                        <input type="number" class="gov-field-input" @bind="_swarmMaxConcurrent" min="1" max="16" />
+                    </div>
+
+                    <div class="gov-field-row">
+                        <span>Token Budget</span>
+                        <input type="number" class="gov-field-input" @bind="_swarmMaxTokenBudget" min="10000" step="50000" />
+                    </div>
+
+                    <div class="gov-field-row">
+                        <span>Task Timeout (seconds)</span>
+                        <input type="number" class="gov-field-input" @bind="_swarmTimeout" min="30" max="3600" />
+                    </div>
+
+                    <div class="gov-field-row">
+                        <span>Permissions</span>
+                        <select class="gov-field-input" @bind="_swarmPermissions">
+                            <option value="ask">Ask</option>
+                            <option value="accept-edits">Accept Edits</option>
+                            <option value="yolo">Auto-Accept All</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button class="btn-primary" style="max-width:200px;margin-top:12px;"
+                        @onclick="SaveSwarmConfig">Save Defaults</button>
+                <p class="text-muted text-sm">Defaults persisted to the database.</p>
+            </div>
+        }
+        else if (_selected is not null)
+        {
+            <div class="detail-content">
+                <div class="orch-detail-header">
+                    <div>
+                        <span class="orch-shape-badge shape-@_selected.RunMode.ToString().ToLowerInvariant()">
+                            @ModeIcon(_selected.RunMode) @_selected.RunMode
+                        </span>
+                        <h2>@_selected.Name</h2>
+                        @if (!string.IsNullOrEmpty(_selected.Description))
+                        {
+                            <p class="text-secondary" style="margin:4px 0 0;">@_selected.Description</p>
+                        }
+                    </div>
+                    <button class="btn-sm btn-danger" @onclick="() => RemoveTeam(_selected.TeamId)">Delete</button>
+                </div>
+
+                <div class="orch-detail-section">
+                    <h3>Run Profile</h3>
+                    <div class="gov-card">
+                        <div class="gov-field-row">
+                            <span>Run Mode</span>
+                            <select class="gov-field-input" @bind="_selected.RunMode">
+                                <option value="@TeamRunMode.Sequential">Sequential</option>
+                                <option value="@TeamRunMode.Parallel">Parallel</option>
+                                <option value="@TeamRunMode.Swarm">Swarm</option>
+                            </select>
+                        </div>
+
+                        <div class="gov-field-row">
+                            <span>Max Concurrent</span>
+                            <input type="number" class="gov-field-input"
+                                   @bind="_selected.MaxConcurrent" min="1" max="16" />
+                        </div>
+
+                        <div class="toggle-card" style="border:none;padding:0;">
+                            <div>
+                                <div class="toggle-title">File Locks</div>
+                                <div class="toggle-desc">Serialize concurrent writes to the same file</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" @bind="_selected.FileLocksEnabled" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="toggle-card" style="border:none;padding:0;">
+                            <div>
+                                <div class="toggle-title">Quality Gate</div>
+                                <div class="toggle-desc">Post-run review + optional retry</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" @bind="_selected.QualityGateEnabled" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        @if (_selected.QualityGateEnabled)
+                        {
+                            <div class="gov-field-row">
+                                <span>Quality Threshold (0–10)</span>
+                                <input type="number" class="gov-field-input"
+                                       @bind="_selected.QualityGateThreshold" min="0" max="10" />
+                            </div>
+                        }
+
+                        <div class="gov-field-row">
+                            <span>Decomposition</span>
+                            <select class="gov-field-input" @bind="_selected.DecompositionMode">
+                                <option value="@TeamDecompositionMode.Off">Off</option>
+                                <option value="@TeamDecompositionMode.RoleAware">RoleAware</option>
+                                <option value="@TeamDecompositionMode.Open">Open</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button class="btn-primary" style="max-width:180px;margin-top:12px;"
+                            @onclick="() => SaveTeamProfile(_selected)">Save Profile</button>
+                </div>
+
+                <div class="orch-detail-section">
+                    <h3>Members</h3>
+                    @if (_selected.Members.Count == 0)
+                    {
+                        <p class="text-muted text-sm">No members.</p>
+                    }
+                    else
+                    {
+                        @foreach (var m in _selected.Members)
+                        {
+                            <div class="ma-member-card">
+                                <div class="ma-member-info">
+                                    <div>
+                                        <span class="ma-member-name">@m.Name</span>
+                                        <span class="ma-role-badge">@m.Role</span>
+                                    </div>
+                                    <div class="ma-member-meta">
+                                        @if (!string.IsNullOrEmpty(m.Model))
+                                        {
+                                            <span>@m.Model</span>
+                                        }
+                                        <span>@m.ToolsSummary</span>
+                                    </div>
+                                </div>
+                                <button class="btn-sm btn-danger" @onclick="() => RemoveMember(m.Id)">X</button>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="detail-empty">
+                <span class="text-muted">Select a team to view details</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Inject] private ITeamRegistry TeamRegistry { get; set; } = default!;
+    [Inject] private ISwarmConfigStore SwarmConfigStore { get; set; } = default!;
+
+    private string _search = string.Empty;
+    private string _status = string.Empty;
+    private bool _showSwarmConfig;
+
+    private List<TeamItem> _all = [];
+    private List<TeamItem> _filtered = [];
+    private TeamItem? _selected;
+
+    private bool _swarmEnabled;
+    private bool _swarmQualityGate = true;
+    private int _swarmMaxConcurrent = 4;
+    private int _swarmMaxTokenBudget = 500_000;
+    private int _swarmTimeout = 300;
+    private string _swarmPermissions = "ask";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSwarmConfigAsync().ConfigureAwait(false);
+        LoadAll();
+    }
+
+    private void LoadAll()
+    {
+        var items = new List<TeamItem>();
+
+        foreach (var t in TeamRegistry.ListTeams())
+        {
+            var members = TeamRegistry.GetTeamMembers(t.Id).Select(ToView).ToList();
+            items.Add(new TeamItem
+            {
+                TeamId = t.Id,
+                Name = t.Name,
+                Description = t.Description ?? string.Empty,
+                Subtitle = members.Count == 1 ? "1 agent" : $"{members.Count} agents",
+                Members = members,
+                RunMode = t.RunMode,
+                MaxConcurrent = t.MaxConcurrent,
+                FileLocksEnabled = t.FileLocksEnabled,
+                QualityGateEnabled = t.QualityGateEnabled,
+                QualityGateThreshold = t.QualityGateThreshold,
+                DecompositionMode = t.DecompositionMode,
+            });
+        }
+
+        _all = items;
+        if (_selected is not null)
+        {
+            _selected = _all.FirstOrDefault(i => i.TeamId == _selected.TeamId);
+        }
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        if (string.IsNullOrWhiteSpace(_search))
+        {
+            _filtered = _all;
+            return;
+        }
+
+        var s = _search.Trim();
+        _filtered = _all.Where(i =>
+            i.Name.Contains(s, StringComparison.OrdinalIgnoreCase) ||
+            i.Description.Contains(s, StringComparison.OrdinalIgnoreCase)
+        ).ToList();
+    }
+
+    private void Select(TeamItem item)
+    {
+        _showSwarmConfig = false;
+        _selected = item;
+    }
+
+    private void ToggleSwarmConfig()
+    {
+        _showSwarmConfig = !_showSwarmConfig;
+        if (_showSwarmConfig) _selected = null;
+    }
+
+    private void HintNew()
+    {
+        _status = "New team picker coming soon. Use /team create in chat to add a team.";
+    }
+
+    private void RemoveTeam(string id)
+    {
+        TeamRegistry.RemoveTeam(id);
+        _status = "Team removed.";
+        _selected = null;
+        LoadAll();
+    }
+
+    private void RemoveMember(string id)
+    {
+        TeamRegistry.RemoveMember(id);
+        _status = "Member removed.";
+        LoadAll();
+    }
+
+    private void SaveTeamProfile(TeamItem team)
+    {
+        var profile = new TeamRunProfile(
+            team.RunMode,
+            team.MaxConcurrent,
+            team.FileLocksEnabled,
+            team.QualityGateEnabled,
+            team.QualityGateThreshold,
+            team.DecompositionMode);
+
+        if (TeamRegistry.UpdateTeamRunProfile(team.TeamId, profile))
+        {
+            _status = $"Saved run profile for '{team.Name}'.";
+            LoadAll();
+        }
+        else
+        {
+            _status = $"Could not save '{team.Name}' — team not found.";
+        }
+    }
+
+    private async Task LoadSwarmConfigAsync()
+    {
+        var config = await SwarmConfigStore.GetAsync().ConfigureAwait(false);
+        _swarmEnabled = config.Enabled;
+        _swarmQualityGate = config.QualityGateEnabled;
+        _swarmMaxConcurrent = config.MaxConcurrent;
+        _swarmMaxTokenBudget = config.MaxTokenBudget;
+        _swarmTimeout = config.TaskTimeoutSeconds;
+        _swarmPermissions = config.Permissions;
+    }
+
+    private async Task SaveSwarmConfig()
+    {
+        try
+        {
+            var config = new SwarmConfig
+            {
+                Enabled            = _swarmEnabled,
+                QualityGateEnabled = _swarmQualityGate,
+                MaxConcurrent      = _swarmMaxConcurrent,
+                MaxTokenBudget     = _swarmMaxTokenBudget,
+                TaskTimeoutSeconds = _swarmTimeout,
+                Permissions        = _swarmPermissions,
+            };
+            await SwarmConfigStore.SetAsync(string.Empty, config).ConfigureAwait(false);
+            _status = "Swarm defaults saved.";
+            LoadAll();
+        }
+        catch (Exception ex) { _status = $"Save failed: {ex.Message}"; }
+    }
+
+    private static MemberView ToView(TeamMemberInfo m) => new()
+    {
+        Id = m.Id,
+        Name = m.Name,
+        Role = m.Role.ToString(),
+        Model = m.Model ?? string.Empty,
+        ToolsSummary = BuildToolsSummary(m.AllowedTools),
+    };
+
+    private static string BuildToolsSummary(IReadOnlyList<string>? tools)
+    {
+        if (tools is null || tools.Count == 0) return "All tools";
+        if (tools.Count <= 3) return string.Join(", ", tools);
+        return $"{string.Join(", ", tools.Take(3))} +{tools.Count - 3} more";
+    }
+
+    private static string ModeIcon(TeamRunMode mode) => mode switch
+    {
+        TeamRunMode.Sequential => "\U0001F465",
+        TeamRunMode.Parallel => "\u26A1",
+        TeamRunMode.Swarm => "\U0001F41D",
+        _ => string.Empty,
+    };
+
+    private string EmptyMessage() =>
+        string.IsNullOrWhiteSpace(_search)
+            ? "No teams yet. Use /team create in chat to set one up."
+            : "No matches.";
+
+    private sealed class TeamItem
+    {
+        public string TeamId { get; init; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
+        public string Description { get; init; } = string.Empty;
+        public string Subtitle { get; init; } = string.Empty;
+        public List<MemberView> Members { get; init; } = [];
+        public TeamRunMode RunMode { get; set; } = TeamRunMode.Parallel;
+        public int MaxConcurrent { get; set; } = 4;
+        public bool FileLocksEnabled { get; set; }
+        public bool QualityGateEnabled { get; set; }
+        public int QualityGateThreshold { get; set; } = 7;
+        public TeamDecompositionMode DecompositionMode { get; set; } = TeamDecompositionMode.Off;
+    }
+
+    private sealed class MemberView
+    {
+        public string Id { get; init; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
+        public string Role { get; init; } = string.Empty;
+        public string Model { get; init; } = string.Empty;
+        public string ToolsSummary { get; init; } = string.Empty;
+    }
+}

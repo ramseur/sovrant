@@ -1,0 +1,84 @@
+name: "Sovrant Agent"
+description: "Run the Sovrant agentic AI engine in CI mode — fix tests, resolve build errors, update generated code."
+
+inputs:
+  prompt:
+    description: "The message to send to the agent (e.g. 'Fix the failing tests')."
+    required: true
+  model:
+    description: "LLM model to use (e.g. gpt-4o-mini, gemini-2.5-flash)."
+    required: false
+    default: ""
+  session:
+    description: "Session ID for persistent context across workflow steps."
+    required: false
+    default: ""
+  max-tool-rounds:
+    description: "Maximum tool rounds per turn (default: 20)."
+    required: false
+    default: "20"
+  working-directory:
+    description: "Working directory for the agent (default: repository root)."
+    required: false
+    default: "."
+
+outputs:
+  success:
+    description: "Whether the agent completed without errors (true/false)."
+    value: ${{ steps.run.outputs.success }}
+  output:
+    description: "The agent's text response."
+    value: ${{ steps.run.outputs.text }}
+  json:
+    description: "Full JSON output from the agent."
+    value: ${{ steps.run.outputs.json }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: "10.0.x"
+
+    - name: Build Sovrant
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: dotnet build src/Sovrant.Cli --configuration Release --nologo -v quiet
+
+    - name: Run agent
+      id: run
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        SOVRANT_CI: "true"
+      run: |
+        args=(--ci)
+        if [ -n "${{ inputs.model }}" ]; then
+          args+=(--model "${{ inputs.model }}")
+        fi
+        if [ -n "${{ inputs.session }}" ]; then
+          args+=(--session "${{ inputs.session }}")
+        fi
+        args+=(prompt "${{ inputs.prompt }}")
+
+        set +e
+        output=$(dotnet run --project src/Sovrant.Cli --configuration Release --no-build -- "${args[@]}" 2>&1)
+        exit_code=$?
+        set -e
+
+        # Write JSON to output
+        echo "json<<SOVRANT_EOF" >> "$GITHUB_OUTPUT"
+        echo "$output" >> "$GITHUB_OUTPUT"
+        echo "SOVRANT_EOF" >> "$GITHUB_OUTPUT"
+
+        # Extract fields for convenience
+        success=$(echo "$output" | jq -r '.success // false')
+        text=$(echo "$output" | jq -r '.text // ""')
+
+        echo "success=$success" >> "$GITHUB_OUTPUT"
+        echo "text<<SOVRANT_TEXT_EOF" >> "$GITHUB_OUTPUT"
+        echo "$text" >> "$GITHUB_OUTPUT"
+        echo "SOVRANT_TEXT_EOF" >> "$GITHUB_OUTPUT"
+
+        exit $exit_code

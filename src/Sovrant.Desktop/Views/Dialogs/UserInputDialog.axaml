@@ -1,0 +1,41 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sovrant.Desktop.Views.Dialogs.UserInputDialog"
+        Title="Input Required"
+        Width="440" Height="240"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel Margin="24">
+        <!-- Buttons -->
+        <StackPanel DockPanel.Dock="Bottom"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="10"
+                    Margin="0,16,0,0">
+            <Button Content="Cancel" Click="OnCancel"
+                    Padding="20,8" CornerRadius="8" />
+            <Button Content="Submit" Click="OnSubmit"
+                    Padding="20,8" CornerRadius="8"
+                    Background="{DynamicResource BrandPrimary}"
+                    Foreground="White"
+                    FontWeight="SemiBold" />
+        </StackPanel>
+
+        <!-- Content -->
+        <StackPanel Spacing="12">
+            <TextBlock x:Name="QuestionText"
+                       TextWrapping="Wrap"
+                       FontSize="14"
+                       Foreground="{DynamicResource TextPrimary}" />
+            <TextBox x:Name="ResponseInput"
+                     Watermark="Type your response..."
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     MinHeight="60"
+                     Padding="12,10"
+                     CornerRadius="8" />
+        </StackPanel>
+    </DockPanel>
+</Window>

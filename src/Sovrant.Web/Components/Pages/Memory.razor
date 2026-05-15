@@ -1,0 +1,173 @@
+@page "/memory"
+@using Sovrant.Runtime.Memory
+
+<div class="settings-page">
+    <h1>Memory</h1>
+
+    <div class="tab-bar">
+        <button class="tab-btn @(_tab == 0 ? "active" : "")" @onclick="() => _tab = 0">
+            Patterns <span class="tab-badge">@_patterns.Count</span>
+        </button>
+        <button class="tab-btn @(_tab == 1 ? "active" : "")" @onclick="() => _tab = 1">
+            Instincts <span class="tab-badge">@_instincts.Count</span>
+        </button>
+        <button class="tab-btn @(_tab == 2 ? "active" : "")" @onclick="() => _tab = 2">
+            Summaries <span class="tab-badge">@_summaries.Count</span>
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="status-message">@_status</div>
+    }
+
+    @if (!string.IsNullOrEmpty(_loadError))
+    {
+        <div class="page-error-banner" role="alert">
+            <span>&#9888;</span>
+            <span class="error-message">@_loadError</span>
+            <button class="btn-sm" @onclick="LoadAllAsync">Retry</button>
+        </div>
+    }
+
+    @if (_isLoading)
+    {
+        <p class="loading-row">Loading memory…</p>
+    }
+    else if (_tab == 0)
+    {
+        <div class="memory-list">
+            @if (_patterns.Count == 0)
+            {
+                <p class="text-secondary">No learned patterns yet. Patterns are extracted from successful sessions.</p>
+            }
+            @foreach (var p in _patterns)
+            {
+                <div class="memory-card">
+                    <div class="memory-content">
+                        <div class="memory-text">@p.Pattern</div>
+                        <div class="memory-meta">
+                            <span class="confidence-badge @ConfidenceClass(p.Confidence)">@((p.Confidence * 100).ToString("F0"))%</span>
+                            <span class="text-muted text-sm">@p.Project</span>
+                            <span class="text-muted text-sm">@p.CreatedAt.LocalDateTime.ToString("d")</span>
+                        </div>
+                    </div>
+                    <button class="btn-sm btn-danger" @onclick="() => DeletePattern(p)">X</button>
+                </div>
+            }
+        </div>
+    }
+    else if (_tab == 1)
+    {
+        <div class="memory-list">
+            @if (_instincts.Count == 0)
+            {
+                <p class="text-secondary">No instincts yet. Instincts are behavioral rules learned over time.</p>
+            }
+            @foreach (var inst in _instincts)
+            {
+                <div class="memory-card">
+                    <div class="memory-content">
+                        <div class="memory-text"><strong>When:</strong> @inst.Trigger</div>
+                        <div class="memory-text"><strong>Then:</strong> @inst.Action</div>
+                        <div class="memory-meta">
+                            <span class="confidence-badge @ConfidenceClass(inst.Confidence)">@((inst.Confidence * 100).ToString("F0"))%</span>
+                            <span class="text-muted text-sm">@inst.CreatedAt.LocalDateTime.ToString("d")</span>
+                        </div>
+                    </div>
+                    <button class="btn-sm btn-danger" @onclick="() => DeleteInstinct(inst)">X</button>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="memory-list">
+            @if (_summaries.Count == 0)
+            {
+                <p class="text-secondary">No session summaries yet.</p>
+            }
+            @foreach (var s in _summaries)
+            {
+                <div class="memory-card">
+                    <div class="memory-content">
+                        <div class="memory-text">
+                            <span class="outcome-badge @s.Outcome.ToString().ToLowerInvariant()">@s.Outcome</span>
+                            @s.SessionId[..Math.Min(12, s.SessionId.Length)]
+                        </div>
+                        <div class="memory-meta">
+                            <span>@s.TurnCount turns</span>
+                            <span>@s.ToolsUsed.Count tools</span>
+                            <span>@s.StartedAt.LocalDateTime.ToString("g")</span>
+                        </div>
+                        @if (s.Tasks.Count > 0)
+                        {
+                            <div class="memory-tasks text-sm text-secondary">@string.Join("; ", s.Tasks.Take(3))</div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Inject] private IMemoryStore MemoryStore { get; set; } = default!;
+
+    private int _tab;
+    private string _status = string.Empty;
+    private bool _isLoading = true;
+    private string _loadError = string.Empty;
+    private List<LearnedPattern> _patterns = [];
+    private List<Instinct> _instincts = [];
+    private List<SessionSummary> _summaries = [];
+
+    private static readonly string Project = Directory.GetCurrentDirectory();
+
+    protected override async Task OnInitializedAsync() => await LoadAllAsync();
+
+    private async Task LoadAllAsync()
+    {
+        _isLoading = true;
+        _loadError = string.Empty;
+        try
+        {
+            _patterns = (await MemoryStore.LoadPatternsAsync(Project)).ToList();
+            _instincts = (await MemoryStore.LoadInstinctsAsync()).ToList();
+            _summaries = (await MemoryStore.LoadSummariesAsync(Project, maxCount: 20)).ToList();
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Failed to load memory: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task DeletePattern(LearnedPattern pattern)
+    {
+        try
+        {
+            await MemoryStore.RemovePatternAsync(pattern.Id, pattern.Project);
+            _patterns.Remove(pattern);
+            _status = "Pattern deleted.";
+        }
+        catch (Exception ex) { _status = $"Delete failed: {ex.Message}"; }
+    }
+
+    private async Task DeleteInstinct(Instinct instinct)
+    {
+        try
+        {
+            await MemoryStore.RemoveInstinctAsync(instinct.Id);
+            _instincts.Remove(instinct);
+            _status = "Instinct deleted.";
+        }
+        catch (Exception ex) { _status = $"Delete failed: {ex.Message}"; }
+    }
+
+    private static string ConfidenceClass(double c)
+        => c >= 0.7 ? "high" : c >= 0.4 ? "medium" : "low";
+}

@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.GovernancePanelView"
+             x:DataType="vm:SidebarViewModel"
+             Background="{DynamicResource SidebarBackground}">
+    <ScrollViewer>
+        <StackPanel Margin="10">
+            <TextBlock Text="GOVERNANCE" FontSize="11" FontWeight="Bold"
+                       Foreground="{DynamicResource TextMuted}"
+                       Margin="6,4,0,10" />
+            <Button Content="🛡  Governance"
+                    Command="{Binding NavigateCommand}" CommandParameter="Governance"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="🔒  Trust Boundary"
+                    Command="{Binding NavigateCommand}" CommandParameter="TrustBoundary"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="🔧  Diagnostics"
+                    Command="{Binding NavigateCommand}" CommandParameter="Diagnostics"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

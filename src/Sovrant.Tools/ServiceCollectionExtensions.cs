@@ -1,0 +1,209 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Sovrant.Lsp;
+using Sovrant.Runtime.Config;
+using Sovrant.Runtime.Documents;
+using Sovrant.Runtime.Prompt;
+using Sovrant.Tools.Agent;
+using Sovrant.Tools.Core;
+using Sovrant.Tools.Extended;
+using Sovrant.Tools.Lsp;
+using Sovrant.Tools.Mcp;
+using Sovrant.Tools.PlanMode;
+using Sovrant.Tools.Skills;
+using Sovrant.Tools.Tasks;
+using Sovrant.Tools.Todo;
+using Sovrant.Tools.Quality;
+using Sovrant.Tools.Shell;
+using Sovrant.Tools.Missions;
+using Sovrant.Tools.Coordination;
+using Sovrant.Tools.Swarm;
+using Sovrant.Tools.Team;
+using Sovrant.Tools.Artifacts;
+using Sovrant.Tools.Documents;
+using Sovrant.Tools.Worktree;
+
+namespace Sovrant.Tools;
+
+/// <summary>Extension methods for registering all Sovrant built-in tools.</summary>
+public static class ServiceCollectionExtensions
+{
+    /// <summary>
+    /// Registers all built-in tools and the <see cref="ToolRegistrar"/>.
+    /// Call <see cref="ToolRegistrar.RegisterAll"/> after building the service provider
+    /// to seed the <see cref="Sovrant.Runtime.Tools.IToolRegistry"/>.
+    /// </summary>
+    public static IServiceCollection AddSovrantTools(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        // HTTP clients for web tools
+        services.AddHttpClient("WebFetch");
+        services.AddHttpClient("WebSearch");
+
+        // User input provider (can be replaced by CLI layer)
+        services.AddSingleton<IUserInputProvider, NullUserInputProvider>();
+
+        // In-session singletons
+        services.AddSingleton<TodoState>();
+        services.AddSingleton<BackgroundTaskRegistry>();
+        services.AddSingleton<WorktreeState>();
+        services.AddSingleton<ShellSessionState>();
+        services.AddSingleton<ShellEnvironment>();
+
+        // Core tools
+        services.AddSingleton<ITool, ReadFileTool>();
+        services.AddSingleton<ITool, WriteFileTool>();
+        services.AddSingleton<ITool, EditFileTool>();
+        services.AddSingleton<ITool, BashTool>();
+        services.AddSingleton<ITool, GlobTool>();
+        services.AddSingleton<ITool, GrepTool>();
+        services.AddSingleton<ITool, ListDirectoryTool>();
+        services.AddSingleton<ITool, WebFetchTool>();
+
+        // Extended tools
+        services.AddSingleton<ITool>(sp =>
+            new WebSearchTool(
+                sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetService<Sovrant.Api.Config.CredentialConfig>(),
+                sp.GetService<Sovrant.Runtime.Mcp.ICredentialStore>(),
+                sp.GetService<Sovrant.Api.Routing.ISmartRouter>(),
+                sp.GetService<Sovrant.Runtime.Config.SovrantConfig>(),
+                sp.GetService<Sovrant.Api.Config.WebSearchOptions>()));
+        services.AddSingleton<ITool, NotebookEditTool>();
+        services.AddSingleton<ITool, ReplTool>();
+        services.AddSingleton<ITool, PowerShellTool>();
+        services.AddSingleton<ITool, SleepTool>();
+        services.AddSingleton<ITool, AskUserQuestionTool>();
+
+        // Todo tool
+        services.AddSingleton<ITool, TodoWriteTool>();
+
+        // Task tools
+        services.AddSingleton<ITool, TaskCreateTool>();
+        services.AddSingleton<ITool, TaskGetTool>();
+        services.AddSingleton<ITool, TaskListTool>();
+        services.AddSingleton<ITool, TaskOutputTool>();
+        services.AddSingleton<ITool, TaskStopTool>();
+        services.AddSingleton<ITool, TaskUpdateTool>();
+
+        // Plan mode tools
+        services.AddSingleton<ITool, EnterPlanModeTool>();
+        services.AddSingleton<ITool, ExitPlanModeTool>();
+
+        // Worktree tools
+        services.AddSingleton<ITool, EnterWorktreeTool>();
+        services.AddSingleton<ITool, ExitWorktreeTool>();
+
+        // Skill system — registry, runner, tools
+        services.AddSingleton<SkillRegistry>();
+        services.AddSingleton<SkillRunner>();
+        services.AddSingleton<ICapabilityCatalog, CapabilityCatalog>();
+        services.AddSingleton<ITool, SkillTool>();
+        services.AddSingleton<ITool, SkillCreateTool>();
+        services.AddSingleton<ITool, ToolSearchTool>();
+
+        // User-authored markdown tool templates (3-tier filesystem). Distinct from
+        // ITool — these are instructional guides shown in the Knowledge UI; they
+        // do not register handlers in IToolRegistry.
+        services.AddSingleton<Sovrant.Tools.Templates.UserToolTemplateRegistry>();
+
+        // MCP resource tools, dynamic proxy, and OAuth
+        services.AddSingleton<ITool, ListMcpResourcesTool>();
+        services.AddSingleton<ITool, ReadMcpResourceTool>();
+        services.AddSingleton<ITool, McpProxyTool>();
+        services.AddSingleton<ITool, McpAuthTool>();
+
+        // Agent tool
+        services.AddSingleton<ITool, AgentTool>();
+
+        // Team tools
+        services.AddSingleton<ITool, TeamCreateTool>();
+        services.AddSingleton<ITool, TeamDeleteTool>();
+        services.AddSingleton<ITool, TeamStatusTool>();
+        services.AddSingleton<ITool>(sp =>
+        {
+            var registry = sp.GetRequiredService<Sovrant.Agents.Teams.ITeamRegistry>();
+            var factory = sp.GetRequiredService<Sovrant.Agents.Shared.SovrantAgentFactory>();
+
+            // SovrantAgentFactory always creates in-process SovrantAgent instances,
+            // so team delegation must use InProcessOrchestrationSystem regardless of
+            // the global AGENT_MODE setting (which may be ProcessBased).
+            var coordinator = sp.GetRequiredService<Sovrant.Agents.Shared.OrchestrationCoordinator>();
+            var workspace = sp.GetRequiredService<Sovrant.Agents.Shared.WorkspaceContext>();
+            var logger = sp.GetRequiredService<ILogger<Sovrant.Agents.Shared.InProcessOrchestrationSystem>>();
+            var agentSystem = new Sovrant.Agents.Shared.InProcessOrchestrationSystem(coordinator, workspace, logger);
+
+            return new TeamDelegateTool(registry, agentSystem, member => factory.Create(member));
+        });
+
+        // Team run + publish tools (Phase 52)
+        services.AddSingleton<ITool, TeamRunTool>();
+        services.AddSingleton<ITool, TeamPublishTool>();
+
+        // Mission tool — lets running agents spawn and drive sub-missions
+        services.AddSingleton<ITool, MissionTool>();
+
+        // Artifact tools — agent-side producer interface (Phase 41)
+        services.AddSingleton<ITool, ArtifactTool>();
+
+        // Document generation (Phase 66) — markdown, simple PDF, structured PDF.
+        services.AddSovrantDocuments();
+        services.AddSingleton<ITool, DocumentGenerateTool>();
+        services.AddSingleton<ITool, DocumentFromTemplateTool>();
+        services.AddSingleton<ITool, DocumentListTemplatesTool>();
+        services.AddSingleton<ITool, DocumentSuggestTemplateTool>();
+        services.AddSingleton<ITool, DocumentPackageTool>();
+        services.AddSingleton<ITool, DocumentListPackagesTool>();
+
+        // Quality / verification tools
+        services.AddSingleton<ITool, VerifyTool>();
+
+        // Swarm tools
+        services.AddSingleton<ISwarmProgressReporter, NullSwarmProgressReporter>();
+        services.AddSingleton<ITool, SwarmTool>();
+        services.AddSingleton<ITool, SwarmStatusTool>();
+
+        // Coordination tools (Phase 57)
+        services.AddSingleton<ITool, CoordinationStatusTool>();
+
+        // LSP tools — language-server entries are loaded from ILspServerStore
+        // (the lsp_servers table in V019), not settings.json. Reads tolerate
+        // a missing table because the DI resolve can happen before
+        // InitializeRuntimeAsync runs migrations (e.g. when a test resolves
+        // the tool registry to introspect routes).
+        services.AddSingleton<ILspClientManager>(sp =>
+        {
+            var store = sp.GetRequiredService<Sovrant.Runtime.Mcp.ILspServerStore>();
+            var loggerFactory = sp.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>();
+            IReadOnlyDictionary<string, Sovrant.Runtime.Mcp.LspServerEntry> entries;
+            try
+            {
+                entries = store.GetAllAsync().GetAwaiter().GetResult();
+            }
+            catch (Microsoft.Data.Sqlite.SqliteException)
+            {
+                // lsp_servers table not yet created — DB hasn't been migrated.
+                entries = new Dictionary<string, Sovrant.Runtime.Mcp.LspServerEntry>(StringComparer.OrdinalIgnoreCase);
+            }
+            var configs = entries.Select(kvp => new LspServerConfig
+            {
+                Language = kvp.Key,
+                Command = kvp.Value.Command,
+                Args = kvp.Value.Args,
+                Env = kvp.Value.Env,
+            });
+            return new LspClientManager(configs, loggerFactory);
+        });
+        services.AddSingleton<ITool, LspHoverTool>();
+        services.AddSingleton<ITool, LspDefinitionTool>();
+        services.AddSingleton<ITool, LspReferencesTool>();
+        services.AddSingleton<ITool, LspDiagnosticsTool>();
+        services.AddSingleton<ITool, LspRenameTool>();
+
+        // Tool registrar
+        services.AddSingleton<ToolRegistrar>();
+
+        return services;
+    }
+}

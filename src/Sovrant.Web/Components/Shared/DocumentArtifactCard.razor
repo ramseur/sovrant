@@ -1,0 +1,127 @@
+@using System.Text.Json
+
+@if (_artifacts.Count > 0)
+{
+    <div class="doc-artifact-list">
+        @foreach (var art in _artifacts)
+        {
+            <div class="doc-artifact-card">
+                <div class="doc-artifact-header">
+                    <span class="doc-artifact-icon">@FormatIcon(art.Format)</span>
+                    <div class="doc-artifact-meta">
+                        <div class="doc-artifact-name">@art.DisplayName</div>
+                        <div class="doc-artifact-sub">
+                            <span>@art.Format.ToUpperInvariant()</span>
+                            @if (art.SizeBytes is long size)
+                            {
+                                <span> · @FormatSize(size)</span>
+                            }
+                            @if (!string.IsNullOrEmpty(art.TemplateId))
+                            {
+                                <span> · @art.TemplateId</span>
+                            }
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(art.AccessUrl))
+                    {
+                        <a class="doc-artifact-download" href="@art.AccessUrl" target="_blank" rel="noopener">Download</a>
+                    }
+                </div>
+                @if (art.IsPdf && !string.IsNullOrEmpty(art.AccessUrl))
+                {
+                    <iframe class="doc-artifact-preview" src="@art.AccessUrl" title="@art.DisplayName"></iframe>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string ToolName { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string ResultJson { get; set; } = string.Empty;
+
+    private List<Artifact> _artifacts = new();
+
+    protected override void OnParametersSet()
+    {
+        _artifacts = Parse(ToolName, ResultJson);
+    }
+
+    public static bool ProducesArtifacts(string toolName) =>
+        toolName is "DocumentGenerate" or "DocumentFromTemplate" or "DocumentPackage";
+
+    private static List<Artifact> Parse(string toolName, string json)
+    {
+        var list = new List<Artifact>();
+        if (string.IsNullOrWhiteSpace(json) || !ProducesArtifacts(toolName)) return list;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return list;
+
+            if (toolName == "DocumentPackage" &&
+                root.TryGetProperty("documents", out var docs) &&
+                docs.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in docs.EnumerateArray())
+                {
+                    var a = ReadOne(item);
+                    if (a is not null) list.Add(a);
+                }
+            }
+            else
+            {
+                var a = ReadOne(root);
+                if (a is not null) list.Add(a);
+            }
+        }
+        catch (JsonException)
+        {
+            // tool returned a plain error string — nothing to render.
+        }
+        return list;
+    }
+
+    private static Artifact? ReadOne(JsonElement el)
+    {
+        if (el.ValueKind != JsonValueKind.Object) return null;
+        var status = el.TryGetProperty("status", out var s) ? s.GetString() : null;
+        if (status != "generated") return null;
+
+        var format = el.TryGetProperty("format", out var f) ? f.GetString() ?? "" : "";
+        var path = el.TryGetProperty("path", out var p) ? p.GetString() ?? "" : "";
+        var url = el.TryGetProperty("access_url", out var u) ? u.GetString() : null;
+        var size = el.TryGetProperty("size_bytes", out var sz) && sz.TryGetInt64(out var v) ? v : (long?)null;
+        var templateId = el.TryGetProperty("template_id", out var t) ? t.GetString() : null;
+        var contentType = el.TryGetProperty("content_type", out var ct) ? ct.GetString() ?? "" : "";
+
+        var name = string.IsNullOrEmpty(path) ? (templateId ?? "document") : System.IO.Path.GetFileName(path);
+        var isPdf = format.Contains("pdf", StringComparison.OrdinalIgnoreCase) ||
+                    contentType.Contains("pdf", StringComparison.OrdinalIgnoreCase);
+
+        return new Artifact(name, format, size, url, templateId, isPdf);
+    }
+
+    private static string FormatIcon(string format) => format.ToLowerInvariant() switch
+    {
+        "pdf" or "structured_pdf" => "\uD83D\uDCC4",      // 📄
+        "word" or "docx" => "\uD83D\uDCDD",                // 📝
+        "excel" or "xlsx" => "\uD83D\uDCCA",               // 📊
+        "powerpoint" or "pptx" => "\uD83D\uDCFD\uFE0F",    // 📽️
+        "markdown" or "md" => "\uD83D\uDCC4",              // 📄
+        _ => "\uD83D\uDCCE",                                // 📎
+    };
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    private sealed record Artifact(
+        string DisplayName, string Format, long? SizeBytes,
+        string? AccessUrl, string? TemplateId, bool IsPdf);
+}

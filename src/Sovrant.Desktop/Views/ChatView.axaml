@@ -1,0 +1,647 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             x:Class="Sovrant.Desktop.Views.ChatView"
+             x:DataType="vm:ChatViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel>
+        <!-- Bottom: Input bar -->
+        <Border DockPanel.Dock="Bottom"
+                Padding="24,12"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource SurfaceBorder}">
+            <DockPanel>
+                <!-- Connections selector — sits as a small row above the input -->
+                <StackPanel DockPanel.Dock="Top"
+                            Orientation="Horizontal"
+                            Spacing="8"
+                            Margin="0,0,0,8"
+                            HorizontalAlignment="Left"
+                            IsVisible="{Binding HasConnections}">
+                    <Button Padding="10,4" CornerRadius="999"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}"
+                            BorderThickness="1"
+                            ToolTip.Tip="Choose which MCP servers this session can call">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="🔗" FontSize="11" />
+                            <TextBlock Text="Connections" FontSize="11"
+                                       Foreground="{DynamicResource TextSecondary}" />
+                            <TextBlock Text="{Binding ConnectionsLabel}" FontSize="11"
+                                       Foreground="{DynamicResource TextMuted}" />
+                        </StackPanel>
+                        <Button.Flyout>
+                            <Flyout Placement="Top">
+                                <ScrollViewer MaxHeight="280" MinWidth="220">
+                                    <ItemsControl ItemsSource="{Binding Connections}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="vm:McpConnectionItem">
+                                                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                          Content="{Binding Name}"
+                                                          FontSize="12"
+                                                          Padding="6,4" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                </StackPanel>
+                <!-- Send button — visible when idle -->
+                <Button DockPanel.Dock="Right"
+                        Content="Send"
+                        Command="{Binding SendCommand}"
+                        Padding="16,10"
+                        Margin="8,0,0,0"
+                        Background="{DynamicResource BrandPrimary}"
+                        Foreground="White"
+                        CornerRadius="8"
+                        FontWeight="SemiBold"
+                        VerticalAlignment="Bottom"
+                        IsVisible="{Binding !IsSending}" />
+                <!-- Stop button — visible while sending -->
+                <Button DockPanel.Dock="Right"
+                        Command="{Binding StopCommand}"
+                        Padding="16,10"
+                        Margin="8,0,0,0"
+                        Background="{DynamicResource StatusFail}"
+                        Foreground="White"
+                        CornerRadius="8"
+                        FontWeight="SemiBold"
+                        VerticalAlignment="Bottom"
+                        IsVisible="{Binding IsSending}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Border Width="10" Height="10" CornerRadius="2"
+                                Background="White" VerticalAlignment="Center" />
+                        <TextBlock Text="Stop" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Grid>
+                    <TextBox x:Name="InputBox"
+                             Text="{Binding InputText}"
+                             Watermark="Type a message or / for commands..."
+                             AcceptsReturn="False"
+                             TextWrapping="Wrap"
+                             KeyDown="OnInputKeyDown"
+                             MinHeight="40"
+                             MaxHeight="120"
+                             Padding="12,10"
+                             CornerRadius="8"
+                             Background="{DynamicResource InputBackground}"
+                             BorderBrush="{DynamicResource InputBorder}" />
+                    <!-- Command suggestions popup above input (rendered after TextBox for z-order) -->
+                    <Border VerticalAlignment="Bottom"
+                            Margin="0,0,0,44"
+                            CornerRadius="8"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}"
+                            BorderThickness="1"
+                            Padding="4"
+                            IsVisible="{Binding ShowCommandSuggestions}"
+                            MaxHeight="260"
+                            ZIndex="10">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding CommandSuggestions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vm:CommandSuggestion">
+                                        <Button Command="{Binding $parent[ItemsControl].((vm:ChatViewModel)DataContext).AcceptSuggestionCommand}"
+                                                CommandParameter="{Binding}"
+                                                HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Stretch"
+                                                Padding="10,6"
+                                                Margin="0,1"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                CornerRadius="4"
+                                                Cursor="Hand">
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Left"
+                                                           Text="{Binding Display}"
+                                                           FontSize="13"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource BrandPrimary}"
+                                                           MinWidth="120" />
+                                                <TextBlock Text="{Binding Description}"
+                                                           FontSize="12"
+                                                           Foreground="{DynamicResource TextSecondary}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </DockPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </DockPanel>
+        </Border>
+
+        <!-- Session stats (tokens + cost) — visible once messages exist -->
+        <Border DockPanel.Dock="Bottom"
+                Padding="24,4"
+                IsVisible="{Binding HasMessages}">
+            <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Right">
+                <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center">
+                    <TextBlock.Text>
+                        <MultiBinding StringFormat="{}{0:N0} tokens">
+                            <Binding Path="TokenCount" />
+                        </MultiBinding>
+                    </TextBlock.Text>
+                </TextBlock>
+                <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center">
+                    <TextBlock.Text>
+                        <MultiBinding StringFormat="~${0:F4}">
+                            <Binding Path="SessionCost" />
+                        </MultiBinding>
+                    </TextBlock.Text>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+
+        <!-- Content area: Grid allows hero to truly center while ScrollViewer fills -->
+        <Grid>
+            <!-- Empty hero state — centered in the full remaining space -->
+            <StackPanel IsVisible="{Binding !HasMessages}"
+                        IsHitTestVisible="{Binding !HasMessages}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="16"
+                        MaxWidth="600">
+                <!-- Logo icon -->
+                <Border Width="56" Height="56" CornerRadius="14"
+                        Background="{DynamicResource BrandPrimary}"
+                        HorizontalAlignment="Center">
+                    <TextBlock Text="⚡" FontSize="24"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+
+                <TextBlock Text="What are you working on?"
+                           FontSize="24" FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimary}"
+                           HorizontalAlignment="Center" />
+                <TextBlock Text="Create agents, build teams, and orchestrate missions to automate your work."
+                           FontSize="14"
+                           Foreground="{DynamicResource TextSecondary}"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,8" />
+
+                <!-- Suggestion cards — 2 columns -->
+                <UniformGrid Columns="2" HorizontalAlignment="Center">
+                    <Button Margin="4" Padding="14,10" CornerRadius="10"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                            Command="{Binding SuggestionCommand}" CommandParameter="Create a custom agent with tools for web research and summarization">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="🤖" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Create a custom agent" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Margin="4" Padding="14,10" CornerRadius="10"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                            Command="{Binding SuggestionCommand}" CommandParameter="Create a team that researches a topic and produces a structured report">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="🤝" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Build a team of agents" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Margin="4" Padding="14,10" CornerRadius="10"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                            Command="{Binding SuggestionCommand}" CommandParameter="Build a best-practice swarm that parallelizes tasks across agents">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="🌀" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Design an agent swarm" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Margin="4" Padding="14,10" CornerRadius="10"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                            Command="{Binding SuggestionCommand}" CommandParameter="Set up a mission that monitors a project and sends daily updates">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="🎯" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Set up a mission" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Margin="4" Padding="14,10" CornerRadius="10"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                            Command="{Binding SuggestionCommand}" CommandParameter="Orchestrate a multi-agent pipeline for code review and testing">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="🎼" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Orchestrate a pipeline" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Margin="4" Padding="14,10" CornerRadius="10"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                            Command="{Binding SuggestionCommand}" CommandParameter="Connect an MCP server and create an agent that uses its tools">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="🔗" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Connect an MCP server" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
+                    </Button>
+                </UniformGrid>
+            </StackPanel>
+
+            <!-- Messages area -->
+            <ScrollViewer x:Name="MessageScroller"
+                          IsVisible="{Binding HasMessages}"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding Messages}"
+                              Margin="32,16"
+                              MaxWidth="800"
+                              HorizontalAlignment="Stretch">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:MessageViewModel">
+                            <Border Margin="0,8" Padding="0">
+                                <Border.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Copy message"
+                                                  Click="OnCopyMessageClick" />
+                                    </ContextMenu>
+                                </Border.ContextMenu>
+                                <StackPanel>
+                                    <!-- === User message layout === -->
+                                    <StackPanel IsVisible="{Binding IsUser}" Spacing="6">
+                                        <!-- Avatar + "You" label row -->
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Border Width="32" Height="32" CornerRadius="16"
+                                                    Background="{DynamicResource BrandPrimary}">
+                                                <TextBlock Text="J" FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="White"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center" />
+                                            </Border>
+                                            <TextBlock Text="You" FontSize="14" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextPrimary}"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <!-- Message text (no card background) -->
+                                        <SelectableTextBlock Text="{Binding Text}"
+                                                             TextWrapping="Wrap"
+                                                             FontSize="14"
+                                                             Foreground="{DynamicResource TextPrimary}"
+                                                             Margin="42,0,0,0" />
+                                    </StackPanel>
+
+                                    <!-- === Sovrant (assistant) message layout === -->
+                                    <Border IsVisible="{Binding !IsUser}"
+                                            Padding="0,12"
+                                            CornerRadius="12"
+                                            Background="{DynamicResource AssistantMessageBackground}">
+                                        <StackPanel Spacing="6">
+                                            <!-- Icon + "Sovrant" label row -->
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Border Width="32" Height="32" CornerRadius="8"
+                                                        Background="{DynamicResource BrandPrimary}">
+                                                    <TextBlock Text="⚡" FontSize="14"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center" />
+                                                </Border>
+                                                <TextBlock Text="{Binding SenderLabel}" FontSize="14" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextPrimary}"
+                                                           VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding ElapsedText}" FontSize="11"
+                                                           Foreground="{DynamicResource TextMuted}"
+                                                           VerticalAlignment="Center" Margin="8,0,0,0"
+                                                           IsVisible="{Binding ElapsedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                            </StackPanel>
+
+                                            <!-- Thinking indicator -->
+                                            <StackPanel Orientation="Horizontal" Spacing="8"
+                                                        Margin="42,4,0,0"
+                                                        IsVisible="{Binding IsThinking}">
+                                                <Border Width="8" Height="8" CornerRadius="4"
+                                                        Background="{DynamicResource BrandPrimary}">
+                                                    <Border.Styles>
+                                                        <Style Selector="Border">
+                                                            <Style.Animations>
+                                                                <Animation Duration="0:0:1" IterationCount="INFINITE">
+                                                                    <KeyFrame Cue="0%">
+                                                                        <Setter Property="Opacity" Value="1.0" />
+                                                                    </KeyFrame>
+                                                                    <KeyFrame Cue="50%">
+                                                                        <Setter Property="Opacity" Value="0.3" />
+                                                                    </KeyFrame>
+                                                                    <KeyFrame Cue="100%">
+                                                                        <Setter Property="Opacity" Value="1.0" />
+                                                                    </KeyFrame>
+                                                                </Animation>
+                                                            </Style.Animations>
+                                                        </Style>
+                                                    </Border.Styles>
+                                                </Border>
+                                                <TextBlock Text="{Binding ThinkingText}"
+                                                           FontSize="13" FontStyle="Italic"
+                                                           Foreground="{DynamicResource TextSecondary}" />
+                                                <TextBlock Text="{Binding ElapsedText}"
+                                                           FontSize="11" Margin="8,0,0,0"
+                                                           Foreground="{DynamicResource TextMuted}"
+                                                           VerticalAlignment="Center" />
+                                            </StackPanel>
+
+                                            <!-- Execution status bar — visible during tool calls -->
+                                            <Border Margin="42,4,0,0"
+                                                    Padding="10,6"
+                                                    CornerRadius="6"
+                                                    Background="{DynamicResource ToolUseBackground}"
+                                                    BorderBrush="{DynamicResource BrandPrimary}"
+                                                    BorderThickness="1"
+                                                    IsVisible="{Binding IsExecutingTools}">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <Border Width="8" Height="8" CornerRadius="4"
+                                                            Background="{DynamicResource BrandPrimary}">
+                                                        <Border.Styles>
+                                                            <Style Selector="Border">
+                                                                <Style.Animations>
+                                                                    <Animation Duration="0:0:0.8" IterationCount="INFINITE">
+                                                                        <KeyFrame Cue="0%">
+                                                                            <Setter Property="Opacity" Value="1.0" />
+                                                                        </KeyFrame>
+                                                                        <KeyFrame Cue="50%">
+                                                                            <Setter Property="Opacity" Value="0.2" />
+                                                                        </KeyFrame>
+                                                                        <KeyFrame Cue="100%">
+                                                                            <Setter Property="Opacity" Value="1.0" />
+                                                                        </KeyFrame>
+                                                                    </Animation>
+                                                                </Style.Animations>
+                                                            </Style>
+                                                        </Border.Styles>
+                                                    </Border>
+                                                    <TextBlock Text="{Binding ExecutionStatusText}"
+                                                               FontSize="12" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextPrimary}" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Step progress bar — visible during plan execution -->
+                                            <Border Margin="42,4,0,0"
+                                                    Padding="10,6"
+                                                    CornerRadius="6"
+                                                    Background="{DynamicResource SurfaceCard}"
+                                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                                    BorderThickness="1"
+                                                    IsVisible="{Binding StepProgressText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                <TextBlock Text="{Binding StepProgressText}"
+                                                           FontSize="12"
+                                                           Foreground="{DynamicResource TextSecondary}" />
+                                            </Border>
+
+                                            <!-- Raw text while streaming (fast, no re-parsing) -->
+                                            <SelectableTextBlock Text="{Binding Text}"
+                                                                 TextWrapping="Wrap"
+                                                                 FontSize="14"
+                                                                 Foreground="{DynamicResource TextPrimary}"
+                                                                 Margin="42,0,0,0"
+                                                                 IsVisible="{Binding IsStreaming}" />
+
+                                            <!-- Markdown rendered after response completes -->
+                                            <ctrl:SafeMarkdownPresenter Markdown="{Binding SafeMarkdown}"
+                                                                        Margin="42,0,0,0"
+                                                                        IsVisible="{Binding IsComplete}" />
+
+                                            <!-- Error banner with retry -->
+                                            <Border Margin="42,6,0,0"
+                                                    Padding="12,10"
+                                                    CornerRadius="8"
+                                                    Background="#2D1A1A"
+                                                    BorderBrush="{DynamicResource StatusFail}"
+                                                    BorderThickness="1"
+                                                    IsVisible="{Binding HasError}">
+                                                <DockPanel>
+                                                    <Button DockPanel.Dock="Right"
+                                                            Content="Retry"
+                                                            Command="{Binding $parent[ItemsControl].((vm:ChatViewModel)DataContext).RetryLastCommand}"
+                                                            Padding="14,6"
+                                                            CornerRadius="6"
+                                                            Background="{DynamicResource BrandPrimary}"
+                                                            Foreground="White"
+                                                            FontWeight="SemiBold"
+                                                            FontSize="12"
+                                                            VerticalAlignment="Center"
+                                                            Margin="12,0,0,0" />
+                                                    <StackPanel Spacing="2">
+                                                        <TextBlock Text="Request failed"
+                                                                   FontWeight="SemiBold"
+                                                                   FontSize="13"
+                                                                   Foreground="{DynamicResource StatusFail}" />
+                                                        <TextBlock Text="{Binding ErrorMessage}"
+                                                                   FontSize="12"
+                                                                   Foreground="{DynamicResource TextSecondary}"
+                                                                   TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                </DockPanel>
+                                            </Border>
+
+                                            <!-- Tool uses -->
+                                            <ItemsControl ItemsSource="{Binding ToolUses}"
+                                                          Margin="42,2,0,0"
+                                                          IsVisible="{Binding ToolUses.Count}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="vm:ToolUseViewModel">
+                                                        <Border Margin="0,4"
+                                                                Padding="10,8"
+                                                                CornerRadius="8"
+                                                                Background="{DynamicResource ToolUseBackground}"
+                                                                BorderBrush="{Binding IsError, Converter={x:Static vm:BoolToBrushConverter.ErrorOrToolBorder}}"
+                                                                BorderThickness="1">
+                                                            <StackPanel Spacing="4">
+                                                                <DockPanel LastChildFill="False">
+                                                                    <!-- Status chip docks right -->
+                                                                    <Border DockPanel.Dock="Right"
+                                                                            Padding="6,1" CornerRadius="10"
+                                                                            Background="{DynamicResource SurfaceCard}"
+                                                                            BorderThickness="0"
+                                                                            VerticalAlignment="Center"
+                                                                            IsVisible="{Binding IsStatusDone}">
+                                                                        <TextBlock Text="{Binding Status}"
+                                                                                   FontSize="10" FontWeight="SemiBold"
+                                                                                   Foreground="{DynamicResource StatusPass}" />
+                                                                    </Border>
+                                                                    <Border DockPanel.Dock="Right"
+                                                                            Padding="6,1" CornerRadius="10"
+                                                                            Background="{DynamicResource SurfaceCard}"
+                                                                            BorderThickness="0"
+                                                                            VerticalAlignment="Center"
+                                                                            IsVisible="{Binding IsStatusError}">
+                                                                        <TextBlock Text="{Binding Status}"
+                                                                                   FontSize="10" FontWeight="SemiBold"
+                                                                                   Foreground="{DynamicResource StatusFail}" />
+                                                                    </Border>
+                                                                    <Border DockPanel.Dock="Right"
+                                                                            Padding="6,1" CornerRadius="10"
+                                                                            Background="{DynamicResource SurfaceCard}"
+                                                                            BorderThickness="0"
+                                                                            VerticalAlignment="Center"
+                                                                            IsVisible="{Binding IsStatusRunning}">
+                                                                        <TextBlock Text="{Binding Status}"
+                                                                                   FontSize="10" FontWeight="SemiBold"
+                                                                                   Foreground="{DynamicResource StatusWarn}" />
+                                                                    </Border>
+                                                                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                                        <TextBlock Text="🔧" FontSize="12" />
+                                                                        <TextBlock Text="{Binding ToolName}"
+                                                                                   FontWeight="SemiBold"
+                                                                                   FontSize="12"
+                                                                                   Foreground="{DynamicResource TextPrimary}" />
+                                                                    </StackPanel>
+                                                                </DockPanel>
+                                                                <SelectableTextBlock Text="{Binding Result}"
+                                                                                     TextWrapping="Wrap"
+                                                                                     FontSize="11"
+                                                                                     FontFamily="Consolas,Menlo,monospace"
+                                                                                     Foreground="{DynamicResource TextSecondary}"
+                                                                                     IsVisible="{Binding HasResult}"
+                                                                                     MaxLines="{Binding ResultMaxLines}" />
+
+                                                                <!-- Expand/collapse toggle for long results -->
+                                                                <Button Command="{Binding ToggleExpandedCommand}"
+                                                                        Content="{Binding ExpandToggleText}"
+                                                                        IsVisible="{Binding IsResultLong}"
+                                                                        HorizontalAlignment="Left"
+                                                                        Padding="0,2"
+                                                                        Background="Transparent"
+                                                                        BorderThickness="0"
+                                                                        Foreground="{DynamicResource TextSecondary}"
+                                                                        FontSize="11" />
+
+                                                                <!-- Phase 66: Document artifact cards (one per generated doc) -->
+                                                                <ItemsControl ItemsSource="{Binding DocumentArtifacts}"
+                                                                              IsVisible="{Binding HasDocumentArtifacts}"
+                                                                              Margin="0,6,0,0">
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate DataType="vm:DocumentArtifactViewModel">
+                                                                            <Border Margin="0,3"
+                                                                                    Padding="10,8"
+                                                                                    CornerRadius="6"
+                                                                                    Background="{DynamicResource SurfaceCard}"
+                                                                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                                                                    BorderThickness="1">
+                                                                                <DockPanel>
+                                                                                    <TextBlock DockPanel.Dock="Left"
+                                                                                               Text="{Binding Icon}"
+                                                                                               FontSize="20"
+                                                                                               VerticalAlignment="Center"
+                                                                                               Margin="0,0,10,0" />
+                                                                                    <StackPanel DockPanel.Dock="Right"
+                                                                                                Orientation="Horizontal"
+                                                                                                Spacing="6"
+                                                                                                VerticalAlignment="Center">
+                                                                                        <Button Content="Open"
+                                                                                                Command="{Binding OpenCommand}"
+                                                                                                Padding="8,3"
+                                                                                                CornerRadius="4"
+                                                                                                FontSize="11"
+                                                                                                Background="{DynamicResource BrandPrimary}"
+                                                                                                Foreground="White" />
+                                                                                        <Button Content="Reveal"
+                                                                                                Command="{Binding RevealInFolderCommand}"
+                                                                                                Padding="8,3"
+                                                                                                CornerRadius="4"
+                                                                                                FontSize="11"
+                                                                                                Background="Transparent"
+                                                                                                BorderBrush="{DynamicResource SurfaceBorder}"
+                                                                                                BorderThickness="1"
+                                                                                                Foreground="{DynamicResource TextSecondary}"
+                                                                                                IsVisible="{Binding LocalPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                                                    </StackPanel>
+                                                                                    <StackPanel Spacing="2">
+                                                                                        <TextBlock Text="{Binding DisplayName}"
+                                                                                                   FontSize="12"
+                                                                                                   FontWeight="SemiBold"
+                                                                                                   Foreground="{DynamicResource TextPrimary}"
+                                                                                                   TextTrimming="CharacterEllipsis" />
+                                                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                                            <TextBlock Text="{Binding Format}"
+                                                                                                       FontSize="10"
+                                                                                                       Foreground="{DynamicResource TextMuted}" />
+                                                                                            <TextBlock Text="·"
+                                                                                                       FontSize="10"
+                                                                                                       Foreground="{DynamicResource TextMuted}"
+                                                                                                       IsVisible="{Binding SizeText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                                                            <TextBlock Text="{Binding SizeText}"
+                                                                                                       FontSize="10"
+                                                                                                       Foreground="{DynamicResource TextMuted}" />
+                                                                                            <TextBlock Text="·"
+                                                                                                       FontSize="10"
+                                                                                                       Foreground="{DynamicResource TextMuted}"
+                                                                                                       IsVisible="{Binding TemplateId, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                                                            <TextBlock Text="{Binding TemplateId}"
+                                                                                                       FontSize="10"
+                                                                                                       Foreground="{DynamicResource TextMuted}" />
+                                                                                        </StackPanel>
+                                                                                    </StackPanel>
+                                                                                </DockPanel>
+                                                                            </Border>
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+
+                                                                <!-- Inline approve/deny buttons -->
+                                                                <StackPanel Orientation="Horizontal" Spacing="8"
+                                                                            Margin="0,6,0,0"
+                                                                            IsVisible="{Binding IsPendingConfirmation}">
+                                                                    <Button Content="✓ Allow once"
+                                                                            Command="{Binding ApproveCommand}"
+                                                                            Padding="10,4"
+                                                                            CornerRadius="6"
+                                                                            Background="{DynamicResource StatusPass}"
+                                                                            Foreground="White"
+                                                                            FontSize="11"
+                                                                            FontWeight="SemiBold" />
+                                                                    <Button Content="✓✓ Allow for turn"
+                                                                            Command="{Binding ApproveForTurnCommand}"
+                                                                            ToolTip.Tip="Auto-approve this tool for the rest of this turn"
+                                                                            Padding="10,4"
+                                                                            CornerRadius="6"
+                                                                            Background="Transparent"
+                                                                            BorderBrush="{DynamicResource StatusPass}"
+                                                                            BorderThickness="1"
+                                                                            Foreground="{DynamicResource StatusPass}"
+                                                                            FontSize="11"
+                                                                            FontWeight="SemiBold" />
+                                                                    <Button Content="✕ Deny"
+                                                                            Command="{Binding DenyCommand}"
+                                                                            Padding="10,4"
+                                                                            CornerRadius="6"
+                                                                            Background="{DynamicResource StatusFail}"
+                                                                            Foreground="White"
+                                                                            FontSize="11"
+                                                                            FontWeight="SemiBold" />
+                                                                </StackPanel>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</UserControl>

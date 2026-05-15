@@ -1,0 +1,212 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.SetupWizardOverlay"
+             x:DataType="vm:SetupWizardViewModel"
+             IsVisible="{Binding IsVisible}">
+
+    <!-- Dark overlay backdrop -->
+    <Border Background="#CC000000">
+        <Border MaxWidth="500"
+                CornerRadius="16"
+                Background="{DynamicResource SurfaceCard}"
+                BorderBrush="{DynamicResource SurfaceBorder}"
+                BorderThickness="1"
+                Padding="32,28"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                BoxShadow="0 8 32 0 #40000000">
+
+            <StackPanel Spacing="14">
+                <!-- Header (shared) -->
+                <StackPanel HorizontalAlignment="Center" Spacing="6">
+                    <Border Width="48" Height="48" CornerRadius="12"
+                            Background="{DynamicResource BrandPrimary}"
+                            HorizontalAlignment="Center">
+                        <TextBlock Text="⚡" FontSize="24"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="Welcome to Sovrant"
+                               FontSize="22" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+
+                <!-- ── Step 1: Mode selection ──────────────────────── -->
+                <StackPanel Spacing="12" IsVisible="{Binding IsModeStep}">
+                    <TextBlock Text="How do you want to run Sovrant?"
+                               FontSize="13"
+                               Foreground="{DynamicResource TextSecondary}"
+                               HorizontalAlignment="Center"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center" />
+
+                    <!-- Local card -->
+                    <Button Command="{Binding ChooseLocalCommand}"
+                            HorizontalAlignment="Stretch"
+                            CornerRadius="10"
+                            Padding="16,14"
+                            Background="{DynamicResource SurfaceBase}"
+                            BorderBrush="{DynamicResource SurfaceBorder}"
+                            BorderThickness="1">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Local (embedded)"
+                                       FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="Runs the AI runtime in this app. Connect your own API key from any supported provider."
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Remote card -->
+                    <Button Command="{Binding ChooseRemoteCommand}"
+                            HorizontalAlignment="Stretch"
+                            CornerRadius="10"
+                            Padding="16,14"
+                            Background="{DynamicResource SurfaceBase}"
+                            BorderBrush="{DynamicResource SurfaceBorder}"
+                            BorderThickness="1">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Remote (connect to server)"
+                                       FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="Connects to an existing Sovrant Server. Ideal for teams — no local API key needed."
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <!-- ── Step 2: Provider / API key ─────────────────── -->
+                <StackPanel Spacing="12" IsVisible="{Binding IsProviderStep}">
+                    <TextBlock Text="Connect a provider to get started. You can switch models anytime from the sidebar."
+                               FontSize="13"
+                               Foreground="{DynamicResource TextSecondary}"
+                               HorizontalAlignment="Center"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center" />
+
+                    <!-- Provider selector -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Provider" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondary}" />
+                        <ComboBox ItemsSource="{Binding Providers}"
+                                  SelectedItem="{Binding SelectedProvider}"
+                                  HorizontalAlignment="Stretch"
+                                  CornerRadius="8"
+                                  Padding="10,8" />
+                    </StackPanel>
+
+                    <!-- API Key -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="API Key" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondary}" />
+                        <TextBox Text="{Binding ApiKey}"
+                                 Watermark="sk-..."
+                                 PasswordChar="•"
+                                 CornerRadius="8"
+                                 Padding="10,8" />
+                    </StackPanel>
+
+                    <!-- Base URL -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Base URL" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondary}" />
+                        <TextBox Text="{Binding BaseUrl}"
+                                 Watermark="Auto-filled for known providers"
+                                 CornerRadius="8"
+                                 Padding="10,8"
+                                 FontSize="12" />
+                        <TextBlock Text="Auto-filled when you select a known provider. Edit for custom endpoints."
+                                   FontSize="10"
+                                   Foreground="{DynamicResource TextMuted}" />
+                    </StackPanel>
+
+                    <!-- Status message -->
+                    <TextBlock Text="{Binding StatusMessage}"
+                               FontSize="12"
+                               Foreground="{DynamicResource StatusFail}"
+                               IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                    <Grid ColumnDefinitions="Auto,*">
+                        <Button Grid.Column="0"
+                                Content="← Back"
+                                Command="{Binding BackToModeCommand}"
+                                Padding="12,10"
+                                CornerRadius="8"
+                                FontSize="13" />
+                        <Button Grid.Column="1"
+                                Content="Get Started"
+                                Command="{Binding SaveAndStartCommand}"
+                                HorizontalAlignment="Stretch"
+                                Margin="8,0,0,0"
+                                Padding="14,10"
+                                CornerRadius="8"
+                                Background="{DynamicResource BrandPrimary}"
+                                Foreground="White"
+                                FontWeight="SemiBold"
+                                FontSize="14"
+                                IsEnabled="{Binding !IsSaving}" />
+                    </Grid>
+                </StackPanel>
+
+                <!-- ── Step 3: Remote server URL ───────────────────── -->
+                <StackPanel Spacing="12" IsVisible="{Binding IsRemoteStep}">
+                    <TextBlock Text="Enter the URL of your Sovrant Server."
+                               FontSize="13"
+                               Foreground="{DynamicResource TextSecondary}"
+                               HorizontalAlignment="Center"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center" />
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Server URL" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondary}" />
+                        <TextBox Text="{Binding RemoteServerUrl}"
+                                 Watermark="http://localhost:5200"
+                                 CornerRadius="8"
+                                 Padding="10,8" />
+                    </StackPanel>
+
+                    <!-- Status message -->
+                    <TextBlock Text="{Binding RemoteStatusMessage}"
+                               FontSize="12"
+                               Foreground="{DynamicResource StatusFail}"
+                               IsVisible="{Binding RemoteStatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                    <TextBlock Text="The app will restart in remote mode. You'll log in with your server credentials."
+                               FontSize="11"
+                               Foreground="{DynamicResource TextMuted}"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center" />
+
+                    <Grid ColumnDefinitions="Auto,*">
+                        <Button Grid.Column="0"
+                                Content="← Back"
+                                Command="{Binding BackToModeCommand}"
+                                Padding="12,10"
+                                CornerRadius="8"
+                                FontSize="13" />
+                        <Button Grid.Column="1"
+                                Content="Connect &amp; Restart"
+                                Command="{Binding SaveRemoteAndStartCommand}"
+                                HorizontalAlignment="Stretch"
+                                Margin="8,0,0,0"
+                                Padding="14,10"
+                                CornerRadius="8"
+                                Background="{DynamicResource BrandPrimary}"
+                                Foreground="White"
+                                FontWeight="SemiBold"
+                                FontSize="14"
+                                IsEnabled="{Binding !IsSaving}" />
+                    </Grid>
+                </StackPanel>
+
+            </StackPanel>
+        </Border>
+    </Border>
+</UserControl>

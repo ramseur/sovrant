@@ -1,0 +1,182 @@
+@page "/setup"
+@using Sovrant.Api.Auth
+@using Sovrant.Runtime.Config
+@using Sovrant.Runtime.Mcp
+@using Sovrant.Runtime.Preferences
+@using Sovrant.Runtime.Providers
+@using Sovrant.Web.Adapters
+
+<div class="setup-backdrop">
+    <div class="setup-card">
+        <div class="setup-icon">&#9889;</div>
+        <h1>Welcome to Sovrant</h1>
+        <p class="text-secondary">Connect a provider to get started. You can switch models anytime from the sidebar.</p>
+
+        <form autocomplete="off" @onsubmit:preventDefault>
+        <div class="form-field">
+            <label>Provider</label>
+            <select @bind="_provider" @bind:after="OnProviderChanged">
+                @foreach (var p in Providers)
+                {
+                    <option value="@p">@p</option>
+                }
+            </select>
+        </div>
+
+        <div class="form-field">
+            <label>API Key</label>
+            <input type="password" @bind="_apiKey" placeholder="sk-..." autocomplete="off" data-lpignore="true" data-1p-ignore />
+        </div>
+
+        <div class="form-field">
+            <label>Base URL</label>
+            <input type="text" @bind="_baseUrl" placeholder="Auto-filled from provider" />
+            <span class="text-muted text-sm">Auto-filled when you select a provider. Edit for custom endpoints.</span>
+        </div>
+
+        <button class="btn-primary" @onclick="SaveAsync" disabled="@_saving">
+            @(_saving ? "Saving..." : "Get Started")
+        </button>
+        </form>
+
+        @if (!string.IsNullOrEmpty(_status))
+        {
+            <div class="status-message">@_status</div>
+        }
+    </div>
+</div>
+
+@code {
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+    [Inject] private SovrantConfig Config { get; set; } = default!;
+    [Inject] private MutableAuthProvider AuthProvider { get; set; } = default!;
+    [Inject] private IUserPreferenceStore Prefs { get; set; } = default!;
+    [Inject] private IProviderProfileStore Profiles { get; set; } = default!;
+    [Inject] private ICredentialStore Credentials { get; set; } = default!;
+
+    private string _provider = "OpenAI";
+    private string _apiKey = string.Empty;
+    private string _baseUrl = "https://api.openai.com/v1";
+    private string _status = string.Empty;
+    private bool _saving;
+
+    private static readonly string[] Providers =
+        ["OpenAI", "OpenRouter", "DeepSeek", "Groq", "Mistral", "Together AI", "Google", "Azure OpenAI", "Ollama", "LM Studio", "Custom"];
+
+    private static readonly Dictionary<string, string> ProviderBaseUrls = new(StringComparer.Ordinal)
+    {
+        ["OpenAI"] = "https://api.openai.com/v1",
+        ["OpenRouter"] = "https://openrouter.ai/api/v1",
+        ["DeepSeek"] = "https://api.deepseek.com/v1",
+        ["Groq"] = "https://api.groq.com/openai/v1",
+        ["Mistral"] = "https://api.mistral.ai/v1",
+        ["Together AI"] = "https://api.together.xyz/v1",
+        ["Ollama"] = "http://localhost:11434/v1",
+        ["LM Studio"] = "http://localhost:1234/v1",
+        ["Google"] = "https://generativelanguage.googleapis.com/v1beta/openai",
+        ["Azure OpenAI"] = "",
+        ["Custom"] = "",
+    };
+
+    private static readonly Dictionary<string, string> DefaultModels = new(StringComparer.Ordinal)
+    {
+        ["OpenAI"] = "gpt-4o",
+        ["OpenRouter"] = "google/gemma-4-27b-it:free",
+        ["DeepSeek"] = "deepseek-chat",
+        ["Groq"] = "llama-3.3-70b-versatile",
+        ["Mistral"] = "mistral-large-latest",
+        ["Together AI"] = "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        ["Google"] = "gemini-2.5-flash",
+        ["Azure OpenAI"] = "gpt-4o",
+    };
+
+    protected override void OnInitialized()
+    {
+        if (!string.IsNullOrWhiteSpace(Config.ApiKey))
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+    }
+
+    private void OnProviderChanged()
+    {
+        if (ProviderBaseUrls.TryGetValue(_provider, out var url))
+            _baseUrl = url;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey)) { _status = "API key is required."; return; }
+        _saving = true;
+        _status = string.Empty;
+        try
+        {
+            var trimmedKey = _apiKey.Trim();
+            var trimmedBase = (_baseUrl ?? string.Empty).Trim();
+            var defaultModel = DefaultModels.GetValueOrDefault(_provider, "gpt-4o");
+
+            var profileId = MakeProfileId(_provider);
+            var credentialId = $"provider.{profileId}.api_key";
+            var userId = Sovrant.Web.Program.SovrantUserId;
+
+            await Credentials.StoreAsync(credentialId, trimmedKey);
+            await Credentials.StoreAsync(CredentialKeys.LlmApiKey, trimmedKey);
+
+            var now = DateTimeOffset.UtcNow;
+            var profile = new ProviderProfile(
+                ProfileId: profileId,
+                UserId: userId,
+                Name: _provider,
+                ProviderKind: _provider,
+                BaseUrl: trimmedBase,
+                DefaultModel: defaultModel,
+                MaxTokens: 32000,
+                CredentialId: credentialId,
+                CreatedAt: now,
+                UpdatedAt: now);
+
+            var existing = await Profiles.GetAsync(profileId);
+            if (existing is null)
+                await Profiles.CreateAsync(profile);
+            else
+                await Profiles.UpdateAsync(profile with { CreatedAt = existing.CreatedAt });
+
+            await Prefs.SetAsync(userId, UserPreferenceKeys.ActiveProviderProfileId, profileId);
+            await Prefs.SetAsync(userId, UserPreferenceKeys.Provider, _provider);
+            await Prefs.SetAsync(userId, UserPreferenceKeys.Model, defaultModel);
+            if (!string.IsNullOrWhiteSpace(trimmedBase))
+                await Prefs.SetAsync(userId, UserPreferenceKeys.BaseUrl, trimmedBase);
+            await Prefs.SetAsync(userId, UserPreferenceKeys.MaxTokens, "32000");
+
+            // Hot-swap runtime config so the chat surface works without a restart.
+            Config.Model = defaultModel;
+            Config.ApiKey = trimmedKey;
+            Config.MaxTokens = 32000;
+            AuthProvider.ApiKey = trimmedKey;
+            if (!string.IsNullOrWhiteSpace(trimmedBase) && Uri.TryCreate(trimmedBase, UriKind.Absolute, out var parsed))
+            {
+                Config.BaseUrl = parsed;
+                AuthProvider.BaseUrl = parsed;
+                Environment.SetEnvironmentVariable("LLM_BASE_URL", trimmedBase);
+            }
+
+            // Env-var bridge for any provider clients still reading from the environment.
+            Environment.SetEnvironmentVariable("LLM_API_KEY", trimmedKey);
+            Environment.SetEnvironmentVariable("LLM_MODEL", defaultModel);
+            if (trimmedBase.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
+                Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", trimmedKey);
+
+            Nav.NavigateTo("/command");
+        }
+        catch (Exception ex) { _status = $"Failed to save: {ex.Message}"; }
+        finally { _saving = false; }
+    }
+
+    private static string MakeProfileId(string provider)
+    {
+        var slug = $"{provider}-{provider}".ToLowerInvariant();
+        var sanitized = new string(slug.Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
+        return sanitized.Trim('-');
+    }
+}

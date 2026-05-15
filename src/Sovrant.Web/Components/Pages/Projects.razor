@@ -1,0 +1,213 @@
+@page "/projects"
+@using Sovrant.Runtime.Projects
+@using Sovrant.Runtime.Workspaces
+@using Sovrant.Web.Services
+@implements IDisposable
+
+<div class="settings-page">
+    <div class="diag-header">
+        <h1>Projects</h1>
+        <span class="item-count">@_filtered.Count</span>
+    </div>
+
+    <div class="card">
+        <div class="form-field">
+            <label>New Project</label>
+            <div class="input-group">
+                <input type="text" @bind="_newName" placeholder="Project name..." />
+                <button class="btn-primary btn-sm btn-inline-add" @onclick="CreateAsync">Create</button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="status-message">@_status</div>
+    }
+
+    @if (!string.IsNullOrEmpty(_loadError))
+    {
+        <div class="page-error-banner" role="alert">
+            <span>&#9888;</span>
+            <span class="error-message">@_loadError</span>
+            <button class="btn-sm" @onclick="LoadAsync">Retry</button>
+        </div>
+    }
+
+    <div class="master-search" style="padding:0;">
+        <input type="text" placeholder="Search projects..." @bind="_search" @bind:event="oninput" @bind:after="ApplyFilter" />
+    </div>
+
+    @if (_isLoading)
+    {
+        <p class="loading-row">Loading projects…</p>
+    }
+    else
+    {
+    <div class="memory-list">
+        @if (_filtered.Count == 0)
+        {
+            <p class="text-secondary">No projects found.</p>
+        }
+        @foreach (var p in _filtered)
+        {
+            <div class="memory-card">
+                <div class="memory-content">
+                    <div class="memory-text">
+                        <strong>@p.Name</strong>
+                        @if (p.IsArchived)
+                        {
+                            <span class="outcome-badge unknown">Archived</span>
+                        }
+                    </div>
+                    <div class="memory-meta">
+                        <span class="text-muted text-sm">@p.Slug</span>
+                        <span class="text-muted text-sm">@p.CreatedAt.LocalDateTime.ToString("d")</span>
+                        @if (!string.IsNullOrEmpty(p.Description))
+                        {
+                            <span class="text-secondary text-sm">@p.Description</span>
+                        }
+                    </div>
+                </div>
+                <div class="provider-actions">
+                    @if (p.IsArchived)
+                    {
+                        <button class="btn-sm btn-primary" @onclick="() => UnarchiveAsync(p)">Restore</button>
+                    }
+                    else
+                    {
+                        <button class="btn-sm btn-danger" @onclick="() => ArchiveAsync(p)">Archive</button>
+                    }
+                    <button class="btn-sm btn-danger" @onclick="() => DeleteAsync(p)">X</button>
+                </div>
+            </div>
+        }
+    </div>
+    }
+</div>
+
+@code {
+    [Inject] private IProjectService ProjectService { get; set; } = default!;
+    [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
+
+    private string WorkspaceId => string.IsNullOrEmpty(ActiveContext.WorkspaceId) ? WorkspaceIdentity.DefaultPersonal() : ActiveContext.WorkspaceId;
+    private string _newName = string.Empty;
+    private string _search = string.Empty;
+    private string _status = string.Empty;
+    private bool _isLoading = true;
+    private string _loadError = string.Empty;
+    private List<ProjectItem> _all = [];
+    private List<ProjectItem> _filtered = [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        ActiveContext.OnChanged += OnContextChanged;
+        await Sovrant.Web.Program.RuntimeReady.Task;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private void OnContextChanged()
+    {
+        InvokeAsync(async () =>
+        {
+            await LoadAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        ActiveContext.OnChanged -= OnContextChanged;
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = string.Empty;
+        try
+        {
+            var list = await ProjectService.ListAsync(WorkspaceId, includeArchived: true);
+            _all = list.Select(p => new ProjectItem
+            {
+                Id = p.ProjectId, Name = p.Name, Slug = p.Slug,
+                Description = p.Description, CreatedAt = p.CreatedAt,
+                IsArchived = p.ArchivedAt.HasValue,
+            }).OrderByDescending(p => p.CreatedAt).ToList();
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Failed to load projects: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newName)) { _status = "Enter a name."; return; }
+        var name = _newName.Trim();
+        var slug = name.ToLowerInvariant().Replace(' ', '-');
+        if (_all.Any(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase)
+                       || p.Slug.Equals(slug, StringComparison.OrdinalIgnoreCase)))
+        {
+            _status = $"A project named '{name}' already exists.";
+            return;
+        }
+        try
+        {
+            await ProjectService.CreateAsync(WorkspaceId, name, slug);
+            _newName = string.Empty;
+            _status = "Project created.";
+            await LoadAsync();
+            ActiveContext.NotifyDataChanged();
+        }
+        catch (Exception ex) { _status = $"Failed: {ex.Message}"; }
+    }
+
+    private async Task ArchiveAsync(ProjectItem p)
+    {
+        await ProjectService.ArchiveAsync(p.Id);
+        _status = $"'{p.Name}' archived.";
+        await LoadAsync();
+    }
+
+    private async Task UnarchiveAsync(ProjectItem p)
+    {
+        await ProjectService.UnarchiveAsync(p.Id);
+        _status = $"'{p.Name}' restored.";
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(ProjectItem p)
+    {
+        await ProjectService.DeleteAsync(p.Id);
+        _status = $"'{p.Name}' deleted.";
+        await LoadAsync();
+        ActiveContext.NotifyDataChanged();
+    }
+
+    private void ApplyFilter()
+    {
+        _filtered = string.IsNullOrWhiteSpace(_search)
+            ? _all
+            : _all.Where(p =>
+                p.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                p.Slug.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+    }
+
+    private sealed class ProjectItem
+    {
+        public string Id { get; init; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
+        public string Slug { get; init; } = string.Empty;
+        public string? Description { get; init; }
+        public DateTimeOffset CreatedAt { get; init; }
+        public bool IsArchived { get; init; }
+    }
+}

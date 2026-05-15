@@ -1,0 +1,20 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.ConnectPanelView"
+             x:DataType="vm:SidebarViewModel"
+             Background="{DynamicResource SidebarBackground}">
+    <ScrollViewer>
+        <StackPanel Margin="10">
+            <TextBlock Text="CONNECT" FontSize="11" FontWeight="Bold"
+                       Foreground="{DynamicResource TextMuted}"
+                       Margin="6,4,0,10" />
+            <Button Content="🔌  Integrations"
+                    Command="{Binding NavigateCommand}" CommandParameter="Integrations"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Integrations}"
+                    Foreground="{DynamicResource TextPrimary}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

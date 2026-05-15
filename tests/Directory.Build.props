@@ -1,0 +1,6 @@
+<Project>
+  <!-- xUnit test naming uses underscores; suppress CA1707 in test projects only -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
+  </PropertyGroup>
+</Project>

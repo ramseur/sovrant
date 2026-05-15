@@ -1,0 +1,208 @@
+@page "/documents/templates"
+@using Sovrant.Runtime.Documents.Templates
+@using Sovrant.Web.Components.Shared
+@using Markdig
+
+@if (_editing is not null)
+{
+    <div class="detail-content" style="padding:0; height:100%;">
+        <MarkdownEditor Value="@_editing.Source"
+                        Title="@(_editing.IsNew ? "New document template" : _editing.Slug)"
+                        ReadOnly="@_editing.ReadOnly"
+                        OnSave="HandleSave"
+                        OnCancel="@(() => { _editing = null; return Task.CompletedTask; })" />
+    </div>
+}
+else
+{
+    <MasterDetailLayout TItem="TemplateItem"
+                        Title="Document Templates"
+                        ItemCount="@_filtered.Count"
+                        Items="@_filtered"
+                        SelectedItem="@_selected"
+                        EmptyMessage="No user document templates. Click + New to create one."
+                        OnRefresh="Reload"
+                        OnItemSelected="@(t => { _selected = t; return Task.CompletedTask; })"
+                        OnSearch="Search">
+        <ItemTemplate>
+            <div class="item-title">
+                @context.Name
+                <span class="tier-badge tier-@(context.Tier.ToString().ToLowerInvariant())">@context.Tier.ToString().ToLowerInvariant()</span>
+            </div>
+            <div class="item-subtitle">@context.Industry &middot; @context.DefaultFormat</div>
+        </ItemTemplate>
+        <FooterTemplate>
+            <a class="btn-outline btn-sm" href="/documents">Built-in templates</a>
+        </FooterTemplate>
+        @* Authoring buttons hidden — see Phase 91 roadmap entry. Re-enable after the
+           "edit anything, no Duplicate-to-user step" UX rework lands. *@
+        <DetailTemplate>
+            <div class="detail-content">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+                    <h2 style="margin:0;">@context.Name</h2>
+                </div>
+                <div class="detail-meta">
+                    <span><code>@context.Slug</code></span>
+                    <span>@context.Industry</span>
+                    <span>Default: @context.DefaultFormat</span>
+                </div>
+                @if (!string.IsNullOrEmpty(context.Description))
+                {
+                    <p class="text-secondary">@context.Description</p>
+                }
+                @if (!string.IsNullOrEmpty(context.Body))
+                {
+                    <h3>Body</h3>
+                    <div class="message-markdown">
+                        @((MarkupString)Markdown.ToHtml(context.Body, _pipeline))
+                    </div>
+                }
+            </div>
+        </DetailTemplate>
+    </MasterDetailLayout>
+}
+
+@code {
+    [Inject] private UserDocumentTemplateRegistry Registry { get; set; } = default!;
+
+    private List<TemplateItem> _all = [];
+    private List<TemplateItem> _filtered = [];
+    private TemplateItem? _selected;
+    private EditorState? _editing;
+
+    private static readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
+        .UseAdvancedExtensions().Build();
+
+    private const string NewTemplate = """
+        ---
+        name: untitled-template
+        description: One-line description.
+        industry: general
+        default_format: markdown
+        ---
+        # {{title}}
+
+        Write your template body here. Use {{field}} placeholders for inputs.
+        """;
+
+    protected override void OnInitialized() => Reload();
+
+    private void Reload()
+    {
+        _all = Registry.All
+            .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(t => new TemplateItem
+            {
+                Slug = t.Slug,
+                Name = t.Name,
+                Description = t.Description,
+                Industry = t.Industry,
+                DefaultFormat = t.DefaultFormat,
+                Body = t.Body,
+                Tier = t.Tier,
+                SourcePath = t.SourcePath,
+            }).ToList();
+        _filtered = _all;
+    }
+
+    private void Search(string text)
+    {
+        _filtered = string.IsNullOrWhiteSpace(text)
+            ? _all
+            : _all.Where(t =>
+                t.Name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                t.Description.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                t.Industry.Contains(text, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+    }
+
+    private void StartNew() =>
+        _editing = new EditorState { Slug = string.Empty, Source = NewTemplate, IsNew = true, ReadOnly = false };
+
+    private void StartEdit(TemplateItem item, bool readOnly)
+    {
+        var source = File.Exists(item.SourcePath) ? File.ReadAllText(item.SourcePath) : item.Body;
+        _editing = new EditorState
+        {
+            Slug = item.Slug,
+            Source = source,
+            IsNew = false,
+            ReadOnly = readOnly,
+        };
+    }
+
+    private void StartDuplicate(TemplateItem item)
+    {
+        var source = File.Exists(item.SourcePath) ? File.ReadAllText(item.SourcePath) : item.Body;
+        _editing = new EditorState { Slug = item.Slug, Source = source, IsNew = true, ReadOnly = false };
+    }
+
+    private Task HandleSave(string markdown)
+    {
+        if (_editing is null) return Task.CompletedTask;
+        var slug = ExtractSlug(markdown) ?? _editing.Slug;
+        if (string.IsNullOrWhiteSpace(slug)) return Task.CompletedTask;
+
+        Registry.SaveGlobal(slug, markdown);
+        _editing = null;
+        Reload();
+        return Task.CompletedTask;
+    }
+
+    private Task DeleteAsync(TemplateItem item)
+    {
+        Registry.DeleteGlobal(item.Slug);
+        if (_selected == item) _selected = null;
+        Reload();
+        return Task.CompletedTask;
+    }
+
+    private static string? ExtractSlug(string markdown)
+    {
+        if (!markdown.StartsWith("---", StringComparison.Ordinal)) return null;
+        var end = markdown.IndexOf("\n---", 3, StringComparison.Ordinal);
+        if (end < 0) return null;
+        var fm = markdown.Substring(3, end - 3);
+        foreach (var line in fm.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith("name:", StringComparison.OrdinalIgnoreCase))
+            {
+                var raw = trimmed.Substring(5).Trim().Trim('"', '\'');
+                return Slugify(raw);
+            }
+        }
+        return null;
+    }
+
+    private static string Slugify(string raw)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var c in raw.ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(c)) sb.Append(c);
+            else if (c == ' ' || c == '-' || c == '_') sb.Append('-');
+        }
+        return sb.ToString().Trim('-');
+    }
+
+    private sealed class TemplateItem
+    {
+        public string Slug { get; init; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
+        public string Description { get; init; } = string.Empty;
+        public string Industry { get; init; } = string.Empty;
+        public string DefaultFormat { get; init; } = string.Empty;
+        public string Body { get; init; } = string.Empty;
+        public UserTemplateTier Tier { get; init; }
+        public string SourcePath { get; init; } = string.Empty;
+    }
+
+    private sealed class EditorState
+    {
+        public string Slug { get; init; } = string.Empty;
+        public string Source { get; init; } = string.Empty;
+        public bool IsNew { get; init; }
+        public bool ReadOnly { get; init; }
+    }
+}

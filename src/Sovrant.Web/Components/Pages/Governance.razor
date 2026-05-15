@@ -1,0 +1,165 @@
+@page "/governance"
+@using Sovrant.Runtime.Governance
+@using Sovrant.Runtime.Workspaces
+@using Sovrant.Web.Services
+@inject IWorkspaceSettingsStore SettingsStore
+@inject LiveSettingsRegistry LiveSettings
+@inject WebSessionService Session
+@inject NavigationManager Nav
+
+<div class="settings-page">
+    <h1>Governance</h1>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="status-message">@_status</div>
+    }
+
+    <!-- Level + Audit card -->
+    <div class="gov-card">
+        <div class="gov-field-row">
+            <div>
+                <span class="gov-field-label">Governance Level</span>
+            </div>
+            <select class="gov-field-input" @bind="_level">
+                <option value="permissive">Permissive</option>
+                <option value="standard">Standard</option>
+                <option value="strict">Strict</option>
+            </select>
+        </div>
+
+        <div class="toggle-card toggle-card-bare">
+            <div>
+                <div class="toggle-title">Audit Logging</div>
+                <div class="toggle-desc">Log all agent actions for audit trail</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" @bind="_auditLog" />
+                <span class="slider"></span>
+            </label>
+        </div>
+    </div>
+
+    <!-- Blocked Commands -->
+    <h2>Blocked Commands</h2>
+    <div class="input-group input-group-tight">
+        <input type="text" @bind="_newBlockedCmd" placeholder="e.g. rm -rf /" />
+        <button class="btn-primary btn-inline-add" @onclick="AddBlockedCommand">Add</button>
+    </div>
+    @if (_blockedCommands.Count == 0)
+    {
+        <p class="text-muted text-sm">No blocked commands configured</p>
+    }
+    @foreach (var cmd in _blockedCommands)
+    {
+        <div class="gov-item gov-item-danger">
+            <code class="gov-item-text gov-text-danger">@cmd</code>
+            <button class="btn-sm btn-danger" @onclick="() => _blockedCommands.Remove(cmd)">Remove</button>
+        </div>
+    }
+
+    <!-- Protected Files -->
+    <h2 class="mt-16">Protected Files</h2>
+    <div class="input-group input-group-tight">
+        <input type="text" @bind="_newProtectedFile" placeholder="e.g. .env, credentials.json" />
+        <button class="btn-primary btn-inline-add" @onclick="AddProtectedFile">Add</button>
+    </div>
+    @if (_protectedFiles.Count == 0)
+    {
+        <p class="text-muted text-sm">No protected files configured</p>
+    }
+    @foreach (var f in _protectedFiles)
+    {
+        <div class="gov-item gov-item-warn">
+            <code class="gov-item-text gov-text-warn">@f</code>
+            <button class="btn-sm btn-danger" @onclick="() => _protectedFiles.Remove(f)">Remove</button>
+        </div>
+    }
+
+    <!-- Secret Patterns -->
+    <h2 class="mt-16">Secret Detection Patterns</h2>
+    <div class="input-group input-group-tight">
+        <input type="text" @bind="_newSecretPattern" placeholder="e.g. sk-[a-zA-Z0-9]+" />
+        <button class="btn-primary btn-inline-add" @onclick="AddSecretPattern">Add</button>
+    </div>
+    @if (_secretPatterns.Count == 0)
+    {
+        <p class="text-muted text-sm">No custom secret patterns (built-in patterns active)</p>
+    }
+    @foreach (var p in _secretPatterns)
+    {
+        <div class="gov-item gov-item-default">
+            <code class="gov-item-text">@p</code>
+            <button class="btn-sm btn-danger" @onclick="() => _secretPatterns.Remove(p)">Remove</button>
+        </div>
+    }
+
+    <button class="btn-primary" style="max-width:200px;margin-top:20px;" @onclick="SaveConfigAsync">Save Configuration</button>
+    <p class="text-muted text-sm">Stored in the workspace settings database.</p>
+</div>
+
+@code {
+    private string _level = "standard";
+    private bool _auditLog = true;
+    private List<string> _blockedCommands = [];
+    private List<string> _protectedFiles = [];
+    private List<string> _secretPatterns = [];
+    private string _newBlockedCmd = string.Empty;
+    private string _newProtectedFile = string.Empty;
+    private string _newSecretPattern = string.Empty;
+    private string _status = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        if (!Session.IsAdmin) { Nav.NavigateTo("/", forceLoad: false); return; }
+        var config = GovernanceConfig.Load(SettingsStore);
+        _level = config.GovernanceLevelName;
+        _auditLog = config.AuditLog;
+        _blockedCommands = [.. config.BlockedCommands];
+        _protectedFiles = [.. config.ProtectedFiles];
+        _secretPatterns = [.. config.SecretPatterns];
+    }
+
+    private void AddBlockedCommand()
+    {
+        if (!string.IsNullOrWhiteSpace(_newBlockedCmd) && !_blockedCommands.Contains(_newBlockedCmd.Trim()))
+        {
+            _blockedCommands.Add(_newBlockedCmd.Trim());
+            _newBlockedCmd = string.Empty;
+        }
+    }
+
+    private void AddProtectedFile()
+    {
+        if (!string.IsNullOrWhiteSpace(_newProtectedFile) && !_protectedFiles.Contains(_newProtectedFile.Trim()))
+        {
+            _protectedFiles.Add(_newProtectedFile.Trim());
+            _newProtectedFile = string.Empty;
+        }
+    }
+
+    private void AddSecretPattern()
+    {
+        if (!string.IsNullOrWhiteSpace(_newSecretPattern) && !_secretPatterns.Contains(_newSecretPattern.Trim()))
+        {
+            _secretPatterns.Add(_newSecretPattern.Trim());
+            _newSecretPattern = string.Empty;
+        }
+    }
+
+    private async Task SaveConfigAsync()
+    {
+        try
+        {
+            var config = new GovernanceConfig { GovernanceLevelName = _level, AuditLog = _auditLog };
+            foreach (var c in _blockedCommands) config.BlockedCommands.Add(c);
+            foreach (var f in _protectedFiles) config.ProtectedFiles.Add(f);
+            foreach (var p in _secretPatterns) config.SecretPatterns.Add(p);
+
+            await config.SaveToStoreAsync(SettingsStore);
+            LiveSettings.ReloadAll();
+            _status = "Governance config saved.";
+        }
+        catch (Exception ex) { _status = $"Save failed: {ex.Message}"; }
+    }
+}

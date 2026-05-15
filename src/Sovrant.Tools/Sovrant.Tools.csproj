@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <NoWarn>CA1034;CA1710;CA1000;CA2225</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sovrant.Agents\Sovrant.Agents.csproj" />
+    <ProjectReference Include="..\Sovrant.Lsp\Sovrant.Lsp.csproj" />
+    <ProjectReference Include="..\Sovrant.Runtime\Sovrant.Runtime.csproj" />
+    <ProjectReference Include="..\Sovrant.Runtime.Documents\Sovrant.Runtime.Documents.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Skills\skills\**" CopyToOutputDirectory="PreserveNewest" Link="skills\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.5" />
+  </ItemGroup>
+
+</Project>

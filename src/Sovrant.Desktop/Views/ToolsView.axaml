@@ -1,0 +1,106 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             x:Class="Sovrant.Desktop.Views.ToolsView"
+             x:DataType="vm:ToolsViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel>
+        <!-- Header -->
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="12">
+            <DockPanel>
+                <Button DockPanel.Dock="Right"
+                        Content="Refresh"
+                        Command="{Binding RefreshCommand}"
+                        Padding="12,6"
+                        CornerRadius="6"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
+                <StackPanel>
+                    <TextBlock Text="Tools" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
+                        <Run Text="{Binding TotalCount}" />
+                        <Run Text=" tools registered — select one to view details" />
+                    </TextBlock>
+                </StackPanel>
+            </DockPanel>
+
+            <TextBox Text="{Binding SearchText}"
+                     Watermark="Search tools..."
+                     CornerRadius="8"
+                     Padding="12,8" />
+        </StackPanel>
+
+        <!-- Master-detail -->
+        <Grid Margin="32,12,32,24" ColumnDefinitions="300,12,*">
+            <!-- List -->
+            <ScrollViewer Grid.Column="0">
+                <ItemsControl ItemsSource="{Binding FilteredTools}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:ToolItemViewModel">
+                            <Button Command="{Binding $parent[ItemsControl].((vm:ToolsViewModel)DataContext).SelectToolCommand}"
+                                    CommandParameter="{Binding}"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Padding="0" Margin="0,2"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Cursor="Hand">
+                                <Border Padding="12,8"
+                                        CornerRadius="8"
+                                        Background="{DynamicResource SurfaceCard}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                        BorderThickness="1">
+                                    <StackPanel Spacing="2">
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   FontFamily="Consolas,Menlo,monospace"
+                                                   Foreground="{DynamicResource BrandPrimary}" />
+                                        <TextBlock Text="{Binding Description}"
+                                                   FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxLines="2"
+                                                   Foreground="{DynamicResource TextSecondary}" />
+                                    </StackPanel>
+                                </Border>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Detail pane -->
+            <Grid Grid.Column="2">
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding !SelectedTool}">
+                    <TextBlock Text="Select a tool to view its details"
+                               FontSize="14"
+                               Foreground="{DynamicResource TextMuted}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding !!SelectedTool}">
+                    <ContentControl Content="{Binding SelectedTool}">
+                        <ContentControl.ContentTemplate>
+                            <DataTemplate DataType="vm:ToolItemViewModel">
+                                <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
+                            </DataTemplate>
+                        </ContentControl.ContentTemplate>
+                    </ContentControl>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</UserControl>

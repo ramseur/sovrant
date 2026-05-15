@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sovrant.Api\Sovrant.Api.csproj" />
+    <ProjectReference Include="..\Sovrant.Api.Client\Sovrant.Api.Client.csproj" />
+    <ProjectReference Include="..\Sovrant.Runtime\Sovrant.Runtime.csproj" />
+    <ProjectReference Include="..\Sovrant.Tools\Sovrant.Tools.csproj" />
+    <ProjectReference Include="..\Sovrant.Commands\Sovrant.Commands.csproj" />
+    <ProjectReference Include="..\Sovrant.Mcp\Sovrant.Mcp.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.5" />
+    <PackageReference Include="Spectre.Console" Version="0.55.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
+    <PackageReference Include="System.CommandLine" Version="3.0.0-preview.2.26159.112" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>sovrant</AssemblyName>
+    <!-- Console EXE entry point — suppress ConfigureAwait warning (CA2007) -->
+    <NoWarn>CA2007</NoWarn>
+  </PropertyGroup>
+
+</Project>

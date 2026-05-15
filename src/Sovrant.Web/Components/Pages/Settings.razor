@@ -1,0 +1,430 @@
+@page "/settings"
+@using Microsoft.Extensions.DependencyInjection
+@using Sovrant.Api.Auth
+@using Sovrant.Api.Capabilities
+@using Sovrant.Api.Config
+@using Sovrant.Api.Routing
+@using Sovrant.Runtime.Config
+@using Sovrant.Runtime.Mcp
+@using Sovrant.Runtime.Permissions
+@using Sovrant.Runtime.Preferences
+@using Sovrant.Runtime.Providers
+@using Sovrant.Web.Adapters
+@using Sovrant.Web.Services
+
+<div class="settings-page">
+    <h1>Settings</h1>
+
+    <!-- Tab bar -->
+    <div class="tab-bar">
+        <button class="tab-btn @(_selectedTab == 0 ? "active" : "")" @onclick="() => _selectedTab = 0">General</button>
+        <button class="tab-btn @(_selectedTab == 1 ? "active" : "")" @onclick="() => _selectedTab = 1">Providers</button>
+    </div>
+
+    @if (_selectedTab == 1)
+    {
+        <!-- Providers tab -->
+        <div class="settings-section">
+            <h2>Your Providers</h2>
+            <p class="text-muted text-sm">Configure API keys and endpoints. The model dropdown above uses the active provider's connection.</p>
+
+            @if (_savedProfiles.Count == 0)
+            {
+                <p class="text-secondary">Add a provider below to get started.</p>
+            }
+            @foreach (var profile in _savedProfiles)
+            {
+                <div class="provider-card">
+                    <div class="provider-info">
+                        <div class="provider-name">@profile.Provider</div>
+                        <div class="provider-detail">@profile.BaseUrl</div>
+                    </div>
+                    <div class="provider-actions">
+                        <button class="btn-sm btn-primary" @onclick="() => ActivateProfile(profile)">Activate</button>
+                        <button class="btn-sm btn-danger" @onclick="() => DeleteProfile(profile)">X</button>
+                    </div>
+                </div>
+            }
+
+            <h2 class="mt-16">Add Provider</h2>
+
+            <form autocomplete="off" @onsubmit:preventDefault>
+            <div class="form-field">
+                <label>Provider</label>
+                <select @bind="_selectedProvider" @bind:after="OnProviderChanged">
+                    @foreach (var p in Providers)
+                    {
+                        <option value="@p">@p</option>
+                    }
+                </select>
+            </div>
+
+            <div class="form-field">
+                <label>API Key</label>
+                <input type="password" @bind="_apiKey" placeholder="sk-..." autocomplete="off" data-lpignore="true" data-1p-ignore />
+            </div>
+
+            <div class="form-field">
+                <label>Base URL</label>
+                <input type="text" @bind="_baseUrl" placeholder="https://api.openai.com/v1" />
+                <span class="text-muted text-sm">Auto-filled when you select a provider. Edit for custom endpoints.</span>
+            </div>
+
+            <div class="card">
+                <div class="form-field">
+                    <input type="text" @bind="_newProfileName" placeholder="Display name (or leave blank for auto)" />
+                </div>
+                <button class="btn-primary" @onclick="AddProvider">Add Provider</button>
+            </div>
+            </form>
+
+            @if (!string.IsNullOrEmpty(_statusMessage))
+            {
+                <div class="status-message">@_statusMessage</div>
+            }
+
+            <p class="text-muted text-sm">Providers are stored in the encrypted credential store. Click Activate to switch the active provider.</p>
+        </div>
+    }
+    else
+    {
+        <!-- General tab -->
+        <div class="settings-section">
+            <h2>Permissions</h2>
+            <div class="form-field">
+                <label>Permission Mode</label>
+                <select @bind="_permissionMode" @bind:after="OnPermissionModeChanged">
+                    <option value="Default">Default</option>
+                    <option value="AcceptEdits">AcceptEdits</option>
+                    <option value="BypassPermissions">BypassPermissions</option>
+                </select>
+                <span class="text-muted text-sm">
+                    <strong>Default</strong> — ask before destructive ops.
+                    <strong>AcceptEdits</strong> — auto-approve edits, ask for bash.
+                    <strong>BypassPermissions</strong> — allow all.
+                </span>
+            </div>
+
+            <h2>Appearance</h2>
+            <div class="toggle-card">
+                <div>
+                    <div class="toggle-title">Dark Mode</div>
+                    <div class="toggle-desc">Switch between dark and light theme</div>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" checked="@_isDarkMode" @onchange="ToggleTheme" />
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_statusMessage))
+            {
+                <div class="status-message">@_statusMessage</div>
+            }
+
+            <p class="text-muted text-sm">Settings auto-save when changed.</p>
+
+            <h2>Account</h2>
+            <div class="settings-section-row">
+                <button class="btn btn-secondary" @onclick="LogoutAsync">Log out</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Inject] private SovrantConfig Config { get; set; } = default!;
+    [Inject] private IPermissionModeAccessor PermissionModeAccessor { get; set; } = default!;
+    [Inject] private MutableAuthProvider AuthProvider { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
+    [Inject] private IServiceProvider Services { get; set; } = default!;
+    [Inject] private IUserPreferenceStore Prefs { get; set; } = default!;
+    [Inject] private IProviderProfileStore ProfileStore { get; set; } = default!;
+    [Inject] private ICredentialStore Credentials { get; set; } = default!;
+    [Inject] private WebSessionService Session { get; set; } = default!;
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    private ISmartRouter? _router;
+    private IModelCapabilityRegistry? _capabilities;
+    private int _selectedTab;
+    private string _selectedProvider = "OpenAI";
+    private string _apiKey = string.Empty;
+    private string _baseUrl = string.Empty;
+    private string _permissionMode = "Default";
+    private bool _isDarkMode = true;
+    private string _statusMessage = string.Empty;
+    private string _newProfileName = string.Empty;
+    private List<ProviderProfileVm> _savedProfiles = [];
+
+    private CancellationTokenSource? _autoSaveCts;
+
+    public static readonly Dictionary<string, string> ProviderBaseUrls = new(StringComparer.Ordinal)
+    {
+        ["OpenAI"] = "https://api.openai.com/v1",
+        ["OpenRouter"] = "https://openrouter.ai/api/v1",
+        ["DeepSeek"] = "https://api.deepseek.com/v1",
+        ["Groq"] = "https://api.groq.com/openai/v1",
+        ["Mistral"] = "https://api.mistral.ai/v1",
+        ["Together AI"] = "https://api.together.xyz/v1",
+        ["Ollama"] = "http://localhost:11434/v1",
+        ["LM Studio"] = "http://localhost:1234/v1",
+        ["Google"] = "https://generativelanguage.googleapis.com/v1beta/openai",
+        ["Azure OpenAI"] = "",
+        ["Custom"] = "",
+    };
+
+    private static readonly string[] Providers =
+        ["OpenAI", "DeepSeek", "Groq", "Mistral", "Together AI", "Azure OpenAI", "Google", "OpenRouter", "Ollama", "LM Studio", "Custom"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _router = Services.GetService<ISmartRouter>();
+        _capabilities = Services.GetService<IModelCapabilityRegistry>();
+        _apiKey = string.Empty; // Never pre-fill; user must enter or load a saved profile explicitly.
+        _baseUrl = Config.BaseUrl?.ToString() ?? string.Empty;
+        _permissionMode = PermissionModeAccessor.Mode.ToString();
+        _selectedProvider = await InferProviderAsync();
+        await LoadProfilesAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var theme = await JS.InvokeAsync<string>("sovrantInterop.getTheme");
+            _isDarkMode = theme != "light";
+            StateHasChanged();
+        }
+    }
+
+    private void OnProviderChanged()
+    {
+        if (ProviderBaseUrls.TryGetValue(_selectedProvider, out var url))
+            _baseUrl = url;
+        // Changing provider starts a fresh add-profile flow — clear the key field.
+        _apiKey = string.Empty;
+        // Still auto-fill the base URL from a matching saved profile if present.
+        var profile = _savedProfiles.FirstOrDefault(p =>
+            p.Provider.Equals(_selectedProvider, StringComparison.OrdinalIgnoreCase));
+        if (profile is not null)
+            _baseUrl = profile.BaseUrl;
+    }
+
+    private async Task AddProvider()
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey)) { _statusMessage = "Please enter an API key."; return; }
+
+        var displayName = string.IsNullOrWhiteSpace(_newProfileName)
+            ? _selectedProvider : _newProfileName.Trim();
+
+        var trimmedKey = _apiKey.Trim();
+        var trimmedBase = (_baseUrl ?? string.Empty).Trim();
+        var profileId = MakeProfileId(_selectedProvider, displayName);
+        var credentialId = $"provider.{profileId}.api_key";
+        var userId = Session.UserId!;
+
+        try
+        {
+            await Credentials.StoreAsync(credentialId, trimmedKey);
+
+            var now = DateTimeOffset.UtcNow;
+            var existingRow = await ProfileStore.GetAsync(profileId);
+            var profile = new ProviderProfile(
+                ProfileId: profileId,
+                UserId: userId,
+                Name: displayName,
+                ProviderKind: _selectedProvider,
+                BaseUrl: trimmedBase,
+                DefaultModel: existingRow?.DefaultModel ?? Config.Model,
+                MaxTokens: Config.MaxTokens,
+                CredentialId: credentialId,
+                CreatedAt: existingRow?.CreatedAt ?? now,
+                UpdatedAt: now);
+            if (existingRow is null)
+                await ProfileStore.CreateAsync(profile);
+            else
+                await ProfileStore.UpdateAsync(profile);
+
+            await LoadProfilesAsync();
+            var added = _savedProfiles.FirstOrDefault(p => p.ProfileId == profileId);
+            if (added is not null)
+                await ActivateProfile(added);
+            _newProfileName = string.Empty;
+            _statusMessage = $"Provider '{_selectedProvider}' saved and activated.";
+        }
+        catch (Exception ex) { _statusMessage = $"Failed to add provider: {ex.Message}"; }
+    }
+
+    private async Task ActivateProfile(ProviderProfileVm profile)
+    {
+        _selectedProvider = profile.Provider;
+        _apiKey = profile.ApiKey;
+        _baseUrl = profile.BaseUrl;
+
+        await Prefs.SetAsync(Session.UserId!,
+            UserPreferenceKeys.ActiveProviderProfileId, profile.ProfileId);
+
+        await SaveAsync();
+        _statusMessage = $"Switched to '{profile.Name}'.";
+    }
+
+    private async Task DeleteProfile(ProviderProfileVm profile)
+    {
+        try
+        {
+            await ProfileStore.DeleteAsync(profile.ProfileId);
+            if (!string.IsNullOrWhiteSpace(profile.CredentialId))
+                await Credentials.DeleteAsync(profile.CredentialId);
+            await LoadProfilesAsync();
+            _statusMessage = $"Profile '{profile.Name}' deleted.";
+        }
+        catch (Exception ex) { _statusMessage = $"Delete failed: {ex.Message}"; }
+    }
+
+    private async Task LoadProfilesAsync()
+    {
+        try
+        {
+            var rows = await ProfileStore.ListAsync(Session.UserId!);
+            var list = new List<ProviderProfileVm>(rows.Count);
+            foreach (var row in rows)
+            {
+                var apiKey = await Credentials.RetrieveAsync(row.CredentialId) ?? string.Empty;
+                list.Add(new ProviderProfileVm
+                {
+                    ProfileId = row.ProfileId,
+                    CredentialId = row.CredentialId,
+                    Name = row.Name,
+                    Provider = row.ProviderKind,
+                    ApiKey = apiKey,
+                    BaseUrl = row.BaseUrl ?? string.Empty,
+                    MaxTokens = row.MaxTokens ?? 32000,
+                });
+            }
+            _savedProfiles = list;
+        }
+        catch { _savedProfiles = []; }
+    }
+
+    private void OnPermissionModeChanged()
+    {
+        if (Enum.TryParse<PermissionMode>(_permissionMode, out var mode))
+            PermissionModeAccessor.Mode = mode;
+        ScheduleAutoSave();
+    }
+
+    private async Task ToggleTheme(ChangeEventArgs e)
+    {
+        _isDarkMode = (bool)(e.Value ?? true);
+        await JS.InvokeVoidAsync("sovrantInterop.setTheme", _isDarkMode ? "dark" : "light");
+        ScheduleAutoSave();
+    }
+
+    private void ScheduleAutoSave()
+    {
+        _autoSaveCts?.Cancel();
+        _autoSaveCts = new CancellationTokenSource();
+        var token = _autoSaveCts.Token;
+        _ = Task.Run(async () =>
+        {
+            try { await Task.Delay(600, token); await InvokeAsync(async () => await SaveAsync()); }
+            catch (OperationCanceledException) { }
+        }, token);
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var userId = Session.UserId!;
+            await Prefs.SetAsync(userId, UserPreferenceKeys.Provider, _selectedProvider);
+            if (!string.IsNullOrWhiteSpace(Config.Model))
+                await Prefs.SetAsync(userId, UserPreferenceKeys.Model, Config.Model);
+            await Prefs.SetAsync(userId, UserPreferenceKeys.PermissionMode, _permissionMode);
+            if (!string.IsNullOrWhiteSpace(_baseUrl))
+                await Prefs.SetAsync(userId, UserPreferenceKeys.BaseUrl, _baseUrl.Trim());
+            else
+                await Prefs.DeleteAsync(userId, UserPreferenceKeys.BaseUrl);
+
+            // Mirror the current key to the global LLM credential so server-side
+            // auth lookups resolve on the next request.
+            if (!string.IsNullOrWhiteSpace(_apiKey))
+                await Credentials.StoreAsync(CredentialKeys.LlmApiKey, _apiKey.Trim());
+
+            // Hot-swap runtime config, env vars, and auth provider.
+            // Model is managed by sidebar dropdown, not settings.
+            if (Enum.TryParse<PermissionMode>(_permissionMode, out var pm))
+                Config.PermissionMode = pm;
+
+            if (!string.IsNullOrWhiteSpace(_apiKey))
+            {
+                Config.ApiKey = _apiKey.Trim();
+                Environment.SetEnvironmentVariable("LLM_API_KEY", _apiKey.Trim());
+                AuthProvider.ApiKey = _apiKey.Trim();
+                if (_baseUrl.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
+                    Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", _apiKey.Trim());
+            }
+
+            if (!string.IsNullOrWhiteSpace(_baseUrl))
+            {
+                var parsed = new Uri(_baseUrl.Trim());
+                Config.BaseUrl = parsed;
+                AuthProvider.BaseUrl = parsed;
+                Environment.SetEnvironmentVariable("LLM_BASE_URL", _baseUrl.Trim());
+            }
+            else
+            {
+                Config.BaseUrl = null;
+                AuthProvider.BaseUrl = null;
+                Environment.SetEnvironmentVariable("LLM_BASE_URL", null);
+            }
+
+            ActiveContext.SetModel(Config.Model, _selectedProvider);
+            _statusMessage = "Settings saved.";
+        }
+        catch (Exception ex) { _statusMessage = $"Save failed: {ex.Message}"; }
+        StateHasChanged();
+    }
+
+    private async Task<string> InferProviderAsync()
+    {
+        try
+        {
+            var saved = await Prefs.GetAsync(Session.UserId!, UserPreferenceKeys.Provider);
+            if (!string.IsNullOrWhiteSpace(saved)) return saved;
+        }
+        catch { /* fall through */ }
+        var url = Config.BaseUrl?.ToString() ?? string.Empty;
+        if (url.Contains("openrouter", StringComparison.OrdinalIgnoreCase)) return "OpenRouter";
+        if (url.Contains("deepseek", StringComparison.OrdinalIgnoreCase)) return "DeepSeek";
+        return "OpenAI";
+    }
+
+    private static string MakeProfileId(string provider, string name)
+    {
+        var slug = $"{provider}-{name}".ToLowerInvariant();
+        var sanitized = new string(slug.Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
+        return sanitized.Trim('-');
+    }
+
+    private const string StoredWebTokenKey = "sovrant.web.auth_token";
+
+    private async Task LogoutAsync()
+    {
+        await Credentials.DeleteAsync(StoredWebTokenKey).ConfigureAwait(false);
+        Session.SignOut();
+        Nav.NavigateTo("/login", forceLoad: false);
+    }
+
+    private class ProviderProfileVm
+    {
+        public string ProfileId { get; set; } = string.Empty;
+        public string CredentialId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Provider { get; set; } = string.Empty;
+        public string ApiKey { get; set; } = string.Empty;
+        public string BaseUrl { get; set; } = string.Empty;
+        public int MaxTokens { get; set; } = 32000;
+    }
+}

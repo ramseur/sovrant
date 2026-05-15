@@ -1,0 +1,58 @@
+{
+  "name": "@sovrant/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript/JavaScript client SDK for Sovrant — streaming chat, session management, tool events.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./react": {
+      "import": "./dist/hooks/use-chat.js",
+      "types": "./dist/hooks/use-chat.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "build:dev": "tsup --no-minify --sourcemap",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ramseur/sovrant-engine.git",
+    "directory": "sdk/js"
+  },
+  "keywords": [
+    "sovrant",
+    "ai",
+    "agent",
+    "llm",
+    "streaming",
+    "sse"
+  ]
+}

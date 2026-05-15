@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "max_concurrent": 4,
+  "max_token_budget": 500000,
+  "max_retries": 1,
+  "quality_gate": true,
+  "permissions": "ask",
+  "decomposer_level": "High",
+  "worker_level": "Standard",
+  "task_timeout_seconds": 300
+}

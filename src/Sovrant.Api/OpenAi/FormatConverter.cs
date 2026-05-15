@@ -1,0 +1,177 @@
+using System.Text;
+using System.Text.Json;
+using Sovrant.Api.Types;
+
+namespace Sovrant.Api.OpenAi;
+
+/// <summary>Converts between Sovrant's internal message types and OpenAI chat completions format.</summary>
+internal static class FormatConverter
+{
+    /// <summary>Converts a <see cref="MessagesRequest"/> to an <see cref="OpenAiChatRequest"/>.</summary>
+    public static OpenAiChatRequest ToOpenAi(MessagesRequest req) =>
+        ToOpenAi(req, plan: null, dialect: OpenAiDialect.Other);
+
+    /// <summary>
+    /// Converts a <see cref="MessagesRequest"/> to an <see cref="OpenAiChatRequest"/>,
+    /// applying the given <see cref="NativeWebSearchPlan"/>. When the plan calls for
+    /// native injection on an OpenRouter dialect, the OpenRouter <c>plugins</c> field
+    /// is populated; the <c>WebSearch</c> function tool is dropped when the plan
+    /// suppresses it. For any other dialect the plan only affects function-tool
+    /// suppression — no native server tool is emitted on the chat-completions wire.
+    /// </summary>
+    public static OpenAiChatRequest ToOpenAi(MessagesRequest req, NativeWebSearchPlan? plan, OpenAiDialect dialect)
+    {
+        ArgumentNullException.ThrowIfNull(req);
+        var messages = new List<OpenAiMessage>();
+        if (req.System is not null)
+        {
+            messages.Add(new OpenAiMessage("system", req.System));
+        }
+        foreach (var msg in req.Messages)
+        {
+            ConvertInputMessage(msg, messages);
+        }
+
+        List<OpenAiTool>? tools = null;
+        if (req.Tools is { Count: > 0 })
+        {
+            var filtered = plan?.SuppressFunctionTool == true
+                ? req.Tools.Where(t => !string.Equals(t.Name, "WebSearch", StringComparison.Ordinal))
+                : req.Tools;
+            tools = filtered
+                .Select(t => new OpenAiTool("function", new OpenAiToolFunction(t.Name, t.Description, t.InputSchema)))
+                .ToList();
+            if (tools.Count == 0) tools = null;
+        }
+
+        IReadOnlyList<OpenAiPlugin>? plugins = null;
+        if (plan is { InjectNative: true } && dialect == OpenAiDialect.OpenRouter)
+            plugins = [new OpenAiPlugin("web")];
+
+        // OpenAI reasoning models (o1, o3, o4) require max_completion_tokens and reject max_tokens.
+        // All other providers use max_tokens for backward compatibility.
+        bool useMaxCompletionTokens = IsReasoningModel(req.Model);
+
+        return new OpenAiChatRequest(req.Model, messages)
+        {
+            MaxTokens = useMaxCompletionTokens ? null : req.MaxTokens,
+            MaxCompletionTokens = useMaxCompletionTokens ? req.MaxTokens : null,
+            Tools = tools,
+            ToolChoice = tools is { Count: > 0 } ? "auto" : null,
+            Stream = req.Stream,
+            StreamOptions = req.Stream ? new OpenAiStreamOptions(true) : null,
+            Plugins = plugins,
+        };
+    }
+
+    /// <summary>Converts an <see cref="OpenAiChatResponse"/> to a <see cref="MessageResponse"/>.</summary>
+    public static MessageResponse FromOpenAi(OpenAiChatResponse resp)
+    {
+        ArgumentNullException.ThrowIfNull(resp);
+        var choice = resp.Choices.Count > 0 ? resp.Choices[0] : null;
+        var content = new List<OutputContentBlock>();
+
+        if (choice?.Message.Content is { Length: > 0 } text)
+        {
+            content.Add(new OutputContentBlock.TextBlock(text));
+        }
+        if (choice?.Message.ToolCalls is { Count: > 0 } calls)
+        {
+            foreach (var call in calls)
+            {
+                var input = JsonDocument.Parse(
+                    string.IsNullOrEmpty(call.Function.Arguments) ? "{}" : call.Function.Arguments
+                ).RootElement;
+                content.Add(new OutputContentBlock.ToolUseBlock(call.Id, call.Function.Name, input));
+            }
+        }
+
+        var stopReason = choice?.FinishReason switch
+        {
+            "stop" => "end_turn",
+            "tool_calls" => "tool_use",
+            "length" => "max_tokens",
+            var r => r
+        };
+
+        var usage = new Usage(
+            InputTokens: resp.Usage?.PromptTokens ?? 0,
+            OutputTokens: resp.Usage?.CompletionTokens ?? 0);
+
+        return new MessageResponse(resp.Id, "message", "assistant", content, resp.Model, usage)
+        {
+            StopReason = stopReason
+        };
+    }
+
+    private static void ConvertInputMessage(InputMessage msg, List<OpenAiMessage> output)
+    {
+        if (string.Equals(msg.Role, "user", StringComparison.Ordinal))
+        {
+            var textParts = new List<string>();
+            foreach (var block in msg.Content)
+            {
+                switch (block)
+                {
+                    case InputContentBlock.TextBlock t:
+                        textParts.Add(t.Text);
+                        break;
+                    case InputContentBlock.ToolResultBlock tr:
+                        if (textParts.Count > 0)
+                        {
+                            output.Add(new OpenAiMessage("user", string.Join("\n", textParts)));
+                            textParts.Clear();
+                        }
+                        var resultText = string.Join("\n",
+                            tr.Content.OfType<ToolResultContentBlock.TextBlock>().Select(x => x.Text));
+                        output.Add(new OpenAiMessage("tool", resultText) { ToolCallId = tr.ToolUseId });
+                        break;
+                }
+            }
+            if (textParts.Count > 0)
+            {
+                output.Add(new OpenAiMessage("user", string.Join("\n", textParts)));
+            }
+        }
+        else if (string.Equals(msg.Role, "assistant", StringComparison.Ordinal))
+        {
+            var textParts = new List<string>();
+            var toolCalls = new List<OpenAiToolCall>();
+            foreach (var block in msg.Content)
+            {
+                switch (block)
+                {
+                    case InputContentBlock.TextBlock t:
+                        textParts.Add(t.Text);
+                        break;
+                    case InputContentBlock.ToolUseBlock tu:
+                        toolCalls.Add(new OpenAiToolCall(tu.Id, "function",
+                            new OpenAiFunction(tu.Name, tu.Input.GetRawText())));
+                        break;
+                }
+            }
+            output.Add(new OpenAiMessage("assistant", textParts.Count > 0 ? string.Join("", textParts) : null)
+            {
+                ToolCalls = toolCalls.Count > 0 ? toolCalls : null
+            });
+        }
+    }
+
+    /// <summary>
+    /// Returns true for OpenAI reasoning models that require <c>max_completion_tokens</c>
+    /// instead of <c>max_tokens</c>. Only matches o-series models (o1, o3, o4) which
+    /// reject max_tokens entirely. GPT models (gpt-4o, gpt-5, etc.) accept max_tokens
+    /// and are compatible with all OpenAI-compat providers (OpenRouter, Groq, etc.).
+    /// </summary>
+    private static bool IsReasoningModel(string model)
+    {
+        // Normalize: strip provider prefix (e.g. "openai/o3-mini" → "o3-mini")
+        var name = model;
+        var slash = model.LastIndexOf('/');
+        if (slash >= 0) name = model[(slash + 1)..];
+
+        return name.StartsWith("o1", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("o3", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("o4", StringComparison.OrdinalIgnoreCase);
+    }
+}

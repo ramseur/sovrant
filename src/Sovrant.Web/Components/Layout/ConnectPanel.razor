@@ -1,0 +1,10 @@
+@*  Phase 69 — Connect group secondary panel.  *@
+
+<div class="rail-secondary-header">Connect</div>
+<NavButton Href="/integrations" Icon="&#x1F50C;" Label="Integrations" OnClick="OnNavigate" />
+@* Automations entry hidden: workflow automation will be delivered through MCP-connected
+   platforms (n8n, etc.) rather than a built-in surface. Page + route remain wired. *@
+
+@code {
+    [Parameter] public EventCallback<string> OnNavigate { get; set; }
+}

@@ -1,0 +1,10 @@
+@*  Agents group secondary panel — templates and orchestration.
+    Command Center lives under Admin since it surfaces every user's runs. *@
+
+<div class="rail-secondary-header">Agents</div>
+<NavButton Href="/agents" Icon="&#x1F916;" Label="Templates" OnClick="OnNavigate" />
+<NavButton Href="/orchestration" Icon="&#x1F3BC;" Label="Orchestration" OnClick="OnNavigate" />
+
+@code {
+    [Parameter] public EventCallback<string> OnNavigate { get; set; }
+}

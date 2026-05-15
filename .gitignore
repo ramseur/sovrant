@@ -27,6 +27,9 @@ bld/
 project.lock.json
 project.fragment.lock.json
 artifacts/
+# But keep our source Artifacts/ directories (Phase 53)
+!src/**/Artifacts/
+!tests/**/Artifacts/
 
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt
@@ -52,3 +55,12 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+# Code coverage
+coverage-results/
+coverage-report/
+
+# Local environment files (secrets). Keep .env.example committed.
+.env
+.env.local
+.env.*.local
+.envrc

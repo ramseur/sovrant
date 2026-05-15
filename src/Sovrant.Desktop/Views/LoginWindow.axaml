@@ -1,0 +1,72 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sovrant.Desktop.ViewModels"
+        x:Class="Sovrant.Desktop.Views.LoginWindow"
+        x:DataType="vm:LoginViewModel"
+        Title="Sovrant — Sign in"
+        Width="420" Height="460"
+        CanResize="False"
+        WindowStartupLocation="CenterScreen">
+
+  <Border Padding="36" Background="{DynamicResource BackgroundBrush}">
+    <StackPanel Spacing="16">
+
+      <TextBlock Text="Sovrant" FontSize="28" FontWeight="Bold"
+                 HorizontalAlignment="Center" Margin="0,0,0,4"/>
+
+      <TextBlock Text="Sign in to continue."
+                 FontSize="12" Opacity="0.6"
+                 HorizontalAlignment="Center"
+                 Margin="0,0,0,4"/>
+
+      <!-- Email -->
+      <StackPanel Spacing="6">
+        <TextBlock Text="Email" FontSize="13"/>
+        <TextBox Text="{Binding Email, Mode=TwoWay}"
+                 Watermark="you@example.com"
+                 IsEnabled="{Binding !IsBusy}"/>
+      </StackPanel>
+
+      <!-- Password -->
+      <StackPanel Spacing="6">
+        <TextBlock Text="Password" FontSize="13"/>
+        <TextBox Text="{Binding Password, Mode=TwoWay}"
+                 PasswordChar="•"
+                 Watermark="Password"
+                 IsEnabled="{Binding !IsBusy}"/>
+      </StackPanel>
+
+      <!-- Error message -->
+      <TextBlock Text="{Binding ErrorMessage}"
+                 Foreground="Red"
+                 TextWrapping="Wrap"
+                 IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+      <Button Content="Sign in"
+              HorizontalAlignment="Stretch"
+              HorizontalContentAlignment="Center"
+              Command="{Binding LoginCommand}"
+              IsEnabled="{Binding !IsBusy}"
+              Padding="0,10"/>
+
+      <!-- Registration option shown only when open -->
+      <StackPanel Spacing="6" IsVisible="{Binding IsRegistrationOpen}">
+        <Separator/>
+        <TextBlock Text="Don't have an account?"
+                   HorizontalAlignment="Center" Opacity="0.55" FontSize="12"/>
+        <Button Content="Create account"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Center"
+                Command="{Binding RegisterCommand}"
+                IsEnabled="{Binding !IsBusy}"
+                Padding="0,8"/>
+      </StackPanel>
+
+      <!-- Busy indicator -->
+      <ProgressBar IsIndeterminate="True"
+                   IsVisible="{Binding IsBusy}"
+                   Height="3"/>
+
+    </StackPanel>
+  </Border>
+</Window>

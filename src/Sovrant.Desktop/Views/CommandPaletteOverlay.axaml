@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.CommandPaletteOverlay"
+             x:DataType="vm:CommandPaletteViewModel"
+             IsVisible="{Binding IsOpen}">
+
+    <!-- Semi-transparent backdrop -->
+    <Panel>
+        <Border Background="#80000000"
+                PointerPressed="OnBackdropPressed" />
+
+        <!-- Palette card -->
+        <Border MaxWidth="520"
+                MaxHeight="400"
+                Margin="0,80,0,0"
+                VerticalAlignment="Top"
+                HorizontalAlignment="Center"
+                CornerRadius="12"
+                Background="{DynamicResource SurfaceCard}"
+                BorderBrush="{DynamicResource SurfaceBorder}"
+                BorderThickness="1"
+                BoxShadow="0 8 24 0 #40000000">
+            <DockPanel>
+                <!-- Search input -->
+                <TextBox DockPanel.Dock="Top"
+                         Text="{Binding SearchText}"
+                         Watermark="Type a command..."
+                         Padding="14,12"
+                         FontSize="15"
+                         BorderThickness="0,0,0,1"
+                         BorderBrush="{DynamicResource SurfaceBorder}"
+                         CornerRadius="12,12,0,0"
+                         x:Name="SearchInput" />
+
+                <!-- Command list -->
+                <ScrollViewer>
+                    <ItemsControl ItemsSource="{Binding FilteredCommands}"
+                                  Margin="4">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:CommandItem">
+                                <Button Command="{Binding $parent[UserControl].((vm:CommandPaletteViewModel)DataContext).ExecuteCommand}"
+                                        CommandParameter="{Binding}"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Left"
+                                        Padding="12,8"
+                                        Margin="0,1"
+                                        CornerRadius="6">
+                                    <DockPanel>
+                                        <Border DockPanel.Dock="Right"
+                                                Padding="6,2"
+                                                CornerRadius="8"
+                                                Background="{DynamicResource SurfaceBorder}"
+                                                VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Category}"
+                                                       FontSize="10"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                        </Border>
+                                        <StackPanel Spacing="2">
+                                            <TextBlock FontSize="13" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextPrimary}">
+                                                <Run Text="/" /><Run Text="{Binding Name}" />
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding Description}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TextSecondary}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Panel>
+</UserControl>

@@ -1,0 +1,138 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+
+<div class="app-shell">
+    <aside class="rail-secondary">
+        <button class="rail-brand" @onclick='() => { _selectedGroup = "chat"; Nav.NavigateTo("/"); }' title="Home">
+            <span class="rail-brand-icon">&#9889;</span>
+            <span class="rail-brand-text">Sovrant</span>
+        </button>
+        <RailNav Selected="@_selectedGroup" OnSelect="OnGroupSelected" />
+
+        <div class="rail-secondary-body">
+            @switch (_selectedGroup)
+            {
+                case "chat":
+                    <Sidebar OnNavigate="Navigate" />
+                    break;
+                case "knowledge":
+                    <KnowledgePanel OnNavigate="Navigate" />
+                    break;
+                case "agents":
+                    <AgentsPanel OnNavigate="Navigate" />
+                    break;
+                case "workspace":
+                    <WorkspacePanel OnNavigate="Navigate" />
+                    break;
+                case "connect":
+                    <ConnectPanel OnNavigate="Navigate" />
+                    break;
+                case "admin":
+                    <AdminPanel OnNavigate="Navigate" />
+                    break;
+                case "settings":
+                    break;
+            }
+        </div>
+
+        <div class="rail-footer">
+            <div class="rail-footer-user">
+                <div class="rail-footer-avatar">@_userInitial</div>
+                <div class="rail-footer-info">
+                    <div class="rail-footer-name">@_userName</div>
+                    <div class="rail-footer-sub">Personal</div>
+                </div>
+            </div>
+            <button class="rail-footer-settings" title="Log out"
+                    @onclick="LogoutAsync">&#x21AA;</button>
+        </div>
+    </aside>
+
+    <main class="content-area">
+        <TopContextBar />
+        @Body
+    </main>
+
+    <CommandPalette @ref="_palette" OnCommandOutput="OnCommandOutput" OnInjectMessage="OnInjectMessage" />
+</div>
+
+@code {
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private Sovrant.Web.Services.ActiveContextService ActiveContext { get; set; } = default!;
+    [Inject] private Sovrant.Web.Services.WebSessionService Session { get; set; } = default!;
+
+    private string _selectedGroup = "chat";
+    private CommandPalette? _palette;
+    private DotNetObjectReference<MainLayout>? _dotNetRef;
+
+    private string _userName => LocalPart(Session.Email) ?? Session.UserId ?? "user";
+    private string _userInitial => (_userName.Length > 0 ? _userName[..1] : "U").ToUpperInvariant();
+
+    private static string? LocalPart(string? email)
+    {
+        if (email is null) return null;
+        var idx = email.IndexOf('@', StringComparison.Ordinal);
+        return idx > 0 ? email[..idx] : email;
+    }
+
+    protected override void OnInitialized()
+    {
+        if (!Session.IsAuthenticated)
+            Nav.NavigateTo("/login", forceLoad: false);
+    }
+
+    private void OnGroupSelected(string group)
+    {
+        _selectedGroup = group;
+        // Clicking a top-level icon should land on the first sub-nav item so the
+        // main content is never blank. Chat starts a fresh session; we both
+        // navigate (covers "currently on /settings") AND fire a reset (covers
+        // "already on /" where Blazor reuses the component instance).
+        var url = group switch
+        {
+            "chat" => "/",
+            "knowledge" => "/artifacts",
+            "agents" => "/agents",
+            "workspace" => "/projects",
+            "connect" => "/integrations",
+            "admin" => "/admin",
+            "settings" => "/settings",
+            _ => null,
+        };
+        if (group == "chat") ActiveContext.StartNewSession();
+        if (url is not null) Nav.NavigateTo(url, forceLoad: false);
+    }
+
+    private void Navigate(string url)
+    {
+        Nav.NavigateTo(url);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("sovrantInterop.registerCtrlK", _dotNetRef);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnCtrlK()
+    {
+        if (_palette is not null)
+            await _palette.ToggleAsync();
+    }
+
+    private void OnCommandOutput(string output) { /* could show toast */ }
+    private void OnInjectMessage(string msg) => Nav.NavigateTo($"/?inject={Uri.EscapeDataString(msg)}");
+
+    private void LogoutAsync()
+    {
+        Session.SignOut();
+        Nav.NavigateTo("/login", forceLoad: false);
+    }
+
+    public void Dispose() => _dotNetRef?.Dispose();
+}

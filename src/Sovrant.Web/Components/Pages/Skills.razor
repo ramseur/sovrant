@@ -1,0 +1,237 @@
+@page "/skills"
+@using Sovrant.Tools.Skills
+@using Sovrant.Web.Components.Shared
+@using Markdig
+
+@if (_editing is not null)
+{
+    <div class="detail-content" style="padding:0; height:100%;">
+        <MarkdownEditor Value="@_editing.Source"
+                        Title="@(_editing.IsNew ? "New skill" : _editing.Slug)"
+                        ReadOnly="@_editing.ReadOnly"
+                        OnSave="HandleSave"
+                        OnCancel="@(() => { _editing = null; return Task.CompletedTask; })" />
+    </div>
+}
+else
+{
+    <MasterDetailLayout TItem="SkillItem"
+                        Title="Skills"
+                        ItemCount="@_filtered.Count"
+                        Items="@_filtered"
+                        SelectedItem="@_selected"
+                        EmptyMessage="No skills registered."
+                        OnRefresh="Reload"
+                        OnItemSelected="@(s => { _selected = s; return Task.CompletedTask; })"
+                        OnSearch="Search">
+        <ItemTemplate>
+            <div class="item-title">
+                @context.Name
+                @if (context.Tier == SkillTier.Global)
+                {
+                    <span class="tier-badge tier-user" title="User template">user</span>
+                }
+                else if (context.Tier == SkillTier.Project)
+                {
+                    <span class="tier-badge tier-project" title="Project template">project</span>
+                }
+            </div>
+            <div class="item-subtitle">
+                @if (!string.IsNullOrEmpty(context.Trigger))
+                {
+                    <code>@context.Trigger</code>
+                    <span> &middot; </span>
+                }
+                @context.AgentCount agents &middot; @context.ToolCount tools
+            </div>
+        </ItemTemplate>
+        @* Authoring buttons hidden — see Phase 91 roadmap entry. Re-enable after the
+           "edit anything, no Duplicate-to-user step" UX rework lands. *@
+        <DetailTemplate>
+            <div class="detail-content">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+                    <h2 style="margin:0;">@context.Name</h2>
+                </div>
+                <p class="text-secondary">@context.Description</p>
+                <div class="detail-meta">
+                    @if (!string.IsNullOrEmpty(context.Trigger))
+                    {
+                        <span>Trigger: <code>@context.Trigger</code></span>
+                    }
+                    <span>Agents: @(context.AgentCount > 0 ? string.Join(", ", context.Agents) : "None")</span>
+                    <span>Tools: @(context.ToolCount > 0 ? string.Join(", ", context.Tools) : "None")</span>
+                </div>
+                @if (!string.IsNullOrEmpty(context.Body))
+                {
+                    <h3>Workflow</h3>
+                    <div class="message-markdown">
+                        @((MarkupString)Markdown.ToHtml(context.Body, _pipeline))
+                    </div>
+                }
+            </div>
+        </DetailTemplate>
+    </MasterDetailLayout>
+}
+
+@code {
+    [Inject] private SkillRegistry SkillRegistry { get; set; } = default!;
+
+    private List<SkillItem> _all = [];
+    private List<SkillItem> _filtered = [];
+    private SkillItem? _selected;
+    private EditorState? _editing;
+
+    private static readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
+        .UseAdvancedExtensions().Build();
+
+    private const string NewSkillTemplate = """
+        ---
+        name: untitled-skill
+        description: Briefly describe what this skill does and when to use it.
+        trigger: /untitled
+        ---
+        ## Steps
+        1. ...
+        2. ...
+        """;
+
+    protected override void OnInitialized() => Reload();
+
+    private void Reload()
+    {
+        _all = SkillRegistry.All
+            .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(s =>
+            {
+                var src = SkillRegistry.TryGetSource(s.Name);
+                return new SkillItem
+                {
+                    Name = s.Name,
+                    Description = s.Description,
+                    Trigger = s.Trigger,
+                    Agents = s.Agents,
+                    Tools = s.Tools,
+                    AgentCount = s.Agents.Count,
+                    ToolCount = s.Tools.Count,
+                    Body = s.Body,
+                    Tier = src?.Tier ?? SkillTier.BuiltIn,
+                    SourcePath = src?.Path,
+                };
+            }).ToList();
+        _filtered = _all;
+    }
+
+    private void Search(string text)
+    {
+        _filtered = string.IsNullOrWhiteSpace(text)
+            ? _all
+            : _all.Where(s =>
+                s.Name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                s.Description.Contains(text, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+    }
+
+    private void StartNew() =>
+        _editing = new EditorState { Slug = string.Empty, Source = NewSkillTemplate, IsNew = true, ReadOnly = false };
+
+    private void StartEdit(SkillItem item, bool readOnly)
+    {
+        var source = item.SourcePath is not null && File.Exists(item.SourcePath)
+            ? File.ReadAllText(item.SourcePath)
+            : item.Body;
+        _editing = new EditorState
+        {
+            Slug = item.SourcePath is null ? item.Name : Path.GetFileNameWithoutExtension(item.SourcePath),
+            Source = source,
+            IsNew = false,
+            ReadOnly = readOnly,
+        };
+    }
+
+    private void StartDuplicate(SkillItem item)
+    {
+        var source = item.SourcePath is not null && File.Exists(item.SourcePath)
+            ? File.ReadAllText(item.SourcePath)
+            : item.Body;
+        _editing = new EditorState
+        {
+            Slug = item.SourcePath is null ? item.Name : Path.GetFileNameWithoutExtension(item.SourcePath),
+            Source = source,
+            IsNew = true,
+            ReadOnly = false,
+        };
+    }
+
+    private Task HandleSave(string markdown)
+    {
+        if (_editing is null) return Task.CompletedTask;
+        var slug = ExtractSlug(markdown) ?? _editing.Slug;
+        if (string.IsNullOrWhiteSpace(slug)) return Task.CompletedTask;
+
+        SkillRegistry.SaveGlobal(slug, markdown);
+        _editing = null;
+        Reload();
+        return Task.CompletedTask;
+    }
+
+    private Task DeleteAsync(SkillItem item)
+    {
+        if (item.SourcePath is null) return Task.CompletedTask;
+        var slug = Path.GetFileNameWithoutExtension(item.SourcePath);
+        SkillRegistry.DeleteGlobal(slug);
+        if (_selected == item) _selected = null;
+        Reload();
+        return Task.CompletedTask;
+    }
+
+    private static string? ExtractSlug(string markdown)
+    {
+        if (!markdown.StartsWith("---", StringComparison.Ordinal)) return null;
+        var end = markdown.IndexOf("\n---", 3, StringComparison.Ordinal);
+        if (end < 0) return null;
+        var fm = markdown.Substring(3, end - 3);
+        foreach (var line in fm.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith("name:", StringComparison.OrdinalIgnoreCase))
+            {
+                var raw = trimmed.Substring(5).Trim().Trim('"', '\'');
+                return Slugify(raw);
+            }
+        }
+        return null;
+    }
+
+    private static string Slugify(string raw)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var c in raw.ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(c)) sb.Append(c);
+            else if (c == ' ' || c == '-' || c == '_') sb.Append('-');
+        }
+        return sb.ToString().Trim('-');
+    }
+
+    private sealed class SkillItem
+    {
+        public string Name { get; init; } = string.Empty;
+        public string Description { get; init; } = string.Empty;
+        public string Trigger { get; init; } = string.Empty;
+        public IReadOnlyList<string> Agents { get; init; } = [];
+        public IReadOnlyList<string> Tools { get; init; } = [];
+        public int AgentCount { get; init; }
+        public int ToolCount { get; init; }
+        public string Body { get; init; } = string.Empty;
+        public SkillTier Tier { get; init; }
+        public string? SourcePath { get; init; }
+    }
+
+    private sealed class EditorState
+    {
+        public string Slug { get; init; } = string.Empty;
+        public string Source { get; init; } = string.Empty;
+        public bool IsNew { get; init; }
+        public bool ReadOnly { get; init; }
+    }
+}

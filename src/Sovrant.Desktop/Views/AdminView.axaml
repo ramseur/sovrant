@@ -1,0 +1,533 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:conv="using:Sovrant.Desktop.Converters"
+             xmlns:users="using:Sovrant.Runtime.Users"
+             xmlns:ws="using:Sovrant.Runtime.Workspaces"
+             x:Class="Sovrant.Desktop.Views.AdminView"
+             x:DataType="vm:AdminViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <UserControl.Resources>
+        <conv:EqualityToBoolConverter x:Key="EqConv" />
+    </UserControl.Resources>
+
+    <ScrollViewer Padding="32,24">
+        <StackPanel MaxWidth="800" Spacing="20">
+
+            <!-- Header -->
+            <DockPanel>
+                <Button DockPanel.Dock="Right"
+                        Content="Refresh"
+                        Command="{Binding LoadCommand}"
+                        Padding="16,8" CornerRadius="8"
+                        Background="{DynamicResource SurfaceMuted}"
+                        Foreground="{DynamicResource TextPrimary}"
+                        FontWeight="SemiBold" />
+                <TextBlock FontSize="24" FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimary}"
+                           VerticalAlignment="Center"
+                           Text="Users"
+                           IsVisible="{Binding IsUsersSection}" />
+                <TextBlock FontSize="24" FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimary}"
+                           VerticalAlignment="Center"
+                           Text="Workspaces"
+                           IsVisible="{Binding IsWorkspacesSection}" />
+            </DockPanel>
+
+            <!-- Status / Error banners -->
+            <Border Padding="12,10" CornerRadius="8"
+                    Background="{DynamicResource BrandPrimaryMuted}"
+                    IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <TextBlock Text="{Binding Status}" FontSize="13"
+                           Foreground="{DynamicResource BrandPrimary}" />
+            </Border>
+
+            <Border Padding="12,10" CornerRadius="8"
+                    Background="#1FEF4444"
+                    IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <TextBlock Text="{Binding Error}" FontSize="13"
+                           Foreground="#EF4444" />
+            </Border>
+
+            <TextBlock Text="Loading…" FontSize="14"
+                       Foreground="{DynamicResource TextSecondary}"
+                       IsVisible="{Binding IsLoading}" />
+
+            <!-- Tab bar (Users section only) -->
+            <StackPanel Orientation="Horizontal" Spacing="4"
+                        IsVisible="{Binding IsUsersSection}">
+
+                <Button Content="Users"
+                        Command="{Binding SelectTabCommand}" CommandParameter="0"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource BrandPrimary}" Foreground="White"
+                        IsVisible="{Binding IsUsersTab}" />
+                <Button Content="Users"
+                        Command="{Binding SelectTabCommand}" CommandParameter="0"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
+                        IsVisible="{Binding !IsUsersTab}" />
+
+                <Button Content="Registration"
+                        Command="{Binding SelectTabCommand}" CommandParameter="1"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource BrandPrimary}" Foreground="White"
+                        IsVisible="{Binding IsRegistrationTab}" />
+                <Button Content="Registration"
+                        Command="{Binding SelectTabCommand}" CommandParameter="1"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
+                        IsVisible="{Binding !IsRegistrationTab}" />
+
+                <Button Content="Password Reset"
+                        Command="{Binding SelectTabCommand}" CommandParameter="2"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource BrandPrimary}" Foreground="White"
+                        IsVisible="{Binding IsPasswordResetTab}" />
+                <Button Content="Password Reset"
+                        Command="{Binding SelectTabCommand}" CommandParameter="2"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
+                        IsVisible="{Binding !IsPasswordResetTab}" />
+
+            </StackPanel>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- USERS section · TAB 0: Users                    -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <StackPanel Spacing="12">
+                <StackPanel.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="IsUsersSection" />
+                        <Binding Path="IsUsersTab" />
+                    </MultiBinding>
+                </StackPanel.IsVisible>
+
+                <ComboBox SelectedItem="{Binding UserFilter}"
+                          Width="200" Padding="8,6" CornerRadius="8">
+                    <ComboBox.Items>
+                        <x:String>all</x:String>
+                        <x:String>pending</x:String>
+                        <x:String>active</x:String>
+                        <x:String>inactive</x:String>
+                    </ComboBox.Items>
+                </ComboBox>
+
+                <TextBlock Text="No users found."
+                           FontSize="13" Foreground="{DynamicResource TextSecondary}"
+                           IsVisible="{Binding !FilteredUsers.Count}" />
+
+                <ItemsControl ItemsSource="{Binding FilteredUsers}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="users:User">
+                            <Border Padding="14,10" CornerRadius="10" Margin="0,0,0,6"
+                                    Background="{DynamicResource SurfaceMuted}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1">
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Right"
+                                                Orientation="Horizontal" Spacing="6"
+                                                VerticalAlignment="Center">
+                                        <Button Content="Approve"
+                                                Command="{Binding $parent[ItemsControl].((vm:AdminViewModel)DataContext).ApproveCommand}"
+                                                CommandParameter="{Binding}"
+                                                IsVisible="{Binding Status, Converter={StaticResource EqConv}, ConverterParameter=pending}"
+                                                Padding="10,5" CornerRadius="6" FontSize="12"
+                                                Background="{DynamicResource BrandPrimary}"
+                                                Foreground="White" />
+                                        <Button Content="Disable"
+                                                Command="{Binding $parent[ItemsControl].((vm:AdminViewModel)DataContext).DisableCommand}"
+                                                CommandParameter="{Binding}"
+                                                IsVisible="{Binding Status, Converter={StaticResource EqConv}, ConverterParameter=active}"
+                                                Padding="10,5" CornerRadius="6" FontSize="12"
+                                                Background="#EF4444"
+                                                Foreground="White" />
+                                        <Button Content="Reactivate"
+                                                Command="{Binding $parent[ItemsControl].((vm:AdminViewModel)DataContext).ReactivateCommand}"
+                                                CommandParameter="{Binding}"
+                                                IsVisible="{Binding Status, Converter={StaticResource EqConv}, ConverterParameter=inactive}"
+                                                Padding="10,5" CornerRadius="6" FontSize="12"
+                                                Background="{DynamicResource SurfaceMuted}"
+                                                Foreground="{DynamicResource TextPrimary}" />
+                                    </StackPanel>
+                                    <StackPanel Spacing="2">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="{Binding Email}" FontWeight="SemiBold"
+                                                       FontSize="14" Foreground="{DynamicResource TextPrimary}" />
+                                            <Border Padding="6,2" CornerRadius="4"
+                                                    Background="{DynamicResource SurfaceBorder}">
+                                                <TextBlock Text="{Binding Status}" FontSize="11"
+                                                           Foreground="{DynamicResource TextSecondary}" />
+                                            </Border>
+                                            <Border Padding="6,2" CornerRadius="4"
+                                                    Background="{DynamicResource BrandPrimaryMuted}"
+                                                    IsVisible="{Binding Role, Converter={StaticResource EqConv}, ConverterParameter=admin}">
+                                                <TextBlock Text="admin" FontSize="11"
+                                                           Foreground="{DynamicResource BrandPrimary}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding UserId}" FontSize="11"
+                                                   Foreground="{DynamicResource TextMuted}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+            </StackPanel>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- USERS section · TAB 1: Registration             -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <StackPanel Spacing="12">
+                <StackPanel.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="IsUsersSection" />
+                        <Binding Path="IsRegistrationTab" />
+                    </MultiBinding>
+                </StackPanel.IsVisible>
+
+                <TextBlock Text="Controls who can create new accounts."
+                           FontSize="13" Foreground="{DynamicResource TextSecondary}" />
+
+                <Border Padding="14,12" CornerRadius="10"
+                        Background="{DynamicResource SurfaceMuted}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <CheckBox DockPanel.Dock="Right"
+                                  IsChecked="{Binding RegistrationOpen}"
+                                  Command="{Binding ToggleRegistrationCommand}"
+                                  VerticalAlignment="Center" />
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Open registration" FontWeight="SemiBold"
+                                       FontSize="14" Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="Allow new users to register. Closes automatically after the first user signs up."
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap" MaxWidth="480" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <Border Padding="14,12" CornerRadius="10"
+                        Background="{DynamicResource SurfaceMuted}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <CheckBox DockPanel.Dock="Right"
+                                  IsChecked="{Binding ApprovalRequired}"
+                                  Command="{Binding ToggleApprovalCommand}"
+                                  VerticalAlignment="Center" />
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Require admin approval" FontWeight="SemiBold"
+                                       FontSize="14" Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="New accounts start as pending and cannot log in until an admin approves them."
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap" MaxWidth="480" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+            </StackPanel>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- WORKSPACES section                              -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <StackPanel Spacing="12" IsVisible="{Binding IsWorkspacesSection}">
+
+                <TextBlock Text="No projects found." FontSize="13"
+                           Foreground="{DynamicResource TextSecondary}"
+                           IsVisible="{Binding !AdminWorkspaces.Count}" />
+
+                <ItemsControl ItemsSource="{Binding AdminWorkspaces}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="ws:Workspace">
+                            <Border Padding="14,10" CornerRadius="10" Margin="0,0,0,4"
+                                    Background="{DynamicResource SurfaceMuted}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1">
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+                                        <Button Content="Configure"
+                                                Command="{Binding $parent[ItemsControl].((vm:AdminViewModel)DataContext).ConfigureWorkspaceCommand}"
+                                                CommandParameter="{Binding}"
+                                                Padding="10,5" CornerRadius="6" FontSize="12"
+                                                Background="{DynamicResource BrandPrimary}"
+                                                Foreground="White" />
+                                        <Button Content="Delete"
+                                                Command="{Binding $parent[ItemsControl].((vm:AdminViewModel)DataContext).DeleteWorkspaceCommand}"
+                                                CommandParameter="{Binding}"
+                                                IsVisible="{Binding Type, Converter={StaticResource EqConv}, ConverterParameter=Team}"
+                                                Padding="10,5" CornerRadius="6" FontSize="12"
+                                                Background="#EF4444" Foreground="White" />
+                                    </StackPanel>
+                                    <StackPanel Spacing="2">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                                       FontSize="14" Foreground="{DynamicResource TextPrimary}" />
+                                            <Border Padding="6,2" CornerRadius="4"
+                                                    Background="{DynamicResource SurfaceBorder}">
+                                                <TextBlock Text="{Binding Type}" FontSize="11"
+                                                           Foreground="{DynamicResource TextSecondary}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding Slug}" FontSize="11"
+                                                   FontFamily="Consolas,monospace"
+                                                   Foreground="{DynamicResource TextMuted}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Workspace configuration panel -->
+                <Border IsVisible="{Binding IsConfigPanelVisible}"
+                        Padding="16,14" CornerRadius="10" Margin="0,4,0,4"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource BrandPrimary}" BorderThickness="1">
+                    <StackPanel Spacing="16">
+
+                        <!-- Panel header -->
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="✕ Close"
+                                    Command="{Binding ConfigureWorkspaceCommand}"
+                                    CommandParameter="{Binding ConfigWorkspace}"
+                                    Padding="10,5" CornerRadius="6" FontSize="12"
+                                    Background="{DynamicResource SurfaceBorder}"
+                                    Foreground="{DynamicResource TextSecondary}" />
+                            <TextBlock Text="{Binding ConfigWorkspace.Name, StringFormat='Configure: {0}'}"
+                                       FontSize="15" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       VerticalAlignment="Center" />
+                        </DockPanel>
+
+                        <!-- ─── General Settings ─── -->
+                        <TextBlock Text="General" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondary}" />
+
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Max Output Tokens" FontSize="12"
+                                       Foreground="{DynamicResource TextSecondary}" />
+                            <NumericUpDown Value="{Binding WsMaxTokens}"
+                                           Minimum="256" Maximum="128000" Increment="1000"
+                                           CornerRadius="8" Padding="10,6"
+                                           HorizontalAlignment="Stretch" />
+                        </StackPanel>
+
+                        <Border Padding="12,8" CornerRadius="8"
+                                Background="{DynamicResource SurfaceMuted}"
+                                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                            <DockPanel>
+                                <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding WsStreaming}"
+                                              OnContent="" OffContent="" />
+                                <TextBlock Text="Streaming" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
+                            </DockPanel>
+                        </Border>
+
+                        <Border Padding="12,8" CornerRadius="8"
+                                Background="{DynamicResource SurfaceMuted}"
+                                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                            <DockPanel>
+                                <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding WsIntentRouting}"
+                                              OnContent="" OffContent="" />
+                                <TextBlock Text="Intent Routing" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
+                            </DockPanel>
+                        </Border>
+
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Web Search Backend" FontSize="12"
+                                       Foreground="{DynamicResource TextSecondary}" />
+                            <ComboBox ItemsSource="{Binding WebSearchBackends}"
+                                      SelectedItem="{Binding WsWebSearchBackend}"
+                                      HorizontalAlignment="Stretch" CornerRadius="8" Padding="10,6" />
+                        </StackPanel>
+
+                        <Button Content="Save General Settings"
+                                Command="{Binding SaveWorkspaceGeneralCommand}"
+                                HorizontalAlignment="Left" Padding="14,7" CornerRadius="8"
+                                Background="{DynamicResource BrandPrimary}" Foreground="White"
+                                FontWeight="SemiBold" FontSize="13" />
+
+                        <!-- ─── Members ─── -->
+                        <TextBlock Text="Members" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondary}" Margin="0,8,0,0" />
+
+                        <ItemsControl ItemsSource="{Binding ConfigWorkspaceMembers}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="ws:WorkspaceMember">
+                                    <Border Padding="10,7" CornerRadius="8" Margin="0,0,0,3"
+                                            Background="{DynamicResource SurfaceMuted}"
+                                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                        <DockPanel>
+                                            <Button DockPanel.Dock="Right" Content="Remove"
+                                                    Command="{Binding $parent[ItemsControl].((vm:AdminViewModel)DataContext).RemoveWorkspaceMemberCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    Padding="8,4" CornerRadius="6" FontSize="11"
+                                                    Background="#EF4444" Foreground="White" />
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="{Binding UserId}" FontWeight="SemiBold" FontSize="13"
+                                                           Foreground="{DynamicResource TextPrimary}" />
+                                                <TextBlock Text="{Binding Role}" FontSize="11"
+                                                           Foreground="{DynamicResource TextSecondary}" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Add member form -->
+                        <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto" HorizontalAlignment="Stretch">
+                            <TextBox Grid.Column="0" Text="{Binding NewMemberEmail}"
+                                     Watermark="User email or ID"
+                                     CornerRadius="8" Padding="10,6" FontSize="12" Margin="0,0,6,0" />
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding MemberRoles}"
+                                      SelectedItem="{Binding NewMemberRole}"
+                                      Width="100" CornerRadius="8" Padding="8,6" FontSize="12" Margin="0,0,6,0" />
+                            <Button Grid.Column="2" Content="Add"
+                                    Command="{Binding AddWorkspaceMemberCommand}"
+                                    Padding="14,7" CornerRadius="8"
+                                    Background="{DynamicResource BrandPrimary}"
+                                    Foreground="White" FontWeight="SemiBold" FontSize="12" />
+                        </Grid>
+
+                        <!-- ─── Provider Profiles ─── -->
+                        <TextBlock Text="Provider Profiles" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondary}" Margin="0,8,0,0" />
+
+                        <ItemsControl ItemsSource="{Binding ConfigWorkspaceProfiles}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:WorkspaceProviderProfile">
+                                    <Border Padding="10,7" CornerRadius="8" Margin="0,0,0,3"
+                                            Background="{DynamicResource SurfaceMuted}"
+                                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                        <DockPanel>
+                                            <Button DockPanel.Dock="Right" Content="Remove"
+                                                    Command="{Binding $parent[ItemsControl].((vm:AdminViewModel)DataContext).RemoveWorkspaceProviderCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    Padding="8,4" CornerRadius="6" FontSize="11"
+                                                    Background="#EF4444" Foreground="White" />
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"
+                                                           Foreground="{DynamicResource TextPrimary}" />
+                                                <TextBlock Text="{Binding ProviderKind}" FontSize="11"
+                                                           Foreground="{DynamicResource TextSecondary}" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Add provider form -->
+                        <StackPanel Spacing="8">
+                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" HorizontalAlignment="Stretch">
+                                <TextBox Grid.Row="0" Grid.Column="0" Text="{Binding WsNewProviderName}"
+                                         Watermark="Name (optional)" CornerRadius="8" Padding="10,6" FontSize="12"
+                                         Margin="0,0,6,6" />
+                                <ComboBox Grid.Row="0" Grid.Column="1"
+                                          ItemsSource="{Binding Providers}"
+                                          SelectedItem="{Binding WsNewProviderKind}"
+                                          CornerRadius="8" Padding="10,6" FontSize="12" HorizontalAlignment="Stretch"
+                                          Margin="0,0,0,6" />
+                                <TextBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                         Text="{Binding WsNewProviderApiKey}"
+                                         PasswordChar="*" Watermark="API Key"
+                                         CornerRadius="8" Padding="10,6" FontSize="12" />
+                            </Grid>
+                            <TextBox Text="{Binding WsNewProviderBaseUrl}"
+                                     Watermark="Base URL (leave blank for default)"
+                                     CornerRadius="8" Padding="10,6" FontSize="12" />
+                            <Button Content="Add Provider to Workspace"
+                                    Command="{Binding AddWorkspaceProviderCommand}"
+                                    HorizontalAlignment="Left" Padding="14,7" CornerRadius="8"
+                                    Background="{DynamicResource BrandPrimary}" Foreground="White"
+                                    FontWeight="SemiBold" FontSize="12" />
+                        </StackPanel>
+
+                    </StackPanel>
+                </Border>
+
+                <!-- Create form -->
+                <Border Padding="14,12" CornerRadius="10"
+                        Background="{DynamicResource SurfaceMuted}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="New team workspace" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBox Text="{Binding NewWorkspaceName}"
+                                 Watermark="Name"
+                                 FontSize="13" Padding="8,6" CornerRadius="6" />
+                        <Button Content="Create"
+                                Command="{Binding CreateWorkspaceCommand}"
+                                HorizontalAlignment="Left"
+                                Padding="16,7" CornerRadius="8"
+                                Background="{DynamicResource BrandPrimary}"
+                                Foreground="White" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- USERS section · TAB 2: Password Reset           -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <StackPanel Spacing="12">
+                <StackPanel.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="IsUsersSection" />
+                        <Binding Path="IsPasswordResetTab" />
+                    </MultiBinding>
+                </StackPanel.IsVisible>
+
+                <TextBlock Text="Generate a one-time reset token for a user. Share it out-of-band — expires in 24 hours."
+                           FontSize="13" Foreground="{DynamicResource TextSecondary}" />
+
+                <ComboBox ItemsSource="{Binding ActiveUsers}"
+                          SelectedItem="{Binding SelectedResetUser}"
+                          Width="320" Padding="8,6" CornerRadius="8"
+                          PlaceholderText="— select user —">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate DataType="users:User">
+                            <TextBlock Text="{Binding Email}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <Button Content="Generate reset token"
+                        Command="{Binding GenerateResetTokenCommand}"
+                        IsEnabled="{Binding SelectedResetUser, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        Padding="16,8" CornerRadius="8"
+                        Background="{DynamicResource BrandPrimary}"
+                        Foreground="White" FontWeight="SemiBold" />
+
+                <Border Padding="14,12" CornerRadius="10"
+                        Background="{DynamicResource SurfaceMuted}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1"
+                        IsVisible="{Binding ResetToken, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="One-time reset token (share securely):"
+                                   FontSize="12" Foreground="{DynamicResource TextSecondary}" />
+                        <SelectableTextBlock Text="{Binding ResetToken}"
+                                             FontSize="12" FontFamily="Consolas,monospace"
+                                             Foreground="{DynamicResource BrandPrimary}"
+                                             TextWrapping="Wrap" />
+                        <TextBlock Text="Expires in 24 hours. Select the token above to copy."
+                                   FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+
+</UserControl>

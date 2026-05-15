@@ -1,0 +1,75 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.SidebarView"
+             x:DataType="vm:SidebarViewModel"
+             Background="{DynamicResource SidebarBackground}">
+
+    <DockPanel>
+        <!-- Phase 69: shared sidebar footer (in MainWindow) owns the user info; Chat panel just renders chat tools. -->
+        <ScrollViewer>
+            <StackPanel Margin="10,10,10,4">
+                <TextBlock Text="CHAT" FontSize="11" FontWeight="Bold"
+                           Foreground="{DynamicResource TextMuted}"
+                           Margin="2,2,0,10" />
+
+                <!-- Search -->
+                <DockPanel Margin="0,0,0,8">
+                    <TextBox Watermark="Search conversations..."
+                             CornerRadius="8"
+                             Padding="8,5"
+                             FontSize="11" />
+                </DockPanel>
+
+                <!-- Recent conversations -->
+                <TextBlock Text="RECENT" FontSize="9" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondary}"
+                           Margin="4,4,0,4" />
+
+                <ItemsControl ItemsSource="{Binding RecentSessions}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:SessionListItem">
+                            <DockPanel Margin="0,1">
+                                <Button DockPanel.Dock="Right"
+                                        Content="✕"
+                                        Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).DeleteSessionCommand}"
+                                        CommandParameter="{Binding SessionId}"
+                                        FontSize="9"
+                                        Padding="3,1"
+                                        Margin="2,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Background="Transparent"
+                                        Foreground="{DynamicResource TextMuted}"
+                                        CornerRadius="4"
+                                        ToolTip.Tip="Delete session" />
+                                <Button Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).ResumeSessionCommand}"
+                                        CommandParameter="{Binding SessionId}"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Left"
+                                        Padding="8,3"
+                                        CornerRadius="4"
+                                        Background="Transparent">
+                                    <StackPanel Spacing="1">
+                                        <TextBlock Text="{Binding Label}"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:MMM d, HH:mm}'}"
+                                                   FontSize="9"
+                                                   Foreground="{DynamicResource TextMuted}" />
+                                    </StackPanel>
+                                </Button>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Text="No recent conversations"
+                           FontSize="10"
+                           Foreground="{DynamicResource TextSecondary}"
+                           IsVisible="{Binding !RecentSessions.Count}"
+                           Margin="4,0" />
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>
