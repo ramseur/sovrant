@@ -1014,14 +1014,18 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             ?? WorkspaceIdentity.DefaultPersonalFor(resolvedUserId);
         var projectId = Environment.GetEnvironmentVariable("SOVRANT_PROJECT_ID")
             ?? Artifacts.ArtifactScope.DefaultProjectId;
-        sb.Append("\n\nWhen creating documents, plans, reports, specifications, or any deliverable that is NOT a direct modification to existing source code, ")
-          .Append("use the Artifact tool with action 'write' to store it. ")
-          .Append("Always pass workspace_id='").Append(workspaceId)
-          .Append("', project_id='").Append(projectId)
-          .Append("', and run_id='").Append(_sessionId)
-          .Append("'. Choose a descriptive path like 'plan.md', 'report.md', or 'docs/architecture.md'. ")
-          .Append("This keeps generated outputs organized per workspace, project, and session. ")
-          .Append("Only use the Write tool for modifying actual source code files in the project.");
+        sb.Append("\n\n## Output and Artifact Rules\n")
+          .Append("ALWAYS use the Artifact tool (action='write') when you produce ANY of the following: ")
+          .Append("documents, plans, reports, specifications, summaries, analyses, guides, code files, configs, data files, ")
+          .Append("or any content longer than a short snippet. ")
+          .Append("Do NOT paste long content into chat — save it as an artifact and tell the user it is ready.\n")
+          .Append("Use this scope for ALL artifact writes — do not omit these fields:\n")
+          .Append("  workspace_id='").Append(workspaceId).Append("'\n")
+          .Append("  project_id='").Append(projectId).Append("'\n")
+          .Append("  run_id='").Append(_sessionId).Append("'\n")
+          .Append("Choose a descriptive relative path (e.g. 'plan.md', 'report.md', 'output/data.json').\n")
+          .Append("The Write tool is ONLY for editing existing source code files at absolute paths. ")
+          .Append("Never use Write to create new documents or save generated content.");
 
         // Global memory: ~/.sovrant/memory.md
         var globalMemory = Path.Combine(

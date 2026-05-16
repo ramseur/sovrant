@@ -258,6 +258,16 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             Messages.Add(assistantMsg);
         });
 
+        // On first message: persist the session and title immediately so the sidebar
+        // shows the new chat right away — before the full turn completes.
+        if (isFirstMessage)
+        {
+            var title = text.Length > 60 ? text[..60] + "..." : text;
+            await _sessionStore.SetTitleAsync(SessionId, title, ownerUserId: App.SovrantUserId, ct: CancellationToken.None)
+                .ConfigureAwait(false);
+            await Dispatcher.UIThread.InvokeAsync(() => TurnCompleted?.Invoke());
+        }
+
         try
         {
             // Wait for runtime initialization (DB migrations, model metadata) before first send.
@@ -294,13 +304,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 assistantMsg.CompleteStreaming();
                 TurnCompleted?.Invoke();
             });
-
-            // Auto-title from the first user message.
-            if (isFirstMessage)
-            {
-                var title = text.Length > 60 ? text[..60] + "..." : text;
-                _ = _sessionStore.SetTitleAsync(SessionId, title, ownerUserId: App.SovrantUserId, ct: CancellationToken.None);
-            }
         }
     }
 

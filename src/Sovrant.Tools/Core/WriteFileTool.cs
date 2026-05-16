@@ -22,6 +22,10 @@ public sealed class WriteFileTool : ITool
         if (string.IsNullOrWhiteSpace(filePath))
             return "Error: file_path is required.";
 
+        if (!Path.IsPathRooted(filePath))
+            return $"Error: file_path must be an absolute path. Got: '{filePath}'. " +
+                   "Use the Artifact tool (action='write') to save documents, reports, and generated content.";
+
         if (!input.TryGetProperty("content", out var contentProp))
             return "Error: content is required.";
 
