@@ -587,23 +587,21 @@ public partial class SidebarViewModel : ViewModelBase
 
     private async Task LoadSessionsAsync()
     {
-        var ids = await _sessionStore.ListAsync(ownerUserId: App.SovrantUserId);
+        var sessions = await _sessionStore.ListWithTitlesAsync(ownerUserId: App.SovrantUserId);
         var items = new List<SessionListItem>();
 
-        foreach (var id in ids.Take(20))
+        foreach (var s in sessions.Take(20))
         {
-            var entries = await _sessionStore.LoadAsync(id, ownerUserId: App.SovrantUserId);
-            var firstUser = entries.FirstOrDefault(e => e.Role == "user");
-            var label = firstUser?.Content ?? id;
+            var label = s.Title ?? s.SessionId;
             if (label.Length > 40)
                 label = string.Concat(label.AsSpan(0, 37), "...");
 
             items.Add(new SessionListItem
             {
-                SessionId = id,
+                SessionId = s.SessionId,
                 Label = label,
-                Timestamp = entries.Count > 0 ? entries[^1].Timestamp : DateTimeOffset.MinValue,
-                MessageCount = entries.Count(e => e.Role is "user" or "assistant"),
+                Timestamp = s.UpdatedAt,
+                MessageCount = 0,
             });
         }
 
