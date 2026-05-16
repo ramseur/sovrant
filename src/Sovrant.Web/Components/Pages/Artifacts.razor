@@ -127,17 +127,20 @@
                     continue;
 
                 var relativePath = System.IO.Path.GetRelativePath(root, file).Replace('\\', '/');
+                var segments = relativePath.Split('/');
+
+                // Require at least {workspace}/{project}/{run}/{artifact} — skip stray files at shallower levels
+                if (segments.Length < 4)
+                    continue;
+
                 var info = new FileInfo(file);
                 var ext = System.IO.Path.GetExtension(file);
 
                 // Parse workspace/project/run from path: {workspace}/{project}/{run}/{rest}
-                var segments = relativePath.Split('/');
-                var workspaceId = segments.Length > 0 ? segments[0] : "";
-                var projectId = segments.Length > 1 ? segments[1] : "";
-                var runId = segments.Length > 2 ? segments[2] : "";
-                var artifactPath = segments.Length > 3
-                    ? string.Join('/', segments[3..])
-                    : fileName;
+                var workspaceId = segments[0];
+                var projectId = segments[1];
+                var runId = segments[2];
+                var artifactPath = string.Join('/', segments[3..]);
 
                 var accessUrl = string.Empty;
                 var runZipUrl = string.Empty;
