@@ -12,7 +12,7 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 
 **Runtime:** .NET 10 / C# 14
 **License:** Business Source License 1.1 — source-available, converts to Apache 2.0 on 2029-05-15. See [LICENSE](LICENSE).
-**Status:** 56 tools. 25 agent templates. 32 built-in skills. 115 server endpoints + SignalR hub. Command Center cockpit (Web + Desktop). Multi-user with login, registration, per-user API tokens, workspaces, projects, and ownership scoping. Team orchestration with per-team run profiles. Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 1,689 tests passing across 10 projects.
+**Status:** 56 tools. 25 agent templates. 32 built-in skills. 141 server endpoints + SignalR hub. Command Center cockpit (Web + Desktop). Multi-user with login, registration, per-user API tokens, workspaces, projects, and ownership scoping. Team orchestration with per-team run profiles. Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 1,689 tests passing across 10 projects.
 
 | Web | Desktop |
 |---|---|
@@ -137,24 +137,20 @@ dotnet run --project src/Sovrant.Cli -- --ci --model gpt-4o-mini prompt "Fix the
 
 ### Server
 
-Copy `.env.example` to `.env` in your working directory and fill in the required values:
-
-```bash
-cp .env.example .env
-# edit .env — set LLM_API_KEY and SOVRANT_TOKEN at minimum
-```
-
-Or export the variables directly (CI / container environments):
-
-```bash
-export LLM_API_KEY="sk-..."
-export SOVRANT_TOKEN="your-secret-token"
-```
-
-**Then run:**
 ```bash
 dotnet run --project src/Sovrant.Server
 ```
+
+The server starts on port `5200`. On first run, complete the setup wizard to create an admin account and configure your LLM provider. All credentials (API keys, provider tokens) are stored in the AES-256-GCM encrypted keystore at `~/.sovrant/credentials/` — never in `.env` files or environment variables.
+
+For headless / CI deployments, set `SOVRANT_TOKEN` to bootstrap a static admin bearer token:
+
+```bash
+export SOVRANT_TOKEN="your-secret-token"
+dotnet run --project src/Sovrant.Server
+```
+
+> All other environment variables are optional and documented in [Configuration](#configuration).
 
 ```bash
 # Non-streaming
@@ -400,7 +396,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 | Project | Description |
 |---|---|
 | `Sovrant.Cli` | Interactive REPL and one-shot `prompt` CLI. Entry point for local use. |
-| `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus management APIs. 115 endpoints + SignalR hub. |
+| `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus management APIs. 141 endpoints + SignalR hub. |
 | `Sovrant.Desktop` | Avalonia desktop app — full GUI with streaming chat, tool use, settings, and management pages. |
 | `Sovrant.Web` | Blazor Server web app — browser-based UI with embedded or remote runtime. Port 5100. Dual-mode: `SOVRANT_RUNTIME_MODE=embedded` (default) or `remote` (connects to Sovrant.Server via SignalR). |
 | `Sovrant.Runtime` | Core agentic loop, mission engine, planner/executor, SQLite persistence (26 migrations V001–V026), permission system, tool executor, MCP client, cost tracking. |
@@ -410,7 +406,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 | `Sovrant.Agents` | Orchestration: team registry (SQLite-backed), agent factory, dual backends (isolated + shared), 25 agent templates, swarm orchestrator, unified run ledger, inter-agent coordination (PM agents + mailbox). |
 | `Sovrant.Mcp` | Shared MCP protocol handlers (tools/list, tools/call, resources, prompts, completions). Consumed by both the CLI's `mcp-server` stdio subcommand and `Sovrant.Server`'s HTTP/SSE MCP transport. |
 | `Sovrant.Lsp` | Language Server Protocol client: JSON-RPC over stdio, manages language server lifecycle, 5 LSP tools. |
-| `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient` covering the 116-endpoint server (incl. `login` / `register` / `getCommandCenterState` / `updateTeamProfile`), SSE streaming, React `useChat()` hook, 85+ TypeScript interfaces. |
+| `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient` covering the 141-endpoint server (incl. `login` / `register` / `getCommandCenterState` / `updateTeamProfile`), SSE streaming, React `useChat()` hook, 85+ TypeScript interfaces. |
 
 ### Key Design Decisions
 
@@ -683,7 +679,7 @@ The `SmartRouter` pings all configured providers on startup, scores them by late
 
 ## Server API
 
-The server exposes an OpenAI-compatible chat completions endpoint plus comprehensive management APIs. 115 endpoints + SignalR hub across 23 route groups:
+The server exposes an OpenAI-compatible chat completions endpoint plus comprehensive management APIs. 141 endpoints + SignalR hub across 27 route groups:
 
 | Group | Endpoints | Description |
 |---|---|---|
@@ -753,10 +749,10 @@ dotnet run --project src/Sovrant.Web
 
 The TypeScript/JavaScript SDK (`sdk/js`) provides a typed client for building custom frontends against the Sovrant server.
 
-- **`SovrantClient`** — covers the 116-endpoint server: chat, **auth (login, register, password reset, registration / approval toggles)**, command center, sessions, users (incl. admin `issueResetToken` / `approveUser`), workspaces, projects, teams (incl. `updateTeamProfile`), missions, swarm, engine, evals, artifacts, and registries
+- **`SovrantClient`** — covers the 141-endpoint server: chat, **auth (login, register, password reset, registration / approval toggles)**, command center, sessions, users (incl. admin `issueResetToken` / `approveUser`), workspaces, projects, teams (incl. `updateTeamProfile`), missions, swarm, engine, evals, artifacts, and registries
 - **SSE streaming** — real-time token-by-token responses with `streamChat()`
 - **React `useChat()` hook** — drop-in conversational UI component
-- **75+ TypeScript interfaces** — full type coverage for all request/response shapes
+- **85+ TypeScript interfaces** — full type coverage for all request/response shapes
 - **Security** — AbortController timeouts, error body truncation, runtime input validation
 
 ```bash
@@ -889,7 +885,7 @@ Use `/memory` (or `/mem`) in the REPL to view or create these files.
 | Workspace | `workspace_memory` table (layered entries with confidence scores) | `GET/POST/DELETE /v1/workspaces/{id}/memory` |
 | Project | Same table, scoped by `project_id`; reads merge project-scoped + workspace-level entries | `GET /v1/projects/{id}/memory` (writes go through the workspace endpoint with `project_id`) |
 
-> **Note:** Database-backed memory is not yet injected into the system prompt automatically — see Phase 81 in the roadmap. Today it is read/written via the API and UI; it will be merged into the prompt builder in a future phase so workspace and project memory reach the LLM the same way file memory does.
+> **Note:** Database-backed memory is injected into the system prompt automatically by `MemoryInjector` — workspace-level entries plus any project-scoped entries (merged at injection time) are appended to the prompt alongside file memory each turn.
 
 ### Database Management
 
@@ -1068,7 +1064,7 @@ All tests use isolated in-memory SQLite databases. No external services or API k
 
 | Document | Contents |
 |---|---|
-| [`docs/server.md`](docs/server.md) | Full server API reference — all 115 endpoints + SignalR hub, Command Center, auth, CORS, streaming format, cost tracking, remote mode |
+| [`docs/server.md`](docs/server.md) | Full server API reference — all 141 endpoints + SignalR hub, Command Center, auth, CORS, streaming format, cost tracking, remote mode |
 | [`docs/frontend-integration.md`](docs/frontend-integration.md) | SDK reference, proxy setup, browser SSE, multi-tenant LLM keys, React hook, remote mode (dual-mode web frontend) |
 | [`docs/persistence.md`](docs/persistence.md) | SQLite schema reference — 26 migrations (V001–V026), domain stores, security model, keystore integration |
 | [`docs/agent-systems.md`](docs/agent-systems.md) | Team vs Swarm deep dive — architecture, value analysis, unified orchestration, inter-agent coordination |
