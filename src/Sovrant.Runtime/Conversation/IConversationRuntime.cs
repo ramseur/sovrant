@@ -14,10 +14,9 @@ public interface IConversationRuntime
     /// </summary>
     /// <param name="sessionId">The session ID to resume, or <see langword="null"/> for a new session.</param>
     /// <param name="ownerUserId">
-    /// Phase 38 — the authenticated user_id that owns this session. When non-null,
-    /// history is loaded only if the recorded owner matches and subsequent appends
-    /// tag new sessions with this owner. Null skips ownership enforcement (CLI,
-    /// tests, and legacy static-token callers).
+    /// The authenticated user_id that owns this session. When non-null, history is
+    /// loaded only if the recorded owner matches and subsequent appends tag new
+    /// sessions with this owner. Null skips ownership enforcement (CLI, tests).
     /// </param>
     /// <param name="ct">A cancellation token.</param>
     Task InitializeSessionAsync(string? sessionId, string? ownerUserId = null, CancellationToken ct = default);

@@ -7,16 +7,11 @@ using Sovrant.Server.Auth;
 namespace Sovrant.Server.Routes;
 
 /// <summary>
-/// Phase 38 PR 3 — self-service routes scoped to the authenticated user.
+/// Self-service routes scoped to the authenticated user.
 ///
 /// <para>Every endpoint here resolves the target user from the request's
 /// identity (set by <see cref="BearerTokenMiddleware"/>) rather than from
 /// the URL — there is no <c>{userId}</c> path parameter to forge.</para>
-///
-/// <para>Static-token (legacy <c>SOVRANT_TOKEN</c>) requests have no
-/// associated user, so these endpoints return 400 for them: the legacy
-/// god-token is for admin operations on the <c>/v1/users/{id}/*</c>
-/// surface, not for impersonating an arbitrary user.</para>
 /// </summary>
 internal static class MeRoutes
 {
@@ -132,11 +127,7 @@ internal static class MeRoutes
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Pulls the authenticated user_id off the request. Static-token
-    /// callers fail with a 400 because <c>/v1/users/me</c> is meaningless
-    /// without a per-user identity.
-    /// </summary>
+    /// <summary>Pulls the authenticated user_id off the request.</summary>
     private static bool TryGetCallerUserId(HttpContext ctx, out string userId, out IResult error)
     {
         var id = ctx.GetUserId();
@@ -145,7 +136,7 @@ internal static class MeRoutes
             userId = string.Empty;
             error = Results.BadRequest(new
             {
-                error = "/v1/users/me requires a per-user (svt_*) bearer token; the legacy static token has no associated user.",
+                error = "/v1/users/me requires a per-user (svt_*) bearer token.",
             });
             return false;
         }

@@ -12,9 +12,9 @@ namespace Sovrant.Server.Routes;
 /// <summary>
 /// Registers session management endpoints.
 ///
-/// <para>Phase 38 — all endpoints scope reads and deletes to the authenticated
-/// user's owned sessions. Admin callers (legacy static token, or
-/// <c>users.role = 'admin'</c>) see the full set without a filter.</para>
+/// <para>All endpoints scope reads and deletes to the authenticated user's owned
+/// sessions. Admin callers (<c>users.role = 'admin'</c>) see the full set without
+/// a filter.</para>
 /// </summary>
 internal static class SessionRoutes
 {

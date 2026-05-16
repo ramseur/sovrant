@@ -277,7 +277,6 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 |---|---|---|
 | `LLM_API_KEY` | Yes | API key for the primary provider. Aliases: `OPENAI_API_KEY`, `PROVIDER_API_KEY` (checked in order) |
 | `LLM_BASE_URL` | No | Base URL (default: `https://api.openai.com/v1`). Alias: `OPENAI_BASE_URL` |
-| `SOVRANT_TOKEN` | Yes (server only) | Bearer token for `Sovrant.Server`. All requests return 401 if unset. |
 | `SOVRANT_PORT` | No | Server port (default: `5200`) |
 | `PROVIDER_BASE_URL` | No | Enables the native messages API provider (`/v1/messages` format, e.g. `https://api.anthropic.com`) |
 | `PROVIDER_API_KEY` | No | API key for the native messages API provider |
@@ -306,11 +305,15 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 
 ```bash
 export LLM_API_KEY="..."    # fresh key — never paste keys into chat
-export SOVRANT_TOKEN=test123
 
 # Start server
 dotnet run --project src/Sovrant.Server --no-build &
 sleep 5
+
+# Issue a per-user token (one-time, capture the returned svt_* secret)
+TOKEN=$(curl -s -X POST http://localhost:5200/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"smoke","password":"smoketest"}' | jq -r '.token')
 
 # 1. Health (unauthenticated)
 curl -s http://localhost:5200/health
@@ -318,47 +321,47 @@ curl -s http://localhost:5200/health
 
 # 2. Non-streaming chat
 curl -s -X POST http://localhost:5200/v1/chat/completions \
-  -H "Authorization: Bearer test123" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Reply with one word: pong"}],"model":"gpt-4o-mini","stream":false}'
 # expected: {"choices":[{"message":{"content":"pong",...},...}],...}
 
 # 3. Streaming chat (SSE)
 curl -s -X POST http://localhost:5200/v1/chat/completions \
-  -H "Authorization: Bearer test123" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Reply with one word: pong"}],"model":"gpt-4o-mini","stream":true}'
 # expected: data: {...,"delta":{"content":"pong"},...}  then  data: [DONE]
 
 # 4. Session continuity via server pool
 curl -s -X POST http://localhost:5200/v1/chat/completions \
-  -H "Authorization: Bearer test123" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"My name is Eric"}],"model":"gpt-4o-mini","session_id":"test-session-1"}'
 
 curl -s -X POST http://localhost:5200/v1/chat/completions \
-  -H "Authorization: Bearer test123" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"What is my name?"}],"model":"gpt-4o-mini","session_id":"test-session-1"}'
 # expected: second response references "Eric"
 
 # 5. Status endpoint
-curl -s -H "Authorization: Bearer test123" http://localhost:5200/v1/status
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:5200/v1/status
 
 # 6. Models endpoint
-curl -s -H "Authorization: Bearer test123" http://localhost:5200/v1/models
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:5200/v1/models
 
 # 7. Config update
 curl -s -X PUT http://localhost:5200/v1/config \
-  -H "Authorization: Bearer test123" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"model":"gpt-4o"}'
 
 # 8. Session list
-curl -s -H "Authorization: Bearer test123" http://localhost:5200/v1/sessions
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:5200/v1/sessions
 
 # 9. Session delete
-curl -s -X DELETE -H "Authorization: Bearer test123" http://localhost:5200/v1/sessions/test-session-1
+curl -s -X DELETE -H "Authorization: Bearer $TOKEN" http://localhost:5200/v1/sessions/test-session-1
 ```
 
 ## Tools Needing Smoke Tests

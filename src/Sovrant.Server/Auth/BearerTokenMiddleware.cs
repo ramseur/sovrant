@@ -3,8 +3,7 @@ using Sovrant.Runtime.Auth;
 namespace Sovrant.Server.Auth;
 
 /// <summary>
-/// Phase 85 — Authenticates requests via per-user <c>svt_</c> bearer tokens.
-/// The legacy static <c>SOVRANT_TOKEN</c> path has been removed.
+/// Authenticates requests via per-user <c>svt_</c> bearer tokens.
 ///
 /// <para>Unauthenticated paths: <c>/health</c>, <c>OPTIONS</c>, and the
 /// auth endpoints (<c>/v1/auth/login</c>, <c>/v1/auth/register</c>,

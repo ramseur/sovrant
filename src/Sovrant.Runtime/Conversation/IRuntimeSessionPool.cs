@@ -19,10 +19,10 @@ public interface IRuntimeSessionPool
     /// Ignored if the session already exists in the pool.
     /// </param>
     /// <param name="ownerUserId">
-    /// Phase 38 — authenticated user id that owns this session. Used both as
-    /// an isolation key (two users requesting the same session_id get separate
-    /// pool entries) and as the owner stamped on new rows in the SQLite store.
-    /// Null means no enforcement — legacy static-token callers and the CLI.
+    /// Authenticated user id that owns this session. Used both as an isolation key
+    /// (two users requesting the same session_id get separate pool entries) and as
+    /// the owner stamped on new rows in the SQLite store. Null means no enforcement
+    /// (CLI, tests).
     /// </param>
     /// <param name="ct">A cancellation token.</param>
     Task<PooledSession> GetOrCreateAsync(
@@ -36,7 +36,7 @@ public interface IRuntimeSessionPool
     /// Call this when a session is deleted so stale state is not retained.
     /// When <paramref name="ownerUserId"/> is non-null the owner-partitioned pool entry is
     /// evicted; when null all entries for the given session id (regardless of owner) are
-    /// evicted — used by admin flows and the legacy static-token path.
+    /// evicted — used by admin flows.
     /// </summary>
     void Evict(string sessionId, string? ownerUserId = null);
 

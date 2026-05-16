@@ -7,9 +7,6 @@ namespace Sovrant.Runtime.Auth;
 /// secret is <b>never</b> stored or returned through this record — only the
 /// hash lives on disk, and the plaintext is only ever surfaced once via
 /// <see cref="TokenIssueResult"/> at creation time.
-///
-/// <para>Phase 38 — replaces the single shared <c>SOVRANT_TOKEN</c> with
-/// per-user bearer tokens.</para>
 /// </summary>
 public sealed record ApiToken
 {

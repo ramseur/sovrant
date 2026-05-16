@@ -7,15 +7,13 @@
 ## Running the Server
 
 ```bash
-# Minimum — no auth (all requests blocked until SOVRANT_TOKEN is set)
-dotnet run --project src/Sovrant.Server
-
 # Typical
 LLM_API_KEY=sk-...        \
 LLM_BASE_URL=https://api.openai.com/v1 \
-SOVRANT_TOKEN=my-secret   \
 dotnet run --project src/Sovrant.Server
 ```
+
+On first run, register an admin user via `POST /v1/auth/register` (or use the desktop/web setup wizard). All subsequent API calls authenticate with that user's `svt_*` bearer token.
 
 The server binds to `http://127.0.0.1:5200` by default.
 
@@ -29,7 +27,6 @@ The server binds to `http://127.0.0.1:5200` by default.
 |---|---|---|---|
 | `LLM_API_KEY` | Yes | — | API key forwarded to the LLM provider. Aliases: `OPENAI_API_KEY`, `PROVIDER_API_KEY` (checked in order) |
 | `LLM_BASE_URL` | No | `https://api.openai.com/v1` | LLM provider base URL. Alias: `OPENAI_BASE_URL` |
-| `SOVRANT_TOKEN` | Yes | — | Bearer token all clients must supply. Returns 401 for all requests if unset. |
 | `SOVRANT_PORT` | No | `5200` | TCP port Kestrel listens on |
 | `PROVIDER_BASE_URL` | No | — | Enables the native messages API provider (`/v1/messages` format, e.g. Anthropic direct) |
 | `PROVIDER_API_KEY` | No | — | API key for the native messages API provider |
@@ -59,34 +56,23 @@ The server binds to `http://127.0.0.1:5200` by default.
 
 ---
 
-## Authentication (Phase 38)
+## Authentication
 
-Every request (except `GET /health` and CORS preflight `OPTIONS`) must include:
+Every request (except `GET /health`, CORS preflight `OPTIONS`, and the auth endpoints — `/v1/auth/login`, `/v1/auth/register`, `/v1/auth/use-reset-token`, `/v1/auth/registration/status`) must include:
 
 ```
 Authorization: Bearer <token>
 ```
 
-The server accepts **two** kinds of bearer token, checked in this order by `BearerTokenMiddleware`:
+Tokens are **per-user** strings of the form `svt_<base64url-secret>`, issued to a specific user via `POST /v1/users/me/tokens` (self-service) or `POST /v1/users/{id}/tokens` (admin). Tokens are stored as SHA-256 hashes in the `api_tokens` table; the plaintext is returned **exactly once** at issuance and is never recoverable. `BearerTokenMiddleware` resolves the caller's `user_id` and role from the token and stamps them onto `HttpContext` for downstream ownership checks. Revoked, expired, malformed, or missing tokens return `401 Unauthorized`. Token comparison is timing-safe (`CryptographicOperations.FixedTimeEquals`).
 
-1. **Per-user tokens** — strings of the form `svt_<base64url-secret>`, issued to a specific user via `POST /v1/users/me/tokens` (self-service) or `POST /v1/users/{id}/tokens` (admin). Tokens are stored as SHA-256 hashes in the `api_tokens` table; the plaintext is returned **exactly once** at issuance and is never recoverable. The middleware resolves the caller's `user_id` and role from this token and stamps them onto `HttpContext` for downstream ownership checks. Revoked or expired tokens return `401`.
+### Admin
 
-2. **Legacy static token** — the value of the `SOVRANT_TOKEN` env var, used for server-to-server / bootstrap scenarios. Requests authenticated with the static token are treated as **admin** (unrestricted cross-user view) but have no associated `user_id`. `/v1/users/me/*` routes reject static-token callers with `400` since "me" is meaningless without a user identity.
-
-A missing, malformed, expired, or revoked token returns `401 Unauthorized`. Token comparison is timing-safe (`CryptographicOperations.FixedTimeEquals`).
-
-### Admin bypass
-
-A request is treated as admin when **any** of the following holds:
-
-- it is authenticated with the legacy `SOVRANT_TOKEN`, or
-- it is authenticated with an `svt_*` token whose owning user has `users.role = 'admin'`.
-
-Admins bypass ownership scoping on session/usage routes (see below) and can manage any user via `/v1/users/{id}/*`. Non-admin `svt_*` callers see only their own data.
+A request is treated as admin when the authenticating user has `users.role = 'admin'`. Admins bypass ownership scoping on session/usage routes (see below) and can manage any user via `/v1/users/{id}/*`. Non-admin callers see only their own data.
 
 ### Ownership scoping
 
-All session-bearing endpoints — `GET /v1/sessions`, `GET /v1/sessions/{id}`, `DELETE /v1/sessions/{id}`, `GET /v1/sessions/{id}/export`, `GET/PUT /v1/sessions/{id}/config`, and `GET /v1/usage` — filter results by the caller's `user_id`. A non-admin caller attempting to read, modify, or delete another user's session receives `404 Not Found` (not `403`) so that session IDs cannot be enumerated across users. Admin callers (static token or `users.role = 'admin'`) see the full set.
+All session-bearing endpoints — `GET /v1/sessions`, `GET /v1/sessions/{id}`, `DELETE /v1/sessions/{id}`, `GET /v1/sessions/{id}/export`, `GET/PUT /v1/sessions/{id}/config`, and `GET /v1/usage` — filter results by the caller's `user_id`. A non-admin caller attempting to read, modify, or delete another user's session receives `404 Not Found` (not `403`) so that session IDs cannot be enumerated across users. Admin callers see the full set.
 
 Ownership is stamped at the `SqliteSessionStore` layer with `INSERT OR IGNORE` semantics: the first append to a given `session_id` records the owner in `sessions.user_id`; subsequent appends from any caller cannot overwrite it. The `POST /v1/chat/completions` path performs a pre-flight `GetOwnerAsync` check and rejects attempts to attach to an already-owned session belonging to a different user. The runtime session pool is keyed on `{session_id}##{owner_user_id}` so two concurrent users cannot race to share a pool entry.
 
@@ -395,7 +381,7 @@ Change the permission mode live via `PUT /v1/config`:
 
 ```bash
 curl -X PUT http://127.0.0.1:5200/v1/config \
-  -H "Authorization: Bearer $SOVRANT_TOKEN" \
+  -H "Authorization: Bearer $SOVRANT_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"permission_mode":"BypassPermissions"}'
 ```
@@ -524,7 +510,7 @@ sovrant db import-swarm [--dir <path>] [--delete-source]
 
 ## User Management
 
-CRUD over the `users` table plus per-user data views. **Auth model (Phase 38):** these endpoints require an **admin** bearer token — either the legacy `SOVRANT_TOKEN` or an `svt_*` token belonging to a user with `users.role = 'admin'`. Non-admin `svt_*` callers receive `403 Forbidden`. Self-service profile and token routes that don't require admin live under `/v1/users/me/*` (see [Self-Service](#self-service-phase-38) below).
+CRUD over the `users` table plus per-user data views. **Auth model:** these endpoints require an **admin** bearer token — an `svt_*` token belonging to a user with `users.role = 'admin'`. Non-admin callers receive `403 Forbidden`. Self-service profile and token routes that don't require admin live under `/v1/users/me/*` (see [Self-Service](#self-service) below).
 
 **Soft-delete only.** `DELETE /v1/users/{id}` flips `status='inactive'`; the row is preserved so all FK references (workspaces, projects, sessions, audit) remain valid. Hard-delete is intentionally not exposed.
 
@@ -605,13 +591,13 @@ Query params: `model`, `from`, `to`. Returns aggregated token totals plus a per-
 
 ### List User Audit — `GET /v1/users/{id}/audit`
 
-Query param: `limit`. Joins `audit_governance` through `sessions.user_id`. As of Phase 38, sessions are stamped with the authenticated caller's `user_id` at creation (pulled from the `svt_*` token), so audit views reflect real per-user activity. Sessions created via the legacy `SOVRANT_TOKEN` fall back to `SOVRANT_USER_ID` / OS username.
+Query param: `limit`. Joins `audit_governance` through `sessions.user_id`. Sessions are stamped with the authenticated caller's `user_id` at creation (pulled from the `svt_*` token), so audit views reflect real per-user activity.
 
 ---
 
-## Self-Service (Phase 38)
+## Self-Service
 
-Routes scoped to the authenticated caller. Every endpoint resolves the target user from the `svt_*` token's identity — there is no `{userId}` path parameter to forge. Static-token callers receive `400` since "me" is meaningless without a user identity.
+Routes scoped to the authenticated caller. Every endpoint resolves the target user from the `svt_*` token's identity — there is no `{userId}` path parameter to forge.
 
 ### Profile — `GET /v1/users/me`
 

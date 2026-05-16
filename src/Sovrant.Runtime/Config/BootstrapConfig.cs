@@ -33,13 +33,6 @@ public sealed record BootstrapConfig
     /// </summary>
     public string? KeystorePath { get; init; }
 
-    /// <summary>
-    /// Static bearer token for server auth. When set, the API enforces it as
-    /// the only accepted token. When absent, server requests are unauthenticated
-    /// (suitable only for local development).
-    /// </summary>
-    public string? ServerToken { get; init; }
-
     // ── TLS ──────────────────────────────────────────────────────────────────
 
     /// <summary>

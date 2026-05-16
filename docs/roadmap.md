@@ -9848,17 +9848,18 @@ See the Phase 96 entry for the full smoke test checklist.
 
 | Priority | Item | Effort | Status |
 |---|---|---|---|
-| 1 | Phase 40A UI — workspace switcher (Web + Desktop) + `sovrant workspace list/members` (CLI) | ~1–2 days | ⬜ Not started |
-| 2 | Bug — model selection not persisted across restart | ~half day | ⬜ Not started |
-| 3 | Phase 97 — TLS/SSL for Server, Web & MCP | ~1 day | ⬜ Not started |
-| 4 | Phase 93 — Configuration boundary audit | ~half day | ⬜ Not started |
+| 1 | Phase 40A UI — workspace switcher (Web + Desktop) | ~1–2 days | ✅ Complete — `WorkspacesView`/`WorkspacesViewModel` (Desktop), `Workspaces.razor`/`WorkspacesAdmin.razor` (Web) |
+| 1 | Phase 40A CLI — `sovrant workspace list/members` remote mode | ~half day | ⬜ Outstanding — commands exist but only work in embedded mode; remote mode shows a warning and exits |
+| 2 | Bug — model selection not persisted across restart | ~half day | ✅ Complete — fixed in `Fix provider/model UX across Desktop and Web` commit |
+| 3 | Phase 97 — TLS/SSL for Server, Web & MCP | ~1 day | ✅ Complete — Kestrel TLS (PEM/PFX), HTTPS redirect, and configurable port in `Sovrant.Server/Program.cs` |
+| 4 | Phase 93 — Configuration boundary audit | ~half day | ✅ Complete (2026-05-09) — `sovrant.config` removed; bootstrap reads env vars + `.env` only |
 | — | Phases 94, 95 (model switch continuity, memory audit) | — | **Post-beta** |
 
 ---
 
 ## Phase 97 — TLS/SSL Support for Server, Web & MCP
 
-**Status:** Planned
+**Status:** ✅ Complete — Kestrel TLS binding (PEM/PFX), configurable HTTPS port, and HTTP→HTTPS redirect middleware implemented in `Sovrant.Server/Program.cs` and `Sovrant.Web/Program.cs`.
 **Goal:** All three network-facing surfaces (HTTP server, Blazor Web frontend, MCP server) support HTTPS/TLS so that traffic between clients and Sovrant is encrypted in transit. No plaintext HTTP in any production or beta deployment.
 
 ### Scope
@@ -9890,6 +9891,36 @@ See the Phase 96 entry for the full smoke test checklist.
 4. Update MCP server transport to use the same Kestrel TLS binding
 5. Update README / setup guide with dev-certs and self-hosted cert instructions
 6. Smoke test: HTTPS handshake on Server, Web (including SignalR), and MCP endpoint; verify HTTP redirects; verify CLI connects cleanly
+
+---
+
+## Phase 98 — CLI Workspace Commands in Remote Mode
+
+**Status:** ⬜ Outstanding — last remaining pre-beta item.
+
+`sovrant workspace list` and `sovrant workspace members` exist and work correctly in embedded (local) mode. In remote mode both commands currently bail out with a yellow warning: `workspace commands are only available in embedded (local) mode.`
+
+### What needs to change
+
+| Location | Change |
+|---|---|
+| `src/Sovrant.Api.Client/` | Add `RemoteWorkspaceService.cs` — thin HTTP wrapper implementing `IWorkspaceService` (or a minimal subset) over `GET /v1/workspaces` and `GET /v1/workspaces/{id}/members` |
+| `src/Sovrant.Cli/Program.cs` — `wsListCmd` | Replace embedded-only guard with a mode branch: call `IWorkspaceService` (embedded) or `RemoteWorkspaceService` (remote) |
+| `src/Sovrant.Cli/Program.cs` — `wsMembersCmd` | Same pattern |
+| `src/Sovrant.Cli/Program.cs` DI registration | Register `RemoteWorkspaceService` in the remote-mode service branch (alongside `RemoteIdentityService` etc.) |
+
+### Existing server endpoints (no changes needed)
+
+- `GET /v1/workspaces` — returns all workspaces the caller belongs to (scoped to authenticated user via `WorkspaceContextMiddleware`)
+- `GET /v1/workspaces/{id}/members` — returns member list for a workspace the caller has access to
+
+### Scope
+
+Read-only. `workspace create`, `workspace add-member`, etc. are out of scope for this item — the CLI is an inspection surface, not an admin console.
+
+### Done when
+
+`sovrant workspace list` and `sovrant workspace members <id>` produce correct tabular output in remote mode, using the stored `svt_` token for auth. Embedded-mode behaviour is unchanged.
 
 ---
 
