@@ -34,7 +34,7 @@ internal static class ArtifactRoutes
             CancellationToken ct) =>
         {
             var scope = ScopeFromQuery(ctx);
-            var deny = await RequireWorkspaceAccess(ctx, scope.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
+            var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, scope.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
             if (deny is not null) return deny;
 
             var entries = new List<object>();
@@ -67,7 +67,7 @@ internal static class ArtifactRoutes
                 return Results.BadRequest(new { error = "Invalid artifact path." });
 
             var scope = ScopeFromQuery(ctx, runId);
-            var deny = await RequireWorkspaceAccess(ctx, scope.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
+            var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, scope.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
             if (deny is not null) return deny;
 
             ArtifactHandle handle;
@@ -106,7 +106,7 @@ internal static class ArtifactRoutes
             CancellationToken ct) =>
         {
             var scope = ScopeFromQuery(ctx, runId);
-            var deny = await RequireWorkspaceAccess(ctx, scope.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
+            var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, scope.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
             if (deny is not null) return deny;
 
             try
@@ -121,15 +121,7 @@ internal static class ArtifactRoutes
         });
     }
 
-    private static async Task<IResult?> RequireWorkspaceAccess(
-        HttpContext ctx, string workspaceId, IWorkspaceService svc, CancellationToken ct)
-    {
-        if (HttpContextAuthExtensions.IsAdmin(ctx)) return null;
-        var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
-        if (!await svc.IsMemberAsync(workspaceId, userId, ct).ConfigureAwait(false))
-            return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
-        return null;
-    }
+    // Workspace access guard lives in Sovrant.Server.Auth.WorkspaceAuthGuards.
 
     /// <summary>
     /// Rejects paths containing traversal sequences or null bytes.

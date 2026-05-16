@@ -38,7 +38,6 @@
 | 17 | ProviderApiKey | `CredentialConfig.cs`, `PROVIDER_API_KEY` | C | Secret |
 | 18 | ProviderBaseUrl | `CredentialConfig.cs`, `PROVIDER_BASE_URL` | B | Non-secret endpoint |
 | 19 | OllamaBaseUrl | `CredentialConfig.cs`, `OLLAMA_BASE_URL` | B | Non-secret endpoint |
-| 20 | SovrantToken | `CredentialConfig.cs`, `SOVRANT_TOKEN` (server auth) | A | Bootstrap auth — never persisted |
 | 21 | BraveApiKey | `CredentialConfig.cs`, `BRAVE_API_KEY` | C | Secret |
 | 22 | FirecrawlApiKey | `CredentialConfig.cs`, `FIRECRAWL_API_KEY` | C | Secret |
 | 23 | OpenRouterApiKey | `CredentialConfig.cs`, `OPENROUTER_API_KEY` | C | Secret |
@@ -186,13 +185,12 @@ The following items were tracked as open during Phase 87/88–93 and have all sh
 
 ## Bucket-A Consolidation Plan ✅ DONE
 
-Bucket-A items must be available *before* SQLite opens, so they live in a single
-physical JSON file rather than the DB. They're now consolidated into
-`BootstrapConfig` / `BootstrapConfigLoader` backed purely by environment
-variables and an optional `.env` file. Previously scattered across
-`SovrantConfig.DbPath`, env vars (`SOVRANT_LOG_FILE`, `SOVRANT_ARTIFACTS_ROOT`,
-`SOVRANT_TOKEN`, `SOVRANT_DB_PATH`), an embedded `IConfiguration` key
-(`Server:Token`), and hardcoded paths (credential store keystore).
+Bucket-A items must be available *before* SQLite opens, so they live as
+environment variables (with an optional `.env` file) rather than the DB.
+They're consolidated into `BootstrapConfig` / `BootstrapConfigLoader`.
+Previously scattered across `SovrantConfig.DbPath`, env vars
+(`SOVRANT_LOG_FILE`, `SOVRANT_ARTIFACTS_ROOT`, `SOVRANT_DB_PATH`), and
+hardcoded paths (credential store keystore).
 
 ### Configuration source: environment variables + `.env`
 
@@ -213,7 +211,6 @@ environment take precedence (so CI secrets always win). Layers (highest preceden
 | `SOVRANT_LOG_FILE` | `~/.sovrant/logs/sovrant-{Date}.log` | — |
 | `SOVRANT_ARTIFACTS_ROOT` | `~/.sovrant/artifacts` | — |
 | `SOVRANT_KEYSTORE_PATH` | `~/.sovrant/credentials/.keystore` | — |
-| `SOVRANT_TOKEN` | `""` (no auth) | — |
 | `SOVRANT_TLS_CERT` | `null` (TLS disabled) | — |
 | `SOVRANT_TLS_CERT_PASSWORD` | `null` | — |
 | `SOVRANT_TLS_KEY` | `null` | — |
@@ -223,8 +220,6 @@ environment take precedence (so CI secrets always win). Layers (highest preceden
 
 - `SovrantConfig.DbPath` (init-only) — bootstrap concern, doesn't belong on the
   runtime config object. Move to `BootstrapConfig.DbPath`.
-- `CredentialConfig.SovrantToken` — already env-only; the resolver moves into
-  `BootstrapConfigLoader` so the field disappears from `CredentialConfig`.
 - `SovrantLogConfig.FromEnvironment()` — keeps the env-only path internally, but
   is fed by `BootstrapConfig.LogFile` when no env override is set.
 - `LocalArtifactStore` constructor `artifactsRoot` parameter — wired from
@@ -238,7 +233,6 @@ environment take precedence (so CI secrets always win). Layers (highest preceden
 
 ```dotenv
 LLM_API_KEY=
-SOVRANT_TOKEN=
 
 # Storage paths — uncomment to override defaults
 # SOVRANT_DB_PATH=~/.sovrant/data/sovrant.db

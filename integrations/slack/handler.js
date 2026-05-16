@@ -9,7 +9,7 @@
  *   SLACK_BOT_TOKEN      — xoxb-... Bot User OAuth Token
  *   SLACK_APP_TOKEN      — xapp-... App-Level Token (for Socket Mode)
  *   SOVRANT_URL          — Base URL of the Sovrant server (default: http://localhost:5200)
- *   SOVRANT_TOKEN        — Bearer token for the Sovrant server
+ *   SOVRANT_API_TOKEN    — Per-user svt_* bearer token for the Sovrant server
  *   SOVRANT_MODEL        — Optional model override
  *
  * Install: npm install @slack/bolt
@@ -19,7 +19,7 @@
 const { App } = require("@slack/bolt");
 
 const SOVRANT_URL = process.env.SOVRANT_URL || "http://localhost:5200";
-const SOVRANT_TOKEN = process.env.SOVRANT_TOKEN || "";
+const SOVRANT_API_TOKEN = process.env.SOVRANT_API_TOKEN || "";
 const SOVRANT_MODEL = process.env.SOVRANT_MODEL || undefined;
 
 const app = new App({
@@ -44,7 +44,7 @@ async function askSovrant(userId, message, threadId) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${SOVRANT_TOKEN}`,
+      Authorization: `Bearer ${SOVRANT_API_TOKEN}`,
     },
     body: JSON.stringify(body),
   });

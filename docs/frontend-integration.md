@@ -8,13 +8,15 @@ This guide covers connecting any frontend — browser, Node.js, React, or server
 
 ## How authentication works
 
-`Sovrant.Server` uses a single bearer token (`SOVRANT_TOKEN` env var). Every request must include:
+`Sovrant.Server` authenticates clients with **per-user bearer tokens** (`svt_*` strings issued to a specific user). Every request must include:
 
 ```
-Authorization: Bearer <your-token>
+Authorization: Bearer <your-svt_-token>
 ```
 
-If the token is missing or wrong, the server returns `401 Unauthorized`.
+If the token is missing, expired, revoked, or wrong, the server returns `401 Unauthorized`.
+
+Tokens are minted via the auth/registration flow or by calling `POST /v1/users/me/tokens` after logging in. The plaintext token is returned exactly once at issuance — store it as you would a database password.
 
 **The SDK sends this header automatically** — you set the token once in the constructor and never touch it again.
 
@@ -35,7 +37,7 @@ import { SovrantClient } from "@sovrant/sdk";
 
 const client = new SovrantClient({
   baseUrl: "http://localhost:5200",
-  token: process.env.SOVRANT_TOKEN!,  // Never hardcode — always from environment
+  token: process.env.SOVRANT_API_TOKEN!,  // svt_* token — never hardcode, always from environment
   model: "gpt-4o",
 });
 
@@ -57,27 +59,27 @@ await client.stream("Draft a project plan", {
 
 ## Architecture: Browser vs Server
 
-The `SOVRANT_TOKEN` is a **server secret**. Where you put the SDK depends on whether your app is public-facing or internal.
+A user's `svt_*` token grants full access to that user's sessions, workspaces, and agent runs. Where you put the SDK depends on whether your app is public-facing or internal.
 
 ### Public-facing browser apps — proxy pattern (required)
 
-Never send `SOVRANT_TOKEN` to a browser. Any user can read browser network requests, local storage, or bundle source maps. Instead, put the SDK and the token on a Node.js backend and have the browser call your proxy:
+Never ship a long-lived `svt_*` token to a browser. Any user can read browser network requests, local storage, or bundle source maps. Instead, put the SDK and the token on a Node.js backend and have the browser call your proxy:
 
 ```
 Browser  ──►  Your Node.js proxy  ──►  Sovrant.Server :5200
-              (holds SOVRANT_TOKEN,       (validates token,
-               uses SDK server-side)       runs the agent)
+              (holds svt_* token,        (validates token,
+               uses SDK server-side)      runs the agent)
 ```
 
 The browser sends unauthenticated requests to your proxy at `/v1`. The proxy uses the SDK with the real token and streams responses back to the browser. See the [Proxy Setup Reference](#proxy-setup-reference) section.
 
 ### Internal tools and admin dashboards
 
-If the application is protected by its own authentication layer (SSO, VPN, corporate identity provider) and the users are trusted members of your organisation, it is acceptable to issue a scoped token to authenticated sessions and use the SDK directly in the browser.
+If the application is protected by its own authentication layer (SSO, VPN, corporate identity provider) and the users are trusted members of your organisation, it is acceptable to issue a per-user `svt_*` token to authenticated sessions and use the SDK directly in the browser.
 
 In this pattern, your backend:
 1. Authenticates the user (SSO / login)
-2. Issues a **session-scoped credential** for that user's browser session — this can be the `SOVRANT_TOKEN` itself, or a short-lived proxy token that your backend validates
+2. Calls `POST /v1/users/me/tokens` (using its own admin credentials) to mint a scoped token for that user — or uses a short-lived proxy token your backend validates
 3. The browser uses that credential with the SDK
 
 This is appropriate for: internal developer tools, admin dashboards, Replit-style sandboxes, or any app where you control who can log in.
@@ -104,7 +106,7 @@ import { NextRequest } from "next/server";
 
 const client = new SovrantClient({
   baseUrl: process.env.SOVRANT_URL!,
-  token: process.env.SOVRANT_TOKEN!,
+  token: process.env.SOVRANT_API_TOKEN!,
 });
 
 export async function POST(req: NextRequest) {
@@ -124,11 +126,11 @@ For cloud platforms where each team or user brings their own LLM API key, the SD
 
 ```
 Team's browser/server
-  ──[Authorization: Bearer SOVRANT_TOKEN]──►  Sovrant.Server
+  ──[Authorization: Bearer svt_team-...]──►  Sovrant.Server
   ──[X-LLM-Api-Key: sk-team-...]──────────►    ──[sk-team-...]──►  OpenAI / Gemini / etc.
 ```
 
-- `SOVRANT_TOKEN` still authenticates the client to your Sovrant server (via `Authorization` header)
+- The `svt_*` token still authenticates the client to your Sovrant server (via `Authorization` header)
 - `X-LLM-Api-Key` and `X-LLM-Base-Url` travel as **HTTP headers**, encrypted by HTTPS
 - The server uses them for that LLM call only — they are never logged, stored, or included in error responses
 - Each team's session history is isolated by a composite key (`session_id + provider`)
@@ -139,7 +141,7 @@ Team's browser/server
 // One client per team — constructed with their credentials
 const teamClient = new SovrantClient({
   baseUrl: "https://sovrant.yourcompany.com",
-  token: process.env.SOVRANT_TOKEN!,     // Your server's bearer token
+  token: team.sovrantApiToken,           // The team owner's svt_* token
   llmApiKey: team.llmApiKey,             // Team's own LLM key
   llmBaseUrl: team.llmBaseUrl,           // Team's provider (optional)
   sessionId: `team:${team.id}`,
@@ -183,7 +185,7 @@ await client.chat("hello", {
 ```ts
 const client = new SovrantClient({
   baseUrl: "http://localhost:5200",  // Required — only http: and https: allowed
-  token: "your-token",               // Required — SOVRANT_TOKEN bearer token
+  token: "your-token",               // Required — per-user svt_* bearer token
   model: "gpt-4o",                   // Optional — default model for requests
   sessionId: "session-abc",          // Optional — default session for persistent conversations
   maxRetries: 3,                     // Optional — retry count on 429/5xx (default: 3)
@@ -482,7 +484,7 @@ const { status } = await client.health();
 
 The SDK includes a `useChat` hook for React apps with built-in streaming, state management, and tool event callbacks.
 
-> **Where to use this hook:** In internal tools, admin dashboards, or authenticated apps where you control who can access the token. For public-facing apps, run the SDK on your server and stream results to the browser via your own API — do not use this hook with the real `SOVRANT_TOKEN` in a public bundle.
+> **Where to use this hook:** In internal tools, admin dashboards, or authenticated apps where you control who can access the token. For public-facing apps, run the SDK on your server and stream results to the browser via your own API — do not ship a long-lived `svt_*` token in a public bundle.
 
 ### Install
 
@@ -610,19 +612,19 @@ The SDK enforces several security measures automatically. Here's what it does an
 
 ### What you must do
 
-#### 1. Never expose SOVRANT_TOKEN to a public browser bundle
+#### 1. Never expose an svt_* token to a public browser bundle
 
-`SOVRANT_TOKEN` is a **server secret** — treat it like a database password. It grants full access to the agent, all sessions, and all config endpoints.
+A user's `svt_*` token is a **secret** — treat it like a database password. It grants full access to that user's sessions, workspaces, and agent runs (admin tokens grant cross-user access).
 
 For public-facing browser apps, use one of these approaches:
 
 **Option A — Proxy (no token in browser):**
-Your backend proxy holds `SOVRANT_TOKEN` and the browser never sees it. See the [Proxy Setup Reference](#proxy-setup-reference) below.
+Your backend proxy holds the `svt_*` token and the browser never sees it. See the [Proxy Setup Reference](#proxy-setup-reference) below.
 
 **Option B — Authenticated internal app:**
-If all users are trusted (employees, internal tool), authenticate them first (SSO / login), then provide the token only to authenticated sessions — not in the bundle, not in source code.
+If all users are trusted (employees, internal tool), authenticate them first (SSO / login), then mint a per-user `svt_*` token via `POST /v1/users/me/tokens` and provide it only to authenticated sessions — not in the bundle, not in source code.
 
-The SDK's `toJSON()` redaction protects against accidentally logging the token, but it **cannot** stop you from shipping it in a JavaScript bundle. If the token is in `new SovrantClient({ token: "sk-..." })` in your frontend code, users can find it.
+The SDK's `toJSON()` redaction protects against accidentally logging the token, but it **cannot** stop you from shipping it in a JavaScript bundle. If the token is in `new SovrantClient({ token: "svt_..." })` in your frontend code, users can find it.
 
 #### 2. Store tokens in environment variables
 
@@ -680,7 +682,7 @@ Use separate session IDs per user and per conversation to prevent cross-contamin
 ```ts
 const client = new SovrantClient({
   baseUrl: "https://sovrant.internal",
-  token: process.env.SOVRANT_TOKEN!,
+  token: process.env.SOVRANT_API_TOKEN!,
   sessionId: `user:${userId}:conv:${conversationId}`,
 });
 ```
@@ -698,7 +700,7 @@ const usage = await client.getUsage();
 
 ## Proxy Setup Reference
 
-For public-facing apps, the proxy holds `SOVRANT_TOKEN` server-side and the browser never touches it.
+For public-facing apps, the proxy holds the `svt_*` token server-side and the browser never touches it.
 
 ### Express (Node.js)
 
@@ -715,8 +717,8 @@ app.use("/v1", requireAuth, createProxyMiddleware({
   changeOrigin: true,
   on: {
     proxyReq(proxyReq) {
-      // Inject the server secret — the browser never sees this
-      proxyReq.setHeader("Authorization", `Bearer ${process.env.SOVRANT_TOKEN}`);
+      // Inject the secret token — the browser never sees this
+      proxyReq.setHeader("Authorization", `Bearer ${process.env.SOVRANT_API_TOKEN}`);
       // Remove any Authorization header the browser sent — don't forward client creds
       proxyReq.removeHeader("x-forwarded-authorization");
     },
@@ -732,7 +734,7 @@ Store the token as a variable (not hardcoded in the config file). One approach: 
 
 ```nginx
 # /etc/nginx/sovrant_secrets  — not in version control, chmod 600
-# set $sovrant_token "your-secret-token-here";
+# set $sovrant_token "svt_...";
 
 server {
     location /v1/ {
@@ -764,7 +766,7 @@ import { spawn } from "child_process";
 function startSovrant() {
   const proc = spawn("dotnet", ["run", "--project", "src/Sovrant.Server", "--no-build"], {
     env: {
-      ...process.env,           // Inherit LLM_API_KEY, SOVRANT_TOKEN, etc. from the environment
+      ...process.env,           // Inherit LLM_API_KEY, SOVRANT_API_TOKEN, etc. from the environment
     },
     stdio: "inherit",
   });

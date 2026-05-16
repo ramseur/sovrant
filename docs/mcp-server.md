@@ -36,12 +36,11 @@ Run `Sovrant.Server` (port 5200 by default) with `SOVRANT_MCP_HTTP=true`:
 
 ```bash
 export SOVRANT_MCP_HTTP=true
-export SOVRANT_TOKEN="your-server-bearer-token"
 dotnet run --project src/Sovrant.Server
 # → MCP endpoint live at http://localhost:5200/mcp
 ```
 
-Clients connect to `http://<host>:<port>/mcp` over HTTP/SSE and authenticate using the server's standard bearer token (`Authorization: Bearer $SOVRANT_TOKEN`) — `SOVRANT_MCP_TOKEN` only applies to the stdio path. When `SOVRANT_MCP_HTTP=false` (the default), the `/mcp` endpoint is not registered.
+Clients connect to `http://<host>:<port>/mcp` over HTTP/SSE and authenticate using a per-user `svt_*` bearer token (`Authorization: Bearer svt_...`) — the same auth used by every other `Sovrant.Server` endpoint. `SOVRANT_MCP_TOKEN` only applies to the stdio path. When `SOVRANT_MCP_HTTP=false` (the default), the `/mcp` endpoint is not registered.
 
 ---
 
@@ -191,7 +190,7 @@ Tool names are **case-sensitive** — use the exact names as shown above.
 Auth differs by transport:
 
 - **stdio:** no HTTP, no `Authorization` headers. The token is checked once as a **startup gate** — the process exits before accepting any JSON-RPC messages if the token is missing or wrong. Configured via `SOVRANT_MCP_TOKEN` + `--token`.
-- **HTTP/SSE:** uses the standard `Sovrant.Server` bearer auth — clients send `Authorization: Bearer $SOVRANT_TOKEN` on every request. `SOVRANT_MCP_TOKEN` is **not** consulted on this path.
+- **HTTP/SSE:** uses the standard `Sovrant.Server` bearer auth — clients send `Authorization: Bearer svt_...` (a per-user token) on every request. `SOVRANT_MCP_TOKEN` is **not** consulted on this path.
 
 ### How to enable (stdio)
 
@@ -251,7 +250,6 @@ Errors go to **stderr** so they don't corrupt the stdout JSON-RPC transport. The
 | `LLM_BASE_URL` | No | Provider base URL (default: OpenAI) |
 | `SOVRANT_MCP_TOKEN` | No | **stdio only.** Required bearer token. If set, callers must pass `--token <value>` matching this. Unset = no auth required. |
 | `SOVRANT_MCP_HTTP` | No | **HTTP/SSE only.** Set to `true` on `Sovrant.Server` to enable the `/mcp` endpoint. Default: `false`. |
-| `SOVRANT_TOKEN` | No | **HTTP/SSE only.** Bearer token enforced by `Sovrant.Server` for all requests, including `/mcp`. |
 | `SOVRANT_MCP_TOOLS` | No | Comma-separated allow-list of tool names. Applies to both transports. Unset = all tools. |
 
 All standard Sovrant environment variables (`ROUTER_MODE`, `ROUTER_STRATEGY`, `SOVRANT_WEB_SEARCH`, etc.) are respected.
@@ -260,7 +258,7 @@ All standard Sovrant environment variables (`ROUTER_MODE`, `ROUTER_STRATEGY`, `S
 
 ## Security
 
-- **Token authentication** — stdio uses `SOVRANT_MCP_TOKEN` + `--token` as a startup gate; HTTP/SSE uses the server's `SOVRANT_TOKEN` bearer header per request.
+- **Token authentication** — stdio uses `SOVRANT_MCP_TOKEN` + `--token` as a startup gate; HTTP/SSE uses per-user `svt_*` bearer tokens enforced by `Sovrant.Server` per request.
 - **Permission mode** is forced to `DontAsk` on the stdio path — all tool executions are auto-approved because there is no console to prompt. The HTTP path inherits the server's configured permission policy.
 - **Console logging is suppressed (stdio only)** — stdout is the JSON-RPC transport on stdio, so logs go to file only (`~/.sovrant/logs/`). The HTTP path uses normal server logging.
 - **Network exposure** — stdio is only accessible to the parent process that spawned it. HTTP/SSE binds wherever `Sovrant.Server` is configured to listen; restrict access at the network or reverse-proxy layer if exposing beyond localhost.
@@ -346,6 +344,6 @@ The shared protocol library is `Sovrant.Mcp` — `McpServerSetup.AddSovrantMcpHa
 
 **HTTP/SSE path (`SOVRANT_MCP_HTTP=true` on `Sovrant.Server`):**
 1. `Sovrant.Server` registers the same `Sovrant.Mcp` handlers with `WithHttpTransport()` and maps them at `/mcp`.
-2. Clients send JSON-RPC over HTTP/SSE, authenticating with `Authorization: Bearer $SOVRANT_TOKEN`.
+2. Clients send JSON-RPC over HTTP/SSE, authenticating with `Authorization: Bearer svt_...` (a per-user token).
 
 The synthetic `chat` tool (available on both transports) creates a transient `ConversationRuntime` and runs a full agentic turn — the caller gets the agent's complete response including any tool use.

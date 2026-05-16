@@ -21,6 +21,7 @@ public sealed class SmartRouter : ISmartRouter, IAsyncDisposable, IDisposable
     private readonly IModelCapabilityRegistry? _capabilityRegistry;
     private readonly IModelTierResolver? _tierResolver;
     private readonly RoutingConfig _routingConfig;
+    private readonly List<(System.Text.RegularExpressions.Regex Regex, string Tier)> _compiledRoutingRules;
     private readonly CancellationTokenSource _shutdownCts = new();
     private readonly List<Task> _recheckTasks = [];
     private bool _initialized;
@@ -85,6 +86,30 @@ public sealed class SmartRouter : ISmartRouter, IAsyncDisposable, IDisposable
         _tierResolver = tierResolver;
         _routingConfig = routingConfig ?? new RoutingConfig();
         IntentRoutingEnabled = _routingConfig.IntentRouting;
+        _compiledRoutingRules = CompileRoutingRules(_routingConfig);
+    }
+
+    private static List<(System.Text.RegularExpressions.Regex Regex, string Tier)> CompileRoutingRules(RoutingConfig config)
+    {
+        if (config.CustomRules.Count == 0)
+            return [];
+        var compiled = new List<(System.Text.RegularExpressions.Regex Regex, string Tier)>(config.CustomRules.Count);
+        foreach (var rule in config.CustomRules)
+        {
+            if (string.IsNullOrEmpty(rule.Pattern))
+                continue;
+            try
+            {
+                var regex = new System.Text.RegularExpressions.Regex(
+                    rule.Pattern,
+                    System.Text.RegularExpressions.RegexOptions.Compiled
+                        | System.Text.RegularExpressions.RegexOptions.IgnoreCase,
+                    TimeSpan.FromMilliseconds(100));
+                compiled.Add((regex, rule.Tier));
+            }
+            catch (ArgumentException) { /* invalid regex in user config — skip */ }
+        }
+        return compiled;
     }
 
     /// <inheritdoc/>
@@ -199,24 +224,17 @@ public sealed class SmartRouter : ISmartRouter, IAsyncDisposable, IDisposable
     /// <summary>Checks user message against custom routing rules.</summary>
     private string? MatchCustomRule(string? text)
     {
-        if (text is null || _routingConfig.CustomRules.Count == 0)
+        if (text is null || _compiledRoutingRules.Count == 0)
             return null;
 
-        foreach (var rule in _routingConfig.CustomRules)
+        foreach (var (regex, tier) in _compiledRoutingRules)
         {
-            if (string.IsNullOrEmpty(rule.Pattern))
-                continue;
             try
             {
-                if (System.Text.RegularExpressions.Regex.IsMatch(text, rule.Pattern,
-                        System.Text.RegularExpressions.RegexOptions.IgnoreCase,
-                        TimeSpan.FromMilliseconds(100)))
-                {
-                    return rule.Tier;
-                }
+                if (regex.IsMatch(text))
+                    return tier;
             }
             catch (System.Text.RegularExpressions.RegexMatchTimeoutException) { }
-            catch (ArgumentException) { } // invalid regex in user config
         }
         return null;
     }
@@ -226,15 +244,10 @@ public sealed class SmartRouter : ISmartRouter, IAsyncDisposable, IDisposable
     {
         // If a provider is pinned, prefer it when healthy.
         var pinned = _pinnedProviderName;
-        if (pinned is not null)
+        if (pinned is not null && _providersByName.TryGetValue(pinned, out var pinnedInfo) && pinnedInfo.Healthy)
         {
-            var pinnedInfo = _providers.FirstOrDefault(p =>
-                string.Equals(p.Provider.Name, pinned, StringComparison.OrdinalIgnoreCase) && p.Healthy);
-            if (pinnedInfo is not null)
-            {
-                _logRouting(_logger, pinnedInfo.Provider.Name, "pinned", null);
-                return pinnedInfo.Provider;
-            }
+            _logRouting(_logger, pinnedInfo.Provider.Name, "pinned", null);
+            return pinnedInfo.Provider;
         }
 
         var available = _providers.Where(p => p.Healthy).ToList();

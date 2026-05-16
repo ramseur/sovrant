@@ -158,14 +158,7 @@
             {
                 Config.BaseUrl = parsed;
                 AuthProvider.BaseUrl = parsed;
-                Environment.SetEnvironmentVariable("LLM_BASE_URL", trimmedBase);
             }
-
-            // Env-var bridge for any provider clients still reading from the environment.
-            Environment.SetEnvironmentVariable("LLM_API_KEY", trimmedKey);
-            Environment.SetEnvironmentVariable("LLM_MODEL", defaultModel);
-            if (trimmedBase.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
-                Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", trimmedKey);
 
             Nav.NavigateTo("/command");
         }

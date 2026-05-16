@@ -12,7 +12,7 @@ This document tracks planned features, architectural decisions, and the reasonin
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
 - **56 tools** across 17 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, missions, artifacts, documents, quality, swarm, coordination, LSP)
-- **1,689 tests** across 13 projects, 0 failures
+- **1,689 tests** across 10 projects, 0 failures
 - **115 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
@@ -9848,17 +9848,18 @@ See the Phase 96 entry for the full smoke test checklist.
 
 | Priority | Item | Effort | Status |
 |---|---|---|---|
-| 1 | Phase 40A UI — workspace switcher (Web + Desktop) + `sovrant workspace list/members` (CLI) | ~1–2 days | ⬜ Not started |
-| 2 | Bug — model selection not persisted across restart | ~half day | ⬜ Not started |
-| 3 | Phase 97 — TLS/SSL for Server, Web & MCP | ~1 day | ⬜ Not started |
-| 4 | Phase 93 — Configuration boundary audit | ~half day | ⬜ Not started |
+| 1 | Phase 40A UI — workspace switcher (Web + Desktop) | ~1–2 days | ✅ Complete — `WorkspacesView`/`WorkspacesViewModel` (Desktop), `Workspaces.razor`/`WorkspacesAdmin.razor` (Web) |
+| 1 | Phase 40A CLI — `sovrant workspace list/members` remote mode | ~half day | ⬜ Outstanding — commands exist but only work in embedded mode; remote mode shows a warning and exits |
+| 2 | Bug — model selection not persisted across restart | ~half day | ✅ Complete — fixed in `Fix provider/model UX across Desktop and Web` commit |
+| 3 | Phase 97 — TLS/SSL for Server, Web & MCP | ~1 day | ✅ Complete — Kestrel TLS (PEM/PFX), HTTPS redirect, and configurable port in `Sovrant.Server/Program.cs` |
+| 4 | Phase 93 — Configuration boundary audit | ~half day | ✅ Complete (2026-05-09) — `sovrant.config` removed; bootstrap reads env vars + `.env` only |
 | — | Phases 94, 95 (model switch continuity, memory audit) | — | **Post-beta** |
 
 ---
 
 ## Phase 97 — TLS/SSL Support for Server, Web & MCP
 
-**Status:** Planned
+**Status:** ✅ Complete — Kestrel TLS binding (PEM/PFX), configurable HTTPS port, and HTTP→HTTPS redirect middleware implemented in `Sovrant.Server/Program.cs` and `Sovrant.Web/Program.cs`.
 **Goal:** All three network-facing surfaces (HTTP server, Blazor Web frontend, MCP server) support HTTPS/TLS so that traffic between clients and Sovrant is encrypted in transit. No plaintext HTTP in any production or beta deployment.
 
 ### Scope
@@ -9890,6 +9891,148 @@ See the Phase 96 entry for the full smoke test checklist.
 4. Update MCP server transport to use the same Kestrel TLS binding
 5. Update README / setup guide with dev-certs and self-hosted cert instructions
 6. Smoke test: HTTPS handshake on Server, Web (including SignalR), and MCP endpoint; verify HTTP redirects; verify CLI connects cleanly
+
+---
+
+## Phase 98 — CLI Workspace Commands in Remote Mode
+
+**Status:** ⬜ Outstanding — last remaining pre-beta item.
+
+`sovrant workspace list` and `sovrant workspace members` exist and work correctly in embedded (local) mode. In remote mode both commands currently bail out with a yellow warning: `workspace commands are only available in embedded (local) mode.`
+
+### What needs to change
+
+| Location | Change |
+|---|---|
+| `src/Sovrant.Api.Client/` | Add `RemoteWorkspaceService.cs` — thin HTTP wrapper implementing `IWorkspaceService` (or a minimal subset) over `GET /v1/workspaces` and `GET /v1/workspaces/{id}/members` |
+| `src/Sovrant.Cli/Program.cs` — `wsListCmd` | Replace embedded-only guard with a mode branch: call `IWorkspaceService` (embedded) or `RemoteWorkspaceService` (remote) |
+| `src/Sovrant.Cli/Program.cs` — `wsMembersCmd` | Same pattern |
+| `src/Sovrant.Cli/Program.cs` DI registration | Register `RemoteWorkspaceService` in the remote-mode service branch (alongside `RemoteIdentityService` etc.) |
+
+### Existing server endpoints (no changes needed)
+
+- `GET /v1/workspaces` — returns all workspaces the caller belongs to (scoped to authenticated user via `WorkspaceContextMiddleware`)
+- `GET /v1/workspaces/{id}/members` — returns member list for a workspace the caller has access to
+
+### Scope
+
+Read-only. `workspace create`, `workspace add-member`, etc. are out of scope for this item — the CLI is an inspection surface, not an admin console.
+
+### Done when
+
+`sovrant workspace list` and `sovrant workspace members <id>` produce correct tabular output in remote mode, using the stored `svt_` token for auth. Embedded-mode behaviour is unchanged.
+
+---
+
+## Phase 99 — Auth Hardening: Recovery, MFA, OAuth & Audit
+
+**Status:** Planned. Post-beta evolution of the Phase 85 foundation.
+
+Phase 85 shipped the baseline: per-user `svt_*` tokens, Argon2id passwords, admin-generated one-time reset tokens, sliding 30-day TTL. This phase closes the gaps that became obvious once we started dogfooding it and reviewing the code:
+
+### Gaps to close
+
+| # | Gap | Why it matters |
+|---|---|---|
+| 1 | **No recovery path when the sole admin loses their password** | Today there is no in-product way back in — only raw `sqlite3` surgery on `users.password_hash` or restoring from `db backup`. The previous `tools/ReadDb` shortcut (hardcoded `Admin123!`) was deleted as unsafe; we need a deliberate replacement. |
+| 2 | **Password reset still requires an admin in the loop** | Phase 85 left this as "admin generates a token and shares it out-of-band" — fine for tiny teams, breaks down once there is more than one user who forgets passwords. |
+| 3 | **No second factor** | Phase 85 explicitly deferred TOTP. With registration open by default on first install, a brute-force or credential-stuffing attack against a known admin email/username has no second hurdle. |
+| 4 | **No OAuth / SSO providers** | Phase 85 sketched Google/Microsoft/GitHub as pluggable but did not implement any. Common ask from teams that already have an identity provider. |
+| 5 | **Tokens are not audience-scoped** | A `svt_*` issued for the CLI is accepted by the Web cookie path and vice versa. Phase 85's acceptance criteria listed audience scoping but it did not ship. |
+| 6 | **No lockout / brute-force protection beyond generic rate-limit** | The existing per-session rate limiter throttles HTTP but does not lock accounts. Phase 85 listed this as acceptance criteria too — needs verification or implementation. |
+| 7 | **No dedicated auth audit log** | Login attempts (success + failure), password changes, token issuance / revocation, reset-token use, lockout events are not first-class rows. The general audit log captures some of this incidentally; auth events deserve their own indexed view. |
+
+### Scope (in priority order)
+
+1. **Lockout & auth audit** — `auth_events` table (or extension of `audit_governance`) with `event_type`, `user_id`, `ip`, `user_agent`, `outcome`, `ts`. Lock the account after N consecutive failed logins within a window; auto-unlock after a cooldown or admin override. Surface the audit view on the existing admin page.
+2. **Self-service password reset via OS-local recovery code** — at registration, generate a one-time **recovery code** that the user must capture (printed once, never stored plaintext). `POST /v1/auth/recover` accepts `{username, recovery_code, new_password}`. Replaces the admin-in-the-loop flow for users who still have their recovery code; admin reset stays as the fallback.
+3. **Admin lockout recovery** — documented (not in-product) procedure: shutdown the server, run `sovrant db admin-unlock` (a *gated* CLI command that requires a sentinel file `~/.sovrant/data/.allow-admin-recovery` chmod 0600 + same UID as the DB file — proves filesystem ownership), which clears lockout flags and prints a one-time recovery code for the oldest active admin. No password reset, no shortcut.
+4. **TOTP 2FA** — opt-in per user, enrollment from Settings → Account on Web/Desktop. RFC 6238, 30-second window, 6 digits. Backup codes generated at enrollment (single-use, hashed at rest). Login flow extended: `POST /v1/auth/login` returns `{ requires_totp: true, challenge_id }` when the user has TOTP enabled.
+5. **Audience-scoped tokens** — `api_tokens.audience` column (`cli` / `web` / `desktop` / `sdk`). `BearerTokenMiddleware` rejects a token whose audience doesn't match the caller — surface determined by request path / `User-Agent` / explicit header. Existing tokens migrated to `audience='any'` and continue to work; new tokens default to the issuing surface.
+6. **OAuth providers — Google + GitHub first** — `IExternalIdentityProvider` abstraction. Users link a Google / GitHub identity to their Sovrant user on first OAuth login; subsequent logins skip password entry. No new account is created from OAuth alone — admin must approve the user first (same as password registration today).
+
+### Explicitly deferred
+
+- **SMTP-based password reset email** — runs into deliverability + SMTP-config complexity. The recovery-code flow above gets us self-service without an SMTP dependency. Email reset can layer on top later for installs that want it.
+- **WebAuthn / passkeys** — desirable, but TOTP-first per Phase 85.
+- **SAML / enterprise SSO** — same deferral as Phase 85; revisit when a customer asks.
+- **OIDC discovery / generic OAuth providers beyond the named two** — pick Google + GitHub for the first pass; generalize once the abstraction is battle-tested.
+
+### Acceptance Criteria
+
+- [ ] Brute-forcing a known admin username from a single IP is rate-limited AND results in account lockout after N failures; lockout state and the unlock procedure are visible in the admin audit view
+- [ ] A user who captures their recovery code at registration can reset their own password without admin involvement
+- [ ] The sole-admin lockout scenario has a documented recovery procedure that requires filesystem-level proof and produces an auditable event
+- [ ] A user can enable TOTP from Settings and subsequent logins require the second factor on all four surfaces (CLI, Web, Desktop, SDK)
+- [ ] A CLI-audience token is rejected when presented to the Web cookie middleware (and vice versa) — integration tests cover the four-by-four matrix
+- [ ] Linking a Google or GitHub account to an existing Sovrant user lets them sign in via OAuth on Web and Desktop; CLI continues using password + token
+
+### Why now
+
+- The Phase 85 baseline is shipped and dogfooded; the rough edges are now concrete (recovery path, audience scoping, no MFA) rather than hypothetical.
+- The pending Beta and BSL → Apache transition both raise the cost of staying at the current bar — outside contributors will probe this surface.
+- Trust Boundary (Phase 58) and the upcoming Command Center cockpit assume a strong principal model; weak login undermines the layers built on top.
+
+---
+
+## Phase 100 — Knowledge Pages: User-Authored Markdown in System Context
+
+**Status:** Planned. A CRUD shell exists in the working tree from an earlier exploratory session (V028 migration, `IKnowledgePageStore` + `SqliteKnowledgePageStore`, basic Web page) — the *useful* half (prompt injection, Desktop parity, server API, tests) is not done.
+
+### Goal
+
+A per-user "personal wiki" of named markdown pages that the agent can reference during a turn. Pages sit alongside Artifacts, Skills, Tools, Agents, and Memory in the Knowledge section. The user explicitly authors and curates them; the agent reads selected pages into the system prompt so it has stable, durable context (coding standards, project conventions, domain knowledge, reference material) without relying on transient memory or filesystem artifacts.
+
+### Why it earns a phase
+
+Today knowledge enters the agent only through (a) conversation memory (transient, derived) or (b) artifacts (file-shaped, run-scoped). Neither is the right shape for "this is a markdown page I want the agent to know about across every session". Without a deliberate slot for hand-curated knowledge, users either lean on memory hacks (forces the agent to learn things it should just *be told*) or stuff context into every prompt manually.
+
+### What already exists in the tree
+
+| Layer | File | State |
+|---|---|---|
+| DB migration | `Storage/Migrations/V028__knowledge_pages.sql` | Table: `id`, `user_id`, `title`, `content`, `tags` (JSON), timestamps |
+| Runtime | `Storage/IKnowledgePageStore.cs`, `SqliteKnowledgePageStore.cs` | Full owner-scoped CRUD |
+| DI | `Runtime/ServiceCollectionExtensions.cs` | `IKnowledgePageStore` registered |
+| Web UI | `Web/Components/Pages/KnowledgePages.razor` (195 lines) + nav surface edits | Single-surface CRUD UI |
+
+These uncommitted edits are a useful starting point; the phase keeps or discards them based on whether they fit the final design.
+
+### What's missing
+
+| Gap | Why it matters |
+|---|---|
+| **System-prompt injection** | The CRUD is dead weight without it — the whole point is for the agent to *see* the pages |
+| **Page selection model** | Inject *which* pages? All of them blows past context windows. Options: explicit per-session "active pages", tag-driven auto-selection, or admin-marked "always-on" pages |
+| **Server API endpoints** | `GET/POST/PUT/DELETE /v1/knowledge-pages` so remote-mode Web/Desktop and the SDK can drive the feature |
+| **Desktop parity** | Avalonia `KnowledgePagesView` + nav entry — matches every other Knowledge-section item |
+| **CLI surface** | `sovrant pages list/show/edit/delete` for headless workflows |
+| **Tests** | Store, server, prompt-injection — nothing covered today |
+| **Token-budget guardrails** | Selected pages must fit a configurable cap (default ~3,000 tokens or ~10% of context window) with deterministic truncation/ordering |
+
+### Scope (in priority order)
+
+1. **Decide the injection model.** Pick one of: (a) explicit per-session active-page list managed via session config, (b) tag-driven auto-selection ("inject any page tagged `always`"), (c) hybrid (auto for `always`, explicit for everything else). Recommend hybrid — covers the "team conventions" use case without making the user fiddle every session.
+2. **Wire prompt injection.** Add a `KnowledgePageContext` builder invoked by `ConversationRuntime` at turn start. Emit each included page as a `# Knowledge: <title>` markdown block in the system prompt. Cap total tokens per the guardrail above; drop oldest-updated pages first when over budget.
+3. **Server endpoints + ownership scoping.** Match the workspace pattern from existing routes — caller's `user_id` derived from the `svt_*` token; admin can see all pages.
+4. **Desktop UI.** Avalonia view with markdown editor (existing `MarkdownScrollViewer` per `feedback_markdown_avalonia.md` — beware code-fence crashes).
+5. **CLI surface.** Read-only first (`list`, `show`); editing later.
+6. **Tests.** `SqliteKnowledgePageStoreTests`, server route tests, an integration test that confirms a page tagged `always` appears verbatim in the system prompt of the next turn.
+
+### Deferred
+
+- **External knowledge sources** (Confluence, Notion, GitHub wikis) — keep v1 hand-authored only; integrations are their own phase.
+- **Vector / semantic search** — string search by title and tag is enough at the page counts users will realistically maintain. Revisit if anyone hits >200 pages.
+- **Multi-user / workspace-shared pages** — v1 is per-user (`user_id`-scoped). Workspace-shared pages slot into the same table once the shared-workspace model from `project_workspace_provider_roadmap` lands.
+- **Versioning / history** — same deferral as the Phase 91 knowledge authoring story; revisit together.
+
+### Acceptance Criteria
+
+- [ ] User creates a page tagged `always` and on the next turn the page content appears verbatim in the system prompt sent to the LLM
+- [ ] Token budget for injected pages is configurable per user and enforced — over-budget pages are deterministically dropped with a visible diagnostic
+- [ ] Server endpoints scope every read/write to the caller's `user_id` (admin sees all) — non-owner access returns 404
+- [ ] Desktop and Web surfaces have feature parity for CRUD
+- [ ] All existing tests still pass; new store + injection tests cover the happy path and the token-budget edge case
 
 ---
 

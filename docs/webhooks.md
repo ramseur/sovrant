@@ -93,7 +93,7 @@ npm install @slack/bolt
 export SLACK_BOT_TOKEN="xoxb-..."
 export SLACK_APP_TOKEN="xapp-..."
 export SOVRANT_URL="http://localhost:5200"
-export SOVRANT_TOKEN="your-secret-token"
+export SOVRANT_API_TOKEN="svt_..."   # per-user bearer token issued via /v1/auth/login or /v1/users/me/tokens
 export SOVRANT_MODEL="gpt-4o-mini"  # optional
 
 node handler.js
@@ -114,7 +114,7 @@ Use the webhook endpoint with a Teams outgoing webhook or a Bot Framework bot:
 
 ```bash
 curl -X POST http://localhost:5200/v1/webhook \
-  -H "Authorization: Bearer $SOVRANT_TOKEN" \
+  -H "Authorization: Bearer $SOVRANT_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "source": "teams",
@@ -134,7 +134,7 @@ Use a Discord bot that listens for messages and forwards them to the webhook:
 
 ```bash
 curl -X POST http://localhost:5200/v1/webhook \
-  -H "Authorization: Bearer $SOVRANT_TOKEN" \
+  -H "Authorization: Bearer $SOVRANT_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "source": "discord",
@@ -153,7 +153,7 @@ Any HTTP client can use the webhook endpoint. The `source` field is a free-form 
 ```bash
 # Internal tool
 curl -X POST http://localhost:5200/v1/webhook \
-  -H "Authorization: Bearer $SOVRANT_TOKEN" \
+  -H "Authorization: Bearer $SOVRANT_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "source": "internal-dashboard",
@@ -166,7 +166,7 @@ curl -X POST http://localhost:5200/v1/webhook \
 
 ## Security
 
-- The webhook endpoint requires the same `SOVRANT_TOKEN` bearer auth as all other endpoints.
+- The webhook endpoint requires the same per-user `svt_*` bearer auth as all other endpoints.
 - `callback_url` must be an absolute HTTP or HTTPS URL — relative URLs and non-HTTP schemes are rejected.
 - The Slack bot uses Socket Mode (WebSocket) — no public URL or ingress is required.
 - Each `source:user_id` pair gets an isolated session — users cannot see each other's conversations.

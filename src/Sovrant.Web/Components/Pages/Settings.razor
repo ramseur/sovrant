@@ -40,7 +40,6 @@
                         <div class="provider-detail">@profile.BaseUrl</div>
                     </div>
                     <div class="provider-actions">
-                        <button class="btn-sm btn-primary" @onclick="() => ActivateProfile(profile)">Activate</button>
                         <button class="btn-sm btn-danger" @onclick="() => DeleteProfile(profile)">X</button>
                     </div>
                 </div>
@@ -83,7 +82,7 @@
                 <div class="status-message">@_statusMessage</div>
             }
 
-            <p class="text-muted text-sm">Providers are stored in the encrypted credential store. Click Activate to switch the active provider.</p>
+            <p class="text-muted text-sm">Providers are stored in the encrypted credential store. Switch between providers from the model dropdown at the top.</p>
         </div>
     }
     else
@@ -236,7 +235,7 @@
                 Name: displayName,
                 ProviderKind: _selectedProvider,
                 BaseUrl: trimmedBase,
-                DefaultModel: existingRow?.DefaultModel ?? Config.Model,
+                DefaultModel: null,
                 MaxTokens: Config.MaxTokens,
                 CredentialId: credentialId,
                 CreatedAt: existingRow?.CreatedAt ?? now,
@@ -246,27 +245,17 @@
             else
                 await ProfileStore.UpdateAsync(profile);
 
+            await Prefs.DeleteAsync(userId, UserPreferenceKeys.Model);
+            await Prefs.DeleteAsync(userId, UserPreferenceKeys.ActiveProviderProfileId);
+            Config.Model = string.Empty;
+            ActiveContext.SetModel(string.Empty, string.Empty);
+
             await LoadProfilesAsync();
-            var added = _savedProfiles.FirstOrDefault(p => p.ProfileId == profileId);
-            if (added is not null)
-                await ActivateProfile(added);
+            _apiKey = string.Empty;
             _newProfileName = string.Empty;
-            _statusMessage = $"Provider '{_selectedProvider}' saved and activated.";
+            _statusMessage = $"Provider '{_selectedProvider}' saved. Pick a model from the dropdown at the top.";
         }
         catch (Exception ex) { _statusMessage = $"Failed to add provider: {ex.Message}"; }
-    }
-
-    private async Task ActivateProfile(ProviderProfileVm profile)
-    {
-        _selectedProvider = profile.Provider;
-        _apiKey = profile.ApiKey;
-        _baseUrl = profile.BaseUrl;
-
-        await Prefs.SetAsync(Session.UserId!,
-            UserPreferenceKeys.ActiveProviderProfileId, profile.ProfileId);
-
-        await SaveAsync();
-        _statusMessage = $"Switched to '{profile.Name}'.";
     }
 
     private async Task DeleteProfile(ProviderProfileVm profile)
@@ -276,7 +265,35 @@
             await ProfileStore.DeleteAsync(profile.ProfileId);
             if (!string.IsNullOrWhiteSpace(profile.CredentialId))
                 await Credentials.DeleteAsync(profile.CredentialId);
+
             await LoadProfilesAsync();
+
+            var userId = Session.UserId!;
+            var activeId = await Prefs.GetAsync(userId, UserPreferenceKeys.ActiveProviderProfileId);
+            var wasActive = string.Equals(activeId, profile.ProfileId, StringComparison.Ordinal);
+            var lastProfile = _savedProfiles.Count == 0;
+
+            if (wasActive || lastProfile)
+            {
+                await Prefs.DeleteAsync(userId, UserPreferenceKeys.ActiveProviderProfileId);
+                await Prefs.DeleteAsync(userId, UserPreferenceKeys.Model);
+                Config.Model = string.Empty;
+            }
+
+            if (lastProfile)
+            {
+                await Prefs.DeleteAsync(userId, UserPreferenceKeys.Provider);
+                await Prefs.DeleteAsync(userId, UserPreferenceKeys.BaseUrl);
+                await Credentials.DeleteAsync(CredentialKeys.LlmApiKey);
+                Config.ApiKey = string.Empty;
+                Config.BaseUrl = null;
+                AuthProvider.ApiKey = string.Empty;
+                AuthProvider.BaseUrl = null;
+            }
+
+            if (wasActive || lastProfile)
+                ActiveContext.SetModel(string.Empty, string.Empty);
+
             _statusMessage = $"Profile '{profile.Name}' deleted.";
         }
         catch (Exception ex) { _statusMessage = $"Delete failed: {ex.Message}"; }
@@ -360,10 +377,7 @@
             if (!string.IsNullOrWhiteSpace(_apiKey))
             {
                 Config.ApiKey = _apiKey.Trim();
-                Environment.SetEnvironmentVariable("LLM_API_KEY", _apiKey.Trim());
                 AuthProvider.ApiKey = _apiKey.Trim();
-                if (_baseUrl.Contains("openrouter", StringComparison.OrdinalIgnoreCase))
-                    Environment.SetEnvironmentVariable("OPENROUTER_API_KEY", _apiKey.Trim());
             }
 
             if (!string.IsNullOrWhiteSpace(_baseUrl))
@@ -371,13 +385,11 @@
                 var parsed = new Uri(_baseUrl.Trim());
                 Config.BaseUrl = parsed;
                 AuthProvider.BaseUrl = parsed;
-                Environment.SetEnvironmentVariable("LLM_BASE_URL", _baseUrl.Trim());
             }
             else
             {
                 Config.BaseUrl = null;
                 AuthProvider.BaseUrl = null;
-                Environment.SetEnvironmentVariable("LLM_BASE_URL", null);
             }
 
             ActiveContext.SetModel(Config.Model, _selectedProvider);

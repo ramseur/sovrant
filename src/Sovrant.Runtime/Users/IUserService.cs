@@ -1,10 +1,9 @@
 namespace Sovrant.Runtime.Users;
 
 /// <summary>
-/// Phase 37 — User management API surface. CRUD over the Phase 32 <c>users</c>
-/// table plus per-user data views (sessions, usage, audit). All identity is
-/// still gated by the single <c>SOVRANT_TOKEN</c>; per-user authentication is
-/// deferred to Phase 38.
+/// User management API surface. CRUD over the <c>users</c> table plus per-user
+/// data views (sessions, usage, audit). Callers are authenticated via per-user
+/// <c>svt_</c> bearer tokens issued by <see cref="Sovrant.Runtime.Auth.ITokenService"/>.
 /// </summary>
 public interface IUserService
 {

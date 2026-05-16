@@ -47,7 +47,7 @@ internal static class ProjectRoutes
     {
         if (!InputValidation.IsValidResourceId(wid))
             return Results.BadRequest(new { error = "Invalid workspace ID format." });
-        var deny = await RequireWorkspaceAccess(ctx, wid, wsSvc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, wid, wsSvc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
         var projects = await svc.ListAsync(wid, includeArchived ?? false, ct).ConfigureAwait(false);
         return Results.Ok(new { projects });
@@ -59,7 +59,7 @@ internal static class ProjectRoutes
     {
         if (!InputValidation.IsValidResourceId(wid))
             return Results.BadRequest(new { error = "Invalid workspace ID format." });
-        var deny = await RequireWorkspaceAccess(ctx, wid, wsSvc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, wid, wsSvc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
         ArgumentNullException.ThrowIfNull(req);
         if (string.IsNullOrWhiteSpace(req.Name))
@@ -94,31 +94,7 @@ internal static class ProjectRoutes
         return null;
     }
 
-    /// <summary>
-    /// Verifies the caller has access to the given workspace. Admins always pass;
-    /// non-admin callers must be a workspace member.
-    /// </summary>
-    private static async Task<IResult?> RequireWorkspaceAccess(
-        HttpContext ctx, string workspaceId, IWorkspaceService wsSvc, CancellationToken ct)
-    {
-        if (ctx.IsAdmin()) return null;
-        var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
-        if (!await wsSvc.IsMemberAsync(workspaceId, userId, ct).ConfigureAwait(false))
-            return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
-        return null;
-    }
-
-    /// <summary>Workspace owner, workspace admin, or global admin may manage project membership.</summary>
-    private static async Task<IResult?> RequireWorkspaceManage(
-        HttpContext ctx, string workspaceId, IWorkspaceService wsSvc, CancellationToken ct)
-    {
-        if (ctx.IsAdmin()) return null;
-        var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
-        var role = await wsSvc.GetMemberRoleAsync(workspaceId, userId, ct).ConfigureAwait(false);
-        if (role is null || !role.Value.IsAtLeast(WorkspaceRole.Admin))
-            return Results.Json(new { error = "Workspace admin role required." }, statusCode: StatusCodes.Status403Forbidden);
-        return null;
-    }
+    // Workspace access/manage guards live in Sovrant.Server.Auth.WorkspaceAuthGuards.
 
     // ── Project CRUD ───────────────────────────────────────────────────────
 
@@ -151,7 +127,7 @@ internal static class ProjectRoutes
         // Resolve workspace for this project to check workspace-level manage role.
         var project = await svc.GetAsync(id, ct).ConfigureAwait(false);
         if (project is null) return Results.NotFound(new { error = "Project not found." });
-        var deny = await RequireWorkspaceManage(ctx, project.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceManageAsync(ctx, project.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
 
         var deleted = await svc.DeleteAsync(id, ct).ConfigureAwait(false);
@@ -201,7 +177,7 @@ internal static class ProjectRoutes
     {
         var project = await svc.GetAsync(id, ct).ConfigureAwait(false);
         if (project is null) return Results.NotFound(new { error = "Project not found." });
-        var deny = await RequireWorkspaceManage(ctx, project.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceManageAsync(ctx, project.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
 
         ArgumentNullException.ThrowIfNull(req);
@@ -225,7 +201,7 @@ internal static class ProjectRoutes
             return Results.BadRequest(new { error = "Invalid user ID format." });
         var project = await svc.GetAsync(id, ct).ConfigureAwait(false);
         if (project is null) return Results.NotFound(new { error = "Project not found." });
-        var deny = await RequireWorkspaceManage(ctx, project.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
+        var deny = await WorkspaceAuthGuards.RequireWorkspaceManageAsync(ctx, project.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
 
         var removed = await svc.RemoveMemberAsync(id, userId, ct).ConfigureAwait(false);

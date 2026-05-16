@@ -35,8 +35,8 @@ public sealed class SqliteStorageProviderTests : IAsyncDisposable
     {
         await _provider.InitializeAsync();
 
-        // Bumped to 22 after Phase 87 V022 (workspace identity unification).
-        Assert.Equal(26, _provider.SchemaVersion);
+        // Schema head bumped to 27 by V027 (workspace provider profiles).
+        Assert.Equal(27, _provider.SchemaVersion);
     }
 
     [Fact]

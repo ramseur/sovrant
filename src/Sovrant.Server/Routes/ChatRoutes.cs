@@ -78,11 +78,15 @@ internal static class ChatRoutes
             // Phase 38 — reject attempts by a non-owner to attach to an
             // existing session. Unknown sessions (owner == null) fall through
             // so the first append creates the row with ownerUserId stamped.
-            // Admin callers (static token or users.role = 'admin') bypass.
-            if (ownerUserId is not null && !ctx.IsAdmin())
+            // Admin callers (users.role = 'admin') bypass; an unauthenticated
+            // caller (ownerUserId == null) must not be able to attach to an
+            // owned session (R4-M3).
+            if (!ctx.IsAdmin())
             {
                 var recordedOwner = await sessionStore.GetOwnerAsync(req.SessionId, ct).ConfigureAwait(false);
-                if (recordedOwner is not null && !string.Equals(recordedOwner, ownerUserId, StringComparison.Ordinal))
+                if (recordedOwner is not null
+                    && (ownerUserId is null
+                        || !string.Equals(recordedOwner, ownerUserId, StringComparison.Ordinal)))
                 {
                     ctx.Response.StatusCode = StatusCodes.Status404NotFound;
                     await ctx.Response.WriteAsJsonAsync(

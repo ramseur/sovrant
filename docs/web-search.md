@@ -35,15 +35,19 @@ Highest priority wins:
 1. `/websearch <backend>` in the running session
    (`SovrantConfig.WebSearchOverride`).
 2. `SOVRANT_WEB_SEARCH` environment variable.
-3. `WebSearch:Backend` (or flat `WebSearch`) key in `~/.sovrant/settings.json`,
-   `.sovrant/settings.json`, or `.sovrant/settings.local.json`.
-4. Legacy `LLM_WEB_SEARCH=true` → `native` (with a deprecation warning).
-5. Default: `auto`.
+3. `workspace_settings` DB row keyed `websearch.backend` (V018 schema). The
+   Web (Blazor) `/settings` page and the Desktop Settings panel write here
+   directly and fire `LiveSettingsRegistry.ReloadAll()` so the change takes
+   effect on the next request without a restart (Phase 93 Bucket-B).
+4. `user_preferences` DB row keyed `websearch.backend` (V020 schema) for
+   per-user overrides.
+5. Legacy `LLM_WEB_SEARCH=true` → `native` (with a deprecation warning).
+6. Default: `auto`.
 
-The Web (Blazor) and Desktop (Avalonia) Settings pages persist the chosen
-backend to the same `settings.json` and hot-swap the resolved
-`WebSearchOptions.Backend` so the change takes effect on the next request
-without a restart.
+`settings.json` is no longer consulted as of Phase 93 — all on-disk JSON
+config for web search migrated into SQLite. The `LegacyConfigMigrator` runs
+once on first boot and lifts any pre-Phase-93 `WebSearch:Backend` value into
+the DB.
 
 ## Provider matrix
 

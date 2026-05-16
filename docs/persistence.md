@@ -584,7 +584,7 @@ The following concerns were surfaced during the Phase 37 audit of the SQLite lay
 
 ## Testing
 
-The persistence layer is exercised by the full solution test suite (**1,689 tests** across 13 projects, all green as of 2026-05-09). Storage-focused suites include:
+The persistence layer is exercised by the full solution test suite (**1,689 tests** across 10 projects, all green as of 2026-05-09). Storage-focused suites include:
 
 | Test Class | Validates |
 |---|---|

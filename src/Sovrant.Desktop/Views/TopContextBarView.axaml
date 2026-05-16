@@ -59,7 +59,8 @@
                             <StackPanel IsVisible="{Binding IsProviderStep}">
                                 <TextBlock Text="SELECT PROVIDER" FontSize="9" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextMuted}"
-                                           Margin="8,4,0,4" />
+                                           Margin="8,4,0,4"
+                                           IsVisible="{Binding HasProviderProfiles}" />
                                 <ItemsControl ItemsSource="{Binding TreeGroups}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:ProviderTreeGroup">
@@ -85,6 +86,20 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
+                                <StackPanel IsVisible="{Binding !HasProviderProfiles}" Spacing="6" Margin="8,8,8,4">
+                                    <TextBlock Text="No providers configured."
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}" />
+                                    <Button Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).AddProviderCommand}"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Center"
+                                            Padding="8,6" CornerRadius="5"
+                                            Background="{DynamicResource SurfaceBackground}"
+                                            Foreground="{DynamicResource TextPrimary}"
+                                            FontSize="12" FontWeight="Medium">
+                                        <TextBlock Text="+ Add a provider" />
+                                    </Button>
+                                </StackPanel>
                             </StackPanel>
                             <StackPanel IsVisible="{Binding !IsProviderStep}">
                                 <Button Command="{Binding BackToProvidersCommand}"

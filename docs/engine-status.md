@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-05-09 (56 tools, 115 server endpoints + SignalR hub, 1,689 tests across 13 projects, JS SDK covering the server, V001–V026 migrations, Phase 93 Configuration Boundary Audit shipped)
+**Last updated:** 2026-05-15 (56 tools, 115 server endpoints + SignalR hub, 1,689 tests across 10 projects, JS SDK covering the server, V001–V026 migrations, Phase 93 Configuration Boundary Audit shipped, v0.9.2 release candidate)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -33,7 +33,7 @@
 | MCP server mode | ✅ Implemented | `sovrant mcp-server` — stdio transport (JSON-RPC 2.0). Bridges all `IToolRegistry` tools + synthetic `chat` tool + session/config resources to MCP protocol. Zero overlap with HTTP server. Bearer token auth via `SOVRANT_MCP_TOKEN` + `--token`. |
 | Dynamic MCP Tool Proxy (`MCPTool`) | ✅ Implemented | Calls any tool on any connected MCP server dynamically at execution time — no static registration needed. Optional `server` param; searches all clients when omitted. |
 | SQLite persistence layer | ✅ Implemented | `IStorageProvider` + `SqliteStorageProvider` + 26 versioned migrations V001–V026. Stores: sessions (+ titles, entry provider), memory, audit, credentials, token usage, workspaces, projects, teams (+ run profile), missions, swarm events, coordination events, hooks, workspace_settings, MCP/LSP servers, user preferences, provider profiles. See [persistence.md](persistence.md). |
-| Unit test suite | ✅ 1,689 passing | 13 projects: Runtime, Agents, Tools, Server, Api, Runtime.Documents, Commands, McpServer, Lsp, Integration + Web, Desktop, Routing |
+| Unit test suite | ✅ 1,689 passing | 10 projects: Runtime, Agents, Tools, Server, Api, Runtime.Documents, Commands, Mcp, Lsp, Integration |
 | Cost tracking (Phase 55) | ✅ Implemented | `ICostModel`, `OpenRouterCostModel`, `BudgetEnforcer`, `CostMetricsLogger` (JSONL), `/cost` CLI command, `GET /v1/cost` API, cost display in Desktop + Web, `RuntimeEvent.TurnCost`. |
 | Inter-agent coordination (Phase 57) | ✅ Implemented | `GroupMailbox`, `PMCoordinator`, `LlmPMAgent`, `CoordinationStatusTool`. SQLite V013 migration (`coordination_events`, `group_pm_assignments`). Enables team-to-team and swarm-to-swarm coordination through leader/PM agents. |
 | Remote server mode (Phase 61) | ✅ Implemented | SignalR `ChatHub` at `/hubs/chat`, `RuntimeEventDto` shared DTO, `AddSovrantClient()` DI extension. Web frontend can run in embedded mode (in-process) or remote mode (connecting to Sovrant.Server via SignalR). Controlled by `SOVRANT_RUNTIME_MODE=embedded\|remote`. |
@@ -52,6 +52,7 @@
 | Team run profiles (Phase 78 Path 2) | ✅ Implemented | V015 migration adds `run_mode`, `max_concurrent`, `file_locks_enabled`, `quality_gate_enabled`, `quality_gate_threshold`, `decomposition_mode` to `teams`. `PUT /v1/teams/{id}/profile` endpoint with PATCH-style partial updates and snake_case JSON binding. `TeamRunner` honours the profile (sequential vs parallel execution, concurrency cap, file-lock arbitration, quality gate threshold, decomposition mode). SDK exposes `updateTeamProfile()`. Editable from Web/Desktop Orchestration page. |
 | Command Center cockpit (Phase 89/90) | ✅ Implemented | `/command` page on Web (`Sovrant.Web/Components/Pages/CommandCenter.razor`) and Desktop (`CommandCenterView.axaml` + `CommandCenterViewModel`) — read-only live grid aggregating active missions, team runs, agent runs, and sessions for the current user/workspace. Backed by `CommandCenterAggregator` and `GET /v1/command-center/state`. 2-second auto-refresh; click-through to Activity / Orchestration / mission detail. Default landing page after first-run setup. |
 | Public release readiness (Phase 90) | ✅ Shipped 2026-05-02 | README repositioned around source-available BSL 1.1 framing; provider API keys migrated through credential keystore (no plaintext on disk); inline-style cleanup; sortable parameter tables on Tools page; Activity drill-down with per-turn detail; `/agents` "Run now" via `AdHocAgentRunner`; Automations stub removed in favour of MCP-platform integrations. |
+| v0.9.2 release candidate | ✅ Prepared 2026-05-15 | License Change Date moved to 2029-05-15; cross-user provider profile leakage fixed; workspace provider profiles wired into model/provider dropdown (admin-added keys visible to workspace members); Settings API key field starts blank on every load; admin registration toggles fixed on Web; assembly version bumped to 0.9.2. Tag held until UAT confirms. |
 
 ### Known issues fixed during testing
 
@@ -276,7 +277,6 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 |---|---|---|
 | `LLM_API_KEY` | Yes | API key for the primary provider. Aliases: `OPENAI_API_KEY`, `PROVIDER_API_KEY` (checked in order) |
 | `LLM_BASE_URL` | No | Base URL (default: `https://api.openai.com/v1`). Alias: `OPENAI_BASE_URL` |
-| `SOVRANT_TOKEN` | Yes (server only) | Bearer token for `Sovrant.Server`. All requests return 401 if unset. |
 | `SOVRANT_PORT` | No | Server port (default: `5200`) |
 | `PROVIDER_BASE_URL` | No | Enables the native messages API provider (`/v1/messages` format, e.g. `https://api.anthropic.com`) |
 | `PROVIDER_API_KEY` | No | API key for the native messages API provider |
@@ -305,11 +305,15 @@ File tools also confirmed with `gemini-2.5-flash` (free tier, rate-limited).
 
 ```bash
 export LLM_API_KEY="..."    # fresh key — never paste keys into chat
-export SOVRANT_TOKEN=test123
 
 # Start server
 dotnet run --project src/Sovrant.Server --no-build &
 sleep 5
+
+# Issue a per-user token (one-time, capture the returned svt_* secret)
+TOKEN=$(curl -s -X POST http://localhost:5200/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"smoke","password":"smoketest"}' | jq -r '.token')
 
 # 1. Health (unauthenticated)
 curl -s http://localhost:5200/health
@@ -317,47 +321,47 @@ curl -s http://localhost:5200/health
 
 # 2. Non-streaming chat
 curl -s -X POST http://localhost:5200/v1/chat/completions \
-  -H "Authorization: Bearer test123" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Reply with one word: pong"}],"model":"gpt-4o-mini","stream":false}'
 # expected: {"choices":[{"message":{"content":"pong",...},...}],...}
 
 # 3. Streaming chat (SSE)
 curl -s -X POST http://localhost:5200/v1/chat/completions \
-  -H "Authorization: Bearer test123" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Reply with one word: pong"}],"model":"gpt-4o-mini","stream":true}'
 # expected: data: {...,"delta":{"content":"pong"},...}  then  data: [DONE]
 
 # 4. Session continuity via server pool
 curl -s -X POST http://localhost:5200/v1/chat/completions \
-  -H "Authorization: Bearer test123" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"My name is Eric"}],"model":"gpt-4o-mini","session_id":"test-session-1"}'
 
 curl -s -X POST http://localhost:5200/v1/chat/completions \
-  -H "Authorization: Bearer test123" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"What is my name?"}],"model":"gpt-4o-mini","session_id":"test-session-1"}'
 # expected: second response references "Eric"
 
 # 5. Status endpoint
-curl -s -H "Authorization: Bearer test123" http://localhost:5200/v1/status
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:5200/v1/status
 
 # 6. Models endpoint
-curl -s -H "Authorization: Bearer test123" http://localhost:5200/v1/models
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:5200/v1/models
 
 # 7. Config update
 curl -s -X PUT http://localhost:5200/v1/config \
-  -H "Authorization: Bearer test123" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"model":"gpt-4o"}'
 
 # 8. Session list
-curl -s -H "Authorization: Bearer test123" http://localhost:5200/v1/sessions
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:5200/v1/sessions
 
 # 9. Session delete
-curl -s -X DELETE -H "Authorization: Bearer test123" http://localhost:5200/v1/sessions/test-session-1
+curl -s -X DELETE -H "Authorization: Bearer $TOKEN" http://localhost:5200/v1/sessions/test-session-1
 ```
 
 ## Tools Needing Smoke Tests

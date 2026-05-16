@@ -797,11 +797,18 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         var cutPoint = _history.Count - KeepTail;
         if (cutPoint <= 0) return;
 
-        var toSummarize = _history.Take(cutPoint).ToList();
-        var toKeep = _history.Skip(cutPoint).ToList();
-
-        var historyText = string.Join("\n\n", toSummarize
-            .Select(m => $"{m.Role.ToUpperInvariant()}: {ExtractText(m)}"));
+        // Build summary text via a single forward pass; copy the tail with
+        // GetRange so we can clear _history without losing it.
+        var historyBuilder = new StringBuilder();
+        for (var i = 0; i < cutPoint; i++)
+        {
+            if (i > 0) historyBuilder.Append("\n\n");
+            var m = _history[i];
+            historyBuilder.Append(m.Role.ToUpperInvariant()).Append(": ").Append(ExtractText(m));
+        }
+        var historyText = historyBuilder.ToString();
+        var toKeep = _history.GetRange(cutPoint, KeepTail);
+        var summarizedCount = cutPoint;
 
         var summaryRequest = new MessagesRequest(
             _config.Model,
@@ -830,10 +837,10 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             _history.Add(InputMessage.AssistantText("Understood. I have the context from the conversation summary."));
             _history.AddRange(toKeep);
 
-            LogCompacted(_logger, SessionId, toSummarize.Count, inputTokens);
+            LogCompacted(_logger, SessionId, summarizedCount, inputTokens);
 
             await AppendSessionEntryAsync("compaction",
-                $"History compacted: {toSummarize.Count} messages summarised at {inputTokens} input tokens.",
+                $"History compacted: {summarizedCount} messages summarised at {inputTokens} input tokens.",
                 ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -1216,49 +1223,36 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         return $"[{providerName} · {displayModel}] {rawError}";
     }
 
+    private static readonly string[] s_shortToolKeywords =
+    [
+        "read", "write", "run", "list", "find", "search",
+        "edit", "create", "delete", "fix", "debug",
+    ];
+
+    private static readonly string[] s_longToolKeywords =
+    [
+        "file", "directory", "folder", "code", "function", "class", "method",
+        "read", "write", "edit", "create", "delete", "remove", "rename",
+        "run", "execute", "command", "shell", "bash", "powershell",
+        "search", "find", "grep", "glob", "list",
+        "fix", "debug", "refactor", "test", "build", "compile",
+        "install", "deploy", "commit", "push", "pull",
+        "api", "endpoint", "database", "migration",
+        "implement", "add", "update", "modify", "change",
+        "research", "look up", "fetch", "download", "web", "url", "http",
+        "explain", "analyze", "review", "check", "show", "open",
+    ];
+
     private static bool LooksLikeToolRequest(string message)
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        // Very short messages (under 20 chars) are almost never tool requests.
-        if (message.Length < 20)
-        {
-            // Unless they contain obvious tool-trigger words.
-#pragma warning disable CA1308 // UseToUpperInvariant — keyword matching is lowercase by convention
-            var lower = message.ToLowerInvariant();
-            return lower.Contains("read", StringComparison.Ordinal)
-                || lower.Contains("write", StringComparison.Ordinal)
-                || lower.Contains("run", StringComparison.Ordinal)
-                || lower.Contains("list", StringComparison.Ordinal)
-                || lower.Contains("find", StringComparison.Ordinal)
-                || lower.Contains("search", StringComparison.Ordinal)
-                || lower.Contains("edit", StringComparison.Ordinal)
-                || lower.Contains("create", StringComparison.Ordinal)
-                || lower.Contains("delete", StringComparison.Ordinal)
-                || lower.Contains("fix", StringComparison.Ordinal)
-                || lower.Contains("debug", StringComparison.Ordinal);
-        }
-
-        // Longer messages — check for keywords that suggest tool use.
-        var keywords = new[]
-        {
-            "file", "directory", "folder", "code", "function", "class", "method",
-            "read", "write", "edit", "create", "delete", "remove", "rename",
-            "run", "execute", "command", "shell", "bash", "powershell",
-            "search", "find", "grep", "glob", "list",
-            "fix", "debug", "refactor", "test", "build", "compile",
-            "install", "deploy", "commit", "push", "pull",
-            "api", "endpoint", "database", "migration",
-            "implement", "add", "update", "modify", "change",
-            "research", "look up", "fetch", "download", "web", "url", "http",
-            "explain", "analyze", "review", "check", "show", "open",
-        };
-
-        var msgLower = message.ToLowerInvariant();
-#pragma warning restore CA1308
+        // OrdinalIgnoreCase avoids the ToLowerInvariant() string allocation
+        // per call — Contains with that comparer does case folding inline.
+        var keywords = message.Length < 20 ? s_shortToolKeywords : s_longToolKeywords;
         foreach (var kw in keywords)
         {
-            if (msgLower.Contains(kw, StringComparison.Ordinal))
+            if (message.Contains(kw, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 
@@ -1318,10 +1312,10 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
         // Per-session MCP gating — drop tools registered from servers the user
         // didn't select for this session. Non-MCP tools are unaffected.
-        var allowed = SessionContext.Current?.AllowedMcpServers;
-        if (allowed is not null && _mcpClients is not null)
+        // The HashSet is cached on SessionConfig so we don't rebuild it per turn.
+        var allowSet = SessionContext.Current?.AllowedMcpServersSet;
+        if (allowSet is not null && _mcpClients is not null)
         {
-            var allowSet = new HashSet<string>(allowed, StringComparer.Ordinal);
             tools = tools
                 .Where(t => !_mcpClients.ToolToServer.TryGetValue(t.Name, out var server)
                             || allowSet.Contains(server))

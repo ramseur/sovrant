@@ -39,6 +39,30 @@ window.sovrantInterop = {
         if (!element) return null;
         const r = element.getBoundingClientRect();
         return { top: r.top, left: r.left, width: r.width, height: r.height, bottom: r.bottom, right: r.right };
+    },
+
+    _dismissId: 0,
+    _dismissHandlers: {},
+    bindLightDismiss: function (triggerEl, ignoreSelector, dotNetRef, methodName) {
+        const id = ++this._dismissId;
+        const self = this;
+        const handler = function (e) {
+            const target = e.target;
+            if (triggerEl && triggerEl.contains && triggerEl.contains(target)) return;
+            if (ignoreSelector && target.closest && target.closest(ignoreSelector)) return;
+            dotNetRef.invokeMethodAsync(methodName);
+        };
+        // Defer attach so the click that opened the dropdown doesn't immediately close it.
+        setTimeout(function () { document.addEventListener('mousedown', handler); }, 0);
+        this._dismissHandlers[id] = handler;
+        return id;
+    },
+    unbindLightDismiss: function (id) {
+        const handler = this._dismissHandlers[id];
+        if (handler) {
+            document.removeEventListener('mousedown', handler);
+            delete this._dismissHandlers[id];
+        }
     }
 };
 

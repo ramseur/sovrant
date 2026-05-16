@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Sovrant.Runtime.Config;
 
 namespace Sovrant.Runtime.Tests.Config;
@@ -15,7 +14,6 @@ public sealed class BootstrapConfigLoaderTests : IDisposable
     private readonly string? _origLog;
     private readonly string? _origArtifacts;
     private readonly string? _origKeystore;
-    private readonly string? _origToken;
 
     public BootstrapConfigLoaderTests()
     {
@@ -26,13 +24,11 @@ public sealed class BootstrapConfigLoaderTests : IDisposable
         _origLog = Environment.GetEnvironmentVariable("SOVRANT_LOG_FILE");
         _origArtifacts = Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT");
         _origKeystore = Environment.GetEnvironmentVariable("SOVRANT_KEYSTORE_PATH");
-        _origToken = Environment.GetEnvironmentVariable("SOVRANT_TOKEN");
 
         Environment.SetEnvironmentVariable("SOVRANT_DB_PATH", null);
         Environment.SetEnvironmentVariable("SOVRANT_LOG_FILE", null);
         Environment.SetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT", null);
         Environment.SetEnvironmentVariable("SOVRANT_KEYSTORE_PATH", null);
-        Environment.SetEnvironmentVariable("SOVRANT_TOKEN", null);
     }
 
     public void Dispose()
@@ -41,7 +37,6 @@ public sealed class BootstrapConfigLoaderTests : IDisposable
         Environment.SetEnvironmentVariable("SOVRANT_LOG_FILE", _origLog);
         Environment.SetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT", _origArtifacts);
         Environment.SetEnvironmentVariable("SOVRANT_KEYSTORE_PATH", _origKeystore);
-        Environment.SetEnvironmentVariable("SOVRANT_TOKEN", _origToken);
         if (Directory.Exists(_tempDir))
             Directory.Delete(_tempDir, recursive: true);
     }
@@ -54,7 +49,6 @@ public sealed class BootstrapConfigLoaderTests : IDisposable
         Assert.Null(cfg.LogFile);
         Assert.Null(cfg.ArtifactsRoot);
         Assert.Null(cfg.KeystorePath);
-        Assert.Null(cfg.ServerToken);
     }
 
     [Fact]
@@ -64,7 +58,6 @@ public sealed class BootstrapConfigLoaderTests : IDisposable
         Environment.SetEnvironmentVariable("SOVRANT_LOG_FILE", "/env/log");
         Environment.SetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT", "/env/artifacts");
         Environment.SetEnvironmentVariable("SOVRANT_KEYSTORE_PATH", "/env/keystore");
-        Environment.SetEnvironmentVariable("SOVRANT_TOKEN", "env-token");
 
         var cfg = BootstrapConfigLoader.Load(cliArgs: []);
 
@@ -72,31 +65,11 @@ public sealed class BootstrapConfigLoaderTests : IDisposable
         Assert.Equal("/env/log", cfg.LogFile);
         Assert.Equal("/env/artifacts", cfg.ArtifactsRoot);
         Assert.Equal("/env/keystore", cfg.KeystorePath);
-        Assert.Equal("env-token", cfg.ServerToken);
     }
 
-    [Fact]
-    public void Load_FromConfigFlag_OverriddenByCli_ButNotEnv()
-    {
-        // Write a config file the loader will read via --config.
-        var configPath = Path.Combine(_tempDir, "custom.json");
-        File.WriteAllText(configPath, JsonSerializer.Serialize(new
-        {
-            dbPath = "/file/db",
-            logFile = "/file/log",
-            serverToken = "file-token",
-        }));
-
-        // Env should beat the file.
-        Environment.SetEnvironmentVariable("SOVRANT_TOKEN", "env-token");
-
-        // CLI db-path should beat env AND file.
-        var cfg = BootstrapConfigLoader.Load(["--config", configPath, "--db-path", "/cli/db"]);
-
-        Assert.Equal("/cli/db", cfg.DbPath);    // CLI wins
-        Assert.Equal("env-token", cfg.ServerToken); // env wins over file
-        Assert.Equal("/file/log", cfg.LogFile); // file wins (no env, no CLI)
-    }
+    // The `--config <path>` flag is not supported by BootstrapConfigLoader.
+    // Only env vars (+ .env file) and `--db-path` are precedence sources.
+    // The previous test exercised behavior that never shipped.
 
     [Fact]
     public void Load_MalformedConfigFile_DoesNotThrow()

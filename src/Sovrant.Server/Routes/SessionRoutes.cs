@@ -12,9 +12,9 @@ namespace Sovrant.Server.Routes;
 /// <summary>
 /// Registers session management endpoints.
 ///
-/// <para>Phase 38 — all endpoints scope reads and deletes to the authenticated
-/// user's owned sessions. Admin callers (legacy static token, or
-/// <c>users.role = 'admin'</c>) see the full set without a filter.</para>
+/// <para>All endpoints scope reads and deletes to the authenticated user's owned
+/// sessions. Admin callers (<c>users.role = 'admin'</c>) see the full set without
+/// a filter.</para>
 /// </summary>
 internal static class SessionRoutes
 {
@@ -68,22 +68,32 @@ internal static class SessionRoutes
         if (entries.Count == 0)
             return Results.NotFound(new { error = $"Session '{id}' not found." });
 
-        var messages = entries
-            .Where(e => e.Role is "user" or "assistant")
-            .Select(e => new SessionMessageDto
+        // Single pass over entries: build message DTOs and accumulate totals
+        // in one iteration instead of two LINQ passes plus two Sum() scans.
+        var messages = new List<SessionMessageDto>(entries.Count);
+        long fallbackInput = 0;
+        long fallbackOutput = 0;
+        foreach (var e in entries)
+        {
+            fallbackInput += e.InputTokens;
+            fallbackOutput += e.OutputTokens;
+            if (e.Role is "user" or "assistant")
             {
-                Role = e.Role,
-                Content = e.Content,
-                Timestamp = e.Timestamp,
-                InputTokens = e.InputTokens,
-                OutputTokens = e.OutputTokens,
-            })
-            .ToList();
+                messages.Add(new SessionMessageDto
+                {
+                    Role = e.Role,
+                    Content = e.Content,
+                    Timestamp = e.Timestamp,
+                    InputTokens = e.InputTokens,
+                    OutputTokens = e.OutputTokens,
+                });
+            }
+        }
 
         // Enrich with live session config if the session is active in memory.
         var sessionConfig = pool.TryGetConfig(id, ctx.GetUserId());
-        var totalInput = sessionConfig?.TotalInputTokens ?? entries.Sum(e => (long)e.InputTokens);
-        var totalOutput = sessionConfig?.TotalOutputTokens ?? entries.Sum(e => (long)e.OutputTokens);
+        var totalInput = sessionConfig?.TotalInputTokens ?? fallbackInput;
+        var totalOutput = sessionConfig?.TotalOutputTokens ?? fallbackOutput;
 
         return Results.Ok(new SessionDetailDto
         {

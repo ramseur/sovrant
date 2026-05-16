@@ -131,7 +131,7 @@
                     @foreach (var m in _configMembers)
                     {
                         <div class="workspace-row">
-                            <span>@m.UserId (@m.Role)</span>
+                            <span>@m.DisplayName (@m.Role)</span>
                             <button class="btn btn-sm btn-danger" @onclick="() => RemoveMemberAsync(m)">Remove</button>
                         </div>
                     }
@@ -192,7 +192,9 @@
     private string _wsWebSearchBackend = "Auto";
     private string _newMemberEmail = string.Empty;
     private string _newMemberRole = "Member";
-    private List<WorkspaceMember> _configMembers = [];
+    private List<MemberRow> _configMembers = [];
+
+    private sealed record MemberRow(string UserId, string DisplayName, WorkspaceRole Role);
     private string _wsNewProviderName = string.Empty;
     private string _wsNewProviderKind = "OpenRouter";
     private string _wsNewProviderApiKey = string.Empty;
@@ -256,7 +258,7 @@
         _wsIntentRouting = string.Equals(intentRaw, "true", StringComparison.OrdinalIgnoreCase);
         var wsRaw = await WsSettings.GetAsync(ws.WorkspaceId, WorkspaceSettingsKeys.GeneralWebSearchBackend);
         _wsWebSearchBackend = string.IsNullOrEmpty(wsRaw) ? "Auto" : wsRaw;
-        _configMembers = (await WorkspaceService.ListMembersAsync(ws.WorkspaceId)).ToList();
+        _configMembers = await LoadMemberRowsAsync(ws.WorkspaceId);
         var profiles = await ProfileStore.ListByWorkspaceAsync(ws.WorkspaceId);
         _configProfiles = profiles.Select(p => new WorkspaceProviderProfile(p.ProfileId, p.Name, p.ProviderKind, p.BaseUrl, p.CredentialId)).ToList();
     }
@@ -284,15 +286,31 @@
             ? WorkspaceRole.Admin : WorkspaceRole.Member;
         await WorkspaceService.AddMemberAsync(_configWorkspace.WorkspaceId, user.UserId, role);
         _newMemberEmail = string.Empty;
-        _configMembers = (await WorkspaceService.ListMembersAsync(_configWorkspace.WorkspaceId)).ToList();
-        _status = $"Member added.";
+        _configMembers = await LoadMemberRowsAsync(_configWorkspace.WorkspaceId);
+        _status = $"{user.Email ?? user.Username} added as {role}.";
     }
 
-    private async Task RemoveMemberAsync(WorkspaceMember member)
+    private async Task RemoveMemberAsync(MemberRow member)
     {
         if (_configWorkspace is null) return;
         await WorkspaceService.RemoveMemberAsync(_configWorkspace.WorkspaceId, member.UserId);
-        _configMembers = (await WorkspaceService.ListMembersAsync(_configWorkspace.WorkspaceId)).ToList();
+        _configMembers = await LoadMemberRowsAsync(_configWorkspace.WorkspaceId);
+        _status = $"{member.DisplayName} removed.";
+    }
+
+    private async Task<List<MemberRow>> LoadMemberRowsAsync(string workspaceId)
+    {
+        var members = await WorkspaceService.ListMembersAsync(workspaceId);
+        var rows = new List<MemberRow>(members.Count);
+        foreach (var m in members)
+        {
+            var user = await UserService.GetAsync(m.UserId);
+            rows.Add(new MemberRow(
+                UserId: m.UserId,
+                DisplayName: user?.Email ?? user?.Username ?? m.UserId,
+                Role: m.Role));
+        }
+        return rows;
     }
 
     private async Task AddWorkspaceProviderAsync()

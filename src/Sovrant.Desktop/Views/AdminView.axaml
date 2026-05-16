@@ -360,7 +360,7 @@
 
                         <ItemsControl ItemsSource="{Binding ConfigWorkspaceMembers}">
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="ws:WorkspaceMember">
+                                <DataTemplate DataType="vm:ConfigWorkspaceMemberRow">
                                     <Border Padding="10,7" CornerRadius="8" Margin="0,0,0,3"
                                             Background="{DynamicResource SurfaceMuted}"
                                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
@@ -371,7 +371,7 @@
                                                     Padding="8,4" CornerRadius="6" FontSize="11"
                                                     Background="#EF4444" Foreground="White" />
                                             <StackPanel Spacing="2">
-                                                <TextBlock Text="{Binding UserId}" FontWeight="SemiBold" FontSize="13"
+                                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13"
                                                            Foreground="{DynamicResource TextPrimary}" />
                                                 <TextBlock Text="{Binding Role}" FontSize="11"
                                                            Foreground="{DynamicResource TextSecondary}" />
