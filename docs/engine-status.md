@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `sovrant-openc-dotnet-port`
-**Last updated:** 2026-05-15 (56 tools, 115 server endpoints + SignalR hub, 1,689 tests across 10 projects, JS SDK covering the server, V001–V026 migrations, Phase 93 Configuration Boundary Audit shipped, v0.9.2 release candidate)
+**Last updated:** 2026-05-16 (56 tools, 115 server endpoints + SignalR hub, 1,689 tests across 10 projects, JS SDK covering the server, V001–V026 migrations, Phase 93 Configuration Boundary Audit shipped, v0.9.3 release candidate)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---
@@ -52,7 +52,7 @@
 | Team run profiles (Phase 78 Path 2) | ✅ Implemented | V015 migration adds `run_mode`, `max_concurrent`, `file_locks_enabled`, `quality_gate_enabled`, `quality_gate_threshold`, `decomposition_mode` to `teams`. `PUT /v1/teams/{id}/profile` endpoint with PATCH-style partial updates and snake_case JSON binding. `TeamRunner` honours the profile (sequential vs parallel execution, concurrency cap, file-lock arbitration, quality gate threshold, decomposition mode). SDK exposes `updateTeamProfile()`. Editable from Web/Desktop Orchestration page. |
 | Command Center cockpit (Phase 89/90) | ✅ Implemented | `/command` page on Web (`Sovrant.Web/Components/Pages/CommandCenter.razor`) and Desktop (`CommandCenterView.axaml` + `CommandCenterViewModel`) — read-only live grid aggregating active missions, team runs, agent runs, and sessions for the current user/workspace. Backed by `CommandCenterAggregator` and `GET /v1/command-center/state`. 2-second auto-refresh; click-through to Activity / Orchestration / mission detail. Default landing page after first-run setup. |
 | Public release readiness (Phase 90) | ✅ Shipped 2026-05-02 | README repositioned around source-available BSL 1.1 framing; provider API keys migrated through credential keystore (no plaintext on disk); inline-style cleanup; sortable parameter tables on Tools page; Activity drill-down with per-turn detail; `/agents` "Run now" via `AdHocAgentRunner`; Automations stub removed in favour of MCP-platform integrations. |
-| v0.9.2 release candidate | ✅ Prepared 2026-05-15 | License Change Date moved to 2029-05-15; cross-user provider profile leakage fixed; workspace provider profiles wired into model/provider dropdown (admin-added keys visible to workspace members); Settings API key field starts blank on every load; admin registration toggles fixed on Web; assembly version bumped to 0.9.2. Tag held until UAT confirms. |
+| v0.9.3 release candidate | ✅ Prepared 2026-05-16 | License Change Date moved to 2029-05-15; cross-user provider profile leakage fixed; workspace provider profiles wired into model/provider dropdown (admin-added keys visible to workspace members); Settings API key field starts blank on every load; admin registration toggles fixed on Web. Follow-up bump on 2026-05-16: removed legacy `SOVRANT_TOKEN` env var and dead static-token paths; dropped `tools/ReadDb` admin-reset binary; engine + SDK both bumped to 0.9.3. Tag held until UAT confirms. |
 
 ### Known issues fixed during testing
 
