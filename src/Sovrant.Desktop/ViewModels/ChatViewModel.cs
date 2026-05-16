@@ -144,6 +144,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                     IsComplete = true,
                     ModelName = entry.Role == "assistant" ? entry.Model : null,
                     ProviderName = entry.Role == "assistant" ? entry.Provider : null,
+                    UserDisplayName = entry.Role == "user" ? _activeContext.UserDisplayName : null,
                 });
             }
         }
@@ -173,7 +174,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     {
         HasMessages = true;
         await Dispatcher.UIThread.InvokeAsync(() =>
-            Messages.Add(new MessageViewModel { Role = "user", Text = text }));
+            Messages.Add(new MessageViewModel { Role = "user", Text = text, UserDisplayName = _activeContext.UserDisplayName }));
 
         try
         {
@@ -250,7 +251,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             if (Messages.Count == 0 || Messages[^1].Role != "user" || Messages[^1].Text != text)
-                Messages.Add(new MessageViewModel { Role = "user", Text = text });
+                Messages.Add(new MessageViewModel { Role = "user", Text = text, UserDisplayName = _activeContext.UserDisplayName });
 
             // Add assistant placeholder with thinking indicator.
             assistantMsg.StartThinking();

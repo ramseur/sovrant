@@ -35,6 +35,9 @@ public sealed class ChatMessageModel
     /// <summary>The provider that served this response.</summary>
     public string? ProviderName { get; set; }
 
+    /// <summary>Display name of the user who sent this message (local part of email). Never a raw ID.</summary>
+    public string? UserDisplayName { get; set; }
+
     /// <summary>
     /// Display label for the message sender. Shows "Provider · model" for assistant
     /// messages once the turn completes, falls back to "Sovrant" while streaming.
@@ -43,7 +46,7 @@ public sealed class ChatMessageModel
     {
         get
         {
-            if (Role == "user") return "You";
+            if (Role == "user") return string.IsNullOrEmpty(UserDisplayName) ? "You" : UserDisplayName;
             if (ProviderName is not null && ModelName is not null)
                 return $"{ProviderName} · {FormatModelName(ModelName)}";
             if (ModelName is not null)

@@ -286,12 +286,12 @@
                                         <StackPanel Orientation="Horizontal" Spacing="10">
                                             <Border Width="32" Height="32" CornerRadius="16"
                                                     Background="{DynamicResource BrandPrimary}">
-                                                <TextBlock Text="J" FontSize="13" FontWeight="SemiBold"
+                                                <TextBlock Text="{Binding UserInitial}" FontSize="13" FontWeight="SemiBold"
                                                            Foreground="White"
                                                            HorizontalAlignment="Center"
                                                            VerticalAlignment="Center" />
                                             </Border>
-                                            <TextBlock Text="You" FontSize="14" FontWeight="SemiBold"
+                                            <TextBlock Text="{Binding SenderLabel}" FontSize="14" FontWeight="SemiBold"
                                                        Foreground="{DynamicResource TextPrimary}"
                                                        VerticalAlignment="Center" />
                                         </StackPanel>

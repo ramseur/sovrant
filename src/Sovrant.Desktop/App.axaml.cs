@@ -247,9 +247,10 @@ public partial class App : Application
         }
         SovrantUserId = authenticatedUserId;
 
-        // Update sidebar user chip with the authenticated email.
-        _serviceProvider.GetRequiredService<SidebarViewModel>()
-            .SetCurrentUser(principalAccessor.Email ?? authenticatedUserId);
+        // Update sidebar user chip and chat display name with the authenticated email.
+        var emailOrId = principalAccessor.Email ?? authenticatedUserId;
+        _serviceProvider.GetRequiredService<SidebarViewModel>().SetCurrentUser(emailOrId);
+        _serviceProvider.GetRequiredService<ActiveContextViewModel>().SetCurrentUser(emailOrId);
 
         // Re-apply preferences for the authenticated user. InitializeRuntimeAsync ran
         // earlier using the OS identity (SOVRANT_USER_ID env var), which may differ from
@@ -365,8 +366,9 @@ public partial class App : Application
         var authenticatedUserId = await RunLoginWindowAsync(desktop, Services, principal).ConfigureAwait(true);
         SovrantUserId = authenticatedUserId;
 
-        Services.GetRequiredService<SidebarViewModel>()
-            .SetCurrentUser(principal.Email ?? authenticatedUserId);
+        var emailOrId2 = principal.Email ?? authenticatedUserId;
+        Services.GetRequiredService<SidebarViewModel>().SetCurrentUser(emailOrId2);
+        Services.GetRequiredService<ActiveContextViewModel>().SetCurrentUser(emailOrId2);
 
         // Flush all stale per-user state in the singleton MainViewModel so the new
         // user's role and nav state are applied before the window becomes visible.
