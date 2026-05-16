@@ -216,33 +216,9 @@ public sealed partial class LocalArtifactStore : IArtifactStore
     /// <summary>Builds the filesystem path for a scope using composite {id}__{name} directory names.</summary>
     private string BuildScopePath(ArtifactScope scope)
     {
-        var wsDir = FindOrCreateSegment(_root, scope.WorkspaceId, scope.WorkspaceName);
-        var wsPath = Path.Combine(_root, wsDir);
-
-        var projDir = FindOrCreateSegment(wsPath, scope.ProjectId, scope.ProjectName);
-        var projPath = Path.Combine(wsPath, projDir);
-
+        var wsPath = Path.Combine(_root, MakeDirSegment(scope.WorkspaceId, scope.WorkspaceName));
+        var projPath = Path.Combine(wsPath, MakeDirSegment(scope.ProjectId, scope.ProjectName));
         return scope.RunId is not null ? Path.Combine(projPath, scope.RunId) : projPath;
-    }
-
-    /// <summary>
-    /// Finds an existing directory under <paramref name="parentDir"/> whose name starts with
-    /// <paramref name="id"/> (bare or composite <c>{id}__{name}</c>). If none exists, returns
-    /// the new composite name to use when creating the directory.
-    /// </summary>
-    private static string FindOrCreateSegment(string parentDir, string id, string? name)
-    {
-        if (Directory.Exists(parentDir))
-        {
-            foreach (var dir in Directory.GetDirectories(parentDir))
-            {
-                var dirName = Path.GetFileName(dir)!;
-                if (string.Equals(dirName, id, StringComparison.Ordinal) ||
-                    dirName.StartsWith(id + "__", StringComparison.Ordinal))
-                    return dirName;
-            }
-        }
-        return MakeDirSegment(id, name);
     }
 
     /// <summary>Returns <c>{id}__{safeName}</c> if name is usable, otherwise bare <c>{id}</c>.</summary>
