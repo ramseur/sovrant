@@ -59,6 +59,8 @@ internal static class WorkspaceRoutes
             return Results.BadRequest(new { error = "Name is required." });
         if (string.IsNullOrWhiteSpace(req.Slug))
             return Results.BadRequest(new { error = "Slug is required." });
+        if (!InputValidation.IsValidSlug(req.Slug))
+            return Results.BadRequest(new { error = "Slug may only contain letters, digits, hyphens, and underscores (max 80 chars)." });
 
         var userId = HttpContextAuthExtensions.GetUserId(ctx) ?? string.Empty;
         try

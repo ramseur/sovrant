@@ -10,7 +10,8 @@ namespace Sovrant.Server;
 internal static partial class InputValidation
 {
     // Session IDs: 1-128 chars, alphanumeric + hyphens + underscores + colons + dots.
-    [GeneratedRegex(@"^[a-zA-Z0-9._:@\-]{1,128}$")]
+    // @ is excluded — it is invalid in Windows filenames and can appear in email-derived IDs.
+    [GeneratedRegex(@"^[a-zA-Z0-9._:\-]{1,128}$")]
     private static partial Regex SessionIdPattern();
 
     // Model names: 1-128 chars, alphanumeric + hyphens + underscores + dots + slashes + colons.
@@ -32,7 +33,8 @@ internal static partial class InputValidation
         model is not null && ModelNamePattern().IsMatch(model);
 
     // Resource IDs (workspace, project, user): 1-256 chars, same charset as session IDs.
-    [GeneratedRegex(@"^[a-zA-Z0-9._:@\-]{1,256}$")]
+    // @ excluded for the same reason as SessionIdPattern.
+    [GeneratedRegex(@"^[a-zA-Z0-9._:\-]{1,256}$")]
     private static partial Regex ResourceIdPattern();
 
     /// <summary>
@@ -41,4 +43,16 @@ internal static partial class InputValidation
     /// </summary>
     public static bool IsValidResourceId(string? id) =>
         id is not null && ResourceIdPattern().IsMatch(id);
+
+    /// <summary>
+    /// Returns <see langword="true"/> if <paramref name="slug"/> is safe for use as a workspace
+    /// or project slug: letters, digits, hyphens, and underscores only, max 80 chars.
+    /// </summary>
+    public static bool IsValidSlug(string? slug)
+    {
+        if (string.IsNullOrWhiteSpace(slug) || slug.Length > 80) return false;
+        foreach (var c in slug)
+            if (!(char.IsLetterOrDigit(c) || c == '-' || c == '_')) return false;
+        return true;
+    }
 }

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -253,15 +254,25 @@ public sealed partial class LocalArtifactStore : IArtifactStore
         return fullPath;
     }
 
-    /// <summary>Validates a scope segment against traversal and illegal characters.</summary>
+    // Windows-invalid filename characters (NTFS + FAT32): < > : " / \ | ? *
+    // Plus control characters 0–31. @ is technically legal on NTFS but excluded
+    // here because it appears in email addresses that may flow in as user IDs.
+    private static readonly SearchValues<char> InvalidSegmentChars =
+        SearchValues.Create(['<', '>', ':', '"', '/', '\\', '|', '?', '*', '@']);
+
+    /// <summary>Validates a scope segment against path traversal and Windows-illegal filename characters.</summary>
     private static void ValidateSegment(string? value, string paramName)
     {
         if (string.IsNullOrWhiteSpace(value))
             throw new ArgumentException($"{paramName} must not be empty.", paramName);
 
+        if (value.EndsWith(' ') || value.EndsWith('.'))
+            throw new ArgumentException(
+                $"{paramName} must not end with a space or period: '{value}'", paramName);
+
         if (value.Contains("..", StringComparison.Ordinal) ||
-            value.Contains('/', StringComparison.Ordinal) ||
-            value.Contains('\\', StringComparison.Ordinal))
+            value.IndexOfAny(InvalidSegmentChars) >= 0 ||
+            value.Any(char.IsControl))
         {
             throw new ArgumentException(
                 $"{paramName} contains invalid characters: '{value}'", paramName);
