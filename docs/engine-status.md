@@ -1,6 +1,6 @@
 # Sovrant Engine — Status Report
 
-**Branch:** `sovrant-openc-dotnet-port`
+**Branch:** `development`
 **Last updated:** 2026-05-16 (56 tools, 115 server endpoints + SignalR hub, 1,689 tests across 10 projects, JS SDK covering the server, V001–V026 migrations, Phase 93 Configuration Boundary Audit shipped, v0.9.3 release candidate)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 

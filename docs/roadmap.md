@@ -1,6 +1,6 @@
 # Sovrant — Roadmap
 
-**Branch:** `sovrant-openc-dotnet-port`
+**Branch:** `development`
 **Last updated:** 2026-05-09 (Phase 40A UI ✅ — workspace member management across Web/Desktop/CLI; Phase 85 Identity & Login Parity ✅; Phase 93 Configuration Boundary Audit ✅ — sovrant.config removed, .env consolidation, routing.json→env vars, swarm.json→DB; Phase 91 Knowledge Authoring deferred; TLS added to Server + Web; model persistence bug fixed)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
