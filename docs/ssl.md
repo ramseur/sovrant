@@ -40,7 +40,7 @@ dotnet run --project src/Sovrant.Server
 
 # Sovrant.Web (embedded mode)
 SOVRANT_TLS_CERT=./certs/dev.pfx \
-SOVRANT_TLS_CERT_PASSWORD=devpassword \
+SOVRANT_TLS_CERT_PASSWORD="<your-pfx-passphrase>" \
 dotnet run --project src/Sovrant.Web
 ```
 
@@ -48,7 +48,7 @@ On Windows (PowerShell):
 
 ```powershell
 $env:SOVRANT_TLS_CERT = ".\certs\dev.pfx"
-$env:SOVRANT_TLS_CERT_PASSWORD = "devpassword"
+$env:SOVRANT_TLS_CERT_PASSWORD = "<your-pfx-passphrase>"
 dotnet run --project src/Sovrant.Server
 ```
 
