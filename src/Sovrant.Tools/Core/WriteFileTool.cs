@@ -14,6 +14,13 @@ public sealed class WriteFileTool : ITool
             "Overwrites the file if it already exists.",
     };
 
+    // The Sovrant artifact store root — writes here must go through the Artifact tool.
+    private static readonly string s_artifactsRoot = Path.GetFullPath(
+        Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT")
+        ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".sovrant", "artifacts"));
+
     public ToolDefinition Definition => s_definition;
 
     public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
@@ -25,6 +32,12 @@ public sealed class WriteFileTool : ITool
         if (!Path.IsPathRooted(filePath))
             return $"Error: file_path must be an absolute path. Got: '{filePath}'. " +
                    "Use the Artifact tool (action='write') to save documents, reports, and generated content.";
+
+        // Prevent writes into the artifact store — those must go through the Artifact tool.
+        var fullPath = Path.GetFullPath(filePath);
+        if (fullPath.StartsWith(s_artifactsRoot, StringComparison.OrdinalIgnoreCase))
+            return $"Error: cannot write directly to the artifact store at '{s_artifactsRoot}'. " +
+                   "Use the Artifact tool (action='write') instead.";
 
         if (!input.TryGetProperty("content", out var contentProp))
             return "Error: content is required.";
