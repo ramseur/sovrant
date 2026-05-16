@@ -462,7 +462,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 break;
 
             case RuntimeEvent.RuntimeError { Message: var errMsg }:
-                msg.SetError(errMsg);
+                if (!msg.IsComplete) msg.SetError(errMsg);
                 break;
 
             case RuntimeEvent.PermissionDenied { ToolName: var tool, Reason: var reason }:
