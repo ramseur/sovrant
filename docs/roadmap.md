@@ -10180,6 +10180,59 @@ Enable users to generate their own MCP servers from within Sovrant.
 
 ---
 
+## Phase 103 — Optional Project Layer in Artifact Storage
+
+**Status:** Planned.
+
+### Problem
+
+Every artifact run is currently stored under a three-level path:
+
+```
+{workspace}/{project}/{run}/files
+```
+
+The `project` level is mandatory — if no project is selected, Sovrant silently uses the sentinel `default-project`. Users who don't organise their work into projects still see a `default-project` folder on disk and in the Artifacts UI, which is confusing and adds an unwanted layer of indirection.
+
+### Goal
+
+Make the project layer optional. Users with no active project should have artifacts stored directly under the workspace:
+
+```
+{workspace}/{run}/files          ← no project selected
+{workspace}/{project}/{run}/files ← project selected
+```
+
+The `default-project` sentinel is retired. The listing, download, ZIP, and delete routes all become project-layer-aware: they accept either a 3-segment or 4-segment path.
+
+### What changes
+
+| Layer | Change |
+|---|---|
+| `ArtifactScope` | `ProjectId` becomes nullable; null means no project (workspace-level run) |
+| `LocalArtifactStore.BuildScopePath` | Omit the project segment when `ProjectId` is null |
+| `LocalArtifactStore.ValidateSegment` | Only called for project segment when non-null |
+| `Artifacts.razor` listing parser | Handle 3-segment paths (`{ws}/{run}/{file}`) as well as 4-segment (`{ws}/{proj}/{run}/{file}`) |
+| `ArtifactRoutes` | Download and ZIP endpoints support both path depths; `project_id` query param becomes optional |
+| `ConversationRuntime` | Pass null `ProjectId` when no project is active instead of falling back to `DefaultProjectId` |
+| All tool call sites | Same — null project when session has no active project |
+| Desktop / Web UI | Artifacts page groups by workspace first, then project if present |
+
+### Migration
+
+Existing `default-project` directories are treated as workspace-level runs — the listing parser recognises `default-project` as the legacy sentinel and promotes those entries to workspace scope in the UI. No files are moved.
+
+### Acceptance Criteria
+
+- [ ] A session with no active project stores artifacts at `{workspace}/{run}/` with no project subdirectory
+- [ ] A session with an active project stores artifacts at `{workspace}/{project}/{run}/` as today
+- [ ] The Artifacts page groups and displays both layouts correctly in the same list
+- [ ] Existing `default-project` directories are shown as workspace-level artifacts (no "default-project" label visible to users)
+- [ ] Download, ZIP, and delete endpoints handle both path depths
+- [ ] No existing artifacts are moved or broken by the change
+
+---
+
 ## Bug — Selected Model Not Persisted Across Desktop/Web Reload
 
 **Status:** Confirmed (2026-05-08), fix queued as pre-beta item 2
