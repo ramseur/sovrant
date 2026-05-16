@@ -137,24 +137,20 @@ dotnet run --project src/Sovrant.Cli -- --ci --model gpt-4o-mini prompt "Fix the
 
 ### Server
 
-Copy `.env.example` to `.env` in your working directory and fill in the required values:
-
-```bash
-cp .env.example .env
-# edit .env — set LLM_API_KEY and SOVRANT_TOKEN at minimum
-```
-
-Or export the variables directly (CI / container environments):
-
-```bash
-export LLM_API_KEY="sk-..."
-export SOVRANT_TOKEN="your-secret-token"
-```
-
-**Then run:**
 ```bash
 dotnet run --project src/Sovrant.Server
 ```
+
+The server starts on port `5200`. On first run, complete the setup wizard to create an admin account and configure your LLM provider. All credentials (API keys, provider tokens) are stored in the AES-256-GCM encrypted keystore at `~/.sovrant/credentials/` — never in `.env` files or environment variables.
+
+For headless / CI deployments, set `SOVRANT_TOKEN` to bootstrap a static admin bearer token:
+
+```bash
+export SOVRANT_TOKEN="your-secret-token"
+dotnet run --project src/Sovrant.Server
+```
+
+> All other environment variables are optional and documented in [Configuration](#configuration). See `.env.example` for the full reference.
 
 ```bash
 # Non-streaming
