@@ -9924,6 +9924,57 @@ Read-only. `workspace create`, `workspace add-member`, etc. are out of scope for
 
 ---
 
+## Phase 99 — Auth Hardening: Recovery, MFA, OAuth & Audit
+
+**Status:** Planned. Post-beta evolution of the Phase 85 foundation.
+
+Phase 85 shipped the baseline: per-user `svt_*` tokens, Argon2id passwords, admin-generated one-time reset tokens, sliding 30-day TTL. This phase closes the gaps that became obvious once we started dogfooding it and reviewing the code:
+
+### Gaps to close
+
+| # | Gap | Why it matters |
+|---|---|---|
+| 1 | **No recovery path when the sole admin loses their password** | Today there is no in-product way back in — only raw `sqlite3` surgery on `users.password_hash` or restoring from `db backup`. The previous `tools/ReadDb` shortcut (hardcoded `Admin123!`) was deleted as unsafe; we need a deliberate replacement. |
+| 2 | **Password reset still requires an admin in the loop** | Phase 85 left this as "admin generates a token and shares it out-of-band" — fine for tiny teams, breaks down once there is more than one user who forgets passwords. |
+| 3 | **No second factor** | Phase 85 explicitly deferred TOTP. With registration open by default on first install, a brute-force or credential-stuffing attack against a known admin email/username has no second hurdle. |
+| 4 | **No OAuth / SSO providers** | Phase 85 sketched Google/Microsoft/GitHub as pluggable but did not implement any. Common ask from teams that already have an identity provider. |
+| 5 | **Tokens are not audience-scoped** | A `svt_*` issued for the CLI is accepted by the Web cookie path and vice versa. Phase 85's acceptance criteria listed audience scoping but it did not ship. |
+| 6 | **No lockout / brute-force protection beyond generic rate-limit** | The existing per-session rate limiter throttles HTTP but does not lock accounts. Phase 85 listed this as acceptance criteria too — needs verification or implementation. |
+| 7 | **No dedicated auth audit log** | Login attempts (success + failure), password changes, token issuance / revocation, reset-token use, lockout events are not first-class rows. The general audit log captures some of this incidentally; auth events deserve their own indexed view. |
+
+### Scope (in priority order)
+
+1. **Lockout & auth audit** — `auth_events` table (or extension of `audit_governance`) with `event_type`, `user_id`, `ip`, `user_agent`, `outcome`, `ts`. Lock the account after N consecutive failed logins within a window; auto-unlock after a cooldown or admin override. Surface the audit view on the existing admin page.
+2. **Self-service password reset via OS-local recovery code** — at registration, generate a one-time **recovery code** that the user must capture (printed once, never stored plaintext). `POST /v1/auth/recover` accepts `{username, recovery_code, new_password}`. Replaces the admin-in-the-loop flow for users who still have their recovery code; admin reset stays as the fallback.
+3. **Admin lockout recovery** — documented (not in-product) procedure: shutdown the server, run `sovrant db admin-unlock` (a *gated* CLI command that requires a sentinel file `~/.sovrant/data/.allow-admin-recovery` chmod 0600 + same UID as the DB file — proves filesystem ownership), which clears lockout flags and prints a one-time recovery code for the oldest active admin. No password reset, no shortcut.
+4. **TOTP 2FA** — opt-in per user, enrollment from Settings → Account on Web/Desktop. RFC 6238, 30-second window, 6 digits. Backup codes generated at enrollment (single-use, hashed at rest). Login flow extended: `POST /v1/auth/login` returns `{ requires_totp: true, challenge_id }` when the user has TOTP enabled.
+5. **Audience-scoped tokens** — `api_tokens.audience` column (`cli` / `web` / `desktop` / `sdk`). `BearerTokenMiddleware` rejects a token whose audience doesn't match the caller — surface determined by request path / `User-Agent` / explicit header. Existing tokens migrated to `audience='any'` and continue to work; new tokens default to the issuing surface.
+6. **OAuth providers — Google + GitHub first** — `IExternalIdentityProvider` abstraction. Users link a Google / GitHub identity to their Sovrant user on first OAuth login; subsequent logins skip password entry. No new account is created from OAuth alone — admin must approve the user first (same as password registration today).
+
+### Explicitly deferred
+
+- **SMTP-based password reset email** — runs into deliverability + SMTP-config complexity. The recovery-code flow above gets us self-service without an SMTP dependency. Email reset can layer on top later for installs that want it.
+- **WebAuthn / passkeys** — desirable, but TOTP-first per Phase 85.
+- **SAML / enterprise SSO** — same deferral as Phase 85; revisit when a customer asks.
+- **OIDC discovery / generic OAuth providers beyond the named two** — pick Google + GitHub for the first pass; generalize once the abstraction is battle-tested.
+
+### Acceptance Criteria
+
+- [ ] Brute-forcing a known admin username from a single IP is rate-limited AND results in account lockout after N failures; lockout state and the unlock procedure are visible in the admin audit view
+- [ ] A user who captures their recovery code at registration can reset their own password without admin involvement
+- [ ] The sole-admin lockout scenario has a documented recovery procedure that requires filesystem-level proof and produces an auditable event
+- [ ] A user can enable TOTP from Settings and subsequent logins require the second factor on all four surfaces (CLI, Web, Desktop, SDK)
+- [ ] A CLI-audience token is rejected when presented to the Web cookie middleware (and vice versa) — integration tests cover the four-by-four matrix
+- [ ] Linking a Google or GitHub account to an existing Sovrant user lets them sign in via OAuth on Web and Desktop; CLI continues using password + token
+
+### Why now
+
+- The Phase 85 baseline is shipped and dogfooded; the rough edges are now concrete (recovery path, audience scoping, no MFA) rather than hypothetical.
+- The pending Beta and BSL → Apache transition both raise the cost of staying at the current bar — outside contributors will probe this surface.
+- Trust Boundary (Phase 58) and the upcoming Command Center cockpit assume a strong principal model; weak login undermines the layers built on top.
+
+---
+
 ## Bug — Selected Model Not Persisted Across Desktop/Web Reload
 
 **Status:** Confirmed (2026-05-08), fix queued as pre-beta item 2
