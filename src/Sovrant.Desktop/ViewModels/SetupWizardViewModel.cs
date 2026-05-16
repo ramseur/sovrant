@@ -23,19 +23,6 @@ public partial class SetupWizardViewModel : ViewModelBase
     private static readonly Dictionary<string, string> ProviderBaseUrls =
         SettingsViewModel.ProviderBaseUrls;
 
-    // Default model per provider — used as initial model when none is configured yet.
-    private static readonly Dictionary<string, string> DefaultModels = new(StringComparer.Ordinal)
-    {
-        ["OpenAI"] = "gpt-4o",
-        ["OpenRouter"] = "google/gemma-4-27b-it:free",
-        ["DeepSeek"] = "deepseek-chat",
-        ["Groq"] = "llama-3.3-70b-versatile",
-        ["Mistral"] = "mistral-large-latest",
-        ["Together AI"] = "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        ["Google"] = "gemini-2.5-flash",
-        ["Azure OpenAI"] = "gpt-4o",
-    };
-
     // ── Wizard step state ────────────────────────────────────────────────────────
     [ObservableProperty] private bool _isModeStep = true;
     [ObservableProperty] private bool _isProviderStep;
@@ -170,7 +157,6 @@ public partial class SetupWizardViewModel : ViewModelBase
         {
             var trimmedKey = new string(ApiKey.Where(c => c < 128).ToArray()).Trim();
             var trimmedBase = (BaseUrl ?? string.Empty).Trim();
-            var defaultModel = DefaultModels.GetValueOrDefault(SelectedProvider, "gpt-4o");
 
             var profileId = MakeProfileId(SelectedProvider, SelectedProvider);
             var credentialId = $"provider.{profileId}.api_key";
@@ -188,7 +174,7 @@ public partial class SetupWizardViewModel : ViewModelBase
                 Name: SelectedProvider,
                 ProviderKind: SelectedProvider,
                 BaseUrl: trimmedBase,
-                DefaultModel: defaultModel,
+                DefaultModel: null,
                 MaxTokens: 32000,
                 CredentialId: credentialId,
                 CreatedAt: now,
@@ -201,17 +187,18 @@ public partial class SetupWizardViewModel : ViewModelBase
                 await _profileStore.UpdateAsync(runtimeProfile with { CreatedAt = existing.CreatedAt });
 
             // Pin the new profile as active and save scalar prefs so they survive the next boot.
+            // Intentionally do NOT pre-select a model — the sidebar shows "Select a model"
+            // until the user picks one explicitly.
             await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.ActiveProviderProfileId, profileId);
             await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.Provider, SelectedProvider);
-            await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.Model, defaultModel);
             if (!string.IsNullOrWhiteSpace(trimmedBase))
                 await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.BaseUrl, trimmedBase);
             await _prefs.SetAsync(App.SovrantUserId, UserPreferenceKeys.MaxTokens,
                 "32000");
 
-            // Hot-swap the running config so the chat surface works without a restart.
+            // Hot-swap the running config so credentials apply on the next request.
+            // Model is left unset on purpose; user must pick from the chat surface.
             _config.ApiKey = trimmedKey;
-            _config.Model = defaultModel;
             _config.MaxTokens = 32000;
             if (!string.IsNullOrWhiteSpace(trimmedBase) && Uri.TryCreate(trimmedBase, UriKind.Absolute, out var parsed))
                 _config.BaseUrl = parsed;

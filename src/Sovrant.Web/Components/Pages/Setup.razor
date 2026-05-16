@@ -78,18 +78,6 @@
         ["Custom"] = "",
     };
 
-    private static readonly Dictionary<string, string> DefaultModels = new(StringComparer.Ordinal)
-    {
-        ["OpenAI"] = "gpt-4o",
-        ["OpenRouter"] = "google/gemma-4-27b-it:free",
-        ["DeepSeek"] = "deepseek-chat",
-        ["Groq"] = "llama-3.3-70b-versatile",
-        ["Mistral"] = "mistral-large-latest",
-        ["Together AI"] = "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        ["Google"] = "gemini-2.5-flash",
-        ["Azure OpenAI"] = "gpt-4o",
-    };
-
     protected override void OnInitialized()
     {
         if (!string.IsNullOrWhiteSpace(Config.ApiKey))
@@ -114,7 +102,6 @@
         {
             var trimmedKey = _apiKey.Trim();
             var trimmedBase = (_baseUrl ?? string.Empty).Trim();
-            var defaultModel = DefaultModels.GetValueOrDefault(_provider, "gpt-4o");
 
             var profileId = MakeProfileId(_provider);
             var credentialId = $"provider.{profileId}.api_key";
@@ -130,7 +117,7 @@
                 Name: _provider,
                 ProviderKind: _provider,
                 BaseUrl: trimmedBase,
-                DefaultModel: defaultModel,
+                DefaultModel: null,
                 MaxTokens: 32000,
                 CredentialId: credentialId,
                 CreatedAt: now,
@@ -142,15 +129,16 @@
             else
                 await Profiles.UpdateAsync(profile with { CreatedAt = existing.CreatedAt });
 
+            // Intentionally do NOT pre-select a model — the chat surface shows
+            // "Select a model" until the user picks one explicitly.
             await Prefs.SetAsync(userId, UserPreferenceKeys.ActiveProviderProfileId, profileId);
             await Prefs.SetAsync(userId, UserPreferenceKeys.Provider, _provider);
-            await Prefs.SetAsync(userId, UserPreferenceKeys.Model, defaultModel);
             if (!string.IsNullOrWhiteSpace(trimmedBase))
                 await Prefs.SetAsync(userId, UserPreferenceKeys.BaseUrl, trimmedBase);
             await Prefs.SetAsync(userId, UserPreferenceKeys.MaxTokens, "32000");
 
-            // Hot-swap runtime config so the chat surface works without a restart.
-            Config.Model = defaultModel;
+            // Hot-swap runtime config so credentials apply on the next request.
+            // Model is left unset on purpose; user must pick from the chat surface.
             Config.ApiKey = trimmedKey;
             Config.MaxTokens = 32000;
             AuthProvider.ApiKey = trimmedKey;

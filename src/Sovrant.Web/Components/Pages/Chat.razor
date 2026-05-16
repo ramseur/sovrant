@@ -226,7 +226,7 @@
         try
         {
             await Sovrant.Web.Program.RuntimeReady.Task;
-            var entries = await SessionStore.LoadAsync(sessionId);
+            var entries = await SessionStore.LoadAsync(sessionId, ownerUserId: Sovrant.Web.Program.SovrantUserId);
             foreach (var entry in entries)
             {
                 if (entry.Role is "user" or "assistant")
@@ -506,7 +506,7 @@
             if (isFirstMessage)
             {
                 var previewTitle = text.Length > 60 ? text[..60] + "..." : text;
-                await SessionStore.SetTitleAsync(_sessionId, previewTitle);
+                await SessionStore.SetTitleAsync(_sessionId, previewTitle, ownerUserId: Sovrant.Web.Program.SovrantUserId);
                 ActiveContext.NotifyDataChanged();
             }
 
@@ -520,7 +520,7 @@
                 pooled.Config.AllowedMcpServers = allSelected
                     ? null
                     : _selectedConnections.ToList();
-                await SessionStore.SetMcpConnectionsAsync(_sessionId, pooled.Config.AllowedMcpServers);
+                await SessionStore.SetMcpConnectionsAsync(_sessionId, pooled.Config.AllowedMcpServers, ownerUserId: Sovrant.Web.Program.SovrantUserId);
             }
 
             using var _scope = SessionContext.Push(pooled.Config);

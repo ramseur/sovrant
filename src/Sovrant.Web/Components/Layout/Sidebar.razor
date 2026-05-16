@@ -72,11 +72,11 @@
     {
         try
         {
-            var ids = await SessionStore.ListAsync();
+            var ids = await SessionStore.ListAsync(ownerUserId: Sovrant.Web.Program.SovrantUserId);
             var items = new List<SessionItem>();
             foreach (var id in ids.Take(20))
             {
-                var entries = await SessionStore.LoadAsync(id);
+                var entries = await SessionStore.LoadAsync(id, ownerUserId: Sovrant.Web.Program.SovrantUserId);
                 var firstUser = entries.FirstOrDefault(e => e.Role == "user");
                 var label = firstUser?.Content ?? id;
                 if (label.Length > 40) label = string.Concat(label.AsSpan(0, 37), "...");
@@ -106,7 +106,7 @@
 
     private async Task DeleteSession(string sessionId)
     {
-        await SessionStore.DeleteAsync(sessionId);
+        await SessionStore.DeleteAsync(sessionId, ownerUserId: Sovrant.Web.Program.SovrantUserId);
         _recentSessions.RemoveAll(s => s.Id == sessionId);
     }
 }
