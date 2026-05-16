@@ -10097,6 +10097,89 @@ Make free-tier models a first-class citizen rather than a power-user workaround.
 
 ---
 
+## Phase 102 — MCP Ecosystem Integration
+
+**Status:** Planned.
+
+### Goal
+
+Make Sovrant a first-class citizen in the MCP ecosystem — both as a consumer of the thousands of MCP servers that already exist, and as a host that can surface the new **MCP Apps** (SEP-1865) interactive UI spec. Today Sovrant supports stdio and HTTP/SSE MCP connections configured manually. Phase 102 replaces that friction with dynamic discovery, one-click install from public registries, and support for the richer MCP Apps protocol.
+
+### Background
+
+"MCP apps" covers two related but distinct things:
+
+1. **MCP Apps / SEP-1865** — A 2026 extension to the core Model Context Protocol that allows MCP servers to deliver rich, interactive UI (React components, forms, dashboards) into the host application alongside tool results. Claude Desktop, Cursor, and others are adding support. This is the UI layer on top of MCP.
+
+2. **The MCP server creation ecosystem** — A fast-growing set of platforms that generate, host, or aggregate MCP servers:
+   - **Official MCP Registry** (`registry.modelcontextprotocol.io`) — machine-readable, API-accessible, vendor-neutral; maintained by Anthropic and GitHub
+   - **Smithery** (`smithery.ai`) — 5,000–7,000+ community servers; app-store UX with local and remote hosting
+   - **Composio** — single Tool Router endpoint that exposes 500+ app integrations (GitHub, Slack, Notion, Linear, etc.) as MCP tools; 20,000+ individual tools
+   - **Mintlify** — auto-generates MCP servers from API documentation via OpenAPI specs; zero-config
+   - **Glama.ai**, **PulseMCP** — large curated directories
+
+Sovrant already ships an MCP client (`McpClientRegistry`, `McpToolRegistrar`, V024 per-session gating). Phase 102 extends that infrastructure rather than replacing it.
+
+### Sub-area 1 — Registry Discovery & One-Click Install
+
+Allow users to browse, search, and install MCP servers from public registries without editing config files.
+
+| Feature | Detail |
+|---|---|
+| **Registry browser** | Settings → MCP → Browse. Queries the official MCP Registry API and Smithery API. Shows name, description, tool count, transport type, and install status. Searchable. |
+| **One-click install** | "Add to Sovrant" button fetches server manifest, stores connection config in the DB (`mcp_servers` table or equivalent), and makes the server available to sessions immediately. |
+| **`.well-known/mcp.json` discovery** | For any URL the user pastes, attempt discovery via the well-known endpoint before falling back to manual config. |
+| **Transport auto-detect** | Detect stdio vs HTTP/SSE vs WebSocket from the manifest and configure the correct transport automatically. |
+| **Composio preset** | Ship a built-in Composio provider preset: user supplies their Composio API key, Sovrant points at the Tool Router endpoint, and all 20,000+ Composio tools become available to any session. |
+| **Mintlify preset** | For any Mintlify-hosted docs site, derive the MCP server URL automatically from the docs URL and connect without manual config. |
+
+### Sub-area 2 — MCP Apps (SEP-1865) Host Support
+
+Surface interactive MCP App UIs inside Sovrant's Web and Desktop chat interfaces.
+
+| Feature | Detail |
+|---|---|
+| **MCP App renderer (Web)** | When a tool result includes an MCP App payload (React component or structured UI descriptor per SEP-1865), render it inline in the chat response. Blazor web view component wraps the MCP App sandbox. |
+| **MCP App renderer (Desktop)** | Avalonia `WebView` (or equivalent embedded browser) renders the MCP App payload in a chat message panel. Same sandbox isolation as Web. |
+| **Security sandbox** | MCP App UIs run in an isolated context — no access to Sovrant session tokens, DB, or file system. User interaction events are sent back to the MCP server, not directly to the LLM. |
+| **Capability negotiation** | During MCP handshake, advertise `sovrant/mcp-apps-v1` capability so compliant servers know they can send UI payloads. Servers that don't support MCP Apps continue to work unchanged. |
+
+### Sub-area 3 — MCP Server Generation (Sovrant-as-Creator)
+
+Enable users to generate their own MCP servers from within Sovrant.
+
+| Feature | Detail |
+|---|---|
+| **OpenAPI → MCP server** | Given an OpenAPI spec URL or file, generate a working MCP server (TypeScript via FastMCP or Python via `mcp` SDK) that wraps the API. Output: downloadable server bundle or GitHub Gist. |
+| **Sovrant skill: /mcp-server** | A built-in skill that walks the user through generating an MCP server for a URL or OpenAPI spec. Outputs a `server.ts` / `server.py` ready to deploy. |
+| **Publish to Smithery** | Optional: after generating a server, offer to publish it to Smithery via their submission API. |
+
+### Integration Points with Existing Sovrant Systems
+
+- **`McpClientRegistry`** — extend to support registry-sourced connections alongside the existing manual config
+- **`McpToolRegistrar`** — no changes needed; tools discovered from registry servers register the same way as manual ones
+- **V024 per-session MCP gating** — registry-installed servers participate in the same per-session enable/disable flow
+- **Tool-call pruning (Phase 101)** — Composio's 20,000 tools make pruning mandatory; Phase 101's tool-schema pruning must be in place before Composio is enabled by default
+- **Cost dashboard (Phase 101)** — track token cost of MCP tool call results separately from LLM completions
+
+### Acceptance Criteria
+
+- [ ] User can search the official MCP Registry from Settings → MCP and install a server in under 3 clicks with no manual config editing
+- [ ] Composio preset connects via a single API key and makes Composio tools available in sessions
+- [ ] A Mintlify-hosted docs site can be connected by pasting its URL — no manual server URL required
+- [ ] MCP App (SEP-1865) UI payloads render inline in Web and Desktop chat; interactions are sandboxed
+- [ ] `/mcp-server` skill generates a runnable MCP server from an OpenAPI spec URL
+- [ ] All existing manually-configured MCP connections continue to work unchanged
+
+### Deferred
+
+- **Local stdio server management UI** — install and manage locally-running stdio servers from the UI (requires process management, OS-level concerns). Phase 102 v1 focuses on remote HTTP servers.
+- **MCP server marketplace within Sovrant** — hosting and monetising community-built servers inside Sovrant. Requires workspace membership model from `project_workspace_provider_roadmap`.
+- **MCP App authoring** — let users build MCP App UIs inside Sovrant. Rendering first, authoring later.
+- **Smithery publish flow** — deferred until the MCP server generation feature is validated.
+
+---
+
 ## Bug — Selected Model Not Persisted Across Desktop/Web Reload
 
 **Status:** Confirmed (2026-05-08), fix queued as pre-beta item 2
