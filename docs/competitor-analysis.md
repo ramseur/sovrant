@@ -1,6 +1,6 @@
 # Sovrant — Competitor Analysis
 
-**Last updated:** 2026-05-15 (56 tools, 25 agent templates, Command Center cockpit, desktop app, web app, MCP server, mission engine, SDK covering the 115-endpoint server, BSL 1.1 published, v0.9.2 release candidate)
+**Last updated:** 2026-05-16 (56 tools, 25 agent templates, Command Center cockpit, desktop app, web app, MCP server, mission engine, SDK covering the 115-endpoint server, BSL 1.1 published, v0.9.3 release candidate)
 **Products analysed:** Claude Code · OpenClaude · opencode (SST) · Sovrant
 
 ---
@@ -192,7 +192,7 @@ Both exploit Claude Code's trust model around project files and hooks. Sovrant's
 
 | Gap | Competitor ahead | Status |
 |---|---|---|
-| Community scale | opencode (95K stars) | Public launch tagged `v0.9.0` (2026-05-02); `v0.9.2` release candidate prepared 2026-05-15 with workspace provider security, login parity, and license-date fixes |
+| Community scale | opencode (95K stars) | Public launch tagged `v0.9.0` (2026-05-02); `v0.9.3` release candidate prepared 2026-05-16 with workspace provider security, login parity, license-date fixes, and the SOVRANT_TOKEN/static-auth removal |
 | IDE extension (native) | Claude Code (VS Code + JetBrains) | MCP server mode covers MCP-aware IDEs; native extension is future |
 | Voice mode | Claude Code | Future |
 

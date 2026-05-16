@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AnalysisMode>All</AnalysisMode>
-    <Version>0.9.2</Version>
+    <Version>0.9.3</Version>
     <!-- Prevents MSB3492 "could not read cache file" errors when multiple projects
          share output paths during parallel solution builds on Windows. -->
     <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
