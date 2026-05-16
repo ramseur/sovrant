@@ -49,14 +49,14 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 
 ### Prerequisites
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- [.NET 10 SDK or Runtime](https://dotnet.microsoft.com/download)
 - An API key from any supported LLM provider
 
 ### Clone & Build
 
 ```bash
-git clone https://github.com/ramseur/sovrant-engine.git
-cd sovrant-engine
+git clone https://github.com/ramseur/sovrant.git
+cd sovrant
 dotnet restore
 dotnet build
 ```
