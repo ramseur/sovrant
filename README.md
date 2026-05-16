@@ -14,6 +14,10 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 **License:** Business Source License 1.1 — source-available, converts to Apache 2.0 on 2029-05-15. See [LICENSE](LICENSE).
 **Status:** 56 tools. 25 agent templates. 32 built-in skills. 115 server endpoints + SignalR hub. Command Center cockpit (Web + Desktop). Multi-user with login, registration, per-user API tokens, workspaces, projects, and ownership scoping. Team orchestration with per-team run profiles. Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 1,689 tests passing across 10 projects.
 
+| Web | Desktop |
+|---|---|
+| ![Sovrant Web Chat](docs/images/web-chat.png) | ![Sovrant Desktop Command Center](docs/images/desktop-CommandCenter.png) |
+
 ---
 
 ## Table of Contents
