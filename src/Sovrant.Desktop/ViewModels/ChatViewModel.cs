@@ -298,9 +298,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
         finally
         {
-            IsSending = false;
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                IsSending = false;
                 assistantMsg.CompleteStreaming();
                 TurnCompleted?.Invoke();
             });
@@ -458,6 +458,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 msg.ModelName = t.Model;
                 msg.ProviderName = t.ProviderName;
                 msg.CompleteStreaming();
+                IsSending = false; // hide stop button as soon as LLM is done; trailing events may still drain
                 break;
 
             case RuntimeEvent.TurnCost { EstimatedUsd: var usd }:
