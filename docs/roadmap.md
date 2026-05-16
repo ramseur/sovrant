@@ -9975,6 +9975,67 @@ Phase 85 shipped the baseline: per-user `svt_*` tokens, Argon2id passwords, admi
 
 ---
 
+## Phase 100 — Knowledge Pages: User-Authored Markdown in System Context
+
+**Status:** Planned. A CRUD shell exists in the working tree from an earlier exploratory session (V028 migration, `IKnowledgePageStore` + `SqliteKnowledgePageStore`, basic Web page) — the *useful* half (prompt injection, Desktop parity, server API, tests) is not done.
+
+### Goal
+
+A per-user "personal wiki" of named markdown pages that the agent can reference during a turn. Pages sit alongside Artifacts, Skills, Tools, Agents, and Memory in the Knowledge section. The user explicitly authors and curates them; the agent reads selected pages into the system prompt so it has stable, durable context (coding standards, project conventions, domain knowledge, reference material) without relying on transient memory or filesystem artifacts.
+
+### Why it earns a phase
+
+Today knowledge enters the agent only through (a) conversation memory (transient, derived) or (b) artifacts (file-shaped, run-scoped). Neither is the right shape for "this is a markdown page I want the agent to know about across every session". Without a deliberate slot for hand-curated knowledge, users either lean on memory hacks (forces the agent to learn things it should just *be told*) or stuff context into every prompt manually.
+
+### What already exists in the tree
+
+| Layer | File | State |
+|---|---|---|
+| DB migration | `Storage/Migrations/V028__knowledge_pages.sql` | Table: `id`, `user_id`, `title`, `content`, `tags` (JSON), timestamps |
+| Runtime | `Storage/IKnowledgePageStore.cs`, `SqliteKnowledgePageStore.cs` | Full owner-scoped CRUD |
+| DI | `Runtime/ServiceCollectionExtensions.cs` | `IKnowledgePageStore` registered |
+| Web UI | `Web/Components/Pages/KnowledgePages.razor` (195 lines) + nav surface edits | Single-surface CRUD UI |
+
+These uncommitted edits are a useful starting point; the phase keeps or discards them based on whether they fit the final design.
+
+### What's missing
+
+| Gap | Why it matters |
+|---|---|
+| **System-prompt injection** | The CRUD is dead weight without it — the whole point is for the agent to *see* the pages |
+| **Page selection model** | Inject *which* pages? All of them blows past context windows. Options: explicit per-session "active pages", tag-driven auto-selection, or admin-marked "always-on" pages |
+| **Server API endpoints** | `GET/POST/PUT/DELETE /v1/knowledge-pages` so remote-mode Web/Desktop and the SDK can drive the feature |
+| **Desktop parity** | Avalonia `KnowledgePagesView` + nav entry — matches every other Knowledge-section item |
+| **CLI surface** | `sovrant pages list/show/edit/delete` for headless workflows |
+| **Tests** | Store, server, prompt-injection — nothing covered today |
+| **Token-budget guardrails** | Selected pages must fit a configurable cap (default ~3,000 tokens or ~10% of context window) with deterministic truncation/ordering |
+
+### Scope (in priority order)
+
+1. **Decide the injection model.** Pick one of: (a) explicit per-session active-page list managed via session config, (b) tag-driven auto-selection ("inject any page tagged `always`"), (c) hybrid (auto for `always`, explicit for everything else). Recommend hybrid — covers the "team conventions" use case without making the user fiddle every session.
+2. **Wire prompt injection.** Add a `KnowledgePageContext` builder invoked by `ConversationRuntime` at turn start. Emit each included page as a `# Knowledge: <title>` markdown block in the system prompt. Cap total tokens per the guardrail above; drop oldest-updated pages first when over budget.
+3. **Server endpoints + ownership scoping.** Match the workspace pattern from existing routes — caller's `user_id` derived from the `svt_*` token; admin can see all pages.
+4. **Desktop UI.** Avalonia view with markdown editor (existing `MarkdownScrollViewer` per `feedback_markdown_avalonia.md` — beware code-fence crashes).
+5. **CLI surface.** Read-only first (`list`, `show`); editing later.
+6. **Tests.** `SqliteKnowledgePageStoreTests`, server route tests, an integration test that confirms a page tagged `always` appears verbatim in the system prompt of the next turn.
+
+### Deferred
+
+- **External knowledge sources** (Confluence, Notion, GitHub wikis) — keep v1 hand-authored only; integrations are their own phase.
+- **Vector / semantic search** — string search by title and tag is enough at the page counts users will realistically maintain. Revisit if anyone hits >200 pages.
+- **Multi-user / workspace-shared pages** — v1 is per-user (`user_id`-scoped). Workspace-shared pages slot into the same table once the shared-workspace model from `project_workspace_provider_roadmap` lands.
+- **Versioning / history** — same deferral as the Phase 91 knowledge authoring story; revisit together.
+
+### Acceptance Criteria
+
+- [ ] User creates a page tagged `always` and on the next turn the page content appears verbatim in the system prompt sent to the LLM
+- [ ] Token budget for injected pages is configurable per user and enforced — over-budget pages are deterministically dropped with a visible diagnostic
+- [ ] Server endpoints scope every read/write to the caller's `user_id` (admin sees all) — non-owner access returns 404
+- [ ] Desktop and Web surfaces have feature parity for CRUD
+- [ ] All existing tests still pass; new store + injection tests cover the happy path and the token-budget edge case
+
+---
+
 ## Bug — Selected Model Not Persisted Across Desktop/Web Reload
 
 **Status:** Confirmed (2026-05-08), fix queued as pre-beta item 2
