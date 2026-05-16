@@ -213,17 +213,56 @@ public sealed partial class LocalArtifactStore : IArtifactStore
 
     // ── Path helpers ────────────────────────────────────────────────────
 
-    /// <summary>Builds the filesystem path for a scope, omitting null segments.</summary>
+    /// <summary>Builds the filesystem path for a scope using composite {id}__{name} directory names.</summary>
     private string BuildScopePath(ArtifactScope scope)
     {
-        var path = _root;
-        path = Path.Combine(path, scope.WorkspaceId);
-        path = Path.Combine(path, scope.ProjectId);
+        var wsDir = FindOrCreateSegment(_root, scope.WorkspaceId, scope.WorkspaceName);
+        var wsPath = Path.Combine(_root, wsDir);
 
-        if (scope.RunId is not null)
-            path = Path.Combine(path, scope.RunId);
+        var projDir = FindOrCreateSegment(wsPath, scope.ProjectId, scope.ProjectName);
+        var projPath = Path.Combine(wsPath, projDir);
 
-        return path;
+        return scope.RunId is not null ? Path.Combine(projPath, scope.RunId) : projPath;
+    }
+
+    /// <summary>
+    /// Finds an existing directory under <paramref name="parentDir"/> whose name starts with
+    /// <paramref name="id"/> (bare or composite <c>{id}__{name}</c>). If none exists, returns
+    /// the new composite name to use when creating the directory.
+    /// </summary>
+    private static string FindOrCreateSegment(string parentDir, string id, string? name)
+    {
+        if (Directory.Exists(parentDir))
+        {
+            foreach (var dir in Directory.GetDirectories(parentDir))
+            {
+                var dirName = Path.GetFileName(dir)!;
+                if (string.Equals(dirName, id, StringComparison.Ordinal) ||
+                    dirName.StartsWith(id + "__", StringComparison.Ordinal))
+                    return dirName;
+            }
+        }
+        return MakeDirSegment(id, name);
+    }
+
+    /// <summary>Returns <c>{id}__{safeName}</c> if name is usable, otherwise bare <c>{id}</c>.</summary>
+    private static string MakeDirSegment(string id, string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return id;
+        var safe = MakeSafeName(name);
+        return string.IsNullOrEmpty(safe) ? id : $"{id}__{safe}";
+    }
+
+    /// <summary>Converts a display name into a filesystem-safe lowercase suffix (letters, digits, hyphens).</summary>
+    private static string MakeSafeName(string name)
+    {
+        var sb = new System.Text.StringBuilder(name.Length);
+        foreach (var c in name)
+        {
+            if (char.IsLetterOrDigit(c) || c == '_') sb.Append(char.ToLowerInvariant(c));
+            else if (c == ' ' || c == '-') sb.Append('-');
+        }
+        return sb.ToString().Trim('-');
     }
 
     /// <summary>

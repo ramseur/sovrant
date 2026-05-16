@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Sovrant.Runtime.Artifacts;
+using Sovrant.Runtime.Projects;
 using Sovrant.Runtime.Workspaces;
 using Sovrant.Server.Auth;
 
@@ -31,9 +32,10 @@ internal static class ArtifactRoutes
             HttpContext ctx,
             IArtifactStore store,
             IWorkspaceService wsSvc,
+            IProjectService projSvc,
             CancellationToken ct) =>
         {
-            var scope = ScopeFromQuery(ctx);
+            var scope = await ScopeFromQueryAsync(ctx, wsSvc, projSvc, ct);
             var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, scope.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
             if (deny is not null) return deny;
 
@@ -61,12 +63,13 @@ internal static class ArtifactRoutes
             HttpContext ctx,
             IArtifactStore store,
             IWorkspaceService wsSvc,
+            IProjectService projSvc,
             CancellationToken ct) =>
         {
             if (!IsValidArtifactPath(path))
                 return Results.BadRequest(new { error = "Invalid artifact path." });
 
-            var scope = ScopeFromQuery(ctx, runId);
+            var scope = await ScopeFromQueryAsync(ctx, wsSvc, projSvc, ct, runId);
             var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, scope.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
             if (deny is not null) return deny;
 
@@ -103,9 +106,10 @@ internal static class ArtifactRoutes
             HttpContext ctx,
             IArtifactStore store,
             IWorkspaceService wsSvc,
+            IProjectService projSvc,
             CancellationToken ct) =>
         {
-            var scope = ScopeFromQuery(ctx, runId);
+            var scope = await ScopeFromQueryAsync(ctx, wsSvc, projSvc, ct, runId);
             var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, scope.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
             if (deny is not null) return deny;
 
@@ -134,21 +138,45 @@ internal static class ArtifactRoutes
         && path.IndexOf('\0', StringComparison.Ordinal) < 0;
 
     /// <summary>
-    /// Builds an <see cref="ArtifactScope"/> from query-string parameters and
-    /// optional route values.
+    /// Builds an <see cref="ArtifactScope"/> from query-string parameters, resolving
+    /// human-readable workspace and project names for composite directory naming.
     /// </summary>
-    private static ArtifactScope ScopeFromQuery(HttpContext ctx, string? runId = null)
+    private static async Task<ArtifactScope> ScopeFromQueryAsync(
+        HttpContext ctx,
+        IWorkspaceService wsSvc,
+        IProjectService projSvc,
+        CancellationToken ct,
+        string? runId = null)
     {
         var query = ctx.Request.Query;
+        var workspaceId = query["workspace_id"].FirstOrDefault()
+            ?? ctx.Request.Headers["X-Workspace-Id"].FirstOrDefault()
+            ?? WorkspaceIdentity.DefaultPersonal();
+        var projectId = query["project_id"].FirstOrDefault()
+            ?? ctx.Request.Headers["X-Project-Id"].FirstOrDefault()
+            ?? ArtifactScope.DefaultProjectId;
+
+        string? workspaceName = null;
+        string? projectName = null;
+        try
+        {
+            var ws = await wsSvc.GetAsync(workspaceId, ct).ConfigureAwait(false);
+            workspaceName = ws?.Name;
+            if (ws is not null && !string.IsNullOrEmpty(projectId) && projectId != ArtifactScope.DefaultProjectId)
+            {
+                var proj = await projSvc.GetAsync(projectId, ct).ConfigureAwait(false);
+                projectName = proj?.Name;
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException) { /* best effort — names are cosmetic */ }
+
         return new ArtifactScope
         {
-            WorkspaceId = query["workspace_id"].FirstOrDefault()
-                ?? ctx.Request.Headers["X-Workspace-Id"].FirstOrDefault()
-                ?? WorkspaceIdentity.DefaultPersonal(),
-            ProjectId = query["project_id"].FirstOrDefault()
-                ?? ctx.Request.Headers["X-Project-Id"].FirstOrDefault()
-                ?? ArtifactScope.DefaultProjectId,
+            WorkspaceId = workspaceId,
+            ProjectId = projectId,
             RunId = runId ?? query["run_id"].FirstOrDefault(),
+            WorkspaceName = workspaceName,
+            ProjectName = projectName,
         };
     }
 

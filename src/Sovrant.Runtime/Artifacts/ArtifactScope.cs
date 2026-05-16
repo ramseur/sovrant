@@ -44,6 +44,18 @@ public sealed record ArtifactScope
     public string? UserId { get; init; }
 
     /// <summary>
+    /// Human-readable workspace name used to suffix the workspace directory:
+    /// <c>{WorkspaceId}__{WorkspaceName}</c>. Optional — falls back to bare ID.
+    /// </summary>
+    public string? WorkspaceName { get; init; }
+
+    /// <summary>
+    /// Human-readable project name used to suffix the project directory:
+    /// <c>{ProjectId}__{ProjectName}</c>. Optional — falls back to bare ID.
+    /// </summary>
+    public string? ProjectName { get; init; }
+
+    /// <summary>
     /// Returns the canonical personal workspace id for the given user.
     /// Prefer this over inlining the format string.
     /// </summary>

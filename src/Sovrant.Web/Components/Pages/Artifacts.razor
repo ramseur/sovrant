@@ -23,7 +23,7 @@
                     OnSearch="Search"
                     GroupKeySelector="@(a => $"{a.WorkspaceId}|{a.ProjectId}|{a.RunId}")">
     <GroupHeaderTemplate>
-        <span>@context.WorkspaceId / @context.ProjectId
+        <span>@context.WorkspaceDisplay / @context.ProjectDisplay
             @if (!string.IsNullOrEmpty(context.RunId))
             {
                 <text> &middot; run @context.RunId[..Math.Min(8, context.RunId.Length)]</text>
@@ -46,7 +46,7 @@
                 <span>@context.SizeDisplay</span>
                 <span>@context.ContentType</span>
                 <span>@context.LastModified.LocalDateTime.ToString("g")</span>
-                <span>@context.WorkspaceId / @context.ProjectId</span>
+                <span>@context.WorkspaceDisplay / @context.ProjectDisplay</span>
                 @if (context.RunId is not null)
                 {
                     <span>Run: @context.RunId[..Math.Min(8, context.RunId.Length)]</span>
@@ -136,9 +136,11 @@
                 var info = new FileInfo(file);
                 var ext = System.IO.Path.GetExtension(file);
 
-                // Parse workspace/project/run from path: {workspace}/{project}/{run}/{rest}
-                var workspaceId = segments[0];
-                var projectId = segments[1];
+                // Parse workspace/project/run from path: {id}[__{name]}/{id}[__{name}]/{run}/{rest}
+                var workspaceId = SegmentId(segments[0]);
+                var workspaceLabel = SegmentLabel(segments[0]);
+                var projectId = SegmentId(segments[1]);
+                var projectLabel = SegmentLabel(segments[1]);
                 var runId = segments[2];
                 var artifactPath = string.Join('/', segments[3..]);
 
@@ -163,7 +165,9 @@
                     ContentType = GuessMime(ext),
                     LastModified = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
                     WorkspaceId = workspaceId,
+                    WorkspaceLabel = workspaceLabel,
                     ProjectId = projectId,
+                    ProjectLabel = projectLabel,
                     RunId = runId,
                     IsMarkdown = ext.Equals(".md", StringComparison.OrdinalIgnoreCase),
                     IsPdf = ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase),
@@ -221,7 +225,8 @@
             : _all.Where(a =>
                 a.FileName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
                 a.Path.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                a.WorkspaceId.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                a.WorkspaceDisplay.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                a.ProjectDisplay.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
                 (a.RunId?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false)
             ).ToList();
     }
@@ -235,6 +240,20 @@
 
     private static string GuessMime(string ext) => ArtifactMime.For(ext);
 
+    /// <summary>Extracts the ID from a composite <c>{id}__{name}</c> directory segment.</summary>
+    private static string SegmentId(string segment)
+    {
+        var idx = segment.IndexOf("__", StringComparison.Ordinal);
+        return idx >= 0 ? segment[..idx] : segment;
+    }
+
+    /// <summary>Returns the human-readable label from a composite <c>{id}__{name}</c> segment, or null for bare IDs.</summary>
+    private static string? SegmentLabel(string segment)
+    {
+        var idx = segment.IndexOf("__", StringComparison.Ordinal);
+        return idx >= 0 && idx + 2 < segment.Length ? segment[(idx + 2)..] : null;
+    }
+
     private sealed class ArtifactItem
     {
         public string FullDiskPath { get; init; } = string.Empty;
@@ -247,12 +266,20 @@
         public string ContentType { get; init; } = string.Empty;
         public DateTimeOffset LastModified { get; init; }
         public string WorkspaceId { get; init; } = string.Empty;
+        public string? WorkspaceLabel { get; init; }
         public string ProjectId { get; init; } = string.Empty;
+        public string? ProjectLabel { get; init; }
         public string? RunId { get; init; }
         public bool IsMarkdown { get; init; }
         public bool IsPdf { get; init; }
         public string AccessUrl { get; init; } = string.Empty;
         public string RunZipUrl { get; init; } = string.Empty;
         public string? Preview { get; set; }
+
+        /// <summary>Display name for the workspace — label if available, else ID.</summary>
+        public string WorkspaceDisplay => WorkspaceLabel ?? WorkspaceId;
+
+        /// <summary>Display name for the project — label if available, else ID.</summary>
+        public string ProjectDisplay => ProjectLabel ?? ProjectId;
     }
 }
