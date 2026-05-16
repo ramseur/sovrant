@@ -570,7 +570,7 @@ public partial class SidebarViewModel : ViewModelBase
     [RelayCommand]
     private async Task DeleteSessionAsync(string sessionId)
     {
-        await _sessionStore.DeleteAsync(sessionId);
+        await _sessionStore.DeleteAsync(sessionId, ownerUserId: App.SovrantUserId);
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             var item = RecentSessions.FirstOrDefault(s => s.SessionId == sessionId);
@@ -587,12 +587,12 @@ public partial class SidebarViewModel : ViewModelBase
 
     private async Task LoadSessionsAsync()
     {
-        var ids = await _sessionStore.ListAsync();
+        var ids = await _sessionStore.ListAsync(ownerUserId: App.SovrantUserId);
         var items = new List<SessionListItem>();
 
         foreach (var id in ids.Take(20))
         {
-            var entries = await _sessionStore.LoadAsync(id);
+            var entries = await _sessionStore.LoadAsync(id, ownerUserId: App.SovrantUserId);
             var firstUser = entries.FirstOrDefault(e => e.Role == "user");
             var label = firstUser?.Content ?? id;
             if (label.Length > 40)

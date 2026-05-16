@@ -132,7 +132,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         SessionId = sessionId;
         Messages.Clear();
 
-        var entries = await _sessionStore.LoadAsync(sessionId, ct: ct);
+        var entries = await _sessionStore.LoadAsync(sessionId, ownerUserId: App.SovrantUserId, ct: ct);
         foreach (var entry in entries)
         {
             if (entry.Role is "user" or "assistant")
@@ -269,7 +269,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 var selected = Connections.Where(c => c.IsSelected).Select(c => c.Name).ToList();
                 var allSelected = selected.Count == Connections.Count;
                 pooled.Config.AllowedMcpServers = allSelected ? null : selected;
-                await _sessionStore.SetMcpConnectionsAsync(SessionId, pooled.Config.AllowedMcpServers, ct: linkedToken)
+                await _sessionStore.SetMcpConnectionsAsync(SessionId, pooled.Config.AllowedMcpServers, ownerUserId: App.SovrantUserId, ct: linkedToken)
                     .ConfigureAwait(false);
             }
 
@@ -298,7 +298,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             if (isFirstMessage)
             {
                 var title = text.Length > 60 ? text[..60] + "..." : text;
-                _ = _sessionStore.SetTitleAsync(SessionId, title, ct: CancellationToken.None);
+                _ = _sessionStore.SetTitleAsync(SessionId, title, ownerUserId: App.SovrantUserId, ct: CancellationToken.None);
             }
         }
     }
