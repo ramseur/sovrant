@@ -10036,6 +10036,67 @@ These uncommitted edits are a useful starting point; the phase keeps or discards
 
 ---
 
+## Phase 101 — AI Cost Reduction
+
+**Status:** Planned.
+
+### Goal
+
+Reduce the real-money and energy cost of running Sovrant — both for self-hosters and for Anant-operated deployments — through a combination of prompt engineering best practices, open-source tooling integrations, and first-class surfacing of free-tier models across every Sovrant feature.
+
+### Motivation
+
+LLM API spend is the dominant variable cost in any agentic system. As Sovrant scales (more tools, longer missions, swarm orchestration), unchecked token usage compounds fast. Two levers exist: (a) use fewer tokens per call, and (b) use cheaper or free models for calls that don't need full capability.
+
+### Sub-area 1 — Context Efficiency (fewer tokens, same quality)
+
+Adopt proven patterns and open-source libraries that shrink effective context without degrading output quality.
+
+| Technique | Approach |
+|---|---|
+| **Prompt compression** | Evaluate `LLMLingua` / `LLMLingua-2` (Microsoft, MIT license) for compressing long system prompts and retrieved context before injection. Target: 3–5× compression on repetitive or boilerplate content. |
+| **Conversation summarisation** | Instead of replaying the full message history on every turn, summarise older turns beyond a configurable token window. The runtime already has a `ConversationRuntime` abstraction — wire a `ISummarisationStrategy` that swaps in compressed history. |
+| **Knowledge page budgeting** | Phase 100 already plans a per-user token cap for injected knowledge pages. Phase 101 makes the cap visible in the UI (Settings → Usage) and adds a global admin cap. |
+| **Tool-call pruning** | Only emit tool schemas for tools relevant to the current session context (MCP filtering already exists per V024 migration — extend to agent-template-aware pruning). Each removed tool schema saves ~200–600 tokens per turn. |
+| **Caching hot prompts** | Where the provider supports it (e.g. Anthropic prompt caching, OpenAI context caching), cache the system prompt and injected knowledge blocks. Surface cache-hit rate in the cost dashboard. |
+| **Streaming trim** | Skip re-sending unchanged prefix context when the provider supports delta-only context (evaluate per-provider). |
+
+**Reference implementations to evaluate:**
+
+- [`LLMLingua`](https://github.com/microsoft/LLMLingua) — prompt compression (MIT)
+- [`aisuite`](https://github.com/andrewyng/aisuite) — unified multi-provider interface with cost tracking
+- [`guidance`](https://github.com/guidance-ai/guidance) — structured generation to avoid re-prompting loops
+- [`tiktoken`](https://github.com/openai/tiktoken) or provider-native tokenizers — accurate token counting before send (today Sovrant estimates; exact counts prevent over-budget surprises)
+
+### Sub-area 2 — Free Model Promotion
+
+Make free-tier models a first-class citizen rather than a power-user workaround.
+
+| Feature | Detail |
+|---|---|
+| **"Free" badge in model picker** | Tag OpenRouter `:free` suffix models and Google AI Studio free-tier models in the model picker dropdown on Web, Desktop, and CLI. Badge shows cost: `$0.00 / 1M tokens`. |
+| **Default model guidance** | First-run wizard (or onboarding tooltip) recommends a capable free model (e.g. `gemini-2.5-flash` via Google AI Studio) and explains when to step up to a paid model. |
+| **Per-feature model routing** | Allow users to assign a "cheap model" for low-stakes tasks: title generation, session summarisation, skill selection scoring, eval scoring. Today these use the session default model — routing them to a free model cuts spend without user-visible quality loss. |
+| **Cost dashboard** | Extend the existing cost tracking (Phase 88 `TurnCost` events, `session_costs` table) into a full Settings → Usage page: spend by model, spend by day, projected monthly spend, and a "savings from free-model routing" line. |
+| **Provider presets** | Ship pre-filled provider presets for zero-cost setups: Google AI Studio (free quota), Groq free tier, Together AI free models. One-click setup in Settings → Providers. |
+| **Sovrant skill: /frugal** | A built-in skill that temporarily switches the session to the best available free model for the next N turns, then restores the prior model. Useful for exploratory work where full capability isn't needed. |
+
+### Acceptance Criteria
+
+- [ ] At least one prompt-compression strategy (summarisation or LLMLingua integration) is measurably reducing token usage in multi-turn sessions — confirmed by comparing `session_costs` totals before/after on the same conversation replay
+- [ ] Free-tier models are badged in the model picker on all three surfaces (Web, Desktop, CLI)
+- [ ] Per-feature model routing is configurable: user can assign a separate model for title generation and session summarisation in Settings → Models
+- [ ] A Settings → Usage page shows spend by model and by day, sourced from the existing `session_costs` DB table
+- [ ] `/frugal` skill is available and tested across Web, Desktop, and CLI
+
+### Deferred
+
+- **Semantic deduplication of tool results** — deduplicate near-identical tool outputs before they re-enter context (useful for multi-step web search / file reads). Requires embedding; defer until embeddings land.
+- **Speculative decoding / local model offload** — running a small local model for cheap tasks requires local inference infrastructure; out of scope for v1.
+- **Automatic model downgrade on quota exhaustion** — detect 429s from paid providers and auto-reroute to free fallback. Useful but needs careful UX (user must consent to model switch mid-session).
+
+---
+
 ## Bug — Selected Model Not Persisted Across Desktop/Web Reload
 
 **Status:** Confirmed (2026-05-08), fix queued as pre-beta item 2
