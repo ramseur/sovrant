@@ -108,6 +108,15 @@ public partial class MessageViewModel : ViewModelBase
     [ObservableProperty]
     private string? _providerName;
 
+    /// <summary>Display name of the user who sent this message (local part of email). Never a raw ID.</summary>
+    [ObservableProperty]
+    private string? _userDisplayName;
+
+    /// <summary>Single uppercase letter for the user avatar bubble.</summary>
+    public string UserInitial => string.IsNullOrEmpty(UserDisplayName)
+        ? "U"
+        : UserDisplayName[..1].ToUpperInvariant();
+
     /// <summary>
     /// Display label for the message sender. Shows "Provider / model" for assistant
     /// messages once the turn completes, falls back to "Sovrant" while streaming.
@@ -116,7 +125,7 @@ public partial class MessageViewModel : ViewModelBase
     {
         get
         {
-            if (Role == "user") return "You";
+            if (Role == "user") return string.IsNullOrEmpty(UserDisplayName) ? "You" : UserDisplayName;
             if (ProviderName is not null && ModelName is not null)
                 return $"{ProviderName} · {FormatModelName(ModelName)}";
             if (ModelName is not null)

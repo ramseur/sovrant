@@ -1,6 +1,6 @@
 # Sovrant — Roadmap
 
-**Branch:** `sovrant-openc-dotnet-port`
+**Branch:** `development`
 **Last updated:** 2026-05-09 (Phase 40A UI ✅ — workspace member management across Web/Desktop/CLI; Phase 85 Identity & Login Parity ✅; Phase 93 Configuration Boundary Audit ✅ — sovrant.config removed, .env consolidation, routing.json→env vars, swarm.json→DB; Phase 91 Knowledge Authoring deferred; TLS added to Server + Web; model persistence bug fixed)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
@@ -10033,6 +10033,203 @@ These uncommitted edits are a useful starting point; the phase keeps or discards
 - [ ] Server endpoints scope every read/write to the caller's `user_id` (admin sees all) — non-owner access returns 404
 - [ ] Desktop and Web surfaces have feature parity for CRUD
 - [ ] All existing tests still pass; new store + injection tests cover the happy path and the token-budget edge case
+
+---
+
+## Phase 101 — AI Cost Reduction
+
+**Status:** Planned.
+
+### Goal
+
+Reduce the real-money and energy cost of running Sovrant — both for self-hosters and for Anant-operated deployments — through a combination of prompt engineering best practices, open-source tooling integrations, and first-class surfacing of free-tier models across every Sovrant feature.
+
+### Motivation
+
+LLM API spend is the dominant variable cost in any agentic system. As Sovrant scales (more tools, longer missions, swarm orchestration), unchecked token usage compounds fast. Two levers exist: (a) use fewer tokens per call, and (b) use cheaper or free models for calls that don't need full capability.
+
+### Sub-area 1 — Context Efficiency (fewer tokens, same quality)
+
+Adopt proven patterns and open-source libraries that shrink effective context without degrading output quality.
+
+| Technique | Approach |
+|---|---|
+| **Prompt compression** | Evaluate `LLMLingua` / `LLMLingua-2` (Microsoft, MIT license) for compressing long system prompts and retrieved context before injection. Target: 3–5× compression on repetitive or boilerplate content. |
+| **Conversation summarisation** | Instead of replaying the full message history on every turn, summarise older turns beyond a configurable token window. The runtime already has a `ConversationRuntime` abstraction — wire a `ISummarisationStrategy` that swaps in compressed history. |
+| **Knowledge page budgeting** | Phase 100 already plans a per-user token cap for injected knowledge pages. Phase 101 makes the cap visible in the UI (Settings → Usage) and adds a global admin cap. |
+| **Tool-call pruning** | Only emit tool schemas for tools relevant to the current session context (MCP filtering already exists per V024 migration — extend to agent-template-aware pruning). Each removed tool schema saves ~200–600 tokens per turn. |
+| **Caching hot prompts** | Where the provider supports it (e.g. Anthropic prompt caching, OpenAI context caching), cache the system prompt and injected knowledge blocks. Surface cache-hit rate in the cost dashboard. |
+| **Streaming trim** | Skip re-sending unchanged prefix context when the provider supports delta-only context (evaluate per-provider). |
+
+**Reference implementations to evaluate:**
+
+- [`LLMLingua`](https://github.com/microsoft/LLMLingua) — prompt compression (MIT)
+- [`aisuite`](https://github.com/andrewyng/aisuite) — unified multi-provider interface with cost tracking
+- [`guidance`](https://github.com/guidance-ai/guidance) — structured generation to avoid re-prompting loops
+- [`tiktoken`](https://github.com/openai/tiktoken) or provider-native tokenizers — accurate token counting before send (today Sovrant estimates; exact counts prevent over-budget surprises)
+
+### Sub-area 2 — Free Model Promotion
+
+Make free-tier models a first-class citizen rather than a power-user workaround.
+
+| Feature | Detail |
+|---|---|
+| **"Free" badge in model picker** | Tag OpenRouter `:free` suffix models and Google AI Studio free-tier models in the model picker dropdown on Web, Desktop, and CLI. Badge shows cost: `$0.00 / 1M tokens`. |
+| **Default model guidance** | First-run wizard (or onboarding tooltip) recommends a capable free model (e.g. `gemini-2.5-flash` via Google AI Studio) and explains when to step up to a paid model. |
+| **Per-feature model routing** | Allow users to assign a "cheap model" for low-stakes tasks: title generation, session summarisation, skill selection scoring, eval scoring. Today these use the session default model — routing them to a free model cuts spend without user-visible quality loss. |
+| **Cost dashboard** | Extend the existing cost tracking (Phase 88 `TurnCost` events, `session_costs` table) into a full Settings → Usage page: spend by model, spend by day, projected monthly spend, and a "savings from free-model routing" line. |
+| **Provider presets** | Ship pre-filled provider presets for zero-cost setups: Google AI Studio (free quota), Groq free tier, Together AI free models. One-click setup in Settings → Providers. |
+| **Sovrant skill: /frugal** | A built-in skill that temporarily switches the session to the best available free model for the next N turns, then restores the prior model. Useful for exploratory work where full capability isn't needed. |
+
+### Acceptance Criteria
+
+- [ ] At least one prompt-compression strategy (summarisation or LLMLingua integration) is measurably reducing token usage in multi-turn sessions — confirmed by comparing `session_costs` totals before/after on the same conversation replay
+- [ ] Free-tier models are badged in the model picker on all three surfaces (Web, Desktop, CLI)
+- [ ] Per-feature model routing is configurable: user can assign a separate model for title generation and session summarisation in Settings → Models
+- [ ] A Settings → Usage page shows spend by model and by day, sourced from the existing `session_costs` DB table
+- [ ] `/frugal` skill is available and tested across Web, Desktop, and CLI
+
+### Deferred
+
+- **Semantic deduplication of tool results** — deduplicate near-identical tool outputs before they re-enter context (useful for multi-step web search / file reads). Requires embedding; defer until embeddings land.
+- **Speculative decoding / local model offload** — running a small local model for cheap tasks requires local inference infrastructure; out of scope for v1.
+- **Automatic model downgrade on quota exhaustion** — detect 429s from paid providers and auto-reroute to free fallback. Useful but needs careful UX (user must consent to model switch mid-session).
+
+---
+
+## Phase 102 — MCP Ecosystem Integration
+
+**Status:** Planned.
+
+### Goal
+
+Make Sovrant a first-class citizen in the MCP ecosystem — both as a consumer of the thousands of MCP servers that already exist, and as a host that can surface the new **MCP Apps** (SEP-1865) interactive UI spec. Today Sovrant supports stdio and HTTP/SSE MCP connections configured manually. Phase 102 replaces that friction with dynamic discovery, one-click install from public registries, and support for the richer MCP Apps protocol.
+
+### Background
+
+"MCP apps" covers two related but distinct things:
+
+1. **MCP Apps / SEP-1865** — A 2026 extension to the core Model Context Protocol that allows MCP servers to deliver rich, interactive UI (React components, forms, dashboards) into the host application alongside tool results. Claude Desktop, Cursor, and others are adding support. This is the UI layer on top of MCP.
+
+2. **The MCP server creation ecosystem** — A fast-growing set of platforms that generate, host, or aggregate MCP servers:
+   - **Official MCP Registry** (`registry.modelcontextprotocol.io`) — machine-readable, API-accessible, vendor-neutral; maintained by Anthropic and GitHub
+   - **Smithery** (`smithery.ai`) — 5,000–7,000+ community servers; app-store UX with local and remote hosting
+   - **Composio** — single Tool Router endpoint that exposes 500+ app integrations (GitHub, Slack, Notion, Linear, etc.) as MCP tools; 20,000+ individual tools
+   - **Mintlify** — auto-generates MCP servers from API documentation via OpenAPI specs; zero-config
+   - **Glama.ai**, **PulseMCP** — large curated directories
+
+Sovrant already ships an MCP client (`McpClientRegistry`, `McpToolRegistrar`, V024 per-session gating). Phase 102 extends that infrastructure rather than replacing it.
+
+### Sub-area 1 — Registry Discovery & One-Click Install
+
+Allow users to browse, search, and install MCP servers from public registries without editing config files.
+
+| Feature | Detail |
+|---|---|
+| **Registry browser** | Settings → MCP → Browse. Queries the official MCP Registry API and Smithery API. Shows name, description, tool count, transport type, and install status. Searchable. |
+| **One-click install** | "Add to Sovrant" button fetches server manifest, stores connection config in the DB (`mcp_servers` table or equivalent), and makes the server available to sessions immediately. |
+| **`.well-known/mcp.json` discovery** | For any URL the user pastes, attempt discovery via the well-known endpoint before falling back to manual config. |
+| **Transport auto-detect** | Detect stdio vs HTTP/SSE vs WebSocket from the manifest and configure the correct transport automatically. |
+| **Composio preset** | Ship a built-in Composio provider preset: user supplies their Composio API key, Sovrant points at the Tool Router endpoint, and all 20,000+ Composio tools become available to any session. |
+| **Mintlify preset** | For any Mintlify-hosted docs site, derive the MCP server URL automatically from the docs URL and connect without manual config. |
+
+### Sub-area 2 — MCP Apps (SEP-1865) Host Support
+
+Surface interactive MCP App UIs inside Sovrant's Web and Desktop chat interfaces.
+
+| Feature | Detail |
+|---|---|
+| **MCP App renderer (Web)** | When a tool result includes an MCP App payload (React component or structured UI descriptor per SEP-1865), render it inline in the chat response. Blazor web view component wraps the MCP App sandbox. |
+| **MCP App renderer (Desktop)** | Avalonia `WebView` (or equivalent embedded browser) renders the MCP App payload in a chat message panel. Same sandbox isolation as Web. |
+| **Security sandbox** | MCP App UIs run in an isolated context — no access to Sovrant session tokens, DB, or file system. User interaction events are sent back to the MCP server, not directly to the LLM. |
+| **Capability negotiation** | During MCP handshake, advertise `sovrant/mcp-apps-v1` capability so compliant servers know they can send UI payloads. Servers that don't support MCP Apps continue to work unchanged. |
+
+### Sub-area 3 — MCP Server Generation (Sovrant-as-Creator)
+
+Enable users to generate their own MCP servers from within Sovrant.
+
+| Feature | Detail |
+|---|---|
+| **OpenAPI → MCP server** | Given an OpenAPI spec URL or file, generate a working MCP server (TypeScript via FastMCP or Python via `mcp` SDK) that wraps the API. Output: downloadable server bundle or GitHub Gist. |
+| **Sovrant skill: /mcp-server** | A built-in skill that walks the user through generating an MCP server for a URL or OpenAPI spec. Outputs a `server.ts` / `server.py` ready to deploy. |
+| **Publish to Smithery** | Optional: after generating a server, offer to publish it to Smithery via their submission API. |
+
+### Integration Points with Existing Sovrant Systems
+
+- **`McpClientRegistry`** — extend to support registry-sourced connections alongside the existing manual config
+- **`McpToolRegistrar`** — no changes needed; tools discovered from registry servers register the same way as manual ones
+- **V024 per-session MCP gating** — registry-installed servers participate in the same per-session enable/disable flow
+- **Tool-call pruning (Phase 101)** — Composio's 20,000 tools make pruning mandatory; Phase 101's tool-schema pruning must be in place before Composio is enabled by default
+- **Cost dashboard (Phase 101)** — track token cost of MCP tool call results separately from LLM completions
+
+### Acceptance Criteria
+
+- [ ] User can search the official MCP Registry from Settings → MCP and install a server in under 3 clicks with no manual config editing
+- [ ] Composio preset connects via a single API key and makes Composio tools available in sessions
+- [ ] A Mintlify-hosted docs site can be connected by pasting its URL — no manual server URL required
+- [ ] MCP App (SEP-1865) UI payloads render inline in Web and Desktop chat; interactions are sandboxed
+- [ ] `/mcp-server` skill generates a runnable MCP server from an OpenAPI spec URL
+- [ ] All existing manually-configured MCP connections continue to work unchanged
+
+### Deferred
+
+- **Local stdio server management UI** — install and manage locally-running stdio servers from the UI (requires process management, OS-level concerns). Phase 102 v1 focuses on remote HTTP servers.
+- **MCP server marketplace within Sovrant** — hosting and monetising community-built servers inside Sovrant. Requires workspace membership model from `project_workspace_provider_roadmap`.
+- **MCP App authoring** — let users build MCP App UIs inside Sovrant. Rendering first, authoring later.
+- **Smithery publish flow** — deferred until the MCP server generation feature is validated.
+
+---
+
+## Phase 103 — Optional Project Layer in Artifact Storage
+
+**Status:** Planned.
+
+### Problem
+
+Every artifact run is currently stored under a three-level path:
+
+```
+{workspace}/{project}/{run}/files
+```
+
+The `project` level is mandatory — if no project is selected, Sovrant silently uses the sentinel `default-project`. Users who don't organise their work into projects still see a `default-project` folder on disk and in the Artifacts UI, which is confusing and adds an unwanted layer of indirection.
+
+### Goal
+
+Make the project layer optional. Users with no active project should have artifacts stored directly under the workspace:
+
+```
+{workspace}/{run}/files          ← no project selected
+{workspace}/{project}/{run}/files ← project selected
+```
+
+The `default-project` sentinel is retired. The listing, download, ZIP, and delete routes all become project-layer-aware: they accept either a 3-segment or 4-segment path.
+
+### What changes
+
+| Layer | Change |
+|---|---|
+| `ArtifactScope` | `ProjectId` becomes nullable; null means no project (workspace-level run) |
+| `LocalArtifactStore.BuildScopePath` | Omit the project segment when `ProjectId` is null |
+| `LocalArtifactStore.ValidateSegment` | Only called for project segment when non-null |
+| `Artifacts.razor` listing parser | Handle 3-segment paths (`{ws}/{run}/{file}`) as well as 4-segment (`{ws}/{proj}/{run}/{file}`) |
+| `ArtifactRoutes` | Download and ZIP endpoints support both path depths; `project_id` query param becomes optional |
+| `ConversationRuntime` | Pass null `ProjectId` when no project is active instead of falling back to `DefaultProjectId` |
+| All tool call sites | Same — null project when session has no active project |
+| Desktop / Web UI | Artifacts page groups by workspace first, then project if present |
+
+### Migration
+
+Existing `default-project` directories are treated as workspace-level runs — the listing parser recognises `default-project` as the legacy sentinel and promotes those entries to workspace scope in the UI. No files are moved.
+
+### Acceptance Criteria
+
+- [ ] A session with no active project stores artifacts at `{workspace}/{run}/` with no project subdirectory
+- [ ] A session with an active project stores artifacts at `{workspace}/{project}/{run}/` as today
+- [ ] The Artifacts page groups and displays both layouts correctly in the same list
+- [ ] Existing `default-project` directories are shown as workspace-level artifacts (no "default-project" label visible to users)
+- [ ] Download, ZIP, and delete endpoints handle both path depths
+- [ ] No existing artifacts are moved or broken by the change
 
 ---
 

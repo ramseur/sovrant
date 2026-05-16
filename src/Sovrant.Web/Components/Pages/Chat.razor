@@ -134,6 +134,15 @@
     [Inject] private SovrantConfig Config { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private IMcpServerStore McpServerStore { get; set; } = default!;
+    [Inject] private Sovrant.Web.Services.WebSessionService Session { get; set; } = default!;
+
+    private string _userDisplayName => LocalPart(Session.Email) ?? "You";
+    private static string? LocalPart(string? email)
+    {
+        if (email is null) return null;
+        var idx = email.IndexOf('@', StringComparison.Ordinal);
+        return idx > 0 ? email[..idx] : null;
+    }
 
     private List<string> _availableConnections = [];
     private HashSet<string> _selectedConnections = new(StringComparer.Ordinal);
@@ -236,6 +245,7 @@
                         Role = entry.Role,
                         Text = entry.Content,
                         IsComplete = true,
+                        UserDisplayName = entry.Role == "user" ? _userDisplayName : null,
                     });
                 }
             }
@@ -421,7 +431,7 @@
 
     private async Task HandleSlashCommandAsync(string text)
     {
-        _messages.Add(new ChatMessageModel { Role = "user", Text = text, IsComplete = true });
+        _messages.Add(new ChatMessageModel { Role = "user", Text = text, IsComplete = true, UserDisplayName = _userDisplayName });
 
         try
         {
@@ -476,7 +486,7 @@
 
         // Add user message
         if (_messages.Count == 0 || _messages[^1].Role != "user" || _messages[^1].Text != text)
-            _messages.Add(new ChatMessageModel { Role = "user", Text = text, IsComplete = true });
+            _messages.Add(new ChatMessageModel { Role = "user", Text = text, IsComplete = true, UserDisplayName = _userDisplayName });
 
         // Add assistant placeholder with thinking
         var assistantMsg = new ChatMessageModel { Role = "assistant", ModelName = Config.Model };
@@ -606,7 +616,7 @@
                     _sessionCost += usd.Value;
                 break;
             case RuntimeEvent.RuntimeError { Message: var errMsg }:
-                msg.SetError(errMsg);
+                if (!msg.IsComplete) msg.SetError(errMsg);
                 break;
             case RuntimeEvent.PermissionDenied { ToolName: var tool, Reason: var reason }:
                 msg.Text += $"\n\n*Permission denied for {tool}: {reason}*";

@@ -11,13 +11,32 @@ public static class WorkspaceIdentity
 
     /// <summary>
     /// Returns the canonical personal workspace id for the given user.
-    /// Format: <c>ws-personal-{userId}</c>.
+    /// Format: <c>ws-personal-{sanitized-userId}</c>.
+    /// Strips characters that are invalid in Windows filenames so the ID is safe as a directory name.
     /// </summary>
     public static string DefaultPersonalFor(string userId)
     {
         if (string.IsNullOrWhiteSpace(userId))
             throw new ArgumentException("userId must be non-empty.", nameof(userId));
-        return PersonalPrefix + userId;
+        return PersonalPrefix + SanitizeForPath(userId);
+    }
+
+    /// <summary>
+    /// Strips or replaces characters that are illegal in Windows filenames or NTFS paths.
+    /// Keeps alphanumerics, hyphens, underscores, and dots; replaces everything else with a hyphen.
+    /// </summary>
+    public static string SanitizeForPath(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var chars = new char[value.Length];
+        for (var i = 0; i < value.Length; i++)
+        {
+            var c = value[i];
+            chars[i] = char.IsLetterOrDigit(c) || c == '-' || c == '_' || c == '.' ? c : '-';
+        }
+        // Trim trailing dots/spaces (illegal on Windows) and collapse runs of hyphens.
+        var result = new string(chars).Trim('-').Trim('.');
+        return string.IsNullOrEmpty(result) ? "user" : result;
     }
 
     /// <summary>

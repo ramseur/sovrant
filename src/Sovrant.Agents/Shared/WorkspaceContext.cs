@@ -83,11 +83,13 @@ public sealed partial class WorkspaceContext
             return ArtifactHandle.ResolvedRoot;
         }
 
-        // Legacy fallback
-#pragma warning disable CS0618 // Obsolete member — intentional fallback
+        // Legacy fallback — always resolve to ~/.sovrant/artifacts, never CWD-relative.
         var slug = Slugify(prompt);
-        var dir = Path.Combine(ArtifactsRoot, slug);
-#pragma warning restore CS0618
+        var fallbackRoot = Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT")
+            ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".sovrant", "artifacts");
+        var dir = Path.Combine(fallbackRoot, slug);
         Directory.CreateDirectory(dir);
         return dir;
     }
@@ -109,8 +111,11 @@ public sealed partial class WorkspaceContext
             return ArtifactHandle.ResolvedRoot;
         }
 
-        // Legacy fallback — return the flat artifacts root
-        var dir = Path.Combine(WorkingDirectory, "artifacts");
+        // Legacy fallback — always resolve to ~/.sovrant/artifacts, never CWD-relative.
+        var dir = Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT")
+            ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".sovrant", "artifacts");
         Directory.CreateDirectory(dir);
         return dir;
     }

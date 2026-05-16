@@ -1,7 +1,7 @@
 # Sovrant Config Audit
 
 **Date:** 2026-05-09
-**Branch:** `sovrant-openc-dotnet-port`
+**Branch:** `development`
 **Scope:** Every typed config class, settings.json key, and `SOVRANT_*` / `LLM_*` / `ROUTER_*` env var.
 
 ## Buckets

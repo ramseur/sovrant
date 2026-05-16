@@ -209,19 +209,36 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
 
         if (ownerUserId is not null)
         {
-            using var ownerCheck = connection.CreateCommand();
-            ownerCheck.CommandText = "SELECT user_id FROM sessions WHERE session_id = $sid";
-            ownerCheck.Parameters.AddWithValue("$sid", sessionId);
-            var owner = await ownerCheck.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
-            if (owner is null || !string.Equals(owner, ownerUserId, StringComparison.Ordinal))
-                return;
-        }
+            // Upsert the session row first so that SetTitleAsync can be called
+            // before the first AppendAsync (e.g. to show the session in the sidebar
+            // immediately when the user sends their first message).
+            using var ensureCmd = connection.CreateCommand();
+            ensureCmd.CommandText = """
+                INSERT OR IGNORE INTO sessions (session_id, user_id, started_at, updated_at)
+                VALUES ($sid, $uid, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                """;
+            ensureCmd.Parameters.AddWithValue("$sid", sessionId);
+            ensureCmd.Parameters.AddWithValue("$uid", ownerUserId);
+            await ensureCmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = "UPDATE sessions SET title = $title WHERE session_id = $sid";
-        cmd.Parameters.AddWithValue("$sid", sessionId);
-        cmd.Parameters.AddWithValue("$title", title);
-        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = """
+                UPDATE sessions SET title = $title, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                WHERE session_id = $sid AND user_id = $uid
+                """;
+            cmd.Parameters.AddWithValue("$sid", sessionId);
+            cmd.Parameters.AddWithValue("$title", title);
+            cmd.Parameters.AddWithValue("$uid", ownerUserId);
+            await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+        else
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "UPDATE sessions SET title = $title WHERE session_id = $sid";
+            cmd.Parameters.AddWithValue("$sid", sessionId);
+            cmd.Parameters.AddWithValue("$title", title);
+            await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
     }
 
     public async Task<string?> GetTitleAsync(string sessionId, CancellationToken ct = default)

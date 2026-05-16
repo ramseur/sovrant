@@ -62,7 +62,14 @@
                         }
                     </div>
                     <div class="memory-meta">
-                        <span class="text-muted text-sm">@w.Slug</span>
+                        @if (w.Type == "Personal" && !string.IsNullOrEmpty(w.OwnerDisplay))
+                        {
+                            <span class="text-muted text-sm">@w.OwnerDisplay</span>
+                        }
+                        else if (w.Type != "Personal")
+                        {
+                            <span class="text-muted text-sm">@w.Slug</span>
+                        }
                         <span class="text-muted text-sm">@w.CreatedAt.LocalDateTime.ToString("d")</span>
                     </div>
                 </div>
@@ -168,12 +175,24 @@
             foreach (var ws in list)
                 myRoles[ws.WorkspaceId] = await WorkspaceService.GetMemberRoleAsync(ws.WorkspaceId, UserId);
 
-            _workspaces = list.Select(w => new WorkspaceItem
+            var workspaceItems = new List<WorkspaceItem>();
+            foreach (var w in list)
             {
-                Id = w.WorkspaceId, Name = w.Name, Slug = w.Slug,
-                Type = w.Type.ToString(), CreatedAt = w.CreatedAt,
-                MyRole = myRoles.TryGetValue(w.WorkspaceId, out var r) ? r?.ToString() : null,
-            }).ToList();
+                string? ownerDisplay = null;
+                if (w.Type == WorkspaceType.Personal && !string.IsNullOrEmpty(w.OwnerId))
+                {
+                    var owner = await UserService.GetAsync(w.OwnerId);
+                    ownerDisplay = owner?.Email ?? owner?.Username;
+                }
+                workspaceItems.Add(new WorkspaceItem
+                {
+                    Id = w.WorkspaceId, Name = w.Name, Slug = w.Slug,
+                    Type = w.Type.ToString(), CreatedAt = w.CreatedAt,
+                    MyRole = myRoles.TryGetValue(w.WorkspaceId, out var r) ? r?.ToString() : null,
+                    OwnerDisplay = ownerDisplay,
+                });
+            }
+            _workspaces = workspaceItems;
         }
         catch (Exception ex)
         {
@@ -308,6 +327,7 @@
         public string Type { get; init; } = string.Empty;
         public DateTimeOffset CreatedAt { get; init; }
         public string? MyRole { get; init; }
+        public string? OwnerDisplay { get; init; }
     }
 
     private sealed class MemberItem

@@ -144,6 +144,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                     IsComplete = true,
                     ModelName = entry.Role == "assistant" ? entry.Model : null,
                     ProviderName = entry.Role == "assistant" ? entry.Provider : null,
+                    UserDisplayName = entry.Role == "user" ? _activeContext.UserDisplayName : null,
                 });
             }
         }
@@ -173,7 +174,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     {
         HasMessages = true;
         await Dispatcher.UIThread.InvokeAsync(() =>
-            Messages.Add(new MessageViewModel { Role = "user", Text = text }));
+            Messages.Add(new MessageViewModel { Role = "user", Text = text, UserDisplayName = _activeContext.UserDisplayName }));
 
         try
         {
@@ -250,12 +251,22 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             if (Messages.Count == 0 || Messages[^1].Role != "user" || Messages[^1].Text != text)
-                Messages.Add(new MessageViewModel { Role = "user", Text = text });
+                Messages.Add(new MessageViewModel { Role = "user", Text = text, UserDisplayName = _activeContext.UserDisplayName });
 
             // Add assistant placeholder with thinking indicator.
             assistantMsg.StartThinking();
             Messages.Add(assistantMsg);
         });
+
+        // On first message: persist the session and title immediately so the sidebar
+        // shows the new chat right away — before the full turn completes.
+        if (isFirstMessage)
+        {
+            var title = text.Length > 60 ? text[..60] + "..." : text;
+            await _sessionStore.SetTitleAsync(SessionId, title, ownerUserId: App.SovrantUserId, ct: CancellationToken.None)
+                .ConfigureAwait(false);
+            await Dispatcher.UIThread.InvokeAsync(() => TurnCompleted?.Invoke());
+        }
 
         try
         {
@@ -287,19 +298,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
         finally
         {
-            IsSending = false;
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                IsSending = false;
                 assistantMsg.CompleteStreaming();
                 TurnCompleted?.Invoke();
             });
-
-            // Auto-title from the first user message.
-            if (isFirstMessage)
-            {
-                var title = text.Length > 60 ? text[..60] + "..." : text;
-                _ = _sessionStore.SetTitleAsync(SessionId, title, ownerUserId: App.SovrantUserId, ct: CancellationToken.None);
-            }
         }
     }
 
@@ -454,6 +458,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 msg.ModelName = t.Model;
                 msg.ProviderName = t.ProviderName;
                 msg.CompleteStreaming();
+                IsSending = false; // hide stop button as soon as LLM is done; trailing events may still drain
                 break;
 
             case RuntimeEvent.TurnCost { EstimatedUsd: var usd }:
@@ -462,7 +467,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 break;
 
             case RuntimeEvent.RuntimeError { Message: var errMsg }:
-                msg.SetError(errMsg);
+                if (!msg.IsComplete) msg.SetError(errMsg);
                 break;
 
             case RuntimeEvent.PermissionDenied { ToolName: var tool, Reason: var reason }:

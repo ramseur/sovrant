@@ -1397,3 +1397,119 @@ All other endpoints (workspace memory, project config/archive, mission run, team
 | 4 | R4-M4 EvalRoutes suiteName path validation | EvalRoutes.cs:90 | Low |
 | 5 | R4-M5 MeRoutes token expiry bounds | MeRoutes.cs:50 | Low |
 | 6 | 19-C2 ChatRoutes SSRF DNS TOCTOU | ChatRoutes.cs:85 | Medium |
+
+---
+
+## 25. Standing Checklist — Database Call Patterns
+
+**Added:** 2026-05-16. Prompted by `SidebarViewModel.LoadSessionsAsync` doing 21 queries per refresh (N+1: one `ListAsync` for IDs, then one `LoadAsync` per session to derive the label from the first entry's content). Fixed by switching to `ListWithTitlesAsync` which returns `session_id, title, updated_at` in a single SQL query.
+
+This checklist applies on every PR that touches a ViewModel, route handler, background service, or any code that calls an `ISessionStore`, `IWorkspaceService`, `IProjectService`, `IArtifactStore`, or any other persistence interface.
+
+### 25.1 N+1 Query Pattern
+**Severity:** MEDIUM–HIGH depending on list size  
+**What to look for:**
+- Any `foreach` over a collection that calls a store/service method per item
+- `ListAsync` → `LoadAsync` per ID (the exact pattern caught here)
+- `foreach (var id in ids) { var detail = await store.GetAsync(id); ... }`
+
+**Fix:** Use or add a bulk query method that returns all needed data in one call. If a bulk method doesn't exist, add one rather than tolerate N+1 in the calling code.
+
+**Example:**
+```csharp
+// BAD — N+1
+var ids = await _sessionStore.ListAsync(ownerUserId: userId);
+foreach (var id in ids)
+{
+    var entries = await _sessionStore.LoadAsync(id, ownerUserId: userId);
+    var label = entries.FirstOrDefault(e => e.Role == "user")?.Content ?? id;
+    // ...
+}
+
+// GOOD — single query
+var sessions = await _sessionStore.ListWithTitlesAsync(ownerUserId: userId);
+foreach (var s in sessions)
+{
+    var label = s.Title ?? s.SessionId;
+    // ...
+}
+```
+
+---
+
+### 25.2 UI Thread — Store Calls on Background vs. UI Thread
+**Severity:** MEDIUM  
+**What to look for:**
+- Property mutations on `[ObservableProperty]` fields done off the UI thread after an `await`
+- `IsSending = false` (or similar observable state) set on a background thread continuation — Avalonia bindings may not reliably propagate cross-thread property changes
+- `ObservableCollection` mutations outside `Dispatcher.UIThread.InvokeAsync`
+
+**Fix:** Wrap all observable state updates in `await Dispatcher.UIThread.InvokeAsync(() => { ... })`. Keep store/service calls on the background thread (they should not block the UI thread), but marshal results back explicitly.
+
+**Example:**
+```csharp
+// BAD — IsSending mutated on background thread after ConfigureAwait(false)
+finally
+{
+    IsSending = false;  // background thread — Avalonia may not pick this up
+    await Dispatcher.UIThread.InvokeAsync(() => { msg.CompleteStreaming(); });
+}
+
+// GOOD — all observable mutations on UI thread
+finally
+{
+    await Dispatcher.UIThread.InvokeAsync(() =>
+    {
+        IsSending = false;
+        msg.CompleteStreaming();
+    });
+}
+```
+
+---
+
+### 25.3 Upsert vs. Update — Silent No-Ops
+**Severity:** MEDIUM  
+**What to look for:**
+- `UPDATE ... WHERE session_id = $sid` called before the row is guaranteed to exist
+- Any `SetXxxAsync` that uses a bare `UPDATE` — if the row isn't there yet, the call silently does nothing and callers don't know
+- Title/metadata writes that happen before the first `AppendAsync` (which is what creates the session row via `INSERT OR IGNORE`)
+
+**Fix:** Methods that must work before the row exists should use `INSERT OR IGNORE` first, then `UPDATE`. Document the precondition explicitly if an `UPDATE`-only path is intentional.
+
+**Example:**
+```csharp
+// BAD — UPDATE silently no-ops if session row doesn't exist yet
+cmd.CommandText = "UPDATE sessions SET title = $title WHERE session_id = $sid";
+
+// GOOD — upsert: create if missing, then update
+ensureCmd.CommandText = """
+    INSERT OR IGNORE INTO sessions (session_id, user_id, started_at, updated_at)
+    VALUES ($sid, $uid, strftime(...), strftime(...))
+    """;
+// then:
+cmd.CommandText = "UPDATE sessions SET title = $title WHERE session_id = $sid AND user_id = $uid";
+```
+
+---
+
+### 25.4 Fallback Paths — Relative vs. Absolute Paths
+**Severity:** HIGH  
+**What to look for:**
+- Any `Path.Combine(WorkingDirectory, ...)` or `Path.Combine(Directory.GetCurrentDirectory(), ...)` used as a fallback for user data (artifacts, logs, config)
+- `Directory.GetCurrentDirectory()` in data path construction — CWD is unpredictable and changes based on how the process is launched (IDE, `dotnet run`, installed binary)
+- Fallback paths that resolve correctly in development but land in the source tree
+
+**Fix:** For any Sovrant user data, always fall back to `~/.sovrant/` (or `SOVRANT_ARTIFACTS_ROOT`, `SOVRANT_DB_PATH`, etc. env vars) — never to CWD. Use `Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)` as the anchor.
+
+**Example:**
+```csharp
+// BAD — CWD-relative fallback; lands in source tree in dev mode
+var dir = Path.Combine(WorkingDirectory, "artifacts");
+
+// GOOD — always resolves to ~/.sovrant/artifacts or override
+var dir = Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT")
+    ?? Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".sovrant", "artifacts");
+```

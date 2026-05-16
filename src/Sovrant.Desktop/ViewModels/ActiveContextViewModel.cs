@@ -49,6 +49,16 @@ public partial class ActiveContextViewModel : ViewModelBase
     public ObservableCollection<ProjectOption> Projects { get; } = [];
     public ObservableCollection<ProjectOption> ProjectChoices { get; } = [];
 
+    /// <summary>Display name for the current user (local part of email). Never a raw ID.</summary>
+    public string UserDisplayName { get; private set; } = string.Empty;
+
+    /// <summary>Sets the user display name from an email or ID. Extracts the local part if it's an email.</summary>
+    public void SetCurrentUser(string emailOrId)
+    {
+        var atIdx = emailOrId.IndexOf('@', StringComparison.Ordinal);
+        UserDisplayName = atIdx > 0 ? emailOrId[..atIdx] : string.Empty;
+    }
+
     /// <summary>Raised when the active context changes (workspace or project).</summary>
     public event Action? ContextChanged;
 

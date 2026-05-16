@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -212,17 +213,32 @@ public sealed partial class LocalArtifactStore : IArtifactStore
 
     // ── Path helpers ────────────────────────────────────────────────────
 
-    /// <summary>Builds the filesystem path for a scope, omitting null segments.</summary>
+    /// <summary>Builds the filesystem path for a scope using composite {id}__{name} directory names.</summary>
     private string BuildScopePath(ArtifactScope scope)
     {
-        var path = _root;
-        path = Path.Combine(path, scope.WorkspaceId);
-        path = Path.Combine(path, scope.ProjectId);
+        var wsPath = Path.Combine(_root, MakeDirSegment(scope.WorkspaceId, scope.WorkspaceName));
+        var projPath = Path.Combine(wsPath, MakeDirSegment(scope.ProjectId, scope.ProjectName));
+        return scope.RunId is not null ? Path.Combine(projPath, scope.RunId) : projPath;
+    }
 
-        if (scope.RunId is not null)
-            path = Path.Combine(path, scope.RunId);
+    /// <summary>Returns <c>{id}__{safeName}</c> if name is usable, otherwise bare <c>{id}</c>.</summary>
+    private static string MakeDirSegment(string id, string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return id;
+        var safe = MakeSafeName(name);
+        return string.IsNullOrEmpty(safe) ? id : $"{id}__{safe}";
+    }
 
-        return path;
+    /// <summary>Converts a display name into a filesystem-safe lowercase suffix (letters, digits, hyphens).</summary>
+    private static string MakeSafeName(string name)
+    {
+        var sb = new System.Text.StringBuilder(name.Length);
+        foreach (var c in name)
+        {
+            if (char.IsLetterOrDigit(c) || c == '_') sb.Append(char.ToLowerInvariant(c));
+            else if (c == ' ' || c == '-') sb.Append('-');
+        }
+        return sb.ToString().Trim('-');
     }
 
     /// <summary>
@@ -253,15 +269,25 @@ public sealed partial class LocalArtifactStore : IArtifactStore
         return fullPath;
     }
 
-    /// <summary>Validates a scope segment against traversal and illegal characters.</summary>
+    // Windows-invalid filename characters (NTFS + FAT32): < > : " / \ | ? *
+    // Plus control characters 0–31. @ is technically legal on NTFS but excluded
+    // here because it appears in email addresses that may flow in as user IDs.
+    private static readonly SearchValues<char> InvalidSegmentChars =
+        SearchValues.Create(['<', '>', ':', '"', '/', '\\', '|', '?', '*', '@']);
+
+    /// <summary>Validates a scope segment against path traversal and Windows-illegal filename characters.</summary>
     private static void ValidateSegment(string? value, string paramName)
     {
         if (string.IsNullOrWhiteSpace(value))
             throw new ArgumentException($"{paramName} must not be empty.", paramName);
 
+        if (value.EndsWith(' ') || value.EndsWith('.'))
+            throw new ArgumentException(
+                $"{paramName} must not end with a space or period: '{value}'", paramName);
+
         if (value.Contains("..", StringComparison.Ordinal) ||
-            value.Contains('/', StringComparison.Ordinal) ||
-            value.Contains('\\', StringComparison.Ordinal))
+            value.IndexOfAny(InvalidSegmentChars) >= 0 ||
+            value.Any(char.IsControl))
         {
             throw new ArgumentException(
                 $"{paramName} contains invalid characters: '{value}'", paramName);
