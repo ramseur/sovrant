@@ -75,18 +75,18 @@ public sealed class SystemPromptBuilder
             {
                 parts.Add(
                     "CONTENT CREATION DISCIPLINE — any code, script, config, document, or data file " +
-                    "that the user asked you to create or that they will run/use/save must go through " +
-                    "the Artifact tool. Do not paste it into chat.\n\n" +
+                    "the user asked you to create must go through the Artifact tool. " +
+                    "Do NOT write the content into chat first and then save it — call the tool immediately.\n\n" +
                     "- Use Artifact 'write' for a single file, 'write_many' for multiple files in one call. " +
                     "Scope is auto-attached — only set 'path' and 'content'.\n" +
-                    "- The only exception is a brief illustrative snippet (a few lines shown purely to " +
-                    "explain a concept, not to be used directly). If the user asked you to 'write', " +
-                    "'create', 'generate', 'build', or 'give me' code or a file — that is an Artifact, " +
-                    "regardless of length.\n" +
-                    "- After saving, briefly state what you wrote and the path. Do not repeat the full " +
-                    "contents in chat — the file is the deliverable.\n" +
-                    "- Edits to existing repository files use Edit/Write directly. Artifact is for new " +
-                    "generated outputs that don't have an existing path in the working tree.");
+                    "- If the user asked you to 'write', 'create', 'generate', 'build', or 'give me' " +
+                    "a file — call the Artifact tool as your FIRST action, regardless of length. " +
+                    "The only exception is a brief illustrative snippet (a few lines shown purely " +
+                    "to explain a concept, not to be saved or run).\n" +
+                    "- After saving, briefly state what you wrote and the path. Do not repeat the " +
+                    "full contents in chat — the file is the deliverable.\n" +
+                    "- Edits to existing repository files use Edit/Write directly. Artifact is for " +
+                    "new generated outputs that don't have an existing path in the working tree.");
             }
 
             // Document generation guidance — teach the LLM to use DocumentGenerate
@@ -95,16 +95,20 @@ public sealed class SystemPromptBuilder
             {
                 parts.Add(
                     "DOCUMENT GENERATION — when the user asks for a PDF, Word document, Excel " +
-                    "spreadsheet, PowerPoint, or any formatted report, use the DocumentGenerate tool:\n\n" +
-                    "- format 'structured_pdf': styled PDF from markdown (headings, lists, code blocks). " +
-                    "Use this for any PDF request unless the user wants raw plain-text output.\n" +
-                    "- format 'word': .docx from markdown.\n" +
-                    "- format 'excel': .xlsx from JSON {headers, rows}.\n" +
-                    "- format 'powerpoint': .pptx where each H1 heading becomes a new slide.\n" +
-                    "- format 'markdown': saves a .md file as an artifact.\n\n" +
-                    "Never tell the user you cannot create or export a document — you have full " +
-                    "document generation capability. Generate the content, call DocumentGenerate, " +
-                    "and report the saved path.");
+                    "spreadsheet, PowerPoint, or any formatted report:\n\n" +
+                    "CRITICAL: Call DocumentGenerate IMMEDIATELY as your FIRST action. " +
+                    "Do NOT write, draft, outline, or summarize the content in chat first — " +
+                    "go straight to the tool call. The tool produces the file; chat is only " +
+                    "for a one-line confirmation afterward (e.g. 'Your PDF is ready at ...').\n\n" +
+                    "Formats:\n" +
+                    "- 'structured_pdf': styled PDF from markdown (headings, lists, code blocks). " +
+                    "Use for any PDF request unless the user wants raw plain-text.\n" +
+                    "- 'word': .docx from markdown.\n" +
+                    "- 'excel': .xlsx from JSON {headers, rows}.\n" +
+                    "- 'powerpoint': .pptx where each H1 heading becomes a new slide.\n" +
+                    "- 'markdown': saves a .md artifact.\n\n" +
+                    "Never tell the user you cannot create or export a document. " +
+                    "Call the tool first, then confirm with the saved path.");
             }
 
             // Orchestration strategy — teach the LLM when to escalate
