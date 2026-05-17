@@ -7,6 +7,9 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/Dotnet.gitignore
 
+# Local publish output (dotnet publish artifacts — never committed)
+publish/
+
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
