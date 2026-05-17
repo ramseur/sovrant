@@ -312,24 +312,85 @@ public partial class MessageViewModel : ViewModelBase
         var context = ExtractProviderContext(raw);
         var prefix = context is not null ? $"{context}: " : "";
 
-        if (raw.Contains("429", StringComparison.Ordinal) || raw.Contains("rate limit", StringComparison.OrdinalIgnoreCase))
+        // No provider or model configured — most common first-run issue
+        if (raw.Contains("No provider available", StringComparison.OrdinalIgnoreCase))
+            return "No provider configured. Go to Settings → Providers and add an API key to get started.";
+
+        // Credits / billing exhausted
+        if (raw.Contains("insufficient_quota", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("out of credits", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("credit balance", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("402", StringComparison.Ordinal))
+            return $"{prefix}API credits exhausted. Top up your account at the provider's website, or switch to a different provider in Settings.";
+
+        // Rate limited
+        if (raw.Contains("429", StringComparison.Ordinal) ||
+            raw.Contains("rate limit", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("too many requests", StringComparison.OrdinalIgnoreCase))
             return $"{prefix}Rate limited by the provider. Wait a moment and try again, or switch to a different model in Settings.";
-        if (raw.Contains("401", StringComparison.Ordinal) || raw.Contains("Authentication", StringComparison.OrdinalIgnoreCase))
-            return $"{prefix}Authentication failed. Check your API key in Settings.";
-        if (raw.Contains("403", StringComparison.Ordinal))
+
+        // Authentication
+        if (raw.Contains("401", StringComparison.Ordinal) ||
+            raw.Contains("Unauthorized", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("Authentication", StringComparison.OrdinalIgnoreCase))
+            return $"{prefix}Authentication failed. Check your API key in Settings → Providers.";
+
+        // Access denied
+        if (raw.Contains("403", StringComparison.Ordinal) ||
+            raw.Contains("Forbidden", StringComparison.OrdinalIgnoreCase))
             return $"{prefix}Access denied. Your API key may not have permission for this model.";
-        if (raw.Contains("400", StringComparison.Ordinal) && raw.Contains("API error", StringComparison.OrdinalIgnoreCase))
-            return $"{prefix}The model rejected this request (400). Try starting a new chat or switching models.";
+
+        // Model not found
+        if (raw.Contains("404", StringComparison.Ordinal) &&
+            (raw.Contains("model", StringComparison.OrdinalIgnoreCase) || raw.Contains("not found", StringComparison.OrdinalIgnoreCase)))
+            return $"{prefix}Model not found. It may have been removed or renamed — try selecting a different model in Settings.";
+
+        // Context length exceeded
+        if (raw.Contains("context_length", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("context length", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("maximum context", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("413", StringComparison.Ordinal))
+            return $"{prefix}The conversation is too long for this model. Start a new chat or switch to a model with a larger context window.";
+
+        // Content filtered / safety block
+        if (raw.Contains("content_filter", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("content filter", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("moderated", StringComparison.OrdinalIgnoreCase))
+            return $"{prefix}The request was blocked by the provider's content filter. Try rephrasing.";
+
+        // Bad request
+        if (raw.Contains("400", StringComparison.Ordinal))
+            return $"{prefix}The provider rejected this request (400). Try starting a new chat or switching models.";
+
+        // Provider-level error wrapper
         if (raw.Contains("Provider returned error", StringComparison.OrdinalIgnoreCase))
             return $"{prefix}The provider returned an error. Try again or switch to a different model in Settings.";
+
+        // Service overloaded / unavailable
+        if (raw.Contains("529", StringComparison.Ordinal) ||
+            raw.Contains("503", StringComparison.Ordinal) ||
+            raw.Contains("502", StringComparison.Ordinal) ||
+            raw.Contains("overloaded", StringComparison.OrdinalIgnoreCase))
+            return $"{prefix}The provider is temporarily overloaded. Try again in a moment.";
+
+        if (raw.Contains("500", StringComparison.Ordinal))
+            return $"{prefix}The provider hit an internal error (500). Try again.";
+
+        // Connection errors
         if (raw.Contains("connection", StringComparison.OrdinalIgnoreCase) && raw.Contains("refused", StringComparison.OrdinalIgnoreCase))
-            return $"{prefix}Could not connect to the provider. Check your internet connection and base URL.";
-        if (raw.Contains("No such host", StringComparison.OrdinalIgnoreCase))
-            return $"{prefix}Could not reach the provider — DNS lookup failed. Check your internet connection.";
+            return $"{prefix}Could not connect to the provider. Check your internet connection and the base URL in Settings.";
+        if (raw.Contains("No such host", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("Name or service not known", StringComparison.OrdinalIgnoreCase))
+            return $"{prefix}Could not reach the provider — check your internet connection.";
+
+        // Timeout
         if (raw.Contains("timeout", StringComparison.OrdinalIgnoreCase) || raw.Contains("timed out", StringComparison.OrdinalIgnoreCase))
             return $"{prefix}The request timed out. The provider may be overloaded — try again.";
-        if (raw.Contains("No provider available", StringComparison.OrdinalIgnoreCase))
-            return "No provider is available. Check your API key and provider settings.";
+
+        // Agent hit max tool rounds
+        if (raw.Contains("Maximum tool rounds", StringComparison.OrdinalIgnoreCase))
+            return "The agent reached its tool use limit for this turn. Try breaking your request into smaller steps.";
+
         return $"{prefix}Something went wrong. {raw}";
     }
 
