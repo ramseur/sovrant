@@ -8,13 +8,15 @@ namespace Sovrant.Runtime.Artifacts;
 /// <summary>
 /// On-disk <see cref="IArtifactStore"/> implementation that writes artifacts
 /// into a tenant-scoped directory tree under <c>SOVRANT_ARTIFACTS_ROOT</c>
-/// (default <c>~/.sovrant/artifacts</c>).
+/// (default <c>~/.sovrant/workspaces</c>).
 /// </summary>
 /// <remarks>
-/// Layout: <c>{root}/{workspace}/{project}/{run}/</c>
+/// Workspace-level layout: <c>{root}/{workspace}/artifacts/{run}/</c>
+/// Project-level layout:   <c>{root}/{workspace}/projects/{project}/artifacts/{run}/</c>
+/// The routing is determined by <see cref="ArtifactScope.IsWorkspaceLevel"/>:
+/// when no real project is selected the artifact lands at workspace level;
+/// an explicit project routes it under the project's artifacts folder.
 /// Each run directory contains a <c>_manifest.json</c> with metadata.
-/// The initiating user is recorded in the manifest, not in the path —
-/// all workspace members share the same artifact tree.
 /// </remarks>
 public sealed partial class LocalArtifactStore : IArtifactStore
 {
@@ -37,7 +39,7 @@ public sealed partial class LocalArtifactStore : IArtifactStore
             ?? Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT")
             ?? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".sovrant", "artifacts");
+                ".sovrant", "workspaces");
         _accessPathPrefix = accessPathPrefix
             ?? Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_URL_PREFIX");
     }
@@ -197,12 +199,25 @@ public sealed partial class LocalArtifactStore : IArtifactStore
         {
             var scope = handle.Scope;
             var prefix = _accessPathPrefix.TrimEnd('/');
-            var segs = new List<string> { prefix, Uri.EscapeDataString(scope.WorkspaceId), Uri.EscapeDataString(scope.ProjectId) };
+            var segs = new List<string> { prefix, Uri.EscapeDataString(scope.WorkspaceId) };
+
+            if (scope.IsWorkspaceLevel)
+            {
+                segs.Add("artifacts");
+            }
+            else
+            {
+                segs.Add("projects");
+                segs.Add(Uri.EscapeDataString(scope.ProjectId));
+                segs.Add("artifacts");
+            }
+
             if (!string.IsNullOrEmpty(scope.RunId))
                 segs.Add(Uri.EscapeDataString(scope.RunId));
-            // Escape each path segment but keep the separators.
+
             foreach (var seg in relativePath.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries))
                 segs.Add(Uri.EscapeDataString(seg));
+
             var url = string.Join('/', segs);
             var kind = Uri.IsWellFormedUriString(url, UriKind.Absolute) ? UriKind.Absolute : UriKind.Relative;
             return Task.FromResult<Uri?>(new Uri(url, kind));
@@ -213,12 +228,29 @@ public sealed partial class LocalArtifactStore : IArtifactStore
 
     // ── Path helpers ────────────────────────────────────────────────────
 
-    /// <summary>Builds the filesystem path for a scope using composite {id}__{name} directory names.</summary>
+    /// <summary>
+    /// Builds the filesystem path for a scope.
+    /// Workspace-level (no real project): <c>{root}/{ws}/artifacts/{run}</c>
+    /// Project-level (explicit project):  <c>{root}/{ws}/projects/{proj}/artifacts/{run}</c>
+    /// </summary>
     private string BuildScopePath(ArtifactScope scope)
     {
-        var wsPath = Path.Combine(_root, MakeDirSegment(scope.WorkspaceId, scope.WorkspaceName));
-        var projPath = Path.Combine(wsPath, MakeDirSegment(scope.ProjectId, scope.ProjectName));
-        return scope.RunId is not null ? Path.Combine(projPath, scope.RunId) : projPath;
+        var wsDir = Path.Combine(_root, MakeDirSegment(scope.WorkspaceId, scope.WorkspaceName));
+
+        string artifactsDir;
+        if (scope.IsWorkspaceLevel)
+        {
+            // No real project selected — store at workspace level.
+            artifactsDir = Path.Combine(wsDir, "artifacts");
+        }
+        else
+        {
+            // Explicit project — nest under projects/{proj}/artifacts.
+            var projDir = Path.Combine(wsDir, "projects", MakeDirSegment(scope.ProjectId, scope.ProjectName));
+            artifactsDir = Path.Combine(projDir, "artifacts");
+        }
+
+        return scope.RunId is not null ? Path.Combine(artifactsDir, scope.RunId) : artifactsDir;
     }
 
     /// <summary>Returns <c>{id}__{safeName}</c> if name is usable, otherwise bare <c>{id}</c>.</summary>
