@@ -10,13 +10,13 @@ public partial class DeleteConfirmDialog : Window
 
     public DeleteConfirmDialog() => InitializeComponent();
 
-    public DeleteConfirmDialog(string itemType, string itemName, bool requireTypeName = true) : this()
+    public DeleteConfirmDialog(string itemType, string itemName, bool requireTypeName = true, string verb = "Delete") : this()
     {
         _requireTypeName = requireTypeName;
         _requiredText = itemName;
 
-        HeadingText.Text = $"Delete {itemType}";
-        DeleteButton.Content = $"Delete {itemType}";
+        HeadingText.Text = $"{verb} {itemType}";
+        DeleteButton.Content = $"{verb} {itemType}";
 
         if (requireTypeName)
         {
@@ -26,7 +26,9 @@ public partial class DeleteConfirmDialog : Window
         }
         else
         {
-            BodyText.Text = $"Are you sure you want to delete \"{itemName}\"? This action cannot be undone.";
+#pragma warning disable CA1308
+            BodyText.Text = $"Are you sure you want to {verb.ToLowerInvariant()} \"{itemName}\"? This action cannot be undone.";
+#pragma warning restore CA1308
             HintText.IsVisible = false;
             ConfirmInput.IsVisible = false;
             DeleteButton.IsEnabled = true;

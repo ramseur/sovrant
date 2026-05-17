@@ -407,6 +407,33 @@ internal sealed partial class SqliteUserStore : IUserService
         return rows > 0;
     }
 
+    public async Task<bool> HardDeleteAsync(string userId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(userId)) return false;
+
+        using var connection = _connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        // Remove owned data first, then the user row.
+        // FK cascades handle workspace_members and project_members where defined;
+        // sessions, tokens, and preferences are cleaned explicitly for safety.
+        cmd.CommandText = """
+            DELETE FROM sessions WHERE user_id = $id;
+            DELETE FROM api_tokens WHERE user_id = $id;
+            DELETE FROM user_preferences WHERE user_id = $id;
+            DELETE FROM workspace_members WHERE user_id = $id;
+            DELETE FROM users WHERE user_id = $id;
+            """;
+        cmd.Parameters.AddWithValue("$id", userId);
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+
+        // Check if the user row is gone.
+        using var check = connection.CreateCommand();
+        check.CommandText = "SELECT COUNT(1) FROM users WHERE user_id = $id";
+        check.Parameters.AddWithValue("$id", userId);
+        var remaining = (long)(await check.ExecuteScalarAsync(ct).ConfigureAwait(false))!;
+        return remaining == 0;
+    }
+
     // ── Per-user data views ────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<string>> ListSessionsAsync(string userId, int limit = 100, int offset = 0, CancellationToken ct = default)
