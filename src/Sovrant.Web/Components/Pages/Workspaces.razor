@@ -75,7 +75,7 @@
                 </div>
                 @if (w.Type != "Personal" && (Session.Role == "admin" || w.MyRole is "Owner"))
                 {
-                    <button class="btn-sm btn-danger" @onclick="() => DeleteAsync(w)">X</button>
+                    <button class="btn-sm btn-danger" @onclick="() => RequestDelete(w)">Delete</button>
                 }
             </div>
 
@@ -137,11 +137,14 @@
     }
 </div>
 
+<DeleteConfirmModal @ref="_deleteModal" />
+
 @code {
     [Inject] private IWorkspaceService WorkspaceService { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
     [Inject] private WebSessionService Session { get; set; } = default!;
 
+    private DeleteConfirmModal _deleteModal = default!;
     private static string UserId => Sovrant.Web.Program.SovrantUserId;
     private string _newName = string.Empty;
     private string _status = string.Empty;
@@ -249,6 +252,9 @@
         catch (Exception ex) { _status = $"Failed: {ex.Message}"; }
     }
 
+    private void RequestDelete(WorkspaceItem w) =>
+        _deleteModal.Show("Workspace", w.Name, () => DeleteAsync(w));
+
     private async Task DeleteAsync(WorkspaceItem w)
     {
         try
@@ -260,6 +266,7 @@
             ActiveContext.NotifyDataChanged();
         }
         catch (Exception ex) { _status = $"Cannot delete: {ex.Message}"; }
+        StateHasChanged();
     }
 
     private async Task AddMemberAsync(WorkspaceItem w)

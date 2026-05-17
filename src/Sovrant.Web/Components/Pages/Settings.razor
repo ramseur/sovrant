@@ -40,7 +40,7 @@
                         <div class="provider-detail">@profile.BaseUrl</div>
                     </div>
                     <div class="provider-actions">
-                        <button class="btn-sm btn-danger" @onclick="() => DeleteProfile(profile)">X</button>
+                        <button class="btn-sm btn-danger" @onclick="() => RequestDeleteProfile(profile)">Delete</button>
                     </div>
                 </div>
             }
@@ -131,6 +131,8 @@
     }
 </div>
 
+<DeleteConfirmModal @ref="_deleteModal" />
+
 @code {
     [Inject] private SovrantConfig Config { get; set; } = default!;
     [Inject] private IPermissionModeAccessor PermissionModeAccessor { get; set; } = default!;
@@ -144,6 +146,7 @@
     [Inject] private WebSessionService Session { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
 
+    private DeleteConfirmModal _deleteModal = default!;
     private ISmartRouter? _router;
     private IModelCapabilityRegistry? _capabilities;
     private int _selectedTab;
@@ -258,6 +261,9 @@
         catch (Exception ex) { _statusMessage = $"Failed to add provider: {ex.Message}"; }
     }
 
+    private void RequestDeleteProfile(ProviderProfileVm profile) =>
+        _deleteModal.Show("Provider", profile.Provider, () => DeleteProfile(profile), requireTypeName: false);
+
     private async Task DeleteProfile(ProviderProfileVm profile)
     {
         try
@@ -297,6 +303,7 @@
             _statusMessage = $"Profile '{profile.Name}' deleted.";
         }
         catch (Exception ex) { _statusMessage = $"Delete failed: {ex.Message}"; }
+        StateHasChanged();
     }
 
     private async Task LoadProfilesAsync()

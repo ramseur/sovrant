@@ -12,20 +12,16 @@ public partial class MessageViewModel : ViewModelBase
 {
     private static readonly string[] ThinkingPhrases =
     [
-        "Thinking really hard...",
-        "Consulting the oracle...",
-        "Pondering the possibilities...",
+        "Thinking...",
+        "Reasoning through it...",
         "Gathering thoughts...",
         "Connecting the dots...",
-        "Reasoning through it...",
         "Weighing the options...",
-        "Mulling it over...",
+        "Working on it...",
     ];
 
-    private DispatcherTimer? _thinkingTimer;
     private DispatcherTimer? _elapsedTimer;
     private readonly Stopwatch _stopwatch = new();
-    private int _phraseIndex;
 
     [ObservableProperty]
     private string _role = "user";
@@ -63,6 +59,14 @@ public partial class MessageViewModel : ViewModelBase
     private string _errorMessage = string.Empty;
 
     // ── Phase 59 properties ─────────────────────────────────────────────
+
+    /// <summary>Phase 59d — what the system thinks the user wants, e.g. "I'll create a PDF report for you".</summary>
+    [ObservableProperty]
+    private string? _intentNarration;
+
+    /// <summary>Phase 59d — summary of what was actually done, derived from tool uses after completion.</summary>
+    [ObservableProperty]
+    private string? _actionSummary;
 
     /// <summary>Phase 59a — clarification question from the intent gate.</summary>
     [ObservableProperty]
@@ -154,18 +158,10 @@ public partial class MessageViewModel : ViewModelBase
     partial void OnModelNameChanged(string? value) => OnPropertyChanged(nameof(SenderLabel));
     partial void OnProviderNameChanged(string? value) => OnPropertyChanged(nameof(SenderLabel));
 
-    public void StartThinking()
+    public void StartThinking(string? prompt = null)
     {
         IsThinking = true;
-        _phraseIndex = RandomNumberGenerator.GetInt32(ThinkingPhrases.Length);
-        ThinkingText = ThinkingPhrases[_phraseIndex];
-        _thinkingTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
-        _thinkingTimer.Tick += (_, _) =>
-        {
-            _phraseIndex = (_phraseIndex + 1) % ThinkingPhrases.Length;
-            ThinkingText = ThinkingPhrases[_phraseIndex];
-        };
-        _thinkingTimer.Start();
+        ThinkingText = PickThinkingPhrase(prompt);
 
         // Start elapsed timer — ticks every second.
         _stopwatch.Restart();
@@ -178,9 +174,78 @@ public partial class MessageViewModel : ViewModelBase
     public void StopThinking()
     {
         IsThinking = false;
-        _thinkingTimer?.Stop();
-        _thinkingTimer = null;
     }
+
+    private static string PickThinkingPhrase(string? prompt)
+    {
+        if (!string.IsNullOrEmpty(prompt))
+        {
+            var p = prompt;
+            if (ContainsAny(p, "pdf", "document", "word", "excel", "spreadsheet", "powerpoint", "report"))
+                return "Preparing your document...";
+            if (ContainsAny(p, "create", "write", "generate", "build", "make") &&
+                ContainsAny(p, "code", "script", "function", "class", "program", "app"))
+                return "Writing the code...";
+            if (ContainsAny(p, "search", "find", "look up", "lookup", "google", "web"))
+                return "Searching the web...";
+            if (ContainsAny(p, "analyze", "analyse", "review", "check", "audit", "read"))
+                return "Reading and analyzing...";
+            if (ContainsAny(p, "fix", "debug", "error", "bug", "issue", "problem"))
+                return "Investigating the issue...";
+            if (ContainsAny(p, "explain", "what", "how", "why", "describe", "tell me"))
+                return "Looking that up...";
+            if (ContainsAny(p, "summarize", "summarise", "summary", "recap"))
+                return "Summarizing...";
+            if (ContainsAny(p, "create", "make", "generate", "build", "write"))
+                return "Working on your request...";
+        }
+        return ThinkingPhrases[RandomNumberGenerator.GetInt32(ThinkingPhrases.Length)];
+    }
+
+    private static bool ContainsAny(string text, params string[] terms) =>
+        terms.Any(t => text.Contains(t, StringComparison.OrdinalIgnoreCase));
+
+    public static string FriendlyToolLabel(string toolName) => toolName switch
+    {
+        "DocumentGenerate" => "Generate Document",
+        "Artifact" => "Save File",
+        "Bash" => "Run Command",
+        "Read" => "Read File",
+        "Write" => "Write File",
+        "Edit" => "Edit File",
+        "Glob" => "Find Files",
+        "Grep" => "Search Files",
+        "WebSearch" => "Search Web",
+        "WebFetch" => "Fetch URL",
+        "Agent" => "Sub-Agent",
+        "Swarm" => "Coordinate Swarm",
+        "TeamCreate" => "Create Team",
+        "TeamRun" => "Run Team",
+        "TeamDelegate" => "Delegate to Team",
+        "Mission" => "Mission",
+        _ => toolName,
+    };
+
+    private static string FriendlyToolStatus(string toolName) => toolName switch
+    {
+        "DocumentGenerate" => "Creating your document...",
+        "Artifact" => "Saving file...",
+        "Bash" => "Running command...",
+        "Read" => "Reading file...",
+        "Write" => "Writing file...",
+        "Edit" => "Editing file...",
+        "Glob" => "Finding files...",
+        "Grep" => "Searching files...",
+        "WebSearch" => "Searching the web...",
+        "WebFetch" => "Fetching page...",
+        "Agent" => "Working with sub-agent...",
+        "Swarm" => "Coordinating swarm...",
+        "TeamCreate" => "Creating team...",
+        "TeamRun" => "Running team...",
+        "TeamDelegate" => "Delegating task...",
+        "Mission" => "Running mission...",
+        _ => $"Running {toolName}...",
+    };
 
     public void StartStreaming()
     {
@@ -195,6 +260,20 @@ public partial class MessageViewModel : ViewModelBase
         IsExecutingTools = false;
         StopElapsedTimer();
         OnPropertyChanged(nameof(SafeMarkdown));
+        ActionSummary = BuildActionSummary();
+    }
+
+    private string? BuildActionSummary()
+    {
+        if (ToolUses.Count == 0) return null;
+        var parts = new List<string>();
+        var groups = ToolUses
+            .Where(t => !t.IsError)
+            .GroupBy(t => t.ToolName)
+            .Select(g => (Label: g.Key, Count: g.Count()));
+        foreach (var (label, count) in groups)
+            parts.Add(count > 1 ? $"{label} ×{count}" : label);
+        return parts.Count > 0 ? string.Join(" · ", parts) : null;
     }
 
     private void StopElapsedTimer()
@@ -281,11 +360,11 @@ public partial class MessageViewModel : ViewModelBase
         if (IsThinking) StopThinking();
 
         IsExecutingTools = true;
-        ExecutionStatusText = $"Running {toolName}...";
+        ExecutionStatusText = FriendlyToolStatus(toolName);
 
         ToolUses.Add(new ToolUseViewModel
         {
-            ToolName = toolName,
+            ToolName = FriendlyToolLabel(toolName),
             ToolUseId = toolUseId,
             Status = "Running...",
         });

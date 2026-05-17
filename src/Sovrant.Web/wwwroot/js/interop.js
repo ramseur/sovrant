@@ -63,6 +63,20 @@ window.sovrantInterop = {
             document.removeEventListener('mousedown', handler);
             delete this._dismissHandlers[id];
         }
+    },
+
+    initTextareaAutoResize: function (el) {
+        if (!el) return;
+        const resize = function () {
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
+        };
+        el.addEventListener('input', resize);
+    },
+
+    resetTextareaHeight: function (el) {
+        if (!el) return;
+        el.style.height = '';
     }
 };
 

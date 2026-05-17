@@ -37,6 +37,9 @@ public partial class ProjectsViewModel : ViewModelBase
 
     public ObservableCollection<ProjectItemViewModel> FilteredProjects { get; } = [];
 
+    /// <summary>Set by the View to show a confirmation dialog before destructive actions.</summary>
+    public Func<string, string, Task<bool>>? ConfirmDeleteAsync { get; set; }
+
     public ProjectsViewModel(IProjectService projectService, ActiveContextViewModel activeContext)
     {
         _projectService = projectService;
@@ -76,6 +79,7 @@ public partial class ProjectsViewModel : ViewModelBase
     [RelayCommand]
     private async Task DeleteProjectAsync(ProjectItemViewModel project)
     {
+        if (ConfirmDeleteAsync is not null && !await ConfirmDeleteAsync("Project", project.Name)) return;
         await _projectService.DeleteAsync(project.Id);
         if (SelectedProject == project) SelectedProject = null;
         StatusMessage = $"Deleted project '{project.Name}'.";

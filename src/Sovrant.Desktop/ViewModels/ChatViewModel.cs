@@ -254,7 +254,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 Messages.Add(new MessageViewModel { Role = "user", Text = text, UserDisplayName = _activeContext.UserDisplayName });
 
             // Add assistant placeholder with thinking indicator.
-            assistantMsg.StartThinking();
+            assistantMsg.StartThinking(text);
             Messages.Add(assistantMsg);
         });
 
@@ -475,6 +475,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 break;
 
             // ── Phase 59 events ─────────────────────────────────────────
+            case RuntimeEvent.IntentNarrated { Narration: var narration }:
+                msg.IntentNarration = narration;
+                msg.ThinkingText = narration;
+                break;
+
             case RuntimeEvent.ClarificationNeeded { Question: var question }:
                 msg.ClarificationQuestion = question;
                 msg.AppendText($"\n\n**Clarification needed:** {question}");

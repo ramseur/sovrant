@@ -23,7 +23,16 @@
                 {
                     <span class="elapsed-text">@Message.ElapsedText</span>
                 }
+                @if (Message.IsComplete && !string.IsNullOrEmpty(Message.ActionSummary))
+                {
+                    <span class="action-summary">@Message.ActionSummary</span>
+                }
             </div>
+
+            @if (!string.IsNullOrEmpty(Message.IntentNarration) && (Message.IsThinking || Message.IsExecutingTools))
+            {
+                <div class="intent-narration msg-indent">@Message.IntentNarration</div>
+            }
 
             @if (Message.IsThinking)
             {
@@ -50,7 +59,7 @@
                         <div class="tool-use-block @(tool.IsError ? "tool-error" : "")">
                             <div class="tool-header">
                                 <span class="tool-icon">&#x1F527;</span>
-                                <span class="tool-name">@tool.ToolName</span>
+                                <span class="tool-name">@ChatMessageModel.FriendlyToolLabel(tool.ToolName)</span>
                                 <span class="tool-status @(tool.Status == "Done" ? "status-done" : tool.IsError ? "status-error" : "status-running")">@tool.Status</span>
                             </div>
                             @if (tool.IsPendingConfirmation)

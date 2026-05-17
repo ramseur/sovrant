@@ -248,27 +248,34 @@ public class SafeMarkdownPresenter : ContentControl
         {
             if (item is not ListItemBlock listItem) continue;
 
-            var itemPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-
             var bullet = list.IsOrdered ? $"{index++}." : "\u2022";
-            itemPanel.Children.Add(new TextBlock
+            var bulletWidth = list.IsOrdered ? 24 : 16;
+
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(bulletWidth)));
+            grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+
+            var bulletBlock = new TextBlock
             {
                 Text = bullet,
                 FontSize = 14,
                 Foreground = ThemeBrush("TextSecondary", "#999999"),
-                Width = list.IsOrdered ? 20 : 12,
                 TextAlignment = TextAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
-            });
+                Margin = new Thickness(0, 2, 6, 0),
+            };
+            Grid.SetColumn(bulletBlock, 0);
+            grid.Children.Add(bulletBlock);
 
             var contentPanel = new StackPanel { Spacing = 2 };
+            Grid.SetColumn(contentPanel, 1);
             foreach (var child in listItem)
             {
                 var c = RenderBlock(child);
                 if (c is not null) contentPanel.Children.Add(c);
             }
-            itemPanel.Children.Add(contentPanel);
-            panel.Children.Add(itemPanel);
+            grid.Children.Add(contentPanel);
+            panel.Children.Add(grid);
         }
 
         return new Border

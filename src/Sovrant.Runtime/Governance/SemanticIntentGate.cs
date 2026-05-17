@@ -109,8 +109,34 @@ public sealed partial class SemanticIntentGate : IIntentGate
             Confidence: classification.Complexity,
             RequiresTools: requiresTools,
             NeedsClarification: false,
-            SuggestedClarification: null));
+            SuggestedClarification: null,
+            Narration: NarrateIntent(classification.Intent)));
     }
+
+    private static string? NarrateIntent(IntentClass intent) => intent switch
+    {
+        IntentClass.Conversation => null,
+        IntentClass.CodeGeneration => "I'll write that code for you",
+        IntentClass.CodeEdit => "I'll make those code changes",
+        IntentClass.CodeReview => "I'll review the code",
+        IntentClass.Refactor => "I'll refactor that",
+        IntentClass.Debugging => "I'll investigate and fix that",
+        IntentClass.TestGeneration => "I'll write tests for that",
+        IntentClass.DocGeneration => "I'll create that document",
+        IntentClass.SpecDrafting => "I'll draft that spec",
+        IntentClass.ReportGeneration => "I'll generate that report",
+        IntentClass.FileRead => "I'll read and analyze those files",
+        IntentClass.FileSearch => "I'll search for those files",
+        IntentClass.FileManage => "I'll manage those files",
+        IntentClass.ShellExec => "I'll run that command",
+        IntentClass.EnvConfig => "I'll configure that",
+        IntentClass.GitOps => "I'll handle that git operation",
+        IntentClass.Explain => "I'll explain that",
+        IntentClass.Compare => "I'll compare those for you",
+        IntentClass.Planning => "I'll help you plan that",
+        IntentClass.Research => "I'll research that for you",
+        _ => "I'll take care of that",
+    };
 
     /// <summary>
     /// Determines whether a short message needs clarification.

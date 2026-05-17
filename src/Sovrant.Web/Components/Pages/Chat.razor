@@ -98,7 +98,6 @@
                       @bind:event="oninput"
                       @onkeydown="HandleKeyDown"
                       placeholder="Type a message or / for commands..."
-                      rows="1"
                       disabled="@_isSending"></textarea>
         </div>
         @if (_isSending)
@@ -187,6 +186,15 @@
 
     private bool CanSend => !_isSending && !string.IsNullOrWhiteSpace(_inputText);
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { await JS.InvokeVoidAsync("sovrantInterop.initTextareaAutoResize", _inputRef); }
+            catch { }
+        }
+    }
+
     protected override void OnInitialized()
     {
         ConfirmationHandler.ConfirmationRequested += OnConfirmationRequested;
@@ -246,6 +254,8 @@
                         Text = entry.Content,
                         IsComplete = true,
                         UserDisplayName = entry.Role == "user" ? _userDisplayName : null,
+                        ModelName = entry.Role == "assistant" ? entry.Model : null,
+                        ProviderName = entry.Role == "assistant" ? entry.Provider : null,
                     });
                 }
             }
@@ -413,12 +423,19 @@
         await SendAsync();
     }
 
+    private async Task ResetTextareaHeight()
+    {
+        try { await JS.InvokeVoidAsync("sovrantInterop.resetTextareaHeight", _inputRef); }
+        catch { }
+    }
+
     private async Task SendAsync()
     {
         var text = _inputText.Trim();
         if (string.IsNullOrEmpty(text) || _isSending) return;
 
         _inputText = string.Empty;
+        await ResetTextareaHeight();
 
         if (text.StartsWith('/'))
         {
@@ -490,7 +507,7 @@
 
         // Add assistant placeholder with thinking
         var assistantMsg = new ChatMessageModel { Role = "assistant", ModelName = Config.Model };
-        assistantMsg.StartThinking();
+        assistantMsg.StartThinking(text);
         _messages.Add(assistantMsg);
         _streamingMsg = assistantMsg;
         StateHasChanged();
@@ -623,6 +640,11 @@
                 break;
 
             // ── Phase 59 events ─────────────────────────────────────────
+            case RuntimeEvent.IntentNarrated { Narration: var narration }:
+                msg.IntentNarration = narration;
+                msg.ThinkingText = narration;
+                break;
+
             case RuntimeEvent.ClarificationNeeded { Question: var question }:
                 if (msg.IsThinking) msg.StopThinking();
                 msg.ClarificationQuestion = question;

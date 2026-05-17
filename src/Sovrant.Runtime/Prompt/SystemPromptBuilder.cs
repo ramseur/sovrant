@@ -74,18 +74,37 @@ public sealed class SystemPromptBuilder
             if (HasArtifactTool(tools))
             {
                 parts.Add(
-                    "CONTENT CREATION DISCIPLINE — when you produce a file the user will want to keep " +
-                    "(code, documents, configs, reports, data), save it via the Artifact tool instead " +
-                    "of pasting the contents into chat:\n\n" +
+                    "CONTENT CREATION DISCIPLINE — any code, script, config, document, or data file " +
+                    "that the user asked you to create or that they will run/use/save must go through " +
+                    "the Artifact tool. Do not paste it into chat.\n\n" +
                     "- Use Artifact 'write' for a single file, 'write_many' for multiple files in one call. " +
-                    "Scope (workspace, project, run) is auto-attached — only set 'path' and 'content'.\n" +
-                    "- Short snippets and examples (~20 lines or fewer, illustrating a point inline) stay " +
-                    "in chat. Anything that has a natural filename, or that the user is likely to copy " +
-                    "into a real file, goes through Artifact.\n" +
-                    "- After saving, briefly mention what you wrote and the path(s) so the user can find it. " +
-                    "Don't repeat the full contents in chat — the file is the deliverable.\n" +
+                    "Scope is auto-attached — only set 'path' and 'content'.\n" +
+                    "- The only exception is a brief illustrative snippet (a few lines shown purely to " +
+                    "explain a concept, not to be used directly). If the user asked you to 'write', " +
+                    "'create', 'generate', 'build', or 'give me' code or a file — that is an Artifact, " +
+                    "regardless of length.\n" +
+                    "- After saving, briefly state what you wrote and the path. Do not repeat the full " +
+                    "contents in chat — the file is the deliverable.\n" +
                     "- Edits to existing repository files use Edit/Write directly. Artifact is for new " +
                     "generated outputs that don't have an existing path in the working tree.");
+            }
+
+            // Document generation guidance — teach the LLM to use DocumentGenerate
+            // instead of saying it cannot produce files.
+            if (HasDocumentTool(tools))
+            {
+                parts.Add(
+                    "DOCUMENT GENERATION — when the user asks for a PDF, Word document, Excel " +
+                    "spreadsheet, PowerPoint, or any formatted report, use the DocumentGenerate tool:\n\n" +
+                    "- format 'structured_pdf': styled PDF from markdown (headings, lists, code blocks). " +
+                    "Use this for any PDF request unless the user wants raw plain-text output.\n" +
+                    "- format 'word': .docx from markdown.\n" +
+                    "- format 'excel': .xlsx from JSON {headers, rows}.\n" +
+                    "- format 'powerpoint': .pptx where each H1 heading becomes a new slide.\n" +
+                    "- format 'markdown': saves a .md file as an artifact.\n\n" +
+                    "Never tell the user you cannot create or export a document — you have full " +
+                    "document generation capability. Generate the content, call DocumentGenerate, " +
+                    "and report the saved path.");
             }
 
             // Orchestration strategy — teach the LLM when to escalate
@@ -134,4 +153,7 @@ public sealed class SystemPromptBuilder
 
     private static bool HasArtifactTool(IReadOnlyList<ToolDefinition> tools) =>
         tools.Any(t => t.Name == "Artifact");
+
+    private static bool HasDocumentTool(IReadOnlyList<ToolDefinition> tools) =>
+        tools.Any(t => t.Name == "DocumentGenerate");
 }

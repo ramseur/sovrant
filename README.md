@@ -47,6 +47,8 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 
 ## Quick Start
 
+> **Best experiences today:** The **Desktop app** and the **embedded Web app** deliver the most complete, polished experience. The CLI is functional but actively being refined — treat it as a work in progress.
+
 ### Prerequisites
 
 - [.NET 10 SDK or Runtime](https://dotnet.microsoft.com/download)
@@ -141,38 +143,42 @@ dotnet run --project src/Sovrant.Cli -- --ci --model gpt-4o-mini prompt "Fix the
 dotnet run --project src/Sovrant.Server
 ```
 
-The server starts on port `5200`. On first run, complete the setup wizard to create an admin account and configure your LLM provider. All credentials (API keys, provider tokens) are stored in the AES-256-GCM encrypted keystore at `~/.sovrant/credentials/` — never in `.env` files or environment variables.
-
-For headless / CI deployments, set `SOVRANT_TOKEN` to bootstrap a static admin bearer token:
+The server starts on port `5200`. On first run, register your admin account — the first user to register is automatically granted the `admin` role.
 
 ```bash
-export SOVRANT_TOKEN="your-secret-token"
-dotnet run --project src/Sovrant.Server
+# 1. Register (first user becomes admin)
+curl -X POST http://localhost:5200/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@example.com","password":"your-password"}'
+# → { "token": "svt_...", "user_id": "...", "role": "admin" }
+
+# 2. Save your token
+export SVT_TOKEN="svt_..."
 ```
 
-> All other environment variables are optional and documented in [Configuration](#configuration).
+All credentials (API keys, provider tokens) are stored in the AES-256-GCM encrypted keystore at `~/.sovrant/credentials/` — never in `.env` files or environment variables.
 
 ```bash
 # Non-streaming
 curl -X POST http://localhost:5200/v1/chat/completions \
-  -H "Authorization: Bearer your-secret-token" \
+  -H "Authorization: Bearer $SVT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Hello"}]}'
 
 # Streaming (SSE)
 curl -X POST http://localhost:5200/v1/chat/completions \
-  -H "Authorization: Bearer your-secret-token" \
+  -H "Authorization: Bearer $SVT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Hello"}],"stream":true}'
 
 # Persistent session
 curl -X POST http://localhost:5200/v1/chat/completions \
-  -H "Authorization: Bearer your-secret-token" \
+  -H "Authorization: Bearer $SVT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"My name is Eric"}],"session_id":"user-123"}'
 ```
 
-> **Auth model:** `SOVRANT_TOKEN` is the legacy / bootstrap bearer and is treated as admin. For real multi-user deployments, create users and issue per-user `svt_*` tokens via `POST /v1/users/me/tokens` (self-service) or `POST /v1/users/{id}/tokens` (admin). Non-admin callers see only their own data. See [Multi-User & Workspaces](#multi-user--workspaces).
+> **Auth model:** All requests require a `svt_*` bearer token. Log in via `POST /v1/auth/login` to get a token. Additional long-lived tokens can be issued via `POST /v1/users/me/tokens` (self-service) or `POST /v1/users/{id}/tokens` (admin). Tokens carry an optional expiry and can be revoked at any time. Non-admin callers see only their own data. See [Multi-User & Workspaces](#multi-user--workspaces).
 
 ### Permission Modes
 
@@ -282,7 +288,7 @@ Sovrant ships as a proper multi-user system, not a single-admin tool.
 
 - **Login + registration on Web and Desktop.** First-run goes through registration, not a blank config screen. Username + password (hashed in SQLite via V026). Admins can flip **open registration** and **require admin approval** flags from the Admin UI.
 - **Per-user API tokens.** Users issue `svt_*` bearer tokens via `POST /v1/users/me/tokens` (or admins via `POST /v1/users/{id}/tokens`); the plaintext is returned once and never recoverable. Tokens carry an optional expiry, a sliding `last_used_at` for inactivity TTL, and can be revoked at any time.
-- **Two-token auth model.** The legacy static `SOVRANT_TOKEN` still works for bootstrap / server-to-server and is treated as admin. `svt_*` tokens carry a real `user_id` and role — non-admin callers see only their own sessions, usage, and audit; cross-user access returns `404` (not `403`) so IDs are not enumerable.
+- **`svt_*` bearer tokens.** All API requests require a `svt_*` bearer token obtained via `POST /v1/auth/login` (or returned at registration). Additional long-lived tokens can be issued via `POST /v1/users/me/tokens` (self-service) or `POST /v1/users/{id}/tokens` (admin); the plaintext is returned once and never recoverable. Tokens carry an optional expiry, a sliding `last_used_at` for inactivity TTL, and can be revoked at any time. Non-admin callers see only their own sessions, usage, and audit; cross-user access returns `404` (not `403`) so IDs are not enumerable.
 - **Admin role.** `users.role = 'admin'` grants cross-user visibility and `/v1/users/{id}/*` management. Admin-issued password reset tokens (`password_reset_tokens` table, 24-hour TTL, one-time use) cover lost-password flows.
 - **Personal workspace per user.** Every user gets an auto-created `ws-personal-{user_id}` workspace on signup, idempotent and undeletable. Team workspaces are created via the API with 7-day invite tokens and owner/editor/viewer roles. Accept invites via `POST /v1/workspaces/invites/accept`.
 - **Projects nest inside workspaces** with their own member lists and 3-tier config inheritance (project → workspace → global).
@@ -702,7 +708,7 @@ The server exposes an OpenAI-compatible chat completions endpoint plus comprehen
 | **MCP Auth** | 1 endpoint | OAuth callback for MCP server authorization |
 | **SignalR Hub** | `/hubs/chat` | Real-time streaming for web frontend (StreamTurn, ConfirmTool, DenyTool, CancelTurn) |
 
-All endpoints require `Authorization: Bearer <SOVRANT_TOKEN>` (except `/health` and MCP auth callback). See [`docs/server.md`](docs/server.md) for the full API reference.
+All endpoints require `Authorization: Bearer <svt_token>` (except `/health`, `/v1/auth/login`, `/v1/auth/register`, and the MCP auth callback). See [`docs/server.md`](docs/server.md) for the full API reference.
 
 ---
 
@@ -923,7 +929,6 @@ API-key variables marked **(stored)** below can alternatively be saved with `sov
 |---|---|---|
 | `LLM_API_KEY` | Yes (or `auth set llm`) | API key for the primary provider — **(stored)** as `llm`. Aliases: `OPENAI_API_KEY`, `PROVIDER_API_KEY` |
 | `LLM_BASE_URL` | No | Provider base URL (default: `https://api.openai.com/v1`). Alias: `OPENAI_BASE_URL` |
-| `SOVRANT_TOKEN` | Yes (server) | Bearer token for HTTP API authentication |
 | `SOVRANT_PORT` | No | Server port (default: `5200`) |
 | `SOVRANT_MODEL` | No | Default model name |
 | `PROVIDER_BASE_URL` | No | Enables native messages API provider (`/v1/messages` format) |

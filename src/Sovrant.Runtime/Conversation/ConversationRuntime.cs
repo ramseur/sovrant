@@ -265,6 +265,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                         yield return new RuntimeEvent.ClarificationNeeded(
                             gateResult.SuggestedClarification ?? "Could you clarify what you'd like me to do?");
 
+                    if (!gateResult.NeedsClarification && gateResult.Narration is not null)
+                        yield return new RuntimeEvent.IntentNarrated(gateResult.Narration);
+
                     tools = gateResult.RequiresTools
                         ? FilterToolsForModel(allTools)
                         : [];
