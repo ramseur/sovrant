@@ -92,13 +92,15 @@
                         BorderThickness="1"
                         Padding="20,16"
                         IsVisible="{Binding !!SelectedTool}">
-                    <ContentControl Content="{Binding SelectedTool}">
-                        <ContentControl.ContentTemplate>
-                            <DataTemplate DataType="vm:ToolItemViewModel">
-                                <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
-                            </DataTemplate>
-                        </ContentControl.ContentTemplate>
-                    </ContentControl>
+                    <ScrollViewer>
+                        <ContentControl Content="{Binding SelectedTool}">
+                            <ContentControl.ContentTemplate>
+                                <DataTemplate DataType="vm:ToolItemViewModel">
+                                    <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
+                                </DataTemplate>
+                            </ContentControl.ContentTemplate>
+                        </ContentControl>
+                    </ScrollViewer>
                 </Border>
             </Grid>
         </Grid>
