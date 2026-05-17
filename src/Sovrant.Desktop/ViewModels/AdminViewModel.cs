@@ -20,6 +20,9 @@ public partial class AdminViewModel : ViewModelBase
     private readonly IProviderProfileStore _profileStore;
     private readonly ICredentialStore _credentials;
 
+    /// <summary>Set by the View to show a confirmation dialog before destructive actions.</summary>
+    public Func<string, string, Task<bool>>? ConfirmDeleteAsync { get; set; }
+
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private string _status = string.Empty;
     [ObservableProperty] private string _error = string.Empty;
@@ -170,6 +173,8 @@ public partial class AdminViewModel : ViewModelBase
     private async Task DisableAsync(User user)
     {
         if (user.UserId == _principal.UserId) return;
+        if (ConfirmDeleteAsync is not null &&
+            !await ConfirmDeleteAsync("User", user.Email ?? user.Username)) return;
         Status = string.Empty;
         await _users.DeactivateAsync(user.UserId).ConfigureAwait(true);
         Status = $"{user.Email ?? user.Username} disabled.";

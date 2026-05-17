@@ -82,7 +82,7 @@
                                 }
                                 @if (u.Status == "active" && u.UserId != Session.UserId)
                                 {
-                                    <button class="btn btn-sm btn-danger" @onclick="() => DisableAsync(u.UserId)">Disable</button>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => RequestDisable(u)">Disable</button>
                                 }
                                 @if (u.Status == "inactive")
                                 {
@@ -163,7 +163,10 @@
     }
 </div>
 
+<DeleteConfirmModal @ref="_deleteModal" />
+
 @code {
+    private DeleteConfirmModal _deleteModal = default!;
     private int _tab;
     private bool _isLoading = true;
     private string _userFilter = "all";
@@ -217,12 +220,17 @@
         await LoadAsync();
     }
 
+    private void RequestDisable(User u) =>
+        _deleteModal.Show("User", u.Email ?? u.Username,
+            () => DisableAsync(u.UserId), requireTypeName: false);
+
     private async Task DisableAsync(string userId)
     {
         _status = string.Empty;
         await UserService.DeactivateAsync(userId).ConfigureAwait(false);
         _status = "User disabled.";
         await LoadAsync();
+        StateHasChanged();
     }
 
     private async Task ReactivateAsync(string userId)
