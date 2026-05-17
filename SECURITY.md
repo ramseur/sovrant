@@ -46,7 +46,7 @@ The following are **out of scope** for this policy:
 ## Known Security Architecture Decisions
 
 - API keys and credentials are stored exclusively in an AES-256-GCM encrypted keystore (`~/.sovrant/credentials/`). They are never written to `.env` files or environment variables.
-- LLM API keys are sent per-request directly to the provider over HTTPS. In remote mode the client never sees the key — the server holds and sends it. See [`docs/api-key-security.md`](docs/api-key-security.md) for full details.
+- LLM API keys are sent per-request directly to the provider over HTTPS. In remote mode the client never sees the key — the server holds and sends it. See [`docs/security-architecture.md`](docs/security-architecture.md) for full details.
 - The `WriteFileTool` enforces absolute paths only and blocks writes inside the artifact store root.
 - The `LocalArtifactStore` enforces path containment via `ResolveAndGuard` — no path traversal is possible through the Artifact tool.
 - Tool execution is permission-gated. Dangerous tools require explicit user approval unless `bypassPermissions` is set.
