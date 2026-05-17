@@ -42,6 +42,7 @@ public sealed partial class LocalArtifactStore : IArtifactStore
                 ".sovrant", "workspaces");
         _accessPathPrefix = accessPathPrefix
             ?? Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_URL_PREFIX");
+        Directory.CreateDirectory(_root);
     }
 
     /// <summary>The resolved root directory for all artifacts.</summary>
