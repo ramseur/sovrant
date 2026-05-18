@@ -129,6 +129,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Supabase backend — swap SQLite for Supabase (PostgreSQL) as the server-side database; Supabase Auth replaces the hand-rolled auth stack and delivers SSO (Google, GitHub, Azure AD, SAML, etc.) out of the box; admin UI for enabling/disabling providers per workspace | Phase 40C | Deferred |
 | Granular feature permissions — workspace members can be granted or denied access to specific features (Chat, Agents, Teams, Swarms, Missions, MCP, Knowledge, Artifacts, Settings); current model is all-or-nothing per workspace role; Phase 40D adds a permission matrix admins configure per user or role | Phase 40D | Deferred |
 | DuckDB database provider — `IStorageProvider` implementation backed by DuckDB; columnar analytics for agent runs, session history, token usage, cost aggregations, and audit queries; embedded like SQLite, analytical like a data warehouse; ideal for self-hosted deployments that need fast cross-session reporting without standing up Supabase | Phase 104 | Deferred |
+| MCP server permissions — scope which MCP servers are available at the workspace and project level; admins allowlist/blocklist servers per workspace, project owners further restrict per project; users only see MCP tools their scope permits; replaces today's global MCP server list | Phase 105 | Deferred |
 | VS Code native extension | Phase 42 | Deferred (MCP server covers MCP-aware IDEs) |
 | Embedded terminal panel inside the desktop app | Phase 45 | Deferred |
 | n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |
@@ -10405,6 +10406,60 @@ DuckDB is ideal when an operator wants to self-host Sovrant and query session hi
 5. Add Parquet export endpoint
 6. `IStorageProvider` contract tests run against DuckDB backend
 7. Tests: schema correctness, analytics view output, Parquet export, provider selection via env var
+
+---
+
+## Phase 105 — MCP Server Permissions (Workspace & Project Scoping)
+
+**Status:** Planned / Deferred.
+
+**Depends on:** Phase 16 (dynamic MCP tool proxy), Phase 40A (workspace roles), Phase 40D (granular feature permissions)
+
+**Goal:** Scope which MCP servers are available at the workspace and project level. Today MCP servers are configured globally — any connected server is visible to every session regardless of workspace or project. Phase 105 introduces an allowlist/blocklist model so workspace admins can control which external integrations their members can call, and project owners can further restrict or expand that list for a specific project.
+
+### Problem
+
+An admin connects a Stripe MCP server for the billing team's workspace and a GitHub MCP server for the engineering workspace. Today both servers are visible to all sessions across all workspaces. There is no way to say "only the engineering workspace can use GitHub tools" or "only the payments project can use Stripe tools."
+
+### Permission model
+
+Three scopes in resolution order:
+
+```
+Project-level allowlist/blocklist   (highest — project owner override)
+    ↓
+Workspace-level allowlist/blocklist (set by workspace admin)
+    ↓
+Server-level default                (global admin sets whether new servers are allow-by-default or deny-by-default)
+```
+
+A server must be allowed at both the workspace level and the project level to appear in a session's tool list. Denial at either level removes the server from that scope's sessions.
+
+### What it adds
+
+| Item | Detail |
+|---|---|
+| `mcp_server_permissions` table | `(scope_type [workspace/project], scope_id, mcp_server_id, effect [allow/deny])` |
+| Server-level default | Global admin sets `default_effect` per server: `allow` (visible everywhere unless explicitly blocked) or `deny` (hidden everywhere unless explicitly allowed). New servers default to `deny` for safety. |
+| `IMcpPermissionService` | `GetAllowedServersAsync(workspaceId, projectId?)` — returns the intersected set of permitted servers for a session. Called by `McpClientRegistry` before building the tool list for a turn. |
+| `McpClientRegistry` integration | Before exposing MCP tools to the LLM, `GetAllowedServersAsync` filters the registered server list to the session's permitted set. Filtered servers are invisible to the model — no tool definitions, no error. |
+| Workspace admin UI — Web | Settings → MCP Servers → per-server allow/deny toggle for this workspace. Shows inherited default, allows override. |
+| Workspace admin UI — Desktop | Same toggle list in Settings → Connections. |
+| Project settings — Web | Project Settings → MCP Servers → further restrict or re-allow servers within the workspace's permitted set. |
+| Project settings — Desktop | Same in project context panel. |
+| Tool-level allowlist (future sub-phase) | Within a permitted server, allowlist specific tools (e.g. allow `github_read_file` but deny `github_push`). Deferred — server-level scoping ships first. |
+| Audit | Server permission changes logged to `audit_events` with `scope_type`, `scope_id`, and `effect`. |
+
+### Implementation plan
+
+1. Add `mcp_server_permissions` DB migration; add `default_effect` column to `mcp_servers`
+2. Implement `IMcpPermissionService` + `McpPermissionStore`; register in DI
+3. Update `McpClientRegistry.GetToolsForSessionAsync` (or equivalent) to call `GetAllowedServersAsync` and filter before building tool definitions
+4. Web: MCP Servers permission toggle in workspace Settings and project Settings pages
+5. Desktop: same toggles in Settings → Connections and project context panel
+6. Global admin UI: set `default_effect` per server (`allow` / `deny`)
+7. API routes: `GET/PUT /v1/workspaces/{id}/mcp-permissions`, `GET/PUT /v1/projects/{id}/mcp-permissions`
+8. Tests: workspace-level filtering, project-level override, default_effect fallback, filtered tools invisible to model, audit trail
 
 ---
 
