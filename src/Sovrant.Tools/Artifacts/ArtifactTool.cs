@@ -79,6 +79,7 @@ public sealed class ArtifactTool : ITool
             var handle = await _store.CreateRunScopeAsync(scope, ct).ConfigureAwait(false);
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
             await _store.WriteAsync(handle, path, stream, contentType, ct).ConfigureAwait(false);
+            var accessUrl = await _store.GetAccessUrlAsync(handle, path, TimeSpan.FromDays(1), ct).ConfigureAwait(false);
 
             return JsonSerializer.Serialize(new
             {
@@ -88,6 +89,7 @@ public sealed class ArtifactTool : ITool
                 workspace_id = scope.WorkspaceId,
                 project_id = scope.ProjectId,
                 size_bytes = stream.Length,
+                access_url = accessUrl?.ToString(),
             });
         }
         catch (ArgumentException ex)
@@ -131,7 +133,8 @@ public sealed class ArtifactTool : ITool
                 try
                 {
                     await _store.WriteAsync(handle, path, stream, contentType, ct).ConfigureAwait(false);
-                    written.Add(new { path, size_bytes = stream.Length });
+                    var accessUrl = await _store.GetAccessUrlAsync(handle, path, TimeSpan.FromDays(1), ct).ConfigureAwait(false);
+                    written.Add(new { path, size_bytes = stream.Length, access_url = accessUrl?.ToString() });
                 }
                 catch (ArgumentException ex)
                 {
