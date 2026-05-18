@@ -430,6 +430,74 @@
                                                                         Margin="42,0,0,0"
                                                                         IsVisible="{Binding IsComplete}" />
 
+                                            <!-- Auto-saved artifacts (from large text blocks) -->
+                                            <ItemsControl ItemsSource="{Binding StandaloneArtifacts}"
+                                                          IsVisible="{Binding HasStandaloneArtifacts}"
+                                                          Margin="42,4,0,0">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="vm:DocumentArtifactViewModel">
+                                                        <Border Margin="0,3"
+                                                                Padding="10,8"
+                                                                CornerRadius="6"
+                                                                Background="{DynamicResource SurfaceCard}"
+                                                                BorderBrush="{DynamicResource SurfaceBorder}"
+                                                                BorderThickness="1">
+                                                            <DockPanel>
+                                                                <TextBlock DockPanel.Dock="Left"
+                                                                           Text="{Binding Icon}"
+                                                                           FontSize="18"
+                                                                           VerticalAlignment="Center"
+                                                                           Margin="0,0,10,0" />
+                                                                <StackPanel DockPanel.Dock="Right"
+                                                                            Orientation="Horizontal"
+                                                                            Spacing="6"
+                                                                            VerticalAlignment="Center">
+                                                                    <Button Content="Open"
+                                                                            Command="{Binding OpenCommand}"
+                                                                            Padding="8,3"
+                                                                            CornerRadius="4"
+                                                                            FontSize="11"
+                                                                            Background="{DynamicResource BrandPrimary}"
+                                                                            Foreground="White" />
+                                                                    <Button Content="Reveal"
+                                                                            Command="{Binding RevealInFolderCommand}"
+                                                                            Padding="8,3"
+                                                                            CornerRadius="4"
+                                                                            FontSize="11"
+                                                                            Background="Transparent"
+                                                                            BorderBrush="{DynamicResource SurfaceBorder}"
+                                                                            BorderThickness="1"
+                                                                            Foreground="{DynamicResource TextSecondary}"
+                                                                            IsVisible="{Binding LocalPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                                </StackPanel>
+                                                                <StackPanel Spacing="2">
+                                                                    <TextBlock Text="{Binding DisplayName}"
+                                                                               FontSize="12"
+                                                                               FontWeight="SemiBold"
+                                                                               Foreground="{DynamicResource TextPrimary}"
+                                                                               TextTrimming="CharacterEllipsis" />
+                                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                        <TextBlock Text="{Binding Format}"
+                                                                                   FontSize="10"
+                                                                                   Foreground="{DynamicResource TextMuted}" />
+                                                                        <TextBlock Text="·"
+                                                                                   FontSize="10"
+                                                                                   Foreground="{DynamicResource TextMuted}"
+                                                                                   IsVisible="{Binding SizeText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                                        <TextBlock Text="{Binding SizeText}"
+                                                                                   FontSize="10"
+                                                                                   Foreground="{DynamicResource TextMuted}" />
+                                                                        <TextBlock Text="· auto-saved"
+                                                                                   FontSize="10"
+                                                                                   Foreground="{DynamicResource TextMuted}" />
+                                                                    </StackPanel>
+                                                                </StackPanel>
+                                                            </DockPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
                                             <!-- Error banner with retry -->
                                             <Border Margin="42,6,0,0"
                                                     Padding="12,10"

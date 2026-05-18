@@ -639,6 +639,16 @@
                 msg.Text += $"\n\n*Permission denied for {tool}: {reason}*";
                 break;
 
+            case RuntimeEvent.ArtifactWritten a:
+                msg.StandaloneArtifacts.Add(new AutoArtifactModel
+                {
+                    Path = a.Path,
+                    Format = a.Format,
+                    SizeBytes = a.SizeBytes,
+                    AccessUrl = a.AccessUrl?.ToString(),
+                });
+                break;
+
             // ── Phase 59 events ─────────────────────────────────────────
             case RuntimeEvent.IntentNarrated { Narration: var narration }:
                 msg.IntentNarration = narration;

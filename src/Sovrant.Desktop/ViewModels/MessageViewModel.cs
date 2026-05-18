@@ -154,6 +154,16 @@ public partial class MessageViewModel : ViewModelBase
 
     public ObservableCollection<ToolUseViewModel> ToolUses { get; } = [];
 
+    /// <summary>Artifacts auto-saved from large text blocks (not tied to a specific tool use row).</summary>
+    public ObservableCollection<DocumentArtifactViewModel> StandaloneArtifacts { get; } = [];
+    public bool HasStandaloneArtifacts => StandaloneArtifacts.Count > 0;
+
+    public void AddStandaloneArtifact(DocumentArtifactViewModel vm)
+    {
+        StandaloneArtifacts.Add(vm);
+        OnPropertyChanged(nameof(HasStandaloneArtifacts));
+    }
+
     partial void OnRoleChanged(string value) => IsUser = value == "user";
     partial void OnModelNameChanged(string? value) => OnPropertyChanged(nameof(SenderLabel));
     partial void OnProviderNameChanged(string? value) => OnPropertyChanged(nameof(SenderLabel));

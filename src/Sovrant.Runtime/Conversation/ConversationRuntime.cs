@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Sovrant.Api.Routing;
 using Sovrant.Api.Types;
+using Sovrant.Runtime.Artifacts;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Hooks;
 using Sovrant.Runtime.Memory;
@@ -39,6 +40,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly ILiveSettings<CompactionSettings> _compaction;
     private readonly Permissions.IPerTurnApprovalCache? _approvalCache;
     private readonly McpClientRegistry? _mcpClients;
+    private readonly IArtifactStore? _artifactStore;
     private readonly List<InputMessage> _history = [];
     private string _systemPrompt;
     /// <summary>Once true, all subsequent turns expose tools (session used tools at least once).</summary>
@@ -75,6 +77,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Content discipline miss: assistant emitted a {Lines}-line code fence in chat (session={SessionId}); should have used Artifact.write")]
     private static partial void LogContentDisciplineMiss(ILogger logger, int lines, string sessionId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Auto-save of fenced block failed for session {SessionId}")]
+    private static partial void LogAutoSaveFailed(ILogger logger, Exception ex, string sessionId);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "LLM request failed: {Error}")]
     private static partial void LogRequestFailed(ILogger logger, string error);
@@ -114,7 +119,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         ILiveSettings<CompactionSettings>? compaction = null,
         Permissions.IPerTurnApprovalCache? approvalCache = null,
         McpClientRegistry? mcpClients = null,
-        Prompt.ICapabilityCatalog? capabilityCatalog = null)
+        Prompt.ICapabilityCatalog? capabilityCatalog = null,
+        IArtifactStore? artifactStore = null)
     {
         _router = router;
         _toolExecutor = toolExecutor;
@@ -134,6 +140,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             CompactionSettings.Resolve(settings, fallback: _config.CompactThreshold));
         _approvalCache = approvalCache;
         _mcpClients = mcpClients;
+        _artifactStore = artifactStore;
         _systemPrompt = systemPromptOverride ?? BuildSystemPrompt(capabilityCatalog);
     }
 
@@ -391,14 +398,20 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     outputTokens: accumulated.OutputTokens)
                     .ConfigureAwait(false);
 
-                // Phase 87 Track A — flag turns where the model dumped a long
-                // fenced code block in chat instead of writing through Artifact.
-                // Telemetry only — does not block or rewrite the response.
+                // Phase 87 Track A — detect and auto-save long fenced code blocks
+                // that the model dumped in chat instead of calling Artifact.write.
                 if (ArtifactToolRegistered())
                 {
                     var fenceLines = LongestFencedBlockLines(assistantText);
                     if (fenceLines >= ContentDisciplineFenceThreshold)
+                    {
                         LogContentDisciplineMiss(_logger, fenceLines, _sessionId);
+                        if (_artifactStore != null)
+                        {
+                            await foreach (var autoEv in AutoSaveFencedBlocksAsync(assistantText, ct).ConfigureAwait(false))
+                                yield return autoEv;
+                        }
+                    }
                 }
             }
 
@@ -950,6 +963,159 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         for (var i = 0; i < defs.Count; i++)
             if (defs[i].Name == "Artifact") return true;
         return false;
+    }
+
+    // Language tag → file extension map for auto-saved artifacts.
+    private static readonly Dictionary<string, string> s_langToExt =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["python"] = "py", ["py"] = "py",
+            ["javascript"] = "js", ["js"] = "js",
+            ["typescript"] = "ts", ["ts"] = "ts",
+            ["csharp"] = "cs", ["cs"] = "cs", ["c#"] = "cs",
+            ["java"] = "java",
+            ["go"] = "go",
+            ["rust"] = "rs", ["rs"] = "rs",
+            ["cpp"] = "cpp", ["c++"] = "cpp",
+            ["c"] = "c",
+            ["ruby"] = "rb", ["rb"] = "rb",
+            ["php"] = "php",
+            ["swift"] = "swift",
+            ["kotlin"] = "kt",
+            ["shell"] = "sh", ["bash"] = "sh", ["sh"] = "sh",
+            ["powershell"] = "ps1", ["ps1"] = "ps1",
+            ["sql"] = "sql",
+            ["html"] = "html",
+            ["css"] = "css",
+            ["json"] = "json",
+            ["yaml"] = "yaml", ["yml"] = "yaml",
+            ["toml"] = "toml",
+            ["xml"] = "xml",
+            ["markdown"] = "md", ["md"] = "md",
+        };
+
+    private static string LangToExt(string lang) =>
+        s_langToExt.TryGetValue(lang.Trim(), out var ext) ? ext : "txt";
+
+    /// <summary>
+    /// Extracts fenced code blocks at or above <paramref name="threshold"/> lines.
+    /// Returns (language, content) pairs in order of appearance.
+    /// </summary>
+    private static List<(string Language, string Content)> ExtractLongFencedBlocks(string text, int threshold)
+    {
+        var result = new List<(string, string)>();
+        var lines = text.Split('\n');
+        var inFence = false;
+        var lang = string.Empty;
+        var buf = new System.Text.StringBuilder();
+
+        foreach (var rawLine in lines)
+        {
+            var line = rawLine.TrimStart();
+            if (!inFence && line.StartsWith("```", StringComparison.Ordinal))
+            {
+                lang = line[3..].Trim();
+                inFence = true;
+                buf.Clear();
+            }
+            else if (inFence && line.StartsWith("```", StringComparison.Ordinal))
+            {
+                var content = buf.ToString();
+                var lineCount = content.Split('\n').Length;
+                if (lineCount >= threshold)
+                    result.Add((lang, content.TrimEnd()));
+                inFence = false;
+                lang = string.Empty;
+                buf.Clear();
+            }
+            else if (inFence)
+            {
+                buf.Append(rawLine).Append('\n');
+            }
+        }
+
+        // Unclosed fence — include if long enough.
+        if (inFence)
+        {
+            var content = buf.ToString();
+            if (content.Split('\n').Length >= threshold)
+                result.Add((lang, content.TrimEnd()));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Auto-saves long fenced code blocks that bypassed the Artifact tool and
+    /// yields <see cref="RuntimeEvent.ArtifactWritten"/> events for each saved block.
+    /// </summary>
+    private async IAsyncEnumerable<RuntimeEvent> AutoSaveFencedBlocksAsync(
+        string assistantText,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        var blocks = ExtractLongFencedBlocks(assistantText, ContentDisciplineFenceThreshold);
+        if (blocks.Count == 0 || _artifactStore == null) yield break;
+
+        var events = await CollectAutoSaveEventsAsync(blocks, ct).ConfigureAwait(false);
+        foreach (var ev in events)
+            yield return ev;
+    }
+
+    private async Task<List<RuntimeEvent>> CollectAutoSaveEventsAsync(
+        List<(string Language, string Content)> blocks,
+        CancellationToken ct)
+    {
+        var result = new List<RuntimeEvent>();
+        if (_artifactStore == null) return result;
+
+        var resolvedUserId = _ownerUserId is { Length: > 0 } u ? u : WorkspaceIdentity.CurrentUserId;
+        var workspaceId = Environment.GetEnvironmentVariable("SOVRANT_WORKSPACE_ID")
+            ?? WorkspaceIdentity.DefaultPersonalFor(resolvedUserId);
+        var projectId = Environment.GetEnvironmentVariable("SOVRANT_PROJECT_ID")
+            ?? ArtifactScope.DefaultProjectId;
+
+        var scope = new ArtifactScope
+        {
+            WorkspaceId = workspaceId,
+            ProjectId = projectId,
+            RunId = _sessionId,
+        };
+
+        ArtifactHandle? handle = null;
+        var counter = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        foreach (var (lang, content) in blocks)
+        {
+            try
+            {
+                handle ??= await _artifactStore.CreateRunScopeAsync(scope, ct).ConfigureAwait(false);
+
+                var ext = LangToExt(lang);
+                counter.TryGetValue(ext, out var idx);
+                counter[ext] = idx + 1;
+                var fileName = idx == 0 ? $"output.{ext}" : $"output_{idx}.{ext}";
+
+                using var stream = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
+                await _artifactStore.WriteAsync(handle, fileName, stream, "text/plain", ct).ConfigureAwait(false);
+                var accessUrl = await _artifactStore.GetAccessUrlAsync(handle, fileName, TimeSpan.FromDays(1), ct).ConfigureAwait(false);
+
+                var format = string.IsNullOrEmpty(lang) ? ext : lang;
+                result.Add(new RuntimeEvent.ArtifactWritten(
+                    Path: fileName,
+                    Format: format,
+                    SizeBytes: stream.Length,
+                    AccessUrl: accessUrl,
+                    RunId: _sessionId,
+                    WorkspaceId: workspaceId,
+                    ProjectId: projectId));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                LogAutoSaveFailed(_logger, ex, _sessionId);
+            }
+        }
+
+        return result;
     }
 
     private async Task AppendSessionEntryAsync(
