@@ -126,7 +126,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Gap | Phase | Priority |
 |---|---|---|
 | Enterprise auth & external identity (OAuth/OIDC, SAML, SSO) | Phase 40B | Deferred |
-| SSO & Auth Provider Management — admin UI + API for configuring identity providers (Google, GitHub, Azure AD, Okta, SAML IdPs) per workspace; enable/disable providers, set client credentials, map claims to roles; mirrors LLM provider management in Settings | Phase 40C | Deferred |
+| Supabase backend — swap SQLite for Supabase (PostgreSQL) as the server-side database; Supabase Auth replaces the hand-rolled auth stack and delivers SSO (Google, GitHub, Azure AD, SAML, etc.) out of the box; admin UI for enabling/disabling providers per workspace | Phase 40C | Deferred |
 | VS Code native extension | Phase 42 | Deferred (MCP server covers MCP-aware IDEs) |
 | Embedded terminal panel inside the desktop app | Phase 45 | Deferred |
 | n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |
@@ -2212,8 +2212,9 @@ SQLite is the starting persistence layer, not the final one. The `IStorageProvid
 | Scale | Backend | When |
 |---|---|---|
 | Single user / small team | SQLite (this phase) | Now |
-| Multi-instance server | Postgres / CockroachDB | When horizontal scaling is needed |
+| Hosted server / multi-tenant | Supabase (PostgreSQL + Auth) | Phase 40C — first cloud backend; includes SSO |
 | Edge / embedded | SQLite remains ideal | Always |
+| Multi-instance server (self-hosted) | Postgres / CockroachDB | When Supabase managed service is not desired |
 | Distributed edge | Turso (libSQL) | SQLite-compatible with replication |
 
 Swapping backends is a DI registration change + migration script, not a rewrite. All consumers use `IStorageProvider` — they never touch `SqliteConnection` directly.
@@ -2843,37 +2844,65 @@ Add this phase when:
 
 ---
 
-### Phase 40C — SSO & Auth Provider Management ⏸️ Deferred
+### Phase 40C — Supabase Backend + SSO ⏸️ Deferred
 
-**Depends on:** Phase 40B (enterprise auth & external identity implemented)
+**Depends on:** Phase 32 (SQLite persistence abstraction via `IStorageProvider`)
 
-**Goal:** Give workspace admins a first-class UI and API for managing which identity providers are active, configuring provider credentials, and mapping external claims to Sovrant roles — mirroring how LLM providers are managed in Settings today.
+**Goal:** Replace the server-side SQLite database with Supabase (PostgreSQL) and adopt Supabase Auth as the first managed identity layer. Supabase Auth ships SSO out of the box (Google, GitHub, Microsoft/Azure AD, Apple, SAML 2.0, generic OIDC) — eliminating the need to build Phase 40B's hand-rolled OAuth/OIDC/SAML plumbing. The embedded desktop continues to use SQLite.
 
-Phase 40B implements the auth plumbing (OAuth/OIDC flows, SAML, DB-backed roles). Phase 40C is the management surface on top of it: an admin can enable Google SSO for their workspace, paste in their Okta client ID/secret, set the claim → role mapping, and test the connection — all without touching environment variables.
+**Supabase is the first SSO provider, not the only one.** The auth layer is designed around an `IAuthProvider` abstraction so additional managed auth services (Auth0, Clerk, Azure AD B2C, Okta, WorkOS) can be plugged in as future sub-phases without changing application code. The goal is to support all major enterprise SSO providers — Supabase simply ships first because it bundles the database.
+
+This also supersedes Phase 40B. Phase 40B remains documented for reference (hand-rolling auth from scratch), but Phase 40C is the intended path — managed providers handle the hard parts.
+
+#### Why Supabase
+
+| Concern | Hand-rolled (Phase 40B) | Supabase (Phase 40C) |
+|---|---|---|
+| SSO providers | Build OAuth/OIDC + SAML from scratch | Enabled via Supabase dashboard in minutes |
+| Database | SQLite (single-node) | PostgreSQL (scalable, multi-instance safe) |
+| Auth tokens | Custom `svt_*` + JWT co-existence wiring | Supabase JWTs; `svt_*` tokens bridged or replaced |
+| Row-level security | App-layer workspace checks | PostgreSQL RLS policies (defence-in-depth) |
+| User management | Custom users table + Argon2id | Supabase Auth users table; password hashing managed |
+| Email verification / magic links | Not implemented | Built-in |
+| Ops burden | We maintain migrations, backups, indexing | Supabase handles infra; we own schema only |
+
+#### Deployment topology
+
+```
+Desktop (embedded)   →  SQLite (unchanged — local, offline-capable)
+Server (hosted)      →  Supabase (PostgreSQL + Supabase Auth)
+```
+
+The `IStorageProvider` abstraction introduced in Phase 32 makes the swap a DI registration change for the server. Embedded desktop is unaffected.
 
 #### What it adds
 
 | Item | Detail |
 |---|---|
-| Auth provider registry | `auth_providers` table: `(id, workspace_id, type, display_name, enabled, config_encrypted, claim_mappings, created_at)`. Types: `google`, `github`, `azure_ad`, `okta`, `generic_oidc`, `saml`. |
-| Admin UI — Web | Settings → Identity Providers page. Card per provider: enable toggle, client ID/secret (masked), OIDC discovery URL or SAML metadata URL, claim-to-role mapping table, Test Connection button. |
-| Admin UI — Desktop | Same provider list in Settings panel, read/write parity with web. |
-| Provider API | `GET/POST/PUT/DELETE /v1/admin/auth-providers` — list, create, update, delete providers. Secrets stored in `ICredentialStore` (AES-256-GCM), never returned in GET responses. |
-| Claim mapping | Admin defines `{ "groups": { "admins": "admin", "members": "member" } }` or `{ "email_domain": "anant.us": "member" }`. Applied at login time to assign workspace role. |
-| SSO enforcement | Per-workspace flag: require SSO — disables username/password login for non-admin users. |
-| Test Connection | Validates OIDC discovery endpoint or SAML metadata; returns success/error without saving. |
-| Audit | Provider enable/disable, credential rotation, and claim mapping changes logged to `audit_events`. |
+| `SupabaseStorageProvider` | Implements `IStorageProvider` against PostgreSQL via Supabase client or Npgsql. Registered for server builds; `SqliteStorageProvider` remains for desktop/embedded. |
+| Schema migration | Port the 26 SQLite migrations to PostgreSQL-compatible DDL. Apply via Supabase migrations or Flyway. |
+| Supabase Auth integration | `BearerTokenMiddleware` validates Supabase JWTs in addition to (or instead of) `svt_*` tokens. User identity flows from `auth.users`. |
+| SSO provider management | Admin enables/disables identity providers (Google, GitHub, Azure AD, SAML, OIDC) via Supabase Auth dashboard or the Supabase Management API. No custom provider config UI needed. |
+| Admin UI — Web | Settings → Identity Providers page shows active providers (read from Supabase) with enable/disable toggle. Credential entry not needed — Supabase holds the client secrets. |
+| Admin UI — Desktop | Same read-only provider status list in Settings; configuration done via Supabase dashboard. |
+| Role mapping | Supabase Auth custom claims (JWT `app_metadata`) carry workspace role. Mapped from external IdP groups or email domain via Supabase Auth hooks. |
+| SSO enforcement | Per-workspace flag: require SSO — disable password login for non-admin users. Enforced at the Supabase Auth level. |
+| Row-level security | PostgreSQL RLS policies enforce workspace ownership as a second layer below the application. |
+| Realtime (optional) | Supabase Realtime subscriptions can replace or supplement SignalR for live session updates. Deferred to a sub-phase. |
+| `IAuthProvider` abstraction | Interface wrapping the auth backend (token validation, user lookup, SSO provider list). `SupabaseAuthProvider` is the first implementation; future sub-phases add `Auth0AuthProvider`, `ClerkAuthProvider`, `OktaAuthProvider`, `WorkOsAuthProvider`, `AzureAdB2CAuthProvider`. |
+| Future SSO providers | Phase 40C-1 Auth0, Phase 40C-2 Clerk, Phase 40C-3 Okta/WorkOS, Phase 40C-4 Azure AD B2C — each is a new `IAuthProvider` registration and Settings UI card; no changes to the application auth pipeline. |
 
 #### Implementation plan
 
-1. Add `auth_providers` DB migration; store secrets via `ICredentialStore`
-2. Add `IAuthProviderStore` + `AuthProviderService` for CRUD and claim mapping evaluation
-3. `BearerTokenMiddleware` consults `AuthProviderService` to resolve workspace-level provider list at login
-4. Web: Identity Providers settings page (card list, enable toggle, credentials form, test button)
-5. Desktop: Settings panel — provider list with same fields
-6. API routes: `GET/POST/PUT/DELETE /v1/admin/auth-providers`
-7. SSO enforcement check in login endpoint
-8. Tests: provider CRUD, claim mapping, SSO enforcement, credential storage/retrieval
+1. Add `Sovrant.Storage.Supabase` project — `SupabaseStorageProvider` wrapping Npgsql + Supabase client
+2. Port SQLite schema (26 migrations) to PostgreSQL DDL; run against Supabase project
+3. Update `ServiceCollectionExtensions` to register `SupabaseStorageProvider` when `SOVRANT_SUPABASE_URL` + `SOVRANT_SUPABASE_KEY` env vars are set (server); fall through to SQLite otherwise (desktop/embedded)
+4. Extend `BearerTokenMiddleware` to accept Supabase JWTs (`Authorization: Bearer <supabase-jwt>`); validate via Supabase public key; map to `userId`, `role`
+5. Web/Desktop Settings → Identity Providers: read enabled providers from Supabase Auth API; show status cards with enable toggle (calls Supabase Management API)
+6. Supabase Auth hook: map `app_metadata.groups` or `email` domain → workspace role custom claim
+7. SSO enforcement: per-workspace `require_sso` flag in `workspace_settings`; login endpoint rejects password auth if set
+8. Add PostgreSQL RLS policies to all tables scoped by `workspace_id`
+9. Tests: provider login flow (Google, GitHub), JWT validation, role mapping, SSO enforcement, RLS policy coverage, `IStorageProvider` contract tests against PostgreSQL
 
 ---
 
