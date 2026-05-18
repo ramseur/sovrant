@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-05-09 (Phase 40A UI ✅ — workspace member management across Web/Desktop/CLI; Phase 85 Identity & Login Parity ✅; Phase 93 Configuration Boundary Audit ✅ — sovrant.config removed, .env consolidation, routing.json→env vars, swarm.json→DB; Phase 91 Knowledge Authoring deferred; TLS added to Server + Web; model persistence bug fixed)
+**Last updated:** 2026-05-18 (Phase 40A UI ✅ — workspace member management across Web/Desktop/CLI; Phase 85 Identity & Login Parity ✅; Phase 93 Configuration Boundary Audit ✅ — sovrant.config removed, .env consolidation, routing.json→env vars, swarm.json→DB; Phase 91 Knowledge Authoring deferred; TLS added to Server + Web; model persistence bug fixed; Phase 87 Tracks A+D partial ✅ — auto-save fenced code blocks, workspace-first artifact layout, artifact download cards; Phase 89 Command Center cockpit ✅ shipped at v0.9.0)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -8508,8 +8508,25 @@ a backgrounded session finishes, errors, or hits a confirmation prompt.
 
 ## Phase 87 — Artifacts-by-Default for Code & Documents (with Workspace Identity Unification)
 
-> **Status:** Pending. Closes the loop between *what the LLM produces* and
-> *where it lands*. Today the assistant routinely dumps multi-thousand-token
+> **Status:** Partially complete (2026-05-18). Tracks A and D have shipped;
+> Tracks B, C, E, and F are still pending.
+>
+> **Shipped:**
+> - **Track A (partial)** — `ConversationRuntime` auto-saves fenced code blocks
+>   over the threshold as artifacts and emits `RuntimeEvent.ArtifactWritten`;
+>   Web (`Chat.razor`) and Desktop (`ChatViewModel`) render them as download cards.
+>   The `ArtifactWritten` event is wired into `ChatMessageModel.StandaloneArtifacts`
+>   (Web) and `MessageViewModel.StandaloneArtifacts` (Desktop).
+> - **Track D** — Workspace-first artifact layout (`workspace/project` path
+>   routing) shipped; `ConversationRuntime` auto-injects workspace/project/run
+>   scope into Artifact tool calls when the LLM omits them.
+>
+> **Still pending:** Artifact tool description rewrite (Track B), `write_many`
+> action (Track C), per-turn "always allow Artifact" grant (Track E), file-tree
+> view + Monaco preview + download-as-zip on Artifacts screen (Track F), full
+> workspace identity migration sweep (`personal/` → `ws-personal-{userId}/`).
+>
+> Original rationale: the assistant routinely dumps multi-thousand-token
 > code and document bodies into the chat instead of writing them to the
 > artifact store, and the artifact store itself silently splits the same
 > "personal" workspace into two parallel directories because two different
@@ -8996,6 +9013,12 @@ their old config looked like, and a future support flow can ask
 ---
 
 ## Phase 89 — Command Center: Sovrant as the Operations Surface for Agents, Teams & Missions
+
+> **Status:** ✅ MVP shipped 2026-05-02 (v0.9.0). Read-only live grid at `/command`
+> on Web and Desktop — aggregates active missions, team runs, agent runs, and
+> sessions with click-through to existing detail pages. Substrate-only; no new
+> runtime engines. Full autonomy features (Phases 67/78/79/86/81) remain pending
+> and will layer on top when those phases land.
 
 **Depends on:** Phase 67 (autonomous modes), Phase 78 (teams substrate
 with parallel execution + file locks + quality gate), Phase 79 (agents

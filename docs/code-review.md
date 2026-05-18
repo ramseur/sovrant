@@ -1,10 +1,10 @@
 # Sovrant Code Review
 
-**Status as of 2026-05-05:** Rounds 1–3 are frozen historical reference (all findings COMPLETE through Phase 90). Round 4 findings (2026-05-05) are the current action list — see Section 15 below.
+**Status as of 2026-05-18:** Rounds 1–3 are frozen historical reference (all findings COMPLETE through Phase 90). Round 4 findings (2026-05-05) are the current action list — see Section 15 below. Section 25 (DB call patterns checklist) added 2026-05-16.
 
 **Original review timeline:** 2026-04-05 (Round 1) · 2026-04-12 (Round 2 — deep review) · 2026-04-14 (Round 3 — UX gap analysis) · 2026-04-29 (counts refreshed) · **2026-05-05 (Round 4 — Web/Server/SDK/recent changes)**
 **Original scope:** Full codebase — Runtime, Providers, Server, Tools, Agents, CLI, Desktop, Web, LSP, MCP, TypeScript SDK
-**Build at time of review:** 1,492 tests passing, 0 warnings (10 test projects). Current build: **1,689 tests passing, 0 failures** post-Phase-93 (10 projects).
+**Build at time of review:** 1,492 tests passing, 0 warnings (10 test projects). Build at Round 4 (2026-05-05): **1,911 tests passing, 0 failures** (10 projects).
 
 ---
 
