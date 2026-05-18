@@ -48,7 +48,7 @@
     }
 
     public static bool ProducesArtifacts(string toolName) =>
-        toolName is "DocumentGenerate" or "DocumentFromTemplate" or "DocumentPackage";
+        toolName is "DocumentGenerate" or "DocumentFromTemplate" or "DocumentPackage" or "Artifact";
 
     private static List<Artifact> Parse(string toolName, string json)
     {
@@ -67,13 +67,23 @@
             {
                 foreach (var item in docs.EnumerateArray())
                 {
-                    var a = ReadOne(item);
+                    var a = ReadOne(item, isArtifactTool: false);
+                    if (a is not null) list.Add(a);
+                }
+            }
+            else if (toolName == "Artifact" &&
+                     root.TryGetProperty("written", out var writtenArr) &&
+                     writtenArr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in writtenArr.EnumerateArray())
+                {
+                    var a = ReadOne(item, isArtifactTool: true);
                     if (a is not null) list.Add(a);
                 }
             }
             else
             {
-                var a = ReadOne(root);
+                var a = ReadOne(root, isArtifactTool: toolName == "Artifact");
                 if (a is not null) list.Add(a);
             }
         }
@@ -84,18 +94,32 @@
         return list;
     }
 
-    private static Artifact? ReadOne(JsonElement el)
+    private static Artifact? ReadOne(JsonElement el, bool isArtifactTool)
     {
         if (el.ValueKind != JsonValueKind.Object) return null;
         var status = el.TryGetProperty("status", out var s) ? s.GetString() : null;
-        if (status != "generated") return null;
+        var expectedStatus = isArtifactTool ? "written" : "generated";
+        if (status != expectedStatus) return null;
 
-        var format = el.TryGetProperty("format", out var f) ? f.GetString() ?? "" : "";
         var path = el.TryGetProperty("path", out var p) ? p.GetString() ?? "" : "";
         var url = el.TryGetProperty("access_url", out var u) ? u.GetString() : null;
         var size = el.TryGetProperty("size_bytes", out var sz) && sz.TryGetInt64(out var v) ? v : (long?)null;
-        var templateId = el.TryGetProperty("template_id", out var t) ? t.GetString() : null;
-        var contentType = el.TryGetProperty("content_type", out var ct) ? ct.GetString() ?? "" : "";
+
+        string format;
+        string? templateId;
+        string contentType;
+        if (isArtifactTool)
+        {
+            format = ExtensionToFormat(System.IO.Path.GetExtension(path));
+            templateId = null;
+            contentType = "";
+        }
+        else
+        {
+            format = el.TryGetProperty("format", out var f) ? f.GetString() ?? "" : "";
+            templateId = el.TryGetProperty("template_id", out var t) ? t.GetString() : null;
+            contentType = el.TryGetProperty("content_type", out var ct) ? ct.GetString() ?? "" : "";
+        }
 
         var name = string.IsNullOrEmpty(path) ? (templateId ?? "document") : System.IO.Path.GetFileName(path);
         var isPdf = format.Contains("pdf", StringComparison.OrdinalIgnoreCase) ||
@@ -103,6 +127,17 @@
 
         return new Artifact(name, format, size, url, templateId, isPdf);
     }
+
+    private static string ExtensionToFormat(string ext) => ext.TrimStart('.').ToLowerInvariant() switch
+    {
+        "md" or "markdown" => "markdown",
+        "pdf" => "pdf",
+        "docx" => "word",
+        "xlsx" => "excel",
+        "pptx" => "powerpoint",
+        var e when !string.IsNullOrEmpty(e) => e,
+        _ => "file",
+    };
 
     private static string FormatIcon(string format) => format.ToLowerInvariant() switch
     {
@@ -113,6 +148,8 @@
         "markdown" or "md" => "\uD83D\uDCC4",              // 📄
         _ => "\uD83D\uDCCE",                                // 📎
     };
+
+    public static string FormatBytes(long bytes) => FormatSize(bytes);
 
     private static string FormatSize(long bytes)
     {

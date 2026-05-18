@@ -89,6 +89,32 @@
                 </div>
             }
 
+            @if (Message.StandaloneArtifacts.Count > 0)
+            {
+                <div class="msg-indent doc-artifact-list">
+                    @foreach (var art in Message.StandaloneArtifacts)
+                    {
+                        <div class="doc-artifact-card">
+                            <div class="doc-artifact-header">
+                                <span class="doc-artifact-icon">&#x1F4CE;</span>
+                                <div class="doc-artifact-meta">
+                                    <div class="doc-artifact-name">@System.IO.Path.GetFileName(art.Path)</div>
+                                    <div class="doc-artifact-sub">
+                                        <span>@art.Format.ToUpperInvariant()</span>
+                                        <span> · @DocumentArtifactCard.FormatBytes(art.SizeBytes)</span>
+                                        <span class="doc-artifact-auto-label"> · auto-saved</span>
+                                    </div>
+                                </div>
+                                @if (!string.IsNullOrEmpty(art.AccessUrl))
+                                {
+                                    <a class="doc-artifact-download" href="@art.AccessUrl" target="_blank" rel="noopener">Download</a>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
             @if (!string.IsNullOrEmpty(Message.Text))
             {
                 <div class="msg-indent">

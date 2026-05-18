@@ -474,6 +474,23 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 msg.AppendText($"\n\n*Permission denied for {tool}: {reason}*");
                 break;
 
+            case RuntimeEvent.ArtifactWritten a:
+            {
+                var ext = System.IO.Path.GetExtension(a.Path).TrimStart('.');
+                var urlStr = a.AccessUrl?.ToString();
+                var vm = new DocumentArtifactViewModel
+                {
+                    DisplayName = System.IO.Path.GetFileName(a.Path),
+                    Format = (string.IsNullOrEmpty(a.Format) ? ext : a.Format).ToUpperInvariant(),
+                    SizeText = DocumentArtifactParser.FormatSize(a.SizeBytes),
+                    Icon = DocumentArtifactParser.FormatIconPublic(a.Format),
+                    AccessUrl = urlStr,
+                    LocalPath = a.AccessUrl is { IsFile: true } fu ? fu.LocalPath : null,
+                };
+                msg.AddStandaloneArtifact(vm);
+                break;
+            }
+
             // ── Phase 59 events ─────────────────────────────────────────
             case RuntimeEvent.IntentNarrated { Narration: var narration }:
                 msg.IntentNarration = narration;

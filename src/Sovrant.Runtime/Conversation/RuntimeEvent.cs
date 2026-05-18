@@ -46,6 +46,20 @@ public abstract partial record RuntimeEvent
     public sealed record RuntimeError(string Message) : RuntimeEvent;
 
     /// <summary>
+    /// The runtime auto-saved a large text block that the model wrote directly
+    /// into chat (instead of calling the Artifact tool). Emitted after the text
+    /// stream so the UI can render a download card alongside the inline text.
+    /// </summary>
+    public sealed record ArtifactWritten(
+        string Path,
+        string Format,
+        long SizeBytes,
+        Uri? AccessUrl,
+        string RunId,
+        string WorkspaceId,
+        string ProjectId) : RuntimeEvent;
+
+    /// <summary>
     /// An MCP server requires OAuth authorization before it can be used.
     /// The authorization URL should be surfaced to the user so they can complete the flow.
     /// </summary>

@@ -126,6 +126,10 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Gap | Phase | Priority |
 |---|---|---|
 | Enterprise auth & external identity (OAuth/OIDC, SAML, SSO) | Phase 40B | Deferred |
+| Supabase backend — swap SQLite for Supabase (PostgreSQL) as the server-side database; Supabase Auth replaces the hand-rolled auth stack and delivers SSO (Google, GitHub, Azure AD, SAML, etc.) out of the box; admin UI for enabling/disabling providers per workspace | Phase 40C | Deferred |
+| Granular feature permissions — workspace members can be granted or denied access to specific features (Chat, Agents, Teams, Swarms, Missions, MCP, Knowledge, Artifacts, Settings); current model is all-or-nothing per workspace role; Phase 40D adds a permission matrix admins configure per user or role | Phase 40D | Deferred |
+| DuckDB database provider — `IStorageProvider` implementation backed by DuckDB; columnar analytics for agent runs, session history, token usage, cost aggregations, and audit queries; embedded like SQLite, analytical like a data warehouse; ideal for self-hosted deployments that need fast cross-session reporting without standing up Supabase | Phase 104 | Deferred |
+| MCP server permissions — scope which MCP servers are available at the workspace and project level; admins allowlist/blocklist servers per workspace, project owners further restrict per project; users only see MCP tools their scope permits; replaces today's global MCP server list | Phase 105 | Deferred |
 | VS Code native extension | Phase 42 | Deferred (MCP server covers MCP-aware IDEs) |
 | Embedded terminal panel inside the desktop app | Phase 45 | Deferred |
 | n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |
@@ -2211,8 +2215,9 @@ SQLite is the starting persistence layer, not the final one. The `IStorageProvid
 | Scale | Backend | When |
 |---|---|---|
 | Single user / small team | SQLite (this phase) | Now |
-| Multi-instance server | Postgres / CockroachDB | When horizontal scaling is needed |
+| Hosted server / multi-tenant | Supabase (PostgreSQL + Auth) | Phase 40C — first cloud backend; includes SSO |
 | Edge / embedded | SQLite remains ideal | Always |
+| Multi-instance server (self-hosted) | Postgres / CockroachDB | When Supabase managed service is not desired |
 | Distributed edge | Turso (libSQL) | SQLite-compatible with replication |
 
 Swapping backends is a DI registration change + migration script, not a rewrite. All consumers use `IStorageProvider` — they never touch `SqliteConnection` directly.
@@ -2839,6 +2844,133 @@ Add this phase when:
 6. Add SSO enforcement flag on `workspace_config`
 7. Add `POST /v1/admin/reload`
 8. Tests: OAuth flow, SAML flow, DB role evaluation, RBAC permission checks, SSO enforcement, JWT + svt_ coexistence
+
+---
+
+### Phase 40C — Supabase Backend + SSO ⏸️ Deferred
+
+**Depends on:** Phase 32 (SQLite persistence abstraction via `IStorageProvider`)
+
+**Goal:** Replace the server-side SQLite database with Supabase (PostgreSQL) and adopt Supabase Auth as the first managed identity layer. Supabase Auth ships SSO out of the box (Google, GitHub, Microsoft/Azure AD, Apple, SAML 2.0, generic OIDC) — eliminating the need to build Phase 40B's hand-rolled OAuth/OIDC/SAML plumbing. The embedded desktop continues to use SQLite.
+
+**Supabase is the first SSO provider, not the only one.** The auth layer is designed around an `IAuthProvider` abstraction so additional managed auth services (Auth0, Clerk, Azure AD B2C, Okta, WorkOS) can be plugged in as future sub-phases without changing application code. The goal is to support all major enterprise SSO providers — Supabase simply ships first because it bundles the database.
+
+This also supersedes Phase 40B. Phase 40B remains documented for reference (hand-rolling auth from scratch), but Phase 40C is the intended path — managed providers handle the hard parts.
+
+#### Why Supabase
+
+| Concern | Hand-rolled (Phase 40B) | Supabase (Phase 40C) |
+|---|---|---|
+| SSO providers | Build OAuth/OIDC + SAML from scratch | Enabled via Supabase dashboard in minutes |
+| Database | SQLite (single-node) | PostgreSQL (scalable, multi-instance safe) |
+| Auth tokens | Custom `svt_*` + JWT co-existence wiring | Supabase JWTs; `svt_*` tokens bridged or replaced |
+| Row-level security | App-layer workspace checks | PostgreSQL RLS policies (defence-in-depth) |
+| User management | Custom users table + Argon2id | Supabase Auth users table; password hashing managed |
+| Email verification / magic links | Not implemented | Built-in |
+| Ops burden | We maintain migrations, backups, indexing | Supabase handles infra; we own schema only |
+
+#### Deployment topology
+
+```
+Desktop (embedded)   →  SQLite (unchanged — local, offline-capable)
+Server (hosted)      →  Supabase (PostgreSQL + Supabase Auth)
+```
+
+The `IStorageProvider` abstraction introduced in Phase 32 makes the swap a DI registration change for the server. Embedded desktop is unaffected.
+
+#### What it adds
+
+| Item | Detail |
+|---|---|
+| `SupabaseStorageProvider` | Implements `IStorageProvider` against PostgreSQL via Supabase client or Npgsql. Registered for server builds; `SqliteStorageProvider` remains for desktop/embedded. |
+| Schema migration | Port the 26 SQLite migrations to PostgreSQL-compatible DDL. Apply via Supabase migrations or Flyway. |
+| Supabase Auth integration | `BearerTokenMiddleware` validates Supabase JWTs in addition to (or instead of) `svt_*` tokens. User identity flows from `auth.users`. |
+| SSO provider management | Admin enables/disables identity providers (Google, GitHub, Azure AD, SAML, OIDC) via Supabase Auth dashboard or the Supabase Management API. No custom provider config UI needed. |
+| Admin UI — Web | Settings → Identity Providers page shows active providers (read from Supabase) with enable/disable toggle. Credential entry not needed — Supabase holds the client secrets. |
+| Admin UI — Desktop | Same read-only provider status list in Settings; configuration done via Supabase dashboard. |
+| Role mapping | Supabase Auth custom claims (JWT `app_metadata`) carry workspace role. Mapped from external IdP groups or email domain via Supabase Auth hooks. |
+| SSO enforcement | Per-workspace flag: require SSO — disable password login for non-admin users. Enforced at the Supabase Auth level. |
+| Row-level security | PostgreSQL RLS policies enforce workspace ownership as a second layer below the application. |
+| Realtime (optional) | Supabase Realtime subscriptions can replace or supplement SignalR for live session updates. Deferred to a sub-phase. |
+| `IAuthProvider` abstraction | Interface wrapping the auth backend (token validation, user lookup, SSO provider list). `SupabaseAuthProvider` is the first implementation; future sub-phases add `Auth0AuthProvider`, `ClerkAuthProvider`, `OktaAuthProvider`, `WorkOsAuthProvider`, `AzureAdB2CAuthProvider`. |
+| Future SSO providers | Phase 40C-1 Auth0, Phase 40C-2 Clerk, Phase 40C-3 Okta/WorkOS, Phase 40C-4 Azure AD B2C — each is a new `IAuthProvider` registration and Settings UI card; no changes to the application auth pipeline. |
+
+#### Implementation plan
+
+1. Add `Sovrant.Storage.Supabase` project — `SupabaseStorageProvider` wrapping Npgsql + Supabase client
+2. Port SQLite schema (26 migrations) to PostgreSQL DDL; run against Supabase project
+3. Update `ServiceCollectionExtensions` to register `SupabaseStorageProvider` when `SOVRANT_SUPABASE_URL` + `SOVRANT_SUPABASE_KEY` env vars are set (server); fall through to SQLite otherwise (desktop/embedded)
+4. Extend `BearerTokenMiddleware` to accept Supabase JWTs (`Authorization: Bearer <supabase-jwt>`); validate via Supabase public key; map to `userId`, `role`
+5. Web/Desktop Settings → Identity Providers: read enabled providers from Supabase Auth API; show status cards with enable toggle (calls Supabase Management API)
+6. Supabase Auth hook: map `app_metadata.groups` or `email` domain → workspace role custom claim
+7. SSO enforcement: per-workspace `require_sso` flag in `workspace_settings`; login endpoint rejects password auth if set
+8. Add PostgreSQL RLS policies to all tables scoped by `workspace_id`
+9. Tests: provider login flow (Google, GitHub), JWT validation, role mapping, SSO enforcement, RLS policy coverage, `IStorageProvider` contract tests against PostgreSQL
+
+---
+
+### Phase 40D — Granular Feature Permissions ⏸️ Deferred
+
+**Depends on:** Phase 40A (workspace roles), Phase 40C (Supabase auth + DB)
+
+**Goal:** Move beyond the current all-or-nothing workspace role model (Owner / Admin / Member) and let workspace admins grant or deny access to individual product features per user or per role. A member can have access to the workspace but be restricted to Chat only — no Agents, no Teams, no MCP connections, no Settings.
+
+#### Current limitation
+
+Today `Member` role grants access to everything inside a workspace. There is no way to say "this contractor can chat but cannot create agents or run swarms" without removing them from the workspace entirely.
+
+#### Feature permission model
+
+Features are grouped into discrete capabilities. Each can be `allow` or `deny` per user (overrides role default) or per role (applies to all members of that role):
+
+| Feature key | Covers |
+|---|---|
+| `chat` | Chat sessions — send messages, view history |
+| `agents` | Agent creation, editing, and execution |
+| `teams` | Team creation and TeamRun orchestration |
+| `swarms` | Swarm tool and swarm pipeline execution |
+| `missions` | Mission creation and management |
+| `mcp` | MCP server connections and tool proxy |
+| `knowledge` | Knowledge page authoring and browsing |
+| `artifacts` | Artifact read/write access |
+| `projects` | Project creation and management |
+| `settings.workspace` | Workspace settings (TTL, limits, etc.) |
+| `settings.providers` | LLM provider configuration |
+| `settings.identity` | Identity provider / SSO configuration |
+| `admin` | User management, approval, role changes |
+
+#### Resolution order
+
+```
+User-level grant/deny  (highest — explicit per-user override)
+    ↓
+Role-level grant/deny  (applies to all members of the role)
+    ↓
+Workspace default       (Member: allow all by default)
+```
+
+#### What it adds
+
+| Item | Detail |
+|---|---|
+| `feature_permissions` table | `(workspace_id, subject_type [role/user], subject_id, feature, effect [allow/deny])` |
+| `IFeaturePermissionService` | `CanAsync(userId, workspaceId, feature)` — evaluates the resolution chain above |
+| Route-level enforcement | Each feature area's API routes check `IFeaturePermissionService` before handler logic; return 403 with `"feature_denied"` error code |
+| UI gating | Web + Desktop hide or disable nav items and action buttons for denied features; denial is enforced server-side regardless |
+| Admin UI — Permission Matrix | Settings → Members → select user → permission matrix table; toggle allow/deny per feature; role-level defaults shown as background |
+| Role defaults editor | Settings → Roles → edit role → feature defaults toggle matrix |
+| Audit | Permission grant/deny changes logged to `audit_events` |
+
+#### Implementation plan
+
+1. Add `feature_permissions` DB migration
+2. Implement `IFeaturePermissionService` + `FeaturePermissionStore`; register in DI
+3. Add `[RequireFeature("chat")]` middleware/attribute applied to route groups
+4. Web: hide/disable nav items and action buttons based on feature check (server-rendered initial state + client guard)
+5. Desktop: same guard on nav items and command bindings
+6. Admin UI: permission matrix in Members settings page (web + desktop)
+7. Role defaults editor in Roles settings
+8. Tests: resolution order (user override beats role), 403 enforcement, UI gating, audit trail
 
 ---
 
@@ -10230,6 +10362,104 @@ Existing `default-project` directories are treated as workspace-level runs — t
 - [ ] Existing `default-project` directories are shown as workspace-level artifacts (no "default-project" label visible to users)
 - [ ] Download, ZIP, and delete endpoints handle both path depths
 - [ ] No existing artifacts are moved or broken by the change
+
+---
+
+## Phase 104 — DuckDB Database Provider
+
+**Status:** Planned / Deferred.
+
+**Depends on:** Phase 32 (`IStorageProvider` abstraction)
+
+**Goal:** Add DuckDB as a third `IStorageProvider` implementation alongside SQLite (embedded/desktop) and Supabase (hosted/multi-tenant). DuckDB is an in-process columnar analytical database — embedded like SQLite but built for fast aggregations over large result sets. It is the right backend for self-hosted Sovrant deployments that need rich cross-session analytics (cost dashboards, agent performance reports, audit queries) without the infrastructure overhead of running a PostgreSQL server.
+
+### Why DuckDB
+
+| Property | SQLite | Supabase (PostgreSQL) | DuckDB |
+|---|---|---|---|
+| Deployment | Embedded, zero-infra | Managed cloud service | Embedded, zero-infra |
+| Write pattern | OLTP — frequent small writes | OLTP — frequent small writes | OLAP — optimised for bulk reads and aggregations |
+| Analytics queries | Slow table scans | Fast with indexes | Native columnar — very fast |
+| Infrastructure | None | Supabase account required | None |
+| Best for | Desktop / single-user | Hosted multi-tenant | Self-hosted with analytics needs |
+| Parquet / Arrow export | No | No | Native |
+
+DuckDB is ideal when an operator wants to self-host Sovrant and query session history, token usage, agent run performance, and audit events without standing up a Postgres server or paying for Supabase.
+
+### What it adds
+
+| Item | Detail |
+|---|---|
+| `DuckDbStorageProvider` | Implements `IStorageProvider` against DuckDB via `DuckDB.NET`. Registered when `SOVRANT_DB_PROVIDER=duckdb` is set. |
+| Schema | Port the SQLite DDL to DuckDB-compatible SQL. Primary key and constraint handling adapted for DuckDB's dialect. |
+| Analytics views | Pre-built DuckDB views for common queries: session cost by model/provider, tool call frequency, agent run durations, token usage over time, governance violations. |
+| Parquet export | `GET /v1/admin/analytics/export?format=parquet` — exports the analytics views as Parquet files for use in BI tools (DuckDB's native export). |
+| `IStorageProvider` registration | `SOVRANT_DB_PROVIDER=duckdb` + `SOVRANT_DB_PATH=sovrant.duckdb` selects the DuckDB backend at startup. Falls back to SQLite if unset. |
+| Desktop option | Future: desktop settings UI lets the user switch from SQLite to DuckDB for the local store without data loss (migrator runs at startup). |
+
+### Implementation plan
+
+1. Add `Sovrant.Storage.DuckDb` project — `DuckDbStorageProvider` wrapping `DuckDB.NET`
+2. Port SQLite schema to DuckDB DDL; handle type differences (e.g. `TEXT` vs `VARCHAR`, `BLOB` vs `BYTEA`)
+3. Register `DuckDbStorageProvider` in `ServiceCollectionExtensions` when `SOVRANT_DB_PROVIDER=duckdb`
+4. Add analytics views (`session_costs`, `tool_call_stats`, `agent_run_durations`, `audit_summary`)
+5. Add Parquet export endpoint
+6. `IStorageProvider` contract tests run against DuckDB backend
+7. Tests: schema correctness, analytics view output, Parquet export, provider selection via env var
+
+---
+
+## Phase 105 — MCP Server Permissions (Workspace & Project Scoping)
+
+**Status:** Planned / Deferred.
+
+**Depends on:** Phase 16 (dynamic MCP tool proxy), Phase 40A (workspace roles), Phase 40D (granular feature permissions)
+
+**Goal:** Scope which MCP servers are available at the workspace and project level. Today MCP servers are configured globally — any connected server is visible to every session regardless of workspace or project. Phase 105 introduces an allowlist/blocklist model so workspace admins can control which external integrations their members can call, and project owners can further restrict or expand that list for a specific project.
+
+### Problem
+
+An admin connects a Stripe MCP server for the billing team's workspace and a GitHub MCP server for the engineering workspace. Today both servers are visible to all sessions across all workspaces. There is no way to say "only the engineering workspace can use GitHub tools" or "only the payments project can use Stripe tools."
+
+### Permission model
+
+Three scopes in resolution order:
+
+```
+Project-level allowlist/blocklist   (highest — project owner override)
+    ↓
+Workspace-level allowlist/blocklist (set by workspace admin)
+    ↓
+Server-level default                (global admin sets whether new servers are allow-by-default or deny-by-default)
+```
+
+A server must be allowed at both the workspace level and the project level to appear in a session's tool list. Denial at either level removes the server from that scope's sessions.
+
+### What it adds
+
+| Item | Detail |
+|---|---|
+| `mcp_server_permissions` table | `(scope_type [workspace/project], scope_id, mcp_server_id, effect [allow/deny])` |
+| Server-level default | Global admin sets `default_effect` per server: `allow` (visible everywhere unless explicitly blocked) or `deny` (hidden everywhere unless explicitly allowed). New servers default to `deny` for safety. |
+| `IMcpPermissionService` | `GetAllowedServersAsync(workspaceId, projectId?)` — returns the intersected set of permitted servers for a session. Called by `McpClientRegistry` before building the tool list for a turn. |
+| `McpClientRegistry` integration | Before exposing MCP tools to the LLM, `GetAllowedServersAsync` filters the registered server list to the session's permitted set. Filtered servers are invisible to the model — no tool definitions, no error. |
+| Workspace admin UI — Web | Settings → MCP Servers → per-server allow/deny toggle for this workspace. Shows inherited default, allows override. |
+| Workspace admin UI — Desktop | Same toggle list in Settings → Connections. |
+| Project settings — Web | Project Settings → MCP Servers → further restrict or re-allow servers within the workspace's permitted set. |
+| Project settings — Desktop | Same in project context panel. |
+| Tool-level allowlist (future sub-phase) | Within a permitted server, allowlist specific tools (e.g. allow `github_read_file` but deny `github_push`). Deferred — server-level scoping ships first. |
+| Audit | Server permission changes logged to `audit_events` with `scope_type`, `scope_id`, and `effect`. |
+
+### Implementation plan
+
+1. Add `mcp_server_permissions` DB migration; add `default_effect` column to `mcp_servers`
+2. Implement `IMcpPermissionService` + `McpPermissionStore`; register in DI
+3. Update `McpClientRegistry.GetToolsForSessionAsync` (or equivalent) to call `GetAllowedServersAsync` and filter before building tool definitions
+4. Web: MCP Servers permission toggle in workspace Settings and project Settings pages
+5. Desktop: same toggles in Settings → Connections and project context panel
+6. Global admin UI: set `default_effect` per server (`allow` / `deny`)
+7. API routes: `GET/PUT /v1/workspaces/{id}/mcp-permissions`, `GET/PUT /v1/projects/{id}/mcp-permissions`
+8. Tests: workspace-level filtering, project-level override, default_effect fallback, filtered tools invisible to model, audit trail
 
 ---
 

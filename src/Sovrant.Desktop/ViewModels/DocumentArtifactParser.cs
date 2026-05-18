@@ -11,7 +11,7 @@ namespace Sovrant.Desktop.ViewModels;
 internal static class DocumentArtifactParser
 {
     public static bool ProducesArtifacts(string toolName) =>
-        toolName is "DocumentGenerate" or "DocumentFromTemplate" or "DocumentPackage";
+        toolName is "DocumentGenerate" or "DocumentFromTemplate" or "DocumentPackage" or "Artifact";
 
     public static IEnumerable<DocumentArtifactViewModel> Parse(string toolName, string json)
     {
@@ -33,29 +33,52 @@ internal static class DocumentArtifactParser
             {
                 foreach (var item in docs.EnumerateArray())
                 {
-                    var vm = ReadOne(item);
+                    var vm = ReadOne(item, isArtifactTool: false);
+                    if (vm is not null) yield return vm;
+                }
+            }
+            else if (toolName == "Artifact" &&
+                     root.TryGetProperty("written", out var writtenArr) &&
+                     writtenArr.ValueKind == JsonValueKind.Array)
+            {
+                // write_many response — each entry has path, size_bytes, access_url
+                foreach (var item in writtenArr.EnumerateArray())
+                {
+                    var vm = ReadOne(item, isArtifactTool: true);
                     if (vm is not null) yield return vm;
                 }
             }
             else
             {
-                var vm = ReadOne(root);
+                var vm = ReadOne(root, isArtifactTool: toolName == "Artifact");
                 if (vm is not null) yield return vm;
             }
         }
     }
 
-    private static DocumentArtifactViewModel? ReadOne(JsonElement el)
+    private static DocumentArtifactViewModel? ReadOne(JsonElement el, bool isArtifactTool)
     {
         if (el.ValueKind != JsonValueKind.Object) return null;
         var status = el.TryGetProperty("status", out var s) ? s.GetString() : null;
-        if (status != "generated") return null;
+        var expectedStatus = isArtifactTool ? "written" : "generated";
+        if (status != expectedStatus) return null;
 
-        var format = el.TryGetProperty("format", out var f) ? f.GetString() ?? "" : "";
         var path = el.TryGetProperty("path", out var p) ? p.GetString() ?? "" : "";
         var url = el.TryGetProperty("access_url", out var u) ? u.GetString() : null;
         var size = el.TryGetProperty("size_bytes", out var sz) && sz.TryGetInt64(out var v) ? v : (long?)null;
-        var templateId = el.TryGetProperty("template_id", out var t) ? t.GetString() : null;
+
+        string format;
+        string? templateId;
+        if (isArtifactTool)
+        {
+            format = ExtensionToFormat(Path.GetExtension(path));
+            templateId = null;
+        }
+        else
+        {
+            format = el.TryGetProperty("format", out var f) ? f.GetString() ?? "" : "";
+            templateId = el.TryGetProperty("template_id", out var t) ? t.GetString() : null;
+        }
 
         var localPath = TryFileUrlToPath(url);
         var name = !string.IsNullOrEmpty(localPath) ? Path.GetFileName(localPath)
@@ -73,6 +96,19 @@ internal static class DocumentArtifactParser
         };
     }
 
+#pragma warning disable CA1308
+    private static string ExtensionToFormat(string ext) => ext.TrimStart('.').ToLowerInvariant() switch
+#pragma warning restore CA1308
+    {
+        "md" or "markdown" => "markdown",
+        "pdf" => "pdf",
+        "docx" => "word",
+        "xlsx" => "excel",
+        "pptx" => "powerpoint",
+        var e when !string.IsNullOrEmpty(e) => e,
+        _ => "file",
+    };
+
     private static string? TryFileUrlToPath(string? url)
     {
         if (string.IsNullOrEmpty(url)) return null;
@@ -80,6 +116,8 @@ internal static class DocumentArtifactParser
             return u.LocalPath;
         return null;
     }
+
+    public static string FormatIconPublic(string format) => FormatIcon(format);
 
     private static string FormatIcon(string format)
     {
@@ -95,7 +133,7 @@ internal static class DocumentArtifactParser
         };
     }
 
-    private static string FormatSize(long bytes)
+    public static string FormatSize(long bytes)
     {
         if (bytes < 1024) return $"{bytes} B";
         if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";

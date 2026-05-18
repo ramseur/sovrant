@@ -23,6 +23,7 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+  - [Vibe Coding (Cursor, Claude Code)](#vibe-coding-cursor-claude-code-or-any-ai-coding-tool)
 - [Command Center](#command-center)
 - [Key Features](#key-features)
 - [Architecture](#architecture)
@@ -48,6 +49,23 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 ## Quick Start
 
 > **Best experiences today:** The **Desktop app** and the **embedded Web app** deliver the most complete, polished experience. The CLI is functional but actively being refined — treat it as a work in progress.
+
+### Vibe Coding (Cursor, Claude Code, or any AI coding tool)
+
+The fastest way to get up and running is to let your AI coding tool do it for you. This has been proven to work with **Cursor** and **Claude Code** — paste the prompt below into your tool and it will clone the repo, orient itself, build the project, and launch both the Desktop and Web apps.
+
+```
+Clone https://github.com/ramseur/sovrant.git, then:
+1. Read README.md for an overview of the project
+2. Read every file in the docs/ folder to understand the architecture
+3. Run: dotnet restore && dotnet build
+4. Start the Desktop app: dotnet run --project src/Sovrant.Desktop
+5. Start the Web app: dotnet run --project src/Sovrant.Web
+   (opens on http://localhost:5100)
+Report what you find and confirm both surfaces are running.
+```
+
+Your tool will read the docs, build the solution, and start both surfaces. On first launch the Desktop setup wizard walks you through adding an API key — the Web app does the same on first login.
 
 ### Prerequisites
 

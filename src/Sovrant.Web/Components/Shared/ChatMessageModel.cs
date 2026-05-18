@@ -28,6 +28,9 @@ public sealed class ChatMessageModel
     private int _completedToolCount;
     public List<ToolUseModel> ToolUses { get; } = [];
 
+    /// <summary>Artifacts auto-saved from large text blocks (not tied to a specific tool use row).</summary>
+    public List<AutoArtifactModel> StandaloneArtifacts { get; } = [];
+
     /// <summary>The model that generated this response.</summary>
     public string? ModelName { get; set; }
 
@@ -359,4 +362,13 @@ public sealed class ToolUseModel
     public bool IsError { get; set; }
     public bool IsPendingConfirmation { get; set; }
     public ConfirmationRequest? PendingRequest { get; set; }
+}
+
+public sealed class AutoArtifactModel
+{
+    public string Path { get; init; } = string.Empty;
+    public string Format { get; init; } = string.Empty;
+    public long SizeBytes { get; init; }
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056", Justification = "Razor href binding requires string")]
+    public string? AccessUrl { get; init; }
 }
