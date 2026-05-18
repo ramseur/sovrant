@@ -126,6 +126,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Gap | Phase | Priority |
 |---|---|---|
 | Enterprise auth & external identity (OAuth/OIDC, SAML, SSO) | Phase 40B | Deferred |
+| SSO & Auth Provider Management — admin UI + API for configuring identity providers (Google, GitHub, Azure AD, Okta, SAML IdPs) per workspace; enable/disable providers, set client credentials, map claims to roles; mirrors LLM provider management in Settings | Phase 40C | Deferred |
 | VS Code native extension | Phase 42 | Deferred (MCP server covers MCP-aware IDEs) |
 | Embedded terminal panel inside the desktop app | Phase 45 | Deferred |
 | n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |
@@ -2839,6 +2840,40 @@ Add this phase when:
 6. Add SSO enforcement flag on `workspace_config`
 7. Add `POST /v1/admin/reload`
 8. Tests: OAuth flow, SAML flow, DB role evaluation, RBAC permission checks, SSO enforcement, JWT + svt_ coexistence
+
+---
+
+### Phase 40C — SSO & Auth Provider Management ⏸️ Deferred
+
+**Depends on:** Phase 40B (enterprise auth & external identity implemented)
+
+**Goal:** Give workspace admins a first-class UI and API for managing which identity providers are active, configuring provider credentials, and mapping external claims to Sovrant roles — mirroring how LLM providers are managed in Settings today.
+
+Phase 40B implements the auth plumbing (OAuth/OIDC flows, SAML, DB-backed roles). Phase 40C is the management surface on top of it: an admin can enable Google SSO for their workspace, paste in their Okta client ID/secret, set the claim → role mapping, and test the connection — all without touching environment variables.
+
+#### What it adds
+
+| Item | Detail |
+|---|---|
+| Auth provider registry | `auth_providers` table: `(id, workspace_id, type, display_name, enabled, config_encrypted, claim_mappings, created_at)`. Types: `google`, `github`, `azure_ad`, `okta`, `generic_oidc`, `saml`. |
+| Admin UI — Web | Settings → Identity Providers page. Card per provider: enable toggle, client ID/secret (masked), OIDC discovery URL or SAML metadata URL, claim-to-role mapping table, Test Connection button. |
+| Admin UI — Desktop | Same provider list in Settings panel, read/write parity with web. |
+| Provider API | `GET/POST/PUT/DELETE /v1/admin/auth-providers` — list, create, update, delete providers. Secrets stored in `ICredentialStore` (AES-256-GCM), never returned in GET responses. |
+| Claim mapping | Admin defines `{ "groups": { "admins": "admin", "members": "member" } }` or `{ "email_domain": "anant.us": "member" }`. Applied at login time to assign workspace role. |
+| SSO enforcement | Per-workspace flag: require SSO — disables username/password login for non-admin users. |
+| Test Connection | Validates OIDC discovery endpoint or SAML metadata; returns success/error without saving. |
+| Audit | Provider enable/disable, credential rotation, and claim mapping changes logged to `audit_events`. |
+
+#### Implementation plan
+
+1. Add `auth_providers` DB migration; store secrets via `ICredentialStore`
+2. Add `IAuthProviderStore` + `AuthProviderService` for CRUD and claim mapping evaluation
+3. `BearerTokenMiddleware` consults `AuthProviderService` to resolve workspace-level provider list at login
+4. Web: Identity Providers settings page (card list, enable toggle, credentials form, test button)
+5. Desktop: Settings panel — provider list with same fields
+6. API routes: `GET/POST/PUT/DELETE /v1/admin/auth-providers`
+7. SSO enforcement check in login endpoint
+8. Tests: provider CRUD, claim mapping, SSO enforcement, credential storage/retrieval
 
 ---
 
