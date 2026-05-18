@@ -127,6 +127,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 |---|---|---|
 | Enterprise auth & external identity (OAuth/OIDC, SAML, SSO) | Phase 40B | Deferred |
 | Supabase backend — swap SQLite for Supabase (PostgreSQL) as the server-side database; Supabase Auth replaces the hand-rolled auth stack and delivers SSO (Google, GitHub, Azure AD, SAML, etc.) out of the box; admin UI for enabling/disabling providers per workspace | Phase 40C | Deferred |
+| Granular feature permissions — workspace members can be granted or denied access to specific features (Chat, Agents, Teams, Swarms, Missions, MCP, Knowledge, Artifacts, Settings); current model is all-or-nothing per workspace role; Phase 40D adds a permission matrix admins configure per user or role | Phase 40D | Deferred |
 | VS Code native extension | Phase 42 | Deferred (MCP server covers MCP-aware IDEs) |
 | Embedded terminal panel inside the desktop app | Phase 45 | Deferred |
 | n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |
@@ -2903,6 +2904,71 @@ The `IStorageProvider` abstraction introduced in Phase 32 makes the swap a DI re
 7. SSO enforcement: per-workspace `require_sso` flag in `workspace_settings`; login endpoint rejects password auth if set
 8. Add PostgreSQL RLS policies to all tables scoped by `workspace_id`
 9. Tests: provider login flow (Google, GitHub), JWT validation, role mapping, SSO enforcement, RLS policy coverage, `IStorageProvider` contract tests against PostgreSQL
+
+---
+
+### Phase 40D — Granular Feature Permissions ⏸️ Deferred
+
+**Depends on:** Phase 40A (workspace roles), Phase 40C (Supabase auth + DB)
+
+**Goal:** Move beyond the current all-or-nothing workspace role model (Owner / Admin / Member) and let workspace admins grant or deny access to individual product features per user or per role. A member can have access to the workspace but be restricted to Chat only — no Agents, no Teams, no MCP connections, no Settings.
+
+#### Current limitation
+
+Today `Member` role grants access to everything inside a workspace. There is no way to say "this contractor can chat but cannot create agents or run swarms" without removing them from the workspace entirely.
+
+#### Feature permission model
+
+Features are grouped into discrete capabilities. Each can be `allow` or `deny` per user (overrides role default) or per role (applies to all members of that role):
+
+| Feature key | Covers |
+|---|---|
+| `chat` | Chat sessions — send messages, view history |
+| `agents` | Agent creation, editing, and execution |
+| `teams` | Team creation and TeamRun orchestration |
+| `swarms` | Swarm tool and swarm pipeline execution |
+| `missions` | Mission creation and management |
+| `mcp` | MCP server connections and tool proxy |
+| `knowledge` | Knowledge page authoring and browsing |
+| `artifacts` | Artifact read/write access |
+| `projects` | Project creation and management |
+| `settings.workspace` | Workspace settings (TTL, limits, etc.) |
+| `settings.providers` | LLM provider configuration |
+| `settings.identity` | Identity provider / SSO configuration |
+| `admin` | User management, approval, role changes |
+
+#### Resolution order
+
+```
+User-level grant/deny  (highest — explicit per-user override)
+    ↓
+Role-level grant/deny  (applies to all members of the role)
+    ↓
+Workspace default       (Member: allow all by default)
+```
+
+#### What it adds
+
+| Item | Detail |
+|---|---|
+| `feature_permissions` table | `(workspace_id, subject_type [role/user], subject_id, feature, effect [allow/deny])` |
+| `IFeaturePermissionService` | `CanAsync(userId, workspaceId, feature)` — evaluates the resolution chain above |
+| Route-level enforcement | Each feature area's API routes check `IFeaturePermissionService` before handler logic; return 403 with `"feature_denied"` error code |
+| UI gating | Web + Desktop hide or disable nav items and action buttons for denied features; denial is enforced server-side regardless |
+| Admin UI — Permission Matrix | Settings → Members → select user → permission matrix table; toggle allow/deny per feature; role-level defaults shown as background |
+| Role defaults editor | Settings → Roles → edit role → feature defaults toggle matrix |
+| Audit | Permission grant/deny changes logged to `audit_events` |
+
+#### Implementation plan
+
+1. Add `feature_permissions` DB migration
+2. Implement `IFeaturePermissionService` + `FeaturePermissionStore`; register in DI
+3. Add `[RequireFeature("chat")]` middleware/attribute applied to route groups
+4. Web: hide/disable nav items and action buttons based on feature check (server-rendered initial state + client guard)
+5. Desktop: same guard on nav items and command bindings
+6. Admin UI: permission matrix in Members settings page (web + desktop)
+7. Role defaults editor in Roles settings
+8. Tests: resolution order (user override beats role), 403 enforcement, UI gating, audit trail
 
 ---
 
