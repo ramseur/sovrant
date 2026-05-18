@@ -128,6 +128,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Enterprise auth & external identity (OAuth/OIDC, SAML, SSO) | Phase 40B | Deferred |
 | Supabase backend — swap SQLite for Supabase (PostgreSQL) as the server-side database; Supabase Auth replaces the hand-rolled auth stack and delivers SSO (Google, GitHub, Azure AD, SAML, etc.) out of the box; admin UI for enabling/disabling providers per workspace | Phase 40C | Deferred |
 | Granular feature permissions — workspace members can be granted or denied access to specific features (Chat, Agents, Teams, Swarms, Missions, MCP, Knowledge, Artifacts, Settings); current model is all-or-nothing per workspace role; Phase 40D adds a permission matrix admins configure per user or role | Phase 40D | Deferred |
+| DuckDB database provider — `IStorageProvider` implementation backed by DuckDB; columnar analytics for agent runs, session history, token usage, cost aggregations, and audit queries; embedded like SQLite, analytical like a data warehouse; ideal for self-hosted deployments that need fast cross-session reporting without standing up Supabase | Phase 104 | Deferred |
 | VS Code native extension | Phase 42 | Deferred (MCP server covers MCP-aware IDEs) |
 | Embedded terminal panel inside the desktop app | Phase 45 | Deferred |
 | n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |
@@ -10360,6 +10361,50 @@ Existing `default-project` directories are treated as workspace-level runs — t
 - [ ] Existing `default-project` directories are shown as workspace-level artifacts (no "default-project" label visible to users)
 - [ ] Download, ZIP, and delete endpoints handle both path depths
 - [ ] No existing artifacts are moved or broken by the change
+
+---
+
+## Phase 104 — DuckDB Database Provider
+
+**Status:** Planned / Deferred.
+
+**Depends on:** Phase 32 (`IStorageProvider` abstraction)
+
+**Goal:** Add DuckDB as a third `IStorageProvider` implementation alongside SQLite (embedded/desktop) and Supabase (hosted/multi-tenant). DuckDB is an in-process columnar analytical database — embedded like SQLite but built for fast aggregations over large result sets. It is the right backend for self-hosted Sovrant deployments that need rich cross-session analytics (cost dashboards, agent performance reports, audit queries) without the infrastructure overhead of running a PostgreSQL server.
+
+### Why DuckDB
+
+| Property | SQLite | Supabase (PostgreSQL) | DuckDB |
+|---|---|---|---|
+| Deployment | Embedded, zero-infra | Managed cloud service | Embedded, zero-infra |
+| Write pattern | OLTP — frequent small writes | OLTP — frequent small writes | OLAP — optimised for bulk reads and aggregations |
+| Analytics queries | Slow table scans | Fast with indexes | Native columnar — very fast |
+| Infrastructure | None | Supabase account required | None |
+| Best for | Desktop / single-user | Hosted multi-tenant | Self-hosted with analytics needs |
+| Parquet / Arrow export | No | No | Native |
+
+DuckDB is ideal when an operator wants to self-host Sovrant and query session history, token usage, agent run performance, and audit events without standing up a Postgres server or paying for Supabase.
+
+### What it adds
+
+| Item | Detail |
+|---|---|
+| `DuckDbStorageProvider` | Implements `IStorageProvider` against DuckDB via `DuckDB.NET`. Registered when `SOVRANT_DB_PROVIDER=duckdb` is set. |
+| Schema | Port the SQLite DDL to DuckDB-compatible SQL. Primary key and constraint handling adapted for DuckDB's dialect. |
+| Analytics views | Pre-built DuckDB views for common queries: session cost by model/provider, tool call frequency, agent run durations, token usage over time, governance violations. |
+| Parquet export | `GET /v1/admin/analytics/export?format=parquet` — exports the analytics views as Parquet files for use in BI tools (DuckDB's native export). |
+| `IStorageProvider` registration | `SOVRANT_DB_PROVIDER=duckdb` + `SOVRANT_DB_PATH=sovrant.duckdb` selects the DuckDB backend at startup. Falls back to SQLite if unset. |
+| Desktop option | Future: desktop settings UI lets the user switch from SQLite to DuckDB for the local store without data loss (migrator runs at startup). |
+
+### Implementation plan
+
+1. Add `Sovrant.Storage.DuckDb` project — `DuckDbStorageProvider` wrapping `DuckDB.NET`
+2. Port SQLite schema to DuckDB DDL; handle type differences (e.g. `TEXT` vs `VARCHAR`, `BLOB` vs `BYTEA`)
+3. Register `DuckDbStorageProvider` in `ServiceCollectionExtensions` when `SOVRANT_DB_PROVIDER=duckdb`
+4. Add analytics views (`session_costs`, `tool_call_stats`, `agent_run_durations`, `audit_summary`)
+5. Add Parquet export endpoint
+6. `IStorageProvider` contract tests run against DuckDB backend
+7. Tests: schema correctness, analytics view output, Parquet export, provider selection via env var
 
 ---
 
