@@ -82,11 +82,15 @@
                                 }
                                 @if (u.Status == "active" && u.UserId != Session.UserId)
                                 {
-                                    <button class="btn btn-sm btn-danger" @onclick="() => DisableAsync(u.UserId)">Disable</button>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => RequestDisable(u)">Disable</button>
                                 }
                                 @if (u.Status == "inactive")
                                 {
                                     <button class="btn btn-sm" @onclick="() => ReactivateAsync(u.UserId)">Reactivate</button>
+                                }
+                                @if (u.UserId != Session.UserId)
+                                {
+                                    <button class="btn btn-sm btn-danger" @onclick="() => RequestHardDelete(u)">Delete</button>
                                 }
                             </div>
                         </div>
@@ -163,7 +167,10 @@
     }
 </div>
 
+<DeleteConfirmModal @ref="_deleteModal" />
+
 @code {
+    private DeleteConfirmModal _deleteModal = default!;
     private int _tab;
     private bool _isLoading = true;
     private string _userFilter = "all";
@@ -217,12 +224,21 @@
         await LoadAsync();
     }
 
+    private void RequestDisable(User u) =>
+        _deleteModal.Show("User", u.Email ?? u.Username,
+            () => DisableAsync(u.UserId), requireTypeName: false, verb: "Disable");
+
+    private void RequestHardDelete(User u) =>
+        _deleteModal.Show("User", u.Email ?? u.Username,
+            () => HardDeleteAsync(u.UserId), requireTypeName: true, verb: "Delete");
+
     private async Task DisableAsync(string userId)
     {
         _status = string.Empty;
         await UserService.DeactivateAsync(userId).ConfigureAwait(false);
         _status = "User disabled.";
         await LoadAsync();
+        StateHasChanged();
     }
 
     private async Task ReactivateAsync(string userId)
@@ -231,6 +247,15 @@
         await UserService.ReactivateAsync(userId).ConfigureAwait(false);
         _status = "User reactivated.";
         await LoadAsync();
+    }
+
+    private async Task HardDeleteAsync(string userId)
+    {
+        _status = string.Empty;
+        await UserService.HardDeleteAsync(userId).ConfigureAwait(false);
+        _status = "User permanently deleted.";
+        await LoadAsync();
+        StateHasChanged();
     }
 
     private async Task ToggleRegistrationAsync(ChangeEventArgs e)

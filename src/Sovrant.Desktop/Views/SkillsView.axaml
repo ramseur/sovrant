@@ -111,13 +111,15 @@
                         BorderThickness="1"
                         Padding="20,16"
                         IsVisible="{Binding !!SelectedSkill}">
-                    <ContentControl Content="{Binding SelectedSkill}">
-                        <ContentControl.ContentTemplate>
-                            <DataTemplate DataType="vm:SkillItemViewModel">
-                                <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
-                            </DataTemplate>
-                        </ContentControl.ContentTemplate>
-                    </ContentControl>
+                    <ScrollViewer>
+                        <ContentControl Content="{Binding SelectedSkill}">
+                            <ContentControl.ContentTemplate>
+                                <DataTemplate DataType="vm:SkillItemViewModel">
+                                    <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
+                                </DataTemplate>
+                            </ContentControl.ContentTemplate>
+                        </ContentControl>
+                    </ScrollViewer>
                 </Border>
             </Grid>
         </Grid>

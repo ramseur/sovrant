@@ -898,10 +898,9 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .chat-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 16px 32px;
-    max-width: 860px;
-    margin: 0 auto;
+    padding: 16px clamp(16px, 4vw, 48px);
     width: 100%;
+    box-sizing: border-box;
 }
 
 /* ===== Hero state ===== */
@@ -1171,6 +1170,19 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     color: var(--text-primary);
 }
 
+.intent-narration {
+    font-size: 12px;
+    font-style: italic;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.action-summary {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: 8px;
+}
+
 /* ===== Tool use blocks ===== */
 .tool-use-block {
     margin: 8px 0;
@@ -1366,10 +1378,8 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 /* ===== Chat connections selector ===== */
 .chat-connections-row {
     position: relative;
-    max-width: 860px;
-    margin: 0 auto;
     width: 100%;
-    padding: 4px 24px 0 24px;
+    padding: 4px clamp(16px, 4vw, 48px) 0 clamp(16px, 4vw, 48px);
 }
 
 .chat-connections-pill {
@@ -1428,13 +1438,12 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 /* ===== Chat input ===== */
 .chat-input-bar {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: 8px;
-    padding: 12px 24px;
+    padding: 12px clamp(16px, 4vw, 48px) 16px;
     border-top: 1px solid var(--surface-border);
-    max-width: 860px;
-    margin: 0 auto;
     width: 100%;
+    box-sizing: border-box;
 }
 
 .input-wrapper {
@@ -1453,6 +1462,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     line-height: 1.4;
     min-height: 42px;
     max-height: 200px;
+    overflow-y: auto;
 }
 
 .input-wrapper textarea::placeholder { color: var(--text-muted); }
@@ -1460,8 +1470,10 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
 .send-btn {
     width: auto;
-    padding: 10px 20px;
+    padding: 0 20px;
+    height: 42px;
     flex-shrink: 0;
+    align-self: center;
 }
 
 .btn-stop {
@@ -3024,3 +3036,51 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .toggle-switch input:checked + .toggle-slider { background: var(--brand-primary); }
 .toggle-switch input:checked + .slider:before,
 .toggle-switch input:checked + .toggle-slider:before { transform: translateX(18px); }
+
+/* ── Delete Confirm Modal ────────────────────────────────────────────────── */
+.delete-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 440px;
+    background: var(--surface-card);
+    border: 1px solid var(--surface-border);
+    border-radius: 12px;
+    z-index: 101;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+.delete-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--surface-border);
+}
+.delete-modal-header h3 { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary); }
+.delete-modal-icon { font-size: 18px; color: var(--status-fail); }
+.delete-modal-body { padding: 20px 24px; }
+.delete-modal-body p { margin: 0 0 12px; font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+.delete-modal-body p:last-child { margin-bottom: 0; }
+.delete-modal-hint { color: var(--text-muted) !important; font-size: 13px !important; }
+.delete-modal-input {
+    width: 100%;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: var(--surface-input);
+    border: 1px solid var(--surface-border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 14px;
+    box-sizing: border-box;
+}
+.delete-modal-input:focus { outline: none; border-color: var(--status-fail); }
+.delete-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 16px 24px;
+    border-top: 1px solid var(--surface-border);
+    background: var(--surface-hover);
+}

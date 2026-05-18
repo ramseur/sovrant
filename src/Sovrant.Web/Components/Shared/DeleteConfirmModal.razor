@@ -1,0 +1,61 @@
+@if (_isOpen)
+{
+    <div class="palette-backdrop" @onclick="Cancel"></div>
+    <div class="delete-modal">
+        <div class="delete-modal-header">
+            <span class="delete-modal-icon">&#9888;</span>
+            <h3>@_verb @_itemType</h3>
+        </div>
+        <div class="delete-modal-body">
+            @if (_requireTypeName)
+            {
+                <p>This will permanently delete <strong>@_itemName</strong> and all of its data. This action <strong>cannot be undone</strong>.</p>
+                <p class="delete-modal-hint">Type <strong>@_itemName</strong> to confirm:</p>
+                <input class="delete-modal-input" type="text" @bind="_confirmText" @bind:event="oninput"
+                       placeholder="@_itemName" @ref="_inputRef" />
+            }
+            else
+            {
+                <p>Are you sure you want to @_verb.ToLowerInvariant() <strong>@_itemName</strong>? This action cannot be undone.</p>
+            }
+        </div>
+        <div class="delete-modal-footer">
+            <button class="btn-sm" @onclick="Cancel">Cancel</button>
+            <button class="btn-sm btn-danger" @onclick="Confirm" disabled="@(!CanConfirm)">@_verb @_itemType</button>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _isOpen;
+    private string _itemType = string.Empty;
+    private string _itemName = string.Empty;
+    private string _verb = "Delete";
+    private bool _requireTypeName;
+    private string _confirmText = string.Empty;
+    private Func<Task>? _onConfirmed;
+    private ElementReference _inputRef;
+
+    private bool CanConfirm => !_requireTypeName || _confirmText == _itemName;
+
+    public void Show(string itemType, string itemName, Func<Task> onConfirmed, bool requireTypeName = true, string verb = "Delete")
+    {
+        _itemType = itemType;
+        _itemName = itemName;
+        _onConfirmed = onConfirmed;
+        _requireTypeName = requireTypeName;
+        _verb = verb;
+        _confirmText = string.Empty;
+        _isOpen = true;
+        StateHasChanged();
+    }
+
+    private void Cancel() { _isOpen = false; StateHasChanged(); }
+
+    private async Task Confirm()
+    {
+        if (!CanConfirm) return;
+        _isOpen = false;
+        if (_onConfirmed is not null) await _onConfirmed();
+    }
+}

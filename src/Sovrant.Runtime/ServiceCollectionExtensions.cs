@@ -349,11 +349,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<WorkspaceIdentityMigrator>(sp =>
         {
             var store = sp.GetRequiredService<IArtifactStore>();
-            // The factory currently only produces LocalArtifactStore for the
-            // local backend; the migrator only makes sense against an on-disk
-            // tree, so other backends produce a no-op migrator.
             var root = store is LocalArtifactStore local ? local.Root : string.Empty;
             return new WorkspaceIdentityMigrator(root, sp.GetRequiredService<ILogger<WorkspaceIdentityMigrator>>());
+        });
+        services.AddSingleton<ArtifactLayoutMigrator>(sp =>
+        {
+            var store = sp.GetRequiredService<IArtifactStore>();
+            var root = store is LocalArtifactStore local ? local.Root : string.Empty;
+            return new ArtifactLayoutMigrator(root, sp.GetRequiredService<ILogger<ArtifactLayoutMigrator>>());
         });
 
         // Eval framework (Phase 27) — SQLite-backed since Phase 49
@@ -480,6 +483,11 @@ public static class ServiceCollectionExtensions
         // into the canonical `ws-personal-{userId}/` layout. Idempotent.
         var workspaceMigrator = services.GetRequiredService<WorkspaceIdentityMigrator>();
         workspaceMigrator.MigrateIfNeeded();
+
+        // Workspace-first layout migration — move old artifacts/{ws}/{proj}/{run}
+        // tree into the new workspaces/{ws}/.../artifacts/{run} structure. Idempotent.
+        var layoutMigrator = services.GetRequiredService<ArtifactLayoutMigrator>();
+        layoutMigrator.MigrateIfNeeded();
 
         var mcpStore = services.GetRequiredService<IMcpServerStore>();
         var mcpServers = await mcpStore.GetAllAsync(ct).ConfigureAwait(false);

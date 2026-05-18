@@ -27,9 +27,11 @@ public interface IIntentGate
 /// <param name="RequiresTools">Whether tools should be exposed to the LLM for this message.</param>
 /// <param name="NeedsClarification">Whether the system should ask the user to clarify before proceeding.</param>
 /// <param name="SuggestedClarification">If clarification is needed, the question to ask the user.</param>
+/// <param name="Narration">Phase 59d — short human-readable phrase describing what the system thinks the user wants, e.g. "I'll create a PDF report for you". Null for conversational messages.</param>
 public sealed record IntentGateResult(
     IntentClass Intent,
     float Confidence,
     bool RequiresTools,
     bool NeedsClarification,
-    string? SuggestedClarification);
+    string? SuggestedClarification,
+    string? Narration = null);

@@ -151,6 +151,12 @@
                                                 Padding="10,5" CornerRadius="6" FontSize="12"
                                                 Background="{DynamicResource SurfaceMuted}"
                                                 Foreground="{DynamicResource TextPrimary}" />
+                                        <Button Content="Delete"
+                                                Command="{Binding $parent[ItemsControl].((vm:AdminViewModel)DataContext).HardDeleteCommand}"
+                                                CommandParameter="{Binding}"
+                                                Padding="10,5" CornerRadius="6" FontSize="12"
+                                                Background="#7F1D1D"
+                                                Foreground="White" />
                                     </StackPanel>
                                     <StackPanel Spacing="2">
                                         <StackPanel Orientation="Horizontal" Spacing="8">

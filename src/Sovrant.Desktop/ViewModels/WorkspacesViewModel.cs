@@ -29,6 +29,9 @@ public partial class WorkspacesViewModel : ViewModelBase
     [ObservableProperty] private WorkspaceRole _addMemberRole = WorkspaceRole.Member;
 
     public ObservableCollection<WorkspaceItemViewModel> Workspaces { get; } = [];
+
+    /// <summary>Set by the View to show a confirmation dialog before destructive actions.</summary>
+    public Func<string, string, Task<bool>>? ConfirmDeleteAsync { get; set; }
     public ObservableCollection<WorkspaceMemberViewModel> Members { get; } = [];
     public IReadOnlyList<WorkspaceRole> RoleOptions { get; } = [WorkspaceRole.Member, WorkspaceRole.Admin, WorkspaceRole.Viewer];
 
@@ -85,6 +88,8 @@ public partial class WorkspacesViewModel : ViewModelBase
             StatusMessage = "Cannot delete personal workspace.";
             return;
         }
+
+        if (ConfirmDeleteAsync is not null && !await ConfirmDeleteAsync("Workspace", workspace.Name)) return;
 
         var success = await _workspaceService.DeleteAsync(workspace.Id);
         if (success)

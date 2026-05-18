@@ -9,9 +9,8 @@ public sealed class ChatMessageModel
     private readonly Stopwatch _stopwatch = new();
     private static readonly string[] ThinkingPhrases =
     [
-        "Thinking really hard...", "Consulting the oracle...", "Pondering the possibilities...",
-        "Gathering thoughts...", "Connecting the dots...", "Reasoning through it...",
-        "Weighing the options...", "Mulling it over...",
+        "Thinking...", "Reasoning through it...", "Gathering thoughts...",
+        "Connecting the dots...", "Weighing the options...", "Working on it...",
     ];
 
     public string Role { get; set; } = "user";
@@ -61,6 +60,14 @@ public sealed class ChatMessageModel
         return slash >= 0 ? model[(slash + 1)..] : model;
     }
 
+    // ── Phase 59d — intent narration ───────────────────────────────────
+
+    /// <summary>What the system thinks the user wants, e.g. "I'll create a PDF report for you". Set when IntentNarrated fires.</summary>
+    public string? IntentNarration { get; set; }
+
+    /// <summary>Summary of what was actually done, derived from ToolUses after completion.</summary>
+    public string? ActionSummary { get; set; }
+
     // ── Phase 59 properties ─────────────────────────────────────────────
 
     /// <summary>Phase 59a — clarification question from the intent gate.</summary>
@@ -84,14 +91,45 @@ public sealed class ChatMessageModel
     /// <summary>Phase 59e — human-readable step progress summary.</summary>
     public string? StepProgressText { get; set; }
 
-    public void StartThinking()
+    public void StartThinking(string? prompt = null)
     {
         IsThinking = true;
-        var idx = RandomNumberGenerator.GetInt32(ThinkingPhrases.Length);
-        ThinkingText = ThinkingPhrases[idx];
+        ThinkingText = PickThinkingPhrase(prompt);
         _stopwatch.Restart();
         ElapsedText = "0s";
     }
+
+    private static string PickThinkingPhrase(string? prompt)
+    {
+        if (!string.IsNullOrEmpty(prompt))
+        {
+            var p = prompt;
+            if (ContainsAny(p, "pdf", "document", "word", "excel", "spreadsheet", "powerpoint", "report"))
+                return "Preparing your document...";
+            if (ContainsAny(p, "create", "write", "generate", "build", "make") &&
+                ContainsAny(p, "code", "script", "function", "class", "program", "app"))
+                return "Writing the code...";
+            if (ContainsAny(p, "search", "find", "look up", "lookup", "google", "web"))
+                return "Searching the web...";
+            if (ContainsAny(p, "analyze", "analyse", "review", "check", "audit", "read"))
+                return "Reading and analyzing...";
+            if (ContainsAny(p, "fix", "debug", "error", "bug", "issue", "problem"))
+                return "Investigating the issue...";
+            if (ContainsAny(p, "explain", "what", "how", "why", "describe", "tell me"))
+                return "Looking that up...";
+            if (ContainsAny(p, "summarize", "summarise", "summary", "recap"))
+                return "Summarizing...";
+            if (ContainsAny(p, "translate", "translation", "convert"))
+                return "Translating...";
+            if (ContainsAny(p, "create", "make", "generate", "build", "write"))
+                return "Working on your request...";
+        }
+        var idx = RandomNumberGenerator.GetInt32(ThinkingPhrases.Length);
+        return ThinkingPhrases[idx];
+    }
+
+    private static bool ContainsAny(string text, params string[] terms) =>
+        terms.Any(t => text.Contains(t, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Call periodically (e.g. every second) to refresh the elapsed display.</summary>
     public void UpdateElapsed()
@@ -115,9 +153,51 @@ public sealed class ChatMessageModel
     {
         if (IsThinking) StopThinking();
         IsExecutingTools = true;
-        ExecutionStatusText = $"Running {toolName}...";
+        ExecutionStatusText = FriendlyToolStatus(toolName);
         ToolUses.Add(new ToolUseModel { ToolName = toolName, ToolUseId = toolUseId, Status = "Running..." });
     }
+
+    public static string FriendlyToolLabel(string toolName) => toolName switch
+    {
+        "DocumentGenerate" => "Generate Document",
+        "Artifact" => "Save File",
+        "Bash" => "Run Command",
+        "Read" => "Read File",
+        "Write" => "Write File",
+        "Edit" => "Edit File",
+        "Glob" => "Find Files",
+        "Grep" => "Search Files",
+        "WebSearch" => "Search Web",
+        "WebFetch" => "Fetch URL",
+        "Agent" => "Sub-Agent",
+        "Swarm" => "Coordinate Swarm",
+        "TeamCreate" => "Create Team",
+        "TeamRun" => "Run Team",
+        "TeamDelegate" => "Delegate to Team",
+        "Mission" => "Mission",
+        _ => toolName,
+    };
+
+    private static string FriendlyToolStatus(string toolName) => toolName switch
+    {
+        "DocumentGenerate" => "Creating your document...",
+        "Artifact" => "Saving file...",
+        "Bash" => "Running command...",
+        "Read" => "Reading file...",
+        "Write" => "Writing file...",
+        "Edit" => "Editing file...",
+        "Glob" => "Finding files...",
+        "Grep" => "Searching files...",
+        "WebSearch" => "Searching the web...",
+        "WebFetch" => "Fetching page...",
+        "Agent" => "Working with sub-agent...",
+        "Swarm" => "Coordinating swarm...",
+        "TeamCreate" => "Creating team...",
+        "TeamRun" => "Running team...",
+        "TeamDelegate" => "Delegating task...",
+        "Mission" => "Running mission...",
+        _ => $"Running {toolName}...",
+    };
 
     public void UpdateToolResult(string toolUseId, string content, bool isError)
     {
@@ -140,6 +220,20 @@ public sealed class ChatMessageModel
         IsExecutingTools = false;
         _stopwatch.Stop();
         UpdateElapsed();
+        ActionSummary = BuildActionSummary();
+    }
+
+    private string? BuildActionSummary()
+    {
+        if (ToolUses.Count == 0) return null;
+        var parts = new List<string>();
+        var groups = ToolUses
+            .Where(t => !t.IsError)
+            .GroupBy(t => t.ToolName)
+            .Select(g => (Label: g.Key, Count: g.Count()));
+        foreach (var (label, count) in groups)
+            parts.Add(count > 1 ? $"{label} ×{count}" : label);
+        return parts.Count > 0 ? string.Join(" · ", parts) : null;
     }
 
     public void SetError(string rawError)
@@ -159,20 +253,85 @@ public sealed class ChatMessageModel
         var context = ExtractProviderContext(raw);
         var prefix = context is not null ? $"{context}: " : "";
 
-        if (raw.Contains("429", StringComparison.Ordinal) || raw.Contains("rate limit", StringComparison.OrdinalIgnoreCase))
+        // No provider or model configured — most common first-run issue
+        if (raw.Contains("No provider available", StringComparison.OrdinalIgnoreCase))
+            return "No provider configured. Go to Settings → Providers and add an API key to get started.";
+
+        // Credits / billing exhausted
+        if (raw.Contains("insufficient_quota", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("out of credits", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("credit balance", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("402", StringComparison.Ordinal))
+            return $"{prefix}API credits exhausted. Top up your account at the provider's website, or switch to a different provider in Settings.";
+
+        // Rate limited
+        if (raw.Contains("429", StringComparison.Ordinal) ||
+            raw.Contains("rate limit", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("too many requests", StringComparison.OrdinalIgnoreCase))
             return $"{prefix}Rate limited by the provider. Wait a moment and try again, or switch to a different model in Settings.";
-        if (raw.Contains("401", StringComparison.Ordinal) || raw.Contains("Authentication", StringComparison.OrdinalIgnoreCase))
-            return $"{prefix}Authentication failed. Check your API key in Settings.";
-        if (raw.Contains("403", StringComparison.Ordinal))
+
+        // Authentication
+        if (raw.Contains("401", StringComparison.Ordinal) ||
+            raw.Contains("Unauthorized", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("Authentication", StringComparison.OrdinalIgnoreCase))
+            return $"{prefix}Authentication failed. Check your API key in Settings → Providers.";
+
+        // Access denied
+        if (raw.Contains("403", StringComparison.Ordinal) ||
+            raw.Contains("Forbidden", StringComparison.OrdinalIgnoreCase))
             return $"{prefix}Access denied. Your API key may not have permission for this model.";
-        if (raw.Contains("400", StringComparison.Ordinal) && raw.Contains("API error", StringComparison.OrdinalIgnoreCase))
-            return $"{prefix}The model rejected this request (400). Try starting a new chat or switching models.";
+
+        // Model not found
+        if (raw.Contains("404", StringComparison.Ordinal) &&
+            (raw.Contains("model", StringComparison.OrdinalIgnoreCase) || raw.Contains("not found", StringComparison.OrdinalIgnoreCase)))
+            return $"{prefix}Model not found. It may have been removed or renamed — try selecting a different model in Settings.";
+
+        // Context length exceeded
+        if (raw.Contains("context_length", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("context length", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("maximum context", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("413", StringComparison.Ordinal))
+            return $"{prefix}The conversation is too long for this model. Start a new chat or switch to a model with a larger context window.";
+
+        // Content filtered / safety block
+        if (raw.Contains("content_filter", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("content filter", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("moderated", StringComparison.OrdinalIgnoreCase))
+            return $"{prefix}The request was blocked by the provider's content filter. Try rephrasing.";
+
+        // Bad request
+        if (raw.Contains("400", StringComparison.Ordinal))
+            return $"{prefix}The provider rejected this request (400). Try starting a new chat or switching models.";
+
+        // Provider-level error wrapper
         if (raw.Contains("Provider returned error", StringComparison.OrdinalIgnoreCase))
             return $"{prefix}The provider returned an error. Try again or switch to a different model in Settings.";
-        if (raw.Contains("timeout", StringComparison.OrdinalIgnoreCase))
-            return $"{prefix}The request timed out. Try again.";
-        if (raw.Contains("No provider available", StringComparison.OrdinalIgnoreCase))
-            return "No provider is available. Check your API key and provider settings.";
+
+        // Service overloaded / unavailable
+        if (raw.Contains("529", StringComparison.Ordinal) ||
+            raw.Contains("503", StringComparison.Ordinal) ||
+            raw.Contains("502", StringComparison.Ordinal) ||
+            raw.Contains("overloaded", StringComparison.OrdinalIgnoreCase))
+            return $"{prefix}The provider is temporarily overloaded. Try again in a moment.";
+
+        if (raw.Contains("500", StringComparison.Ordinal))
+            return $"{prefix}The provider hit an internal error (500). Try again.";
+
+        // Connection errors
+        if (raw.Contains("connection", StringComparison.OrdinalIgnoreCase) && raw.Contains("refused", StringComparison.OrdinalIgnoreCase))
+            return $"{prefix}Could not connect to the provider. Check your internet connection and the base URL in Settings.";
+        if (raw.Contains("No such host", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("Name or service not known", StringComparison.OrdinalIgnoreCase))
+            return $"{prefix}Could not reach the provider — check your internet connection.";
+
+        // Timeout
+        if (raw.Contains("timeout", StringComparison.OrdinalIgnoreCase) || raw.Contains("timed out", StringComparison.OrdinalIgnoreCase))
+            return $"{prefix}The request timed out. The provider may be overloaded — try again.";
+
+        // Agent hit max tool rounds
+        if (raw.Contains("Maximum tool rounds", StringComparison.OrdinalIgnoreCase))
+            return "The agent reached its tool use limit for this turn. Try breaking your request into smaller steps.";
+
         return $"{prefix}Something went wrong. {raw}";
     }
 

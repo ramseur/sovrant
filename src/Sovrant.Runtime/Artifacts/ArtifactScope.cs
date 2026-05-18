@@ -4,20 +4,26 @@ namespace Sovrant.Runtime.Artifacts;
 
 /// <summary>
 /// Identifies the workspace-scoped location where artifacts for a given run
-/// are stored. The workspace is the top-level partition — all users in the
-/// same workspace share the same artifact tree. The initiating user is
-/// tracked in the <see cref="ArtifactManifest"/> metadata, not in the
-/// directory path.
+/// are stored. The workspace is the top-level tenant object — all users in
+/// the same workspace share the same artifact tree. The initiating user is
+/// tracked in the <see cref="ArtifactManifest"/> metadata, not in the path.
 /// </summary>
 /// <remarks>
-/// Layout: <c>{root}/{workspace}/{project}/{run}/</c>
-/// Unknown segments fall back to sentinel values so a fresh install with
-/// no workspaces or projects configured still works.
+/// Layout (workspace-level):  <c>{root}/{workspace}/artifacts/{run}/</c>
+/// Layout (project-level):    <c>{root}/{workspace}/projects/{project}/artifacts/{run}/</c>
+/// The routing rule: if <see cref="ProjectId"/> equals <see cref="DefaultProjectId"/>
+/// the artifact is stored at workspace level; any real project routes under projects/.
 /// </remarks>
 public sealed record ArtifactScope
 {
-    /// <summary>Sentinel used when no project is configured.</summary>
+    /// <summary>
+    /// Sentinel used when no project is explicitly selected (startup, workspace-only context).
+    /// Artifacts with this project ID are stored at workspace level, not under a project folder.
+    /// </summary>
     public const string DefaultProjectId = "default-project";
+
+    /// <summary>Returns true when this scope targets workspace-level storage (no real project selected).</summary>
+    public bool IsWorkspaceLevel => string.IsNullOrEmpty(ProjectId) || ProjectId == DefaultProjectId;
 
     /// <summary>
     /// The workspace. Defaults to the active user's personal workspace

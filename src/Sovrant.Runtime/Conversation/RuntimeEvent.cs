@@ -54,6 +54,13 @@ public abstract partial record RuntimeEvent
     // ── Phase 59 events ─────────────────────────────────────────────────
 
     /// <summary>
+    /// Phase 59d — emitted immediately after the intent gate classifies the
+    /// user's message. Tells the UI what the system thinks the user wants so
+    /// the user sees "I'll create a PDF report" before any tool runs.
+    /// </summary>
+    public sealed record IntentNarrated(string Narration) : RuntimeEvent;
+
+    /// <summary>
     /// Phase 59a — the intent gate determined the user's message is ambiguous
     /// and needs clarification before tools can be exposed.
     /// </summary>

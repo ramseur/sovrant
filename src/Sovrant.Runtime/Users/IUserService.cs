@@ -70,6 +70,14 @@ public interface IUserService
     /// <summary>Re-activates a previously soft-deleted user.</summary>
     Task<bool> ReactivateAsync(string userId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Permanently removes a user row and all owned data (sessions, tokens, preferences).
+    /// Workspace memberships are also removed. Use only when the user account must be
+    /// fully erased — prefer <see cref="DeactivateAsync"/> for reversible suspension.
+    /// </summary>
+    /// <returns><c>true</c> if the user existed and was deleted; <c>false</c> if not found.</returns>
+    Task<bool> HardDeleteAsync(string userId, CancellationToken ct = default);
+
     // ── Per-user data views ────────────────────────────────────────────────
 
     /// <summary>Lists session IDs owned by a user, newest first.</summary>

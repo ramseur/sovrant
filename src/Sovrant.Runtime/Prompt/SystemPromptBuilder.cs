@@ -74,18 +74,41 @@ public sealed class SystemPromptBuilder
             if (HasArtifactTool(tools))
             {
                 parts.Add(
-                    "CONTENT CREATION DISCIPLINE — when you produce a file the user will want to keep " +
-                    "(code, documents, configs, reports, data), save it via the Artifact tool instead " +
-                    "of pasting the contents into chat:\n\n" +
+                    "CONTENT CREATION DISCIPLINE — any code, script, config, document, or data file " +
+                    "the user asked you to create must go through the Artifact tool. " +
+                    "Do NOT write the content into chat first and then save it — call the tool immediately.\n\n" +
                     "- Use Artifact 'write' for a single file, 'write_many' for multiple files in one call. " +
-                    "Scope (workspace, project, run) is auto-attached — only set 'path' and 'content'.\n" +
-                    "- Short snippets and examples (~20 lines or fewer, illustrating a point inline) stay " +
-                    "in chat. Anything that has a natural filename, or that the user is likely to copy " +
-                    "into a real file, goes through Artifact.\n" +
-                    "- After saving, briefly mention what you wrote and the path(s) so the user can find it. " +
-                    "Don't repeat the full contents in chat — the file is the deliverable.\n" +
-                    "- Edits to existing repository files use Edit/Write directly. Artifact is for new " +
-                    "generated outputs that don't have an existing path in the working tree.");
+                    "Scope is auto-attached — only set 'path' and 'content'.\n" +
+                    "- If the user asked you to 'write', 'create', 'generate', 'build', or 'give me' " +
+                    "a file — call the Artifact tool as your FIRST action, regardless of length. " +
+                    "The only exception is a brief illustrative snippet (a few lines shown purely " +
+                    "to explain a concept, not to be saved or run).\n" +
+                    "- After saving, briefly state what you wrote and the path. Do not repeat the " +
+                    "full contents in chat — the file is the deliverable.\n" +
+                    "- Edits to existing repository files use Edit/Write directly. Artifact is for " +
+                    "new generated outputs that don't have an existing path in the working tree.");
+            }
+
+            // Document generation guidance — teach the LLM to use DocumentGenerate
+            // instead of saying it cannot produce files.
+            if (HasDocumentTool(tools))
+            {
+                parts.Add(
+                    "DOCUMENT GENERATION — when the user asks for a PDF, Word document, Excel " +
+                    "spreadsheet, PowerPoint, or any formatted report:\n\n" +
+                    "CRITICAL: Call DocumentGenerate IMMEDIATELY as your FIRST action. " +
+                    "Do NOT write, draft, outline, or summarize the content in chat first — " +
+                    "go straight to the tool call. The tool produces the file; chat is only " +
+                    "for a one-line confirmation afterward (e.g. 'Your PDF is ready at ...').\n\n" +
+                    "Formats:\n" +
+                    "- 'structured_pdf': styled PDF from markdown (headings, lists, code blocks). " +
+                    "Use for any PDF request unless the user wants raw plain-text.\n" +
+                    "- 'word': .docx from markdown.\n" +
+                    "- 'excel': .xlsx from JSON {headers, rows}.\n" +
+                    "- 'powerpoint': .pptx where each H1 heading becomes a new slide.\n" +
+                    "- 'markdown': saves a .md artifact.\n\n" +
+                    "Never tell the user you cannot create or export a document. " +
+                    "Call the tool first, then confirm with the saved path.");
             }
 
             // Orchestration strategy — teach the LLM when to escalate
@@ -134,4 +157,7 @@ public sealed class SystemPromptBuilder
 
     private static bool HasArtifactTool(IReadOnlyList<ToolDefinition> tools) =>
         tools.Any(t => t.Name == "Artifact");
+
+    private static bool HasDocumentTool(IReadOnlyList<ToolDefinition> tools) =>
+        tools.Any(t => t.Name == "DocumentGenerate");
 }

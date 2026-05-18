@@ -10,7 +10,7 @@
     <DockPanel>
         <!-- Bottom: Input bar -->
         <Border DockPanel.Dock="Bottom"
-                Padding="24,12"
+                Padding="48,12"
                 BorderThickness="0,1,0,0"
                 BorderBrush="{DynamicResource SurfaceBorder}">
             <DockPanel>
@@ -61,7 +61,7 @@
                         Foreground="White"
                         CornerRadius="8"
                         FontWeight="SemiBold"
-                        VerticalAlignment="Bottom"
+                        VerticalAlignment="Center"
                         IsVisible="{Binding !IsSending}" />
                 <!-- Stop button — visible while sending -->
                 <Button DockPanel.Dock="Right"
@@ -72,7 +72,7 @@
                         Foreground="White"
                         CornerRadius="8"
                         FontWeight="SemiBold"
-                        VerticalAlignment="Bottom"
+                        VerticalAlignment="Center"
                         IsVisible="{Binding IsSending}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <Border Width="10" Height="10" CornerRadius="2"
@@ -87,8 +87,8 @@
                              AcceptsReturn="False"
                              TextWrapping="Wrap"
                              KeyDown="OnInputKeyDown"
-                             MinHeight="40"
-                             MaxHeight="120"
+                             MinHeight="60"
+                             MaxHeight="300"
                              Padding="12,10"
                              CornerRadius="8"
                              Background="{DynamicResource InputBackground}"
@@ -142,7 +142,7 @@
 
         <!-- Session stats (tokens + cost) — visible once messages exist -->
         <Border DockPanel.Dock="Bottom"
-                Padding="24,4"
+                Padding="48,4"
                 IsVisible="{Binding HasMessages}">
             <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Right">
                 <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center">
@@ -267,8 +267,7 @@
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <ItemsControl ItemsSource="{Binding Messages}"
-                              Margin="32,16"
-                              MaxWidth="800"
+                              Margin="48,16"
                               HorizontalAlignment="Stretch">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:MessageViewModel">
@@ -309,7 +308,7 @@
                                             CornerRadius="12"
                                             Background="{DynamicResource AssistantMessageBackground}">
                                         <StackPanel Spacing="6">
-                                            <!-- Icon + "Sovrant" label row -->
+                                            <!-- Icon + sender label + elapsed + action summary -->
                                             <StackPanel Orientation="Horizontal" Spacing="10">
                                                 <Border Width="32" Height="32" CornerRadius="8"
                                                         Background="{DynamicResource BrandPrimary}">
@@ -324,7 +323,18 @@
                                                            Foreground="{DynamicResource TextMuted}"
                                                            VerticalAlignment="Center" Margin="8,0,0,0"
                                                            IsVisible="{Binding ElapsedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                <TextBlock Text="{Binding ActionSummary}" FontSize="11"
+                                                           Foreground="{DynamicResource TextMuted}"
+                                                           VerticalAlignment="Center" Margin="4,0,0,0"
+                                                           IsVisible="{Binding ActionSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                                             </StackPanel>
+
+                                            <!-- Intent narration — what the system thinks the user wants -->
+                                            <TextBlock Text="{Binding IntentNarration}"
+                                                       FontSize="12" FontStyle="Italic"
+                                                       Foreground="{DynamicResource TextSecondary}"
+                                                       Margin="42,0,0,0"
+                                                       IsVisible="{Binding IntentNarration, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
                                             <!-- Thinking indicator -->
                                             <StackPanel Orientation="Horizontal" Spacing="8"

@@ -78,7 +78,7 @@
                     {
                         <button class="btn-sm btn-danger" @onclick="() => ArchiveAsync(p)">Archive</button>
                     }
-                    <button class="btn-sm btn-danger" @onclick="() => DeleteAsync(p)">X</button>
+                    <button class="btn-sm btn-danger" @onclick="() => RequestDelete(p)">Delete</button>
                 </div>
             </div>
         }
@@ -86,11 +86,14 @@
     }
 </div>
 
+<DeleteConfirmModal @ref="_deleteModal" />
+
 @code {
     [Inject] private IProjectService ProjectService { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
 
     private string WorkspaceId => string.IsNullOrEmpty(ActiveContext.WorkspaceId) ? WorkspaceIdentity.DefaultPersonal() : ActiveContext.WorkspaceId;
+    private DeleteConfirmModal _deleteModal = default!;
     private string _newName = string.Empty;
     private string _search = string.Empty;
     private string _status = string.Empty;
@@ -183,12 +186,16 @@
         await LoadAsync();
     }
 
+    private void RequestDelete(ProjectItem p) =>
+        _deleteModal.Show("Project", p.Name, () => DeleteAsync(p));
+
     private async Task DeleteAsync(ProjectItem p)
     {
         await ProjectService.DeleteAsync(p.Id);
         _status = $"'{p.Name}' deleted.";
         await LoadAsync();
         ActiveContext.NotifyDataChanged();
+        StateHasChanged();
     }
 
     private void ApplyFilter()

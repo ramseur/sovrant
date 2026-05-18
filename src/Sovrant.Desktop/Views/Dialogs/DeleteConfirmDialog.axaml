@@ -1,0 +1,48 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sovrant.Desktop.Views.Dialogs.DeleteConfirmDialog"
+        Title="Confirm Deletion"
+        Width="440" Height="260"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel Margin="24">
+        <!-- Buttons -->
+        <StackPanel DockPanel.Dock="Bottom"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="10"
+                    Margin="0,16,0,0">
+            <Button Content="Cancel" Click="OnCancel"
+                    Padding="20,8" CornerRadius="8" />
+            <Button x:Name="DeleteButton" Click="OnDelete"
+                    Padding="20,8" CornerRadius="8"
+                    Background="#C62828"
+                    Foreground="White"
+                    FontWeight="SemiBold"
+                    IsEnabled="False" />
+        </StackPanel>
+
+        <!-- Content -->
+        <StackPanel Spacing="10">
+            <TextBlock x:Name="HeadingText"
+                       FontSize="15" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimary}" />
+            <TextBlock x:Name="BodyText"
+                       TextWrapping="Wrap"
+                       FontSize="13"
+                       Foreground="{DynamicResource TextSecondary}"
+                       LineHeight="20" />
+            <TextBlock x:Name="HintText"
+                       FontSize="12"
+                       Foreground="{DynamicResource TextMuted}" />
+            <TextBox x:Name="ConfirmInput"
+                     Watermark="Type to confirm..."
+                     Padding="10,8"
+                     CornerRadius="6"
+                     FontSize="13"
+                     TextChanged="OnInputChanged" />
+        </StackPanel>
+    </DockPanel>
+</Window>
