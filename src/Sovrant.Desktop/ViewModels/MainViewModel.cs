@@ -44,16 +44,20 @@ public partial class MainViewModel : ViewModelBase
 
     private readonly IServiceProvider _services;
     private readonly IPrincipalAccessor _principal;
+    private readonly ActiveSessionsViewModel _activeSessions;
+    // Parked ChatViewModels whose turns are still running in background.
+    private readonly Dictionary<string, ChatViewModel> _backgroundChats = [];
 
     public bool IsAdmin => _principal.IsAdmin;
 
-    public MainViewModel(SidebarViewModel sidebar, CommandPaletteViewModel commandPalette, IServiceProvider services, IPrincipalAccessor principal)
+    public MainViewModel(SidebarViewModel sidebar, CommandPaletteViewModel commandPalette, IServiceProvider services, IPrincipalAccessor principal, ActiveSessionsViewModel activeSessions)
     {
         ArgumentNullException.ThrowIfNull(sidebar);
         _sidebar = sidebar;
         _commandPalette = commandPalette;
         _services = services;
         _principal = principal;
+        _activeSessions = activeSessions;
         var cockpit = services.GetRequiredService<CommandCenterViewModel>();
         _currentPage = cockpit;
         cockpit.RowSelected += OnCockpitRowSelected;
@@ -99,6 +103,7 @@ public partial class MainViewModel : ViewModelBase
         SelectedGroup = group;
         // Clicking a top-level icon should land on the first sub-nav item so the
         // main area is never blank. Chat starts a fresh session; admin guards on role.
+        ParkCurrentChatIfRunning();
         switch (group)
         {
             case "chat":
@@ -174,8 +179,19 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    private void ParkCurrentChatIfRunning()
+    {
+        if (CurrentPage is ChatViewModel current
+            && current.IsSending
+            && _activeSessions.HasSession(current.SessionId))
+        {
+            _backgroundChats[current.SessionId] = current;
+        }
+    }
+
     private void OnNavigationRequested(object? sender, string pageName)
     {
+        ParkCurrentChatIfRunning();
         CurrentPage = pageName switch
         {
             "Chat" => CreateChatViewModel(),
@@ -210,6 +226,15 @@ public partial class MainViewModel : ViewModelBase
 
     private async void OnSessionResumeRequested(object? sender, string sessionId)
     {
+        // If the user navigated away while a turn was running, re-attach the parked VM.
+        if (_backgroundChats.TryGetValue(sessionId, out var parked))
+        {
+            _backgroundChats.Remove(sessionId);
+            CurrentPage = parked;
+            parked.ReAttachToBackground();
+            return;
+        }
+
         var chat = CreateChatViewModel();
         CurrentPage = chat;
         await chat.LoadSessionAsync(sessionId);

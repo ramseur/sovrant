@@ -69,6 +69,11 @@ public partial class SidebarViewModel : ViewModelBase
     public ObservableCollection<ProviderTreeGroup> TreeGroups { get; } = [];
     public ObservableCollection<SessionListItem> RecentSessions { get; } = [];
 
+    private ActiveSessionsViewModel? _activeSessions;
+    public bool HasActiveSessions => _activeSessions?.HasActiveSessions ?? false;
+    public ObservableCollection<ActiveSessionInfoViewModel> ActiveBackgroundSessions =>
+        _activeSessions?.ActiveSessions ?? [];
+
     /// <summary>True when showing providers list (step 1), false when showing models (step 2).</summary>
     public bool IsProviderStep => SelectedTreeGroup is null;
 
@@ -107,6 +112,7 @@ public partial class SidebarViewModel : ViewModelBase
         IUserPreferenceStore prefs,
         IProviderProfileStore profileStore,
         ICredentialStore credentials,
+        ActiveSessionsViewModel? activeSessions = null,
         MutableAuthProvider? authProvider = null,
         IHttpClientFactory? httpFactory = null,
         IModelCapabilityRegistry? capabilityRegistry = null)
@@ -120,6 +126,17 @@ public partial class SidebarViewModel : ViewModelBase
         _credentials = credentials;
         _capabilityRegistry = capabilityRegistry;
         ActiveContext = activeContext;
+        _activeSessions = activeSessions;
+        if (_activeSessions is not null)
+        {
+            _activeSessions.ActiveSessions.CollectionChanged += (_, _) =>
+            {
+                OnPropertyChanged(nameof(HasActiveSessions));
+                OnPropertyChanged(nameof(ActiveBackgroundSessions));
+                // Refresh IsActive on all recent sessions
+                foreach (var s in RecentSessions) s.RefreshIsActive(_activeSessions);
+            };
+        }
         // Re-fire PropertyChanged for HasProviderProfiles whenever the collection
         // changes so the dropdown's empty-state toggles correctly.
         ProviderProfiles.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasProviderProfiles));
@@ -569,6 +586,12 @@ public partial class SidebarViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void CancelActiveSession(string sessionId) => _activeSessions?.Cancel(sessionId);
+
+    [RelayCommand]
+    private void DismissActiveSession(string sessionId) => _activeSessions?.Dismiss(sessionId);
+
+    [RelayCommand]
     private async Task DeleteSessionAsync(string sessionId)
     {
         await _sessionStore.DeleteAsync(sessionId, ownerUserId: App.SovrantUserId);
@@ -610,7 +633,10 @@ public partial class SidebarViewModel : ViewModelBase
         {
             RecentSessions.Clear();
             foreach (var item in items.OrderByDescending(s => s.Timestamp))
+            {
+                item.RefreshIsActive(_activeSessions);
                 RecentSessions.Add(item);
+            }
         });
     }
 
@@ -688,5 +714,13 @@ public partial class SessionListItem : ViewModelBase
 
     [ObservableProperty]
     private int _messageCount;
+
+    [ObservableProperty]
+    private bool _isActive;
+
+    public void RefreshIsActive(ActiveSessionsViewModel? activeSessions)
+    {
+        IsActive = activeSessions?.HasSession(SessionId) ?? false;
+    }
 }
 

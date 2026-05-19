@@ -130,6 +130,7 @@
     [Inject] private BlazorConfirmationHandler ConfirmationHandler { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
+    [Inject] private ActiveSessionsService ActiveSessions { get; set; } = default!;
     [Inject] private SovrantConfig Config { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private IMcpServerStore McpServerStore { get; set; } = default!;
@@ -156,7 +157,10 @@
     private ElementReference _inputRef;
     private string _inputText = string.Empty;
     private bool _isSending;
+    // Legacy CTS used only when background sessions are disabled.
     private CancellationTokenSource? _sendCts;
+    // True when the current turn is owned by ActiveSessionsService.
+    private bool _isBackgroundSession;
     private ChatMessageModel? _streamingMsg;
     private bool _stopRequested;
     private int _tokenCount;
@@ -234,6 +238,30 @@
             _tokenCount = 0;
             _sessionCost = 0;
             ActiveContext.PendingResumeSessionId = null;
+
+            // If this session has a running background turn, replay buffered events
+            // and re-subscribe live instead of loading from DB.
+            if (ActiveSessions.HasSession(sessionId))
+            {
+                await LoadSessionAsync(sessionId);
+                var lastAssistant = _messages.FindLast(m => m.Role == "assistant");
+                if (lastAssistant is null)
+                {
+                    lastAssistant = new ChatMessageModel { Role = "assistant", ModelName = Config.Model };
+                    _messages.Add(lastAssistant);
+                }
+                var (buffered, isRunning) = ActiveSessions.Attach(sessionId, evt =>
+                    InvokeAsync(() => { HandleEvent((RuntimeEvent)evt, lastAssistant); StateHasChanged(); return Task.CompletedTask; }));
+                foreach (var evt in buffered)
+                    HandleEvent((RuntimeEvent)evt, lastAssistant);
+                _streamingMsg = isRunning ? lastAssistant : null;
+                _isSending = isRunning;
+                _isBackgroundSession = isRunning;
+                StateHasChanged();
+                await ScrollToBottom();
+                return;
+            }
+
             await LoadSessionAsync(sessionId);
         });
     }
@@ -493,19 +521,28 @@
 
     private async Task SendToRuntimeAsync(string text)
     {
-        _sendCts?.Dispose();
-        _sendCts = new CancellationTokenSource();
-        var ct = _sendCts.Token;
+        var bgEnabled = await ActiveSessions.IsEnabledAsync();
+        var maxActive = await ActiveSessions.GetMaxActiveAsync();
+
+        if (bgEnabled && ActiveSessions.RunningCount() >= maxActive)
+        {
+            _messages.Add(new ChatMessageModel
+            {
+                Role = "assistant",
+                Text = $"Cannot start: you already have {maxActive} background session(s) running. Cancel one first.",
+                IsComplete = true,
+            });
+            StateHasChanged();
+            return;
+        }
 
         _isSending = true;
         _stopRequested = false;
         var isFirstMessage = _messages.All(m => m.Role != "user");
 
-        // Add user message
         if (_messages.Count == 0 || _messages[^1].Role != "user" || _messages[^1].Text != text)
             _messages.Add(new ChatMessageModel { Role = "user", Text = text, IsComplete = true, UserDisplayName = _userDisplayName });
 
-        // Add assistant placeholder with thinking
         var assistantMsg = new ChatMessageModel { Role = "assistant", ModelName = Config.Model };
         assistantMsg.StartThinking(text);
         _messages.Add(assistantMsg);
@@ -513,70 +550,109 @@
         StateHasChanged();
         await ScrollToBottom();
 
-        // Tick the elapsed timer every second while waiting.
-        using var elapsedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        _ = Task.Run(async () =>
+        string? title = null;
+        if (isFirstMessage)
         {
-            using var ticker = new PeriodicTimer(TimeSpan.FromSeconds(1));
-            while (await ticker.WaitForNextTickAsync(elapsedCts.Token).ConfigureAwait(false))
+            title = text.Length > 60 ? text[..60] + "..." : text;
+            await SessionStore.SetTitleAsync(_sessionId, title, ownerUserId: Sovrant.Web.Program.SovrantUserId);
+            ActiveContext.NotifyDataChanged();
+        }
+
+        var sessionId = _sessionId;
+        var turnCts = new CancellationTokenSource();
+
+        if (bgEnabled)
+        {
+            _isBackgroundSession = true;
+            ActiveSessions.TryRegister(sessionId, title ?? sessionId, turnCts);
+            ActiveSessions.Attach(sessionId, evt =>
+                InvokeAsync(() => { HandleEvent((RuntimeEvent)evt, assistantMsg); StateHasChanged(); return Task.CompletedTask; }));
+
+            _ = Task.Run(async () => await RunTurnCoreAsync(text, assistantMsg, sessionId, turnCts.Token, bgEnabled: true));
+        }
+        else
+        {
+            _isBackgroundSession = false;
+            _sendCts?.Dispose();
+            _sendCts = turnCts;
+            await RunTurnCoreAsync(text, assistantMsg, sessionId, turnCts.Token, bgEnabled: false);
+        }
+    }
+
+    private async Task RunTurnCoreAsync(string text, ChatMessageModel assistantMsg, string sessionId, CancellationToken ct, bool bgEnabled)
+    {
+        var elapsedCts = bgEnabled ? null : CancellationTokenSource.CreateLinkedTokenSource(ct);
+        if (elapsedCts is not null)
+        {
+            _ = Task.Run(async () =>
             {
-                assistantMsg.UpdateElapsed();
-                await InvokeAsync(StateHasChanged);
-            }
-        }, elapsedCts.Token);
+                using var ticker = new PeriodicTimer(TimeSpan.FromSeconds(1));
+                while (await ticker.WaitForNextTickAsync(elapsedCts.Token).ConfigureAwait(false))
+                {
+                    assistantMsg.UpdateElapsed();
+                    await InvokeAsync(StateHasChanged);
+                }
+            }, elapsedCts.Token);
+        }
 
         try
         {
             await Sovrant.Web.Program.RuntimeReady.Task.WaitAsync(ct);
-            var pooled = await SessionPool.GetOrCreateAsync(_sessionId, ct: ct);
+            var pooled = await SessionPool.GetOrCreateAsync(sessionId, ct: ct);
 
-            if (isFirstMessage)
-            {
-                var previewTitle = text.Length > 60 ? text[..60] + "..." : text;
-                await SessionStore.SetTitleAsync(_sessionId, previewTitle, ownerUserId: Sovrant.Web.Program.SovrantUserId);
-                ActiveContext.NotifyDataChanged();
-            }
-
-            // Apply the per-session MCP connection gate. When all servers are
-            // selected we leave the gate open (null) so non-MCP tools register
-            // identically to pre-Connections behaviour.
             if (_connectionsLoaded)
             {
                 var allSelected = _availableConnections.Count > 0
                     && _selectedConnections.Count == _availableConnections.Count;
-                pooled.Config.AllowedMcpServers = allSelected
-                    ? null
-                    : _selectedConnections.ToList();
-                await SessionStore.SetMcpConnectionsAsync(_sessionId, pooled.Config.AllowedMcpServers, ownerUserId: Sovrant.Web.Program.SovrantUserId);
+                pooled.Config.AllowedMcpServers = allSelected ? null : _selectedConnections.ToList();
+                await SessionStore.SetMcpConnectionsAsync(sessionId, pooled.Config.AllowedMcpServers, ownerUserId: Sovrant.Web.Program.SovrantUserId);
             }
 
             using var _scope = SessionContext.Push(pooled.Config);
             await foreach (var ev in pooled.Runtime.RunTurnAsync(text, ct))
             {
-                HandleEvent(ev, assistantMsg);
-                StateHasChanged();
-
-                if (ev is RuntimeEvent.TextChunk)
-                    await ScrollToBottom();
+                if (bgEnabled)
+                {
+                    ActiveSessions.PushEvent(sessionId, ev);
+                }
+                else
+                {
+                    HandleEvent(ev, assistantMsg);
+                    await InvokeAsync(StateHasChanged);
+                    if (ev is RuntimeEvent.TextChunk)
+                        await ScrollToBottom();
+                }
             }
+
+            if (bgEnabled) ActiveSessions.Complete(sessionId);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            if (bgEnabled) ActiveSessions.Fail(sessionId, "Cancelled");
+        }
         catch (Exception ex)
         {
-            assistantMsg.SetError(ex.Message);
+            if (bgEnabled) ActiveSessions.Fail(sessionId, ex.Message);
+            else assistantMsg.SetError(ex.Message);
         }
         finally
         {
-            await elapsedCts.CancelAsync();
-            _isSending = false;
-            _streamingMsg = null;
-            assistantMsg.CompleteStreaming();
-            StateHasChanged();
-            await ScrollToBottom();
-            await FocusInput();
-
-            if (isFirstMessage)
+            if (elapsedCts is not null)
+            {
+                await elapsedCts.CancelAsync();
+                elapsedCts.Dispose();
+            }
+            await InvokeAsync(async () =>
+            {
+                _isSending = false;
+                _streamingMsg = null;
+                _isBackgroundSession = false;
+                assistantMsg.CompleteStreaming();
+                StateHasChanged();
+                await ScrollToBottom();
+                await FocusInput();
                 ActiveContext.NotifyDataChanged();
+            });
         }
     }
 
@@ -585,14 +661,9 @@
         if (!_isSending || _stopRequested) return Task.CompletedTask;
         _stopRequested = true;
 
-        // Immediate UX feedback: mark the streaming message stopped and flip
-        // the input bar back to Send. The runtime cancellation propagates
-        // through _sendCts and the SendToRuntimeAsync `finally` will run when
-        // the HTTP stream actually tears down — which can lag a beat.
         if (_streamingMsg is { } msg)
         {
-            if (string.IsNullOrEmpty(msg.Text))
-                msg.Text = "[Stopped]";
+            if (string.IsNullOrEmpty(msg.Text)) msg.Text = "[Stopped]";
             msg.StopThinking();
             msg.CompleteStreaming();
         }
@@ -600,7 +671,12 @@
         _isSending = false;
         StateHasChanged();
 
-        _sendCts?.Cancel();
+        if (_isBackgroundSession)
+            ActiveSessions.Cancel(_sessionId);
+        else
+            _sendCts?.Cancel();
+
+        _isBackgroundSession = false;
         return Task.CompletedTask;
     }
 
@@ -741,5 +817,10 @@
         ActiveContext.OnChanged -= OnContextChanged;
         ActiveContext.OnSessionResume -= OnSessionResume;
         ActiveContext.OnNewSession -= OnNewSession;
+
+        if (_isBackgroundSession && ActiveSessions.HasSession(_sessionId))
+            ActiveSessions.Detach(_sessionId);
+        else
+            _sendCts?.Dispose();
     }
 }
