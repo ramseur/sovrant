@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-05-18 (Phase 40A UI ✅ — workspace member management across Web/Desktop/CLI; Phase 85 Identity & Login Parity ✅; Phase 93 Configuration Boundary Audit ✅ — sovrant.config removed, .env consolidation, routing.json→env vars, swarm.json→DB; Phase 91 Knowledge Authoring deferred; TLS added to Server + Web; model persistence bug fixed; Phase 87 Tracks A+D partial ✅ — auto-save fenced code blocks, workspace-first artifact layout, artifact download cards; Phase 89 Command Center cockpit ✅ shipped at v0.9.0)
+**Last updated:** 2026-05-19 (Phase 40A UI ✅ — workspace member management across Web/Desktop/CLI; Phase 85 Identity & Login Parity ✅; Phase 93 Configuration Boundary Audit ✅ — sovrant.config removed, .env consolidation, routing.json→env vars, swarm.json→DB; Phase 91 Knowledge Authoring deferred; TLS added to Server + Web; model persistence bug fixed; Phase 87 Tracks A+D partial ✅ — auto-save fenced code blocks, workspace-first artifact layout, artifact download cards; Phase 89 Command Center cockpit ✅ shipped at v0.9.0; Phase 79 Agents page, Phase 94 Orchestration Studio, Phase 95 Integrations Gallery added to roadmap)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -154,6 +154,9 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Artifacts-by-default for code & documents (with workspace identity unification) | Phase 87 | Medium–High |
 | Knowledge Authoring Revisit — Web + Desktop UX rework: single Edit action on any item, silent copy-on-write for built-ins, no "Duplicate to user" intermediate; fix AvaloniaEdit defects on Desktop | Phase 91 | Deferred |
 | Active Sessions: up to 5 concurrent live tasks with return-anytime results; Settings UI on Web + Desktop, DB-backed; future admin console fallback | Phase 92 | High |
+| Agents page — rename from "Agent Templates"; in-app create/edit of agent definitions (silent copy-on-write for built-ins); "Launch chat" button to open a persistent session scoped to an agent alongside the existing "Run now" one-shot; agents remain referenceable by name from the agentic loop | Phase 79 | Medium–High |
+| Orchestration Studio — make the Orchestration page a first-class composition surface: create teams from the UI by picking defined agents; support a single-agent run as a first-class option (not just multi-agent teams); add a Run button with task prompt so teams can be launched without going to chat; bridges agent definitions (Phase 79) to orchestrated execution | Phase 94 | Medium–High |
+| Integrations Gallery — replace the raw "Add MCP Server" form as the entry point with a catalog-first experience. Three tiers: (1) Trusted/first-party integrations Sovrant pre-knows how to configure — LLM providers (OpenAI, Anthropic, OpenRouter, Gemini, Ollama), observability (OpenTelemetry), automation (n8n, Zapier, Make) — one-click enable, just enter key/URL; (2) Known agent platforms with guided setup — OpenClaw (federated swarm bus), Hermes Agent (self-improving skills via MCP), Composio (250+ app catalog with managed OAuth) — engine understands their protocol and wires them automatically; (3) Open/community MCP servers (stdio or HTTP) via the existing raw add form as a power-user fallback. Gallery cards show name, category, description, and live connection status. Connected integrations continue to be managed in the existing server detail view. | Phase 95 | Medium–High |
 
 ### v1.0 release polish (in progress)
 
