@@ -7,6 +7,27 @@ This document tracks planned features, architectural decisions, and the reasonin
 
 ---
 
+## Current Focus
+
+What we are actively working on and shipping next, in priority order.
+
+| Wave | Phase | What |
+|---|---|---|
+| **v1.0 — now** | Phase 92 | Active Sessions — up to 5 concurrent live tasks, return-anytime results |
+| **v1.0 — now** | Phase 86 | Background session continuation across navigation and session switches |
+| **v1.0 — now** | Phase 87 | Artifacts-by-default — finish workspace identity unification (auto-save partial ✅) |
+| **v1.1 — wave 1** | Phase 79 | Agents page — in-app create/edit of agent definitions + Launch chat button |
+| **v1.1 — wave 1** | Phase 94 | Orchestration Studio — compose and run teams from the UI without chat commands |
+| **v1.1 — wave 2** | Phase 95 | Integrations Gallery — catalog-first onramp for MCP, LLM providers, and known agent platforms |
+| **v1.1 — wave 2** | Phase 85.5 | Local / remote mode selection — `sovrant connect <url>`, setup wizard mode picker |
+| **v1.1 — wave 2** | Phase 73 | Code creation — project scaffolding and app generation |
+| **v1.1 — wave 2** | Phase 40C | Supabase backend + SSO — swap SQLite for Supabase/PostgreSQL on the server side |
+| **v1.2** | Phase 82.5 | OpenTelemetry — traces, metrics, and logs via OTLP (after data model is on Supabase) |
+
+> Items below v1.0 are planned but not yet scheduled. See [Still pending](#still-pending) for the full gap list.
+
+---
+
 ## Current State
 
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
