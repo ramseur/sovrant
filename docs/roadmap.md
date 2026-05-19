@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-05-19 (Phase 40A UI ✅ — workspace member management across Web/Desktop/CLI; Phase 85 Identity & Login Parity ✅; Phase 93 Configuration Boundary Audit ✅ — sovrant.config removed, .env consolidation, routing.json→env vars, swarm.json→DB; Phase 91 Knowledge Authoring deferred; TLS added to Server + Web; model persistence bug fixed; Phase 87 Tracks A+D partial ✅ — auto-save fenced code blocks, workspace-first artifact layout, artifact download cards; Phase 89 Command Center cockpit ✅ shipped at v0.9.0; Phase 79 Agents page, Phase 94 Orchestration Studio, Phase 95 Integrations Gallery added to roadmap)
+**Last updated:** 2026-05-19 (Phase 40A UI ✅ — workspace member management across Web/Desktop/CLI; Phase 85 Identity & Login Parity ✅; Phase 93 Configuration Boundary Audit ✅ — sovrant.config removed, .env consolidation, routing.json→env vars, swarm.json→DB; Phase 91 Knowledge Authoring deferred; TLS added to Server + Web; model persistence bug fixed; Phase 87 Tracks A+D partial ✅ — auto-save fenced code blocks, workspace-first artifact layout, artifact download cards; Phase 89 Command Center cockpit ✅ shipped at v0.9.0; Phase 79 Agents page, Phase 94 Orchestration Studio, Phase 95 Integrations Gallery added; Phase 40C Supabase promoted from Deferred → High)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -126,7 +126,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Gap | Phase | Priority |
 |---|---|---|
 | Enterprise auth & external identity (OAuth/OIDC, SAML, SSO) | Phase 40B | Deferred |
-| Supabase backend — swap SQLite for Supabase (PostgreSQL) as the server-side database; Supabase Auth replaces the hand-rolled auth stack and delivers SSO (Google, GitHub, Azure AD, SAML, etc.) out of the box; admin UI for enabling/disabling providers per workspace | Phase 40C | Deferred |
+| Supabase backend — swap SQLite for Supabase (PostgreSQL) as the server-side database; Supabase Auth replaces the hand-rolled auth stack and delivers SSO (Google, GitHub, Azure AD, SAML, etc.) out of the box; admin UI for enabling/disabling providers per workspace | Phase 40C | High |
 | Granular feature permissions — workspace members can be granted or denied access to specific features (Chat, Agents, Teams, Swarms, Missions, MCP, Knowledge, Artifacts, Settings); current model is all-or-nothing per workspace role; Phase 40D adds a permission matrix admins configure per user or role | Phase 40D | Deferred |
 | DuckDB database provider — `IStorageProvider` implementation backed by DuckDB; columnar analytics for agent runs, session history, token usage, cost aggregations, and audit queries; embedded like SQLite, analytical like a data warehouse; ideal for self-hosted deployments that need fast cross-session reporting without standing up Supabase | Phase 104 | Deferred |
 | MCP server permissions — scope which MCP servers are available at the workspace and project level; admins allowlist/blocklist servers per workspace, project owners further restrict per project; users only see MCP tools their scope permits; replaces today's global MCP server list | Phase 105 | Deferred |
@@ -2850,7 +2850,7 @@ Add this phase when:
 
 ---
 
-### Phase 40C — Supabase Backend + SSO ⏸️ Deferred
+### Phase 40C — Supabase Backend + SSO 🔜 High Priority
 
 **Depends on:** Phase 32 (SQLite persistence abstraction via `IStorageProvider`)
 
