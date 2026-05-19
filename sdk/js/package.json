@@ -1,6 +1,6 @@
 {
   "name": "@sovrant/sdk",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "description": "TypeScript/JavaScript client SDK for Sovrant — streaming chat, session management, tool events.",
   "type": "module",
   "main": "dist/index.js",
