@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -38,6 +39,9 @@ public partial class ActiveContextViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _hasActiveProject;
+
+    [ObservableProperty]
+    private string _activeWorkspaceRole = string.Empty;
 
     [ObservableProperty]
     private WorkspaceOption? _selectedWorkspace;
@@ -111,7 +115,24 @@ public partial class ActiveContextViewModel : ViewModelBase
         Environment.SetEnvironmentVariable("SOVRANT_PROJECT_ID", null);
         OnPropertyChanged(nameof(ContextDisplay));
         _ = LoadProjectsAsync();
+        _ = RefreshWorkspaceRoleAsync(value.Id);
         ContextChanged?.Invoke();
+    }
+
+    private async Task RefreshWorkspaceRoleAsync(string workspaceId)
+    {
+        try
+        {
+            var role = await _workspaceService.GetMemberRoleAsync(workspaceId, UserId).ConfigureAwait(false);
+#pragma warning disable CA1308 // display label, not a comparison key
+            var label = role.HasValue ? role.Value.ToString().ToLower(CultureInfo.InvariantCulture) : string.Empty;
+#pragma warning restore CA1308
+            await Dispatcher.UIThread.InvokeAsync(() => ActiveWorkspaceRole = label);
+        }
+        catch
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => ActiveWorkspaceRole = string.Empty);
+        }
     }
 
     partial void OnSelectedProjectChoiceChanged(ProjectOption? value)

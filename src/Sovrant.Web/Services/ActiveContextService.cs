@@ -9,6 +9,7 @@ public sealed class ActiveContextService
 {
     public string WorkspaceId { get; private set; } = string.Empty;
     public string WorkspaceName { get; private set; } = "Personal";
+    public string WorkspaceRole { get; private set; } = string.Empty;
     public string ProjectId { get; private set; } = string.Empty;
     public string ProjectName { get; private set; } = string.Empty;
     public string Model { get; private set; } = string.Empty;
@@ -33,10 +34,11 @@ public sealed class ActiveContextService
     /// </summary>
     public string? PendingResumeSessionId { get; set; }
 
-    public void SetWorkspace(string id, string name)
+    public void SetWorkspace(string id, string name, string? role = null)
     {
         WorkspaceId = id;
         WorkspaceName = name;
+        WorkspaceRole = string.IsNullOrWhiteSpace(role) ? string.Empty : role;
         // Clear project when workspace changes
         ProjectId = string.Empty;
         ProjectName = string.Empty;
