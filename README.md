@@ -174,7 +174,7 @@ curl -X POST http://localhost:5200/v1/auth/register \
 export SVT_TOKEN="svt_..."
 ```
 
-All credentials (API keys, provider tokens) are stored in the AES-256-GCM encrypted keystore at `~/.sovrant/credentials/` — never in `.env` files or environment variables.
+All credentials (API keys, provider tokens) are stored in the AES-256-GCM encrypted keystore at `~/.sovrant/credentials/` by default. Environment variables (e.g. `LLM_API_KEY`) are still accepted as an override for 12-factor / CI deployments and always take precedence over the stored value.
 
 ```bash
 # Non-streaming
@@ -680,20 +680,26 @@ GET  /v1/evals/{name}/history
 
 ## Providers
 
-| Provider | How to enable |
+| Provider | Base URL |
 |---|---|
-| OpenAI | `LLM_API_KEY=sk-...` (default base URL) |
-| OpenRouter | `LLM_BASE_URL=https://openrouter.ai/api/v1` + `LLM_API_KEY=sk-or-v1-...` |
-| Google AI Studio (Gemini) | `LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/` + `LLM_API_KEY=...` |
-| DeepSeek | `LLM_BASE_URL=https://api.deepseek.com/v1` + `LLM_API_KEY=...` |
-| Groq | `LLM_BASE_URL=https://api.groq.com/openai/v1` + `LLM_API_KEY=...` |
-| Mistral | `LLM_BASE_URL=https://api.mistral.ai/v1` + `LLM_API_KEY=...` |
-| Together AI | `LLM_BASE_URL=https://api.together.xyz/v1` + `LLM_API_KEY=...` |
-| Azure OpenAI | `LLM_BASE_URL=https://your-resource.openai.azure.com/openai/deployments/your-deployment/` + `LLM_API_KEY=...` |
-| Ollama (local) | `LLM_BASE_URL=http://localhost:11434/v1` (no API key needed) |
-| LM Studio (local) | `LLM_BASE_URL=http://localhost:1234/v1` (no API key needed) |
+| OpenAI | `https://api.openai.com/v1` (default) |
+| OpenRouter | `https://openrouter.ai/api/v1` |
+| Google AI Studio (Gemini) | `https://generativelanguage.googleapis.com/v1beta/openai/` |
+| DeepSeek | `https://api.deepseek.com/v1` |
+| Groq | `https://api.groq.com/openai/v1` |
+| Mistral | `https://api.mistral.ai/v1` |
+| Together AI | `https://api.together.xyz/v1` |
+| Azure OpenAI | `https://your-resource.openai.azure.com/openai/deployments/your-deployment/` |
+| Ollama (local) | `http://localhost:11434/v1` (no API key needed) |
+| LM Studio (local) | `http://localhost:1234/v1` (no API key needed) |
 
-> The desktop and web apps provide a GUI for managing providers with saved profiles — no environment variables needed.
+**Desktop / Web:** add a provider profile in Settings — the API key is stored in the AES-256-GCM encrypted keystore and never exposed in plaintext.
+
+**CLI:** use `sovrant auth set llm` (prompts without echo) to store the key in the same encrypted keystore, then set the base URL with `sovrant auth set base-url` or `LLM_BASE_URL`. Keys stored this way are managed, rotatable, and never land in shell history or config files.
+
+> **CI / scripted deployments:** `LLM_API_KEY` and `LLM_BASE_URL` environment variables are accepted as an override and take precedence over the stored value — but for interactive use the keystore is always preferred.
+
+> Gemma models via Google AI Studio do not support function calling over the OpenAI-compat endpoint. Use Gemini 2.5 Flash or a newer Gemini model.
 
 > Gemma models via Google AI Studio do not support function calling over the OpenAI-compat endpoint. Use Gemini 2.5 Flash or a newer Gemini model.
 
