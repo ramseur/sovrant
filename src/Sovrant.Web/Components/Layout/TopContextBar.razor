@@ -564,7 +564,8 @@
             if (personal is not null && string.IsNullOrEmpty(_selectedWorkspaceId))
             {
                 _selectedWorkspaceId = personal.Id;
-                ActiveContext.SetWorkspace(personal.Id, personal.Name);
+                var personalRole = await GetWorkspaceRoleAsync(personal.Id);
+                ActiveContext.SetWorkspace(personal.Id, personal.Name, personalRole);
                 await LoadProjectsAsync();
             }
         }
@@ -590,7 +591,19 @@
         _selectedProjectId = string.Empty;
         await LoadProjectsAsync();
         var ws = _workspaces.FirstOrDefault(w => w.Id == _selectedWorkspaceId);
-        ActiveContext.SetWorkspace(_selectedWorkspaceId, ws?.Name ?? "Personal");
+        var role = await GetWorkspaceRoleAsync(_selectedWorkspaceId);
+        ActiveContext.SetWorkspace(_selectedWorkspaceId, ws?.Name ?? "Personal", role);
+    }
+
+    private async Task<string?> GetWorkspaceRoleAsync(string workspaceId)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(Session.UserId)) return null;
+            var role = await WorkspaceService.GetMemberRoleAsync(workspaceId, Session.UserId);
+            return role.HasValue ? role.Value.ToString().ToLower(System.Globalization.CultureInfo.InvariantCulture) : null;
+        }
+        catch { return null; }
     }
 
     private void OnProjectChanged()

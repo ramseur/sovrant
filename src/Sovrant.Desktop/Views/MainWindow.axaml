@@ -156,8 +156,9 @@
                                 <StackPanel VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Sidebar.CurrentUserName}" FontSize="11"
                                                Foreground="{DynamicResource TextPrimary}" />
-                                    <TextBlock Text="Personal" FontSize="9"
-                                               Foreground="{DynamicResource TextSecondary}" />
+                                    <TextBlock Text="{Binding Sidebar.ActiveContext.ActiveWorkspaceRole}" FontSize="9"
+                                               Foreground="{DynamicResource TextSecondary}"
+                                               IsVisible="{Binding Sidebar.ActiveContext.ActiveWorkspaceRole, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                                 </StackPanel>
                             </StackPanel>
                         </DockPanel>

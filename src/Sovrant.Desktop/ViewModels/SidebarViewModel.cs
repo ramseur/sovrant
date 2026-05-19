@@ -55,6 +55,7 @@ public partial class SidebarViewModel : ViewModelBase
         ? Environment.UserName[..1].ToUpperInvariant()
         : "U";
 
+
     [ObservableProperty]
     private ProviderProfileEntry? _selectedProfile;
 

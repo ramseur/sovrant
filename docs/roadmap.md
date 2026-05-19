@@ -1,9 +1,30 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-05-09 (Phase 40A UI ✅ — workspace member management across Web/Desktop/CLI; Phase 85 Identity & Login Parity ✅; Phase 93 Configuration Boundary Audit ✅ — sovrant.config removed, .env consolidation, routing.json→env vars, swarm.json→DB; Phase 91 Knowledge Authoring deferred; TLS added to Server + Web; model persistence bug fixed)
+**Last updated:** 2026-05-19 (Phase 40A UI ✅ — workspace member management across Web/Desktop/CLI; Phase 85 Identity & Login Parity ✅; Phase 93 Configuration Boundary Audit ✅ — sovrant.config removed, .env consolidation, routing.json→env vars, swarm.json→DB; Phase 91 Knowledge Authoring deferred; TLS added to Server + Web; model persistence bug fixed; Phase 87 Tracks A+D partial ✅ — auto-save fenced code blocks, workspace-first artifact layout, artifact download cards; Phase 89 Command Center cockpit ✅ shipped at v0.9.0; Phase 79 Agents page, Phase 94 Orchestration Studio, Phase 95 Integrations Gallery added; Phase 40C Supabase promoted from Deferred → High)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
+
+---
+
+## Current Focus
+
+What we are actively working on and shipping next, in priority order.
+
+| Wave | Phase | What |
+|---|---|---|
+| **v1.0 — now** | Phase 92 | Active Sessions — up to 5 concurrent live tasks, return-anytime results |
+| **v1.0 — now** | Phase 86 | Background session continuation across navigation and session switches |
+| **v1.0 — now** | Phase 87 | Artifacts-by-default — finish workspace identity unification (auto-save partial ✅) |
+| **v1.1 — wave 1** | Phase 79 | Agents page — in-app create/edit of agent definitions + Launch chat button |
+| **v1.1 — wave 1** | Phase 94 | Orchestration Studio — compose and run teams from the UI without chat commands |
+| **v1.1 — wave 2** | Phase 95 | Integrations Gallery — catalog-first onramp for MCP, LLM providers, and known agent platforms |
+| **v1.1 — wave 2** | Phase 85.5 | Local / remote mode selection — `sovrant connect <url>`, setup wizard mode picker |
+| **v1.1 — wave 2** | Phase 73 | Code creation — project scaffolding and app generation |
+| **v1.1 — wave 2** | Phase 40C | Supabase backend + SSO — swap SQLite for Supabase/PostgreSQL on the server side |
+| **v1.2** | Phase 82.5 | OpenTelemetry — traces, metrics, and logs via OTLP (after data model is on Supabase) |
+
+> Items below v1.0 are planned but not yet scheduled. See [Still pending](#still-pending) for the full gap list.
 
 ---
 
@@ -126,7 +147,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Gap | Phase | Priority |
 |---|---|---|
 | Enterprise auth & external identity (OAuth/OIDC, SAML, SSO) | Phase 40B | Deferred |
-| Supabase backend — swap SQLite for Supabase (PostgreSQL) as the server-side database; Supabase Auth replaces the hand-rolled auth stack and delivers SSO (Google, GitHub, Azure AD, SAML, etc.) out of the box; admin UI for enabling/disabling providers per workspace | Phase 40C | Deferred |
+| Supabase backend — swap SQLite for Supabase (PostgreSQL) as the server-side database; Supabase Auth replaces the hand-rolled auth stack and delivers SSO (Google, GitHub, Azure AD, SAML, etc.) out of the box; admin UI for enabling/disabling providers per workspace | Phase 40C | High |
 | Granular feature permissions — workspace members can be granted or denied access to specific features (Chat, Agents, Teams, Swarms, Missions, MCP, Knowledge, Artifacts, Settings); current model is all-or-nothing per workspace role; Phase 40D adds a permission matrix admins configure per user or role | Phase 40D | Deferred |
 | DuckDB database provider — `IStorageProvider` implementation backed by DuckDB; columnar analytics for agent runs, session history, token usage, cost aggregations, and audit queries; embedded like SQLite, analytical like a data warehouse; ideal for self-hosted deployments that need fast cross-session reporting without standing up Supabase | Phase 104 | Deferred |
 | MCP server permissions — scope which MCP servers are available at the workspace and project level; admins allowlist/blocklist servers per workspace, project owners further restrict per project; users only see MCP tools their scope permits; replaces today's global MCP server list | Phase 105 | Deferred |
@@ -154,6 +175,9 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Artifacts-by-default for code & documents (with workspace identity unification) | Phase 87 | Medium–High |
 | Knowledge Authoring Revisit — Web + Desktop UX rework: single Edit action on any item, silent copy-on-write for built-ins, no "Duplicate to user" intermediate; fix AvaloniaEdit defects on Desktop | Phase 91 | Deferred |
 | Active Sessions: up to 5 concurrent live tasks with return-anytime results; Settings UI on Web + Desktop, DB-backed; future admin console fallback | Phase 92 | High |
+| Agents page — rename from "Agent Templates"; in-app create/edit of agent definitions (silent copy-on-write for built-ins); "Launch chat" button to open a persistent session scoped to an agent alongside the existing "Run now" one-shot; agents remain referenceable by name from the agentic loop | Phase 79 | Medium–High |
+| Orchestration Studio — make the Orchestration page a first-class composition surface: create teams from the UI by picking defined agents; support a single-agent run as a first-class option (not just multi-agent teams); add a Run button with task prompt so teams can be launched without going to chat; bridges agent definitions (Phase 79) to orchestrated execution | Phase 94 | Medium–High |
+| Integrations Gallery — replace the raw "Add MCP Server" form as the entry point with a catalog-first experience. Three tiers: (1) Trusted/first-party integrations Sovrant pre-knows how to configure — LLM providers (OpenAI, Anthropic, OpenRouter, Gemini, Ollama), observability (OpenTelemetry), automation (n8n, Zapier, Make) — one-click enable, just enter key/URL; (2) Known agent platforms with guided setup — OpenClaw (federated swarm bus), Hermes Agent (self-improving skills via MCP), Composio (250+ app catalog with managed OAuth) — engine understands their protocol and wires them automatically; (3) Open/community MCP servers (stdio or HTTP) via the existing raw add form as a power-user fallback. Gallery cards show name, category, description, and live connection status. Connected integrations continue to be managed in the existing server detail view. | Phase 95 | Medium–High |
 
 ### v1.0 release polish (in progress)
 
@@ -2847,7 +2871,7 @@ Add this phase when:
 
 ---
 
-### Phase 40C — Supabase Backend + SSO ⏸️ Deferred
+### Phase 40C — Supabase Backend + SSO 🔜 High Priority
 
 **Depends on:** Phase 32 (SQLite persistence abstraction via `IStorageProvider`)
 
@@ -8508,8 +8532,25 @@ a backgrounded session finishes, errors, or hits a confirmation prompt.
 
 ## Phase 87 — Artifacts-by-Default for Code & Documents (with Workspace Identity Unification)
 
-> **Status:** Pending. Closes the loop between *what the LLM produces* and
-> *where it lands*. Today the assistant routinely dumps multi-thousand-token
+> **Status:** Partially complete (2026-05-18). Tracks A and D have shipped;
+> Tracks B, C, E, and F are still pending.
+>
+> **Shipped:**
+> - **Track A (partial)** — `ConversationRuntime` auto-saves fenced code blocks
+>   over the threshold as artifacts and emits `RuntimeEvent.ArtifactWritten`;
+>   Web (`Chat.razor`) and Desktop (`ChatViewModel`) render them as download cards.
+>   The `ArtifactWritten` event is wired into `ChatMessageModel.StandaloneArtifacts`
+>   (Web) and `MessageViewModel.StandaloneArtifacts` (Desktop).
+> - **Track D** — Workspace-first artifact layout (`workspace/project` path
+>   routing) shipped; `ConversationRuntime` auto-injects workspace/project/run
+>   scope into Artifact tool calls when the LLM omits them.
+>
+> **Still pending:** Artifact tool description rewrite (Track B), `write_many`
+> action (Track C), per-turn "always allow Artifact" grant (Track E), file-tree
+> view + Monaco preview + download-as-zip on Artifacts screen (Track F), full
+> workspace identity migration sweep (`personal/` → `ws-personal-{userId}/`).
+>
+> Original rationale: the assistant routinely dumps multi-thousand-token
 > code and document bodies into the chat instead of writing them to the
 > artifact store, and the artifact store itself silently splits the same
 > "personal" workspace into two parallel directories because two different
@@ -8996,6 +9037,12 @@ their old config looked like, and a future support flow can ask
 ---
 
 ## Phase 89 — Command Center: Sovrant as the Operations Surface for Agents, Teams & Missions
+
+> **Status:** ✅ MVP shipped 2026-05-02 (v0.9.0). Read-only live grid at `/command`
+> on Web and Desktop — aggregates active missions, team runs, agent runs, and
+> sessions with click-through to existing detail pages. Substrate-only; no new
+> runtime engines. Full autonomy features (Phases 67/78/79/86/81) remain pending
+> and will layer on top when those phases land.
 
 **Depends on:** Phase 67 (autonomous modes), Phase 78 (teams substrate
 with parallel execution + file locks + quality gate), Phase 79 (agents
