@@ -88,6 +88,7 @@ public static class Program
             builder.Services.AddSovrantStorage(bootstrapConfig);
             builder.Services.AddSovrantClient(remoteOptions);
             builder.Services.AddSingleton<ActiveContextService>();
+            builder.Services.AddScoped<ActiveSessionsService>();
         }
         else
         {
@@ -123,6 +124,7 @@ public static class Program
             builder.Services.AddSingleton<IAuthProvider>(mutableAuth);
             builder.Services.AddSingleton(mutableAuth);
             builder.Services.AddSingleton<ActiveContextService>();
+            builder.Services.AddScoped<ActiveSessionsService>();
         }
 
         builder.Services.AddRazorComponents()

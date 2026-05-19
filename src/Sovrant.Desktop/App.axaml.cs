@@ -169,6 +169,7 @@ public partial class App : Application
 
         // ViewModels.
         services.AddSingleton<ActiveContextViewModel>();
+        services.AddSingleton<ActiveSessionsViewModel>();
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<SidebarViewModel>();
         services.AddTransient<ChatViewModel>();

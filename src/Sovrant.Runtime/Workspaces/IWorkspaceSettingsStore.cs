@@ -42,6 +42,12 @@ public static class WorkspaceSettingsKeys
     /// <summary>Maximum live sessions before LRU eviction (integer).</summary>
     public const string MaxSessions = "session.max_sessions";
 
+    /// <summary>Max concurrent background sessions per user (int 1–5). Default 5.</summary>
+    public const string MaxActiveSessions = "session.max_active_sessions";
+
+    /// <summary>Whether background session execution is enabled (bool). Default true.</summary>
+    public const string BackgroundSessionsEnabled = "session.background_enabled";
+
     /// <summary>Hard ceiling on re-plan requests per executor run (integer). Default 3.</summary>
     public const string ExecutorMaxReplans = "executor.max_replans";
 

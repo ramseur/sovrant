@@ -104,6 +104,24 @@
                 </span>
             </div>
 
+            <h2>Background Sessions</h2>
+            <div class="toggle-card">
+                <div>
+                    <div class="toggle-title">Enable background sessions</div>
+                    <div class="toggle-desc">Turns keep running when you navigate away from chat (up to the limit below)</div>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" checked="@_bgEnabled" @onchange="OnBgEnabledChanged" />
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="settings-row">
+                <label class="toggle-title">Max concurrent sessions (1–5)</label>
+                <input type="number" min="1" max="5" value="@_bgMaxActive"
+                       @onchange="OnBgMaxActiveChanged"
+                       style="width:4rem;margin-left:1rem;" />
+            </div>
+
             <h2>Appearance</h2>
             <div class="toggle-card">
                 <div>
@@ -139,6 +157,7 @@
     [Inject] private MutableAuthProvider AuthProvider { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
+    [Inject] private ActiveSessionsService ActiveSessions { get; set; } = default!;
     [Inject] private IServiceProvider Services { get; set; } = default!;
     [Inject] private IUserPreferenceStore Prefs { get; set; } = default!;
     [Inject] private IProviderProfileStore ProfileStore { get; set; } = default!;
@@ -156,6 +175,8 @@
     private string _permissionMode = "Default";
     private bool _isDarkMode = true;
     private string _statusMessage = string.Empty;
+    private bool _bgEnabled = true;
+    private int _bgMaxActive = 5;
     private string _newProfileName = string.Empty;
     private List<ProviderProfileVm> _savedProfiles = [];
 
@@ -188,6 +209,23 @@
         _permissionMode = PermissionModeAccessor.Mode.ToString();
         _selectedProvider = await InferProviderAsync();
         await LoadProfilesAsync();
+        _bgEnabled = await ActiveSessions.IsEnabledAsync();
+        _bgMaxActive = await ActiveSessions.GetMaxActiveAsync();
+    }
+
+    private async Task OnBgEnabledChanged(ChangeEventArgs e)
+    {
+        _bgEnabled = (bool)(e.Value ?? true);
+        await ActiveSessions.SetEnabledAsync(_bgEnabled);
+    }
+
+    private async Task OnBgMaxActiveChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var v))
+        {
+            _bgMaxActive = Math.Clamp(v, 1, 5);
+            await ActiveSessions.SetMaxActiveAsync(_bgMaxActive);
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

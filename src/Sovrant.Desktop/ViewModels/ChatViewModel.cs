@@ -19,8 +19,14 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private readonly SlashCommandDispatcher _commandDispatcher;
     private readonly DesktopConfirmationHandler? _confirmationHandler;
     private readonly ActiveContextViewModel _activeContext;
+    private readonly ActiveSessionsViewModel _activeSessions;
     private readonly SovrantConfig _config;
     private readonly IMcpServerStore? _mcpStore;
+
+    // Legacy CTS used only when background sessions are disabled.
+    private CancellationTokenSource? _sendCts;
+    // True while a turn for this session is owned by _activeSessions.
+    private bool _isBackgroundSession;
 
     [ObservableProperty]
     private string _sessionId;
@@ -30,8 +36,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     private bool _isSending;
-
-    private CancellationTokenSource? _sendCts;
 
     [ObservableProperty]
     private int _tokenCount;
@@ -68,6 +72,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     public ChatViewModel(IRuntimeSessionPool sessionPool, ISessionStore sessionStore,
         SlashCommandDispatcher commandDispatcher, ActiveContextViewModel activeContext,
+        ActiveSessionsViewModel activeSessions,
         SovrantConfig config,
         DesktopConfirmationHandler? confirmationHandler = null,
         IMcpServerStore? mcpStore = null)
@@ -77,6 +82,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         _commandDispatcher = commandDispatcher;
         _confirmationHandler = confirmationHandler;
         _activeContext = activeContext;
+        _activeSessions = activeSessions;
         _config = config;
         _mcpStore = mcpStore;
         _sessionId = $"session-{Guid.NewGuid():N}";
@@ -234,67 +240,102 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     private async Task SendToRuntimeAsync(string text, CancellationToken ct)
     {
-        _sendCts?.Dispose();
-        _sendCts = new CancellationTokenSource();
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _sendCts.Token);
-        var linkedToken = linked.Token;
+        var bgEnabled = await _activeSessions.IsEnabledAsync().ConfigureAwait(false);
+        var maxActive = await _activeSessions.GetMaxActiveAsync().ConfigureAwait(false);
 
-        IsSending = true;
-        HasMessages = true;
+        if (bgEnabled && _activeSessions.RunningCount() >= maxActive)
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+                Messages.Add(new MessageViewModel
+                {
+                    Role = "assistant",
+                    Text = $"Cannot start: you already have {maxActive} background session(s) running. Wait for one to finish or cancel it.",
+                    IsComplete = true,
+                }));
+            return;
+        }
 
-        // Track whether this is the first user message (for auto-titling).
+        var assistantMsg = new MessageViewModel { Role = "assistant", ModelName = _config.Model };
         var isFirstMessage = Messages.All(m => m.Role != "user");
 
-        // Add user message only if not already added (slash command inject path).
-        // Phase I (R2-M14): ensure collection mutations happen on the UI thread.
-        var assistantMsg = new MessageViewModel { Role = "assistant", ModelName = _config.Model };
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             if (Messages.Count == 0 || Messages[^1].Role != "user" || Messages[^1].Text != text)
                 Messages.Add(new MessageViewModel { Role = "user", Text = text, UserDisplayName = _activeContext.UserDisplayName });
-
-            // Add assistant placeholder with thinking indicator.
             assistantMsg.StartThinking(text);
             Messages.Add(assistantMsg);
+            IsSending = true;
+            HasMessages = true;
         });
 
-        // On first message: persist the session and title immediately so the sidebar
-        // shows the new chat right away — before the full turn completes.
+        string? title = null;
         if (isFirstMessage)
         {
-            var title = text.Length > 60 ? text[..60] + "..." : text;
+            title = text.Length > 60 ? text[..60] + "..." : text;
             await _sessionStore.SetTitleAsync(SessionId, title, ownerUserId: App.SovrantUserId, ct: CancellationToken.None)
                 .ConfigureAwait(false);
             await Dispatcher.UIThread.InvokeAsync(() => TurnCompleted?.Invoke());
         }
 
+        if (bgEnabled)
+        {
+#pragma warning disable CA2000 // ownership transferred to ActiveSessionsViewModel
+            var bgCts = new CancellationTokenSource();
+#pragma warning restore CA2000
+            _isBackgroundSession = true;
+            _activeSessions.TryRegister(SessionId, title ?? SessionId, bgCts);
+            _activeSessions.Attach(SessionId, evt =>
+                Dispatcher.UIThread.Post(() => HandleEvent((RuntimeEvent)evt, assistantMsg)));
+
+            _ = Task.Run(async () => await RunTurnAsync(text, assistantMsg, bgMode: true, bgCts.Token), CancellationToken.None);
+        }
+        else
+        {
+            var syncCts = new CancellationTokenSource();
+            _isBackgroundSession = false;
+            _sendCts?.Dispose();
+            _sendCts = syncCts;
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, syncCts.Token);
+            await RunTurnAsync(text, assistantMsg, bgMode: false, linked.Token);
+        }
+    }
+
+    private async Task RunTurnAsync(string text, MessageViewModel assistantMsg, bool bgMode, CancellationToken token)
+    {
         try
         {
-            // Wait for runtime initialization (DB migrations, model metadata) before first send.
-            await App.RuntimeReady.Task.WaitAsync(linkedToken).ConfigureAwait(false);
+            await App.RuntimeReady.Task.WaitAsync(token).ConfigureAwait(false);
 
-            var pooled = await _sessionPool.GetOrCreateAsync(SessionId, ct: linkedToken).ConfigureAwait(false);
+            var pooled = await _sessionPool.GetOrCreateAsync(SessionId, ct: token).ConfigureAwait(false);
 
             if (Connections.Count > 0)
             {
                 var selected = Connections.Where(c => c.IsSelected).Select(c => c.Name).ToList();
                 var allSelected = selected.Count == Connections.Count;
                 pooled.Config.AllowedMcpServers = allSelected ? null : selected;
-                await _sessionStore.SetMcpConnectionsAsync(SessionId, pooled.Config.AllowedMcpServers, ownerUserId: App.SovrantUserId, ct: linkedToken)
+                await _sessionStore.SetMcpConnectionsAsync(SessionId, pooled.Config.AllowedMcpServers, ownerUserId: App.SovrantUserId, ct: token)
                     .ConfigureAwait(false);
             }
 
             using var _scope = SessionContext.Push(pooled.Config);
-            await foreach (var ev in pooled.Runtime.RunTurnAsync(text, linkedToken))
+            await foreach (var ev in pooled.Runtime.RunTurnAsync(text, token))
             {
-                await Dispatcher.UIThread.InvokeAsync(() => HandleEvent(ev, assistantMsg));
+                if (bgMode)
+                    _activeSessions.PushEvent(SessionId, ev);
+                else
+                    await Dispatcher.UIThread.InvokeAsync(() => HandleEvent(ev, assistantMsg));
             }
+
+            if (bgMode) _activeSessions.Complete(SessionId);
         }
-        catch (OperationCanceledException) { /* expected */ }
+        catch (OperationCanceledException)
+        {
+            if (bgMode) _activeSessions.Fail(SessionId, "Cancelled");
+        }
         catch (Exception ex)
         {
-            await Dispatcher.UIThread.InvokeAsync(() =>
-                assistantMsg.SetError(ex.Message));
+            if (bgMode) _activeSessions.Fail(SessionId, ex.Message);
+            else await Dispatcher.UIThread.InvokeAsync(() => assistantMsg.SetError(ex.Message));
         }
         finally
         {
@@ -307,37 +348,58 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>
+    /// Called by MainViewModel when the user navigates back to a parked background chat.
+    /// Replays buffered events and re-subscribes to live events.
+    /// </summary>
+    public void ReAttachToBackground()
+    {
+        if (!_activeSessions.HasSession(SessionId)) return;
+        var lastAssistant = Messages.LastOrDefault(m => m.Role == "assistant");
+        if (lastAssistant is null) return;
+
+        var (buffered, isRunning) = _activeSessions.Attach(SessionId, evt =>
+            Dispatcher.UIThread.Post(() => HandleEvent((RuntimeEvent)evt, lastAssistant)));
+
+        foreach (var evt in buffered)
+            HandleEvent((RuntimeEvent)evt, lastAssistant);
+
+        IsSending = isRunning;
+        _isBackgroundSession = isRunning;
+    }
+
     [RelayCommand]
     private void Stop()
     {
-        // Immediate visual feedback. The cancellation may take time to propagate
-        // through HTTP streams and tool execution; flipping IsSending here keeps
-        // the UI from feeling stuck while the cancel unwinds. The send task's
-        // finally block also sets this to false — that becomes a no-op.
         IsSending = false;
 
-        if (_sendCts is null || _sendCts.IsCancellationRequested)
+        if (_isBackgroundSession && _activeSessions.HasSession(SessionId))
         {
-            System.Diagnostics.Debug.WriteLine("[ChatViewModel] Stop: no active send to cancel");
+            _activeSessions.Cancel(SessionId);
+            _isBackgroundSession = false;
             return;
         }
 
-        try
-        {
-            _sendCts.Cancel();
-            System.Diagnostics.Debug.WriteLine("[ChatViewModel] Stop: cancellation requested");
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[ChatViewModel] Stop failed: {ex}");
-        }
+        if (_sendCts is null || _sendCts.IsCancellationRequested) return;
+
+        try { _sendCts.Cancel(); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[ChatViewModel] Stop failed: {ex}"); }
     }
 
     protected virtual void Dispose(bool disposing)
     {
         if (disposing)
         {
-            _sendCts?.Dispose();
+            if (_isBackgroundSession && _activeSessions.HasSession(SessionId))
+            {
+                // Turn is running in background — detach but don't cancel.
+                _activeSessions.Detach(SessionId);
+            }
+            else
+            {
+                _sendCts?.Dispose();
+            }
+
             if (_confirmationHandler is not null)
                 _confirmationHandler.ConfirmationRequested -= OnConfirmationRequested;
         }
