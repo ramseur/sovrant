@@ -2,6 +2,8 @@
 @using Sovrant.Runtime.Artifacts
 @using Sovrant.Web.Services
 @using Markdig
+@using BlazorMonaco.Editor
+@implements IAsyncDisposable
 
 @if (!string.IsNullOrEmpty(_loadError))
 {
@@ -38,6 +40,10 @@
                 <div class="detail-meta" style="margin-top: 6px; gap: 10px;">
                     <a href="@context.AccessUrl" target="_blank" rel="noopener" class="btn-outline btn-sm">Open</a>
                     <a href="@context.AccessUrl" target="_blank" rel="noopener" download="@context.FileName" class="btn-outline btn-sm">Download</a>
+                    @if (!string.IsNullOrEmpty(context.ZipUrl))
+                    {
+                        <a href="@context.ZipUrl" download="@($"{context.RunId}.zip")" class="btn-outline btn-sm">Download run (.zip)</a>
+                    }
                 </div>
             }
             @if (context.IsPdf && !string.IsNullOrEmpty(context.AccessUrl))
@@ -51,11 +57,21 @@
                     @((MarkupString)Markdown.ToHtml(context.Preview, _pipeline))
                 </div>
             }
+            else if (context.IsCode && !string.IsNullOrEmpty(_selectedEditorKey))
+            {
+                <div style="height: 480px; margin-top: 10px; border-radius: 6px; overflow: hidden;">
+                    <div @key="@_selectedEditorKey" style="height: 100%;">
+                        <StandaloneCodeEditor @ref="_codeEditor"
+                                              Id="@($"artifact-preview-{Math.Abs(_selectedEditorKey.GetHashCode()):x}")"
+                                              ConstructionOptions="GetCodePreviewOptions" />
+                    </div>
+                </div>
+            }
             else if (!string.IsNullOrEmpty(context.Preview))
             {
                 <pre class="detail-preview" style="white-space: pre-wrap; font-size: 13px; font-family: Consolas, monospace;">@context.Preview</pre>
             }
-            else if (!context.IsPdf)
+            else if (!context.IsPdf && !context.IsCode)
             {
                 <p class="text-muted">No preview available for this file type.</p>
             }
@@ -71,14 +87,24 @@
     private ArtifactItem? _selected;
     private string _search = string.Empty;
     private string _loadError = string.Empty;
+    private string _selectedEditorKey = string.Empty;
+    private StandaloneCodeEditor? _codeEditor;
 
     private static readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions().Build();
 
     private static readonly HashSet<string> TextExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".md", ".txt", ".json", ".xml", ".html", ".css", ".js", ".ts", ".cs", ".py",
-        ".yaml", ".yml", ".toml", ".csv", ".log", ".sh", ".ps1", ".sql",
+        ".md", ".txt", ".json", ".xml", ".html", ".htm", ".css", ".js", ".ts", ".tsx", ".jsx",
+        ".cs", ".py", ".go", ".rs", ".java", ".rb", ".php", ".yaml", ".yml", ".toml", ".csv",
+        ".log", ".sh", ".ps1", ".sql", ".csproj", ".axaml", ".razor", ".ini", ".cfg", ".conf", ".env",
+    };
+
+    private static readonly HashSet<string> CodeExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".ts", ".tsx", ".js", ".jsx", ".cs", ".py", ".go", ".rs", ".java", ".rb", ".php",
+        ".json", ".xml", ".html", ".htm", ".css", ".sql", ".sh", ".ps1", ".yaml", ".yml",
+        ".toml", ".csproj", ".axaml", ".razor",
     };
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
@@ -86,6 +112,8 @@
     private Task LoadAsync()
     {
         _loadError = string.Empty;
+        _selected = null;
+        _selectedEditorKey = string.Empty;
         try
         {
             var root = (ArtifactStore as LocalArtifactStore)?.Root;
@@ -116,11 +144,15 @@
                 var artifactPath = string.Join('/', segments[3..]);
 
                 var accessUrl = string.Empty;
+                var zipUrl = string.Empty;
                 if (!string.IsNullOrEmpty(workspaceId) && !string.IsNullOrEmpty(projectId) && !string.IsNullOrEmpty(runId))
                 {
                     var escapedTail = string.Join('/', artifactPath.Split('/').Select(Uri.EscapeDataString));
                     accessUrl = $"/artifacts/{Uri.EscapeDataString(workspaceId)}/{Uri.EscapeDataString(projectId)}/{Uri.EscapeDataString(runId)}/{escapedTail}";
+                    zipUrl = $"/artifacts/{Uri.EscapeDataString(workspaceId)}/{Uri.EscapeDataString(projectId)}/{Uri.EscapeDataString(runId)}.zip";
                 }
+
+                var isCode = CodeExtensions.Contains(ext);
 
                 items.Add(new ArtifactItem
                 {
@@ -133,7 +165,11 @@
                     LastModified = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
                     IsMarkdown = ext.Equals(".md", StringComparison.OrdinalIgnoreCase),
                     IsPdf = ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase),
+                    IsCode = isCode,
+                    MonacoLanguage = isCode ? GetMonacoLanguage(ext) : "plaintext",
                     AccessUrl = accessUrl,
+                    ZipUrl = zipUrl,
+                    RunId = runId,
                 });
             }
 
@@ -152,6 +188,9 @@
     private async Task SelectItem(ArtifactItem item)
     {
         _selected = item;
+        _selectedEditorKey = string.Empty; // hide Monaco while content loads
+        StateHasChanged();
+
         if (string.IsNullOrEmpty(item.Preview) && TextExtensions.Contains(item.Extension) && item.SizeBytes < 512 * 1024)
         {
             try
@@ -161,12 +200,31 @@
                     var content = await File.ReadAllTextAsync(item.FullDiskPath);
                     if (content.Length > 20000) content = content[..20000] + "\n\n... (truncated at 20,000 chars)";
                     item.Preview = content;
-                    StateHasChanged();
                 }
             }
             catch { item.Preview = "(Could not load preview)"; }
         }
+
+        // Reveal Monaco only after content is ready so ConstructionOptions sees the value
+        if (item.IsCode && !string.IsNullOrEmpty(item.Preview))
+            _selectedEditorKey = item.FullDiskPath;
+
+        StateHasChanged();
     }
+
+    private StandaloneEditorConstructionOptions GetCodePreviewOptions(StandaloneCodeEditor _) => new()
+    {
+        Value = _selected?.Preview ?? string.Empty,
+        Language = _selected?.MonacoLanguage ?? "plaintext",
+        Theme = "vs-dark",
+        AutomaticLayout = true,
+        WordWrap = "off",
+        Minimap = new EditorMinimapOptions { Enabled = false },
+        ReadOnly = true,
+        FontSize = 13,
+        ScrollBeyondLastLine = false,
+        LineNumbers = "on",
+    };
 
     private void Search(string text) { _search = text; ApplyFilter(); }
 
@@ -192,6 +250,37 @@
         return idx >= 0 ? segment[..idx] : segment;
     }
 
+    private static string GetMonacoLanguage(string ext) => ext.ToLowerInvariant() switch
+    {
+        ".ts" or ".tsx" => "typescript",
+        ".js" or ".jsx" => "javascript",
+        ".cs" or ".csproj" => "csharp",
+        ".py" => "python",
+        ".json" => "json",
+        ".xml" or ".axaml" => "xml",
+        ".html" or ".htm" or ".razor" => "html",
+        ".css" => "css",
+        ".sql" => "sql",
+        ".yaml" or ".yml" => "yaml",
+        ".sh" => "shell",
+        ".ps1" => "powershell",
+        ".go" => "go",
+        ".rs" => "rust",
+        ".java" => "java",
+        ".rb" => "ruby",
+        ".php" => "php",
+        ".toml" => "ini",
+        _ => "plaintext",
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_codeEditor is not null)
+        {
+            try { await _codeEditor.DisposeEditor(); } catch { /* ignore disposal errors */ }
+        }
+    }
+
     private sealed class ArtifactItem
     {
         public string FullDiskPath { get; init; } = string.Empty;
@@ -203,7 +292,11 @@
         public DateTimeOffset LastModified { get; init; }
         public bool IsMarkdown { get; init; }
         public bool IsPdf { get; init; }
+        public bool IsCode { get; init; }
+        public string MonacoLanguage { get; init; } = "plaintext";
         public string AccessUrl { get; init; } = string.Empty;
+        public string ZipUrl { get; init; } = string.Empty;
+        public string RunId { get; init; } = string.Empty;
         public string? Preview { get; set; }
     }
 }

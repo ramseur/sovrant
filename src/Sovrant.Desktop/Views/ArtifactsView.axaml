@@ -113,20 +113,41 @@
                         BorderThickness="1"
                         Padding="20,16"
                         IsVisible="{Binding !!SelectedArtifact}">
-                    <Panel>
-                        <!-- Markdown preview for .md files -->
-                        <ctrl:SafeMarkdownPresenter Markdown="{Binding DetailText}"
-                                                    IsVisible="{Binding IsMarkdownPreview}" />
-                        <!-- Plain text preview for other files -->
-                        <ScrollViewer IsVisible="{Binding !IsMarkdownPreview}">
-                            <SelectableTextBlock Text="{Binding DetailText}"
-                                                 TextWrapping="Wrap"
-                                                 FontSize="13"
-                                                 FontFamily="Consolas,Menlo,monospace"
-                                                 Foreground="{DynamicResource TextPrimary}"
-                                                 Padding="4" />
-                        </ScrollViewer>
-                    </Panel>
+                    <DockPanel>
+                        <!-- Header row: filename + open-folder button -->
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                            <Button DockPanel.Dock="Right"
+                                    Content="Open folder"
+                                    Command="{Binding OpenRunFolderCommand}"
+                                    Padding="10,5" CornerRadius="6"
+                                    Background="Transparent"
+                                    Foreground="{DynamicResource TextPrimary}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1" />
+                            <TextBlock Text="{Binding SelectedArtifact.FileName}"
+                                       FontSize="14" FontWeight="SemiBold"
+                                       FontFamily="Consolas,Menlo,monospace"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
+
+                        <!-- Preview area -->
+                        <Panel>
+                            <!-- Markdown preview for .md files -->
+                            <ctrl:SafeMarkdownPresenter Markdown="{Binding DetailText}"
+                                                        IsVisible="{Binding IsMarkdownPreview}" />
+                            <!-- Plain text / code preview -->
+                            <ScrollViewer IsVisible="{Binding !IsMarkdownPreview}">
+                                <SelectableTextBlock Text="{Binding DetailText}"
+                                                     TextWrapping="Wrap"
+                                                     FontSize="13"
+                                                     FontFamily="Consolas,Menlo,monospace"
+                                                     Foreground="{DynamicResource TextPrimary}"
+                                                     Padding="4" />
+                            </ScrollViewer>
+                        </Panel>
+                    </DockPanel>
                 </Border>
             </Grid>
         </Grid>

@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-05-19 (Phase 40A UI ✅ — workspace member management across Web/Desktop/CLI; Phase 85 Identity & Login Parity ✅; Phase 93 Configuration Boundary Audit ✅ — sovrant.config removed, .env consolidation, routing.json→env vars, swarm.json→DB; Phase 91 Knowledge Authoring deferred; TLS added to Server + Web; model persistence bug fixed; Phase 87 Tracks A+D partial ✅ — auto-save fenced code blocks, workspace-first artifact layout, artifact download cards; Phase 89 Command Center cockpit ✅ shipped at v0.9.0; Phase 79 Agents page, Phase 94 Orchestration Studio, Phase 95 Integrations Gallery added; Phase 40C Supabase promoted from Deferred → High)
+**Last updated:** 2026-05-19 (Phase 40A UI ✅ — workspace member management across Web/Desktop/CLI; Phase 85 Identity & Login Parity ✅; Phase 93 Configuration Boundary Audit ✅ — sovrant.config removed, .env consolidation, routing.json→env vars, swarm.json→DB; Phase 91 Knowledge Authoring deferred; TLS added to Server + Web; model persistence bug fixed; Phase 87 ✅ — artifacts-by-default complete: Monaco code preview, download-run-as-zip, workspace identity unification, write_many, content discipline system prompt, auto-save fenced blocks; Phase 89 Command Center cockpit ✅ shipped at v0.9.0; Phase 79 Agents page, Phase 94 Orchestration Studio, Phase 95 Integrations Gallery added; Phase 40C Supabase promoted from Deferred → High; Phase 92 Active Sessions ✅)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -13,9 +13,9 @@ What we are actively working on and shipping next, in priority order.
 
 | Wave | Phase | What |
 |---|---|---|
-| **v1.0 — now** | Phase 92 | Active Sessions — up to 5 concurrent live tasks, return-anytime results |
+| **v1.0 — done** | Phase 92 | Active Sessions — up to 5 concurrent live tasks, return-anytime results ✅ |
 | **v1.0 — now** | Phase 86 | Background session continuation across navigation and session switches |
-| **v1.0 — now** | Phase 87 | Artifacts-by-default — finish workspace identity unification (auto-save partial ✅) |
+| **v1.0 — done** | Phase 87 | Artifacts-by-default — finish workspace identity unification (auto-save partial ✅) ✅ |
 | **v1.1 — wave 1** | Phase 79 | Agents page — in-app create/edit of agent definitions + Launch chat button |
 | **v1.1 — wave 1** | Phase 94 | Orchestration Studio — compose and run teams from the UI without chat commands |
 | **v1.1 — wave 2** | Phase 95 | Integrations Gallery — catalog-first onramp for MCP, LLM providers, and known agent platforms |
@@ -172,9 +172,9 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Prompt library: reusable, parameterised prompt templates across CLI / Web / Desktop | Phase 84 | Medium |
 | Local / remote mode selection — CLI + Desktop can run embedded (local DB) or connect to a shared `Sovrant.Server`; setup wizard mode picker; `sovrant connect <url>` | Phase 85.5 | High |
 | Background session continuation across navigation & session switches | Phase 86 | High |
-| Artifacts-by-default for code & documents (with workspace identity unification) | Phase 87 | Medium–High |
+| Artifacts-by-default for code & documents (with workspace identity unification) | Phase 87 | ✅ Done |
 | Knowledge Authoring Revisit — Web + Desktop UX rework: single Edit action on any item, silent copy-on-write for built-ins, no "Duplicate to user" intermediate; fix AvaloniaEdit defects on Desktop | Phase 91 | Deferred |
-| Active Sessions: up to 5 concurrent live tasks with return-anytime results; Settings UI on Web + Desktop, DB-backed; future admin console fallback | Phase 92 | High |
+| Active Sessions: up to 5 concurrent live tasks with return-anytime results; Settings UI on Web + Desktop, DB-backed; future admin console fallback | Phase 92 | ✅ Done |
 | Agents page — rename from "Agent Templates"; in-app create/edit of agent definitions (silent copy-on-write for built-ins); "Launch chat" button to open a persistent session scoped to an agent alongside the existing "Run now" one-shot; agents remain referenceable by name from the agentic loop | Phase 79 | Medium–High |
 | Orchestration Studio — make the Orchestration page a first-class composition surface: create teams from the UI by picking defined agents; support a single-agent run as a first-class option (not just multi-agent teams); add a Run button with task prompt so teams can be launched without going to chat; bridges agent definitions (Phase 79) to orchestrated execution | Phase 94 | Medium–High |
 | Integrations Gallery — replace the raw "Add MCP Server" form as the entry point with a catalog-first experience. Three tiers: (1) Trusted/first-party integrations Sovrant pre-knows how to configure — LLM providers (OpenAI, Anthropic, OpenRouter, Gemini, Ollama), observability (OpenTelemetry), automation (n8n, Zapier, Make) — one-click enable, just enter key/URL; (2) Known agent platforms with guided setup — OpenClaw (federated swarm bus), Hermes Agent (self-improving skills via MCP), Composio (250+ app catalog with managed OAuth) — engine understands their protocol and wires them automatically; (3) Open/community MCP servers (stdio or HTTP) via the existing raw add form as a power-user fallback. Gallery cards show name, category, description, and live connection status. Connected integrations continue to be managed in the existing server detail view. | Phase 95 | Medium–High |
@@ -8532,23 +8532,15 @@ a backgrounded session finishes, errors, or hits a confirmation prompt.
 
 ## Phase 87 — Artifacts-by-Default for Code & Documents (with Workspace Identity Unification)
 
-> **Status:** Partially complete (2026-05-18). Tracks A and D have shipped;
-> Tracks B, C, E, and F are still pending.
+> **Status:** ✅ Complete (2026-05-19). All tracks shipped.
 >
-> **Shipped:**
-> - **Track A (partial)** — `ConversationRuntime` auto-saves fenced code blocks
->   over the threshold as artifacts and emits `RuntimeEvent.ArtifactWritten`;
->   Web (`Chat.razor`) and Desktop (`ChatViewModel`) render them as download cards.
->   The `ArtifactWritten` event is wired into `ChatMessageModel.StandaloneArtifacts`
->   (Web) and `MessageViewModel.StandaloneArtifacts` (Desktop).
-> - **Track D** — Workspace-first artifact layout (`workspace/project` path
->   routing) shipped; `ConversationRuntime` auto-injects workspace/project/run
->   scope into Artifact tool calls when the LLM omits them.
->
-> **Still pending:** Artifact tool description rewrite (Track B), `write_many`
-> action (Track C), per-turn "always allow Artifact" grant (Track E), file-tree
-> view + Monaco preview + download-as-zip on Artifacts screen (Track F), full
-> workspace identity migration sweep (`personal/` → `ws-personal-{userId}/`).
+> - **Track A** — `ConversationRuntime` auto-saves fenced code blocks; download cards in Web + Desktop.
+> - **Track B** — Artifact tool description rewritten: user-centric, not agent-only; mentions `write_many`.
+> - **Track C** — `write_many` action: manifest-based batch write, one approval, per-entry error tracking.
+> - **Track D** — Workspace-first artifact layout; runtime auto-injects scope.
+> - **Track E** — Per-turn "always allow Artifact" grant in CLI/Web/Desktop via `IPerTurnApprovalCache`.
+> - **Track F** — Artifacts screen: Monaco read-only editor for code files (Web); "Open folder" for run scope (Desktop); download-run-as-zip endpoint + button (Web).
+> - **Workspace identity** — `WorkspaceIdentity.DefaultPersonalFor(userId)` canonical helper; `"personal"` literal removed; V022 migration.
 >
 > Original rationale: the assistant routinely dumps multi-thousand-token
 > code and document bodies into the chat instead of writing them to the
