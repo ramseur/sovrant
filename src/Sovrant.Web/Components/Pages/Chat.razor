@@ -157,8 +157,6 @@
     private ElementReference _inputRef;
     private string _inputText = string.Empty;
     private bool _isSending;
-    // Legacy CTS used only when background sessions are disabled.
-    private CancellationTokenSource? _sendCts;
     // True when the current turn is owned by ActiveSessionsService.
     private bool _isBackgroundSession;
     private ChatMessageModel? _streamingMsg;
@@ -521,10 +519,8 @@
 
     private async Task SendToRuntimeAsync(string text)
     {
-        var bgEnabled = await ActiveSessions.IsEnabledAsync();
-        var maxActive = await ActiveSessions.GetMaxActiveAsync();
-
-        if (bgEnabled && ActiveSessions.RunningCount() >= maxActive)
+        const int maxActive = 5;
+        if (ActiveSessions.RunningCount() >= maxActive)
         {
             _messages.Add(new ChatMessageModel
             {
@@ -560,41 +556,16 @@
 
         var sessionId = _sessionId;
         var turnCts = new CancellationTokenSource();
+        _isBackgroundSession = true;
+        ActiveSessions.TryRegister(sessionId, title ?? sessionId, turnCts);
+        ActiveSessions.Attach(sessionId, evt =>
+            InvokeAsync(() => { HandleEvent((RuntimeEvent)evt, assistantMsg); StateHasChanged(); return Task.CompletedTask; }));
 
-        if (bgEnabled)
-        {
-            _isBackgroundSession = true;
-            ActiveSessions.TryRegister(sessionId, title ?? sessionId, turnCts);
-            ActiveSessions.Attach(sessionId, evt =>
-                InvokeAsync(() => { HandleEvent((RuntimeEvent)evt, assistantMsg); StateHasChanged(); return Task.CompletedTask; }));
-
-            _ = Task.Run(async () => await RunTurnCoreAsync(text, assistantMsg, sessionId, turnCts.Token, bgEnabled: true));
-        }
-        else
-        {
-            _isBackgroundSession = false;
-            _sendCts?.Dispose();
-            _sendCts = turnCts;
-            await RunTurnCoreAsync(text, assistantMsg, sessionId, turnCts.Token, bgEnabled: false);
-        }
+        _ = Task.Run(async () => await RunTurnCoreAsync(text, assistantMsg, sessionId, turnCts.Token));
     }
 
-    private async Task RunTurnCoreAsync(string text, ChatMessageModel assistantMsg, string sessionId, CancellationToken ct, bool bgEnabled)
+    private async Task RunTurnCoreAsync(string text, ChatMessageModel assistantMsg, string sessionId, CancellationToken ct)
     {
-        var elapsedCts = bgEnabled ? null : CancellationTokenSource.CreateLinkedTokenSource(ct);
-        if (elapsedCts is not null)
-        {
-            _ = Task.Run(async () =>
-            {
-                using var ticker = new PeriodicTimer(TimeSpan.FromSeconds(1));
-                while (await ticker.WaitForNextTickAsync(elapsedCts.Token).ConfigureAwait(false))
-                {
-                    assistantMsg.UpdateElapsed();
-                    await InvokeAsync(StateHasChanged);
-                }
-            }, elapsedCts.Token);
-        }
-
         SessionPool.BeginTurn(sessionId, Sovrant.Web.Program.SovrantUserId);
         try
         {
@@ -612,38 +583,22 @@
             using var _scope = SessionContext.Push(pooled.Config);
             await foreach (var ev in pooled.Runtime.RunTurnAsync(text, ct))
             {
-                if (bgEnabled)
-                {
-                    ActiveSessions.PushEvent(sessionId, ev);
-                }
-                else
-                {
-                    HandleEvent(ev, assistantMsg);
-                    await InvokeAsync(StateHasChanged);
-                    if (ev is RuntimeEvent.TextChunk)
-                        await ScrollToBottom();
-                }
+                ActiveSessions.PushEvent(sessionId, ev);
             }
 
-            if (bgEnabled) ActiveSessions.Complete(sessionId);
+            ActiveSessions.Complete(sessionId);
         }
         catch (OperationCanceledException)
         {
-            if (bgEnabled) ActiveSessions.Fail(sessionId, "Cancelled");
+            ActiveSessions.Fail(sessionId, "Cancelled");
         }
         catch (Exception ex)
         {
-            if (bgEnabled) ActiveSessions.Fail(sessionId, ex.Message);
-            else assistantMsg.SetError(ex.Message);
+            ActiveSessions.Fail(sessionId, ex.Message);
         }
         finally
         {
             SessionPool.EndTurn(sessionId, Sovrant.Web.Program.SovrantUserId);
-            if (elapsedCts is not null)
-            {
-                await elapsedCts.CancelAsync();
-                elapsedCts.Dispose();
-            }
             await InvokeAsync(async () =>
             {
                 _isSending = false;
@@ -673,10 +628,7 @@
         _isSending = false;
         StateHasChanged();
 
-        if (_isBackgroundSession)
-            ActiveSessions.Cancel(_sessionId);
-        else
-            _sendCts?.Cancel();
+        ActiveSessions.Cancel(_sessionId);
 
         _isBackgroundSession = false;
         return Task.CompletedTask;
@@ -822,7 +774,5 @@
 
         if (_isBackgroundSession && ActiveSessions.HasSession(_sessionId))
             ActiveSessions.Detach(_sessionId);
-        else
-            _sendCts?.Dispose();
     }
 }

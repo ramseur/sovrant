@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Desktop.ViewModels;
 
@@ -11,8 +10,6 @@ namespace Sovrant.Desktop.ViewModels;
 /// </summary>
 public sealed partial class ActiveSessionsViewModel : ObservableObject, IDisposable
 {
-    private readonly IWorkspaceSettingsStore _settings;
-    private readonly ActiveContextViewModel _context;
     private readonly Lock _lock = new();
     private readonly Dictionary<string, ActiveSessionEntry> _sessions = [];
 
@@ -20,34 +17,10 @@ public sealed partial class ActiveSessionsViewModel : ObservableObject, IDisposa
 
     public bool HasActiveSessions => ActiveSessions.Count > 0;
 
-    public ActiveSessionsViewModel(IWorkspaceSettingsStore settings, ActiveContextViewModel context)
+    public ActiveSessionsViewModel()
     {
-        _settings = settings;
-        _context = context;
         ActiveSessions.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasActiveSessions));
     }
-
-    // ── Settings ──────────────────────────────────────────────────────────────
-
-    public async Task<int> GetMaxActiveAsync()
-    {
-        var raw = await _settings.GetAsync(_context.ActiveWorkspaceId, WorkspaceSettingsKeys.MaxActiveSessions).ConfigureAwait(false);
-        return raw is not null && int.TryParse(raw, out var v) ? Math.Clamp(v, 1, 5) : 5;
-    }
-
-    public async Task<bool> IsEnabledAsync()
-    {
-        var raw = await _settings.GetAsync(_context.ActiveWorkspaceId, WorkspaceSettingsKeys.BackgroundSessionsEnabled).ConfigureAwait(false);
-        return raw is null || !raw.Equals("false", StringComparison.OrdinalIgnoreCase);
-    }
-
-    public Task SetMaxActiveAsync(int value) =>
-        _settings.SetAsync(_context.ActiveWorkspaceId, WorkspaceSettingsKeys.MaxActiveSessions,
-            Math.Clamp(value, 1, 5).ToString(System.Globalization.CultureInfo.InvariantCulture));
-
-    public Task SetEnabledAsync(bool value) =>
-        _settings.SetAsync(_context.ActiveWorkspaceId, WorkspaceSettingsKeys.BackgroundSessionsEnabled,
-            value ? "true" : "false");
 
     // ── Registration ──────────────────────────────────────────────────────────
 

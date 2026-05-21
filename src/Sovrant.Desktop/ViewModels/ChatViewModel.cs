@@ -23,8 +23,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private readonly SovrantConfig _config;
     private readonly IMcpServerStore? _mcpStore;
 
-    // Legacy CTS used only when background sessions are disabled.
-    private CancellationTokenSource? _sendCts;
     // True while a turn for this session is owned by _activeSessions.
     private bool _isBackgroundSession;
 
@@ -240,10 +238,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     private async Task SendToRuntimeAsync(string text, CancellationToken ct)
     {
-        var bgEnabled = await _activeSessions.IsEnabledAsync().ConfigureAwait(false);
-        var maxActive = await _activeSessions.GetMaxActiveAsync().ConfigureAwait(false);
-
-        if (bgEnabled && _activeSessions.RunningCount() >= maxActive)
+        const int maxActive = 5;
+        if (_activeSessions.RunningCount() >= maxActive)
         {
             await Dispatcher.UIThread.InvokeAsync(() =>
                 Messages.Add(new MessageViewModel
@@ -277,27 +273,15 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             await Dispatcher.UIThread.InvokeAsync(() => TurnCompleted?.Invoke());
         }
 
-        if (bgEnabled)
-        {
 #pragma warning disable CA2000 // ownership transferred to ActiveSessionsViewModel
-            var bgCts = new CancellationTokenSource();
+        var bgCts = new CancellationTokenSource();
 #pragma warning restore CA2000
-            _isBackgroundSession = true;
-            _activeSessions.TryRegister(SessionId, title ?? SessionId, bgCts);
-            _activeSessions.Attach(SessionId, evt =>
-                Dispatcher.UIThread.Post(() => HandleEvent((RuntimeEvent)evt, assistantMsg)));
+        _isBackgroundSession = true;
+        _activeSessions.TryRegister(SessionId, title ?? SessionId, bgCts);
+        _activeSessions.Attach(SessionId, evt =>
+            Dispatcher.UIThread.Post(() => HandleEvent((RuntimeEvent)evt, assistantMsg)));
 
-            _ = Task.Run(async () => await RunTurnAsync(text, assistantMsg, bgMode: true, bgCts.Token), CancellationToken.None);
-        }
-        else
-        {
-            var syncCts = new CancellationTokenSource();
-            _isBackgroundSession = false;
-            _sendCts?.Dispose();
-            _sendCts = syncCts;
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, syncCts.Token);
-            await RunTurnAsync(text, assistantMsg, bgMode: false, linked.Token);
-        }
+        _ = Task.Run(async () => await RunTurnAsync(text, assistantMsg, bgMode: true, bgCts.Token), CancellationToken.None);
     }
 
     private async Task RunTurnAsync(string text, MessageViewModel assistantMsg, bool bgMode, CancellationToken token)
@@ -382,10 +366,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        if (_sendCts is null || _sendCts.IsCancellationRequested) return;
-
-        try { _sendCts.Cancel(); }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[ChatViewModel] Stop failed: {ex}"); }
     }
 
     protected virtual void Dispose(bool disposing)
@@ -393,14 +373,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         if (disposing)
         {
             if (_isBackgroundSession && _activeSessions.HasSession(SessionId))
-            {
-                // Turn is running in background — detach but don't cancel.
                 _activeSessions.Detach(SessionId);
-            }
-            else
-            {
-                _sendCts?.Dispose();
-            }
 
             if (_confirmationHandler is not null)
                 _confirmationHandler.ConfirmationRequested -= OnConfirmationRequested;
