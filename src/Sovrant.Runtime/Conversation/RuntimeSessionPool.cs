@@ -19,6 +19,8 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
 {
     private readonly IServiceProvider _services;
     private readonly ConcurrentDictionary<string, SessionEntry> _pool = new(StringComparer.Ordinal);
+    // Keys of sessions with an active in-flight turn — excluded from eviction.
+    private readonly ConcurrentDictionary<string, byte> _activeTurns = new(StringComparer.Ordinal);
 
     public RuntimeSessionPool(IServiceProvider services)
     {
@@ -142,14 +144,39 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
     }
 
     /// <inheritdoc/>
+    public void BeginTurn(string sessionId, string? ownerUserId)
+    {
+        var key = ownerUserId is null ? sessionId : $"{sessionId}##{ownerUserId}";
+        _activeTurns.TryAdd(key, 0);
+    }
+
+    /// <inheritdoc/>
+    public void EndTurn(string sessionId, string? ownerUserId)
+    {
+        var key = ownerUserId is null ? sessionId : $"{sessionId}##{ownerUserId}";
+        _activeTurns.TryRemove(key, out _);
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<string> GetActiveTurnSessionIds()
+    {
+        // Strip the owner suffix so callers get plain session IDs.
+        return _activeTurns.Keys
+            .Select(k => { var i = k.IndexOf("##", StringComparison.Ordinal); return i >= 0 ? k[..i] : k; })
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <inheritdoc/>
     public int EvictExpired(TimeSpan ttl, int maxSessions)
     {
         var evicted = 0;
         var cutoff = DateTimeOffset.UtcNow - ttl;
 
-        // Phase 1: TTL eviction — remove sessions idle longer than TTL.
+        // Phase 1: TTL eviction — skip sessions with an active in-flight turn.
         foreach (var kvp in _pool)
         {
+            if (_activeTurns.ContainsKey(kvp.Key)) continue;
             if (kvp.Value.LastAccess < cutoff)
             {
                 if (_pool.TryRemove(kvp.Key, out var removed))
@@ -161,10 +188,11 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
             }
         }
 
-        // Phase 2: LRU cap — if still above max, evict least-recently-used.
+        // Phase 2: LRU cap — skip active-turn sessions when enforcing the cap.
         if (_pool.Count > maxSessions)
         {
             var sortedByAccess = _pool
+                .Where(kvp => !_activeTurns.ContainsKey(kvp.Key))
                 .OrderBy(kvp => kvp.Value.LastAccess)
                 .ToList();
 

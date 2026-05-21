@@ -64,10 +64,18 @@
                                             CornerRadius="4"
                                             Background="Transparent">
                                         <StackPanel Spacing="1">
-                                            <TextBlock Text="{Binding Title}"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource TextPrimary}"
-                                                       TextTrimming="CharacterEllipsis" />
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Left"
+                                                           Text="{Binding StatusIcon}"
+                                                           FontSize="10"
+                                                           Foreground="{DynamicResource BrandPrimary}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="0,0,4,0" />
+                                                <TextBlock Text="{Binding Title}"
+                                                           FontSize="11"
+                                                           Foreground="{DynamicResource TextPrimary}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </DockPanel>
                                             <TextBlock Text="{Binding ElapsedDisplay}"
                                                        FontSize="9"
                                                        Foreground="{DynamicResource BrandPrimary}" />

@@ -46,9 +46,26 @@ public interface IRuntimeSessionPool
     /// <summary>
     /// Evicts sessions that have been idle longer than <paramref name="ttl"/>,
     /// and enforces the <paramref name="maxSessions"/> cap by evicting least-recently-used entries.
+    /// Sessions currently registered via <see cref="BeginTurn"/> are never evicted.
     /// Returns the number of sessions evicted.
     /// </summary>
     int EvictExpired(TimeSpan ttl, int maxSessions);
+
+    /// <summary>
+    /// Marks the session as having an active in-flight turn so <see cref="EvictExpired"/>
+    /// will not evict it. Callers must pair every <c>BeginTurn</c> with a corresponding
+    /// <see cref="EndTurn"/> (typically in a <c>finally</c> block).
+    /// </summary>
+    void BeginTurn(string sessionId, string? ownerUserId);
+
+    /// <summary>Clears the active-turn marker set by <see cref="BeginTurn"/>.</summary>
+    void EndTurn(string sessionId, string? ownerUserId);
+
+    /// <summary>
+    /// Returns the composite pool keys of all sessions currently registered via
+    /// <see cref="BeginTurn"/>. Used by the active-sessions endpoint.
+    /// </summary>
+    IReadOnlyList<string> GetActiveTurnSessionIds();
 
     /// <summary>
     /// Returns the <see cref="SessionConfig"/> for the given session, or <see langword="null"/>

@@ -55,6 +55,9 @@ public sealed class LlmStepRunnerTests
         public int ActiveCount => 1;
         public int EvictExpired(TimeSpan ttl, int maxSessions) => 0;
         public SessionConfig? TryGetConfig(string sessionId, string? ownerUserId = null) => Session.Config;
+        public void BeginTurn(string sessionId, string? ownerUserId) { }
+        public void EndTurn(string sessionId, string? ownerUserId) { }
+        public IReadOnlyList<string> GetActiveTurnSessionIds() => [];
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

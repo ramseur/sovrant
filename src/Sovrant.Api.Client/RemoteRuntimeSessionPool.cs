@@ -63,6 +63,11 @@ public sealed class RemoteRuntimeSessionPool : IRuntimeSessionPool
         return _pool.TryGetValue(key, out var entry) ? entry.Config : null;
     }
 
+    // Remote pool has no server-side eviction guard; these are no-ops.
+    public void BeginTurn(string sessionId, string? ownerUserId) { }
+    public void EndTurn(string sessionId, string? ownerUserId) { }
+    public IReadOnlyList<string> GetActiveTurnSessionIds() => [];
+
     private sealed class RemoteSessionEntry
     {
         public IConversationRuntime Runtime { get; }

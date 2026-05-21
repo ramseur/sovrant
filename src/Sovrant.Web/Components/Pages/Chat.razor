@@ -595,6 +595,7 @@
             }, elapsedCts.Token);
         }
 
+        SessionPool.BeginTurn(sessionId, Sovrant.Web.Program.SovrantUserId);
         try
         {
             await Sovrant.Web.Program.RuntimeReady.Task.WaitAsync(ct);
@@ -637,6 +638,7 @@
         }
         finally
         {
+            SessionPool.EndTurn(sessionId, Sovrant.Web.Program.SovrantUserId);
             if (elapsedCts is not null)
             {
                 await elapsedCts.CancelAsync();

@@ -14,7 +14,7 @@ What we are actively working on and shipping next, in priority order.
 | Wave | Phase | What |
 |---|---|---|
 | **v1.0 — done** | Phase 92 | Active Sessions — up to 5 concurrent live tasks, return-anytime results ✅ |
-| **v1.0 — now** | Phase 86 | Background session continuation across navigation and session switches |
+| **v1.0 — done** | Phase 86 | Background session continuation across navigation and session switches ✅ |
 | **v1.0 — done** | Phase 87 | Artifacts-by-default — finish workspace identity unification (auto-save partial ✅) ✅ |
 | **v1.1 — wave 1** | Phase 79 | Agents page — in-app create/edit of agent definitions + Launch chat button |
 | **v1.1 — wave 1** | Phase 94 | Orchestration Studio — compose and run teams from the UI without chat commands |
@@ -171,7 +171,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Pluggable memory backends — abstract `IMemoryStore` so the SQLite implementation can be swapped for distributed/remote stores (mem0, Pinecone-style vector DBs, Redis, Postgres+pgvector); enables shared/team memory across nodes | Phase 83 | Medium |
 | Prompt library: reusable, parameterised prompt templates across CLI / Web / Desktop | Phase 84 | Medium |
 | Local / remote mode selection — CLI + Desktop can run embedded (local DB) or connect to a shared `Sovrant.Server`; setup wizard mode picker; `sovrant connect <url>` | Phase 85.5 | High |
-| Background session continuation across navigation & session switches | Phase 86 | High |
+| Background session continuation across navigation & session switches | Phase 86 | ✅ Done |
 | Artifacts-by-default for code & documents (with workspace identity unification) | Phase 87 | ✅ Done |
 | Knowledge Authoring Revisit — Web + Desktop UX rework: single Edit action on any item, silent copy-on-write for built-ins, no "Duplicate to user" intermediate; fix AvaloniaEdit defects on Desktop | Phase 91 | Deferred |
 | Active Sessions: up to 5 concurrent live tasks with return-anytime results; Settings UI on Web + Desktop, DB-backed; future admin console fallback | Phase 92 | ✅ Done |

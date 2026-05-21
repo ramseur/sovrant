@@ -10,16 +10,18 @@ public sealed class SessionCommand : ISlashCommand
 {
     private readonly IConversationRuntime _runtime;
     private readonly ISessionStore _store;
+    private readonly IRuntimeSessionPool _pool;
 
-    public SessionCommand(IConversationRuntime runtime, ISessionStore store)
+    public SessionCommand(IConversationRuntime runtime, ISessionStore store, IRuntimeSessionPool pool)
     {
         _runtime = runtime;
         _store = store;
+        _pool = pool;
     }
 
     public string Name => "session";
     public IReadOnlyList<string> Aliases => [];
-    public string Description => "Session management: list, delete <id>, purge.";
+    public string Description => "Session management: list, active, delete <id>, purge.";
     public string Category => "Session";
 
     public async Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
@@ -28,6 +30,9 @@ public sealed class SessionCommand : ISlashCommand
 
         if (string.Equals(args, "list", StringComparison.OrdinalIgnoreCase))
             return await ListSessionsAsync(ct).ConfigureAwait(false);
+
+        if (string.Equals(args, "active", StringComparison.OrdinalIgnoreCase))
+            return ListActiveSessions();
 
         if (string.Equals(args, "purge", StringComparison.OrdinalIgnoreCase))
             return await PurgeSessionsAsync(ct).ConfigureAwait(false);
@@ -60,6 +65,22 @@ public sealed class SessionCommand : ISlashCommand
         return new SlashCommandResult(sb.ToString());
     }
 
+    private SlashCommandResult ListActiveSessions()
+    {
+        var ids = _pool.GetActiveTurnSessionIds();
+        if (ids.Count == 0)
+            return new SlashCommandResult("No sessions have an active in-flight turn.");
+
+        var sb = new StringBuilder();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# Active Sessions ({ids.Count})");
+        sb.AppendLine();
+        sb.AppendLine("| Session ID |");
+        sb.AppendLine("|------------|");
+        foreach (var id in ids)
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| {id} |");
+        return new SlashCommandResult(sb.ToString().TrimEnd());
+    }
+
     private async Task<SlashCommandResult> ListSessionsAsync(CancellationToken ct)
     {
         var summaries = await _store.ListWithTitlesAsync(ownerUserId: null, ct).ConfigureAwait(false);
@@ -78,7 +99,7 @@ public sealed class SessionCommand : ISlashCommand
             sb.AppendLine(CultureInfo.InvariantCulture, $"| {title} | {s.SessionId} | {s.UpdatedAt:yyyy-MM-dd HH:mm} | {marker} |");
         }
         sb.AppendLine();
-        sb.Append("Use /resume (session-id) to resume, /rename <title> to name this session, /session delete (id) to delete.");
+        sb.Append("Use /resume (session-id) to resume, /rename <title> to name this session, /session delete (id) to delete, /session active to list in-flight turns.");
         return new SlashCommandResult(sb.ToString());
     }
 

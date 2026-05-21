@@ -251,6 +251,13 @@ public partial class ActiveSessionInfoViewModel : ObservableObject
     [ObservableProperty] private string? _error;
 
     public bool IsRunning => Status == ActiveSessionStatus.Running;
+    public string StatusIcon => Status switch
+    {
+        ActiveSessionStatus.Running => "⟳",
+        ActiveSessionStatus.Completed => "✓",
+        ActiveSessionStatus.Failed => "✗",
+        _ => "",
+    };
     public TimeSpan Elapsed => (EndedAt ?? DateTime.UtcNow) - StartedAt;
     public string ElapsedDisplay => Elapsed.TotalSeconds < 60
         ? $"{(int)Elapsed.TotalSeconds}s"
@@ -271,6 +278,7 @@ public partial class ActiveSessionInfoViewModel : ObservableObject
         EndedAt = info.EndedAt;
         Error = info.Error;
         OnPropertyChanged(nameof(IsRunning));
+        OnPropertyChanged(nameof(StatusIcon));
         OnPropertyChanged(nameof(Elapsed));
         OnPropertyChanged(nameof(ElapsedDisplay));
     }

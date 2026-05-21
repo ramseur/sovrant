@@ -302,6 +302,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     private async Task RunTurnAsync(string text, MessageViewModel assistantMsg, bool bgMode, CancellationToken token)
     {
+        _sessionPool.BeginTurn(SessionId, App.SovrantUserId);
         try
         {
             await App.RuntimeReady.Task.WaitAsync(token).ConfigureAwait(false);
@@ -339,6 +340,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
         finally
         {
+            _sessionPool.EndTurn(SessionId, App.SovrantUserId);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 IsSending = false;

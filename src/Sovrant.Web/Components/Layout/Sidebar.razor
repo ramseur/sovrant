@@ -1,5 +1,6 @@
 @using Sovrant.Runtime.Session
 @using Sovrant.Web.Services
+@inject IJSRuntime JS
 @implements IDisposable
 
 <aside class="sidebar">
@@ -107,12 +108,25 @@
 
     private void OnActiveSessionsChanged()
     {
-        InvokeAsync(() =>
+        InvokeAsync(async () =>
         {
             _activeSessions = ActiveSessions.GetAll().ToList();
             var hasRunning = _activeSessions.Any(s => s.Status == ActiveSessionStatus.Running);
             if (hasRunning) EnsureTimer();
             else StopTimer();
+
+            // Update browser tab title when a session finishes or fails while the user is away.
+            var needsAttention = _activeSessions.Any(s =>
+                s.Status == ActiveSessionStatus.Completed || s.Status == ActiveSessionStatus.Failed);
+            try
+            {
+                if (needsAttention)
+                    await JS.InvokeVoidAsync("sovrantInterop.setTabTitlePrefix", "● ");
+                else
+                    await JS.InvokeVoidAsync("sovrantInterop.clearTabTitlePrefix");
+            }
+            catch { /* JS interop may fail if circuit is not fully connected */ }
+
             StateHasChanged();
         });
     }
@@ -183,10 +197,11 @@
             ).ToList();
     }
 
-    private void ResumeSession(string sessionId)
+    private async Task ResumeSession(string sessionId)
     {
+        try { await JS.InvokeVoidAsync("sovrantInterop.clearTabTitlePrefix"); } catch { }
         ActiveContext.ResumeSession(sessionId);
-        OnNavigate.InvokeAsync("/");
+        await OnNavigate.InvokeAsync("/");
     }
 
     private async Task DeleteSession(string sessionId)
