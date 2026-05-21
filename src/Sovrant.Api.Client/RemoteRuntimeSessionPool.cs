@@ -26,6 +26,8 @@ public sealed class RemoteRuntimeSessionPool : IRuntimeSessionPool
         string sessionId,
         ISmartRouter? scopedRouterOverride = null,
         string? ownerUserId = null,
+        string? agentSystemPrompt = null,
+        string? agentName = null,
         CancellationToken ct = default)
     {
         var key = ownerUserId is not null ? $"{sessionId}###{ownerUserId}" : sessionId;

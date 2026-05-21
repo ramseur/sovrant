@@ -65,8 +65,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IOrchestrationSystem>(sp =>
             AgentSystemFactory.Create(sp.GetRequiredService<AgentSystemConfig>(), sp));
 
-        // Template registry and agent factory
+        // Template registry, definition writer, and agent factory
         services.AddSingleton<AgentTemplateRegistry>();
+        services.AddSingleton<AgentDefinitionWriter>();
         services.AddSingleton<ITeamRegistry>(sp =>
             new SqliteTeamRegistry(sp.GetRequiredService<Sovrant.Runtime.Storage.ISqliteConnectionFactory>()));
         services.AddSingleton<SovrantAgentFactory>();

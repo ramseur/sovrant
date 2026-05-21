@@ -7,18 +7,27 @@
              Background="{DynamicResource SurfaceBackground}">
 
     <DockPanel>
+        <!-- ── Header ──────────────────────────────────────────────────────── -->
         <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="12">
             <DockPanel>
-                <Button DockPanel.Dock="Right" Content="Refresh"
-                        Command="{Binding RefreshCommand}"
-                        Padding="12,6" CornerRadius="6"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+                    <Button Content="+ New"
+                            Command="{Binding NewAgentCommand}"
+                            Padding="12,6" CornerRadius="6"
+                            Background="{DynamicResource BrandPrimary}"
+                            Foreground="White" />
+                    <Button Content="Refresh"
+                            Command="{Binding RefreshCommand}"
+                            Padding="12,6" CornerRadius="6"
+                            Background="Transparent"
+                            Foreground="{DynamicResource TextPrimary}" />
+                </StackPanel>
                 <StackPanel>
-                    <TextBlock Text="Agent Templates" FontSize="24" FontWeight="Bold"
+                    <TextBlock Text="Agents" FontSize="24" FontWeight="Bold"
                                Foreground="{DynamicResource TextPrimary}" />
                     <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
                         <Run Text="{Binding TotalCount}" />
-                        <Run Text=" templates available — select one to view details" />
+                        <Run Text=" agents — select one to view details" />
                     </TextBlock>
                 </StackPanel>
             </DockPanel>
@@ -28,9 +37,10 @@
                      CornerRadius="8" Padding="12,8" />
         </StackPanel>
 
-        <!-- Master-detail -->
+        <!-- ── Master-detail ───────────────────────────────────────────────── -->
         <Grid Margin="32,12,32,24" ColumnDefinitions="300,12,*">
-            <!-- Master pane: list of templates + recent runs at the bottom -->
+
+            <!-- Master list + recent runs -->
             <Grid Grid.Column="0" RowDefinitions="*,Auto">
                 <ScrollViewer Grid.Row="0">
                     <ItemsControl ItemsSource="{Binding FilteredTemplates}">
@@ -46,21 +56,35 @@
                                         Cursor="Hand">
                                     <Border Padding="12,8" CornerRadius="8"
                                             Background="{DynamicResource SurfaceCard}"
-                                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                            BorderBrush="{DynamicResource SurfaceBorder}"
+                                            BorderThickness="1">
                                         <StackPanel Spacing="4">
                                             <DockPanel>
-                                                <Border DockPanel.Dock="Right"
-                                                        Padding="5,2" CornerRadius="4"
-                                                        Background="{DynamicResource BrandPrimary}">
-                                                    <TextBlock Text="{Binding RecommendedLevel}"
-                                                               FontSize="10" Foreground="White" />
-                                                </Border>
+                                                <StackPanel DockPanel.Dock="Right"
+                                                            Orientation="Horizontal" Spacing="4">
+                                                    <Border IsVisible="{Binding !IsBuiltIn}"
+                                                            Padding="5,2" CornerRadius="4"
+                                                            Background="{DynamicResource StatusWarn}">
+                                                        <TextBlock Text="user" FontSize="9" Foreground="White" />
+                                                    </Border>
+                                                    <Border Padding="5,2" CornerRadius="4"
+                                                            Background="{DynamicResource BrandPrimary}">
+                                                        <TextBlock Text="{Binding RecommendedLevel}"
+                                                                   FontSize="10" Foreground="White" />
+                                                    </Border>
+                                                </StackPanel>
                                                 <TextBlock Text="{Binding Name}"
                                                            FontSize="13" FontWeight="SemiBold"
                                                            FontFamily="Consolas,Menlo,monospace"
-                                                           Foreground="{DynamicResource BrandPrimary}" />
+                                                           Foreground="{DynamicResource BrandPrimary}"
+                                                           TextTrimming="CharacterEllipsis" />
                                             </DockPanel>
-                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}">
+                                            <TextBlock FontSize="11"
+                                                       Foreground="{DynamicResource TextSecondary}"
+                                                       IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                       Text="{Binding Description}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <TextBlock FontSize="10" Foreground="{DynamicResource TextMuted}">
                                                 <Run Text="Role: " />
                                                 <Run Text="{Binding Role}" />
                                             </TextBlock>
@@ -75,17 +99,16 @@
                     </ItemsControl>
                 </ScrollViewer>
 
-                <!-- Phase 90 Track C — Recent runs (this workspace) -->
+                <!-- Recent runs -->
                 <Border Grid.Row="1"
-                        Margin="0,12,0,0"
-                        Padding="12,10"
+                        Margin="0,12,0,0" Padding="12,10"
                         CornerRadius="8"
                         Background="{DynamicResource SurfaceCard}"
                         BorderBrush="{DynamicResource SurfaceBorder}"
                         BorderThickness="1">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="RECENT RUNS"
-                                   FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="RECENT RUNS" FontSize="11"
+                                   Foreground="{DynamicResource TextSecondary}" />
                         <TextBlock IsVisible="{Binding !RecentRuns.Count}"
                                    FontSize="11" Foreground="{DynamicResource TextMuted}"
                                    Text="No agent runs yet." />
@@ -93,16 +116,13 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vm:RecentAgentRunViewModel">
                                     <StackPanel Spacing="2" Margin="0,3">
-                                        <TextBlock Text="{Binding Title}"
-                                                   FontSize="12"
+                                        <TextBlock Text="{Binding Title}" FontSize="12"
                                                    Foreground="{DynamicResource TextPrimary}"
                                                    TextTrimming="CharacterEllipsis" />
                                         <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <TextBlock Text="{Binding Status}"
-                                                       FontSize="10"
+                                            <TextBlock Text="{Binding Status}" FontSize="10"
                                                        Foreground="{DynamicResource TextMuted}" />
-                                            <TextBlock Text="{Binding WhenLabel}"
-                                                       FontSize="10"
+                                            <TextBlock Text="{Binding WhenLabel}" FontSize="10"
                                                        Foreground="{DynamicResource TextMuted}" />
                                         </StackPanel>
                                     </StackPanel>
@@ -113,84 +133,203 @@
                 </Border>
             </Grid>
 
-            <!-- Detail pane -->
+            <!-- ── Detail pane ─────────────────────────────────────────────── -->
             <Grid Grid.Column="2">
-                <Border CornerRadius="10"
-                        Background="{DynamicResource SurfaceCard}"
-                        BorderBrush="{DynamicResource SurfaceBorder}"
-                        BorderThickness="1"
-                        Padding="20,16"
-                        IsVisible="{Binding !SelectedTemplate}">
-                    <TextBlock Text="Select an agent to view its details"
-                               FontSize="14"
-                               Foreground="{DynamicResource TextMuted}"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
-                </Border>
-                <Border CornerRadius="10"
-                        Background="{DynamicResource SurfaceCard}"
-                        BorderBrush="{DynamicResource SurfaceBorder}"
-                        BorderThickness="1"
-                        Padding="20,16"
-                        IsVisible="{Binding !!SelectedTemplate}">
-                    <DockPanel>
-                        <!-- Phase 90 Track C — Run now controls -->
-                        <Border DockPanel.Dock="Top"
-                                Margin="0,0,0,14"
-                                Padding="12"
-                                CornerRadius="8"
-                                Background="{DynamicResource SurfaceBackground}"
-                                BorderBrush="{DynamicResource SurfaceBorder}"
-                                BorderThickness="1">
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="Run this template"
-                                           FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{DynamicResource TextPrimary}" />
-                                <TextBox Text="{Binding RunPrompt, Mode=TwoWay}"
-                                         Watermark="Describe the task for the agent…"
-                                         AcceptsReturn="True"
-                                         MinHeight="56"
-                                         CornerRadius="6" Padding="8,6"
-                                         Background="{DynamicResource SurfaceBackground}" />
-                                <StackPanel Orientation="Horizontal" Spacing="12">
-                                    <Button Content="Run now"
-                                            Command="{Binding RunNowCommand}"
-                                            IsEnabled="{Binding !IsRunning}"
-                                            Padding="14,6" CornerRadius="6"
-                                            Background="{DynamicResource BrandPrimary}"
-                                            Foreground="White" />
-                                    <TextBlock Text="{Binding LastRunStatus}"
-                                               VerticalAlignment="Center"
-                                               FontSize="11"
-                                               Foreground="{DynamicResource TextSecondary}" />
-                                </StackPanel>
-                                <Border IsVisible="{Binding LastRunOutput, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                        Padding="10"
-                                        CornerRadius="6"
-                                        Background="{DynamicResource SurfaceCard}"
-                                        BorderBrush="{DynamicResource SurfaceBorder}"
-                                        BorderThickness="1"
-                                        MaxHeight="240">
-                                    <ScrollViewer>
-                                        <SelectableTextBlock Text="{Binding LastRunOutput}"
-                                                             FontFamily="Consolas,Menlo,monospace"
-                                                             FontSize="12"
-                                                             TextWrapping="Wrap"
-                                                             Foreground="{DynamicResource TextPrimary}" />
-                                    </ScrollViewer>
-                                </Border>
-                            </StackPanel>
-                        </Border>
 
-                        <ContentControl Content="{Binding SelectedTemplate}">
-                            <ContentControl.ContentTemplate>
-                                <DataTemplate DataType="vm:AgentTemplateItemViewModel">
-                                    <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
-                                </DataTemplate>
-                            </ContentControl.ContentTemplate>
-                        </ContentControl>
-                    </DockPanel>
+                <!-- Empty state -->
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1" Padding="20,16"
+                        IsVisible="{Binding !SelectedTemplate}">
+                    <TextBlock Text="Select an agent to view details"
+                               FontSize="14" Foreground="{DynamicResource TextMuted}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
+
+                <!-- Read view (template selected, not editing) -->
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1" Padding="20,16"
+                        IsVisible="{Binding SelectedTemplate, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <Panel>
+                    <ScrollViewer IsVisible="{Binding !IsEditing}">
+                        <StackPanel Spacing="16">
+                            <!-- Action buttons -->
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Launch Chat"
+                                        Command="{Binding LaunchChatCommand}"
+                                        Padding="14,6" CornerRadius="6"
+                                        Background="{DynamicResource BrandPrimary}"
+                                        Foreground="White" />
+                                <Button Content="Edit"
+                                        Command="{Binding EditAgentCommand}"
+                                        Padding="12,6" CornerRadius="6"
+                                        Background="Transparent"
+                                        Foreground="{DynamicResource TextPrimary}" />
+                                <Button Content="Clone"
+                                        Command="{Binding CloneAgentCommand}"
+                                        Padding="12,6" CornerRadius="6"
+                                        Background="Transparent"
+                                        Foreground="{DynamicResource TextPrimary}" />
+                                <Button Content="Delete"
+                                        Command="{Binding DeleteAgentCommand}"
+                                        Padding="12,6" CornerRadius="6"
+                                        Background="Transparent"
+                                        Foreground="{DynamicResource StatusFail}" />
+                            </StackPanel>
+
+                            <!-- Markdown detail -->
+                            <ContentControl Content="{Binding SelectedTemplate}">
+                                <ContentControl.ContentTemplate>
+                                    <DataTemplate DataType="vm:AgentTemplateItemViewModel">
+                                        <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
+                                    </DataTemplate>
+                                </ContentControl.ContentTemplate>
+                            </ContentControl>
+
+                            <!-- Run now card -->
+                            <Border Padding="14" CornerRadius="8"
+                                    Background="{DynamicResource SurfaceBackground}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="Run one-shot" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimary}" />
+                                    <TextBox Text="{Binding RunPrompt, Mode=TwoWay}"
+                                             Watermark="Describe the task for the agent…"
+                                             AcceptsReturn="True" MinHeight="56"
+                                             CornerRadius="6" Padding="8,6" />
+                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <Button Content="Run now"
+                                                Command="{Binding RunNowCommand}"
+                                                IsEnabled="{Binding !IsRunning}"
+                                                Padding="14,6" CornerRadius="6"
+                                                Background="{DynamicResource BrandPrimary}"
+                                                Foreground="White" />
+                                        <TextBlock Text="{Binding LastRunStatus}"
+                                                   VerticalAlignment="Center" FontSize="11"
+                                                   Foreground="{DynamicResource TextSecondary}" />
+                                    </StackPanel>
+                                    <Border IsVisible="{Binding LastRunOutput, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                            Padding="10" CornerRadius="6" MaxHeight="240"
+                                            Background="{DynamicResource SurfaceCard}"
+                                            BorderBrush="{DynamicResource SurfaceBorder}"
+                                            BorderThickness="1">
+                                        <ScrollViewer>
+                                            <SelectableTextBlock Text="{Binding LastRunOutput}"
+                                                                 FontFamily="Consolas,Menlo,monospace"
+                                                                 FontSize="12" TextWrapping="Wrap"
+                                                                 Foreground="{DynamicResource TextPrimary}" />
+                                        </ScrollViewer>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- ── Editor (IsEditing = true) ────────────────────────────── -->
+                    <ScrollViewer IsVisible="{Binding IsEditing}">
+                        <StackPanel Spacing="14" MaxWidth="680">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="New Agent"
+                                           FontSize="18" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}"
+                                           IsVisible="{Binding IsNew}" />
+                                <TextBlock Text="Edit Agent"
+                                           FontSize="18" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}"
+                                           IsVisible="{Binding !IsNew}" />
+                                <TextBlock FontSize="12" Foreground="{DynamicResource TextMuted}"
+                                           Text="Saves as your copy — original unchanged"
+                                           IsVisible="{Binding !IsNew}" />
+                            </StackPanel>
+
+                            <TextBlock Text="{Binding EditError}"
+                                       IsVisible="{Binding EditError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                       Foreground="{DynamicResource StatusFail}" FontSize="12" />
+
+                            <!-- Name -->
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Name" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextSecondary}" />
+                                <TextBox Text="{Binding EditName, Mode=TwoWay}"
+                                         Watermark="kebab-case-name"
+                                         CornerRadius="6" Padding="8,6"
+                                         FontFamily="Consolas,Menlo,monospace" />
+                            </StackPanel>
+
+                            <!-- Description -->
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Description" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextSecondary}" />
+                                <TextBox Text="{Binding EditDescription, Mode=TwoWay}"
+                                         Watermark="Short description (optional)"
+                                         CornerRadius="6" Padding="8,6" />
+                            </StackPanel>
+
+                            <!-- Role + Level -->
+                            <Grid ColumnDefinitions="*,12,*">
+                                <StackPanel Grid.Column="0" Spacing="4">
+                                    <TextBlock Text="Role" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                    <ComboBox SelectedItem="{Binding EditRole, Mode=TwoWay}"
+                                              ItemsSource="{Binding RoleNames}"
+                                              HorizontalAlignment="Stretch"
+                                              CornerRadius="6" Padding="8,6" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Spacing="4">
+                                    <TextBlock Text="Level" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                    <ComboBox SelectedItem="{Binding EditLevel, Mode=TwoWay}"
+                                              ItemsSource="{Binding LevelNames}"
+                                              HorizontalAlignment="Stretch"
+                                              CornerRadius="6" Padding="8,6" />
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Tools -->
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Allowed Tools (comma-separated, empty = all)"
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextSecondary}" />
+                                <TextBox Text="{Binding EditTools, Mode=TwoWay}"
+                                         Watermark="read_file, write_file, run_command, …"
+                                         CornerRadius="6" Padding="8,6" />
+                            </StackPanel>
+
+                            <!-- System Prompt -->
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="System Prompt" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextSecondary}" />
+                                <TextBox Text="{Binding EditPrompt, Mode=TwoWay}"
+                                         Watermark="You are a helpful assistant…"
+                                         AcceptsReturn="True" MinHeight="160"
+                                         CornerRadius="6" Padding="8,6"
+                                         FontFamily="Consolas,Menlo,monospace"
+                                         FontSize="12" />
+                            </StackPanel>
+
+                            <!-- Save / Cancel -->
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Save"
+                                        Command="{Binding SaveAgentAsyncCommand}"
+                                        IsEnabled="{Binding !IsSaving}"
+                                        Padding="16,8" CornerRadius="6"
+                                        Background="{DynamicResource BrandPrimary}"
+                                        Foreground="White" />
+                                <Button Content="Cancel"
+                                        Command="{Binding CancelEditCommand}"
+                                        Padding="12,8" CornerRadius="6"
+                                        Background="Transparent"
+                                        Foreground="{DynamicResource TextPrimary}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                    </Panel>
+                </Border>
+
             </Grid>
         </Grid>
     </DockPanel>

@@ -35,6 +35,7 @@ public sealed record AgentRunFilter(
     string? ProjectId = null,
     string? UserId = null,
     string? TeamId = null,
+    string? MemberId = null,
     string? Kind = null,
     string? Status = null,
     string? ParentRunId = null);

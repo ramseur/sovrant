@@ -47,6 +47,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly ActiveSessionsViewModel _activeSessions;
     // Parked ChatViewModels whose turns are still running in background.
     private readonly Dictionary<string, ChatViewModel> _backgroundChats = [];
+    private AgentsViewModel? _agentsViewModel;
 
     public bool IsAdmin => _principal.IsAdmin;
 
@@ -207,7 +208,7 @@ public partial class MainViewModel : ViewModelBase
             "TrustBoundary" => _services.GetRequiredService<TrustBoundaryViewModel>(),
             "Projects" => _services.GetRequiredService<ProjectsViewModel>(),
             "Workspaces" => _services.GetRequiredService<WorkspacesViewModel>(),
-            "Agents" => _services.GetRequiredService<AgentsViewModel>(),
+            "Agents" => GetOrCreateAgentsViewModel(),
             "Automations" => _services.GetRequiredService<AutomationsViewModel>(),
             "Orchestration" => _services.GetRequiredService<OrchestrationViewModel>(),
             "CommandCenter" => ResetCockpitToGrid(),
@@ -257,6 +258,26 @@ public partial class MainViewModel : ViewModelBase
         var chat = _services.GetRequiredService<ChatViewModel>();
         chat.TurnCompleted += () => _ = Sidebar.RefreshSessionsCommand.ExecuteAsync(null);
         return chat;
+    }
+
+    private AgentsViewModel GetOrCreateAgentsViewModel()
+    {
+        if (_agentsViewModel is not null) return _agentsViewModel;
+        _agentsViewModel = ActivatorUtilities.CreateInstance<AgentsViewModel>(
+            _services,
+            (Action<string, string?>)LaunchAgentChat);
+        return _agentsViewModel;
+    }
+
+    private void LaunchAgentChat(string agentName, string? systemPrompt)
+    {
+        ParkCurrentChatIfRunning();
+        var chat = CreateChatViewModel();
+        chat.SetAgentScope(agentName, systemPrompt);
+        CurrentPage = chat;
+        SelectedGroup = "chat";
+        OnSelectedGroupChanged("chat");
+        Sidebar.SelectedNavItem = "Chat";
     }
 
     [RelayCommand]

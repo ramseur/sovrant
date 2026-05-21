@@ -112,6 +112,11 @@ internal sealed class SqliteAgentRunStore(ISqliteConnectionFactory connectionFac
             sb.Append(" AND team_id = $teamId");
             cmd.Parameters.AddWithValue("$teamId", filter.TeamId);
         }
+        if (filter?.MemberId is not null)
+        {
+            sb.Append(" AND member_id = $memberId");
+            cmd.Parameters.AddWithValue("$memberId", filter.MemberId);
+        }
         if (filter?.Kind is not null)
         {
             sb.Append(" AND kind = $kind");

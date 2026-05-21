@@ -49,6 +49,8 @@ public sealed class LlmStepRunnerTests
             string sessionId,
             Sovrant.Api.Routing.ISmartRouter? scopedRouterOverride = null,
             string? ownerUserId = null,
+            string? agentSystemPrompt = null,
+            string? agentName = null,
             CancellationToken ct = default) => Task.FromResult(Session);
 
         public void Evict(string sessionId, string? ownerUserId = null) { }

@@ -63,7 +63,7 @@ public sealed partial class LlmStepRunner : IStepRunner
         LogStepStarted(_logger, step.Index, context.AttemptNumber, context.RuntimeRunId, context.SessionId);
 
         var pooled = await _sessionPool
-            .GetOrCreateAsync(context.SessionId, scopedRouterOverride: null, ownerUserId: null, ct)
+            .GetOrCreateAsync(context.SessionId, scopedRouterOverride: null, ownerUserId: null, ct: ct)
             .ConfigureAwait(false);
 
         // Compact prior history if it exceeds the runner budget.

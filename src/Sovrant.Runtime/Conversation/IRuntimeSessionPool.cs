@@ -24,11 +24,22 @@ public interface IRuntimeSessionPool
     /// the owner stamped on new rows in the SQLite store. Null means no enforcement
     /// (CLI, tests).
     /// </param>
+    /// <param name="agentSystemPrompt">
+    /// When not <see langword="null"/> and the session is new, the runtime is constructed
+    /// with this system prompt instead of the default Sovrant prompt.
+    /// Used for agent-scoped chat sessions launched from the Agents page.
+    /// Ignored if the session already exists in the pool.
+    /// </param>
+    /// <param name="agentName">
+    /// Name of the agent template, stored in <see cref="SessionConfig.AgentName"/> for display.
+    /// </param>
     /// <param name="ct">A cancellation token.</param>
     Task<PooledSession> GetOrCreateAsync(
         string sessionId,
         Sovrant.Api.Routing.ISmartRouter? scopedRouterOverride = null,
         string? ownerUserId = null,
+        string? agentSystemPrompt = null,
+        string? agentName = null,
         CancellationToken ct = default);
 
     /// <summary>

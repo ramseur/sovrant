@@ -38,6 +38,18 @@ public sealed class SessionConfig
     internal IReadOnlySet<string>? AllowedMcpServersSet => _allowedMcpServersSet;
 
     /// <summary>
+    /// When set, the session runtime uses this system prompt instead of the default Sovrant prompt.
+    /// Used for agent-scoped chat sessions launched from the Agents page.
+    /// </summary>
+    public string? SystemPromptOverride { get; set; }
+
+    /// <summary>
+    /// Name of the agent template this session is scoped to, if any.
+    /// Informational — used for display in the sidebar and Command Center.
+    /// </summary>
+    public string? AgentName { get; set; }
+
+    /// <summary>
     /// Per-session model override. <see langword="null"/> means use the global default.
     /// </summary>
     public string? Model

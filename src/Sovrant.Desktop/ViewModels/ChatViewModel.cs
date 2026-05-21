@@ -26,6 +26,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     // True while a turn for this session is owned by _activeSessions.
     private bool _isBackgroundSession;
 
+    private string? _agentName;
+    private string? _agentSystemPrompt;
+
     [ObservableProperty]
     private string _sessionId;
 
@@ -129,6 +132,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             var lastAssistant = Messages.LastOrDefault(m => m.Role == "assistant");
             lastAssistant?.AddConfirmation(request);
         });
+    }
+
+    public void SetAgentScope(string agentName, string? systemPrompt)
+    {
+        _agentName = agentName;
+        _agentSystemPrompt = systemPrompt;
     }
 
     public async Task LoadSessionAsync(string sessionId, CancellationToken ct = default)
@@ -291,7 +300,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         {
             await App.RuntimeReady.Task.WaitAsync(token).ConfigureAwait(false);
 
-            var pooled = await _sessionPool.GetOrCreateAsync(SessionId, ct: token).ConfigureAwait(false);
+            var pooled = await _sessionPool.GetOrCreateAsync(SessionId,
+                agentSystemPrompt: _agentSystemPrompt,
+                agentName: _agentName,
+                ct: token).ConfigureAwait(false);
 
             if (Connections.Count > 0)
             {

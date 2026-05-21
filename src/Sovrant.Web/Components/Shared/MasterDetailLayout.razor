@@ -11,6 +11,10 @@
                 {
                     <span class="item-count">@ItemCount</span>
                 }
+                @if (HeaderActions is not null)
+                {
+                    @HeaderActions
+                }
                 @if (OnRefresh.HasDelegate)
                 {
                     <button class="btn-outline btn-sm" @onclick="OnRefresh">Refresh</button>
@@ -93,6 +97,7 @@
     [Parameter] public Func<TItem, string>? GroupKeySelector { get; set; }
     [Parameter] public RenderFragment<TItem>? GroupHeaderTemplate { get; set; }
     [Parameter] public RenderFragment? FooterTemplate { get; set; }
+    [Parameter] public RenderFragment? HeaderActions { get; set; }
     [Parameter] public EventCallback OnRefresh { get; set; }
     [Parameter] public EventCallback<TItem> OnItemSelected { get; set; }
     [Parameter] public EventCallback<string> OnSearch { get; set; }

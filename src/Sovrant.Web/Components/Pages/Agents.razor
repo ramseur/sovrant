@@ -1,80 +1,213 @@
 @page "/agents"
+@using Sovrant.Agents.Models
 @using Sovrant.Agents.Templates
 @using Sovrant.Agents.Shared
 @using Sovrant.Runtime.Storage
 @using Sovrant.Web.Services
 @using Markdig
 @inject AgentTemplateRegistry TemplateRegistry
+@inject AgentDefinitionWriter DefinitionWriter
 @inject AdHocAgentRunner Runner
 @inject IAgentRunStore RunStore
 @inject ActiveContextService ActiveContext
+@inject NavigationManager Nav
 
 <MasterDetailLayout TItem="AgentItem"
-                    Title="Agent Templates"
+                    Title="Agents"
                     ItemCount="@_filtered.Count"
                     Items="@_filtered"
                     SelectedItem="@_selected"
-                    EmptyMessage="No agent templates registered."
+                    EmptyMessage="No agents registered."
                     OnItemSelected="OnSelected"
                     OnSearch="Search">
+    <HeaderActions>
+        <button class="btn-outline btn-sm" @onclick="NewAgent">+ New</button>
+    </HeaderActions>
     <ItemTemplate>
-        <div class="item-title">@context.Name</div>
+        <div class="item-title">
+            @context.Name
+            @if (!context.IsBuiltIn)
+            {
+                <span class="tag tag-user" title="User-defined">user</span>
+            }
+        </div>
         <div class="item-subtitle">@context.Role &middot; @context.RecommendedLevel &middot; @context.ToolsSummary</div>
     </ItemTemplate>
     <DetailTemplate>
         <div class="detail-content">
-            <h2>@context.Name</h2>
-            <div class="detail-meta">
-                <span>Role: @context.Role</span>
-                <span>Level: @context.RecommendedLevel</span>
-                <span>Tools: @context.ToolsSummary</span>
-            </div>
-
-            <!-- Phase 90 Track C — Run now -->
-            <div class="run-now-card">
-                <div class="run-now-header">Run this template</div>
-                <textarea class="run-now-prompt"
-                          placeholder="Describe the task for the agent…"
-                          @bind="_runPrompt"
-                          @bind:event="oninput"
-                          rows="3"></textarea>
-                <div class="run-now-actions">
-                    <button class="btn-primary"
-                            disabled="@(_isRunning || string.IsNullOrWhiteSpace(_runPrompt))"
-                            @onclick="@(() => RunNowAsync(context))">
-                        @(_isRunning ? "Running…" : "Run now")
-                    </button>
-                    @if (_lastRunStatus is not null)
-                    {
-                        <span class="run-now-status @_lastRunStatusClass">@_lastRunStatus</span>
-                    }
-                </div>
-                @if (!string.IsNullOrEmpty(_lastRunOutput))
-                {
-                    <pre class="run-now-output">@_lastRunOutput</pre>
-                }
-            </div>
-
-            @if (context.AllowedTools.Count > 0)
+            @if (_isEditing)
             {
-                <h3>Allowed Tools</h3>
-                <div class="tag-list">
-                    @foreach (var tool in context.AllowedTools)
+                <!-- ── Editor ─────────────────────────────────────────── -->
+                <div class="agent-editor">
+                    <div class="editor-header">
+                        <h2>@(_editItem!.IsBuiltIn ? $"Editing copy of '{_editItem.Name}'" : (_isNew ? "New Agent" : $"Editing '{_editItem.Name}'"))</h2>
+                        @if (_editItem.IsBuiltIn)
+                        {
+                            <span class="info-badge">Saves as your copy · original unchanged</span>
+                        }
+                    </div>
+
+                    <div class="field-group">
+                        <label>Name (kebab-case)</label>
+                        <input class="field-input" type="text" @bind="_editName" placeholder="my-agent" />
+                    </div>
+                    <div class="field-group">
+                        <label>Description</label>
+                        <input class="field-input" type="text" @bind="_editDescription" placeholder="One-line description" />
+                    </div>
+                    <div class="field-row">
+                        <div class="field-group">
+                            <label>Role</label>
+                            <select class="field-select" @bind="_editRole">
+                                @foreach (var r in Enum.GetNames<AgentRole>())
+                                {
+                                    <option value="@r">@r</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="field-group">
+                            <label>Level</label>
+                            <select class="field-select" @bind="_editLevel">
+                                @foreach (var l in Enum.GetNames<RecommendedLevel>())
+                                {
+                                    <option value="@l">@l</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="field-group">
+                        <label>Allowed Tools <span class="field-hint">(comma-separated, empty = all)</span></label>
+                        <input class="field-input" type="text" @bind="_editTools" placeholder="read_file, write_file, bash" />
+                    </div>
+                    <div class="field-group">
+                        <label>System Prompt</label>
+                        <textarea class="field-textarea" rows="12" @bind="_editPrompt"></textarea>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(_editError))
                     {
-                        <span class="tag">@tool</span>
+                        <div class="page-error-banner">@_editError</div>
                     }
+
+                    <div class="editor-actions">
+                        <button class="btn-primary" disabled="@_isSaving" @onclick="SaveAgentAsync">
+                            @(_isSaving ? "Saving…" : "Save")
+                        </button>
+                        <button class="btn-outline" @onclick="CancelEdit">Cancel</button>
+                    </div>
                 </div>
             }
-            <h3>System Prompt</h3>
-            <div class="message-markdown">
-                @((MarkupString)Markdown.ToHtml(context.SystemPrompt, _pipeline))
-            </div>
+            else
+            {
+                <!-- ── Read view ──────────────────────────────────────── -->
+                <div class="detail-header-row">
+                    <h2>@context.Name</h2>
+                    <div class="detail-actions">
+                        <button class="btn-primary btn-sm" @onclick="@(() => LaunchChat(context))" title="Open a chat session scoped to this agent">
+                            &#x1F4AC; Launch chat
+                        </button>
+                        <button class="btn-outline btn-sm" @onclick="@(() => EditAgent(context))">Edit</button>
+                        <button class="btn-outline btn-sm" @onclick="@(() => CloneAgent(context))">Clone</button>
+                        @if (!context.IsBuiltIn)
+                        {
+                            <button class="btn-danger btn-sm" @onclick="@(() => ConfirmDelete(context))">Delete</button>
+                        }
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(context.Description))
+                {
+                    <p class="detail-description">@context.Description</p>
+                }
+
+                <div class="detail-meta">
+                    <span>Role: @context.Role</span>
+                    <span>Level: @context.RecommendedLevel</span>
+                    <span>Tools: @context.ToolsSummary</span>
+                    @if (context.IsBuiltIn)
+                    {
+                        <span class="tag">built-in</span>
+                    }
+                </div>
+
+                <!-- Run one-shot -->
+                <div class="run-now-card">
+                    <div class="run-now-header">Run one-shot</div>
+                    <textarea class="run-now-prompt"
+                              placeholder="Describe the task for the agent…"
+                              @bind="_runPrompt"
+                              @bind:event="oninput"
+                              rows="3"></textarea>
+                    <div class="run-now-actions">
+                        <button class="btn-outline btn-sm"
+                                disabled="@(_isRunning || string.IsNullOrWhiteSpace(_runPrompt))"
+                                @onclick="@(() => RunNowAsync(context))">
+                            @(_isRunning ? "Running…" : "Run now")
+                        </button>
+                        @if (_lastRunStatus is not null)
+                        {
+                            <span class="run-now-status @_lastRunStatusClass">@_lastRunStatus</span>
+                        }
+                    </div>
+                    @if (!string.IsNullOrEmpty(_lastRunOutput))
+                    {
+                        <pre class="run-now-output">@_lastRunOutput</pre>
+                    }
+                </div>
+
+                @if (context.AllowedTools.Count > 0)
+                {
+                    <h3>Allowed Tools</h3>
+                    <div class="tag-list">
+                        @foreach (var tool in context.AllowedTools)
+                        {
+                            <span class="tag">@tool</span>
+                        }
+                    </div>
+                }
+                <h3>System Prompt</h3>
+                <div class="message-markdown">
+                    @((MarkupString)Markdown.ToHtml(context.SystemPrompt, _pipeline))
+                </div>
+
+                <!-- Per-agent run history -->
+                @if (_agentRuns.Count > 0)
+                {
+                    <h3>Recent runs</h3>
+                    <div class="recent-runs">
+                        @foreach (var r in _agentRuns)
+                        {
+                            <div class="recent-run">
+                                <div class="recent-run-title">@(r.MemberId ?? r.Kind)</div>
+                                <div class="recent-run-meta">
+                                    <span class="recent-run-status @StatusClass(r.Status)">@r.Status</span>
+                                    <span>@FormatRelative(r.EndedAt ?? r.StartedAt)</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+
+            <!-- Delete confirmation -->
+            @if (_confirmDeleteName is not null)
+            {
+                <div class="confirm-overlay">
+                    <div class="confirm-dialog">
+                        <p>Delete agent <strong>@_confirmDeleteName</strong>? This cannot be undone.</p>
+                        <div class="confirm-actions">
+                            <button class="btn-danger" @onclick="DeleteConfirmedAsync">Delete</button>
+                            <button class="btn-outline" @onclick="() => _confirmDeleteName = null">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
     </DetailTemplate>
     <FooterTemplate>
         <div class="recent-runs">
             <div class="recent-runs-header">
-                <span>Recent runs (this workspace)</span>
+                <span>All recent runs (this workspace)</span>
                 <button class="btn-link" @onclick="LoadRecentRunsAsync">Refresh</button>
             </div>
             @if (_recentRuns.Count == 0)
@@ -103,42 +236,187 @@
     private List<AgentItem> _filtered = [];
     private AgentItem? _selected;
 
+    // Run one-shot state
     private string _runPrompt = string.Empty;
     private bool _isRunning;
     private string? _lastRunStatus;
     private string _lastRunStatusClass = string.Empty;
     private string _lastRunOutput = string.Empty;
 
+    // Recent runs (footer)
     private List<AgentRunRecord> _recentRuns = [];
+    // Per-agent runs (detail pane)
+    private List<AgentRunRecord> _agentRuns = [];
+
+    // Editor state
+    private bool _isEditing;
+    private bool _isNew;
+    private bool _isSaving;
+    private string _editError = string.Empty;
+    private AgentItem? _editItem;
+    private string _editName = string.Empty;
+    private string _editDescription = string.Empty;
+    private string _editRole = "General";
+    private string _editLevel = "Standard";
+    private string _editTools = string.Empty;
+    private string _editPrompt = string.Empty;
+
+    // Delete confirmation
+    private string? _confirmDeleteName;
 
     private static readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions().Build();
 
     protected override async Task OnInitializedAsync()
     {
-        _all = TemplateRegistry.All
-            .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(t => new AgentItem
-            {
-                Name = t.Name,
-                Role = t.Role.ToString(),
-                RecommendedLevel = t.RecommendedLevel.ToString(),
-                AllowedTools = t.AllowedTools,
-                ToolsSummary = BuildToolsSummary(t.AllowedTools),
-                SystemPrompt = t.SystemPrompt,
-            }).ToList();
-        _filtered = _all;
+        Reload();
         await LoadRecentRunsAsync();
+    }
+
+    private void Reload()
+    {
+        _all = TemplateRegistry.All
+            .OrderBy(t => t.IsBuiltIn ? 1 : 0)
+            .ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(AgentItem.From).ToList();
+        _filtered = _all;
     }
 
     private Task OnSelected(AgentItem item)
     {
         _selected = item;
+        _isEditing = false;
         _runPrompt = string.Empty;
         _lastRunStatus = null;
         _lastRunOutput = string.Empty;
+        _ = LoadAgentRunsAsync(item.Name);
         return Task.CompletedTask;
     }
+
+    // ── Navigation ────────────────────────────────────────────────────────
+
+    private void LaunchChat(AgentItem agent)
+    {
+        var newSessionId = Guid.NewGuid().ToString("N");
+        Nav.NavigateTo($"/chat?session={newSessionId}&agent={Uri.EscapeDataString(agent.Name)}");
+    }
+
+    // ── Editor ────────────────────────────────────────────────────────────
+
+    private void NewAgent()
+    {
+        _isNew = true;
+        _isEditing = true;
+        _editItem = null;
+        _editName = "new-agent";
+        _editDescription = string.Empty;
+        _editRole = "General";
+        _editLevel = "Standard";
+        _editTools = string.Empty;
+        _editPrompt = "You are a helpful assistant.";
+        _editError = string.Empty;
+        _selected = null;
+    }
+
+    private void EditAgent(AgentItem item)
+    {
+        _isNew = false;
+        _isEditing = true;
+        _editItem = item;
+        _editName = item.IsBuiltIn ? $"{item.Name}-custom" : item.Name;
+        _editDescription = item.Description ?? string.Empty;
+        _editRole = item.Role;
+        _editLevel = item.RecommendedLevel;
+        _editTools = string.Join(", ", item.AllowedTools);
+        _editPrompt = item.SystemPrompt;
+        _editError = string.Empty;
+    }
+
+    private void CloneAgent(AgentItem item)
+    {
+        _isNew = true;
+        _isEditing = true;
+        _editItem = item;
+        _editName = $"{item.Name}-copy";
+        _editDescription = item.Description ?? string.Empty;
+        _editRole = item.Role;
+        _editLevel = item.RecommendedLevel;
+        _editTools = string.Join(", ", item.AllowedTools);
+        _editPrompt = item.SystemPrompt;
+        _editError = string.Empty;
+    }
+
+    private void CancelEdit()
+    {
+        _isEditing = false;
+        _isNew = false;
+        _editError = string.Empty;
+    }
+
+    private async Task SaveAgentAsync()
+    {
+        _editError = string.Empty;
+        var name = AgentDefinitionWriter.ToKebabCase(_editName);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            _editError = "Name is required.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_editPrompt))
+        {
+            _editError = "System prompt is required.";
+            return;
+        }
+        if (!Enum.TryParse<AgentRole>(_editRole, out var role)) role = AgentRole.General;
+        if (!Enum.TryParse<RecommendedLevel>(_editLevel, out var level)) level = RecommendedLevel.Standard;
+
+        var tools = string.IsNullOrWhiteSpace(_editTools)
+            ? (IReadOnlyList<string>)[]
+            : _editTools.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var template = new AgentTemplate(
+            Name: name,
+            Role: role,
+            RecommendedLevel: level,
+            AllowedTools: tools,
+            SystemPrompt: _editPrompt.Trim(),
+            IsBuiltIn: false,
+            Description: string.IsNullOrWhiteSpace(_editDescription) ? null : _editDescription.Trim());
+
+        _isSaving = true;
+        StateHasChanged();
+        try
+        {
+            await DefinitionWriter.SaveAsync(template);
+            Reload();
+            _selected = _all.FirstOrDefault(a => a.Name == name);
+            _isEditing = false;
+            _isNew = false;
+        }
+        catch (Exception ex)
+        {
+            _editError = ex.Message;
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    // ── Delete ────────────────────────────────────────────────────────────
+
+    private void ConfirmDelete(AgentItem item) => _confirmDeleteName = item.Name;
+
+    private void DeleteConfirmedAsync()
+    {
+        if (_confirmDeleteName is null) return;
+        DefinitionWriter.Delete(_confirmDeleteName);
+        _confirmDeleteName = null;
+        if (_selected?.Name == _confirmDeleteName) _selected = null;
+        Reload();
+    }
+
+    // ── Run one-shot ──────────────────────────────────────────────────────
 
     private async Task RunNowAsync(AgentItem agent)
     {
@@ -181,9 +459,12 @@
         {
             _isRunning = false;
             await LoadRecentRunsAsync();
+            await LoadAgentRunsAsync(agent.Name);
             StateHasChanged();
         }
     }
+
+    // ── Data loading ──────────────────────────────────────────────────────
 
     private async Task LoadRecentRunsAsync()
     {
@@ -192,14 +473,25 @@
             var filter = string.IsNullOrEmpty(ActiveContext.WorkspaceId)
                 ? null
                 : new AgentRunFilter(WorkspaceId: ActiveContext.WorkspaceId);
-            var runs = await RunStore.ListAsync(filter, limit: 10);
-            _recentRuns = runs.ToList();
+            _recentRuns = (await RunStore.ListAsync(filter, limit: 10)).ToList();
         }
-        catch
-        {
-            _recentRuns = [];
-        }
+        catch { _recentRuns = []; }
     }
+
+    private async Task LoadAgentRunsAsync(string agentName)
+    {
+        try
+        {
+            var filter = new AgentRunFilter(
+                WorkspaceId: ActiveContext.WorkspaceId,
+                MemberId: agentName);
+            _agentRuns = (await RunStore.ListAsync(filter, limit: 5)).ToList();
+        }
+        catch { _agentRuns = []; }
+        StateHasChanged();
+    }
+
+    // ── Search ────────────────────────────────────────────────────────────
 
     private void Search(string text)
     {
@@ -207,9 +499,12 @@
             ? _all
             : _all.Where(a =>
                 a.Name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
-                a.Role.Contains(text, StringComparison.OrdinalIgnoreCase)
+                a.Role.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                (a.Description?.Contains(text, StringComparison.OrdinalIgnoreCase) == true)
             ).ToList();
     }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
 
     private static string BuildToolsSummary(IReadOnlyList<string> tools) => tools.Count switch
     {
@@ -234,16 +529,35 @@
         if (delta.TotalSeconds < 60) return $"{(int)delta.TotalSeconds}s ago";
         if (delta.TotalMinutes < 60) return $"{(int)delta.TotalMinutes}m ago";
         if (delta.TotalHours < 24) return $"{(int)delta.TotalHours}h ago";
-        return when.LocalDateTime.ToString("MMM d, HH:mm");
+        return when.LocalDateTime.ToString("MMM d, HH:mm", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private sealed class AgentItem
     {
         public string Name { get; init; } = string.Empty;
+        public string Description { get; init; } = string.Empty;
         public string Role { get; init; } = string.Empty;
         public string RecommendedLevel { get; init; } = string.Empty;
         public IReadOnlyList<string> AllowedTools { get; init; } = [];
         public string ToolsSummary { get; init; } = string.Empty;
         public string SystemPrompt { get; init; } = string.Empty;
+        public bool IsBuiltIn { get; init; }
+
+        public static AgentItem From(AgentTemplate t) => new()
+        {
+            Name = t.Name,
+            Description = t.Description ?? string.Empty,
+            Role = t.Role.ToString(),
+            RecommendedLevel = t.RecommendedLevel.ToString(),
+            AllowedTools = t.AllowedTools,
+            ToolsSummary = t.AllowedTools.Count switch
+            {
+                0 => "All tools",
+                <= 5 => string.Join(", ", t.AllowedTools),
+                _ => $"{string.Join(", ", t.AllowedTools.Take(5))} +{t.AllowedTools.Count - 5} more",
+            },
+            SystemPrompt = t.SystemPrompt,
+            IsBuiltIn = t.IsBuiltIn,
+        };
     }
 }

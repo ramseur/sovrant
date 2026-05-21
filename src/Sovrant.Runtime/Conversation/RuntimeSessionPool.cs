@@ -35,6 +35,8 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
         string sessionId,
         ISmartRouter? scopedRouterOverride = null,
         string? ownerUserId = null,
+        string? agentSystemPrompt = null,
+        string? agentName = null,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
@@ -54,10 +56,10 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
 
         // Slow path — create, initialise, and race to insert.
         IConversationRuntime runtime;
-        if (scopedRouterOverride is not null)
+        if (scopedRouterOverride is not null || agentSystemPrompt is not null)
         {
             runtime = new ConversationRuntime(
-                scopedRouterOverride,
+                scopedRouterOverride ?? _services.GetRequiredService<ISmartRouter>(),
                 _services.GetRequiredService<IToolExecutor>(),
                 _services.GetRequiredService<IToolRegistry>(),
                 _services.GetRequiredService<ISessionStore>(),
@@ -65,6 +67,7 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
                 _services.GetRequiredService<ILogger<ConversationRuntime>>(),
                 _services.GetService<IHookRunner>(),
                 _services.GetService<MemoryInjector>(),
+                systemPromptOverride: agentSystemPrompt,
                 settings: _services.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>(),
                 mcpClients: _services.GetService<McpClientRegistry>());
         }
@@ -81,6 +84,9 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
         await runtime.InitializeSessionAsync(persistenceId, ownerUserId, ct).ConfigureAwait(false);
 
         var entry = new SessionEntry(runtime);
+        if (agentName is not null)
+            entry.Config.AgentName = agentName;
+
         var winner = _pool.GetOrAdd(pooledKey, entry);
 
         // Fire SessionStart only for the thread that actually created the entry.
