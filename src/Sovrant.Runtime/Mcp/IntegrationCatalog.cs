@@ -96,7 +96,7 @@ public static class IntegrationCatalog
             EndpointLabel: "Connection string (postgresql://user:pass@host/db)",
             DefaultCommand: "npx", DefaultArgs: ["-y", "@modelcontextprotocol/server-postgres", "{ENDPOINT}"]),
 
-        new("supabase", "Supabase", "Platform", "⚡",
+        new("supabase", "Supabase", "Platform", "🗄️",
             "Query, manage, and deploy Supabase projects directly from agents.",
             IntegrationKind.McpStdio, IntegrationTier.Platform,
             ApiKeyLabel: "Access Token",
