@@ -241,9 +241,19 @@ Directory segments use `{id}__{safe-name}` format where the safe name is lowerca
 
 When `SOVRANT_MCP_TOKEN` is set, callers must supply a matching `--token` flag. Errors are written to stderr to preserve the JSON-RPC stdout transport. The token is sourced from an environment variable, making it visible in process listings. Moving it to the credential store is a planned improvement.
 
-### Token Storage
+### OAuth Token Storage
 
-OAuth access tokens are stored in `ICredentialStore` (AES-256-GCM encrypted) and retrieved on demand.
+OAuth access tokens, refresh tokens, and client secrets are stored in `ICredentialStore` (AES-256-GCM encrypted) under keys `mcp.{name}.access_token`, `mcp.{name}.refresh_token`, and `mcp.{name}.client_secret`.
+
+### MCP Server Config Storage (Current Gap)
+
+Non-OAuth MCP server configurations — including HTTP bearer tokens, API keys stored as request headers, and environment variables such as `GITHUB_TOKEN` or `BRAVE_API_KEY` — are persisted as plaintext JSON in the `mcp_servers` SQLite table (`headers_json`, `env_json`, `args_json` columns). These values are protected only by OS filesystem permissions on the SQLite database file (`~/.sovrant/sovrant.db`).
+
+The planned fix is to replace `SqliteMcpServerStore` with a `CredentialStoreMcpServerStore` that stores the full `McpServerConfig` as an AES-256-GCM encrypted blob per server, with a managed name index, eliminating the plaintext SQLite columns entirely.
+
+### Integration Gallery
+
+The Integrations Gallery (web and desktop) presents a catalog of pre-defined MCP servers (Composio, n8n, GitHub, Brave Search, PostgreSQL, etc.). When a user connects an integration from the gallery, any API key or connection string they enter is passed directly into `McpServerConfig.Headers` or `McpServerConfig.Env` and persisted via `IMcpServerStore` — subject to the plaintext SQLite gap described above. LLM provider entries (OpenAI, Anthropic, OpenRouter, Ollama) do not go through `IMcpServerStore`; they are configured separately in Settings.
 
 ---
 
@@ -271,5 +281,6 @@ Request paths are sanitized before logging — dynamic segments are replaced wit
 | Token scopes | Stored, not enforced | Enforce in a future phase |
 | OAuth pending states | In-memory only | Persist to database |
 | MCP server token | Env var | Move to credential store |
+| MCP server API keys / bearer tokens / env vars | Plaintext in SQLite (`headers_json`, `env_json`, `args_json`) | Replace `SqliteMcpServerStore` with `CredentialStoreMcpServerStore` — full config encrypted via `ICredentialStore` |
 | Auth endpoint rate limiting | Not separately rate limited | Per-IP limit on login/register/reset |
 | SignalR token transport | Query parameter (`access_token`) | Move to subprotocol or custom header |
