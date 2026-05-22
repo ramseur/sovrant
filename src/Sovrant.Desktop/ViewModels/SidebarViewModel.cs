@@ -718,9 +718,15 @@ public partial class SessionListItem : ViewModelBase
     [ObservableProperty]
     private bool _isActive;
 
+    [ObservableProperty]
+    private ActiveSessionInfoViewModel? _activeInfo;
+
     public void RefreshIsActive(ActiveSessionsViewModel? activeSessions)
     {
         IsActive = activeSessions?.HasSession(SessionId) ?? false;
+        ActiveInfo = IsActive
+            ? activeSessions?.ActiveSessions.FirstOrDefault(s => s.SessionId == SessionId)
+            : null;
     }
 }
 
