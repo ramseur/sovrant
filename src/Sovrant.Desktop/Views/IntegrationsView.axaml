@@ -13,7 +13,7 @@
 
     <DockPanel>
         <!-- Header -->
-        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="12">
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="10">
             <DockPanel>
                 <Button DockPanel.Dock="Right" Content="Refresh"
                         Command="{Binding RefreshCommand}"
@@ -24,20 +24,90 @@
                                Foreground="{DynamicResource TextPrimary}" />
                     <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
                         <Run Text="{Binding TotalCount}" />
-                        <Run Text=" MCP servers configured — select one to view details" />
+                        <Run Text=" MCP servers connected" />
                     </TextBlock>
                 </StackPanel>
             </DockPanel>
 
-            <TextBox Text="{Binding SearchText}"
-                     Watermark="Search servers..."
-                     CornerRadius="8" Padding="12,8" />
+            <!-- Tab bar -->
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <Button Content="Gallery"
+                        Command="{Binding SwitchTabCommand}" CommandParameter="gallery"
+                        Padding="14,6" CornerRadius="6" FontSize="12"
+                        Background="{Binding ActiveTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=gallery, FallbackValue=Transparent}"
+                        Foreground="{DynamicResource TextPrimary}" />
+                <Button Padding="14,6" CornerRadius="6" FontSize="12"
+                        Command="{Binding SwitchTabCommand}" CommandParameter="connected"
+                        Background="{Binding ActiveTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=connected, FallbackValue=Transparent}"
+                        Foreground="{DynamicResource TextPrimary}">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="Connected" />
+                        <Border Padding="4,1" CornerRadius="8"
+                                Background="{DynamicResource BrandPrimary}">
+                            <TextBlock Text="{Binding TotalCount}" FontSize="10" Foreground="White" />
+                        </Border>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
         </StackPanel>
 
         <!-- Master-detail -->
-        <Grid Margin="32,12,32,24" ColumnDefinitions="320,12,*">
-            <!-- Left panel: list + add form -->
-            <DockPanel Grid.Column="0">
+        <Grid Margin="32,12,32,24" ColumnDefinitions="300,12,*">
+
+            <!-- ── Gallery left panel ──────────────────────────────────────── -->
+            <ScrollViewer Grid.Column="0"
+                          IsVisible="{Binding ActiveTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=gallery}">
+                <ItemsControl ItemsSource="{Binding CatalogEntries}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:CatalogEntryViewModel">
+                            <Button Command="{Binding $parent[ItemsControl].((vm:IntegrationsViewModel)DataContext).SelectCatalogEntryCommand}"
+                                    CommandParameter="{Binding}"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Padding="0" Margin="0,2"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Cursor="Hand">
+                                <Border Padding="12,10" CornerRadius="8"
+                                        Background="{DynamicResource SurfaceCard}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                        BorderThickness="1">
+                                    <DockPanel>
+                                        <!-- Connected badge -->
+                                        <Border DockPanel.Dock="Right"
+                                                IsVisible="{Binding IsAlreadyConnected}"
+                                                Padding="5,2" CornerRadius="4"
+                                                VerticalAlignment="Top"
+                                                Background="{DynamicResource StatusOk}">
+                                            <TextBlock Text="connected" FontSize="9" Foreground="White" />
+                                        </Border>
+                                        <StackPanel Spacing="2">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBlock Text="{Binding Icon}" FontSize="16" VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource BrandPrimary}"
+                                                           VerticalAlignment="Center" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Description}"
+                                                       FontSize="10"
+                                                       Foreground="{DynamicResource TextMuted}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Category}"
+                                                       FontSize="9"
+                                                       Foreground="{DynamicResource TextSecondary}" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- ── Connected left panel ────────────────────────────────────── -->
+            <DockPanel Grid.Column="0"
+                       IsVisible="{Binding ActiveTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=connected}">
                 <!-- Add server form -->
                 <Border DockPanel.Dock="Bottom"
                         Margin="0,8,0,0" Padding="12" CornerRadius="8"
@@ -48,7 +118,6 @@
                         <TextBlock Text="Add MCP Server" FontSize="12" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" />
 
-                        <!-- Mode selector -->
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <RadioButton GroupName="addmode" Content="JSON" FontSize="11"
                                          IsChecked="{Binding AddMode, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=json}" />
@@ -58,28 +127,24 @@
                                          IsChecked="{Binding AddMode, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=http}" />
                         </StackPanel>
 
-                        <!-- JSON paste -->
                         <StackPanel Spacing="8" IsVisible="{Binding AddMode, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=json}">
                             <TextBox Text="{Binding NewServerJson}"
-                                     AcceptsReturn="True" TextWrapping="Wrap"
-                                     MinHeight="160"
-                                     Watermark='{}{ "mcpServers": { "pixellab": { "url": "https://api.pixellab.ai/mcp", "headers": { "Authorization": "Bearer ..." } } } }'
+                                     AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120"
+                                     Watermark='Paste mcpServers JSON…'
                                      FontFamily="Consolas,Menlo,monospace"
                                      FontSize="11" Padding="8,6" CornerRadius="6" />
                         </StackPanel>
 
-                        <!-- stdio fields -->
-                        <StackPanel Spacing="8" IsVisible="{Binding AddMode, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=stdio}">
+                        <StackPanel Spacing="6" IsVisible="{Binding AddMode, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=stdio}">
                             <TextBox Text="{Binding NewServerName}" Watermark="Server name"
                                      FontSize="12" Padding="8,6" CornerRadius="6" />
-                            <TextBox Text="{Binding NewServerCommand}" Watermark="Command (e.g. npx, uvx)"
+                            <TextBox Text="{Binding NewServerCommand}" Watermark="Command (e.g. npx)"
                                      FontSize="12" Padding="8,6" CornerRadius="6" />
                             <TextBox Text="{Binding NewServerArgs}" Watermark="Args (space-separated)"
                                      FontSize="12" Padding="8,6" CornerRadius="6" />
                         </StackPanel>
 
-                        <!-- HTTP fields -->
-                        <StackPanel Spacing="8" IsVisible="{Binding AddMode, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=http}">
+                        <StackPanel Spacing="6" IsVisible="{Binding AddMode, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=http}">
                             <TextBox Text="{Binding NewServerName}" Watermark="Server name"
                                      FontSize="12" Padding="8,6" CornerRadius="6" />
                             <TextBox Text="{Binding NewServerUrl}" Watermark="https://api.example.com/mcp"
@@ -87,11 +152,6 @@
                             <TextBox Text="{Binding NewServerBearer}"
                                      PasswordChar="•" Watermark="Bearer token (optional)"
                                      FontSize="12" Padding="8,6" CornerRadius="6" />
-                            <TextBox Text="{Binding NewServerHeadersJson}"
-                                     AcceptsReturn="True" MinHeight="60"
-                                     Watermark='Extra headers JSON (optional)'
-                                     FontFamily="Consolas,Menlo,monospace"
-                                     FontSize="11" Padding="8,6" CornerRadius="6" />
                         </StackPanel>
 
                         <Button Content="Add Server"
@@ -101,13 +161,14 @@
                                 Padding="8,6" CornerRadius="6"
                                 Background="{DynamicResource BrandPrimary}"
                                 Foreground="White" FontSize="12" />
-                        <TextBlock Text="{Binding StatusMessage}"
-                                   FontSize="11"
-                                   Foreground="{DynamicResource TextMuted}"
-                                   TextWrapping="Wrap"
-                                   IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     </StackPanel>
                 </Border>
+
+                <!-- Search -->
+                <TextBox DockPanel.Dock="Top"
+                         Text="{Binding SearchText}"
+                         Watermark="Search servers..."
+                         CornerRadius="8" Padding="12,8" Margin="0,0,0,8" />
 
                 <!-- Server list -->
                 <ScrollViewer>
@@ -128,7 +189,6 @@
                                             BorderThickness="1">
                                         <StackPanel Spacing="4">
                                             <DockPanel>
-                                                <!-- Connection status -->
                                                 <Border DockPanel.Dock="Right"
                                                         Padding="6,2" CornerRadius="4"
                                                         MinWidth="80"
@@ -148,12 +208,6 @@
                                                            FontFamily="Consolas,Menlo,monospace"
                                                            Foreground="{DynamicResource BrandPrimary}" />
                                             </DockPanel>
-                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}"
-                                                       FontFamily="Consolas,Menlo,monospace">
-                                                <Run Text="{Binding Command}" />
-                                                <Run Text=" " />
-                                                <Run Text="{Binding ArgsSummary}" />
-                                            </TextBlock>
                                             <StackPanel Orientation="Horizontal" Spacing="10">
                                                 <TextBlock FontSize="10" Foreground="{DynamicResource TextMuted}">
                                                     <Run Text="{Binding ToolCount}" />
@@ -173,25 +227,127 @@
                 </ScrollViewer>
             </DockPanel>
 
-            <!-- Detail pane -->
+            <!-- ── Detail pane ─────────────────────────────────────────────── -->
             <Grid Grid.Column="2">
-                <Border CornerRadius="10"
+
+                <!-- Status message -->
+                <Border VerticalAlignment="Top" ZIndex="1"
+                        IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                        Padding="12,8" CornerRadius="6" Margin="0,0,0,8"
                         Background="{DynamicResource SurfaceCard}"
-                        BorderBrush="{DynamicResource SurfaceBorder}"
-                        BorderThickness="1"
-                        Padding="20,16"
-                        IsVisible="{Binding !SelectedServer}">
-                    <TextBlock Text="Select a server to view its details"
-                               FontSize="14"
-                               Foreground="{DynamicResource TextMuted}"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="12"
+                               Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" />
                 </Border>
+
+                <!-- Gallery: empty state -->
                 <Border CornerRadius="10"
                         Background="{DynamicResource SurfaceCard}"
                         BorderBrush="{DynamicResource SurfaceBorder}"
-                        BorderThickness="1"
-                        Padding="20,16"
+                        BorderThickness="1" Padding="20,16"
+                        IsVisible="{Binding SelectedCatalogEntry, Converter={x:Static ObjectConverters.IsNull}}">
+                    <TextBlock IsVisible="{Binding ActiveTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=gallery}"
+                               Text="Select an integration from the gallery to connect it."
+                               FontSize="14" Foreground="{DynamicResource TextMuted}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+
+                <!-- Gallery: quick-connect panel -->
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1" Padding="20,16"
+                        IsVisible="{Binding SelectedCatalogEntry, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <ScrollViewer>
+                        <StackPanel Spacing="16" MaxWidth="520">
+                            <!-- Entry header -->
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{Binding SelectedCatalogEntry.Icon}"
+                                           FontSize="32" />
+                                <TextBlock Text="{Binding SelectedCatalogEntry.Name}"
+                                           FontSize="20" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}" />
+                                <TextBlock Text="{Binding SelectedCatalogEntry.Category}"
+                                           FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                            </StackPanel>
+
+                            <TextBlock Text="{Binding SelectedCatalogEntry.Description}"
+                                       FontSize="13" Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap" />
+
+                            <!-- LLM provider: settings callout -->
+                            <Border IsVisible="{Binding SelectedCatalogEntry.IsLlmProvider}"
+                                    Padding="14,12" CornerRadius="8"
+                                    Background="{DynamicResource SurfaceBackground}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1">
+                                <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                           TextWrapping="Wrap">
+                                    <Run Text="LLM Provider — configure API keys and model selection in" />
+                                    <Run Text=" Settings → Models." FontWeight="SemiBold"
+                                         Foreground="{DynamicResource BrandPrimary}" />
+                                </TextBlock>
+                            </Border>
+
+                            <!-- MCP: connect form -->
+                            <StackPanel IsVisible="{Binding !SelectedCatalogEntry.IsLlmProvider}" Spacing="12">
+                                <!-- Already connected badge -->
+                                <Border IsVisible="{Binding SelectedCatalogEntry.IsAlreadyConnected}"
+                                        Padding="10,6" CornerRadius="6"
+                                        Background="{DynamicResource StatusOk}">
+                                    <TextBlock Text="Already connected" FontSize="12" Foreground="White" />
+                                </Border>
+
+                                <!-- API key field -->
+                                <StackPanel Spacing="4"
+                                            IsVisible="{Binding SelectedCatalogEntry.NeedsApiKey}">
+                                    <TextBlock Text="{Binding SelectedCatalogEntry.ApiKeyLabel}"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                    <TextBox Text="{Binding GalleryApiKey}"
+                                             PasswordChar="•"
+                                             Watermark="Paste your key here"
+                                             CornerRadius="6" Padding="10,7" />
+                                </StackPanel>
+
+                                <!-- Endpoint field -->
+                                <StackPanel Spacing="4"
+                                            IsVisible="{Binding SelectedCatalogEntry.NeedsEndpoint}">
+                                    <TextBlock Text="{Binding SelectedCatalogEntry.EndpointLabel}"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                    <TextBox Text="{Binding GalleryUrl}"
+                                             CornerRadius="6" Padding="10,7" />
+                                </StackPanel>
+
+                                <Button Content="Connect"
+                                        Command="{Binding ConnectFromGalleryCommand}"
+                                        IsEnabled="{Binding !IsGalleryConnecting}"
+                                        Padding="18,8" CornerRadius="6"
+                                        Background="{DynamicResource BrandPrimary}"
+                                        Foreground="White" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- Connected: empty state -->
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1" Padding="20,16"
+                        IsVisible="{Binding !SelectedServer}">
+                    <TextBlock IsVisible="{Binding ActiveTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=connected}"
+                               Text="Select a server to view its details"
+                               FontSize="14" Foreground="{DynamicResource TextMuted}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+
+                <!-- Connected: server detail -->
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1" Padding="20,16"
                         IsVisible="{Binding !!SelectedServer}">
                     <DockPanel>
                         <Button DockPanel.Dock="Top"
@@ -211,6 +367,7 @@
                         </ContentControl>
                     </DockPanel>
                 </Border>
+
             </Grid>
         </Grid>
     </DockPanel>

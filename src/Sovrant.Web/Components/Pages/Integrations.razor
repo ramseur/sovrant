@@ -8,48 +8,86 @@
         <div class="master-header">
             <h1>Integrations</h1>
             <div class="master-header-right">
-                <span class="item-count">@_filtered.Count</span>
-                <button class="btn-sm btn-outline" title="Refresh"
-                        @onclick="LoadServersAsync">&#x21BB;</button>
+                @if (_activeTab == "connected")
+                {
+                    <span class="item-count">@_filtered.Count</span>
+                    <button class="btn-sm btn-outline" title="Refresh"
+                            @onclick="LoadServersAsync">&#x21BB;</button>
+                }
             </div>
         </div>
 
-        <div class="master-search">
-            <input type="text" placeholder="Search servers..."
-                   @bind="_search" @bind:event="oninput" @bind:after="ApplyFilter" />
+        <!-- Tab bar -->
+        <div style="display:flex;gap:4px;padding:0 12px 8px;">
+            <button class="btn-sm @(_activeTab == "gallery" ? "btn-primary" : "btn-outline")"
+                    @onclick='() => SwitchTab("gallery")'>Gallery</button>
+            <button class="btn-sm @(_activeTab == "connected" ? "btn-primary" : "btn-outline")"
+                    @onclick='() => SwitchTab("connected")'>Connected (@_servers.Count)</button>
         </div>
 
-        <div class="master-list">
-            @if (_filtered.Count == 0)
-            {
-                <p class="text-secondary" style="padding:12px;">
-                    @(string.IsNullOrWhiteSpace(_search) ? "No MCP servers configured." : "No matches.")
-                </p>
-            }
-            else
-            {
-                @foreach (var s in _filtered)
+        @if (_activeTab == "gallery")
+        {
+            <!-- Gallery: catalog entries grouped by tier -->
+            <div class="master-list" style="padding:0 4px;">
+                @foreach (var group in IntegrationCatalog.All.GroupBy(e => e.Category))
                 {
-                    <button class="master-item @(ReferenceEquals(s, _selected) && !_showAdd ? "active" : "")"
-                            @onclick="() => Select(s)">
-                        <div class="item-title">
-                            <span class="outcome-badge @(s.IsConnected ? "success" : "unknown")">
-                                @(s.IsConnected ? "OK" : "—")
-                            </span>
-                            <span>@s.Name</span>
-                        </div>
-                        <div class="item-subtitle">
-                            @s.Transport@(s.ToolCount > 0 ? $" • {s.ToolCount} tool{(s.ToolCount == 1 ? "" : "s")}" : "")
-                        </div>
-                    </button>
+                    <div style="padding:6px 8px 2px;font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:.05em;">
+                        @group.Key.ToUpperInvariant()
+                    </div>
+                    @foreach (var entry in group)
+                    {
+                        <button class="master-item @(ReferenceEquals(entry, _catalogEntry) ? "active" : "")"
+                                @onclick="() => SelectCatalogEntry(entry)">
+                            <div class="item-title">
+                                <span style="font-size:16px;line-height:1;margin-right:6px;">@entry.Icon</span>
+                                <span>@entry.Name</span>
+                            </div>
+                            <div class="item-subtitle" style="padding-left:26px;">@entry.Description</div>
+                        </button>
+                    }
                 }
-            }
-        </div>
+            </div>
+        }
+        else
+        {
+            <!-- Connected: existing server list -->
+            <div class="master-search">
+                <input type="text" placeholder="Search servers..."
+                       @bind="_search" @bind:event="oninput" @bind:after="ApplyFilter" />
+            </div>
 
-        <div style="padding:12px;border-top:1px solid var(--border);">
-            <button class="btn-primary" style="width:100%;"
-                    @onclick="ToggleAdd">@(_showAdd ? "Cancel" : "+ Add Server")</button>
-        </div>
+            <div class="master-list">
+                @if (_filtered.Count == 0)
+                {
+                    <p class="text-secondary" style="padding:12px;">
+                        @(string.IsNullOrWhiteSpace(_search) ? "No MCP servers configured." : "No matches.")
+                    </p>
+                }
+                else
+                {
+                    @foreach (var s in _filtered)
+                    {
+                        <button class="master-item @(ReferenceEquals(s, _selected) && !_showAdd ? "active" : "")"
+                                @onclick="() => Select(s)">
+                            <div class="item-title">
+                                <span class="outcome-badge @(s.IsConnected ? "success" : "unknown")">
+                                    @(s.IsConnected ? "OK" : "—")
+                                </span>
+                                <span>@s.Name</span>
+                            </div>
+                            <div class="item-subtitle">
+                                @s.Transport@(s.ToolCount > 0 ? $" • {s.ToolCount} tool{(s.ToolCount == 1 ? "" : "s")}" : "")
+                            </div>
+                        </button>
+                    }
+                }
+            </div>
+
+            <div style="padding:12px;border-top:1px solid var(--border);">
+                <button class="btn-primary" style="width:100%;"
+                        @onclick="ToggleAdd">@(_showAdd ? "Cancel" : "+ Add Server")</button>
+            </div>
+        }
     </div>
 
     <div class="detail-panel">
@@ -58,8 +96,64 @@
             <div class="status-message" style="margin:16px 24px 0;">@_status</div>
         }
 
-        @if (_showAdd)
+        @if (_activeTab == "gallery" && _catalogEntry is not null)
         {
+            <!-- Gallery quick-connect panel -->
+            <div class="detail-content">
+                <div class="orch-detail-header">
+                    <div>
+                        <span style="font-size:36px;line-height:1;display:block;margin-bottom:8px;">@_catalogEntry.Icon</span>
+                        <h2>@_catalogEntry.Name</h2>
+                        <p class="text-secondary" style="margin:4px 0 0;">@_catalogEntry.Category</p>
+                    </div>
+                </div>
+
+                <p style="margin:12px 0 20px;color:var(--text-secondary);">@_catalogEntry.Description</p>
+
+                @if (_catalogEntry.Kind == IntegrationKind.LlmProvider)
+                {
+                    <div class="callout-card">
+                        <strong>LLM Provider</strong> — Configure API keys and model selection in
+                        <a href="/settings" style="color:var(--brand);">Settings → Models</a>.
+                    </div>
+                }
+                else
+                {
+                    @if (_catalogEntry.NeedsApiKey)
+                    {
+                        <div class="form-field">
+                            <label>@_catalogEntry.ApiKeyLabel</label>
+                            <input type="password" @bind="_galleryApiKey"
+                                   placeholder="Paste your key here" />
+                        </div>
+                    }
+                    @if (_catalogEntry.NeedsEndpoint)
+                    {
+                        <div class="form-field">
+                            <label>@_catalogEntry.EndpointLabel</label>
+                            <input type="text" @bind="_galleryUrl" placeholder="" />
+                        </div>
+                    }
+
+                    <button class="btn-primary" style="max-width:200px;"
+                            @onclick="ConnectFromGalleryAsync">Connect</button>
+
+                    @if (_isConnected(_catalogEntry.Id))
+                    {
+                        <span class="outcome-badge success" style="margin-left:12px;">Already connected</span>
+                    }
+                }
+            </div>
+        }
+        else if (_activeTab == "gallery")
+        {
+            <div class="detail-empty">
+                <span class="text-muted">Select an integration to connect it.</span>
+            </div>
+        }
+        else if (_showAdd)
+        {
+            <!-- Manual add form -->
             <div class="detail-content">
                 <h2>Add MCP Server</h2>
                 <p class="text-secondary" style="margin:4px 0 16px;">
@@ -81,7 +175,7 @@
                         <label>MCP Server JSON</label>
                         <textarea @bind="_jsonInput" rows="10" style="font-family:Consolas,monospace;width:100%;"
                                   placeholder='@_jsonPlaceholder'></textarea>
-                        <p class="text-muted text-sm">Paste the standard <code>mcpServers</code> block. Both stdio and HTTP formats are supported.</p>
+                        <p class="text-muted text-sm">Paste the standard <code>mcpServers</code> block.</p>
                     </div>
                     <button class="btn-primary" style="max-width:200px;" @onclick="AddFromJsonAsync">Add from JSON</button>
                 }
@@ -122,12 +216,6 @@
                     </div>
                     <button class="btn-primary" style="max-width:200px;" @onclick="AddHttpServerAsync">Add Server</button>
                 }
-
-                <div class="callout-card" style="margin-top:24px;">
-                    <strong>Need scheduled tasks or webhook-driven workflows?</strong>
-                    Connect an automation platform (n8n, Zapier, Make) as an MCP server —
-                    Sovrant treats those flows as native tools instead of shipping a built-in scheduler.
-                </div>
             </div>
         }
         else if (_selected is not null)
@@ -242,6 +330,7 @@
     [Inject] private McpClientRegistry McpRegistry { get; set; } = default!;
     [Inject] private McpToolRegistrar McpRegistrar { get; set; } = default!;
 
+    private string _activeTab = "gallery";
     private string _addMode = "json";
     private string _newName = string.Empty;
     private string _newCommand = string.Empty;
@@ -256,6 +345,11 @@
     private List<ServerView> _servers = [];
     private List<ServerView> _filtered = [];
     private ServerView? _selected;
+
+    // Gallery state
+    private CatalogEntry? _catalogEntry;
+    private string _galleryApiKey = string.Empty;
+    private string _galleryUrl = string.Empty;
 
     private const string _jsonPlaceholder = """
 {
@@ -273,13 +367,94 @@
 
     protected override async Task OnInitializedAsync() => await LoadServersAsync().ConfigureAwait(false);
 
+    private void SwitchTab(string tab)
+    {
+        _activeTab = tab;
+        _catalogEntry = null;
+        _selected = null;
+        _showAdd = false;
+        _status = string.Empty;
+    }
+
+    private void SelectCatalogEntry(CatalogEntry entry)
+    {
+        _catalogEntry = entry;
+        _galleryApiKey = string.Empty;
+        _galleryUrl = string.Empty;
+        _status = string.Empty;
+    }
+
+    private bool _isConnected(string entryId) =>
+        _servers.Any(s => s.Name == entryId && s.IsConnected);
+
+    private async Task ConnectFromGalleryAsync()
+    {
+        if (_catalogEntry is null || _catalogEntry.Kind == IntegrationKind.LlmProvider) return;
+
+        var entry = _catalogEntry;
+        if (entry.NeedsApiKey && string.IsNullOrWhiteSpace(_galleryApiKey))
+        {
+            _status = $"{entry.ApiKeyLabel} is required.";
+            return;
+        }
+        if (entry.NeedsEndpoint && string.IsNullOrWhiteSpace(_galleryUrl))
+        {
+            _status = $"{entry.EndpointLabel} is required.";
+            return;
+        }
+
+        try
+        {
+            var config = BuildConfig(entry, _galleryApiKey.Trim(), _galleryUrl.Trim());
+            await ServerStore.UpsertAsync(entry.Id, config).ConfigureAwait(false);
+            await ConnectAndRefreshAsync(entry.Id, config).ConfigureAwait(false);
+            _activeTab = "connected";
+            _selected = _servers.FirstOrDefault(s => s.Name == entry.Id);
+        }
+        catch (Exception ex)
+        {
+            _status = $"Failed: {ex.Message}";
+        }
+    }
+
+    private static McpServerConfig BuildConfig(CatalogEntry entry, string apiKey, string endpoint)
+    {
+        if (entry.Kind == IntegrationKind.McpStdio)
+        {
+            var env = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (!string.IsNullOrEmpty(entry.ApiKeyEnvVar) && !string.IsNullOrEmpty(apiKey))
+                env[entry.ApiKeyEnvVar] = apiKey;
+
+            var args = (entry.DefaultArgs ?? (IReadOnlyList<string>)[])
+                .Select(a => a
+                    .Replace("{ENDPOINT}", endpoint, StringComparison.Ordinal)
+                    .Replace("{API_KEY}", apiKey, StringComparison.Ordinal))
+                .ToArray();
+
+            return new McpServerConfig { Command = entry.DefaultCommand!, Args = args, Env = env };
+        }
+        else
+        {
+            var headers = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (!string.IsNullOrEmpty(entry.ApiKeyHeader) && !string.IsNullOrEmpty(apiKey))
+                headers[entry.ApiKeyHeader] = entry.ApiKeyHeader == "Authorization"
+                    ? $"Bearer {apiKey}"
+                    : apiKey;
+
+            var urlStr = !string.IsNullOrEmpty(entry.EndpointTemplate)
+                ? entry.EndpointTemplate.Replace("{API_KEY}", apiKey, StringComparison.Ordinal)
+                : endpoint;
+
+            Uri.TryCreate(urlStr, UriKind.Absolute, out var url);
+            return new McpServerConfig { Url = url, Headers = headers };
+        }
+    }
+
     private async Task LoadServersAsync()
     {
         var servers = new List<ServerView>();
         var stored = await ServerStore.GetAllAsync().ConfigureAwait(false);
 
-        // Use the registrar's tool→server map instead of calling ListToolsAsync
-        // again per server — a second HTTP MCP listing has been observed to hang.
         var toolsByServer = McpRegistry.ToolToServer
             .GroupBy(kv => kv.Value, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Select(kv => kv.Key).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList(), StringComparer.Ordinal);
@@ -315,7 +490,6 @@
             _filtered = _servers;
             return;
         }
-
         var s = _search.Trim();
         _filtered = _servers.Where(srv =>
             srv.Name.Contains(s, StringComparison.OrdinalIgnoreCase) ||
@@ -404,11 +578,7 @@
                 headers["Authorization"] = $"Bearer {_newBearer.Trim()}";
 
             var name = _newName.Trim();
-            var config = new McpServerConfig
-            {
-                Url = url,
-                Headers = headers,
-            };
+            var config = new McpServerConfig { Url = url, Headers = headers };
             await ServerStore.UpsertAsync(name, config).ConfigureAwait(false);
             ResetForm();
             await ConnectAndRefreshAsync(name, config).ConfigureAwait(false);
