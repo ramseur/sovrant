@@ -512,6 +512,24 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     background: rgba(255,255,255,0.15);
 }
 
+.model-tree-divider {
+    height: 1px;
+    background: var(--surface-border);
+    margin: 6px 8px;
+}
+.model-tree-unconfigured {
+    opacity: 0.6;
+}
+.model-tree-unconfigured:hover {
+    opacity: 1;
+    background: var(--surface-hover);
+}
+.model-tree-setup-label {
+    font-size: 10px;
+    color: var(--brand-primary);
+    white-space: nowrap;
+}
+
 /* ===== Status dots ===== */
 .status-dot {
     width: 8px;

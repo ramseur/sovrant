@@ -86,19 +86,43 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <StackPanel IsVisible="{Binding !HasProviderProfiles}" Spacing="6" Margin="8,8,8,4">
-                                    <TextBlock Text="No providers configured."
-                                               FontSize="11"
-                                               Foreground="{DynamicResource TextMuted}" />
-                                    <Button Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).AddProviderCommand}"
-                                            HorizontalAlignment="Stretch"
-                                            HorizontalContentAlignment="Center"
-                                            Padding="8,6" CornerRadius="5"
-                                            Background="{DynamicResource SurfaceBackground}"
-                                            Foreground="{DynamicResource TextPrimary}"
-                                            FontSize="12" FontWeight="Medium">
-                                        <TextBlock Text="+ Add a provider" />
-                                    </Button>
+                                    <!-- Available to set up (unconfigured known providers) -->
+                                <StackPanel IsVisible="{Binding HasUnconfiguredProviders}">
+                                    <Border Height="1" Background="{DynamicResource SurfaceBorder}"
+                                            Margin="8,6,8,0"
+                                            IsVisible="{Binding HasProviderProfiles}" />
+                                    <TextBlock Text="{Binding UnconfiguredSectionLabel}"
+                                               FontSize="9" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextMuted}"
+                                               Margin="8,6,0,2" />
+                                    <ItemsControl ItemsSource="{Binding UnconfiguredProviders}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:UnconfiguredProviderItem">
+                                                <Button Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).AddProviderCommand}"
+                                                        HorizontalAlignment="Stretch"
+                                                        HorizontalContentAlignment="Left"
+                                                        Padding="8,4" Margin="0,1" CornerRadius="5"
+                                                        Background="Transparent"
+                                                        Opacity="0.65"
+                                                        Foreground="{DynamicResource TextPrimary}">
+                                                    <DockPanel>
+                                                        <TextBlock DockPanel.Dock="Right"
+                                                                   Text="Set up →"
+                                                                   FontSize="10"
+                                                                   Foreground="{DynamicResource BrandPrimary}"
+                                                                   VerticalAlignment="Center" />
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <TextBlock Text="{Binding Icon}" FontSize="12"
+                                                                       VerticalAlignment="Center" />
+                                                            <TextBlock Text="{Binding Name}" FontSize="12"
+                                                                       FontWeight="Normal"
+                                                                       VerticalAlignment="Center" />
+                                                        </StackPanel>
+                                                    </DockPanel>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                 </StackPanel>
                             </StackPanel>
                             <StackPanel IsVisible="{Binding !IsProviderStep}">

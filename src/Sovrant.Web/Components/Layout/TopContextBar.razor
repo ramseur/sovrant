@@ -9,6 +9,7 @@
 @using Sovrant.Runtime.Projects
 @using Sovrant.Web.Adapters
 @using Sovrant.Web.Services
+@inject NavigationManager NavManager
 @implements IDisposable
 
 <div class="top-context-bar">
@@ -27,27 +28,42 @@
         @if (_treeOpen)
         {
             <div class="model-tree-dropdown" style="@_dropdownStyle" @onclick:stopPropagation="true">
-                @if (_providerProfiles.Count == 0)
+                @if (_selectedTreeGroup is null)
                 {
-                    <div class="model-tree-empty">No providers configured. <a href="/settings" @onclick='() => { _treeOpen = false; }'>Add one in Settings</a></div>
-                }
-                else if (_selectedTreeGroup is null)
-                {
-                    <div class="model-tree-step-label">Select provider</div>
-                    @foreach (var group in _treeGroups)
+                    @if (_treeGroups.Count > 0)
                     {
-                        var isCurrent = group.Provider.Equals(_currentProvider, StringComparison.OrdinalIgnoreCase);
-                        <button class="model-tree-provider-item @(isCurrent ? "active" : "")"
-                                @onclick="() => DrillIntoProvider(group)">
-                            <span class="model-tree-provider-name">@group.Provider</span>
-                            <div class="model-tree-provider-badges">
-                                @if (group.IsWorkspaceProfile)
-                                {
-                                    <span class="model-workspace-badge">Workspace</span>
-                                }
-                                <span class="model-tree-group-badge">@(group.Models.Count > 0 ? group.Models.Count.ToString() : "...")</span>
-                            </div>
-                        </button>
+                        <div class="model-tree-step-label">Select provider</div>
+                        @foreach (var group in _treeGroups)
+                        {
+                            var isCurrent = group.Provider.Equals(_currentProvider, StringComparison.OrdinalIgnoreCase);
+                            <button class="model-tree-provider-item @(isCurrent ? "active" : "")"
+                                    @onclick="() => DrillIntoProvider(group)">
+                                <span class="model-tree-provider-name">@group.Provider</span>
+                                <div class="model-tree-provider-badges">
+                                    @if (group.IsWorkspaceProfile)
+                                    {
+                                        <span class="model-workspace-badge">Workspace</span>
+                                    }
+                                    <span class="model-tree-group-badge">@(group.Models.Count > 0 ? group.Models.Count.ToString() : "...")</span>
+                                </div>
+                            </button>
+                        }
+                    }
+                    @if (_unconfiguredProviders.Count > 0)
+                    {
+                        @if (_treeGroups.Count > 0)
+                        {
+                            <div class="model-tree-divider"></div>
+                        }
+                        <div class="model-tree-step-label">@(_treeGroups.Count == 0 ? "Get started" : "Available to set up")</div>
+                        @foreach (var p in _unconfiguredProviders)
+                        {
+                            <button class="model-tree-provider-item model-tree-unconfigured"
+                                    @onclick='() => { _treeOpen = false; NavManager.NavigateTo("/settings"); }'>
+                                <span class="model-tree-provider-name">@p.Icon @p.Name</span>
+                                <span class="model-tree-setup-label">Set up →</span>
+                            </button>
+                        }
                     }
                 }
                 else
@@ -145,6 +161,22 @@
     }
 
     private List<TreeGroup> _treeGroups = [];
+    private List<(string Name, string Icon)> _unconfiguredProviders = [];
+
+    private static readonly (string Name, string Icon)[] _knownProviders =
+    [
+        ("OpenAI",       "🤖"),
+        ("Anthropic",    "🧠"),
+        ("OpenRouter",   "🔀"),
+        ("DeepSeek",     "🔵"),
+        ("Groq",         "⚡"),
+        ("Mistral",      "🌀"),
+        ("Google",       "🔷"),
+        ("Together AI",  "🤝"),
+        ("Ollama",       "🦙"),
+        ("LM Studio",    "💻"),
+        ("Azure OpenAI", "☁️"),
+    ];
 
     private static readonly Dictionary<string, string[]> StaticProviderModels = new(StringComparer.Ordinal)
     {
@@ -284,6 +316,8 @@
             }
         }
         _treeGroups = groups.Values.ToList();
+        var configuredSet = new HashSet<string>(groups.Keys, StringComparer.OrdinalIgnoreCase);
+        _unconfiguredProviders = _knownProviders.Where(p => !configuredSet.Contains(p.Name)).ToList();
     }
 
     private async Task ToggleTreeDropdown()

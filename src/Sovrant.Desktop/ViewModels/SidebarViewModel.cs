@@ -67,6 +67,9 @@ public partial class SidebarViewModel : ViewModelBase
 
     public ObservableCollection<ProviderProfileEntry> ProviderProfiles { get; } = [];
     public ObservableCollection<ProviderTreeGroup> TreeGroups { get; } = [];
+    public ObservableCollection<UnconfiguredProviderItem> UnconfiguredProviders { get; } = [];
+    public bool HasUnconfiguredProviders => UnconfiguredProviders.Count > 0;
+    public string UnconfiguredSectionLabel => HasProviderProfiles ? "AVAILABLE TO SET UP" : "GET STARTED";
     public ObservableCollection<SessionListItem> RecentSessions { get; } = [];
 
     private ActiveSessionsViewModel? _activeSessions;
@@ -92,6 +95,21 @@ public partial class SidebarViewModel : ViewModelBase
         ["Google"] = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"],
         ["Azure OpenAI"] = ["gpt-4o", "gpt-4o-mini", "gpt-4.1"],
     };
+
+    private static readonly UnconfiguredProviderItem[] KnownProviders =
+    [
+        new("OpenAI",       "🤖"),
+        new("Anthropic",    "🧠"),
+        new("OpenRouter",   "🔀"),
+        new("DeepSeek",     "🔵"),
+        new("Groq",         "⚡"),
+        new("Mistral",      "🌀"),
+        new("Google",       "🔷"),
+        new("Together AI",  "🤝"),
+        new("Ollama",       "🦙"),
+        new("LM Studio",    "💻"),
+        new("Azure OpenAI", "☁️"),
+    ];
 
     public event EventHandler<string>? NavigationRequested;
     public event EventHandler<string>? SessionResumeRequested;
@@ -137,9 +155,12 @@ public partial class SidebarViewModel : ViewModelBase
                 foreach (var s in RecentSessions) s.RefreshIsActive(_activeSessions);
             };
         }
-        // Re-fire PropertyChanged for HasProviderProfiles whenever the collection
-        // changes so the dropdown's empty-state toggles correctly.
-        ProviderProfiles.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasProviderProfiles));
+        ProviderProfiles.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasProviderProfiles));
+            OnPropertyChanged(nameof(UnconfiguredSectionLabel));
+        };
+        UnconfiguredProviders.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasUnconfiguredProviders));
         LoadFromConfig(config);
         _ = LoadProviderProfilesAsync().ContinueWith(
             t => System.Diagnostics.Debug.WriteLine($"[SidebarViewModel] LoadProviderProfilesAsync failed: {t.Exception}"),
@@ -486,6 +507,12 @@ public partial class SidebarViewModel : ViewModelBase
             g.ModelCount = g.Models.Count;
             TreeGroups.Add(g);
         }
+
+        UnconfiguredProviders.Clear();
+        foreach (var known in KnownProviders)
+            if (!groups.ContainsKey(known.Name))
+                UnconfiguredProviders.Add(known);
+        OnPropertyChanged(nameof(HasUnconfiguredProviders));
     }
 
     private async Task PersistActiveProfileAsync(ProviderProfileEntry profile)
@@ -700,6 +727,8 @@ public sealed class ModelOption(string model, ProviderTreeGroup group, bool isFr
 
     public override string ToString() => DisplayName;
 }
+
+public sealed record UnconfiguredProviderItem(string Name, string Icon);
 
 public partial class SessionListItem : ViewModelBase
 {
