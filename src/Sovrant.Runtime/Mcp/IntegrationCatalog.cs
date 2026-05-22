@@ -51,7 +51,7 @@ public static class IntegrationCatalog
             "Trigger Make (Integromat) scenarios as agent tools via MCP.",
             IntegrationKind.McpHttp, IntegrationTier.Automation,
             EndpointLabel: "Make MCP endpoint",
-            ApiKeyLabel: "API Key (optional)", ApiKeyHeader: "Authorization"),
+            ApiKeyLabel: "API Key", ApiKeyHeader: "Authorization"),
 
         // Platform (stdio MCP)
         new("github", "GitHub", "Platform", "🐙",
@@ -66,11 +66,29 @@ public static class IntegrationCatalog
             EndpointLabel: "Directory path (e.g. /home/user/projects)",
             DefaultCommand: "npx", DefaultArgs: ["-y", "@modelcontextprotocol/server-filesystem", "{ENDPOINT}"]),
 
-        new("brave-search", "Brave Search", "Platform", "🔍",
-            "Web and local search powered by the Brave Search API.",
+        new("slack", "Slack", "Platform", "💬",
+            "Read channels, send messages, and search Slack from agents.",
             IntegrationKind.McpStdio, IntegrationTier.Platform,
-            ApiKeyLabel: "Brave API Key", ApiKeyEnvVar: "BRAVE_API_KEY",
-            DefaultCommand: "npx", DefaultArgs: ["-y", "@modelcontextprotocol/server-brave-search"]),
+            ApiKeyLabel: "Bot Token", ApiKeyEnvVar: "SLACK_BOT_TOKEN",
+            DefaultCommand: "npx", DefaultArgs: ["-y", "@modelcontextprotocol/server-slack"]),
+
+        new("notion", "Notion", "Platform", "📝",
+            "Search, read, and update Notion pages and databases from agents.",
+            IntegrationKind.McpStdio, IntegrationTier.Platform,
+            ApiKeyLabel: "Integration Token", ApiKeyEnvVar: "NOTION_API_KEY",
+            DefaultCommand: "npx", DefaultArgs: ["-y", "@notionhq/notion-mcp-server"]),
+
+        new("linear", "Linear", "Platform", "📐",
+            "Create, update, and query Linear issues and projects from agents.",
+            IntegrationKind.McpStdio, IntegrationTier.Platform,
+            ApiKeyLabel: "API Key", ApiKeyEnvVar: "LINEAR_API_KEY",
+            DefaultCommand: "npx", DefaultArgs: ["-y", "@linear/mcp-server"]),
+
+        new("stripe", "Stripe", "Platform", "💳",
+            "Query customers, payments, and subscriptions via the Stripe MCP server.",
+            IntegrationKind.McpStdio, IntegrationTier.Platform,
+            ApiKeyLabel: "Secret Key", ApiKeyEnvVar: "STRIPE_SECRET_KEY",
+            DefaultCommand: "npx", DefaultArgs: ["-y", "@stripe/mcp", "--tools=all"]),
 
         new("postgres", "PostgreSQL", "Platform", "🐘",
             "Query and manage a PostgreSQL database directly from agents.",
@@ -78,25 +96,36 @@ public static class IntegrationCatalog
             EndpointLabel: "Connection string (postgresql://user:pass@host/db)",
             DefaultCommand: "npx", DefaultArgs: ["-y", "@modelcontextprotocol/server-postgres", "{ENDPOINT}"]),
 
-        // LLM Providers (navigate to Settings)
-        new("openai", "OpenAI", "LLM Provider", "🤖",
-            "GPT-4o, o3, and other OpenAI models.",
-            IntegrationKind.LlmProvider, IntegrationTier.LlmProvider,
-            SettingsSection: "Models"),
+        new("supabase", "Supabase", "Platform", "⚡",
+            "Query, manage, and deploy Supabase projects directly from agents.",
+            IntegrationKind.McpStdio, IntegrationTier.Platform,
+            ApiKeyLabel: "Access Token",
+            DefaultCommand: "npx", DefaultArgs: ["-y", "@supabase/mcp-server-supabase", "--access-token", "{API_KEY}"]),
 
-        new("anthropic", "Anthropic", "LLM Provider", "🧠",
-            "Claude Opus, Sonnet, and Haiku.",
-            IntegrationKind.LlmProvider, IntegrationTier.LlmProvider,
-            SettingsSection: "Models"),
+        new("filesystem", "Filesystem", "Platform", "📁",
+            "Give agents read/write access to a local directory via MCP.",
+            IntegrationKind.McpStdio, IntegrationTier.Platform,
+            EndpointLabel: "Directory path (e.g. /home/user/projects)",
+            DefaultCommand: "npx", DefaultArgs: ["-y", "@modelcontextprotocol/server-filesystem", "{ENDPOINT}"]),
 
-        new("openrouter", "OpenRouter", "LLM Provider", "🔀",
-            "Route to 100+ models from one API key.",
-            IntegrationKind.LlmProvider, IntegrationTier.LlmProvider,
-            SettingsSection: "Models"),
+        // Search
+        new("brave-search", "Brave Search", "Search", "🔍",
+            "Web and local search powered by the Brave Search API.",
+            IntegrationKind.McpStdio, IntegrationTier.Platform,
+            ApiKeyLabel: "API Key", ApiKeyEnvVar: "BRAVE_API_KEY",
+            DefaultCommand: "npx", DefaultArgs: ["-y", "@modelcontextprotocol/server-brave-search"]),
 
-        new("ollama", "Ollama", "LLM Provider", "🦙",
-            "Run local models (Llama, Mistral, Gemma…) via Ollama.",
-            IntegrationKind.LlmProvider, IntegrationTier.LlmProvider,
-            SettingsSection: "Models"),
+        new("exa", "Exa", "Search", "🔎",
+            "AI-powered web search and content retrieval for agent research tasks.",
+            IntegrationKind.McpStdio, IntegrationTier.Platform,
+            ApiKeyLabel: "API Key", ApiKeyEnvVar: "EXA_API_KEY",
+            DefaultCommand: "npx", DefaultArgs: ["-y", "exa-mcp-server"]),
+
+        new("tavily", "Tavily", "Search", "🌐",
+            "Real-time web search optimised for AI agents and RAG pipelines.",
+            IntegrationKind.McpStdio, IntegrationTier.Platform,
+            ApiKeyLabel: "API Key", ApiKeyEnvVar: "TAVILY_API_KEY",
+            DefaultCommand: "npx", DefaultArgs: ["-y", "tavily-mcp"]),
+
     ];
 }

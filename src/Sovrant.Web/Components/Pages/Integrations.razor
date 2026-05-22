@@ -67,7 +67,7 @@
                 {
                     @foreach (var s in _filtered)
                     {
-                        <button class="master-item @(ReferenceEquals(s, _selected) && !_showAdd ? "active" : "")"
+                        <button class="master-item @(ReferenceEquals(s, _selected) ? "active" : "")"
                                 @onclick="() => Select(s)">
                             <div class="item-title">
                                 <span class="outcome-badge @(s.IsConnected ? "success" : "unknown")">
@@ -83,10 +83,6 @@
                 }
             </div>
 
-            <div style="padding:12px;border-top:1px solid var(--border);">
-                <button class="btn-primary" style="width:100%;"
-                        @onclick="ToggleAdd">@(_showAdd ? "Cancel" : "+ Add Server")</button>
-            </div>
         }
     </div>
 
@@ -149,73 +145,6 @@
         {
             <div class="detail-empty">
                 <span class="text-muted">Select an integration to connect it.</span>
-            </div>
-        }
-        else if (_showAdd)
-        {
-            <!-- Manual add form -->
-            <div class="detail-content">
-                <h2>Add MCP Server</h2>
-                <p class="text-secondary" style="margin:4px 0 16px;">
-                    Connect an MCP server (stdio command or HTTP endpoint) so its tools become available to agents.
-                </p>
-
-                <div class="form-field">
-                    <label>Add via</label>
-                    <div style="display:flex;gap:16px;">
-                        <label><input type="radio" name="addmode" checked=@(_addMode == "json") @onchange="@(() => _addMode = "json")" /> Paste JSON</label>
-                        <label><input type="radio" name="addmode" checked=@(_addMode == "stdio") @onchange="@(() => _addMode = "stdio")" /> stdio (command)</label>
-                        <label><input type="radio" name="addmode" checked=@(_addMode == "http") @onchange="@(() => _addMode = "http")" /> HTTP (URL + headers)</label>
-                    </div>
-                </div>
-
-                @if (_addMode == "json")
-                {
-                    <div class="form-field">
-                        <label>MCP Server JSON</label>
-                        <textarea @bind="_jsonInput" rows="10" style="font-family:Consolas,monospace;width:100%;"
-                                  placeholder='@_jsonPlaceholder'></textarea>
-                        <p class="text-muted text-sm">Paste the standard <code>mcpServers</code> block.</p>
-                    </div>
-                    <button class="btn-primary" style="max-width:200px;" @onclick="AddFromJsonAsync">Add from JSON</button>
-                }
-                else if (_addMode == "stdio")
-                {
-                    <div class="form-field">
-                        <label>Server Name</label>
-                        <input type="text" @bind="_newName" placeholder="e.g. filesystem" />
-                    </div>
-                    <div class="form-field">
-                        <label>Command</label>
-                        <input type="text" @bind="_newCommand" placeholder="e.g. npx" />
-                    </div>
-                    <div class="form-field">
-                        <label>Arguments (space-separated)</label>
-                        <input type="text" @bind="_newArgs" placeholder="e.g. -y @@modelcontextprotocol/server-filesystem /tmp" />
-                    </div>
-                    <button class="btn-primary" style="max-width:200px;" @onclick="AddStdioServerAsync">Add Server</button>
-                }
-                else
-                {
-                    <div class="form-field">
-                        <label>Server Name</label>
-                        <input type="text" @bind="_newName" placeholder="e.g. pixellab" />
-                    </div>
-                    <div class="form-field">
-                        <label>URL</label>
-                        <input type="text" @bind="_newUrl" placeholder="https://api.example.com/mcp" />
-                    </div>
-                    <div class="form-field">
-                        <label>Bearer Token (optional)</label>
-                        <input type="password" @bind="_newBearer" placeholder="Sets Authorization: Bearer …" />
-                    </div>
-                    <div class="form-field">
-                        <label>Extra Headers (JSON, optional)</label>
-                        <textarea @bind="_newHeadersJson" rows="3" style="font-family:Consolas,monospace;width:100%;"
-                                  placeholder='{"X-Workspace-Id": "abc"}'></textarea>
-                    </div>
-                    <button class="btn-primary" style="max-width:200px;" @onclick="AddHttpServerAsync">Add Server</button>
-                }
             </div>
         }
         else if (_selected is not null)
@@ -318,8 +247,67 @@
         }
         else
         {
-            <div class="detail-empty">
-                <span class="text-muted">Select a server to view details, or add a new one.</span>
+            <!-- Add Server form (Connected tab, nothing selected) -->
+            <div class="detail-content">
+                <div class="orch-detail-header">
+                    <div><h2>Add MCP Server</h2></div>
+                </div>
+
+                <div style="display:flex;gap:4px;margin-bottom:20px;">
+                    <button class="btn-sm @(_addMode == "json"   ? "btn-primary" : "btn-outline")"
+                            @onclick='() => _addMode = "json"'>JSON</button>
+                    <button class="btn-sm @(_addMode == "stdio"  ? "btn-primary" : "btn-outline")"
+                            @onclick='() => _addMode = "stdio"'>stdio</button>
+                    <button class="btn-sm @(_addMode == "http"   ? "btn-primary" : "btn-outline")"
+                            @onclick='() => _addMode = "http"'>HTTP</button>
+                </div>
+
+                @if (_addMode == "json")
+                {
+                    <div class="form-field">
+                        <label>Claude/Cursor JSON config</label>
+                        <textarea rows="10" @bind="_jsonInput" placeholder="@_jsonPlaceholder"
+                                  style="font-family:Consolas,monospace;font-size:12px;width:100%;resize:vertical;"></textarea>
+                    </div>
+                    <button class="btn-primary" @onclick="AddFromJsonAsync">Import</button>
+                }
+                else if (_addMode == "stdio")
+                {
+                    <div class="form-field">
+                        <label>Name</label>
+                        <input type="text" @bind="_newName" placeholder="my-server" />
+                    </div>
+                    <div class="form-field">
+                        <label>Command</label>
+                        <input type="text" @bind="_newCommand" placeholder="npx" />
+                    </div>
+                    <div class="form-field">
+                        <label>Arguments (space-separated)</label>
+                        <input type="text" @bind="_newArgs" placeholder="-y @@modelcontextprotocol/server-filesystem /tmp" />
+                    </div>
+                    <button class="btn-primary" @onclick="AddStdioServerAsync">Add</button>
+                }
+                else
+                {
+                    <div class="form-field">
+                        <label>Name</label>
+                        <input type="text" @bind="_newName" placeholder="my-server" />
+                    </div>
+                    <div class="form-field">
+                        <label>URL</label>
+                        <input type="text" @bind="_newUrl" placeholder="https://mcp.example.com/sse" />
+                    </div>
+                    <div class="form-field">
+                        <label>Bearer Token (optional)</label>
+                        <input type="password" @bind="_newBearer" placeholder="sk-…" />
+                    </div>
+                    <div class="form-field">
+                        <label>Extra Headers JSON (optional)</label>
+                        <input type="text" @bind="_newHeadersJson"
+                               placeholder="{&quot;X-My-Header&quot;: &quot;value&quot;}" />
+                    </div>
+                    <button class="btn-primary" @onclick="AddHttpServerAsync">Add</button>
+                }
             </div>
         }
     </div>
@@ -341,7 +329,6 @@
     private string _jsonInput = string.Empty;
     private string _status = string.Empty;
     private string _search = string.Empty;
-    private bool _showAdd;
     private List<ServerView> _servers = [];
     private List<ServerView> _filtered = [];
     private ServerView? _selected;
@@ -372,7 +359,6 @@
         _activeTab = tab;
         _catalogEntry = null;
         _selected = null;
-        _showAdd = false;
         _status = string.Empty;
     }
 
@@ -499,14 +485,7 @@
 
     private void Select(ServerView item)
     {
-        _showAdd = false;
         _selected = item;
-    }
-
-    private void ToggleAdd()
-    {
-        _showAdd = !_showAdd;
-        if (_showAdd) _selected = null;
     }
 
     private async Task ConnectAndRefreshAsync(string name, McpServerConfig config)
@@ -525,7 +504,6 @@
         }
         await LoadServersAsync().ConfigureAwait(false);
         _selected = _servers.FirstOrDefault(s => s.Name == name);
-        _showAdd = false;
     }
 
     private async Task AddStdioServerAsync()
