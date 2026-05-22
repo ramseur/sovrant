@@ -676,6 +676,14 @@ public partial class SettingsViewModel : ViewModelBase
         "Azure OpenAI", "Google", "OpenRouter", "Ollama", "LM Studio", "Custom"
     ];
 
+    /// <summary>Called from navigation to pre-select a provider by name (case-insensitive).</summary>
+    public void SelectProvider(string name)
+    {
+        var match = Providers.FirstOrDefault(p => string.Equals(p, name, StringComparison.OrdinalIgnoreCase));
+        if (match is not null)
+            SelectedProvider = match;
+    }
+
     public IReadOnlyList<PermissionMode> PermissionModes { get; } =
     [
         PermissionMode.Default,

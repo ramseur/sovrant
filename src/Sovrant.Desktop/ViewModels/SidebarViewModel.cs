@@ -602,7 +602,15 @@ public partial class SidebarViewModel : ViewModelBase
     private void AddProvider()
     {
         IsDropdownOpen = false;
-        Navigate("Settings");
+        Navigate("Settings:Providers");
+    }
+
+    /// <summary>Opens Settings → Providers tab pre-selecting the given known provider.</summary>
+    [RelayCommand]
+    private void SetUpProvider(UnconfiguredProviderItem item)
+    {
+        IsDropdownOpen = false;
+        Navigate($"Settings:Providers:{item.Name}");
     }
 
     [RelayCommand]

@@ -1,4 +1,5 @@
 @page "/settings"
+@inject NavigationManager NavManager
 @using Microsoft.Extensions.DependencyInjection
 @using Sovrant.Api.Auth
 @using Sovrant.Api.Capabilities
@@ -149,6 +150,9 @@
     private DeleteConfirmModal _deleteModal = default!;
     private ISmartRouter? _router;
     private IModelCapabilityRegistry? _capabilities;
+    [SupplyParameterFromQuery(Name = "tab")] private string? TabParam { get; set; }
+    [SupplyParameterFromQuery(Name = "provider")] private string? ProviderParam { get; set; }
+
     private int _selectedTab;
     private string _selectedProvider = "OpenAI";
     private string _apiKey = string.Empty;
@@ -188,6 +192,19 @@
         _permissionMode = PermissionModeAccessor.Mode.ToString();
         _selectedProvider = await InferProviderAsync();
         await LoadProfilesAsync();
+        ApplyQueryParams();
+    }
+
+    private void ApplyQueryParams()
+    {
+        if (string.Equals(TabParam, "providers", StringComparison.OrdinalIgnoreCase))
+            _selectedTab = 1;
+        if (!string.IsNullOrWhiteSpace(ProviderParam)
+            && Providers.Contains(ProviderParam, StringComparer.OrdinalIgnoreCase))
+        {
+            _selectedProvider = Providers.First(p => string.Equals(p, ProviderParam, StringComparison.OrdinalIgnoreCase));
+            OnProviderChanged();
+        }
     }
 
 

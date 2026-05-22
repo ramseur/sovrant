@@ -98,7 +98,8 @@
                                     <ItemsControl ItemsSource="{Binding UnconfiguredProviders}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:UnconfiguredProviderItem">
-                                                <Button Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).AddProviderCommand}"
+                                                <Button Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).SetUpProviderCommand}"
+                                                        CommandParameter="{Binding}"
                                                         HorizontalAlignment="Stretch"
                                                         HorizontalContentAlignment="Left"
                                                         Padding="8,4" Margin="0,1" CornerRadius="5"

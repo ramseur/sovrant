@@ -197,6 +197,7 @@ public partial class MainViewModel : ViewModelBase
         {
             "Chat" => CreateChatViewModel(),
             "Settings" => _services.GetRequiredService<SettingsViewModel>(),
+            var s when s.StartsWith("Settings:", StringComparison.Ordinal) => ResolveSettings(s),
             "Diagnostics" => _services.GetRequiredService<DiagnosticsViewModel>(),
             "Integrations" => _services.GetRequiredService<IntegrationsViewModel>(),
             "Artifacts" => _services.GetRequiredService<ArtifactsViewModel>(),
@@ -216,6 +217,20 @@ public partial class MainViewModel : ViewModelBase
             "AdminWorkspaces" => ResolveAdmin("workspaces"),
             _ => CurrentPage,
         };
+    }
+
+    private SettingsViewModel ResolveSettings(string route)
+    {
+        var vm = _services.GetRequiredService<SettingsViewModel>();
+        var parts = route.Split(':');
+        // "Settings:Providers" or "Settings:Providers:OpenAI"
+        if (parts.Length >= 2 && string.Equals(parts[1], "Providers", StringComparison.OrdinalIgnoreCase))
+        {
+            vm.SelectedTab = 1;
+            if (parts.Length >= 3 && !string.IsNullOrWhiteSpace(parts[2]))
+                vm.SelectProvider(parts[2]);
+        }
+        return vm;
     }
 
     private AdminViewModel ResolveAdmin(string section)

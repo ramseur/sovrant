@@ -59,7 +59,7 @@
                         @foreach (var p in _unconfiguredProviders)
                         {
                             <button class="model-tree-provider-item model-tree-unconfigured"
-                                    @onclick='() => { _treeOpen = false; NavManager.NavigateTo("/settings"); }'>
+                                    @onclick="() => NavigateToProviderSetup(p.Name)">
                                 <span class="model-tree-provider-name">@p.Icon @p.Name</span>
                                 <span class="model-tree-setup-label">Set up →</span>
                             </button>
@@ -568,6 +568,12 @@
                 _currentProvider = saved;
         }
         catch { /* use inferred */ }
+    }
+
+    private void NavigateToProviderSetup(string providerName)
+    {
+        _treeOpen = false;
+        NavManager.NavigateTo("/settings?tab=providers&provider=" + Uri.EscapeDataString(providerName));
     }
 
     private static string ShortenModelName(string model)
