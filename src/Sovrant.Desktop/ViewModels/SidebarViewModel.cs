@@ -202,6 +202,13 @@ public partial class SidebarViewModel : ViewModelBase
     private void ToggleMcpDropdown() => IsMcpDropdownOpen = !IsMcpDropdownOpen;
 
     [RelayCommand]
+    private void GoToIntegrations()
+    {
+        IsMcpDropdownOpen = false;
+        Navigate("Integrations");
+    }
+
+    [RelayCommand]
     private void ToggleDropdown()
     {
         IsDropdownOpen = !IsDropdownOpen;
