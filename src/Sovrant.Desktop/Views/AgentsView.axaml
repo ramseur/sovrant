@@ -180,15 +180,6 @@
                                         Foreground="{DynamicResource StatusFail}" />
                             </StackPanel>
 
-                            <!-- Markdown detail -->
-                            <ContentControl Content="{Binding SelectedTemplate}">
-                                <ContentControl.ContentTemplate>
-                                    <DataTemplate DataType="vm:AgentTemplateItemViewModel">
-                                        <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
-                                    </DataTemplate>
-                                </ContentControl.ContentTemplate>
-                            </ContentControl>
-
                             <!-- Run now card -->
                             <Border Padding="14" CornerRadius="8"
                                     Background="{DynamicResource SurfaceBackground}"
@@ -226,6 +217,15 @@
                                     </Border>
                                 </StackPanel>
                             </Border>
+
+                            <!-- Markdown detail (description + system prompt) -->
+                            <ContentControl Content="{Binding SelectedTemplate}">
+                                <ContentControl.ContentTemplate>
+                                    <DataTemplate DataType="vm:AgentTemplateItemViewModel">
+                                        <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
+                                    </DataTemplate>
+                                </ContentControl.ContentTemplate>
+                            </ContentControl>
                         </StackPanel>
                     </ScrollViewer>
 
