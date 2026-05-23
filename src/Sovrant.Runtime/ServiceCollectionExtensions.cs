@@ -18,6 +18,7 @@ using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.Tools;
 using Sovrant.Runtime.Projects;
+using Sovrant.Runtime.Projects.Templates;
 using Sovrant.Runtime.Users;
 using Sovrant.Runtime.Workspaces;
 
@@ -401,6 +402,12 @@ public static class ServiceCollectionExtensions
         {
             services.AddSingleton<Metrics.ICostModel>(Metrics.NullCostModel.Instance);
         }
+
+        // Phase 73 — project template registry. Scaffold implementations register as
+        // IProjectTemplate singletons; the registry aggregates them via IEnumerable<T>.
+        // Empty until Step 3 scaffold implementations are added — registry gracefully
+        // handles zero templates.
+        services.AddSingleton<ProjectTemplateRegistry>();
 
         // Conversation runtime — transient so the pool creates independent instances per session.
         services.AddTransient<IConversationRuntime, ConversationRuntime>();
