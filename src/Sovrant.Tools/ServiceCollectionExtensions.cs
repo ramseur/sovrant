@@ -29,6 +29,7 @@ using Sovrant.Tools.Projects.Scaffolds.Go;
 using Sovrant.Tools.Projects.Scaffolds.Rust;
 using Sovrant.Tools.Projects.Scaffolds.Java;
 using Sovrant.Tools.Projects.Scaffolds.Minimal;
+using Sovrant.Tools.Projects;
 using Sovrant.Runtime.Projects.Templates;
 
 namespace Sovrant.Tools;
@@ -183,6 +184,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IProjectTemplate, SwiftCliScaffold>();
         services.AddSingleton<IProjectTemplate, LuaScriptScaffold>();
         services.AddSingleton<IProjectTemplate, ZigCliScaffold>();
+
+        // Phase 73 — code creation tools
+        services.AddSingleton<ITool, CodeCreateTool>();
+        services.AddSingleton<ITool, CodeListTemplatesTool>();
 
         // Quality / verification tools
         services.AddSingleton<ITool, VerifyTool>();
