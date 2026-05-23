@@ -144,7 +144,14 @@ public partial class SidebarViewModel : ViewModelBase
         _credentials = credentials;
         _capabilityRegistry = capabilityRegistry;
         ActiveContext = activeContext;
-        ActiveContext.AvailableMcpServers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(McpBadgeLabel));
+        ActiveContext.AvailableMcpServers.CollectionChanged += (_, e) =>
+        {
+            OnPropertyChanged(nameof(McpSummaryLabel));
+            // Subscribe to IsActive changes on newly added items so the label updates on toggle.
+            if (e.NewItems is null) return;
+            foreach (McpServerToggleItem item in e.NewItems)
+                item.PropertyChanged += (_, _) => OnPropertyChanged(nameof(McpSummaryLabel));
+        };
         _activeSessions = activeSessions;
         if (_activeSessions is not null)
         {
@@ -189,12 +196,20 @@ public partial class SidebarViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isMcpDropdownOpen;
 
-    public string McpBadgeLabel
+    /// <summary>Summary text shown on the MCP switcher button in the context bar.</summary>
+    public string McpSummaryLabel
     {
         get
         {
-            var count = ActiveContext.ActiveMcpServers.Count;
-            return count == 0 ? "MCP" : $"MCP · {count}";
+            var available = ActiveContext.AvailableMcpServers;
+            if (available.Count == 0) return "Integrations";
+            var active = ActiveContext.ActiveMcpServers;
+            return active.Count switch
+            {
+                0 => "None active",
+                1 => active[0],
+                _ => $"{active.Count} active",
+            };
         }
     }
 

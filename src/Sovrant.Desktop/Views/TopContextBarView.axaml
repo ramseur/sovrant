@@ -212,81 +212,104 @@
                           FontSize="12" />
             </StackPanel>
 
-            <!-- MCP pill — always visible; shows integrations deep-link when none configured -->
-            <Panel>
-                <Button Command="{Binding ToggleMcpDropdownCommand}"
-                        Padding="8,4" CornerRadius="12"
-                        Background="{DynamicResource SurfaceCard}"
-                        BorderBrush="{DynamicResource SurfaceBorder}"
-                        BorderThickness="1"
-                        FontSize="11"
-                        Content="{Binding McpBadgeLabel}" />
-                <Popup IsOpen="{Binding IsMcpDropdownOpen, Mode=TwoWay}"
-                       Placement="BottomEdgeAlignedLeft"
-                       IsLightDismissEnabled="True">
-                    <Border Background="{DynamicResource SurfaceCard}"
+            <!-- Vertical separator -->
+            <Border Width="1" Height="22"
+                    Background="{DynamicResource SurfaceBorder}"
+                    Margin="2,0" />
+
+            <!-- Integrations / MCP multi-select — styled to match workspace/project switchers -->
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <TextBlock Text="🔌" FontSize="12" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextMuted}" />
+                <Panel MinWidth="140">
+                    <Button Command="{Binding ToggleMcpDropdownCommand}"
+                            HorizontalAlignment="Stretch"
+                            Padding="8,4" CornerRadius="6"
+                            Background="{DynamicResource SurfaceCard}"
                             BorderBrush="{DynamicResource SurfaceBorder}"
-                            BorderThickness="1" CornerRadius="8"
-                            Padding="8" MinWidth="200"
-                            BoxShadow="0 8 24 0 #59000000">
-                        <StackPanel Spacing="2">
-                            <TextBlock Text="MCP SERVERS" FontSize="9" FontWeight="Bold"
+                            BorderThickness="1">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Text="▾" FontSize="11"
                                        Foreground="{DynamicResource TextMuted}"
-                                       Margin="2,0,0,6" />
+                                       VerticalAlignment="Center" Margin="6,0,0,0" />
+                            <TextBlock Text="{Binding McpSummaryLabel}"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center" />
+                        </DockPanel>
+                    </Button>
 
-                            <!-- Configured servers list -->
-                            <ItemsControl ItemsSource="{Binding ActiveContext.AvailableMcpServers}"
-                                          IsVisible="{Binding ActiveContext.AvailableMcpServers.Count,
-                                                              Converter={x:Static conv:IntToBoolConverter.Instance}}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="vm:McpServerToggleItem">
-                                        <CheckBox IsChecked="{Binding IsActive, Mode=TwoWay}"
-                                                  Content="{Binding Name}"
-                                                  FontSize="12"
-                                                  Padding="4,3"
-                                                  HorizontalAlignment="Stretch" />
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                    <Popup IsOpen="{Binding IsMcpDropdownOpen, Mode=TwoWay}"
+                           Placement="BottomEdgeAlignedLeft"
+                           IsLightDismissEnabled="True">
+                        <Border Background="{DynamicResource SurfaceCard}"
+                                BorderBrush="{DynamicResource SurfaceBorder}"
+                                BorderThickness="1" CornerRadius="8"
+                                Padding="6,8" MinWidth="220"
+                                BoxShadow="0 8 24 0 #59000000">
+                            <StackPanel>
 
-                            <!-- Empty state — no MCP servers configured yet -->
-                            <StackPanel IsVisible="{Binding ActiveContext.AvailableMcpServers.Count,
-                                                            Converter={x:Static conv:IntToBoolConverter.Inverse}}"
-                                        Spacing="4">
-                                <TextBlock Text="No integrations connected."
-                                           FontSize="11" Foreground="{DynamicResource TextMuted}"
-                                           Margin="2,0,0,2" />
+                                <TextBlock Text="INTEGRATIONS"
+                                           FontSize="9" FontWeight="Bold"
+                                           Foreground="{DynamicResource TextMuted}"
+                                           Margin="8,0,0,6" />
+
+                                <!-- Configured servers — toggle rows -->
+                                <ItemsControl ItemsSource="{Binding ActiveContext.AvailableMcpServers}"
+                                              IsVisible="{Binding ActiveContext.AvailableMcpServers.Count,
+                                                                  Converter={x:Static conv:IntToBoolConverter.Instance}}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="vm:McpServerToggleItem">
+                                            <Border CornerRadius="5" Margin="0,1"
+                                                    Background="Transparent">
+                                                <Border.Styles>
+                                                    <Style Selector="Border:pointerover">
+                                                        <Setter Property="Background" Value="{DynamicResource SurfaceBackground}" />
+                                                    </Style>
+                                                </Border.Styles>
+                                                <DockPanel Margin="6,5">
+                                                    <CheckBox DockPanel.Dock="Left"
+                                                              IsChecked="{Binding IsActive, Mode=TwoWay}"
+                                                              VerticalAlignment="Center"
+                                                              Margin="0,0,8,0" />
+                                                    <TextBlock Text="{Binding Name}"
+                                                               FontSize="12"
+                                                               Foreground="{DynamicResource TextPrimary}"
+                                                               VerticalAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </DockPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- Empty state -->
+                                <StackPanel IsVisible="{Binding ActiveContext.AvailableMcpServers.Count,
+                                                                Converter={x:Static conv:IntToBoolConverter.Inverse}}"
+                                            Margin="8,2,8,6" Spacing="6">
+                                    <TextBlock Text="No integrations connected."
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}" />
+                                </StackPanel>
+
+                                <!-- Divider + footer action -->
+                                <Border Height="1" Background="{DynamicResource SurfaceBorder}"
+                                        Margin="4,6,4,4" />
                                 <Button Command="{Binding GoToIntegrationsCommand}"
                                         HorizontalAlignment="Stretch"
                                         HorizontalContentAlignment="Left"
-                                        Padding="4,4" CornerRadius="5"
+                                        Padding="8,5" CornerRadius="5"
                                         Background="Transparent"
                                         Foreground="{DynamicResource BrandPrimary}"
-                                        FontSize="11">
-                                    <TextBlock Text="Browse Integrations →" />
-                                </Button>
-                            </StackPanel>
+                                        FontSize="11"
+                                        Content="Manage Integrations →" />
 
-                            <!-- Footer link shown even when servers are present -->
-                            <Border Height="1" Background="{DynamicResource SurfaceBorder}"
-                                    Margin="0,6,0,4"
-                                    IsVisible="{Binding ActiveContext.AvailableMcpServers.Count,
-                                                        Converter={x:Static conv:IntToBoolConverter.Instance}}" />
-                            <Button Command="{Binding GoToIntegrationsCommand}"
-                                    IsVisible="{Binding ActiveContext.AvailableMcpServers.Count,
-                                                        Converter={x:Static conv:IntToBoolConverter.Instance}}"
-                                    HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Left"
-                                    Padding="4,3" CornerRadius="5"
-                                    Background="Transparent"
-                                    Foreground="{DynamicResource TextSecondary}"
-                                    FontSize="10">
-                                <TextBlock Text="Manage Integrations →" />
-                            </Button>
-                        </StackPanel>
-                    </Border>
-                </Popup>
-            </Panel>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
+                </Panel>
+            </StackPanel>
 
         </StackPanel>
     </Border>
