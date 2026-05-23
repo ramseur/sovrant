@@ -1,0 +1,170 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.CodeView"
+             x:DataType="vm:CodeViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel>
+        <!-- Header -->
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="12">
+            <DockPanel>
+                <Button DockPanel.Dock="Right"
+                        Content="Refresh"
+                        Command="{Binding RefreshCommand}"
+                        Padding="12,6" CornerRadius="6"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextPrimary}" />
+                <StackPanel>
+                    <TextBlock Text="Code Scaffolds" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
+                        <Run Text="{Binding TotalCount}" />
+                        <Run Text=" templates — select one and enter a project name to scaffold" />
+                    </TextBlock>
+                </StackPanel>
+            </DockPanel>
+
+            <TextBox Text="{Binding SearchText}"
+                     Watermark="Search templates..."
+                     CornerRadius="8" Padding="12,8" />
+        </StackPanel>
+
+        <!-- Master-detail -->
+        <Grid Margin="32,12,32,24" ColumnDefinitions="320,12,*">
+            <!-- Template list -->
+            <ScrollViewer Grid.Column="0">
+                <ItemsControl ItemsSource="{Binding FilteredTemplates}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:CodeTemplateItemViewModel">
+                            <Button Command="{Binding $parent[ItemsControl].((vm:CodeViewModel)DataContext).SelectTemplateCommand}"
+                                    CommandParameter="{Binding}"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                    Padding="0" Margin="0,2"
+                                    Background="Transparent" BorderThickness="0" Cursor="Hand">
+                                <Border Padding="12,8" CornerRadius="8"
+                                        Background="{DynamicResource SurfaceCard}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="2">
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <TextBlock Text="{Binding Language}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource BrandPrimary}" />
+                                            <TextBlock Text="·" FontSize="11"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                            <TextBlock Text="{Binding Kind}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TextSecondary}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Detail pane -->
+            <Grid Grid.Column="2">
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding !SelectedTemplate}">
+                    <TextBlock Text="Select a template to scaffold a new project"
+                               FontSize="14" Foreground="{DynamicResource TextMuted}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding !!SelectedTemplate}">
+                    <ScrollViewer>
+                        <StackPanel Spacing="12">
+                            <!-- Header -->
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{Binding SelectedTemplate.Name}"
+                                           FontSize="18" FontWeight="Bold"
+                                           Foreground="{DynamicResource TextPrimary}" />
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="{Binding SelectedTemplate.Id}"
+                                               FontFamily="Consolas,Menlo,monospace"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                    <TextBlock Text="{Binding SelectedTemplate.Language}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource BrandPrimary}" />
+                                    <TextBlock Text="{Binding SelectedTemplate.Kind}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding SelectedTemplate.Description}"
+                                           FontSize="12" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextSecondary}" />
+                            </StackPanel>
+
+                            <!-- Scaffold controls -->
+                            <TextBlock Text="Scaffold" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <TextBox Text="{Binding ProjectName}"
+                                         Watermark="Project name"
+                                         Width="220" FontSize="12"
+                                         Padding="8,6" CornerRadius="6" />
+                                <Button Content="Scaffold"
+                                        Command="{Binding ScaffoldCommand}"
+                                        IsEnabled="{Binding !IsBusy}"
+                                        Padding="14,6" CornerRadius="6"
+                                        Background="{DynamicResource BrandPrimary}"
+                                        Foreground="White" />
+                                <TextBlock Text="Scaffolding..."
+                                           VerticalAlignment="Center" FontSize="11"
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           IsVisible="{Binding IsBusy}" />
+                            </StackPanel>
+
+                            <!-- Error -->
+                            <Border Background="#332d1b1b"
+                                    BorderBrush="#c94a4a"
+                                    BorderThickness="1" CornerRadius="6"
+                                    Padding="12,8"
+                                    IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                <TextBlock Text="{Binding ErrorMessage}"
+                                           FontSize="12" TextWrapping="Wrap"
+                                           Foreground="#ff8080" />
+                            </Border>
+
+                            <!-- Result -->
+                            <Border Background="{DynamicResource SurfaceBackground}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1" CornerRadius="6"
+                                    Padding="12,10"
+                                    IsVisible="{Binding HasResult}">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="{Binding ResultSummary}"
+                                               FontWeight="SemiBold" FontSize="12"
+                                               Foreground="{DynamicResource TextPrimary}" />
+                                    <ItemsControl ItemsSource="{Binding ResultFiles}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="x:String">
+                                                <TextBlock Text="{Binding}"
+                                                           FontFamily="Consolas,Menlo,monospace"
+                                                           FontSize="11"
+                                                           Foreground="{DynamicResource TextSecondary}" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</UserControl>

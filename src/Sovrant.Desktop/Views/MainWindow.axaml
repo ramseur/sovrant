@@ -30,6 +30,9 @@
         <DataTemplate DataType="vm:DocumentsViewModel">
             <views:DocumentsView />
         </DataTemplate>
+        <DataTemplate DataType="vm:CodeViewModel">
+            <views:CodeView />
+        </DataTemplate>
         <DataTemplate DataType="vm:ToolsViewModel">
             <views:ToolsView />
         </DataTemplate>

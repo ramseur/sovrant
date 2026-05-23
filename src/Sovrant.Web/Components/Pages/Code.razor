@@ -1,0 +1,242 @@
+@page "/code"
+@using System.Text
+@using Sovrant.Runtime.Artifacts
+@using Sovrant.Runtime.Projects.Templates
+@using Sovrant.Runtime.Workspaces
+@using Sovrant.Web.Services
+
+<MasterDetailLayout TItem="TemplateItem"
+                    Title="Code Scaffolds"
+                    ItemCount="@_filtered.Count"
+                    Items="@_filtered"
+                    SelectedItem="@_selected"
+                    EmptyMessage="No templates registered."
+                    OnRefresh="Load"
+                    OnItemSelected="SelectItem"
+                    OnSearch="Search">
+    <ItemTemplate>
+        <div class="item-title">@context.Name</div>
+        <div class="item-subtitle">@context.Language &middot; @context.Kind</div>
+    </ItemTemplate>
+    <DetailTemplate>
+        <div class="detail-content">
+            <h2>@context.Name</h2>
+            <div class="detail-meta">
+                <span><code>@context.Id</code></span>
+                <span>@context.Language</span>
+                <span>@context.Kind</span>
+            </div>
+            @if (!string.IsNullOrEmpty(context.Description))
+            {
+                <p class="text-secondary">@context.Description</p>
+            }
+
+            @if (context.Parameters.Count > 0)
+            {
+                <h3>Parameters</h3>
+                <table class="provider-table">
+                    <thead>
+                        <tr><th>Name</th><th>Required</th><th>Default</th><th>Description</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in context.Parameters)
+                        {
+                            <tr>
+                                <td><code>@p.Name</code></td>
+                                <td>@(p.Required ? "Yes" : "")</td>
+                                <td>@(p.Default ?? string.Empty)</td>
+                                <td>@(p.Description ?? string.Empty)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            <h3>Scaffold</h3>
+            <div style="display:flex; gap:12px; align-items:flex-end; margin-bottom:8px; flex-wrap:wrap;">
+                <label style="flex:1; min-width:180px;">
+                    Project name
+                    <input type="text" @bind="_projectName" placeholder="my-project"
+                           style="display:block; width:100%; margin-top:4px;" />
+                </label>
+                @if (context.Parameters.Count > 0)
+                {
+                    <label style="flex:2; min-width:220px;">
+                        Extra parameters (JSON)
+                        <input type="text" @bind="_extraJson" placeholder='{"author":"Jane"}'
+                               style="display:block; width:100%; margin-top:4px; font-family:monospace; font-size:13px;" />
+                    </label>
+                }
+                <button class="btn-primary btn-sm" @onclick="ScaffoldAsync" disabled="@_busy"
+                        style="height:34px; align-self:flex-end;">
+                    @(_busy ? "Scaffolding..." : "Scaffold")
+                </button>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="text-danger" style="margin-top:8px; white-space:pre-wrap;">@_error</div>
+            }
+
+            @if (_lastResult is not null)
+            {
+                <div class="render-result" style="margin-top:12px; padding:12px; border:1px solid var(--border,#333); border-radius:6px;">
+                    <div><strong>Scaffolded @_lastResult.FileCount files</strong> into run <code>@_lastResult.RunId</code></div>
+                    <div style="margin-top:8px; font-size:13px; font-family:monospace; color:var(--text-secondary);">
+                        @foreach (var f in _lastResult.Files)
+                        {
+                            <div>@f</div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </DetailTemplate>
+</MasterDetailLayout>
+
+@code {
+    [Inject] private ProjectTemplateRegistry Registry { get; set; } = default!;
+    [Inject] private IArtifactStore Store { get; set; } = default!;
+    [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
+
+    private List<TemplateItem> _all = [];
+    private List<TemplateItem> _filtered = [];
+    private TemplateItem? _selected;
+    private string _search = string.Empty;
+
+    private string _projectName = string.Empty;
+    private string _extraJson = string.Empty;
+    private ScaffoldResult? _lastResult;
+    private string _error = string.Empty;
+    private bool _busy;
+
+    protected override void OnInitialized() => Load();
+
+    private void Load()
+    {
+        _all = Registry.All
+            .OrderBy(t => t.Language, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(t => t.Kind, StringComparer.OrdinalIgnoreCase)
+            .Select(t => new TemplateItem
+            {
+                Id = t.Id,
+                Name = t.Name,
+                Language = t.Language,
+                Kind = t.Kind,
+                Description = t.Description,
+                Parameters = t.Parameters,
+            })
+            .ToList();
+        ApplyFilter();
+    }
+
+    private Task SelectItem(TemplateItem item)
+    {
+        _selected = item;
+        _projectName = string.Empty;
+        _extraJson = string.Empty;
+        _lastResult = null;
+        _error = string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private void Search(string text) { _search = text; ApplyFilter(); }
+
+    private void ApplyFilter()
+    {
+        _filtered = string.IsNullOrWhiteSpace(_search)
+            ? _all
+            : _all.Where(t =>
+                t.Id.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                t.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                t.Language.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                t.Kind.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                (t.Description ?? string.Empty).Contains(_search, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+    }
+
+    private async Task ScaffoldAsync()
+    {
+        if (_selected is null) return;
+        _error = string.Empty;
+        _lastResult = null;
+
+        var name = _projectName.Trim();
+        if (string.IsNullOrEmpty(name))
+        {
+            _error = "Project name is required.";
+            return;
+        }
+
+        var template = Registry.TryGet(_selected.Id);
+        if (template is null) { _error = $"Template not found: {_selected.Id}"; return; }
+
+        Dictionary<string, string>? extras = null;
+        if (!string.IsNullOrWhiteSpace(_extraJson))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(_extraJson);
+                extras = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                    extras[prop.Name] = prop.Value.GetString() ?? prop.Value.GetRawText();
+            }
+            catch (System.Text.Json.JsonException ex)
+            {
+                _error = $"Invalid JSON in extra parameters: {ex.Message}";
+                return;
+            }
+        }
+
+        _busy = true;
+        try
+        {
+            var context = new ScaffoldContext(name, extras);
+            var files = template.Scaffold(context);
+
+            var runId = $"web-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..40];
+            var scope = new ArtifactScope
+            {
+                WorkspaceId = string.IsNullOrEmpty(ActiveContext.WorkspaceId)
+                    ? WorkspaceIdentity.DefaultPersonal() : ActiveContext.WorkspaceId,
+                ProjectId = string.IsNullOrEmpty(ActiveContext.ProjectId)
+                    ? ArtifactScope.DefaultProjectId : ActiveContext.ProjectId,
+                RunId = runId,
+            };
+
+            var handle = await Store.CreateRunScopeAsync(scope, CancellationToken.None);
+            var written = new List<string>();
+
+            foreach (var file in files)
+            {
+                var path = $"{name}/{file.RelativePath}";
+                var bytes = Encoding.UTF8.GetBytes(file.Content);
+                using var stream = new System.IO.MemoryStream(bytes);
+                await Store.WriteAsync(handle, path, stream, "text/plain", CancellationToken.None);
+                written.Add(path);
+            }
+
+            _lastResult = new ScaffoldResult(runId, files.Count, written);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class TemplateItem
+    {
+        public string Id { get; init; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
+        public string Language { get; init; } = string.Empty;
+        public string Kind { get; init; } = string.Empty;
+        public string? Description { get; init; }
+        public IReadOnlyList<ScaffoldParameter> Parameters { get; init; } = [];
+    }
+
+    private sealed record ScaffoldResult(string RunId, int FileCount, IReadOnlyList<string> Files);
+}
