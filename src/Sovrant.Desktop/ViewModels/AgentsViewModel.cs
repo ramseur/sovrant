@@ -255,13 +255,19 @@ public partial class AgentsViewModel : ViewModelBase
             {
                 RecentRuns.Clear();
                 foreach (var r in runs)
+                {
+                    var title = !string.IsNullOrEmpty(r.Prompt) ? r.Prompt
+                        : !string.IsNullOrEmpty(r.MemberId) ? r.MemberId
+                        : r.Kind;
                     RecentRuns.Add(new RecentAgentRunViewModel
                     {
                         RunId = r.RunId,
-                        Title = string.IsNullOrEmpty(r.MemberId) ? r.Kind : r.MemberId,
+                        Title = title,
+                        AgentName = r.MemberId ?? string.Empty,
                         Status = r.Status,
                         WhenLabel = FormatRelative(r.EndedAt ?? r.StartedAt),
                     });
+                }
             });
         }
         catch { }
@@ -384,6 +390,7 @@ public partial class RecentAgentRunViewModel : ViewModelBase
 {
     [ObservableProperty] private string _runId = string.Empty;
     [ObservableProperty] private string _title = string.Empty;
+    [ObservableProperty] private string _agentName = string.Empty;
     [ObservableProperty] private string _status = string.Empty;
     [ObservableProperty] private string _whenLabel = string.Empty;
 }

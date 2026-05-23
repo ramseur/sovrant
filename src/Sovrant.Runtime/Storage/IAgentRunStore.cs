@@ -27,7 +27,8 @@ public sealed record AgentRunRecord(
     DateTimeOffset? EndedAt = null,
     int InputTokens = 0,
     int OutputTokens = 0,
-    decimal? CostUsd = null);
+    decimal? CostUsd = null,
+    string? Prompt = null);
 
 /// <summary>Filter for <see cref="IAgentRunStore.ListAsync"/>.</summary>
 public sealed record AgentRunFilter(

@@ -178,8 +178,12 @@
                         @foreach (var r in _agentRuns)
                         {
                             <div class="recent-run">
-                                <div class="recent-run-title">@(r.MemberId ?? r.Kind)</div>
+                                <div class="recent-run-title">@(!string.IsNullOrEmpty(r.Prompt) ? r.Prompt : r.MemberId ?? r.Kind)</div>
                                 <div class="recent-run-meta">
+                                    @if (!string.IsNullOrEmpty(r.MemberId))
+                                    {
+                                        <span class="agent-run-badge">@r.MemberId</span>
+                                    }
                                     <span class="recent-run-status @StatusClass(r.Status)">@r.Status</span>
                                     <span>@FormatRelative(r.EndedAt ?? r.StartedAt)</span>
                                 </div>
@@ -219,8 +223,12 @@
                 @foreach (var r in _recentRuns)
                 {
                     <div class="recent-run">
-                        <div class="recent-run-title">@(string.IsNullOrEmpty(r.MemberId) ? r.Kind : r.MemberId)</div>
+                        <div class="recent-run-title">@(!string.IsNullOrEmpty(r.Prompt) ? r.Prompt : !string.IsNullOrEmpty(r.MemberId) ? r.MemberId : r.Kind)</div>
                         <div class="recent-run-meta">
+                            @if (!string.IsNullOrEmpty(r.MemberId))
+                            {
+                                <span class="agent-run-badge">@r.MemberId</span>
+                            }
                             <span class="recent-run-status @StatusClass(r.Status)">@r.Status</span>
                             <span>@FormatRelative(r.EndedAt ?? r.StartedAt)</span>
                         </div>

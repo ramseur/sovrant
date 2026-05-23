@@ -2922,6 +2922,16 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .recent-run-status.succeeded { color: var(--status-pass); }
 .recent-run-status.failed { color: var(--status-fail); }
 .recent-run-status.cancelled { color: var(--text-muted); }
+.agent-run-badge {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--brand-primary);
+    color: white;
+    font-size: 9px;
+    font-family: Consolas, Menlo, monospace;
+    line-height: 1.4;
+}
 
 /* ===== Callout (Phase 90 Track F) ===== */
 .callout-card {

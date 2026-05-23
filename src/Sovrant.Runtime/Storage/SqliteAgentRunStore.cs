@@ -18,10 +18,10 @@ internal sealed class SqliteAgentRunStore(ISqliteConnectionFactory connectionFac
         cmd.CommandText = """
             INSERT INTO agent_runs
                 (run_id, parent_run_id, team_id, member_id, workspace_id, project_id,
-                 user_id, kind, status, started_at, input_tokens, output_tokens, cost_usd)
+                 user_id, kind, status, started_at, input_tokens, output_tokens, cost_usd, prompt)
             VALUES
                 ($runId, $parentRunId, $teamId, $memberId, $ws, $proj,
-                 $userId, $kind, $status, $startedAt, $inTok, $outTok, $cost)
+                 $userId, $kind, $status, $startedAt, $inTok, $outTok, $cost, $prompt)
             """;
         cmd.Parameters.AddWithValue("$runId", run.RunId);
         cmd.Parameters.AddWithValue("$parentRunId", (object?)run.ParentRunId ?? DBNull.Value);
@@ -36,6 +36,7 @@ internal sealed class SqliteAgentRunStore(ISqliteConnectionFactory connectionFac
         cmd.Parameters.AddWithValue("$inTok", run.InputTokens);
         cmd.Parameters.AddWithValue("$outTok", run.OutputTokens);
         AddDecimalParam(cmd, "$cost", run.CostUsd);
+        cmd.Parameters.AddWithValue("$prompt", (object?)run.Prompt ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
         return run;
@@ -49,7 +50,7 @@ internal sealed class SqliteAgentRunStore(ISqliteConnectionFactory connectionFac
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             SELECT run_id, parent_run_id, team_id, member_id, workspace_id, project_id,
-                   user_id, kind, status, started_at, ended_at, input_tokens, output_tokens, cost_usd
+                   user_id, kind, status, started_at, ended_at, input_tokens, output_tokens, cost_usd, prompt
             FROM agent_runs WHERE run_id = $id
             """;
         cmd.Parameters.AddWithValue("$id", runId);
@@ -88,7 +89,7 @@ internal sealed class SqliteAgentRunStore(ISqliteConnectionFactory connectionFac
 
         var sb = new StringBuilder("""
             SELECT run_id, parent_run_id, team_id, member_id, workspace_id, project_id,
-                   user_id, kind, status, started_at, ended_at, input_tokens, output_tokens, cost_usd
+                   user_id, kind, status, started_at, ended_at, input_tokens, output_tokens, cost_usd, prompt
             FROM agent_runs WHERE 1=1
             """);
 
@@ -161,7 +162,8 @@ internal sealed class SqliteAgentRunStore(ISqliteConnectionFactory connectionFac
         EndedAt: r.IsDBNull(10) ? null : DateTimeOffset.Parse(r.GetString(10), CultureInfo.InvariantCulture),
         InputTokens: r.GetInt32(11),
         OutputTokens: r.GetInt32(12),
-        CostUsd: r.IsDBNull(13) ? null : (decimal)r.GetDouble(13));
+        CostUsd: r.IsDBNull(13) ? null : (decimal)r.GetDouble(13),
+        Prompt: r.IsDBNull(14) ? null : r.GetString(14));
 
     private static void AddDecimalParam(Microsoft.Data.Sqlite.SqliteCommand cmd, string name, decimal? value)
     {

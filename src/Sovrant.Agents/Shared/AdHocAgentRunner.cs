@@ -41,6 +41,7 @@ public sealed class AdHocAgentRunner
         string userId,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(prompt);
         var template = _registry.TryGet(templateName);
         if (template is null)
             return new AdHocAgentRunResult(RunId: string.Empty, Success: false, Output: string.Empty,
@@ -59,7 +60,8 @@ public sealed class AdHocAgentRunner
             UserId: userId,
             Kind: "adhoc-template",
             Status: "running",
-            StartedAt: startedAt), ct).ConfigureAwait(false);
+            StartedAt: startedAt,
+            Prompt: prompt.Length > 120 ? prompt[..117] + "…" : prompt), ct).ConfigureAwait(false);
 
         try
         {

@@ -118,8 +118,16 @@
                                     <StackPanel Spacing="2" Margin="0,3">
                                         <TextBlock Text="{Binding Title}" FontSize="12"
                                                    Foreground="{DynamicResource TextPrimary}"
-                                                   TextTrimming="CharacterEllipsis" />
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                   TextTrimming="CharacterEllipsis"
+                                                   TextWrapping="NoWrap" />
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <Border IsVisible="{Binding AgentName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                    Padding="4,1" CornerRadius="3"
+                                                    Background="{DynamicResource BrandPrimary}">
+                                                <TextBlock Text="{Binding AgentName}"
+                                                           FontFamily="Consolas,Menlo,monospace"
+                                                           FontSize="9" Foreground="White" />
+                                            </Border>
                                             <TextBlock Text="{Binding Status}" FontSize="10"
                                                        Foreground="{DynamicResource TextMuted}" />
                                             <TextBlock Text="{Binding WhenLabel}" FontSize="10"
