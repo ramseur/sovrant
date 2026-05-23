@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-05-23 (Phase 95 Integrations Gallery ✅ — catalog-first MCP onramp with Automation/Platform/Search tiers, encrypted credential store, web parity; MCP security migration ✅ — credentials moved to encrypted keystore, no plain-text JSON on disk; model switcher upgrade ✅ — configured + unconfigured providers with click-to-configure deep-link on Web and Desktop; agent run titles ✅ — prompt stored on agent_runs (V028), used as title in Recent Runs on both surfaces; Command Center owner column ✅ — resolves userId → username/email via IUserService; sidebar Cancel fix ✅ — BeginTurn replaces TryRegister so multi-turn cancel actually works)
+**Last updated:** 2026-05-23 (Phase 50 OpenClaw federation ✅ — `SwarmFederationMode` enum, `OpenClawBusClient`, `RouteResolver`, V029 migration adds `parent_swarm_id`, `/v1/swarm/manager` + `/v1/swarm/openclaw/routes` + `/v1/swarm/{id}/children` endpoints, swarm-manager agent template; session-level MCP opt-in ✅ — single `ActiveMcpServers` selector in context bar (Desktop: WorkspacePanelView; Web: TopContextBar), preference-persisted, replaces per-chat MCP selector; Phase 73 code scaffolding ✅ — 21 templates, `CodeCreateMultiTool` for multi-component generation, `ScaffoldManifestValidator` for dependency manifest validation, 235 new golden-path + manifest tests)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -19,8 +19,9 @@ What we are actively working on and shipping next, in priority order.
 | **v1.1 — done** | Phase 79 | Agents page — in-app create/edit of agent definitions + Launch chat button ✅ |
 | **v1.1 — done** | Phase 94 | Orchestration Studio — compose and run teams from the UI without chat commands ✅ |
 | **v1.1 — done** | Phase 95 | Integrations Gallery — catalog-first MCP onramp, encrypted credentials, Web + Desktop parity ✅ |
+| **v1.1 — done** | Phase 50 | OpenClaw federation — `SwarmFederationMode`, bus client, manager-led + siloed routing, V029 migration ✅ |
+| **v1.1 — done** | Phase 73 | Code scaffolding — 21 templates, multi-component generation, manifest validation, 235 tests ✅ |
 | **v1.1 — wave 2** | Phase 85.5 | Local / remote mode selection — `sovrant connect <url>`, setup wizard mode picker |
-| **v1.1 — wave 2** | Phase 73 | Code creation — project scaffolding and app generation |
 | **v1.1 — wave 2** | Phase 40C | Supabase backend + SSO — swap SQLite for Supabase/PostgreSQL on the server side |
 | **v1.2** | Phase 82.5 | OpenTelemetry — traces, metrics, and logs via OTLP (after data model is on Supabase) |
 
@@ -32,12 +33,12 @@ What we are actively working on and shipping next, in priority order.
 
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
-- **56 tools** across 17 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, missions, artifacts, documents, quality, swarm, coordination, LSP)
-- **1,689 tests** across 10 projects, 0 failures
+- **58 tools** across 18 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, missions, artifacts, documents, quality, swarm, coordination, LSP, code scaffolding)
+- **1,924 tests** across 10 projects, 0 failures
 - **115 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
-- SQLite persistence layer with 28 versioned migrations (V001–V028) — adds hooks, workspace settings, MCP/LSP servers, user preferences, provider profiles, workspace identity unification, auth credentials, agent run prompt on top of the Phase 32/42.5/51/52/57/78 foundation
+- SQLite persistence layer with 29 versioned migrations (V001–V029) — adds `parent_swarm_id` for federation child tracking on top of the prior foundation — adds hooks, workspace settings, MCP/LSP servers, user preferences, provider profiles, workspace identity unification, auth credentials, agent run prompt on top of the Phase 32/42.5/51/52/57/78 foundation
 - Single `.env` file configuration — `sovrant.config` removed; all bootstrap knobs are env vars; routing and swarm config fully DB-backed
 - **Integrations Gallery** on Web and Desktop — catalog-first MCP onramp with Automation (Composio, n8n, Zapier, Make), Platform (GitHub, Slack, Notion, Linear, Stripe, PostgreSQL, Supabase, Filesystem), and Search (Brave, Exa, Tavily) tiers; credentials stored in encrypted keystore (Phase 95 ✅)
 - **Model switcher with provider discovery** — configured providers selectable inline; unconfigured known providers shown with click-to-configure deep-link to Settings → Providers on both Web and Desktop
@@ -143,10 +144,12 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | 79 | Agents page — in-app create/edit of agent definitions (silent copy-on-write for built-ins), Launch chat, Run one-shot, prompt stored on agent_runs (V028), prompt as title in Recent Runs with agent badge on Web + Desktop |
 | 94 | Orchestration Studio — compose and run teams from the UI; team + member create forms; Run button with task prompt on Web + Desktop |
 | 95 | Integrations Gallery — catalog-first MCP onramp; 14 integrations (Automation: Composio, n8n, Zapier, Make; Platform: GitHub, Slack, Notion, Linear, Stripe, PostgreSQL, Supabase, Filesystem; Search: Brave, Exa, Tavily); encrypted credential keystore; model switcher upgrade with unconfigured-provider deep-link; Web + Desktop parity |
+| 50 | OpenClaw integration & federated swarms — `SwarmFederationMode` (Silo/Federated/ManagerLed), `OpenClawBusClient`, `RouteResolver`, V029 migration (`parent_swarm_id`), `ListChildrenAsync`, `/v1/swarm/manager` + `/v1/swarm/openclaw/routes` + `/v1/swarm/{id}/children` REST endpoints, swarm-manager agent template |
+| 73 | Code scaffolding — 21 project templates (Node/TS, .NET, Python, Go, Rust, Java, Kotlin, Ruby, Swift, Lua, Zig, C++), `CodeCreateTool`, `CodeCreateMultiTool` (multi-component), `CodeListTemplatesTool`, `ScaffoldManifestValidator`, 235 golden-path + manifest tests; session-level MCP opt-in lifted to context bar on Web + Desktop |
 
 ### Still pending
 
-> **Last audited:** 2026-05-23. Shipped since prior audit: Phase 79 Agents page ✅, Phase 94 Orchestration Studio ✅, Phase 95 Integrations Gallery ✅ (encrypted credentials, catalog with 14 integrations across 3 tiers, Web + Desktop parity). Model switcher upgraded — configured + unconfigured providers with click-to-configure deep-link. Agent run prompt stored (V028) and used as title in Recent Runs. Command Center Owner column resolves to username/email. Sidebar multi-turn Cancel fixed (BeginTurn replaces TryRegister). Phase 91 Knowledge Authoring deferred.
+> **Last audited:** 2026-05-23. Shipped since prior audit: Phase 79 Agents page ✅, Phase 94 Orchestration Studio ✅, Phase 95 Integrations Gallery ✅ (encrypted credentials, catalog with 14 integrations across 3 tiers, Web + Desktop parity). Phase 50 OpenClaw federation ✅ (SwarmFederationMode, bus client, manager-led routing, V029, 3 new API endpoints). Phase 73 code scaffolding ✅ (21 templates, CodeCreateMultiTool, ScaffoldManifestValidator, 235 tests). Session-level MCP opt-in lifted to context bar (Desktop WorkspacePanelView + Web TopContextBar). Phase 91 Knowledge Authoring deferred.
 >
 > Quality / polish / audit phases (62, 68, 69, 70, 71, 72, 75) and partial-completion phases (56) are tracked in their own sections below; this table is gap-only.
 
@@ -162,12 +165,12 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |
 | Workspace backup, import & export | Phase 47 | Medium |
 | SearXNG web search backend (self-hosted, key-free) | Phase 49 | Low–Medium |
-| OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | Medium–High |
+| OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | ✅ Done |
 | Hermes Agent integration via MCP — alternative claw/federation bus provider with self-improving skills | Phase 60 | Medium |
 | Cloud storage backends & workspace isolation (Google Docs, Box, Amazon S3) | Phase 64 | Medium |
 | Video generation — fal.ai, Kling AI, and pluggable provider support for text-to-video, image-to-video | Phase 65 | Medium |
 | Autonomous agent modes (swarm autonomy & alternate claws) | Phase 67 | Medium |
-| Code creation: project scaffolding & app generation | Phase 73 | Medium–High |
+| Code creation: project scaffolding & app generation | Phase 73 | ✅ Done |
 | Markdown-backed document templates | Phase 74 | Medium |
 | In-app document viewing | Phase 76 | Medium |
 | Project isolation with full feature parity | Phase 77 | Medium |
@@ -183,7 +186,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Active Sessions: up to 5 concurrent live tasks with return-anytime results; Settings UI on Web + Desktop, DB-backed; future admin console fallback | Phase 92 | ✅ Done |
 | Agents page — in-app create/edit, Launch chat, Run one-shot, prompt titles in ledger | Phase 79 | ✅ Done |
 | Orchestration Studio — compose and run teams from the UI; Run button with task prompt | Phase 94 | ✅ Done |
-| Integrations Gallery — 14 integrations across Automation/Platform/Search tiers, encrypted credential keystore, Web + Desktop parity; OpenClaw and Hermes pending details | Phase 95 | ✅ Done (OpenClaw + Hermes pending) |
+| Integrations Gallery — 14 integrations across Automation/Platform/Search tiers, encrypted credential keystore, Web + Desktop parity | Phase 95 | ✅ Done (Hermes pending details) |
 
 ### v1.0 release polish (in progress)
 

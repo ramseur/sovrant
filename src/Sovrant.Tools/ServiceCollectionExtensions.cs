@@ -190,6 +190,7 @@ public static class ServiceCollectionExtensions
 
         // Phase 73 — code creation tools
         services.AddSingleton<ITool, CodeCreateTool>();
+        services.AddSingleton<ITool, CodeCreateMultiTool>();
         services.AddSingleton<ITool, CodeListTemplatesTool>();
 
         // Quality / verification tools
