@@ -2458,6 +2458,17 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     text-align: center;
 }
 
+/* Orchestration form cards: inputs fill remaining width, left-aligned */
+.orch-form .gov-field-row {
+    gap: 8px;
+}
+.orch-form .gov-field-input {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+    text-align: left;
+}
+
 .gov-item {
     display: flex;
     align-items: center;

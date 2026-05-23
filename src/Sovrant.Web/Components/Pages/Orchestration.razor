@@ -62,7 +62,7 @@
                     <h2>New Team</h2>
                     <button class="btn-sm btn-outline" @onclick="CancelCreate">Cancel</button>
                 </div>
-                <div class="gov-card" style="max-width:520px;">
+                <div class="gov-card orch-form" style="max-width:520px;">
                     <div class="gov-field-row">
                         <span>Name</span>
                         <input type="text" class="gov-field-input" placeholder="my-team"
@@ -104,7 +104,7 @@
                     <button class="btn-sm btn-outline" @onclick="ToggleSwarmConfig">Close</button>
                 </div>
 
-                <div class="gov-card">
+                <div class="gov-card orch-form">
                     <div class="toggle-card" style="border:none;padding:0;">
                         <div>
                             <div class="toggle-title">Swarm Enabled</div>
@@ -177,7 +177,7 @@
                 <!-- ── Run card ───────────────────────────────────────── -->
                 <div class="orch-detail-section">
                     <h3>Run</h3>
-                    <div class="gov-card" style="max-width:600px;">
+                    <div class="gov-card orch-form" style="max-width:600px;">
                         <textarea class="gov-field-input" rows="3"
                                   placeholder="Describe the goal or task for this team…"
                                   style="width:100%;resize:vertical;"
@@ -202,7 +202,7 @@
                 <!-- ── Run Profile ───────────────────────────────────── -->
                 <div class="orch-detail-section">
                     <h3>Run Profile</h3>
-                    <div class="gov-card">
+                    <div class="gov-card orch-form">
                         <div class="gov-field-row">
                             <span>Run Mode</span>
                             <select class="gov-field-input" @bind="_selected.RunMode">
@@ -296,7 +296,7 @@
                     @if (_isAddingMember)
                     {
                         <!-- ── Add Member inline form ────────────────── -->
-                        <div class="gov-card" style="margin-top:12px;max-width:520px;">
+                        <div class="gov-card orch-form" style="margin-top:12px;max-width:520px;">
                             <div class="gov-field-row">
                                 <span>From Agent Template</span>
                                 <select class="gov-field-input" @bind="_addMemberTemplate"
