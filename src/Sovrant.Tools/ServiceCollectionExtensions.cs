@@ -170,10 +170,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IProjectTemplate, NodeExpressApiScaffold>();
         services.AddSingleton<IProjectTemplate, NodeLibraryScaffold>();
         services.AddSingleton<IProjectTemplate, NodeNextJsScaffold>();
+        services.AddSingleton<IProjectTemplate, NodeMonorepoScaffold>();
         services.AddSingleton<IProjectTemplate, DotNetConsoleScaffold>();
         services.AddSingleton<IProjectTemplate, DotNetWebApiScaffold>();
         services.AddSingleton<IProjectTemplate, DotNetLibraryScaffold>();
         services.AddSingleton<IProjectTemplate, DotNetWorkerScaffold>();
+        services.AddSingleton<IProjectTemplate, DotNetBlazorScaffold>();
         services.AddSingleton<IProjectTemplate, PythonFastApiScaffold>();
         services.AddSingleton<IProjectTemplate, PythonScriptScaffold>();
         services.AddSingleton<IProjectTemplate, GoApiScaffold>();
@@ -184,6 +186,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IProjectTemplate, SwiftCliScaffold>();
         services.AddSingleton<IProjectTemplate, LuaScriptScaffold>();
         services.AddSingleton<IProjectTemplate, ZigCliScaffold>();
+        services.AddSingleton<IProjectTemplate, CppCmakeScaffold>();
 
         // Phase 73 — code creation tools
         services.AddSingleton<ITool, CodeCreateTool>();
