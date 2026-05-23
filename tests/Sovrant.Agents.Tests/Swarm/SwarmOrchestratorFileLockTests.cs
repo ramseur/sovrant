@@ -184,5 +184,8 @@ public sealed class SwarmOrchestratorFileLockTests
 
         public Task<string?> GetOwnerAsync(string swarmId, CancellationToken ct = default) =>
             Task.FromResult<string?>(null);
+
+        public Task<IReadOnlyList<string>> ListChildrenAsync(string parentSwarmId, int? limit = null, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
     }
 }

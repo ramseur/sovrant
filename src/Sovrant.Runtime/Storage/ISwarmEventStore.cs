@@ -36,6 +36,12 @@ public interface ISwarmEventStore
     /// before V025 (pre-ownership tracking).
     /// </summary>
     Task<string?> GetOwnerAsync(string swarmId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the swarm IDs whose <c>parent_swarm_id</c> matches <paramref name="parentSwarmId"/>,
+    /// ordered by most-recent-event timestamp first. Added in Phase 50 (V029).
+    /// </summary>
+    Task<IReadOnlyList<string>> ListChildrenAsync(string parentSwarmId, int? limit = null, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -51,10 +57,14 @@ public sealed record SwarmEventRecord(
     string? AgentId = null,
     string? WorkspaceId = null,
     string? ProjectId = null,
-    string? UserId = null);
+    string? UserId = null,
+    /// <summary>Populated when this swarm was spawned as a child in manager-led federation (Phase 50).</summary>
+    string? ParentSwarmId = null);
 
 /// <summary>Optional filter for <see cref="ISwarmEventStore.ListSwarmsAsync"/>.</summary>
 public sealed record SwarmListFilter(
     string? WorkspaceId = null,
     string? ProjectId = null,
-    int? Limit = null);
+    int? Limit = null,
+    /// <summary>When set, restricts results to child swarms of this parent (Phase 50).</summary>
+    string? ParentSwarmId = null);

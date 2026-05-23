@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Sovrant.Agents.Swarm;
+using Sovrant.Agents.Swarm.Bus;
 using Sovrant.Api.Types;
 
 namespace Sovrant.Tools.Swarm;
@@ -55,12 +56,17 @@ public sealed class SwarmTool : ITool
 
         var dryRun = input.GetBoolProp("dry_run");
         var teamId = input.GetStringProp("team");
+        var federationRaw = input.GetStringProp("federation");
+        var parentSwarmId = input.GetStringProp("parent_swarm_id");
+
+        // Merge per-call federation override into a config clone
+        var config = MergeFederation(_config, federationRaw, parentSwarmId);
 
         // Phase 1: Decompose
         SwarmPlan plan;
         try
         {
-            plan = await _decomposer.DecomposeAsync(prompt, _config, ct).ConfigureAwait(false);
+            plan = await _decomposer.DecomposeAsync(prompt, config, ct).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(teamId))
                 plan.TeamId = teamId;
         }
@@ -73,10 +79,10 @@ public sealed class SwarmTool : ITool
             return FormatDryRun(plan);
 
         // Phase 2: Execute
-        var result = await _orchestrator.ExecuteAsync(plan, _config, onEvent: _progress.Report, ct: ct).ConfigureAwait(false);
+        var result = await _orchestrator.ExecuteAsync(plan, config, onEvent: _progress.Report, ct: ct).ConfigureAwait(false);
 
         // Phase 3: Quality gate (optional)
-        if (_config.QualityGateEnabled && result.Status == SwarmStatus.Completed)
+        if (config.QualityGateEnabled && result.Status == SwarmStatus.Completed)
         {
             result.Status = SwarmStatus.QualityReview;
             _stateTracker.Update(result.SwarmId, result);
@@ -89,6 +95,43 @@ public sealed class SwarmTool : ITool
         }
 
         return FormatResult(result);
+    }
+
+    private static SwarmConfig MergeFederation(SwarmConfig base_, string? federationRaw, string? parentSwarmId)
+    {
+        if (string.IsNullOrWhiteSpace(federationRaw) && string.IsNullOrWhiteSpace(parentSwarmId))
+            return base_;
+
+        var mode = federationRaw?.ToUpperInvariant() switch
+        {
+            "FEDERATED"   => SwarmFederationMode.Federated,
+            "MANAGER_LED" => SwarmFederationMode.ManagerLed,
+            _             => SwarmFederationMode.Silo,
+        };
+
+        var fedConfig = new SwarmFederationConfig
+        {
+            Mode = mode,
+            ParentSwarmId = parentSwarmId,
+            OpenClaw = base_.Federation?.OpenClaw,
+        };
+
+        return new SwarmConfig
+        {
+            Enabled = base_.Enabled,
+            MaxConcurrent = base_.MaxConcurrent,
+            MaxTokenBudget = base_.MaxTokenBudget,
+            MaxRetries = base_.MaxRetries,
+            QualityGateEnabled = base_.QualityGateEnabled,
+            QualityGateThreshold = base_.QualityGateThreshold,
+            FileLocksEnabled = base_.FileLocksEnabled,
+            DecomposerLevel = base_.DecomposerLevel,
+            WorkerLevel = base_.WorkerLevel,
+            TaskTimeoutSeconds = base_.TaskTimeoutSeconds,
+            Permissions = base_.Permissions,
+            TemplateOverrides = base_.TemplateOverrides,
+            Federation = fedConfig,
+        };
     }
 
     private static string FormatDryRun(SwarmPlan plan)
@@ -141,9 +184,11 @@ public sealed class SwarmTool : ITool
         {
             "type": "object",
             "properties": {
-                "prompt":  {"type": "string",  "description": "The complex task to decompose and execute via the swarm."},
-                "team":    {"type": "string",  "description": "Optional team name/ID. When set, swarm workers are resolved from this orchestrated team before falling back to templates."},
-                "dry_run": {"type": "boolean", "description": "If true, only decompose and show the plan without executing."}
+                "prompt":          {"type": "string",  "description": "The complex task to decompose and execute via the swarm."},
+                "team":            {"type": "string",  "description": "Optional team name/ID. When set, swarm workers are resolved from this orchestrated team before falling back to templates."},
+                "dry_run":         {"type": "boolean", "description": "If true, only decompose and show the plan without executing."},
+                "federation":      {"type": "string",  "enum": ["silo", "federated", "manager_led"], "description": "Federation mode override. 'silo' (default) runs locally; 'federated' publishes events to OpenClaw; 'manager_led' treats this swarm as a child of a remote manager."},
+                "parent_swarm_id": {"type": "string",  "description": "ID of the parent swarm when federation is 'manager_led'. Ignored otherwise."}
             },
             "required": ["prompt"]
         }

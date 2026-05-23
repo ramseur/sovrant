@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:conv="using:Sovrant.Desktop.Converters"
              x:Class="Sovrant.Desktop.Views.WorkspacePanelView"
              x:DataType="vm:SidebarViewModel"
              Background="{DynamicResource SidebarBackground}">
@@ -21,6 +22,26 @@
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Code}"
                     Foreground="{DynamicResource TextPrimary}" />
+
+            <!-- MCP opt-in switcher — visible only when MCP servers are configured -->
+            <StackPanel IsVisible="{Binding ActiveContext.AvailableMcpServers.Count, Converter={x:Static conv:IntToBoolConverter.Instance}}"
+                        Margin="0,16,0,0">
+                <TextBlock Text="MCP SERVERS" FontSize="11" FontWeight="Bold"
+                           Foreground="{DynamicResource TextMuted}"
+                           Margin="6,0,0,8" />
+                <ItemsControl ItemsSource="{Binding ActiveContext.AvailableMcpServers}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:McpServerToggleItem">
+                            <CheckBox IsChecked="{Binding IsActive, Mode=TwoWay}"
+                                      Content="{Binding Name}"
+                                      FontSize="12"
+                                      Padding="6,4"
+                                      HorizontalAlignment="Stretch"
+                                      ToolTip.Tip="Include this MCP server in chat, agents, and orchestration" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

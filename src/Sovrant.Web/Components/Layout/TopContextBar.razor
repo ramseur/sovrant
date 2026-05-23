@@ -115,6 +115,40 @@
             }
         </select>
     </div>
+
+    @if (_availableMcpServers.Count > 0)
+    {
+        <div class="tcb-divider"></div>
+
+        <!-- MCP opt-in switcher -->
+        <div class="tcb-mcp-switcher">
+            <button class="tcb-mcp-trigger @(_mcpDropdownOpen ? "open" : "")"
+                    title="Choose which MCP servers agents can call"
+                    @onclick="ToggleMcpDropdown"
+                    @onclick:stopPropagation="true">
+                <span class="tcb-icon">&#128279;</span>
+                <span class="tcb-mcp-label">MCPs</span>
+                <span class="tcb-mcp-badge">@McpBadgeLabel</span>
+            </button>
+            @if (_mcpDropdownOpen)
+            {
+                <div class="tcb-mcp-dropdown" @onclick:stopPropagation="true">
+                    <div class="tcb-mcp-header">Active MCP servers</div>
+                    @foreach (var name in _availableMcpServers)
+                    {
+                        var serverName = name;
+                        var isActive = _activeMcpServers.Contains(serverName);
+                        <label class="tcb-mcp-item @(isActive ? "active" : "")">
+                            <input type="checkbox"
+                                   checked="@isActive"
+                                   @onchange="e => ToggleMcpServer(serverName, (bool)(e.Value ?? false))" />
+                            <span>@serverName</span>
+                        </label>
+                    }
+                </div>
+            }
+        </div>
+    }
 </div>
 
 @code {
@@ -130,6 +164,17 @@
     [Inject] private IModelCapabilityRegistry CapabilityRegistry { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private WebSessionService Session { get; set; } = default!;
+    [Inject] private IMcpServerStore McpServerStore { get; set; } = default!;
+
+    // MCP switcher state
+    private List<string> _availableMcpServers = [];
+    private HashSet<string> _activeMcpServers = new(StringComparer.Ordinal);
+    private bool _mcpDropdownOpen;
+
+    private string McpBadgeLabel =>
+        _activeMcpServers.Count == 0 ? "none"
+        : _activeMcpServers.Count == _availableMcpServers.Count ? "all"
+        : _activeMcpServers.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     private ElementReference _triggerRef;
     private string _dropdownStyle = string.Empty;
@@ -203,10 +248,64 @@
         await InferProviderAsync();
         await LoadProviderProfilesAsync();
         await ApplyDisplayStateAsync();
+        await LoadMcpServersAsync();
 
         ActiveContext.SetModel(_currentModel, _currentProvider);
         ActiveContext.OnChanged += OnActiveContextChanged;
         ActiveContext.OnDataChanged += OnDataChanged;
+    }
+
+    private async Task LoadMcpServersAsync()
+    {
+        try
+        {
+            var configs = await McpServerStore.GetAllAsync();
+            _availableMcpServers = configs.Keys.OrderBy(n => n, StringComparer.Ordinal).ToList();
+
+            // Load persisted selection — opt-in means nothing active by default.
+            var userId = Session.UserId;
+            if (!string.IsNullOrEmpty(userId))
+            {
+                var saved = await Prefs.GetAsync(userId, UserPreferenceKeys.ActiveMcpServers);
+                if (!string.IsNullOrWhiteSpace(saved))
+                {
+                    _activeMcpServers = new HashSet<string>(
+                        saved.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                        StringComparer.Ordinal);
+                }
+            }
+
+            ActiveContext.SetActiveMcpServers([.. _activeMcpServers]);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[TopContextBar] LoadMcpServersAsync failed: {ex.Message}");
+        }
+    }
+
+    private void ToggleMcpDropdown() => _mcpDropdownOpen = !_mcpDropdownOpen;
+
+    private async Task ToggleMcpServer(string name, bool active)
+    {
+        if (active) _activeMcpServers.Add(name);
+        else _activeMcpServers.Remove(name);
+
+        var selected = _activeMcpServers.ToList();
+        ActiveContext.SetActiveMcpServers(selected);
+
+        try
+        {
+            var userId = Session.UserId;
+            if (!string.IsNullOrEmpty(userId))
+            {
+                var value = string.Join(',', selected);
+                await Prefs.SetAsync(userId, UserPreferenceKeys.ActiveMcpServers, value);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[TopContextBar] Failed to persist MCP selection: {ex.Message}");
+        }
     }
 
     // Drives the trigger label from stored prefs (ActiveProviderProfileId + Model)

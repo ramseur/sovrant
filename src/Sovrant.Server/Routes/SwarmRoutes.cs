@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Sovrant.Agents.Swarm;
+using Sovrant.Agents.Swarm.Bus;
 using Sovrant.Runtime.Storage;
 using Sovrant.Server.Auth;
 using Sovrant.Server.Middleware;
@@ -16,9 +17,13 @@ namespace Sovrant.Server.Routes;
 ///   <item><c>GET /v1/swarm/{id}</c> — get swarm status</item>
 ///   <item><c>GET /v1/swarm/{id}/events</c> — replay events from <c>swarm_events</c></item>
 ///   <item><c>GET /v1/swarm/sessions</c> — list all swarm sessions, optionally filtered by workspace/project</item>
+///   <item><c>POST /v1/swarm/manager</c> — launch a manager-led federated swarm</item>
+///   <item><c>GET /v1/swarm/openclaw/routes</c> — list OpenClaw federation routes</item>
+///   <item><c>GET /v1/swarm/{id}/children</c> — list child swarms of a manager-led swarm</item>
 /// </list>
 /// As of Phase 37.5 these read/write through <see cref="ISwarmEventStore"/>
 /// instead of the legacy JSONL files under <c>~/.sovrant/swarm/sessions/</c>.
+/// As of Phase 50 the three federated routes are added.
 /// </summary>
 internal static class SwarmRoutes
 {
@@ -186,6 +191,107 @@ internal static class SwarmRoutes
 
             return Results.Ok(await session.ListSessionsAsync(filter, ct).ConfigureAwait(false));
         });
+
+        // POST /v1/swarm/manager — launch a manager-led federated swarm.
+        // Identical to POST /v1/swarm but forces federation=manager_led and wires parent_swarm_id.
+        app.MapPost("/v1/swarm/manager", async (
+            SwarmManagerRequest request,
+            SwarmConfig config,
+            ISwarmDecomposer decomposer,
+            ISwarmOrchestrator orchestrator,
+            SwarmQualityGate qualityGate,
+            ISwarmStateTracker stateTracker,
+            HttpContext ctx,
+            CancellationToken ct) =>
+        {
+            if (!config.Enabled)
+                return Results.BadRequest(new { error = "Swarm orchestration is disabled." });
+
+            if (string.IsNullOrWhiteSpace(request.Prompt))
+                return Results.BadRequest(new { error = "prompt is required." });
+
+            ctx.Response.ContentType = "text/event-stream; charset=utf-8";
+            ctx.Response.Headers.CacheControl = "no-cache";
+            ctx.Response.Headers["X-Accel-Buffering"] = "no";
+
+            SwarmPlan plan;
+            try { plan = await decomposer.DecomposeAsync(request.Prompt, config, ct); }
+            catch (InvalidOperationException ex)
+            {
+                await WriteSseEventAsync(ctx.Response, "error", new { error = ex.Message }, ct);
+                await WriteSseDoneAsync(ctx.Response, ct);
+                return Results.Empty;
+            }
+
+            var fedConfig = new SwarmFederationConfig
+            {
+                Mode = SwarmFederationMode.ManagerLed,
+                ParentSwarmId = request.ParentSwarmId,
+                OpenClaw = config.Federation?.OpenClaw,
+            };
+            var federatedConfig = new SwarmConfig
+            {
+                Enabled = config.Enabled,
+                MaxConcurrent = config.MaxConcurrent,
+                MaxTokenBudget = config.MaxTokenBudget,
+                MaxRetries = config.MaxRetries,
+                QualityGateEnabled = config.QualityGateEnabled,
+                QualityGateThreshold = config.QualityGateThreshold,
+                FileLocksEnabled = config.FileLocksEnabled,
+                DecomposerLevel = config.DecomposerLevel,
+                WorkerLevel = config.WorkerLevel,
+                TaskTimeoutSeconds = config.TaskTimeoutSeconds,
+                Permissions = config.Permissions,
+                TemplateOverrides = config.TemplateOverrides,
+                Federation = fedConfig,
+            };
+
+            var swarmContext = new SwarmExecutionContext(
+                UserId: HttpContextAuthExtensions.GetUserId(ctx),
+                WorkspaceId: ctx.GetWorkspaceId(),
+                ProjectId: ctx.Request.Headers["X-Project-Id"].FirstOrDefault());
+
+            var logger = ctx.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("Sovrant.Server.SwarmRoutes");
+            var result = await orchestrator.ExecuteAsync(plan, federatedConfig, onEvent: evt =>
+            {
+                _ = WriteSseEventAsync(ctx.Response, evt.GetType().Name, evt, ct)
+                    .ContinueWith(t =>
+                    {
+                        if (t.IsFaulted)
+                            logger?.LogDebug(t.Exception?.InnerException, "SSE write failed (client likely disconnected)");
+                    }, TaskScheduler.Default);
+            }, executionContext: swarmContext, ct: ct);
+
+            await WriteSseEventAsync(ctx.Response, "result", result, ct);
+            await WriteSseDoneAsync(ctx.Response, ct);
+            return Results.Empty;
+        });
+
+        // GET /v1/swarm/openclaw/routes — list routes visible on the OpenClaw bus.
+        app.MapGet("/v1/swarm/openclaw/routes", async (
+            OpenClawBusClient? bus,
+            SwarmConfig config,
+            CancellationToken ct) =>
+        {
+            if (bus is null)
+                return Results.BadRequest(new { error = "OpenClaw bus client is not configured." });
+
+            var serverName = config.Federation?.OpenClaw?.ServerName ?? "openclaw";
+            var routes = await bus.ListRoutesAsync(serverName, ct).ConfigureAwait(false);
+            return Results.Ok(new { routes });
+        });
+
+        // GET /v1/swarm/{id}/children — list child swarms of a manager-led swarm.
+        app.MapGet("/v1/swarm/{id}/children", async (
+            string id,
+            HttpContext ctx,
+            ISwarmEventStore store,
+            CancellationToken ct) =>
+        {
+            int? limit = int.TryParse(ctx.Request.Query["limit"].FirstOrDefault(), out var n) ? n : null;
+            var children = await store.ListChildrenAsync(id, limit, ct).ConfigureAwait(false);
+            return Results.Ok(new { parent_swarm_id = id, children });
+        });
     }
 
     private static async Task WriteSseEventAsync(HttpResponse response, string eventType, object data, CancellationToken ct)
@@ -209,4 +315,11 @@ internal sealed class SwarmRunRequest
     [JsonPropertyName("team")] public string? Team { get; init; }
     [JsonPropertyName("dry_run")] public bool DryRun { get; init; }
     [JsonPropertyName("budget")] public int? Budget { get; init; }
+}
+
+internal sealed class SwarmManagerRequest
+{
+    [JsonPropertyName("prompt")] public string Prompt { get; init; } = string.Empty;
+    [JsonPropertyName("parent_swarm_id")] public string? ParentSwarmId { get; init; }
+    [JsonPropertyName("dry_run")] public bool DryRun { get; init; }
 }

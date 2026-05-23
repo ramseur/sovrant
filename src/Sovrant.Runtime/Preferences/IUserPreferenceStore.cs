@@ -54,4 +54,10 @@ public static class UserPreferenceKeys
 
     /// <summary>Active provider-profile id — foreign key into <c>provider_profiles</c>.</summary>
     public const string ActiveProviderProfileId = "provider.active_profile_id";
+
+    /// <summary>
+    /// Comma-separated list of MCP server names the user has opted into.
+    /// Empty string or missing key means no MCP tools are exposed to agents (opt-in, not opt-out).
+    /// </summary>
+    public const string ActiveMcpServers = "mcp.active_servers";
 }

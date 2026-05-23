@@ -1,11 +1,14 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Sovrant.Agents.Models;
 using Sovrant.Agents.Shared;
+using Sovrant.Agents.Swarm.Bus;
 using Sovrant.Agents.Teams;
 using Sovrant.Agents.Templates;
 using Sovrant.Runtime.Conversation;
+using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Tools;
 
 namespace Sovrant.Agents.Swarm;
@@ -25,6 +28,8 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
     private readonly IToolRegistry _toolRegistry;
     private readonly WorkspaceContext _workspace;
     private readonly ILogger<SwarmOrchestrator> _logger;
+    private readonly OpenClawBusClient? _busClient;
+    private readonly McpClientRegistry? _mcpRegistry;
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Starting swarm '{SwarmId}' — {TaskCount} tasks, {WaveCount} waves")]
     private static partial void LogSwarmStart(ILogger logger, string swarmId, int taskCount, int waveCount);
@@ -59,7 +64,9 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
         SwarmSession session,
         IToolRegistry toolRegistry,
         WorkspaceContext workspace,
-        ILogger<SwarmOrchestrator> logger)
+        ILogger<SwarmOrchestrator> logger,
+        OpenClawBusClient? busClient = null,
+        McpClientRegistry? mcpRegistry = null)
     {
         ArgumentNullException.ThrowIfNull(factory);
         ArgumentNullException.ThrowIfNull(templates);
@@ -79,6 +86,8 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
         _toolRegistry = toolRegistry;
         _workspace = workspace;
         _logger = logger;
+        _busClient = busClient;
+        _mcpRegistry = mcpRegistry;
     }
 
     /// <summary>
@@ -124,7 +133,7 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
         _stateTracker.Update(plan.Id, result);
 
         LogSwarmStart(_logger, plan.Id, plan.Tasks.Count, plan.WaveCount);
-        await EmitAsync(new SwarmEvent.PlanCreated(plan.Id, plan.Tasks.Count, plan.WaveCount), onEvent, swarmContext, ct).ConfigureAwait(false);
+        await EmitAsync(new SwarmEvent.PlanCreated(plan.Id, plan.Tasks.Count, plan.WaveCount), onEvent, swarmContext, ct, config, plan.Id).ConfigureAwait(false);
 
         var semaphore = new SemaphoreSlim(config.MaxConcurrent, config.MaxConcurrent);
         try
@@ -161,13 +170,13 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
                 var waveFailed = waveTasks.Count(t => t.Status == SwarmTaskStatus.Failed);
                 await EmitAsync(
                     new SwarmEvent.WaveCompleted(plan.Id, wave, waveCompleted, waveFailed),
-                    onEvent, swarmContext, ct).ConfigureAwait(false);
+                    onEvent, swarmContext, ct, config, plan.Id).ConfigureAwait(false);
 
                 // Check budget after each wave
                 if (tokenCounter.Value > config.MaxTokenBudget)
                 {
                     LogBudgetExceeded(_logger, plan.Id, tokenCounter.Value, config.MaxTokenBudget);
-                    await EmitAsync(new SwarmEvent.BudgetExceeded(plan.Id, tokenCounter.Value, config.MaxTokenBudget), onEvent, swarmContext, ct).ConfigureAwait(false);
+                    await EmitAsync(new SwarmEvent.BudgetExceeded(plan.Id, tokenCounter.Value, config.MaxTokenBudget), onEvent, swarmContext, ct, config, plan.Id).ConfigureAwait(false);
 
                     // Cancel remaining waves
                     CancelRemainingTasks(plan.Tasks, wave + 1);
@@ -209,7 +218,7 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
             LogSwarmComplete(_logger, plan.Id, result.Status, sw.ElapsedMilliseconds);
             await EmitAsync(
                 new SwarmEvent.SwarmCompleted(plan.Id, result.Status, tokenCounter.Value, sw.Elapsed.TotalSeconds),
-                onEvent, swarmContext, ct).ConfigureAwait(false);
+                onEvent, swarmContext, ct, config, plan.Id).ConfigureAwait(false);
         }
 
         return result;
@@ -263,7 +272,7 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
                     var holderAgentName = holderNode is not null ? ResolveAgentName(holderNode, config) : holderTaskId;
 
                     LogFileConflict(_logger, node.Id, file, holderTaskId);
-                    await EmitAsync(new SwarmEvent.FileConflict(plan.Id, node.Id, agentName, file, holderTaskId, holderAgentName), onEvent, swarmContext, ct).ConfigureAwait(false);
+                    await EmitAsync(new SwarmEvent.FileConflict(plan.Id, node.Id, agentName, file, holderTaskId, holderAgentName), onEvent, swarmContext, ct, config, plan.Id).ConfigureAwait(false);
 
                     node.Status = SwarmTaskStatus.Blocked;
                     node.Error = $"File '{file}' locked by task '{holderTaskId}'.";
@@ -274,7 +283,7 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
         }
         node.Status = SwarmTaskStatus.Running;
         LogTaskStart(_logger, node.Id, agentName);
-        await EmitAsync(new SwarmEvent.TaskStarted(plan.Id, node.Id, agentName, node.Description, node.Wave), onEvent, swarmContext, ct).ConfigureAwait(false);
+        await EmitAsync(new SwarmEvent.TaskStarted(plan.Id, node.Id, agentName, node.Description, node.Wave), onEvent, swarmContext, ct, config, plan.Id).ConfigureAwait(false);
 
         var attempt = 0;
         while (attempt <= config.MaxRetries)
@@ -300,7 +309,7 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
                     tokenCounter.Add(estimatedTokens);
 
                     LogTaskComplete(_logger, node.Id, estimatedTokens);
-                    await EmitAsync(new SwarmEvent.TaskCompleted(plan.Id, node.Id, agentName, node.Description, result.Output, estimatedTokens), onEvent, swarmContext, ct).ConfigureAwait(false);
+                    await EmitAsync(new SwarmEvent.TaskCompleted(plan.Id, node.Id, agentName, node.Description, result.Output, estimatedTokens), onEvent, swarmContext, ct, config, plan.Id).ConfigureAwait(false);
                     return;
                 }
 
@@ -313,7 +322,7 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
                 {
                     node.Status = SwarmTaskStatus.Failed;
                     node.Error = result.Error ?? "Agent returned failure.";
-                    await EmitAsync(new SwarmEvent.TaskFailed(plan.Id, node.Id, agentName, node.Description, node.Error, attempt), onEvent, swarmContext, ct).ConfigureAwait(false);
+                    await EmitAsync(new SwarmEvent.TaskFailed(plan.Id, node.Id, agentName, node.Description, node.Error, attempt), onEvent, swarmContext, ct, config, plan.Id).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -327,7 +336,7 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
                 {
                     node.Status = SwarmTaskStatus.Failed;
                     node.Error = "Task timed out.";
-                    await EmitAsync(new SwarmEvent.TaskFailed(plan.Id, node.Id, agentName, node.Description, node.Error, attempt), onEvent, swarmContext, ct).ConfigureAwait(false);
+                    await EmitAsync(new SwarmEvent.TaskFailed(plan.Id, node.Id, agentName, node.Description, node.Error, attempt), onEvent, swarmContext, ct, config, plan.Id).ConfigureAwait(false);
                 }
             }
         }
@@ -341,7 +350,14 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
         var bypass = config.Permissions.Equals("yolo", StringComparison.OrdinalIgnoreCase)
                   || config.Permissions.Equals("accept-edits", StringComparison.OrdinalIgnoreCase);
         var innerExecutor = _factory.GetDefaultExecutor();
-        var swarmExecutor = new SwarmToolExecutor(innerExecutor, _fileLockManager, node.Id, bypass, bypass ? _toolRegistry : null);
+
+        // MCPs are opt-in at the orchestration level. When AllowedMcpServers is non-empty,
+        // build a filtered registry that blocks MCP tools from unlisted servers while
+        // preserving all native (non-MCP) tools. When the list is empty, MCP tools are
+        // excluded entirely — agents get only the built-in tool set.
+        var effectiveRegistry = BuildMcpFilteredRegistry(config);
+
+        var swarmExecutor = new SwarmToolExecutor(innerExecutor, _fileLockManager, node.Id, bypass, bypass ? effectiveRegistry : null);
 
         // Priority 1: If the plan references a team, try to find a matching team member.
         if (plan.TeamId is not null)
@@ -371,6 +387,35 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
             role: AgentRole.Coder,
             allowedTools: node.AllowedTools?.ToList(),
             executorOverride: swarmExecutor);
+    }
+
+    /// <summary>
+    /// Returns an <see cref="IToolRegistry"/> that strips MCP tools from servers that are
+    /// not listed in <see cref="SwarmConfig.AllowedMcpServers"/>.
+    /// Non-MCP tools are always passed through.
+    /// When <paramref name="config"/> lists no allowed servers, all MCP tools are excluded.
+    /// </summary>
+    private IToolRegistry BuildMcpFilteredRegistry(SwarmConfig config)
+    {
+        if (_mcpRegistry is null)
+            return _toolRegistry; // No MCP registry available — nothing to filter.
+
+        var toolToServer = _mcpRegistry.ToolToServer;
+        if (toolToServer.Count == 0)
+            return _toolRegistry; // No MCP tools registered at all.
+
+        var allowedServers = new HashSet<string>(
+            config.AllowedMcpServers,
+            StringComparer.OrdinalIgnoreCase);
+
+        // Build the permitted set: all non-MCP tool names plus MCP tools from allowed servers.
+        var allDefinitions = _toolRegistry.GetDefinitions();
+        var permitted = allDefinitions
+            .Where(d => !toolToServer.ContainsKey(d.Name) || allowedServers.Contains(toolToServer[d.Name]))
+            .Select(d => d.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        return new FilteredToolRegistry(_toolRegistry, permitted);
     }
 
     private static string BuildTaskPrompt(SwarmTaskNode node, SwarmPlan plan, string artifactsDir)
@@ -456,10 +501,29 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
         SwarmEvent evt,
         Action<SwarmEvent>? onEvent,
         SwarmExecutionContext swarmContext,
-        CancellationToken ct)
+        CancellationToken ct,
+        SwarmConfig? config = null,
+        string? swarmId = null)
     {
         onEvent?.Invoke(evt);
         await _session.RecordAsync(evt, swarmContext, ct).ConfigureAwait(false);
+
+        if (_busClient is not null && config?.Federation is { Mode: not SwarmFederationMode.Silo } fed)
+        {
+            var ocConfig = fed.OpenClaw ?? new OpenClawConfig();
+            var route = RouteResolver.Resolve(
+                swarmId ?? string.Empty,
+                swarmContext,
+                fed.Mode,
+                ocConfig.RoutePrefix,
+                fed.ParentSwarmId);
+
+            if (route is not null)
+            {
+                var payload = JsonSerializer.Serialize(evt, evt.GetType());
+                await _busClient.PublishAsync(ocConfig.ServerName, route, payload, ct).ConfigureAwait(false);
+            }
+        }
     }
 
     /// <summary>Thread-safe token counter for concurrent task execution.</summary>
