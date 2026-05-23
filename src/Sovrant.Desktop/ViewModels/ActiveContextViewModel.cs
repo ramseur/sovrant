@@ -320,6 +320,9 @@ public partial class ActiveContextViewModel : ViewModelBase
         OnPropertyChanged(nameof(SelectedProjectChoice));
     }
 
+    /// <summary>Re-loads MCP servers from the store. Call after adding/removing servers in the Integrations Gallery.</summary>
+    public Task RefreshMcpServersAsync() => LoadMcpServersAsync();
+
     private async Task LoadMcpServersAsync()
     {
         if (_mcpServerStore is null) return;

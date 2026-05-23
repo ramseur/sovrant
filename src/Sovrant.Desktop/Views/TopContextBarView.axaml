@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:conv="using:Sovrant.Desktop.Converters"
              x:Class="Sovrant.Desktop.Views.TopContextBarView"
              x:DataType="vm:SidebarViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -210,6 +211,44 @@
                           Padding="8,4"
                           FontSize="12" />
             </StackPanel>
+
+            <!-- MCP pill — only shown when at least one MCP server is configured -->
+            <Panel IsVisible="{Binding ActiveContext.AvailableMcpServers.Count,
+                                       Converter={x:Static conv:IntToBoolConverter.Instance}}">
+                <Button Command="{Binding ToggleMcpDropdownCommand}"
+                        Padding="8,4" CornerRadius="12"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1"
+                        FontSize="11"
+                        Content="{Binding McpBadgeLabel}" />
+                <Popup IsOpen="{Binding IsMcpDropdownOpen, Mode=TwoWay}"
+                       Placement="BottomEdgeAlignedLeft"
+                       IsLightDismissEnabled="True">
+                    <Border Background="{DynamicResource SurfaceCard}"
+                            BorderBrush="{DynamicResource SurfaceBorder}"
+                            BorderThickness="1" CornerRadius="8"
+                            Padding="8" MinWidth="180"
+                            BoxShadow="0 8 24 0 #59000000">
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="MCP SERVERS" FontSize="9" FontWeight="Bold"
+                                       Foreground="{DynamicResource TextMuted}"
+                                       Margin="2,0,0,6" />
+                            <ItemsControl ItemsSource="{Binding ActiveContext.AvailableMcpServers}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vm:McpServerToggleItem">
+                                        <CheckBox IsChecked="{Binding IsActive, Mode=TwoWay}"
+                                                  Content="{Binding Name}"
+                                                  FontSize="12"
+                                                  Padding="4,3"
+                                                  HorizontalAlignment="Stretch" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                </Popup>
+            </Panel>
 
         </StackPanel>
     </Border>

@@ -144,6 +144,7 @@ public partial class SidebarViewModel : ViewModelBase
         _credentials = credentials;
         _capabilityRegistry = capabilityRegistry;
         ActiveContext = activeContext;
+        ActiveContext.AvailableMcpServers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(McpBadgeLabel));
         _activeSessions = activeSessions;
         if (_activeSessions is not null)
         {
@@ -184,6 +185,21 @@ public partial class SidebarViewModel : ViewModelBase
         if (value is null || _suppressProfileSwitch) return;
         SwitchToProfile(value);
     }
+
+    [ObservableProperty]
+    private bool _isMcpDropdownOpen;
+
+    public string McpBadgeLabel
+    {
+        get
+        {
+            var count = ActiveContext.ActiveMcpServers.Count;
+            return count == 0 ? "MCP" : $"MCP · {count}";
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleMcpDropdown() => IsMcpDropdownOpen = !IsMcpDropdownOpen;
 
     [RelayCommand]
     private void ToggleDropdown()

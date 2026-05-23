@@ -13,6 +13,7 @@ public partial class IntegrationsViewModel : ViewModelBase
     private readonly IMcpServerStore _serverStore;
     private readonly McpClientRegistry _clientRegistry;
     private readonly McpToolRegistrar _registrar;
+    private readonly ActiveContextViewModel? _activeContext;
 
     // ── Tab ──────────────────────────────────────────────────────────────────
     /// <summary>"gallery" | "connected"</summary>
@@ -75,11 +76,12 @@ public partial class IntegrationsViewModel : ViewModelBase
 
     public ObservableCollection<CatalogEntryViewModel> CatalogEntries { get; } = [];
 
-    public IntegrationsViewModel(IMcpServerStore serverStore, McpClientRegistry clientRegistry, McpToolRegistrar registrar)
+    public IntegrationsViewModel(IMcpServerStore serverStore, McpClientRegistry clientRegistry, McpToolRegistrar registrar, ActiveContextViewModel? activeContext = null)
     {
         _serverStore = serverStore;
         _clientRegistry = clientRegistry;
         _registrar = registrar;
+        _activeContext = activeContext;
 
         foreach (var entry in IntegrationCatalog.All)
             CatalogEntries.Add(new CatalogEntryViewModel(entry));
@@ -193,6 +195,8 @@ public partial class IntegrationsViewModel : ViewModelBase
             StatusMessage = $"Failed to connect to '{name}': {ex.Message}";
             await LoadServersAsync().ConfigureAwait(true);
         }
+        if (_activeContext is not null)
+            await _activeContext.RefreshMcpServersAsync().ConfigureAwait(true);
     }
 
     [RelayCommand]
@@ -309,6 +313,8 @@ public partial class IntegrationsViewModel : ViewModelBase
             StatusMessage = $"Server '{server.Name}' removed. Restart to disconnect.";
         }
         catch (Exception ex) { StatusMessage = $"Failed to remove server: {ex.Message}"; }
+        if (_activeContext is not null)
+            await _activeContext.RefreshMcpServersAsync().ConfigureAwait(true);
     }
 
     private async Task LoadServersAsync()
