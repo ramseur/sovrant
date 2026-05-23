@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Sovrant.Agents.Models;
 
@@ -24,18 +23,20 @@ public sealed partial class AgentTemplateRegistry
     [LoggerMessage(Level = LogLevel.Debug, Message = "User template '{Name}' overrides built-in")]
     private static partial void LogOverride(ILogger logger, string name);
 
+    /// <summary>Path where user-authored agents are written. Relative to working directory.</summary>
+    public static readonly string UserAgentsDir = Path.Combine(".sovrant", "agents");
+
     public AgentTemplateRegistry(ILogger<AgentTemplateRegistry> logger, IEnumerable<ITemplateLoader>? loaders = null)
     {
         _logger = logger;
-
         _templates = new ConcurrentDictionary<string, AgentTemplate>(StringComparer.OrdinalIgnoreCase);
 
         // Tier 1 (lowest priority): built-in templates from the install directory
         var assemblyDir = Path.GetDirectoryName(typeof(AgentTemplateRegistry).Assembly.Location) ?? ".";
-        LoadUserTemplates(Path.Combine(assemblyDir, "agents"));
+        LoadFromDirectory(Path.Combine(assemblyDir, "agents"), isBuiltIn: true);
 
         // Tier 2: project-local .sovrant/agents/ (overrides install-dir templates)
-        LoadUserTemplates(Path.Combine(".sovrant", "agents"));
+        LoadFromDirectory(UserAgentsDir, isBuiltIn: false);
 
         // Tier 3: additional loaders (e.g. database, cloud) — highest priority
         if (loaders is not null)
@@ -63,12 +64,33 @@ public sealed partial class AgentTemplateRegistry
     }
 
     /// <summary>
-    /// Loads <c>*.md</c> files from <paramref name="directory"/> as user-defined templates.
-    /// Each file must have YAML front matter with at least <c>name</c> and optional
-    /// <c>role</c>, <c>recommended_level</c>, <c>allowed_tools</c>.
-    /// The file body (after the closing <c>---</c>) is the system prompt.
+    /// Adds or replaces a template in the live registry (does not write to disk).
+    /// Call after <see cref="AgentDefinitionWriter.SaveAsync"/> to refresh the in-memory state.
     /// </summary>
-    internal void LoadUserTemplates(string directory)
+    public void Register(AgentTemplate template)
+    {
+        ArgumentNullException.ThrowIfNull(template);
+        _templates[template.Name] = template;
+    }
+
+    /// <summary>
+    /// Removes a user-defined template from the live registry.
+    /// Returns <see langword="false"/> if the name was not found or the template is built-in.
+    /// Does not touch disk — call <see cref="AgentDefinitionWriter.Delete"/> first.
+    /// </summary>
+    public bool Unregister(string name)
+    {
+        if (_templates.TryGetValue(name, out var existing) && existing.IsBuiltIn)
+            return false;
+        return _templates.TryRemove(name, out _);
+    }
+
+    // ── Internal loading ──────────────────────────────────────────────────────
+
+    /// <summary>Kept for backward compat with callers that used the old name.</summary>
+    internal void LoadUserTemplates(string directory) => LoadFromDirectory(directory, isBuiltIn: false);
+
+    internal void LoadFromDirectory(string directory, bool isBuiltIn)
     {
         if (!Directory.Exists(directory)) return;
 
@@ -76,7 +98,7 @@ public sealed partial class AgentTemplateRegistry
         {
             try
             {
-                var template = ParseTemplateFile(file);
+                var template = ParseTemplateFile(file, isBuiltIn);
                 if (template is null) continue;
 
                 if (_templates.ContainsKey(template.Name))
@@ -92,7 +114,7 @@ public sealed partial class AgentTemplateRegistry
         }
     }
 
-    internal static AgentTemplate? ParseTemplateFile(string path)
+    internal static AgentTemplate? ParseTemplateFile(string path, bool isBuiltIn = false)
     {
         var text = File.ReadAllText(path).ReplaceLineEndings("\n");
 
@@ -134,15 +156,36 @@ public sealed partial class AgentTemplateRegistry
         if (meta.TryGetValue("allowed_tools", out var toolsStr))
             allowedTools = ParseList(toolsStr);
 
+        meta.TryGetValue("description", out var description);
+
         var systemPrompt = string.IsNullOrWhiteSpace(body) ? $"You are a {name} agent." : body;
 
-        return new AgentTemplate(name.Trim(), role, level, allowedTools, systemPrompt);
+        return new AgentTemplate(name.Trim(), role, level, allowedTools, systemPrompt, isBuiltIn, description?.Trim());
+    }
+
+    /// <summary>Serializes a template back to the markdown-with-frontmatter file format.</summary>
+    public static string Serialize(AgentTemplate t)
+    {
+        ArgumentNullException.ThrowIfNull(t);
+        var ic = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("---");
+        sb.AppendLine(string.Create(ic, $"name: {t.Name}"));
+        if (!string.IsNullOrWhiteSpace(t.Description))
+            sb.AppendLine(string.Create(ic, $"description: {t.Description}"));
+        sb.AppendLine(string.Create(ic, $"role: {t.Role}"));
+        sb.AppendLine(string.Create(ic, $"recommended_level: {t.RecommendedLevel}"));
+        if (t.AllowedTools.Count > 0)
+            sb.AppendLine(string.Create(ic, $"allowed_tools: [{string.Join(", ", t.AllowedTools)}]"));
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.Append(t.SystemPrompt);
+        return sb.ToString();
     }
 
     /// <summary>Parses YAML inline list syntax: <c>[A, B, C]</c> or bare <c>A, B, C</c>.</summary>
     private static IReadOnlyList<string> ParseList(string value)
     {
-        // Strip optional surrounding brackets
         var v = value.Trim();
         if (v.StartsWith('[') && v.EndsWith(']'))
             v = v[1..^1];

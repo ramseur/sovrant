@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Runtime.Missions;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Storage;
+using Sovrant.Runtime.Users;
 
 namespace Sovrant.Runtime.CommandCenter;
 
@@ -19,6 +20,7 @@ public sealed class CommandCenterAggregator
     private readonly IAgentRunStore _runs;
     private readonly ISessionStore _sessions;
     private readonly IClawConnectionMonitor _claws;
+    private readonly IUserService? _users;
     private readonly ILogger<CommandCenterAggregator> _logger;
 
     public CommandCenterAggregator(
@@ -26,12 +28,14 @@ public sealed class CommandCenterAggregator
         IAgentRunStore runs,
         ISessionStore sessions,
         ILogger<CommandCenterAggregator> logger,
-        IClawConnectionMonitor? claws = null)
+        IClawConnectionMonitor? claws = null,
+        IUserService? users = null)
     {
         _missions = missions;
         _runs = runs;
         _sessions = sessions;
         _claws = claws ?? NullClawConnectionMonitor.Instance;
+        _users = users;
         _logger = logger;
     }
 
@@ -171,7 +175,10 @@ public sealed class CommandCenterAggregator
                 ProjectId: null));
         }
 
-        var ordered = rows
+        // Resolve raw user IDs to human-readable labels (username or email).
+        var userLabels = await ResolveUserLabelsAsync(rows, ct).ConfigureAwait(false);
+        var resolved = rows
+            .Select(r => r with { OwnerLabel = r.OwnerLabel is null ? null : userLabels.GetValueOrDefault(r.OwnerLabel, r.OwnerLabel) })
             .OrderByDescending(r => r.LastActivity)
             .Take(150)
             .ToList();
@@ -183,7 +190,36 @@ public sealed class CommandCenterAggregator
             ActiveAgentRuns: activeAgentRuns,
             ActiveSessions: sessionRows.Count,
             ActiveClaws: activeClaws,
-            Rows: ordered);
+            Rows: resolved);
+    }
+
+    private async Task<Dictionary<string, string>> ResolveUserLabelsAsync(
+        IReadOnlyList<CommandCenterRow> rows, CancellationToken ct)
+    {
+        if (_users is null) return [];
+        var ids = rows
+            .Where(r => !string.IsNullOrEmpty(r.OwnerLabel))
+            .Select(r => r.OwnerLabel!)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var id in ids)
+        {
+            try
+            {
+                var user = await _users.GetAsync(id, ct).ConfigureAwait(false);
+                if (user is not null)
+                    result[id] = user.Email ?? user.Username;
+            }
+            catch (Exception ex) when (LogUserResolveFailed(_logger, id, ex)) { }
+        }
+        return result;
+    }
+
+    private static bool LogUserResolveFailed(ILogger logger, string userId, Exception ex)
+    {
+        LogSourceFailed(logger, $"user-resolve:{userId}", ex.Message);
+        return true;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

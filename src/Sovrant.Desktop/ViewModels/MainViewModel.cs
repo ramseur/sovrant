@@ -47,6 +47,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly ActiveSessionsViewModel _activeSessions;
     // Parked ChatViewModels whose turns are still running in background.
     private readonly Dictionary<string, ChatViewModel> _backgroundChats = [];
+    private AgentsViewModel? _agentsViewModel;
 
     public bool IsAdmin => _principal.IsAdmin;
 
@@ -196,6 +197,7 @@ public partial class MainViewModel : ViewModelBase
         {
             "Chat" => CreateChatViewModel(),
             "Settings" => _services.GetRequiredService<SettingsViewModel>(),
+            var s when s.StartsWith("Settings:", StringComparison.Ordinal) => ResolveSettings(s),
             "Diagnostics" => _services.GetRequiredService<DiagnosticsViewModel>(),
             "Integrations" => _services.GetRequiredService<IntegrationsViewModel>(),
             "Artifacts" => _services.GetRequiredService<ArtifactsViewModel>(),
@@ -207,7 +209,7 @@ public partial class MainViewModel : ViewModelBase
             "TrustBoundary" => _services.GetRequiredService<TrustBoundaryViewModel>(),
             "Projects" => _services.GetRequiredService<ProjectsViewModel>(),
             "Workspaces" => _services.GetRequiredService<WorkspacesViewModel>(),
-            "Agents" => _services.GetRequiredService<AgentsViewModel>(),
+            "Agents" => GetOrCreateAgentsViewModel(),
             "Automations" => _services.GetRequiredService<AutomationsViewModel>(),
             "Orchestration" => _services.GetRequiredService<OrchestrationViewModel>(),
             "CommandCenter" => ResetCockpitToGrid(),
@@ -215,6 +217,20 @@ public partial class MainViewModel : ViewModelBase
             "AdminWorkspaces" => ResolveAdmin("workspaces"),
             _ => CurrentPage,
         };
+    }
+
+    private SettingsViewModel ResolveSettings(string route)
+    {
+        var vm = _services.GetRequiredService<SettingsViewModel>();
+        var parts = route.Split(':');
+        // "Settings:Providers" or "Settings:Providers:OpenAI"
+        if (parts.Length >= 2 && string.Equals(parts[1], "Providers", StringComparison.OrdinalIgnoreCase))
+        {
+            vm.SelectedTab = 1;
+            if (parts.Length >= 3 && !string.IsNullOrWhiteSpace(parts[2]))
+                vm.SelectProvider(parts[2]);
+        }
+        return vm;
     }
 
     private AdminViewModel ResolveAdmin(string section)
@@ -257,6 +273,26 @@ public partial class MainViewModel : ViewModelBase
         var chat = _services.GetRequiredService<ChatViewModel>();
         chat.TurnCompleted += () => _ = Sidebar.RefreshSessionsCommand.ExecuteAsync(null);
         return chat;
+    }
+
+    private AgentsViewModel GetOrCreateAgentsViewModel()
+    {
+        if (_agentsViewModel is not null) return _agentsViewModel;
+        _agentsViewModel = ActivatorUtilities.CreateInstance<AgentsViewModel>(
+            _services,
+            (Action<string, string?>)LaunchAgentChat);
+        return _agentsViewModel;
+    }
+
+    private void LaunchAgentChat(string agentName, string? systemPrompt)
+    {
+        ParkCurrentChatIfRunning();
+        var chat = CreateChatViewModel();
+        chat.SetAgentScope(agentName, systemPrompt);
+        CurrentPage = chat;
+        SelectedGroup = "chat";
+        OnSelectedGroupChanged("chat");
+        Sidebar.SelectedNavItem = "Chat";
     }
 
     [RelayCommand]

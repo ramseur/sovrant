@@ -30,7 +30,11 @@
                 <div class="hero-logo">
                     <span>&#9889;</span>
                 </div>
-                <h1 class="hero-title">What are you working on?</h1>
+                @if (_agentName is not null)
+                {
+                    <div class="agent-scope-badge">&#x1F916; Chatting with <strong>@_agentName</strong></div>
+                }
+                <h1 class="hero-title">@(_agentName is not null ? $"Ask {_agentName} anything" : "What are you working on?")</h1>
                 <p class="hero-subtitle">Create agents, build teams, and orchestrate missions to automate your work.</p>
                 <div class="hero-suggestions">
                     @foreach (var s in _suggestions)
@@ -135,6 +139,7 @@
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private IMcpServerStore McpServerStore { get; set; } = default!;
     [Inject] private Sovrant.Web.Services.WebSessionService Session { get; set; } = default!;
+    [Inject] private Sovrant.Agents.Templates.AgentTemplateRegistry AgentRegistry { get; set; } = default!;
 
     private string _userDisplayName => LocalPart(Session.Email) ?? "You";
     private static string? LocalPart(string? email)
@@ -157,8 +162,6 @@
     private ElementReference _inputRef;
     private string _inputText = string.Empty;
     private bool _isSending;
-    // Legacy CTS used only when background sessions are disabled.
-    private CancellationTokenSource? _sendCts;
     // True when the current turn is owned by ActiveSessionsService.
     private bool _isBackgroundSession;
     private ChatMessageModel? _streamingMsg;
@@ -167,6 +170,8 @@
     private decimal _sessionCost;
     private string _pageError = string.Empty;
     private string _sessionId = $"session-{Guid.NewGuid():N}";
+    private string? _agentName;
+    private string? _agentSystemPrompt;
 
     private readonly List<ChatMessageModel> _messages = [];
 
@@ -210,6 +215,18 @@
         // Resume from ?session=<id> in the URL (Command Center deep-link).
         var uri = new Uri(Nav.Uri);
         var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+
+        // Agent-scoped session: ?agent=<name> scopes this chat to the named agent's system prompt.
+        if (query.TryGetValue("agent", out var agentParam) && !string.IsNullOrWhiteSpace(agentParam))
+        {
+            var template = AgentRegistry.TryGet(agentParam.ToString());
+            if (template is not null)
+            {
+                _agentName = template.Name;
+                _agentSystemPrompt = template.SystemPrompt;
+            }
+        }
+
         if (query.TryGetValue("session", out var sessionParam) &&
             !string.IsNullOrWhiteSpace(sessionParam) &&
             sessionParam.ToString() != _sessionId)
@@ -521,10 +538,8 @@
 
     private async Task SendToRuntimeAsync(string text)
     {
-        var bgEnabled = await ActiveSessions.IsEnabledAsync();
-        var maxActive = await ActiveSessions.GetMaxActiveAsync();
-
-        if (bgEnabled && ActiveSessions.RunningCount() >= maxActive)
+        const int maxActive = 5;
+        if (ActiveSessions.RunningCount() >= maxActive)
         {
             _messages.Add(new ChatMessageModel
             {
@@ -560,45 +575,22 @@
 
         var sessionId = _sessionId;
         var turnCts = new CancellationTokenSource();
+        _isBackgroundSession = true;
+        ActiveSessions.TryRegister(sessionId, title ?? sessionId, turnCts);
+        ActiveSessions.Attach(sessionId, evt =>
+            InvokeAsync(() => { HandleEvent((RuntimeEvent)evt, assistantMsg); StateHasChanged(); return Task.CompletedTask; }));
 
-        if (bgEnabled)
-        {
-            _isBackgroundSession = true;
-            ActiveSessions.TryRegister(sessionId, title ?? sessionId, turnCts);
-            ActiveSessions.Attach(sessionId, evt =>
-                InvokeAsync(() => { HandleEvent((RuntimeEvent)evt, assistantMsg); StateHasChanged(); return Task.CompletedTask; }));
-
-            _ = Task.Run(async () => await RunTurnCoreAsync(text, assistantMsg, sessionId, turnCts.Token, bgEnabled: true));
-        }
-        else
-        {
-            _isBackgroundSession = false;
-            _sendCts?.Dispose();
-            _sendCts = turnCts;
-            await RunTurnCoreAsync(text, assistantMsg, sessionId, turnCts.Token, bgEnabled: false);
-        }
+        _ = Task.Run(async () => await RunTurnCoreAsync(text, assistantMsg, sessionId, turnCts.Token));
     }
 
-    private async Task RunTurnCoreAsync(string text, ChatMessageModel assistantMsg, string sessionId, CancellationToken ct, bool bgEnabled)
+    private async Task RunTurnCoreAsync(string text, ChatMessageModel assistantMsg, string sessionId, CancellationToken ct)
     {
-        var elapsedCts = bgEnabled ? null : CancellationTokenSource.CreateLinkedTokenSource(ct);
-        if (elapsedCts is not null)
-        {
-            _ = Task.Run(async () =>
-            {
-                using var ticker = new PeriodicTimer(TimeSpan.FromSeconds(1));
-                while (await ticker.WaitForNextTickAsync(elapsedCts.Token).ConfigureAwait(false))
-                {
-                    assistantMsg.UpdateElapsed();
-                    await InvokeAsync(StateHasChanged);
-                }
-            }, elapsedCts.Token);
-        }
-
+        SessionPool.BeginTurn(sessionId, Sovrant.Web.Program.SovrantUserId);
         try
         {
             await Sovrant.Web.Program.RuntimeReady.Task.WaitAsync(ct);
-            var pooled = await SessionPool.GetOrCreateAsync(sessionId, ct: ct);
+            var pooled = await SessionPool.GetOrCreateAsync(sessionId,
+                agentSystemPrompt: _agentSystemPrompt, agentName: _agentName, ct: ct);
 
             if (_connectionsLoaded)
             {
@@ -611,37 +603,22 @@
             using var _scope = SessionContext.Push(pooled.Config);
             await foreach (var ev in pooled.Runtime.RunTurnAsync(text, ct))
             {
-                if (bgEnabled)
-                {
-                    ActiveSessions.PushEvent(sessionId, ev);
-                }
-                else
-                {
-                    HandleEvent(ev, assistantMsg);
-                    await InvokeAsync(StateHasChanged);
-                    if (ev is RuntimeEvent.TextChunk)
-                        await ScrollToBottom();
-                }
+                ActiveSessions.PushEvent(sessionId, ev);
             }
 
-            if (bgEnabled) ActiveSessions.Complete(sessionId);
+            ActiveSessions.Complete(sessionId);
         }
         catch (OperationCanceledException)
         {
-            if (bgEnabled) ActiveSessions.Fail(sessionId, "Cancelled");
+            ActiveSessions.Fail(sessionId, "Cancelled");
         }
         catch (Exception ex)
         {
-            if (bgEnabled) ActiveSessions.Fail(sessionId, ex.Message);
-            else assistantMsg.SetError(ex.Message);
+            ActiveSessions.Fail(sessionId, ex.Message);
         }
         finally
         {
-            if (elapsedCts is not null)
-            {
-                await elapsedCts.CancelAsync();
-                elapsedCts.Dispose();
-            }
+            SessionPool.EndTurn(sessionId, Sovrant.Web.Program.SovrantUserId);
             await InvokeAsync(async () =>
             {
                 _isSending = false;
@@ -671,10 +648,7 @@
         _isSending = false;
         StateHasChanged();
 
-        if (_isBackgroundSession)
-            ActiveSessions.Cancel(_sessionId);
-        else
-            _sendCts?.Cancel();
+        ActiveSessions.Cancel(_sessionId);
 
         _isBackgroundSession = false;
         return Task.CompletedTask;
@@ -820,7 +794,5 @@
 
         if (_isBackgroundSession && ActiveSessions.HasSession(_sessionId))
             ActiveSessions.Detach(_sessionId);
-        else
-            _sendCts?.Dispose();
     }
 }

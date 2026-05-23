@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.Config;
@@ -15,6 +14,12 @@ public partial class IntegrationsViewModel : ViewModelBase
     private readonly McpClientRegistry _clientRegistry;
     private readonly McpToolRegistrar _registrar;
 
+    // ── Tab ──────────────────────────────────────────────────────────────────
+    /// <summary>"gallery" | "connected"</summary>
+    [ObservableProperty]
+    private string _activeTab = "gallery";
+
+    // ── Connected tab ────────────────────────────────────────────────────────
     [ObservableProperty]
     private string _searchText = string.Empty;
 
@@ -22,12 +27,8 @@ public partial class IntegrationsViewModel : ViewModelBase
     private McpServerItem? _selectedServer;
 
     [ObservableProperty]
-    private string _detailMarkdown = string.Empty;
-
-    [ObservableProperty]
     private int _totalCount;
 
-    // Add-server form fields
     [ObservableProperty]
     private string _newServerName = string.Empty;
 
@@ -37,7 +38,6 @@ public partial class IntegrationsViewModel : ViewModelBase
     [ObservableProperty]
     private string _newServerArgs = string.Empty;
 
-    // HTTP transport form fields
     [ObservableProperty]
     private string _newServerUrl = string.Empty;
 
@@ -47,7 +47,6 @@ public partial class IntegrationsViewModel : ViewModelBase
     [ObservableProperty]
     private string _newServerHeadersJson = string.Empty;
 
-    // JSON-paste mode field
     [ObservableProperty]
     private string _newServerJson = string.Empty;
 
@@ -59,21 +58,126 @@ public partial class IntegrationsViewModel : ViewModelBase
     private string _statusMessage = string.Empty;
 
     private readonly List<McpServerItem> _allServers = [];
-
     public ObservableCollection<McpServerItem> FilteredServers { get; } = [];
+
+    // ── Gallery tab ──────────────────────────────────────────────────────────
+    [ObservableProperty]
+    private CatalogEntryViewModel? _selectedCatalogEntry;
+
+    [ObservableProperty]
+    private string _galleryApiKey = string.Empty;
+
+    [ObservableProperty]
+    private string _galleryUrl = string.Empty;
+
+    [ObservableProperty]
+    private bool _isGalleryConnecting;
+
+    public ObservableCollection<CatalogEntryViewModel> CatalogEntries { get; } = [];
 
     public IntegrationsViewModel(IMcpServerStore serverStore, McpClientRegistry clientRegistry, McpToolRegistrar registrar)
     {
         _serverStore = serverStore;
         _clientRegistry = clientRegistry;
         _registrar = registrar;
+
+        foreach (var entry in IntegrationCatalog.All)
+            CatalogEntries.Add(new CatalogEntryViewModel(entry));
+
         _ = LoadServersAsync();
     }
 
-    /// <summary>
-    /// Connects (or reconnects) a single server in-process and updates the UI status
-    /// so users see immediate feedback instead of being told to restart the app.
-    /// </summary>
+    // ── Tab commands ─────────────────────────────────────────────────────────
+    [RelayCommand]
+    private void SwitchTab(string tab)
+    {
+        ActiveTab = tab;
+        SelectedCatalogEntry = null;
+        SelectedServer = null;
+        StatusMessage = string.Empty;
+    }
+
+    // ── Gallery commands ─────────────────────────────────────────────────────
+    [RelayCommand]
+    private void SelectCatalogEntry(CatalogEntryViewModel entry)
+    {
+        SelectedCatalogEntry = entry;
+        GalleryApiKey = string.Empty;
+        GalleryUrl = string.Empty;
+        StatusMessage = string.Empty;
+    }
+
+    [RelayCommand]
+    private async Task ConnectFromGalleryAsync()
+    {
+        var entry = SelectedCatalogEntry;
+        if (entry is null || entry.Kind == IntegrationKind.LlmProvider) return;
+
+        if (entry.NeedsApiKey && string.IsNullOrWhiteSpace(GalleryApiKey))
+        {
+            StatusMessage = $"{entry.ApiKeyLabel} is required.";
+            return;
+        }
+        if (entry.NeedsEndpoint && string.IsNullOrWhiteSpace(GalleryUrl))
+        {
+            StatusMessage = $"{entry.EndpointLabel} is required.";
+            return;
+        }
+
+        IsGalleryConnecting = true;
+        StatusMessage = string.Empty;
+        try
+        {
+            var config = BuildConfig(entry, GalleryApiKey.Trim(), GalleryUrl.Trim());
+            await _serverStore.UpsertAsync(entry.Id, config).ConfigureAwait(true);
+            await ConnectAndRefreshAsync(entry.Id, config).ConfigureAwait(true);
+            ActiveTab = "connected";
+            SelectedServer = FilteredServers.FirstOrDefault(s => s.Name == entry.Id);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Failed: {ex.Message}";
+        }
+        finally
+        {
+            IsGalleryConnecting = false;
+        }
+    }
+
+    private static McpServerConfig BuildConfig(CatalogEntryViewModel entry, string apiKey, string endpoint)
+    {
+        if (entry.Kind == IntegrationKind.McpStdio)
+        {
+            var env = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (!string.IsNullOrEmpty(entry.ApiKeyEnvVar) && !string.IsNullOrEmpty(apiKey))
+                env[entry.ApiKeyEnvVar] = apiKey;
+
+            var args = (entry.DefaultArgs ?? (IReadOnlyList<string>)[])
+                .Select(a => a
+                    .Replace("{ENDPOINT}", endpoint, StringComparison.Ordinal)
+                    .Replace("{API_KEY}", apiKey, StringComparison.Ordinal))
+                .ToArray();
+
+            return new McpServerConfig { Command = entry.DefaultCommand!, Args = args, Env = env };
+        }
+        else
+        {
+            var headers = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (!string.IsNullOrEmpty(entry.ApiKeyHeader) && !string.IsNullOrEmpty(apiKey))
+                headers[entry.ApiKeyHeader] = entry.ApiKeyHeader == "Authorization"
+                    ? $"Bearer {apiKey}"
+                    : apiKey;
+
+            var urlStr = !string.IsNullOrEmpty(entry.EndpointTemplate)
+                ? entry.EndpointTemplate.Replace("{API_KEY}", apiKey, StringComparison.Ordinal)
+                : endpoint;
+
+            Uri.TryCreate(urlStr, UriKind.Absolute, out var url);
+            return new McpServerConfig { Url = url, Headers = headers };
+        }
+    }
+
+    // ── Connected tab commands ────────────────────────────────────────────────
     private async Task ConnectAndRefreshAsync(string name, McpServerConfig config)
     {
         StatusMessage = $"Connecting to '{name}'…";
@@ -109,53 +213,39 @@ public partial class IntegrationsViewModel : ViewModelBase
     {
         var name = NewServerName.Trim();
         var command = NewServerCommand.Trim();
-
         if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(command))
         {
             StatusMessage = "Name and command are required.";
             return;
         }
-
         if (await _serverStore.GetAsync(name).ConfigureAwait(true) is not null)
         {
             StatusMessage = $"Server '{name}' already exists.";
             return;
         }
-
         try
         {
             var args = string.IsNullOrWhiteSpace(NewServerArgs)
                 ? []
                 : NewServerArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-            var config = new McpServerConfig
-            {
-                Command = command,
-                Args = args,
-                Env = new Dictionary<string, string>(StringComparer.Ordinal),
-            };
+            var config = new McpServerConfig { Command = command, Args = args, Env = new Dictionary<string, string>(StringComparer.Ordinal) };
             await _serverStore.UpsertAsync(name, config).ConfigureAwait(true);
             ResetAddForm();
             await ConnectAndRefreshAsync(name, config).ConfigureAwait(true);
         }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Failed to add server: {ex.Message}";
-        }
+        catch (Exception ex) { StatusMessage = $"Failed to add server: {ex.Message}"; }
     }
 
     private async Task AddHttpServerAsync()
     {
         var name = NewServerName.Trim();
         var urlText = NewServerUrl.Trim();
-
         if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(urlText))
         {
             StatusMessage = "Name and URL are required.";
             return;
         }
-        if (!Uri.TryCreate(urlText, UriKind.Absolute, out var url)
-            || (url.Scheme != "http" && url.Scheme != "https"))
+        if (!Uri.TryCreate(urlText, UriKind.Absolute, out var url) || (url.Scheme != "http" && url.Scheme != "https"))
         {
             StatusMessage = "URL must be an absolute http(s) URL.";
             return;
@@ -165,7 +255,6 @@ public partial class IntegrationsViewModel : ViewModelBase
             StatusMessage = $"Server '{name}' already exists.";
             return;
         }
-
         try
         {
             var headers = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -183,49 +272,28 @@ public partial class IntegrationsViewModel : ViewModelBase
             ResetAddForm();
             await ConnectAndRefreshAsync(name, config).ConfigureAwait(true);
         }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Failed to add server: {ex.Message}";
-        }
+        catch (Exception ex) { StatusMessage = $"Failed to add server: {ex.Message}"; }
     }
 
     private async Task AddFromJsonAsync()
     {
-        if (string.IsNullOrWhiteSpace(NewServerJson))
-        {
-            StatusMessage = "Paste a JSON config first.";
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(NewServerJson)) { StatusMessage = "Paste a JSON config first."; return; }
         try
         {
             var entries = McpJsonParser.Parse(NewServerJson);
-            if (entries.Count == 0)
-            {
-                StatusMessage = "No valid mcpServers entries found.";
-                return;
-            }
+            if (entries.Count == 0) { StatusMessage = "No valid mcpServers entries found."; return; }
             foreach (var (name, config) in entries)
                 await _serverStore.UpsertAsync(name, config).ConfigureAwait(true);
-
             ResetAddForm();
             foreach (var (name, config) in entries)
                 await ConnectAndRefreshAsync(name, config).ConfigureAwait(true);
         }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Failed to add server: {ex.Message}";
-        }
+        catch (Exception ex) { StatusMessage = $"Failed to add server: {ex.Message}"; }
     }
 
     private void ResetAddForm()
     {
-        NewServerName = string.Empty;
-        NewServerCommand = string.Empty;
-        NewServerArgs = string.Empty;
-        NewServerUrl = string.Empty;
-        NewServerBearer = string.Empty;
-        NewServerHeadersJson = string.Empty;
-        NewServerJson = string.Empty;
+        NewServerName = NewServerCommand = NewServerArgs = NewServerUrl = NewServerBearer = NewServerHeadersJson = NewServerJson = string.Empty;
     }
 
     [RelayCommand]
@@ -234,44 +302,29 @@ public partial class IntegrationsViewModel : ViewModelBase
         try
         {
             await _serverStore.DeleteAsync(server.Name).ConfigureAwait(true);
-
             _allServers.RemoveAll(s => s.Name == server.Name);
             TotalCount = _allServers.Count;
-
-            if (SelectedServer == server)
-                SelectedServer = null;
-
+            if (SelectedServer == server) SelectedServer = null;
             ApplyFilter();
             StatusMessage = $"Server '{server.Name}' removed. Restart to disconnect.";
         }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Failed to remove server: {ex.Message}";
-        }
+        catch (Exception ex) { StatusMessage = $"Failed to remove server: {ex.Message}"; }
     }
 
     private async Task LoadServersAsync()
     {
         _allServers.Clear();
-
         var servers = await _serverStore.GetAllAsync().ConfigureAwait(true);
 
-        // Tool→server map is the source of truth for what's currently registered.
-        // No need to call ListToolsAsync again — the registrar already did, and
-        // a second call on some HTTP MCPs has been observed to hang/throw.
         var toolsByServer = _clientRegistry.ToolToServer
             .GroupBy(kv => kv.Value, StringComparer.Ordinal)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Select(kv => kv.Key).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList(),
-                StringComparer.Ordinal);
+            .ToDictionary(g => g.Key, g => g.Select(kv => kv.Key).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList(), StringComparer.Ordinal);
 
         foreach (var (name, server) in servers.OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
         {
             var isConnected = _clientRegistry.Clients.ContainsKey(name);
             var tools = toolsByServer.TryGetValue(name, out var t) ? t : [];
-
-            var serverItem = new McpServerItem
+            var item = new McpServerItem
             {
                 Name = name,
                 Command = server.Command,
@@ -284,37 +337,31 @@ public partial class IntegrationsViewModel : ViewModelBase
                 EnvVars = server.Env.ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.Ordinal),
                 Headers = server.Headers.ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.Ordinal),
             };
-            foreach (var toolName in tools)
-                serverItem.ToolNames.Add(toolName);
-            serverItem.Markdown = BuildServerMarkdown(serverItem);
-            _allServers.Add(serverItem);
+            foreach (var toolName in tools) item.ToolNames.Add(toolName);
+            item.Markdown = BuildServerMarkdown(item);
+            _allServers.Add(item);
         }
 
         TotalCount = _allServers.Count;
         ApplyFilter();
+
+        // Refresh "already connected" state on gallery entries
+        foreach (var entry in CatalogEntries)
+            entry.IsAlreadyConnected = _clientRegistry.Clients.ContainsKey(entry.Id);
     }
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
-
-    partial void OnSelectedServerChanged(McpServerItem? value)
-    {
-        DetailMarkdown = value is null ? string.Empty : BuildServerMarkdown(value);
-    }
 
     private void ApplyFilter()
     {
         FilteredServers.Clear();
         var query = SearchText.Trim();
-
         foreach (var server in _allServers)
         {
             if (query.Length > 0
                 && !server.Name.Contains(query, StringComparison.OrdinalIgnoreCase)
                 && !server.Command.Contains(query, StringComparison.OrdinalIgnoreCase))
-            {
                 continue;
-            }
-
             FilteredServers.Add(server);
         }
     }
@@ -324,7 +371,6 @@ public partial class IntegrationsViewModel : ViewModelBase
         var sb = new StringBuilder();
         sb.AppendLine(CultureInfo.InvariantCulture, $"# {server.Name}");
         sb.AppendLine();
-
         sb.AppendLine(CultureInfo.InvariantCulture, $"**Status:** {(server.IsConnected ? "Connected" : "Not Connected")}");
         sb.AppendLine();
         sb.AppendLine(CultureInfo.InvariantCulture, $"**Transport:** {server.Transport}");
@@ -346,55 +392,33 @@ public partial class IntegrationsViewModel : ViewModelBase
             }
         }
 
-        if (server.HasOAuth)
-        {
-            sb.AppendLine("**Authentication:** OAuth 2.0 configured");
-            sb.AppendLine();
-        }
+        if (server.HasOAuth) { sb.AppendLine("**Authentication:** OAuth 2.0 configured"); sb.AppendLine(); }
 
         if (server.Headers.Count > 0)
         {
-            sb.AppendLine("## Headers");
-            sb.AppendLine();
-            sb.AppendLine("| Header | Value |");
-            sb.AppendLine("|--------|-------|");
+            sb.AppendLine("## Headers"); sb.AppendLine();
+            sb.AppendLine("| Header | Value |"); sb.AppendLine("|--------|-------|");
             foreach (var (key, value) in server.Headers.OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
-            {
-                var display = IsSensitiveKey(key) ? Mask(value) : value;
-                sb.AppendLine(CultureInfo.InvariantCulture, $"| {key} | {display} |");
-            }
+                sb.AppendLine(CultureInfo.InvariantCulture, $"| {key} | {(IsSensitiveKey(key) ? Mask(value) : value)} |");
             sb.AppendLine();
         }
 
         if (server.EnvVars.Count > 0)
         {
-            sb.AppendLine("## Environment Variables");
-            sb.AppendLine();
-            sb.AppendLine("| Variable | Value |");
-            sb.AppendLine("|----------|-------|");
+            sb.AppendLine("## Environment Variables"); sb.AppendLine();
+            sb.AppendLine("| Variable | Value |"); sb.AppendLine("|----------|-------|");
             foreach (var (key, value) in server.EnvVars.OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
-            {
-                var display = IsSensitiveKey(key) ? "--------" : value;
-                sb.AppendLine(CultureInfo.InvariantCulture, $"| {key} | {display} |");
-            }
+                sb.AppendLine(CultureInfo.InvariantCulture, $"| {key} | {(IsSensitiveKey(key) ? "--------" : value)} |");
             sb.AppendLine();
         }
 
-        sb.AppendLine("---");
-        sb.AppendLine();
-
+        sb.AppendLine("---"); sb.AppendLine();
         if (server.ToolNames.Count > 0)
-        {
             sb.AppendLine(CultureInfo.InvariantCulture, $"**Tools ({server.ToolCount}):** {string.Join(", ", server.ToolNames)}");
-        }
         else if (server.IsConnected)
-        {
             sb.AppendLine("**Tools:** Connected — server reported no tools.");
-        }
         else
-        {
             sb.AppendLine("**Tools:** Server not connected");
-        }
 
         return sb.ToString();
     }
@@ -409,31 +433,45 @@ public partial class IntegrationsViewModel : ViewModelBase
         value.Length > 6 ? string.Concat(value.AsSpan(0, 4), "****") : "****";
 }
 
+public partial class CatalogEntryViewModel : ViewModelBase
+{
+    private readonly CatalogEntry _entry;
+
+    [ObservableProperty]
+    private bool _isAlreadyConnected;
+
+    public CatalogEntryViewModel(CatalogEntry entry) => _entry = entry;
+
+    public string Id => _entry.Id;
+    public string Name => _entry.Name;
+    public string Category => _entry.Category;
+    public string Icon => _entry.Icon;
+    public string Description => _entry.Description;
+    public IntegrationKind Kind => _entry.Kind;
+    public IntegrationTier Tier => _entry.Tier;
+    public bool NeedsApiKey => _entry.NeedsApiKey;
+    public bool NeedsEndpoint => _entry.NeedsEndpoint;
+    public string? ApiKeyLabel => _entry.ApiKeyLabel;
+    public string? ApiKeyEnvVar => _entry.ApiKeyEnvVar;
+    public string? ApiKeyHeader => _entry.ApiKeyHeader;
+    public string? EndpointLabel => _entry.EndpointLabel;
+    public string? DefaultCommand => _entry.DefaultCommand;
+    public IReadOnlyList<string>? DefaultArgs => _entry.DefaultArgs;
+    public string? EndpointTemplate => _entry.EndpointTemplate;
+    public string? SettingsSection => _entry.SettingsSection;
+    public bool IsLlmProvider => _entry.Kind == IntegrationKind.LlmProvider;
+}
+
 public partial class McpServerItem : ViewModelBase
 {
-    [ObservableProperty]
-    private string _name = string.Empty;
-
-    [ObservableProperty]
-    private string _command = string.Empty;
-
-    [ObservableProperty]
-    private string _argsSummary = string.Empty;
-
-    [ObservableProperty]
-    private string _url = string.Empty;
-
-    [ObservableProperty]
-    private string _transport = "stdio";
-
-    [ObservableProperty]
-    private bool _hasOAuth;
-
-    [ObservableProperty]
-    private bool _isConnected;
-
-    [ObservableProperty]
-    private int _toolCount;
+    [ObservableProperty] private string _name = string.Empty;
+    [ObservableProperty] private string _command = string.Empty;
+    [ObservableProperty] private string _argsSummary = string.Empty;
+    [ObservableProperty] private string _url = string.Empty;
+    [ObservableProperty] private string _transport = "stdio";
+    [ObservableProperty] private bool _hasOAuth;
+    [ObservableProperty] private bool _isConnected;
+    [ObservableProperty] private int _toolCount;
 
     public ObservableCollection<string> ToolNames { get; } = [];
     public Dictionary<string, string> EnvVars { get; init; } = new(StringComparer.Ordinal);

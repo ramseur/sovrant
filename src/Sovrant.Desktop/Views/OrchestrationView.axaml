@@ -18,7 +18,7 @@
                             Background="Transparent" Foreground="{DynamicResource TextPrimary}"
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" />
                     <Button Content="+ New" ToolTip.Tip="New team"
-                            Command="{Binding HintNewCommand}"
+                            Command="{Binding StartCreateCommand}"
                             Padding="10,5" CornerRadius="6" FontSize="12" FontWeight="SemiBold"
                             Background="{DynamicResource BrandPrimary}" Foreground="White" />
                     <Button Content="Refresh"
@@ -47,7 +47,7 @@
                     Padding="8">
                 <ScrollViewer>
                     <StackPanel Spacing="4">
-                        <TextBlock Text="No teams yet. Use /team create in chat to set one up."
+                        <TextBlock Text="No teams yet. Click + New to create one."
                                    FontSize="12" TextWrapping="Wrap" Margin="8"
                                    Foreground="{DynamicResource TextSecondary}"
                                    IsVisible="{Binding !TeamCount}" />
@@ -87,12 +87,69 @@
             <!-- Detail pane -->
             <Grid Grid.Column="2">
 
+                <!-- Create team panel -->
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding IsCreating}">
+                    <StackPanel Spacing="16" MaxWidth="480">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Cancel"
+                                    Command="{Binding CancelCreateCommand}"
+                                    Padding="10,5" CornerRadius="4" FontSize="11"
+                                    Background="Transparent" Foreground="{DynamicResource TextPrimary}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" />
+                            <TextBlock Text="New Team" FontSize="18" FontWeight="Bold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </DockPanel>
+
+                        <Border Padding="14" CornerRadius="8"
+                                Background="{DynamicResource SurfaceBackground}"
+                                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                            <StackPanel Spacing="12">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Name" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                    <TextBox Text="{Binding CreateName, Mode=TwoWay}"
+                                             Watermark="my-team"
+                                             CornerRadius="6" Padding="8,6" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Description" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                    <TextBox Text="{Binding CreateDescription, Mode=TwoWay}"
+                                             Watermark="Optional"
+                                             CornerRadius="6" Padding="8,6" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Run Mode" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                    <ComboBox SelectedItem="{Binding CreateRunModeName, Mode=TwoWay}"
+                                              ItemsSource="{Binding RunModeOptions}"
+                                              HorizontalAlignment="Stretch"
+                                              CornerRadius="6" Padding="8,6" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Button Content="Create Team"
+                                Command="{Binding ConfirmCreateCommand}"
+                                IsEnabled="{Binding CreateName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                HorizontalAlignment="Left"
+                                Padding="16,8" CornerRadius="8"
+                                Background="{DynamicResource BrandPrimary}"
+                                Foreground="White" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+
                 <!-- Empty state -->
                 <Border CornerRadius="10"
                         Background="{DynamicResource SurfaceCard}"
                         BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                         Padding="20,16"
-                        IsVisible="{Binding HasNoSelection}">
+                        IsVisible="{Binding HasNoSelection}"
+                        x:Name="EmptyStateBorder">
                     <TextBlock Text="Select a team to view details"
                                FontSize="14" Foreground="{DynamicResource TextMuted}"
                                HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -130,6 +187,45 @@
                                                IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                                 </StackPanel>
                             </DockPanel>
+
+                            <!-- ── Run card ───────────────────────────────── -->
+                            <TextBlock Text="Run" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+
+                            <Border Padding="14" CornerRadius="8"
+                                    Background="{DynamicResource SurfaceBackground}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                <StackPanel Spacing="8"
+                                            DataContext="{Binding $parent[UserControl].DataContext}">
+                                    <TextBox Text="{Binding RunGoal, Mode=TwoWay}"
+                                             Watermark="Describe the goal or task for this team…"
+                                             AcceptsReturn="True" MinHeight="60"
+                                             CornerRadius="6" Padding="8,6" />
+                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <Button Content="Run Team"
+                                                Command="{Binding RunTeamCommand}"
+                                                IsEnabled="{Binding !IsRunning}"
+                                                Padding="14,6" CornerRadius="6"
+                                                Background="{DynamicResource BrandPrimary}"
+                                                Foreground="White" />
+                                        <TextBlock Text="{Binding RunStatus}"
+                                                   VerticalAlignment="Center" FontSize="11"
+                                                   Foreground="{DynamicResource TextSecondary}" />
+                                    </StackPanel>
+                                    <Border IsVisible="{Binding RunOutput, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                            Padding="10" CornerRadius="6" MaxHeight="200"
+                                            Background="{DynamicResource SurfaceCard}"
+                                            BorderBrush="{DynamicResource SurfaceBorder}"
+                                            BorderThickness="1">
+                                        <ScrollViewer>
+                                            <SelectableTextBlock Text="{Binding RunOutput}"
+                                                                 FontFamily="Consolas,Menlo,monospace"
+                                                                 FontSize="12" TextWrapping="Wrap"
+                                                                 Foreground="{DynamicResource TextPrimary}" />
+                                        </ScrollViewer>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
 
                             <TextBlock Text="Run Profile" FontSize="14" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextPrimary}" />
@@ -259,6 +355,64 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+
+                            <!-- ── Add Member form / button ──────────────── -->
+                            <StackPanel DataContext="{Binding $parent[UserControl].DataContext}">
+                                <Border IsVisible="{Binding IsAddingMember}"
+                                        Padding="14" CornerRadius="8" Margin="0,4,0,0"
+                                        Background="{DynamicResource SurfaceBackground}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                    <StackPanel Spacing="10" MaxWidth="440">
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="From Agent Template" FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextSecondary}" />
+                                            <ComboBox SelectedItem="{Binding AddMemberTemplate, Mode=TwoWay}"
+                                                      ItemsSource="{Binding TemplateOptions}"
+                                                      DisplayMemberBinding="{Binding Label}"
+                                                      SelectedValueBinding="{Binding Name}"
+                                                      HorizontalAlignment="Stretch"
+                                                      CornerRadius="6" Padding="8,6" />
+                                        </StackPanel>
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="Name" FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextSecondary}" />
+                                            <TextBox Text="{Binding AddMemberName, Mode=TwoWay}"
+                                                     Watermark="member-name"
+                                                     CornerRadius="6" Padding="8,6" />
+                                        </StackPanel>
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="Role" FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextSecondary}" />
+                                            <ComboBox SelectedItem="{Binding AddMemberRole, Mode=TwoWay}"
+                                                      ItemsSource="{Binding RoleOptions}"
+                                                      HorizontalAlignment="Stretch"
+                                                      CornerRadius="6" Padding="8,6" />
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button Content="Add"
+                                                    Command="{Binding ConfirmAddMemberCommand}"
+                                                    IsEnabled="{Binding AddMemberName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                    Padding="14,6" CornerRadius="6"
+                                                    Background="{DynamicResource BrandPrimary}"
+                                                    Foreground="White" />
+                                            <Button Content="Cancel"
+                                                    Command="{Binding CancelAddMemberCommand}"
+                                                    Padding="10,6" CornerRadius="6"
+                                                    Background="Transparent"
+                                                    Foreground="{DynamicResource TextPrimary}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                                <Button Content="+ Add Member"
+                                        Command="{Binding StartAddMemberCommand}"
+                                        IsVisible="{Binding !IsAddingMember}"
+                                        Padding="10,5" Margin="0,6,0,0" CornerRadius="6"
+                                        Background="Transparent"
+                                        Foreground="{DynamicResource TextPrimary}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                        BorderThickness="1" />
+                            </StackPanel>
+
                         </StackPanel>
                     </ScrollViewer>
                 </Border>

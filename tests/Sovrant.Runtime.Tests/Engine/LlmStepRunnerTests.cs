@@ -49,12 +49,17 @@ public sealed class LlmStepRunnerTests
             string sessionId,
             Sovrant.Api.Routing.ISmartRouter? scopedRouterOverride = null,
             string? ownerUserId = null,
+            string? agentSystemPrompt = null,
+            string? agentName = null,
             CancellationToken ct = default) => Task.FromResult(Session);
 
         public void Evict(string sessionId, string? ownerUserId = null) { }
         public int ActiveCount => 1;
         public int EvictExpired(TimeSpan ttl, int maxSessions) => 0;
         public SessionConfig? TryGetConfig(string sessionId, string? ownerUserId = null) => Session.Config;
+        public void BeginTurn(string sessionId, string? ownerUserId) { }
+        public void EndTurn(string sessionId, string? ownerUserId) { }
+        public IReadOnlyList<string> GetActiveTurnSessionIds() => [];
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

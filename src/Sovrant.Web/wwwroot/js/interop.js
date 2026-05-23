@@ -77,6 +77,18 @@ window.sovrantInterop = {
     resetTextareaHeight: function (el) {
         if (!el) return;
         el.style.height = '';
+    },
+
+    _baseTitle: null,
+    setTabTitlePrefix: function (prefix) {
+        if (!this._baseTitle) this._baseTitle = document.title;
+        document.title = prefix + (this._baseTitle || 'Sovrant');
+    },
+    clearTabTitlePrefix: function () {
+        if (this._baseTitle) {
+            document.title = this._baseTitle;
+            this._baseTitle = null;
+        }
     }
 };
 

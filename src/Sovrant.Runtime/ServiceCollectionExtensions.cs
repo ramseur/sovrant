@@ -370,10 +370,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<McpToolRegistrar>();
         services.AddSingleton<ICredentialStore>(sp =>
             new SqliteCredentialStore(sp.GetRequiredService<ISqliteConnectionFactory>(), bootstrap.KeystorePath));
-        // MCP/LSP server-entry stores (V019) — metadata only; secrets live in
-        // ICredentialStore under "mcp.{name}.client_secret" / "access_token".
+        // MCP server store — full config (headers, env, args) encrypted in ICredentialStore.
+        // SqliteMcpServerStore is kept for the one-shot migration only; McpServerStoreMigrator
+        // copies its rows into the credential store on first boot then the SQLite table is ignored.
         services.AddSingleton<IMcpServerStore>(sp =>
-            new SqliteMcpServerStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+            new CredentialStoreMcpServerStore(sp.GetRequiredService<ICredentialStore>()));
+        services.AddSingleton<McpServerStoreMigrator>();
         services.AddSingleton<ILspServerStore>(sp =>
             new SqliteLspServerStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
         services.AddHttpClient("McpOAuth", client =>
@@ -488,6 +490,11 @@ public static class ServiceCollectionExtensions
         // tree into the new workspaces/{ws}/.../artifacts/{run} structure. Idempotent.
         var layoutMigrator = services.GetRequiredService<ArtifactLayoutMigrator>();
         layoutMigrator.MigrateIfNeeded();
+
+        // One-shot migration: copy any existing mcp_servers SQLite rows into the
+        // encrypted credential store and write a sentinel so this never runs again.
+        var mcpMigrator = services.GetRequiredService<McpServerStoreMigrator>();
+        await mcpMigrator.MigrateIfNeededAsync(ct).ConfigureAwait(false);
 
         var mcpStore = services.GetRequiredService<IMcpServerStore>();
         var mcpServers = await mcpStore.GetAllAsync(ct).ConfigureAwait(false);

@@ -1,4 +1,5 @@
 @page "/settings"
+@inject NavigationManager NavManager
 @using Microsoft.Extensions.DependencyInjection
 @using Sovrant.Api.Auth
 @using Sovrant.Api.Capabilities
@@ -104,24 +105,6 @@
                 </span>
             </div>
 
-            <h2>Background Sessions</h2>
-            <div class="toggle-card">
-                <div>
-                    <div class="toggle-title">Enable background sessions</div>
-                    <div class="toggle-desc">Turns keep running when you navigate away from chat (up to the limit below)</div>
-                </div>
-                <label class="switch">
-                    <input type="checkbox" checked="@_bgEnabled" @onchange="OnBgEnabledChanged" />
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <div class="settings-row">
-                <label class="toggle-title">Max concurrent sessions (1–5)</label>
-                <input type="number" min="1" max="5" value="@_bgMaxActive"
-                       @onchange="OnBgMaxActiveChanged"
-                       style="width:4rem;margin-left:1rem;" />
-            </div>
-
             <h2>Appearance</h2>
             <div class="toggle-card">
                 <div>
@@ -157,7 +140,6 @@
     [Inject] private MutableAuthProvider AuthProvider { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
-    [Inject] private ActiveSessionsService ActiveSessions { get; set; } = default!;
     [Inject] private IServiceProvider Services { get; set; } = default!;
     [Inject] private IUserPreferenceStore Prefs { get; set; } = default!;
     [Inject] private IProviderProfileStore ProfileStore { get; set; } = default!;
@@ -168,6 +150,9 @@
     private DeleteConfirmModal _deleteModal = default!;
     private ISmartRouter? _router;
     private IModelCapabilityRegistry? _capabilities;
+    [SupplyParameterFromQuery(Name = "tab")] private string? TabParam { get; set; }
+    [SupplyParameterFromQuery(Name = "provider")] private string? ProviderParam { get; set; }
+
     private int _selectedTab;
     private string _selectedProvider = "OpenAI";
     private string _apiKey = string.Empty;
@@ -175,8 +160,6 @@
     private string _permissionMode = "Default";
     private bool _isDarkMode = true;
     private string _statusMessage = string.Empty;
-    private bool _bgEnabled = true;
-    private int _bgMaxActive = 5;
     private string _newProfileName = string.Empty;
     private List<ProviderProfileVm> _savedProfiles = [];
 
@@ -209,24 +192,21 @@
         _permissionMode = PermissionModeAccessor.Mode.ToString();
         _selectedProvider = await InferProviderAsync();
         await LoadProfilesAsync();
-        _bgEnabled = await ActiveSessions.IsEnabledAsync();
-        _bgMaxActive = await ActiveSessions.GetMaxActiveAsync();
+        ApplyQueryParams();
     }
 
-    private async Task OnBgEnabledChanged(ChangeEventArgs e)
+    private void ApplyQueryParams()
     {
-        _bgEnabled = (bool)(e.Value ?? true);
-        await ActiveSessions.SetEnabledAsync(_bgEnabled);
-    }
-
-    private async Task OnBgMaxActiveChanged(ChangeEventArgs e)
-    {
-        if (int.TryParse(e.Value?.ToString(), out var v))
+        if (string.Equals(TabParam, "providers", StringComparison.OrdinalIgnoreCase))
+            _selectedTab = 1;
+        if (!string.IsNullOrWhiteSpace(ProviderParam)
+            && Providers.Contains(ProviderParam, StringComparer.OrdinalIgnoreCase))
         {
-            _bgMaxActive = Math.Clamp(v, 1, 5);
-            await ActiveSessions.SetMaxActiveAsync(_bgMaxActive);
+            _selectedProvider = Providers.First(p => string.Equals(p, ProviderParam, StringComparison.OrdinalIgnoreCase));
+            OnProviderChanged();
         }
     }
+
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

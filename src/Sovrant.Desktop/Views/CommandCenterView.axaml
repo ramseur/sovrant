@@ -188,7 +188,7 @@
                                 <Border Background="{DynamicResource SurfaceCard}"
                                         BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1,0,1,1"
                                         Padding="14,10">
-                                    <Grid ColumnDefinitions="120,*,110,110,80">
+                                    <Grid ColumnDefinitions="120,*,90,150,110,80">
                                         <!-- Kind pill: icon + text, matches the Web cc-kind-pill. -->
                                         <Border Grid.Column="0"
                                                 Background="{DynamicResource SurfaceBackground}"
@@ -216,11 +216,15 @@
                                                    Foreground="{DynamicResource StatusPass}"
                                                    VerticalAlignment="Center"
                                                    TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Grid.Column="3" Text="{Binding LastActivity}" FontSize="11"
+                                        <TextBlock Grid.Column="3" Text="{Binding Owner}" FontSize="11"
                                                    Foreground="{DynamicResource TextMuted}"
                                                    VerticalAlignment="Center"
                                                    TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Grid.Column="4" Text="{Binding Cost}" FontSize="11"
+                                        <TextBlock Grid.Column="4" Text="{Binding LastActivity}" FontSize="11"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="5" Text="{Binding Cost}" FontSize="11"
                                                    Foreground="{DynamicResource TextMuted}"
                                                    VerticalAlignment="Center"
                                                    TextTrimming="CharacterEllipsis" />
@@ -267,6 +271,9 @@
                     <WrapPanel Orientation="Horizontal" ItemSpacing="14">
                         <TextBlock Text="{Binding FocusedStatus, StringFormat='Status: {0}'}" FontSize="11"
                                    Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="{Binding FocusedOwner, StringFormat='Owner: {0}'}" FontSize="11"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   IsVisible="{Binding FocusedOwner, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         <TextBlock Text="{Binding FocusedStarted, StringFormat='Started: {0}'}" FontSize="11"
                                    Foreground="{DynamicResource TextSecondary}" />
                         <TextBlock Text="{Binding FocusedDuration, StringFormat='Duration: {0}'}" FontSize="11"

@@ -241,9 +241,21 @@ Directory segments use `{id}__{safe-name}` format where the safe name is lowerca
 
 When `SOVRANT_MCP_TOKEN` is set, callers must supply a matching `--token` flag. Errors are written to stderr to preserve the JSON-RPC stdout transport. The token is sourced from an environment variable, making it visible in process listings. Moving it to the credential store is a planned improvement.
 
-### Token Storage
+### OAuth Token Storage
 
-OAuth access tokens are stored in `ICredentialStore` (AES-256-GCM encrypted) and retrieved on demand.
+OAuth access tokens, refresh tokens, and client secrets are stored in `ICredentialStore` (AES-256-GCM encrypted) under keys `mcp.{name}.access_token`, `mcp.{name}.refresh_token`, and `mcp.{name}.client_secret`.
+
+### MCP Server Config Storage
+
+Every MCP server configuration — including HTTP bearer tokens, API keys in headers, environment variables such as `GITHUB_TOKEN`, and connection strings in args — is stored as an AES-256-GCM encrypted blob in `ICredentialStore`.
+
+`CredentialStoreMcpServerStore` serialises the full `McpServerConfig` to JSON and encrypts it under key `mcp.{name}.config`. A server name index is maintained at `mcp.__index__` (also encrypted) to support enumeration without knowing server names in advance. No MCP credential material touches the `mcp_servers` SQLite table after the one-shot migration.
+
+**Migration**: `McpServerStoreMigrator` runs once on startup (idempotent via sentinel key `mcp.__v1_migrated__`). It reads any existing rows from the legacy `mcp_servers` SQLite table and imports them into the credential store. Existing installs are migrated automatically without user action.
+
+### Integration Gallery
+
+The Integrations Gallery (web and desktop) presents a catalog of pre-defined MCP servers (Composio, n8n, GitHub, Brave Search, PostgreSQL, etc.). When a user connects an integration from the gallery, any API key or connection string they enter is passed directly into `McpServerConfig.Headers` or `McpServerConfig.Env` and persisted via `IMcpServerStore` — subject to the plaintext SQLite gap described above. LLM provider entries (OpenAI, Anthropic, OpenRouter, Ollama) do not go through `IMcpServerStore`; they are configured separately in Settings.
 
 ---
 
@@ -271,5 +283,6 @@ Request paths are sanitized before logging — dynamic segments are replaced wit
 | Token scopes | Stored, not enforced | Enforce in a future phase |
 | OAuth pending states | In-memory only | Persist to database |
 | MCP server token | Env var | Move to credential store |
+| MCP server API keys / bearer tokens / env vars | ~~Plaintext in SQLite~~ → **Fixed**: encrypted via `CredentialStoreMcpServerStore` | Complete — existing rows auto-migrated on first boot |
 | Auth endpoint rate limiting | Not separately rate limited | Per-IP limit on login/register/reset |
 | SignalR token transport | Query parameter (`access_token`) | Move to subprotocol or custom header |

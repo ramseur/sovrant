@@ -21,112 +21,65 @@
                              FontSize="11" />
                 </DockPanel>
 
-                <!-- Active background sessions -->
-                <StackPanel IsVisible="{Binding HasActiveSessions}" Spacing="0">
-                    <TextBlock Text="ACTIVE" FontSize="9" FontWeight="SemiBold"
-                               Foreground="{DynamicResource BrandPrimary}"
-                               Margin="4,4,0,4" />
-                    <ItemsControl ItemsSource="{Binding ActiveBackgroundSessions}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="vm:ActiveSessionInfoViewModel">
-                                <DockPanel Margin="0,1">
-                                    <Button DockPanel.Dock="Right"
-                                            Content="■"
-                                            Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).CancelActiveSessionCommand}"
-                                            CommandParameter="{Binding SessionId}"
-                                            IsVisible="{Binding IsRunning}"
-                                            FontSize="9"
-                                            Padding="3,1"
-                                            Margin="2,0,0,0"
-                                            VerticalAlignment="Center"
-                                            Background="Transparent"
-                                            Foreground="{DynamicResource TextMuted}"
-                                            CornerRadius="4"
-                                            ToolTip.Tip="Cancel" />
-                                    <Button DockPanel.Dock="Right"
-                                            Content="✕"
-                                            Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).DismissActiveSessionCommand}"
-                                            CommandParameter="{Binding SessionId}"
-                                            IsVisible="{Binding !IsRunning}"
-                                            FontSize="9"
-                                            Padding="3,1"
-                                            Margin="2,0,0,0"
-                                            VerticalAlignment="Center"
-                                            Background="Transparent"
-                                            Foreground="{DynamicResource TextMuted}"
-                                            CornerRadius="4"
-                                            ToolTip.Tip="Dismiss" />
-                                    <Button Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).ResumeSessionCommand}"
-                                            CommandParameter="{Binding SessionId}"
-                                            HorizontalAlignment="Stretch"
-                                            HorizontalContentAlignment="Left"
-                                            Padding="8,3"
-                                            CornerRadius="4"
-                                            Background="Transparent">
-                                        <StackPanel Spacing="1">
-                                            <TextBlock Text="{Binding Title}"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource TextPrimary}"
-                                                       TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Text="{Binding ElapsedDisplay}"
-                                                       FontSize="9"
-                                                       Foreground="{DynamicResource BrandPrimary}" />
-                                        </StackPanel>
-                                    </Button>
-                                </DockPanel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-
-                <!-- Recent conversations -->
+                <!-- Recent conversations (active sessions shown inline) -->
                 <TextBlock Text="RECENT" FontSize="9" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextSecondary}"
-                           Margin="4,8,0,4" />
+                           Margin="4,4,0,4" />
 
                 <ItemsControl ItemsSource="{Binding RecentSessions}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:SessionListItem">
                             <DockPanel Margin="0,1">
+                                <!-- Cancel (running) / Dismiss (done) / Delete (inactive) -->
+                                <Button DockPanel.Dock="Right"
+                                        Content="■"
+                                        Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).CancelActiveSessionCommand}"
+                                        CommandParameter="{Binding SessionId}"
+                                        IsVisible="{Binding ActiveInfo.IsRunning}"
+                                        FontSize="9" Padding="3,1" Margin="2,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Background="Transparent"
+                                        Foreground="{DynamicResource TextMuted}"
+                                        CornerRadius="4" ToolTip.Tip="Cancel" />
                                 <Button DockPanel.Dock="Right"
                                         Content="✕"
                                         Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).DeleteSessionCommand}"
                                         CommandParameter="{Binding SessionId}"
-                                        FontSize="9"
-                                        Padding="3,1"
-                                        Margin="2,0,0,0"
+                                        IsVisible="{Binding !IsActive}"
+                                        FontSize="9" Padding="3,1" Margin="2,0,0,0"
                                         VerticalAlignment="Center"
                                         Background="Transparent"
                                         Foreground="{DynamicResource TextMuted}"
-                                        CornerRadius="4"
-                                        ToolTip.Tip="Delete session" />
+                                        CornerRadius="4" ToolTip.Tip="Delete session" />
+
                                 <Button Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).ResumeSessionCommand}"
                                         CommandParameter="{Binding SessionId}"
                                         HorizontalAlignment="Stretch"
                                         HorizontalContentAlignment="Left"
-                                        Padding="8,3"
-                                        CornerRadius="4"
+                                        Padding="8,3" CornerRadius="4"
                                         Background="Transparent">
                                     <StackPanel Spacing="1">
                                         <DockPanel>
-                                            <Border DockPanel.Dock="Left"
-                                                    IsVisible="{Binding IsActive}"
-                                                    Background="{DynamicResource BrandPrimary}"
-                                                    CornerRadius="3"
-                                                    Padding="3,1"
-                                                    Margin="0,0,4,0"
-                                                    VerticalAlignment="Center">
-                                                <TextBlock Text="ACTIVE"
-                                                           FontSize="7"
-                                                           FontWeight="SemiBold"
-                                                           Foreground="White" />
-                                            </Border>
+                                            <!-- Running indicator icon -->
+                                            <TextBlock DockPanel.Dock="Left"
+                                                       Text="{Binding ActiveInfo.StatusIcon}"
+                                                       IsVisible="{Binding IsActive}"
+                                                       FontSize="10"
+                                                       Foreground="{DynamicResource BrandPrimary}"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0,0,4,0" />
                                             <TextBlock Text="{Binding Label}"
                                                        FontSize="11"
                                                        Foreground="{DynamicResource TextPrimary}"
                                                        TextTrimming="CharacterEllipsis" />
                                         </DockPanel>
+                                        <!-- Active: elapsed time; Inactive: timestamp -->
+                                        <TextBlock Text="{Binding ActiveInfo.ElapsedDisplay}"
+                                                   IsVisible="{Binding IsActive}"
+                                                   FontSize="9"
+                                                   Foreground="{DynamicResource BrandPrimary}" />
                                         <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:MMM d, HH:mm}'}"
+                                                   IsVisible="{Binding !IsActive}"
                                                    FontSize="9"
                                                    Foreground="{DynamicResource TextMuted}" />
                                     </StackPanel>

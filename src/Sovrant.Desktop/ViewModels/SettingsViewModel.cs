@@ -161,6 +161,21 @@ public partial class SettingsViewModel : ViewModelBase
         });
 
         await LoadProfilesAsync();
+
+        // Re-apply any navigation-time provider override AFTER hydration so it isn't
+        // overwritten by the saved-preference path above.
+        if (_pendingProviderOverride is not null)
+        {
+            var pending = _pendingProviderOverride;
+            _pendingProviderOverride = null;
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                _suppressAutoSave = true;
+                SelectedProvider = pending;
+                _suppressAutoSave = false;
+            });
+        }
+
         await Dispatcher.UIThread.InvokeAsync(() => _ = LoadModelsForProviderAsync(SelectedProvider));
     }
 
@@ -675,6 +690,20 @@ public partial class SettingsViewModel : ViewModelBase
         "OpenAI", "DeepSeek", "Groq", "Mistral", "Together AI",
         "Azure OpenAI", "Google", "OpenRouter", "Ollama", "LM Studio", "Custom"
     ];
+
+    private string? _pendingProviderOverride;
+
+    /// <summary>Called from navigation to pre-select a provider by name (case-insensitive).
+    /// Stores a pending override so hydration cannot overwrite it.</summary>
+    public void SelectProvider(string name)
+    {
+        var match = Providers.FirstOrDefault(p => string.Equals(p, name, StringComparison.OrdinalIgnoreCase));
+        if (match is not null)
+        {
+            _pendingProviderOverride = match;
+            SelectedProvider = match;
+        }
+    }
 
     public IReadOnlyList<PermissionMode> PermissionModes { get; } =
     [

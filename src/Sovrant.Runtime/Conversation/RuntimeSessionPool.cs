@@ -19,6 +19,8 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
 {
     private readonly IServiceProvider _services;
     private readonly ConcurrentDictionary<string, SessionEntry> _pool = new(StringComparer.Ordinal);
+    // Keys of sessions with an active in-flight turn — excluded from eviction.
+    private readonly ConcurrentDictionary<string, byte> _activeTurns = new(StringComparer.Ordinal);
 
     public RuntimeSessionPool(IServiceProvider services)
     {
@@ -33,6 +35,8 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
         string sessionId,
         ISmartRouter? scopedRouterOverride = null,
         string? ownerUserId = null,
+        string? agentSystemPrompt = null,
+        string? agentName = null,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
@@ -52,10 +56,10 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
 
         // Slow path — create, initialise, and race to insert.
         IConversationRuntime runtime;
-        if (scopedRouterOverride is not null)
+        if (scopedRouterOverride is not null || agentSystemPrompt is not null)
         {
             runtime = new ConversationRuntime(
-                scopedRouterOverride,
+                scopedRouterOverride ?? _services.GetRequiredService<ISmartRouter>(),
                 _services.GetRequiredService<IToolExecutor>(),
                 _services.GetRequiredService<IToolRegistry>(),
                 _services.GetRequiredService<ISessionStore>(),
@@ -63,6 +67,7 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
                 _services.GetRequiredService<ILogger<ConversationRuntime>>(),
                 _services.GetService<IHookRunner>(),
                 _services.GetService<MemoryInjector>(),
+                systemPromptOverride: agentSystemPrompt,
                 settings: _services.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>(),
                 mcpClients: _services.GetService<McpClientRegistry>());
         }
@@ -79,6 +84,9 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
         await runtime.InitializeSessionAsync(persistenceId, ownerUserId, ct).ConfigureAwait(false);
 
         var entry = new SessionEntry(runtime);
+        if (agentName is not null)
+            entry.Config.AgentName = agentName;
+
         var winner = _pool.GetOrAdd(pooledKey, entry);
 
         // Fire SessionStart only for the thread that actually created the entry.
@@ -142,14 +150,39 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
     }
 
     /// <inheritdoc/>
+    public void BeginTurn(string sessionId, string? ownerUserId)
+    {
+        var key = ownerUserId is null ? sessionId : $"{sessionId}##{ownerUserId}";
+        _activeTurns.TryAdd(key, 0);
+    }
+
+    /// <inheritdoc/>
+    public void EndTurn(string sessionId, string? ownerUserId)
+    {
+        var key = ownerUserId is null ? sessionId : $"{sessionId}##{ownerUserId}";
+        _activeTurns.TryRemove(key, out _);
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<string> GetActiveTurnSessionIds()
+    {
+        // Strip the owner suffix so callers get plain session IDs.
+        return _activeTurns.Keys
+            .Select(k => { var i = k.IndexOf("##", StringComparison.Ordinal); return i >= 0 ? k[..i] : k; })
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <inheritdoc/>
     public int EvictExpired(TimeSpan ttl, int maxSessions)
     {
         var evicted = 0;
         var cutoff = DateTimeOffset.UtcNow - ttl;
 
-        // Phase 1: TTL eviction — remove sessions idle longer than TTL.
+        // Phase 1: TTL eviction — skip sessions with an active in-flight turn.
         foreach (var kvp in _pool)
         {
+            if (_activeTurns.ContainsKey(kvp.Key)) continue;
             if (kvp.Value.LastAccess < cutoff)
             {
                 if (_pool.TryRemove(kvp.Key, out var removed))
@@ -161,10 +194,11 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
             }
         }
 
-        // Phase 2: LRU cap — if still above max, evict least-recently-used.
+        // Phase 2: LRU cap — skip active-turn sessions when enforcing the cap.
         if (_pool.Count > maxSessions)
         {
             var sortedByAccess = _pool
+                .Where(kvp => !_activeTurns.ContainsKey(kvp.Key))
                 .OrderBy(kvp => kvp.Value.LastAccess)
                 .ToList();
 

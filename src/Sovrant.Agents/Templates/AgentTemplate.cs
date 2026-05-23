@@ -27,4 +27,14 @@ public sealed record AgentTemplate(
     IReadOnlyList<string> AllowedTools,
 
     /// <summary>The system prompt injected into the agent's runtime.</summary>
-    string SystemPrompt);
+    string SystemPrompt,
+
+    /// <summary>
+    /// <see langword="true"/> when loaded from the install-dir built-in agents.
+    /// Built-ins cannot be deleted; editing performs a silent copy-on-write to the
+    /// user tier (<c>.sovrant/agents/</c>).
+    /// </summary>
+    bool IsBuiltIn = false,
+
+    /// <summary>Optional one-line description shown in lists and help output.</summary>
+    string? Description = null);

@@ -113,7 +113,7 @@ public sealed partial class LlmContextCompactor : IContextCompactor
     private async Task<string> AskLlmAsync(string prompt, CancellationToken ct)
     {
         var pooled = await _sessionPool
-            .GetOrCreateAsync(CompactorSessionId, scopedRouterOverride: null, ownerUserId: null, ct)
+            .GetOrCreateAsync(CompactorSessionId, scopedRouterOverride: null, ownerUserId: null, ct: ct)
             .ConfigureAwait(false);
 
         var text = new StringBuilder();

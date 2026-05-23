@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using Avalonia.Threading;
@@ -42,6 +43,26 @@ public partial class ArtifactsViewModel : ViewModelBase
 
     [RelayCommand]
     private void SelectArtifact(ArtifactItemViewModel artifact) => SelectedArtifact = artifact;
+
+    [RelayCommand(CanExecute = nameof(CanOpenRunFolder))]
+    private void OpenRunFolder()
+    {
+        if (SelectedArtifact is null) return;
+        var root = (_store as LocalArtifactStore)?.Root;
+        if (root is null) return;
+
+        var runDir = Path.GetFullPath(Path.Combine(root,
+            SelectedArtifact.WorkspaceId,
+            SelectedArtifact.ProjectId,
+            SelectedArtifact.RunId));
+
+        if (!Directory.Exists(runDir)) return;
+
+        Process.Start(new ProcessStartInfo { FileName = runDir, UseShellExecute = true });
+    }
+
+    private bool CanOpenRunFolder =>
+        SelectedArtifact is not null && !string.IsNullOrEmpty(SelectedArtifact.RunId);
 
     [RelayCommand]
     private async Task LoadAsync()
@@ -113,6 +134,8 @@ public partial class ArtifactsViewModel : ViewModelBase
 
     partial void OnSelectedArtifactChanged(ArtifactItemViewModel? value)
     {
+        OpenRunFolderCommand.NotifyCanExecuteChanged();
+
         if (value is null)
         {
             DetailText = string.Empty;

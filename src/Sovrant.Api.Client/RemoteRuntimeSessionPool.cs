@@ -26,6 +26,8 @@ public sealed class RemoteRuntimeSessionPool : IRuntimeSessionPool
         string sessionId,
         ISmartRouter? scopedRouterOverride = null,
         string? ownerUserId = null,
+        string? agentSystemPrompt = null,
+        string? agentName = null,
         CancellationToken ct = default)
     {
         var key = ownerUserId is not null ? $"{sessionId}###{ownerUserId}" : sessionId;
@@ -62,6 +64,11 @@ public sealed class RemoteRuntimeSessionPool : IRuntimeSessionPool
         var key = ownerUserId is not null ? $"{sessionId}###{ownerUserId}" : sessionId;
         return _pool.TryGetValue(key, out var entry) ? entry.Config : null;
     }
+
+    // Remote pool has no server-side eviction guard; these are no-ops.
+    public void BeginTurn(string sessionId, string? ownerUserId) { }
+    public void EndTurn(string sessionId, string? ownerUserId) { }
+    public IReadOnlyList<string> GetActiveTurnSessionIds() => [];
 
     private sealed class RemoteSessionEntry
     {

@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Desktop.ViewModels;
 
@@ -11,8 +10,6 @@ namespace Sovrant.Desktop.ViewModels;
 /// </summary>
 public sealed partial class ActiveSessionsViewModel : ObservableObject, IDisposable
 {
-    private readonly IWorkspaceSettingsStore _settings;
-    private readonly ActiveContextViewModel _context;
     private readonly Lock _lock = new();
     private readonly Dictionary<string, ActiveSessionEntry> _sessions = [];
 
@@ -20,34 +17,10 @@ public sealed partial class ActiveSessionsViewModel : ObservableObject, IDisposa
 
     public bool HasActiveSessions => ActiveSessions.Count > 0;
 
-    public ActiveSessionsViewModel(IWorkspaceSettingsStore settings, ActiveContextViewModel context)
+    public ActiveSessionsViewModel()
     {
-        _settings = settings;
-        _context = context;
         ActiveSessions.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasActiveSessions));
     }
-
-    // ── Settings ──────────────────────────────────────────────────────────────
-
-    public async Task<int> GetMaxActiveAsync()
-    {
-        var raw = await _settings.GetAsync(_context.ActiveWorkspaceId, WorkspaceSettingsKeys.MaxActiveSessions).ConfigureAwait(false);
-        return raw is not null && int.TryParse(raw, out var v) ? Math.Clamp(v, 1, 5) : 5;
-    }
-
-    public async Task<bool> IsEnabledAsync()
-    {
-        var raw = await _settings.GetAsync(_context.ActiveWorkspaceId, WorkspaceSettingsKeys.BackgroundSessionsEnabled).ConfigureAwait(false);
-        return raw is null || !raw.Equals("false", StringComparison.OrdinalIgnoreCase);
-    }
-
-    public Task SetMaxActiveAsync(int value) =>
-        _settings.SetAsync(_context.ActiveWorkspaceId, WorkspaceSettingsKeys.MaxActiveSessions,
-            Math.Clamp(value, 1, 5).ToString(System.Globalization.CultureInfo.InvariantCulture));
-
-    public Task SetEnabledAsync(bool value) =>
-        _settings.SetAsync(_context.ActiveWorkspaceId, WorkspaceSettingsKeys.BackgroundSessionsEnabled,
-            value ? "true" : "false");
 
     // ── Registration ──────────────────────────────────────────────────────────
 
@@ -61,6 +34,28 @@ public sealed partial class ActiveSessionsViewModel : ObservableObject, IDisposa
         }
         RefreshObservable();
         return true;
+    }
+
+    /// <summary>
+    /// Called at the start of every turn. If the session is new, registers it.
+    /// If it already exists (multi-turn), refreshes the CTS and resets status to Running
+    /// so Cancel is wired to the current turn and the button shows correctly.
+    /// </summary>
+    public void BeginTurn(string sessionId, string title, CancellationTokenSource cts)
+    {
+        lock (_lock)
+        {
+            if (_sessions.TryGetValue(sessionId, out var existing))
+            {
+                existing.ReplaceCts(cts);
+                existing.Status = ActiveSessionStatus.Running;
+            }
+            else
+            {
+                _sessions[sessionId] = new ActiveSessionEntry(sessionId, title, cts, DateTime.UtcNow);
+            }
+        }
+        RefreshObservable();
     }
 
     public bool HasSession(string sessionId)
@@ -228,7 +223,9 @@ public sealed partial class ActiveSessionsViewModel : ObservableObject, IDisposa
     {
         public string SessionId { get; } = sessionId;
         public string Title { get; } = title;
-        public CancellationTokenSource? Cts { get; } = cts;
+        private CancellationTokenSource? _cts = cts;
+        public CancellationTokenSource? Cts => _cts;
+        public void ReplaceCts(CancellationTokenSource newCts) => _cts = newCts;
         public DateTime StartedAt { get; } = startedAt;
         public DateTime? EndedAt { get; set; }
         public ActiveSessionStatus Status { get; set; } = ActiveSessionStatus.Running;
@@ -251,6 +248,13 @@ public partial class ActiveSessionInfoViewModel : ObservableObject
     [ObservableProperty] private string? _error;
 
     public bool IsRunning => Status == ActiveSessionStatus.Running;
+    public string StatusIcon => Status switch
+    {
+        ActiveSessionStatus.Running => "⟳",
+        ActiveSessionStatus.Completed => "✓",
+        ActiveSessionStatus.Failed => "✗",
+        _ => "",
+    };
     public TimeSpan Elapsed => (EndedAt ?? DateTime.UtcNow) - StartedAt;
     public string ElapsedDisplay => Elapsed.TotalSeconds < 60
         ? $"{(int)Elapsed.TotalSeconds}s"
@@ -271,6 +275,7 @@ public partial class ActiveSessionInfoViewModel : ObservableObject
         EndedAt = info.EndedAt;
         Error = info.Error;
         OnPropertyChanged(nameof(IsRunning));
+        OnPropertyChanged(nameof(StatusIcon));
         OnPropertyChanged(nameof(Elapsed));
         OnPropertyChanged(nameof(ElapsedDisplay));
     }

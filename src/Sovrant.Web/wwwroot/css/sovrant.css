@@ -512,6 +512,24 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     background: rgba(255,255,255,0.15);
 }
 
+.model-tree-divider {
+    height: 1px;
+    background: var(--surface-border);
+    margin: 6px 8px;
+}
+.model-tree-unconfigured {
+    opacity: 0.6;
+}
+.model-tree-unconfigured:hover {
+    opacity: 1;
+    background: var(--surface-hover);
+}
+.model-tree-setup-label {
+    font-size: 10px;
+    color: var(--brand-primary);
+    white-space: nowrap;
+}
+
 /* ===== Status dots ===== */
 .status-dot {
     width: 8px;
@@ -2440,6 +2458,17 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     text-align: center;
 }
 
+/* Orchestration form cards: inputs fill remaining width, left-aligned */
+.orch-form .gov-field-row {
+    gap: 8px;
+}
+.orch-form .gov-field-input {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+    text-align: left;
+}
+
 .gov-item {
     display: flex;
     align-items: center;
@@ -2682,7 +2711,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .cc-grid-header,
 .cc-grid-row {
     display: grid;
-    grid-template-columns: 110px 1fr 110px 120px 80px;
+    grid-template-columns: 110px 1fr 90px 150px 120px 80px;
     gap: 12px;
     align-items: center;
     padding: 10px 14px;
@@ -2718,6 +2747,11 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 /* Title column needs min-width: 0 so its overflowing children (which use ellipsis)
    can actually shrink below their content width inside the grid track. */
 .cc-col-title { min-width: 0; }
+.cc-col-owner {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .cc-title {
     font-weight: 500;
     overflow: hidden;
@@ -2893,6 +2927,16 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .recent-run-status.succeeded { color: var(--status-pass); }
 .recent-run-status.failed { color: var(--status-fail); }
 .recent-run-status.cancelled { color: var(--text-muted); }
+.agent-run-badge {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--brand-primary);
+    color: white;
+    font-size: 9px;
+    font-family: Consolas, Menlo, monospace;
+    line-height: 1.4;
+}
 
 /* ===== Callout (Phase 90 Track F) ===== */
 .callout-card {

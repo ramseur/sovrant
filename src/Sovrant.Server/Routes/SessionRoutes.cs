@@ -21,6 +21,7 @@ internal static class SessionRoutes
     public static void Map(WebApplication app)
     {
         app.MapGet("/v1/sessions", ListSessions);
+        app.MapGet("/v1/sessions/active", GetActiveSessions);
         app.MapGet("/v1/sessions/{id}", GetSession);
         app.MapDelete("/v1/sessions/{id}", DeleteSession);
         app.MapPut("/v1/sessions/{id}/config", PutSessionConfig);
@@ -34,6 +35,12 @@ internal static class SessionRoutes
     /// </summary>
     private static string? OwnerFilter(HttpContext ctx) =>
         ctx.IsAdmin() ? null : ctx.GetUserId();
+
+    private static IResult GetActiveSessions(IRuntimeSessionPool pool)
+    {
+        var ids = pool.GetActiveTurnSessionIds();
+        return Results.Ok(new { activeSessions = ids, count = ids.Count });
+    }
 
     private static async Task<IResult> ListSessions(
         HttpContext ctx,

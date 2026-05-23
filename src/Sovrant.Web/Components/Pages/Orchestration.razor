@@ -1,6 +1,10 @@
 @page "/orchestration"
+@using Sovrant.Agents.Models
+@using Sovrant.Agents.Orchestration
 @using Sovrant.Agents.Teams
 @using Sovrant.Agents.Swarm
+@using Sovrant.Agents.Templates
+@using Sovrant.Web.Services
 
 <div class="master-detail">
     <div class="master-panel">
@@ -11,7 +15,7 @@
                 <button class="btn-sm btn-outline" title="Swarm defaults"
                         @onclick="ToggleSwarmConfig">&#x2699;</button>
                 <button class="btn-sm btn-primary" title="New team"
-                        @onclick="HintNew">+ New</button>
+                        @onclick="StartCreate">+ New</button>
             </div>
         </div>
 
@@ -50,7 +54,43 @@
             <div class="status-message" style="margin:16px 24px 0;">@_status</div>
         }
 
-        @if (_showSwarmConfig)
+        @if (_isCreating)
+        {
+            <!-- ── New Team form ──────────────────────────────────── -->
+            <div class="detail-content">
+                <div class="orch-detail-header">
+                    <h2>New Team</h2>
+                    <button class="btn-sm btn-outline" @onclick="CancelCreate">Cancel</button>
+                </div>
+                <div class="gov-card orch-form" style="max-width:520px;">
+                    <div class="gov-field-row">
+                        <span>Name</span>
+                        <input type="text" class="gov-field-input" placeholder="my-team"
+                               @bind="_createName" @bind:event="oninput" />
+                    </div>
+                    <div class="gov-field-row">
+                        <span>Description</span>
+                        <input type="text" class="gov-field-input" placeholder="Optional"
+                               @bind="_createDescription" @bind:event="oninput" />
+                    </div>
+                    <div class="gov-field-row">
+                        <span>Run Mode</span>
+                        <select class="gov-field-input" @bind="_createRunMode">
+                            <option value="@TeamRunMode.Sequential">Sequential</option>
+                            <option value="@TeamRunMode.Parallel">Parallel</option>
+                            <option value="@TeamRunMode.Swarm">Swarm</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:12px;">
+                    <button class="btn-primary" style="max-width:160px;"
+                            disabled="@(string.IsNullOrWhiteSpace(_createName))"
+                            @onclick="ConfirmCreate">Create Team</button>
+                    <button class="btn-outline btn-sm" @onclick="CancelCreate">Cancel</button>
+                </div>
+            </div>
+        }
+        else if (_showSwarmConfig)
         {
             <div class="detail-content">
                 <div class="orch-detail-header">
@@ -64,7 +104,7 @@
                     <button class="btn-sm btn-outline" @onclick="ToggleSwarmConfig">Close</button>
                 </div>
 
-                <div class="gov-card">
+                <div class="gov-card orch-form">
                     <div class="toggle-card" style="border:none;padding:0;">
                         <div>
                             <div class="toggle-title">Swarm Enabled</div>
@@ -134,9 +174,35 @@
                     <button class="btn-sm btn-danger" @onclick="() => RemoveTeam(_selected.TeamId)">Delete</button>
                 </div>
 
+                <!-- ── Run card ───────────────────────────────────────── -->
+                <div class="orch-detail-section">
+                    <h3>Run</h3>
+                    <div class="gov-card orch-form" style="max-width:600px;">
+                        <textarea class="gov-field-input" rows="3"
+                                  placeholder="Describe the goal or task for this team…"
+                                  style="width:100%;resize:vertical;"
+                                  @bind="_runGoal" @bind:event="oninput"></textarea>
+                        <div style="display:flex;gap:12px;align-items:center;margin-top:8px;">
+                            <button class="btn-primary"
+                                    disabled="@(_isRunning || string.IsNullOrWhiteSpace(_runGoal))"
+                                    @onclick="RunTeamAsync">
+                                @(_isRunning ? "Running…" : "Run Team")
+                            </button>
+                            <span class="text-muted text-sm">@_runStatus</span>
+                        </div>
+                        @if (!string.IsNullOrEmpty(_runOutput))
+                        {
+                            <div class="orch-run-output">
+                                <pre style="white-space:pre-wrap;font-size:12px;margin:0;">@_runOutput</pre>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- ── Run Profile ───────────────────────────────────── -->
                 <div class="orch-detail-section">
                     <h3>Run Profile</h3>
-                    <div class="gov-card">
+                    <div class="gov-card orch-form">
                         <div class="gov-field-row">
                             <span>Run Mode</span>
                             <select class="gov-field-input" @bind="_selected.RunMode">
@@ -197,6 +263,7 @@
                             @onclick="() => SaveTeamProfile(_selected)">Save Profile</button>
                 </div>
 
+                <!-- ── Members ───────────────────────────────────────── -->
                 <div class="orch-detail-section">
                     <h3>Members</h3>
                     @if (_selected.Members.Count == 0)
@@ -225,6 +292,51 @@
                             </div>
                         }
                     }
+
+                    @if (_isAddingMember)
+                    {
+                        <!-- ── Add Member inline form ────────────────── -->
+                        <div class="gov-card orch-form" style="margin-top:12px;max-width:520px;">
+                            <div class="gov-field-row">
+                                <span>From Agent Template</span>
+                                <select class="gov-field-input" @bind="_addMemberTemplate"
+                                        @bind:after="OnTemplateSelected">
+                                    <option value="">— custom —</option>
+                                    @foreach (var t in _agentTemplates)
+                                    {
+                                        <option value="@t.Name">@t.Name</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="gov-field-row">
+                                <span>Name</span>
+                                <input type="text" class="gov-field-input"
+                                       placeholder="member-name"
+                                       @bind="_addMemberName" @bind:event="oninput" />
+                            </div>
+                            <div class="gov-field-row">
+                                <span>Role</span>
+                                <select class="gov-field-input" @bind="_addMemberRole">
+                                    @foreach (var r in Enum.GetNames<AgentRole>())
+                                    {
+                                        <option value="@r">@r</option>
+                                    }
+                                </select>
+                            </div>
+                            <div style="display:flex;gap:8px;margin-top:8px;">
+                                <button class="btn-primary"
+                                        disabled="@(string.IsNullOrWhiteSpace(_addMemberName))"
+                                        @onclick="ConfirmAddMember">Add</button>
+                                <button class="btn-outline btn-sm"
+                                        @onclick="CancelAddMember">Cancel</button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <button class="btn-outline btn-sm" style="margin-top:10px;"
+                                @onclick="StartAddMember">+ Add Member</button>
+                    }
                 </div>
             </div>
         }
@@ -240,6 +352,9 @@
 @code {
     [Inject] private ITeamRegistry TeamRegistry { get; set; } = default!;
     [Inject] private ISwarmConfigStore SwarmConfigStore { get; set; } = default!;
+    [Inject] private IAgentOrchestrator Orchestrator { get; set; } = default!;
+    [Inject] private AgentTemplateRegistry TemplateRegistry { get; set; } = default!;
+    [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
 
     private string _search = string.Empty;
     private string _status = string.Empty;
@@ -249,6 +364,26 @@
     private List<TeamItem> _filtered = [];
     private TeamItem? _selected;
 
+    // ── Create team state ─────────────────────────────────────────────────
+    private bool _isCreating;
+    private string _createName = string.Empty;
+    private string _createDescription = string.Empty;
+    private TeamRunMode _createRunMode = TeamRunMode.Parallel;
+
+    // ── Add member state ──────────────────────────────────────────────────
+    private bool _isAddingMember;
+    private string _addMemberTemplate = string.Empty;
+    private string _addMemberName = string.Empty;
+    private string _addMemberRole = nameof(AgentRole.General);
+    private List<AgentTemplate> _agentTemplates = [];
+
+    // ── Run state ─────────────────────────────────────────────────────────
+    private string _runGoal = string.Empty;
+    private bool _isRunning;
+    private string _runStatus = string.Empty;
+    private string _runOutput = string.Empty;
+
+    // ── Swarm config ──────────────────────────────────────────────────────
     private bool _swarmEnabled;
     private bool _swarmQualityGate = true;
     private int _swarmMaxConcurrent = 4;
@@ -259,8 +394,139 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadSwarmConfigAsync().ConfigureAwait(false);
+        _agentTemplates = TemplateRegistry.All.ToList();
         LoadAll();
     }
+
+    // ── Create team ───────────────────────────────────────────────────────
+
+    private void StartCreate()
+    {
+        _isCreating = true;
+        _showSwarmConfig = false;
+        _createName = string.Empty;
+        _createDescription = string.Empty;
+        _createRunMode = TeamRunMode.Parallel;
+        _status = string.Empty;
+    }
+
+    private void CancelCreate() => _isCreating = false;
+
+    private void ConfirmCreate()
+    {
+        var name = _createName.Trim();
+        if (string.IsNullOrEmpty(name)) return;
+
+        var team = new TeamInfo(
+            Id: $"team-{Guid.NewGuid():N}",
+            WorkspaceId: ActiveContext.WorkspaceId,
+            ProjectId: string.IsNullOrEmpty(ActiveContext.ProjectId) ? null : ActiveContext.ProjectId,
+            Name: name,
+            Description: string.IsNullOrEmpty(_createDescription) ? null : _createDescription.Trim(),
+            Origin: "ui",
+            CreatedBy: Program.SovrantUserId,
+            CreatedAt: DateTimeOffset.UtcNow)
+        {
+            RunMode = _createRunMode,
+        };
+
+        TeamRegistry.CreateTeam(team);
+        _isCreating = false;
+        _status = $"Created team '{name}'.";
+        LoadAll();
+        _selected = _all.FirstOrDefault(t => t.TeamId == team.Id);
+    }
+
+    // ── Add member ────────────────────────────────────────────────────────
+
+    private void StartAddMember()
+    {
+        _isAddingMember = true;
+        _addMemberTemplate = string.Empty;
+        _addMemberName = string.Empty;
+        _addMemberRole = nameof(AgentRole.General);
+    }
+
+    private void CancelAddMember() => _isAddingMember = false;
+
+    private void OnTemplateSelected()
+    {
+        if (string.IsNullOrEmpty(_addMemberTemplate)) return;
+        var t = TemplateRegistry.TryGet(_addMemberTemplate);
+        if (t is null) return;
+        _addMemberName = t.Name;
+        _addMemberRole = t.Role.ToString();
+    }
+
+    private void ConfirmAddMember()
+    {
+        if (_selected is null || string.IsNullOrWhiteSpace(_addMemberName)) return;
+
+        var template = string.IsNullOrEmpty(_addMemberTemplate) ? null : TemplateRegistry.TryGet(_addMemberTemplate);
+
+        if (!Enum.TryParse<AgentRole>(_addMemberRole, out var role)) role = AgentRole.General;
+
+        var member = new TeamMemberInfo
+        {
+            Id = $"member-{Guid.NewGuid():N}",
+            Name = _addMemberName.Trim(),
+            Role = role,
+            SystemPrompt = template?.SystemPrompt ?? $"You are a {_addMemberRole} agent.",
+            AllowedTools = template?.AllowedTools,
+            TeamId = _selected.TeamId,
+            WorkspaceId = ActiveContext.WorkspaceId,
+            Template = string.IsNullOrEmpty(_addMemberTemplate) ? null : _addMemberTemplate,
+            CreatedBy = Program.SovrantUserId,
+        };
+
+        TeamRegistry.RegisterMember(member);
+        _isAddingMember = false;
+        _status = $"Added '{member.Name}' to team.";
+        LoadAll();
+    }
+
+    // ── Run ───────────────────────────────────────────────────────────────
+
+    private async Task RunTeamAsync()
+    {
+        if (_selected is null || string.IsNullOrWhiteSpace(_runGoal) || _isRunning) return;
+
+        _isRunning = true;
+        _runStatus = "Starting…";
+        _runOutput = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var request = new EnsembleRunRequest
+            {
+                Goal = _runGoal,
+                TeamId = _selected.TeamId,
+                WorkspaceId = ActiveContext.WorkspaceId,
+                UserId = Program.SovrantUserId,
+                Permissions = "ask",
+            };
+
+            var result = await Orchestrator.RunAsync(request).ConfigureAwait(false);
+            var sr = result.SwarmResult;
+            _runStatus = sr.Status.ToString();
+            _runOutput = string.IsNullOrEmpty(sr.CombinedOutput)
+                ? "(no output)"
+                : sr.CombinedOutput;
+        }
+        catch (Exception ex)
+        {
+            _runStatus = "Failed";
+            _runOutput = ex.Message;
+        }
+        finally
+        {
+            _isRunning = false;
+            await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+        }
+    }
+
+    // ── Existing helpers ──────────────────────────────────────────────────
 
     private void LoadAll()
     {
@@ -287,20 +553,13 @@
 
         _all = items;
         if (_selected is not null)
-        {
             _selected = _all.FirstOrDefault(i => i.TeamId == _selected.TeamId);
-        }
         ApplyFilter();
     }
 
     private void ApplyFilter()
     {
-        if (string.IsNullOrWhiteSpace(_search))
-        {
-            _filtered = _all;
-            return;
-        }
-
+        if (string.IsNullOrWhiteSpace(_search)) { _filtered = _all; return; }
         var s = _search.Trim();
         _filtered = _all.Where(i =>
             i.Name.Contains(s, StringComparison.OrdinalIgnoreCase) ||
@@ -311,18 +570,18 @@
     private void Select(TeamItem item)
     {
         _showSwarmConfig = false;
+        _isCreating = false;
+        _isAddingMember = false;
+        _runGoal = string.Empty;
+        _runStatus = string.Empty;
+        _runOutput = string.Empty;
         _selected = item;
     }
 
     private void ToggleSwarmConfig()
     {
         _showSwarmConfig = !_showSwarmConfig;
-        if (_showSwarmConfig) _selected = null;
-    }
-
-    private void HintNew()
-    {
-        _status = "New team picker coming soon. Use /team create in chat to add a team.";
+        if (_showSwarmConfig) { _selected = null; _isCreating = false; }
     }
 
     private void RemoveTeam(string id)
@@ -343,12 +602,8 @@
     private void SaveTeamProfile(TeamItem team)
     {
         var profile = new TeamRunProfile(
-            team.RunMode,
-            team.MaxConcurrent,
-            team.FileLocksEnabled,
-            team.QualityGateEnabled,
-            team.QualityGateThreshold,
-            team.DecompositionMode);
+            team.RunMode, team.MaxConcurrent, team.FileLocksEnabled,
+            team.QualityGateEnabled, team.QualityGateThreshold, team.DecompositionMode);
 
         if (TeamRegistry.UpdateTeamRunProfile(team.TeamId, profile))
         {
@@ -417,9 +672,7 @@
     };
 
     private string EmptyMessage() =>
-        string.IsNullOrWhiteSpace(_search)
-            ? "No teams yet. Use /team create in chat to set one up."
-            : "No matches.";
+        string.IsNullOrWhiteSpace(_search) ? "No teams yet. Click + New to create one." : "No matches.";
 
     private sealed class TeamItem
     {
