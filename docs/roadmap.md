@@ -6943,6 +6943,49 @@ the rest of the LSP-supported surface.
 - [ ] CLI / Desktop / Web all surface a "Create project" entry point
 - [ ] Golden-path tests per language verify scaffold → build → test pipeline
 
+### Implementation Plan
+
+Research completed 2026-05-23. Implementation order:
+
+#### What already exists
+- `write_many` tool (`src/Sovrant.Tools/Artifacts/ArtifactTool.cs`) — already writes
+  batch files to `{root}/{workspace}/artifacts/{run}/`; no new write plumbing needed.
+- Web `Artifacts.razor` — zip download button already wired to
+  `/artifacts/{workspace}/{project}/{run}.zip` but the endpoint does not exist yet.
+- Desktop `ArtifactsView.axaml` — "Open folder" opens the run directory in File Explorer;
+  no download button yet.
+- CLI — `artifacts ls / open / rm` commands; no zip download.
+
+#### Step 1 — Zip download endpoint (quick win, ~50 lines)
+Add `GET /v1/artifacts/{runId}.zip` to `ArtifactRoutes.cs` using
+`System.IO.Compression.ZipArchive`. Unblocks the already-wired Web UI button with no
+new abstractions. Desktop and CLI wire a matching download button/command once the
+endpoint exists.
+
+#### Step 2 — `IProjectTemplate` interface + registry
+New location: `src/Sovrant.Runtime.Projects/Templates/`. Parallel to
+`IDocumentTemplate` (Phase 66) and the agent template pattern
+(`FileSystemTemplateLoader`). Registry selected by language + project kind. Each
+template produces a `IReadOnlyList<ArtifactFile>` (path + content pairs) that
+`write_many` flushes to the artifact store.
+
+#### Step 3 — Scaffold implementations
+Start with Node.js (CLI, Express API, Next.js, library, pnpm monorepo) and C#
+(console, web API, Blazor, library, worker). Each scaffold produces a project that
+builds and passes its first test on a clean box. Remaining LSP languages (Python, Go,
+Rust, Java, Kotlin, Ruby, Swift, C/C++, Lua, Zig) follow in order of user demand.
+
+#### Step 4 — `CodeCreateTool`
+Located in `src/Sovrant.Tools/Projects/`. Takes a natural-language brief, resolves
+language + kind via `IProjectTemplate` registry, collects missing inputs through
+conversation, then calls the scaffold and emits files. Integrates with Phase 58 Trust
+Boundary for dependency manifest validation.
+
+#### Step 5 — Surface in CLI / Desktop / Web
+- CLI: `sovrant create <language> [name]` command
+- Desktop: "Create project" button in Artifacts or Agents view
+- Web: "Create project" entry point in the Artifacts page
+
 ---
 
 ## Phase 74 — Markdown-Backed Document Templates

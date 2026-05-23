@@ -337,7 +337,9 @@ public static class Program
                 relPath.Split('/').Select(Uri.UnescapeDataString));
 
             var rootFull = Path.GetFullPath(local.Root);
-            var fullPath = Path.GetFullPath(Path.Combine(rootFull, ws, proj, run, rel));
+            var runDir = FindRunDir(rootFull, ws, proj, run);
+            if (runDir is null) return Results.NotFound();
+            var fullPath = Path.GetFullPath(Path.Combine(runDir, rel));
             if (!fullPath.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
                 return Results.BadRequest();
             if (!File.Exists(fullPath))
@@ -368,11 +370,8 @@ public static class Program
             var run = Uri.UnescapeDataString(runId);
 
             var rootFull = Path.GetFullPath(local.Root);
-            var runDir = Path.GetFullPath(Path.Combine(rootFull, ws, proj, run));
-            if (!runDir.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
-                return Results.BadRequest();
-            if (!Directory.Exists(runDir))
-                return Results.NotFound();
+            var runDir = FindRunDir(rootFull, ws, proj, run);
+            if (runDir is null) return Results.NotFound();
 
             var safeRun = SanitizeForFilename(run);
             return Results.Stream(async (output) =>
@@ -391,6 +390,30 @@ public static class Program
                 }
             }, contentType: "application/zip", fileDownloadName: $"{safeRun}.zip");
         });
+    }
+
+    /// <summary>
+    /// Resolves the run directory, handling the optional <c>{id}__{name}</c> suffix
+    /// that <see cref="LocalArtifactStore"/> appends when a workspace or project has
+    /// a display name (e.g. <c>ws-personal-abc__myworkspace/artifacts/run-xyz</c>).
+    /// Returns <see langword="null"/> if the directory cannot be found.
+    /// </summary>
+    private static string? FindRunDir(string root, string ws, string proj, string run)
+    {
+        var wsDir = FindSegmentDir(root, ws);
+        if (wsDir is null) return null;
+        var projDir = FindSegmentDir(wsDir, proj);
+        if (projDir is null) return null;
+        var runDir = Path.Combine(projDir, run);
+        return Directory.Exists(runDir) ? runDir : null;
+    }
+
+    private static string? FindSegmentDir(string parent, string id)
+    {
+        if (!Directory.Exists(parent)) return null;
+        var exact = Path.Combine(parent, id);
+        if (Directory.Exists(exact)) return exact;
+        return Directory.EnumerateDirectories(parent, $"{id}__*").FirstOrDefault();
     }
 
     private static string SanitizeForFilename(string name)

@@ -44,6 +44,46 @@ public partial class ArtifactsViewModel : ViewModelBase
     [RelayCommand]
     private void SelectArtifact(ArtifactItemViewModel artifact) => SelectedArtifact = artifact;
 
+    [RelayCommand(CanExecute = nameof(CanDownloadRunZip))]
+    private async Task DownloadRunZipAsync()
+    {
+        if (SelectedArtifact is null) return;
+        var root = (_store as LocalArtifactStore)?.Root;
+        if (root is null) return;
+
+        // WorkspaceId and ProjectId already hold the raw segment names (may include __name suffix)
+        var runDir = Path.GetFullPath(Path.Combine(root,
+            SelectedArtifact.WorkspaceId,
+            SelectedArtifact.ProjectId,
+            SelectedArtifact.RunId));
+        if (!Directory.Exists(runDir)) return;
+
+        var downloadsDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+        if (!Directory.Exists(downloadsDir))
+            downloadsDir = Path.GetTempPath();
+
+        var zipPath = Path.Combine(downloadsDir, $"{SanitizeForFilename(SelectedArtifact.RunId)}.zip");
+        if (File.Exists(zipPath)) File.Delete(zipPath);
+
+        await Task.Run(() =>
+            System.IO.Compression.ZipFile.CreateFromDirectory(
+                runDir, zipPath,
+                System.IO.Compression.CompressionLevel.Fastest,
+                includeBaseDirectory: false))
+            .ConfigureAwait(false);
+
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            Arguments = $"/select,\"{zipPath}\"",
+            UseShellExecute = true,
+        });
+    }
+
+    private bool CanDownloadRunZip =>
+        SelectedArtifact is not null && !string.IsNullOrEmpty(SelectedArtifact.RunId);
+
     [RelayCommand(CanExecute = nameof(CanOpenRunFolder))]
     private void OpenRunFolder()
     {
@@ -135,6 +175,7 @@ public partial class ArtifactsViewModel : ViewModelBase
     partial void OnSelectedArtifactChanged(ArtifactItemViewModel? value)
     {
         OpenRunFolderCommand.NotifyCanExecuteChanged();
+        DownloadRunZipCommand.NotifyCanExecuteChanged();
 
         if (value is null)
         {
@@ -245,6 +286,14 @@ public partial class ArtifactsViewModel : ViewModelBase
 
             FilteredArtifacts.Add(artifact);
         }
+    }
+
+    private static string SanitizeForFilename(string name)
+    {
+        var sb = new StringBuilder(name.Length);
+        foreach (var c in name)
+            sb.Append(Array.IndexOf(Path.GetInvalidFileNameChars(), c) >= 0 ? '_' : c);
+        return sb.Length == 0 ? "artifacts" : sb.ToString();
     }
 
     private static string FormatSize(long bytes) => bytes switch
