@@ -102,7 +102,7 @@ public partial class SidebarViewModel : ViewModelBase
         new("Anthropic",    "🧠"),
         new("OpenRouter",   "🔀"),
         new("DeepSeek",     "🔵"),
-        new("Groq",         "⚡"),
+        new("Groq",         "🚀"),
         new("Mistral",      "🌀"),
         new("Google",       "🔷"),
         new("Together AI",  "🤝"),
