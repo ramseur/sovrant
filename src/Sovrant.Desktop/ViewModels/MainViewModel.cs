@@ -248,7 +248,7 @@ public partial class MainViewModel : ViewModelBase
         {
             _backgroundChats.Remove(sessionId);
             CurrentPage = parked;
-            parked.ReAttachToBackground();
+            await parked.ReAttachToBackground();
             return;
         }
 

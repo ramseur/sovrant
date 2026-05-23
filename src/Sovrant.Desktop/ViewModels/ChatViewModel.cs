@@ -300,9 +300,16 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     /// Called by MainViewModel when the user navigates back to a parked background chat.
     /// Replays buffered events and re-subscribes to live events.
     /// </summary>
-    public void ReAttachToBackground()
+    public async Task ReAttachToBackground()
     {
-        if (!_activeSessions.HasSession(SessionId)) return;
+        if (!_activeSessions.HasSession(SessionId))
+        {
+            // Session completed while parked in background — reload from store so the
+            // full turn history (including any messages written during background run) is shown.
+            await LoadSessionAsync(SessionId);
+            return;
+        }
+
         var lastAssistant = Messages.LastOrDefault(m => m.Role == "assistant");
         if (lastAssistant is null) return;
 
