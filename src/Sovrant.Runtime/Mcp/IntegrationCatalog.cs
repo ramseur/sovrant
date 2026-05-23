@@ -41,7 +41,7 @@ public static class IntegrationCatalog
             EndpointLabel: "n8n MCP endpoint",
             ApiKeyLabel: "API Key (optional)", ApiKeyHeader: "X-N8N-API-Key"),
 
-        new("zapier", "Zapier", "Automation", "⚡",
+        new("zapier", "Zapier", "Automation", "🔌",
             "Run any Zapier action from an agent via the Zapier MCP bridge.",
             IntegrationKind.McpHttp, IntegrationTier.Automation,
             ApiKeyLabel: "API Key", ApiKeyHeader: "Authorization",
