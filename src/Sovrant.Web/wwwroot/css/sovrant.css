@@ -199,6 +199,107 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     opacity: 0.7;
 }
 
+/* ===== MCP / Integrations switcher ===== */
+.top-context-bar .tcb-mcp-switcher {
+    position: relative;
+    flex-shrink: 0;
+}
+.top-context-bar .tcb-mcp-trigger {
+    cursor: pointer;
+    min-width: 140px;
+    justify-content: space-between;
+    user-select: none;
+}
+.top-context-bar .tcb-mcp-trigger:hover {
+    background: var(--surface-background);
+}
+.top-context-bar .tcb-mcp-summary {
+    font-size: 13px;
+    color: var(--text-primary);
+    flex: 1;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.top-context-bar .tcb-mcp-chevron {
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    transition: transform 0.15s ease;
+}
+.top-context-bar .tcb-mcp-chevron.open {
+    transform: rotate(180deg);
+}
+.top-context-bar .tcb-mcp-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 220px;
+    background: var(--surface-card);
+    border: 1px solid var(--surface-border);
+    border-radius: 8px;
+    padding: 8px 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    z-index: 999;
+}
+.top-context-bar .tcb-mcp-header {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    padding: 0 6px 6px;
+}
+.top-context-bar .tcb-mcp-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+.top-context-bar .tcb-mcp-item:hover {
+    background: var(--surface-background);
+}
+.top-context-bar .tcb-mcp-item input[type="checkbox"] {
+    flex-shrink: 0;
+    accent-color: var(--brand-primary);
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+}
+.top-context-bar .tcb-mcp-item-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.top-context-bar .tcb-mcp-empty {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 4px 8px 8px;
+    margin: 0;
+}
+.top-context-bar .tcb-mcp-footer-divider {
+    height: 1px;
+    background: var(--surface-border);
+    margin: 6px 4px;
+}
+.top-context-bar .tcb-mcp-footer-link {
+    display: block;
+    font-size: 12px;
+    color: var(--brand-primary);
+    padding: 5px 8px;
+    border-radius: 5px;
+    text-decoration: none;
+    cursor: pointer;
+}
+.top-context-bar .tcb-mcp-footer-link:hover {
+    background: var(--surface-background);
+}
+
 /* ===== Sidebar (expanded) ===== */
 .sidebar {
     width: 260px;

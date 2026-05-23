@@ -116,24 +116,25 @@
         </select>
     </div>
 
-    @if (_availableMcpServers.Count > 0)
-    {
-        <div class="tcb-divider"></div>
+    <div class="tcb-divider"></div>
 
-        <!-- MCP opt-in switcher -->
-        <div class="tcb-mcp-switcher">
-            <button class="tcb-mcp-trigger @(_mcpDropdownOpen ? "open" : "")"
-                    title="Choose which MCP servers agents can call"
-                    @onclick="ToggleMcpDropdown"
-                    @onclick:stopPropagation="true">
-                <span class="tcb-icon">&#128279;</span>
-                <span class="tcb-mcp-label">MCPs</span>
-                <span class="tcb-mcp-badge">@McpBadgeLabel</span>
-            </button>
-            @if (_mcpDropdownOpen)
-            {
-                <div class="tcb-mcp-dropdown" @onclick:stopPropagation="true">
-                    <div class="tcb-mcp-header">Active MCP servers</div>
+    <!-- Integrations / MCP multi-select — always visible, matches workspace/project style -->
+    <div class="tcb-mcp-switcher">
+        <button class="tcb-field tcb-mcp-trigger"
+                title="Choose which MCP servers are available to agents"
+                @onclick="ToggleMcpDropdown"
+                @onclick:stopPropagation="true">
+            <span class="tcb-icon">&#128279;</span>
+            <span class="tcb-mcp-summary">@McpSummaryLabel</span>
+            <span class="tcb-mcp-chevron @(_mcpDropdownOpen ? "open" : "")">&#x25BE;</span>
+        </button>
+        @if (_mcpDropdownOpen)
+        {
+            <div class="tcb-mcp-dropdown" @onclick:stopPropagation="true">
+                <div class="tcb-mcp-header">INTEGRATIONS</div>
+
+                @if (_availableMcpServers.Count > 0)
+                {
                     @foreach (var name in _availableMcpServers)
                     {
                         var serverName = name;
@@ -142,13 +143,22 @@
                             <input type="checkbox"
                                    checked="@isActive"
                                    @onchange="e => ToggleMcpServer(serverName, (bool)(e.Value ?? false))" />
-                            <span>@serverName</span>
+                            <span class="tcb-mcp-item-name">@serverName</span>
                         </label>
                     }
-                </div>
-            }
-        </div>
-    }
+                }
+                else
+                {
+                    <p class="tcb-mcp-empty">No integrations connected.</p>
+                }
+
+                <div class="tcb-mcp-footer-divider"></div>
+                <a class="tcb-mcp-footer-link" href="/integrations" @onclick="() => _mcpDropdownOpen = false">
+                    Manage Integrations →
+                </a>
+            </div>
+        }
+    </div>
 </div>
 
 @code {
@@ -171,10 +181,19 @@
     private HashSet<string> _activeMcpServers = new(StringComparer.Ordinal);
     private bool _mcpDropdownOpen;
 
-    private string McpBadgeLabel =>
-        _activeMcpServers.Count == 0 ? "none"
-        : _activeMcpServers.Count == _availableMcpServers.Count ? "all"
-        : _activeMcpServers.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    private string McpSummaryLabel
+    {
+        get
+        {
+            if (_availableMcpServers.Count == 0) return "Integrations";
+            return _activeMcpServers.Count switch
+            {
+                0 => "None active",
+                1 => _activeMcpServers.First(),
+                _ => $"{_activeMcpServers.Count} active",
+            };
+        }
+    }
 
     private ElementReference _triggerRef;
     private string _dropdownStyle = string.Empty;
