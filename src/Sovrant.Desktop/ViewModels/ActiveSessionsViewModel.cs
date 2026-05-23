@@ -36,6 +36,28 @@ public sealed partial class ActiveSessionsViewModel : ObservableObject, IDisposa
         return true;
     }
 
+    /// <summary>
+    /// Called at the start of every turn. If the session is new, registers it.
+    /// If it already exists (multi-turn), refreshes the CTS and resets status to Running
+    /// so Cancel is wired to the current turn and the button shows correctly.
+    /// </summary>
+    public void BeginTurn(string sessionId, string title, CancellationTokenSource cts)
+    {
+        lock (_lock)
+        {
+            if (_sessions.TryGetValue(sessionId, out var existing))
+            {
+                existing.ReplaceCts(cts);
+                existing.Status = ActiveSessionStatus.Running;
+            }
+            else
+            {
+                _sessions[sessionId] = new ActiveSessionEntry(sessionId, title, cts, DateTime.UtcNow);
+            }
+        }
+        RefreshObservable();
+    }
+
     public bool HasSession(string sessionId)
     {
         lock (_lock) return _sessions.ContainsKey(sessionId);
@@ -201,7 +223,9 @@ public sealed partial class ActiveSessionsViewModel : ObservableObject, IDisposa
     {
         public string SessionId { get; } = sessionId;
         public string Title { get; } = title;
-        public CancellationTokenSource? Cts { get; } = cts;
+        private CancellationTokenSource? _cts = cts;
+        public CancellationTokenSource? Cts => _cts;
+        public void ReplaceCts(CancellationTokenSource newCts) => _cts = newCts;
         public DateTime StartedAt { get; } = startedAt;
         public DateTime? EndedAt { get; set; }
         public ActiveSessionStatus Status { get; set; } = ActiveSessionStatus.Running;

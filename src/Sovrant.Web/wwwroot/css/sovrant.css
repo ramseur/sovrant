@@ -2711,7 +2711,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .cc-grid-header,
 .cc-grid-row {
     display: grid;
-    grid-template-columns: 110px 1fr 110px 120px 80px;
+    grid-template-columns: 110px 1fr 90px 150px 120px 80px;
     gap: 12px;
     align-items: center;
     padding: 10px 14px;
@@ -2747,6 +2747,11 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 /* Title column needs min-width: 0 so its overflowing children (which use ellipsis)
    can actually shrink below their content width inside the grid track. */
 .cc-col-title { min-width: 0; }
+.cc-col-owner {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .cc-title {
     font-weight: 500;
     overflow: hidden;

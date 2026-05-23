@@ -46,6 +46,7 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string _focusedRunId = string.Empty;
     [ObservableProperty] private string _focusedTitle = string.Empty;
     [ObservableProperty] private string _focusedStatus = string.Empty;
+    [ObservableProperty] private string _focusedOwner = string.Empty;
     [ObservableProperty] private string _focusedStarted = string.Empty;
     [ObservableProperty] private string _focusedDuration = string.Empty;
     [ObservableProperty] private string _focusedTokens = string.Empty;
@@ -135,6 +136,7 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
 
                 FocusedTitle = record.MemberId ?? record.Kind;
                 FocusedStatus = record.Status;
+                FocusedOwner = record.UserId ?? string.Empty;
                 FocusedStarted = record.StartedAt.LocalDateTime.ToString("MMM d, HH:mm:ss", CultureInfo.InvariantCulture);
                 FocusedDuration = record.EndedAt is { } ended
                     ? FormatDuration(ended - record.StartedAt)
@@ -222,6 +224,7 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
                         Status = r.Status,
                         StartedAt = r.StartedAt,
                         LastActivity = FormatRelative(r.LastActivity),
+                        Owner = r.OwnerLabel ?? string.Empty,
                         Preview = r.Preview ?? string.Empty,
                         Cost = r.CostUsd is null ? "—" : $"${r.CostUsd:F4}",
                         DetailRoute = r.DetailRoute ?? string.Empty,
@@ -314,6 +317,7 @@ public partial class CommandCenterRowViewModel : ViewModelBase
     [ObservableProperty] private string _status = string.Empty;
     [ObservableProperty] private DateTimeOffset _startedAt;
     [ObservableProperty] private string _lastActivity = string.Empty;
+    [ObservableProperty] private string _owner = string.Empty;
     [ObservableProperty] private string _preview = string.Empty;
     [ObservableProperty] private string _cost = string.Empty;
     [ObservableProperty] private string _detailRoute = string.Empty;

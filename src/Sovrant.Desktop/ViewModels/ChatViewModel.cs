@@ -286,7 +286,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         var bgCts = new CancellationTokenSource();
 #pragma warning restore CA2000
         _isBackgroundSession = true;
-        _activeSessions.TryRegister(SessionId, title ?? SessionId, bgCts);
+        _activeSessions.BeginTurn(SessionId, title ?? SessionId, bgCts);
         _activeSessions.Attach(SessionId, evt =>
             Dispatcher.UIThread.Post(() => HandleEvent((RuntimeEvent)evt, assistantMsg)));
 

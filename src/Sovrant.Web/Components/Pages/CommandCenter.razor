@@ -33,6 +33,10 @@
                 <h2>@(_focusedRun.MemberId ?? _focusedRun.Kind)</h2>
                 <div class="detail-meta">
                     <span class="cc-status cc-status-@_focusedRun.Status.ToLowerInvariant()">@_focusedRun.Status</span>
+                    @if (!string.IsNullOrEmpty(_focusedRun.UserId))
+                    {
+                        <span>Owner: @_focusedRun.UserId</span>
+                    }
                     <span>Started: @_focusedRun.StartedAt.LocalDateTime.ToString("MMM d, HH:mm:ss", CultureInfo.InvariantCulture)</span>
                     @if (_focusedRun.EndedAt is { } ended)
                     {
@@ -172,6 +176,7 @@
                     <div class="cc-col-kind">Kind</div>
                     <div class="cc-col-title">Title</div>
                     <div class="cc-col-status">Status</div>
+                    <div class="cc-col-owner">Owner</div>
                     <div class="cc-col-when">Last activity</div>
                     <div class="cc-col-cost">Cost</div>
                 </div>
@@ -191,6 +196,7 @@
                         <div class="cc-col-status">
                             <span class="cc-status cc-status-@row.Status.ToLowerInvariant()">@row.Status</span>
                         </div>
+                        <div class="cc-col-owner text-sm text-muted">@(row.OwnerLabel ?? "—")</div>
                         <div class="cc-col-when text-sm text-muted">@FormatRelative(row.LastActivity)</div>
                         <div class="cc-col-cost text-sm text-muted">@(row.CostUsd is null ? "—" : $"${row.CostUsd:F4}")</div>
                     </a>
