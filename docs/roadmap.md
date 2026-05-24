@@ -187,7 +187,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Agents page — in-app create/edit, Launch chat, Run one-shot, prompt titles in ledger | Phase 79 | ✅ Done |
 | Orchestration Studio — compose and run teams from the UI; Run button with task prompt | Phase 94 | ✅ Done |
 | Integrations Gallery — 14 integrations across Automation/Platform/Search tiers, encrypted credential keystore, Web + Desktop parity | Phase 95 | ✅ Done (Hermes pending details) |
-| MCP connection variables — catalog entries declare named env-var fields (label, placeholder, required flag, secret flag); connect UI collects all declared variables before the first connection attempt; post-connect variable editor for servers that need additional env vars configured after setup; Web + Desktop parity; encrypted at rest via existing keystore; covers servers like Sitecore MCP that require 10–20 env vars just to connect | Phase 96 | High |
+| MCP runtime variables — per-server variable store (name, value, secret flag) injected as env vars when the MCP server process is launched; variable editor in the Integrations UI lets users add/edit/remove variables at any time without reconfiguring the connection; covers servers like Sitecore MCP that require 10–20 env vars passed at runtime; encrypted at rest via existing keystore; Web + Desktop parity | Phase 96 | High |
 
 ### v1.0 release polish (in progress)
 
