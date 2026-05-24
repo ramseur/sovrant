@@ -122,6 +122,7 @@
     <div class="tcb-mcp-switcher">
         <button class="tcb-field tcb-mcp-trigger"
                 title="Choose which MCP servers are available to agents"
+                @ref="_mcpTriggerRef"
                 @onclick="ToggleMcpDropdown"
                 @onclick:stopPropagation="true">
             <span class="tcb-icon">&#128279;</span>
@@ -199,6 +200,8 @@
     private string _dropdownStyle = string.Empty;
     private DotNetObjectReference<TopContextBar>? _selfRef;
     private int _dismissBindingId;
+    private ElementReference _mcpTriggerRef;
+    private int _mcpDismissBindingId;
 
     private string _currentModel = string.Empty;
     private string _currentProvider = string.Empty;
@@ -302,7 +305,43 @@
         }
     }
 
-    private void ToggleMcpDropdown() => _mcpDropdownOpen = !_mcpDropdownOpen;
+    private async Task ToggleMcpDropdown()
+    {
+        _mcpDropdownOpen = !_mcpDropdownOpen;
+        if (!_mcpDropdownOpen)
+        {
+            await UnbindMcpDismissAsync();
+            return;
+        }
+        try
+        {
+            _selfRef ??= DotNetObjectReference.Create(this);
+            _mcpDismissBindingId = await JS.InvokeAsync<int>(
+                "sovrantInterop.bindLightDismiss", _mcpTriggerRef, ".tcb-mcp-dropdown", _selfRef, nameof(CloseMcpDropdown));
+        }
+        catch { /* without JS interop dropdown still closes on button click */ }
+    }
+
+    [JSInvokable]
+    public Task CloseMcpDropdown()
+    {
+        return InvokeAsync(async () =>
+        {
+            if (!_mcpDropdownOpen) return;
+            _mcpDropdownOpen = false;
+            await UnbindMcpDismissAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task UnbindMcpDismissAsync()
+    {
+        if (_mcpDismissBindingId == 0) return;
+        var id = _mcpDismissBindingId;
+        _mcpDismissBindingId = 0;
+        try { await JS.InvokeVoidAsync("sovrantInterop.unbindLightDismiss", id); }
+        catch { /* best effort */ }
+    }
 
     private async Task ToggleMcpServer(string name, bool active)
     {

@@ -3352,3 +3352,36 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     margin: 0;
     line-height: 1.5;
 }
+
+/* ── Settings field / input (used inside sys-int cards) ──────────────────── */
+.settings-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.settings-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.02em;
+}
+.settings-input {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-size: 13px;
+    width: 100%;
+    box-sizing: border-box;
+    font-family: inherit;
+}
+.settings-input:focus {
+    outline: none;
+    border-color: var(--brand-primary);
+}
+.settings-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.4;
+}

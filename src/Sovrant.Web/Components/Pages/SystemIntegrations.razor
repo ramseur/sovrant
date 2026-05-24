@@ -50,14 +50,16 @@
         <div class="settings-section">
             <div class="settings-field">
                 <label class="settings-label">Project URL</label>
-                <input class="settings-input" type="url"
+                <input class="settings-input" type="text"
                        placeholder="https://your-project.supabase.co"
+                       autocomplete="off"
                        @bind="_projectUrl" />
             </div>
             <div class="settings-field">
                 <label class="settings-label">Service Role Key</label>
                 <input class="settings-input" type="password"
                        placeholder="eyJ…"
+                       autocomplete="new-password"
                        @bind="_serviceRoleKey" />
                 <span class="settings-hint">Found in Supabase → Project Settings → API → service_role key.</span>
             </div>
