@@ -60,12 +60,6 @@ public static class IntegrationCatalog
             ApiKeyLabel: "Personal Access Token", ApiKeyEnvVar: "GITHUB_TOKEN",
             DefaultCommand: "npx", DefaultArgs: ["-y", "@modelcontextprotocol/server-github"]),
 
-        new("filesystem", "Filesystem", "Platform", "📁",
-            "Give agents read/write access to a local directory via MCP.",
-            IntegrationKind.McpStdio, IntegrationTier.Platform,
-            EndpointLabel: "Directory path (e.g. /home/user/projects)",
-            DefaultCommand: "npx", DefaultArgs: ["-y", "@modelcontextprotocol/server-filesystem", "{ENDPOINT}"]),
-
         new("slack", "Slack", "Platform", "💬",
             "Read channels, send messages, and search Slack from agents.",
             IntegrationKind.McpStdio, IntegrationTier.Platform,
@@ -101,12 +95,6 @@ public static class IntegrationCatalog
             IntegrationKind.McpStdio, IntegrationTier.Platform,
             ApiKeyLabel: "Access Token",
             DefaultCommand: "npx", DefaultArgs: ["-y", "@supabase/mcp-server-supabase", "--access-token", "{API_KEY}"]),
-
-        new("filesystem", "Filesystem", "Platform", "📁",
-            "Give agents read/write access to a local directory via MCP.",
-            IntegrationKind.McpStdio, IntegrationTier.Platform,
-            EndpointLabel: "Directory path (e.g. /home/user/projects)",
-            DefaultCommand: "npx", DefaultArgs: ["-y", "@modelcontextprotocol/server-filesystem", "{ENDPOINT}"]),
 
         // Search
         new("brave-search", "Brave Search", "Search", "🔍",
