@@ -36,40 +36,7 @@
                 <p class="text-secondary">@context.Description</p>
             }
 
-            <h3>Fields</h3>
-            @if (context.Fields.Count > 0)
-            {
-                <table class="provider-table">
-                    <thead>
-                        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var f in context.Fields)
-                        {
-                            <tr>
-                                <td><code>@f.Name</code></td>
-                                <td>@FieldTypeName(f.Type)</td>
-                                <td>@(f.Required ? "Yes" : "")</td>
-                                <td>@(f.Description ?? string.Empty)</td>
-                            </tr>
-                            @if (f.ItemFields is { Count: > 0 })
-                            {
-                                @foreach (var nf in f.ItemFields)
-                                {
-                                    <tr>
-                                        <td style="padding-left:24px;"><code>@nf.Name</code></td>
-                                        <td>@FieldTypeName(nf.Type)</td>
-                                        <td>@(nf.Required ? "Yes" : "")</td>
-                                        <td>@(nf.Description ?? string.Empty)</td>
-                                    </tr>
-                                }
-                            }
-                        }
-                    </tbody>
-                </table>
-            }
-
-            <h3>Render</h3>
+            <h3>Generate</h3>
             <div class="render-controls" style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
                 <label>Format:
                     <select @bind="_formatChoice">
@@ -107,6 +74,39 @@
                         </div>
                     }
                 </div>
+            }
+
+            <h3>Fields</h3>
+            @if (context.Fields.Count > 0)
+            {
+                <table class="provider-table">
+                    <thead>
+                        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var f in context.Fields)
+                        {
+                            <tr>
+                                <td><code>@f.Name</code></td>
+                                <td>@FieldTypeName(f.Type)</td>
+                                <td>@(f.Required ? "Yes" : "")</td>
+                                <td>@(f.Description ?? string.Empty)</td>
+                            </tr>
+                            @if (f.ItemFields is { Count: > 0 })
+                            {
+                                @foreach (var nf in f.ItemFields)
+                                {
+                                    <tr>
+                                        <td style="padding-left:24px;"><code>@nf.Name</code></td>
+                                        <td>@FieldTypeName(nf.Type)</td>
+                                        <td>@(nf.Required ? "Yes" : "")</td>
+                                        <td>@(nf.Description ?? string.Empty)</td>
+                                    </tr>
+                                }
+                            }
+                        }
+                    </tbody>
+                </table>
             }
         </div>
     </DetailTemplate>
