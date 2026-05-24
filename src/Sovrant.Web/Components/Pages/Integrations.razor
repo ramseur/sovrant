@@ -119,7 +119,7 @@
                     {
                         <div class="form-field">
                             <label>@_catalogEntry.ApiKeyLabel</label>
-                            <input type="password" @bind="_galleryApiKey"
+                            <input type="password" autocomplete="new-password" @bind="_galleryApiKey"
                                    placeholder="Paste your key here" />
                         </div>
                     }
@@ -127,7 +127,7 @@
                     {
                         <div class="form-field">
                             <label>@_catalogEntry.EndpointLabel</label>
-                            <input type="text" @bind="_galleryUrl" placeholder="" />
+                            <input type="text" autocomplete="off" @bind="_galleryUrl" placeholder="" />
                         </div>
                     }
 
@@ -275,11 +275,11 @@
                 {
                     <div class="form-field">
                         <label>Name</label>
-                        <input type="text" @bind="_newName" placeholder="my-server" />
+                        <input type="text" autocomplete="off" @bind="_newName" placeholder="my-server" />
                     </div>
                     <div class="form-field">
                         <label>Command</label>
-                        <input type="text" @bind="_newCommand" placeholder="npx" />
+                        <input type="text" autocomplete="off" @bind="_newCommand" placeholder="npx" />
                     </div>
                     <div class="form-field">
                         <label>Arguments (space-separated)</label>
@@ -291,15 +291,15 @@
                 {
                     <div class="form-field">
                         <label>Name</label>
-                        <input type="text" @bind="_newName" placeholder="my-server" />
+                        <input type="text" autocomplete="off" @bind="_newName" placeholder="my-server" />
                     </div>
                     <div class="form-field">
                         <label>URL</label>
-                        <input type="text" @bind="_newUrl" placeholder="https://mcp.example.com/sse" />
+                        <input type="text" autocomplete="off" @bind="_newUrl" placeholder="https://mcp.example.com/sse" />
                     </div>
                     <div class="form-field">
                         <label>Bearer Token (optional)</label>
-                        <input type="password" @bind="_newBearer" placeholder="sk-…" />
+                        <input type="password" autocomplete="new-password" @bind="_newBearer" placeholder="sk-…" />
                     </div>
                     <div class="form-field">
                         <label>Extra Headers JSON (optional)</label>
