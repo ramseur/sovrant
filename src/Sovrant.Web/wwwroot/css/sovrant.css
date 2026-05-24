@@ -1657,6 +1657,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     overflow-y: auto;
     height: 100%;
 }
+.settings-page.cc-page { max-width: none; }
 
 .settings-page h1 {
     font-size: 22px;
@@ -2812,7 +2813,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .cc-grid-header,
 .cc-grid-row {
     display: grid;
-    grid-template-columns: 110px 1fr 90px 150px 120px 80px;
+    grid-template-columns: 110px 2fr 100px 140px 110px 70px;
     gap: 12px;
     align-items: center;
     padding: 10px 14px;

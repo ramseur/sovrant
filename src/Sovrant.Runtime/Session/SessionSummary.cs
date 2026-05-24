@@ -6,4 +6,5 @@ namespace Sovrant.Runtime.Session;
 public sealed record SessionListItem(
     string SessionId,
     string? Title,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? OwnerUserId = null);

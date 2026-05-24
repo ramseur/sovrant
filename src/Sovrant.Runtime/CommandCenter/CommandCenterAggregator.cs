@@ -268,36 +268,39 @@ public sealed class CommandCenterAggregator
     {
         try
         {
-            var ids = await _sessions.ListAsync(ownerUserId, ct).ConfigureAwait(false);
+            var summaries = await _sessions.ListWithTitlesAsync(ownerUserId, ct).ConfigureAwait(false);
             var now = DateTimeOffset.UtcNow;
-            var rows = new List<CommandCenterRow>(Math.Min(ids.Count, 100));
+            var rows = new List<CommandCenterRow>(Math.Min(summaries.Count, 100));
 
-            foreach (var id in ids.Take(100))
+            foreach (var summary in summaries.Take(100))
             {
+                if (summary.UpdatedAt < now.AddDays(-7)) continue;
+
                 IReadOnlyList<SessionEntry> entries;
-                try { entries = await _sessions.LoadAsync(id, ownerUserId, ct).ConfigureAwait(false); }
+                try { entries = await _sessions.LoadAsync(summary.SessionId, ownerUserId, ct).ConfigureAwait(false); }
                 catch (Exception) { continue; }
                 if (entries.Count == 0) continue;
 
                 var first = entries[0];
                 var last = entries[^1];
-                if (last.Timestamp < now.AddDays(-7)) continue;
 
                 var firstUser = entries.FirstOrDefault(e => e.Role == "user");
-                var title = Truncate(firstUser?.Content ?? id, 80);
+                var title = !string.IsNullOrEmpty(summary.Title)
+                    ? summary.Title
+                    : Truncate(firstUser?.Content ?? summary.SessionId, 80);
                 var status = (now - last.Timestamp) < TimeSpan.FromMinutes(2) ? "Active" : "Recent";
 
                 rows.Add(new CommandCenterRow(
                     Kind: "session",
-                    Id: id,
+                    Id: summary.SessionId,
                     Title: title,
                     Status: status,
                     StartedAt: first.Timestamp,
                     LastActivity: last.Timestamp,
-                    OwnerLabel: ownerUserId,
+                    OwnerLabel: summary.OwnerUserId ?? ownerUserId,
                     Preview: Truncate(last.Content, 160),
                     CostUsd: null,
-                    DetailRoute: $"/?session={Uri.EscapeDataString(id)}"));
+                    DetailRoute: $"/?session={Uri.EscapeDataString(summary.SessionId)}"));
             }
             return rows;
         }

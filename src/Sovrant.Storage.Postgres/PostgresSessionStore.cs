@@ -158,10 +158,10 @@ internal sealed class PostgresSessionStore(IPostgresConnectionFactory factory) :
         using var conn = factory.CreateConnection();
         using var cmd = conn.CreateCommand();
         if (ownerUserId is null)
-            cmd.CommandText = "SELECT session_id, title, updated_at FROM sessions ORDER BY updated_at DESC";
+            cmd.CommandText = "SELECT session_id, title, updated_at, user_id FROM sessions ORDER BY updated_at DESC";
         else
         {
-            cmd.CommandText = "SELECT session_id, title, updated_at FROM sessions WHERE user_id = $1 ORDER BY updated_at DESC";
+            cmd.CommandText = "SELECT session_id, title, updated_at, user_id FROM sessions WHERE user_id = $1 ORDER BY updated_at DESC";
             cmd.Parameters.AddWithValue(ownerUserId);
         }
         return await ReadSessionItemsAsync(cmd, ct).ConfigureAwait(false);
@@ -264,7 +264,8 @@ internal sealed class PostgresSessionStore(IPostgresConnectionFactory factory) :
             items.Add(new SessionListItem(
                 SessionId: reader.GetString(0),
                 Title: await reader.IsDBNullAsync(1, ct).ConfigureAwait(false) ? null : reader.GetString(1),
-                UpdatedAt: DateTimeOffset.Parse(reader.GetString(2), CultureInfo.InvariantCulture)));
+                UpdatedAt: DateTimeOffset.Parse(reader.GetString(2), CultureInfo.InvariantCulture),
+                OwnerUserId: await reader.IsDBNullAsync(3, ct).ConfigureAwait(false) ? null : reader.GetString(3)));
         }
         return items;
     }
