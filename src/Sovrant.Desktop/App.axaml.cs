@@ -194,6 +194,7 @@ public partial class App : Application
         services.AddSingleton<CommandPaletteViewModel>();
         services.AddTransient<LoginViewModel>();
         services.AddTransient<AdminViewModel>();
+        services.AddTransient<SystemIntegrationsViewModel>();
 
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;

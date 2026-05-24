@@ -216,6 +216,7 @@ public partial class MainViewModel : ViewModelBase
             "CommandCenter" => ResetCockpitToGrid(),
             "Admin" => ResolveAdmin("users"),
             "AdminWorkspaces" => ResolveAdmin("workspaces"),
+            "AdminSystemIntegrations" => _services.GetRequiredService<SystemIntegrationsViewModel>(),
             _ => CurrentPage,
         };
     }

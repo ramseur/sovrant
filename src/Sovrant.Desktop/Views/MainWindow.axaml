@@ -72,6 +72,9 @@
         <DataTemplate DataType="vm:AdminViewModel">
             <views:AdminView />
         </DataTemplate>
+        <DataTemplate DataType="vm:SystemIntegrationsViewModel">
+            <views:SystemIntegrationsView />
+        </DataTemplate>
     </Window.DataTemplates>
 
     <Panel>

@@ -1,0 +1,194 @@
+@page "/admin/system-integrations"
+@using Sovrant.Api.Auth
+@using Sovrant.Runtime.Mcp
+
+@inject ICredentialStore CredentialStore
+@inject IHttpClientFactory Http
+
+<div class="settings-page">
+    <div class="diag-header">
+        <h1>System Integrations</h1>
+        <span class="page-subtitle">Platform-level integrations that control how Sovrant stores and manages data.</span>
+    </div>
+
+    <!-- Active backend pill -->
+    <div class="sys-int-backend-pill">
+        <span class="sys-int-backend-label">ACTIVE DATABASE BACKEND</span>
+        <span class="sys-int-backend-value @(_isSupabaseActive ? "active-supabase" : "active-sqlite")">
+            @(_isSupabaseActive ? "Supabase (PostgreSQL)" : "SQLite (local)")
+        </span>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_statusMessage))
+    {
+        <div class="status-message">@_statusMessage</div>
+    }
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="page-error-banner" role="alert">
+            <span>⚠</span>
+            <span class="error-message">@_errorMessage</span>
+        </div>
+    }
+
+    <!-- Supabase card -->
+    <div class="sys-int-card">
+        <div class="sys-int-card-header">
+            <div class="sys-int-card-title">
+                <span class="sys-int-icon">🗄️</span>
+                <span class="sys-int-name">Supabase</span>
+                <span class="sys-int-badge @ConnectionBadgeClass">@ConnectionStatusLabel</span>
+            </div>
+            <p class="sys-int-desc">PostgreSQL-backed storage via your Supabase project.</p>
+        </div>
+
+        <div class="settings-section">
+            <div class="settings-field">
+                <label class="settings-label">Project URL</label>
+                <input class="settings-input" type="url"
+                       placeholder="https://your-project.supabase.co"
+                       @bind="_projectUrl" />
+            </div>
+            <div class="settings-field">
+                <label class="settings-label">Service Role Key</label>
+                <input class="settings-input" type="password"
+                       placeholder="eyJ…"
+                       @bind="_serviceRoleKey" />
+                <span class="settings-hint">Found in Supabase → Project Settings → API → service_role key.</span>
+            </div>
+
+            <button class="btn-secondary" @onclick="TestConnectionAsync" disabled="@_isTesting">
+                @(_isTesting ? "Testing…" : "Test Connection")
+            </button>
+        </div>
+
+        @if (_connectionOk)
+        {
+            <div class="sys-int-section">
+                <div class="sys-int-section-label">DATABASE SCHEMA</div>
+                <p class="sys-int-section-desc">
+                    Initialize the Sovrant schema in your Supabase project before switching backends.
+                    Safe to run multiple times (idempotent).
+                </p>
+                <button class="btn-secondary" @onclick="InitializeSchemaAsync">Initialize Schema</button>
+            </div>
+
+            @if (_schemaReady && !_isSupabaseActive)
+            {
+                <div class="sys-int-section">
+                    <div class="sys-int-section-label">MIGRATE EXISTING DATA</div>
+                    <p class="sys-int-section-desc">
+                        Copy all data from the local SQLite database to Supabase. The local database is kept
+                        as a fallback until you explicitly switch backends.
+                    </p>
+                    <button class="btn-secondary" @onclick="MigrateDataAsync">Migrate Data from SQLite</button>
+                </div>
+            }
+
+            @if (_schemaReady)
+            {
+                <div class="sys-int-section">
+                    <div class="sys-int-section-label">ACTIVE BACKEND</div>
+                    @if (!_isSupabaseActive)
+                    {
+                        <button class="btn-primary" @onclick="SwitchBackendAsync">Switch to Supabase</button>
+                    }
+                    else
+                    {
+                        <button class="btn-danger" @onclick="RevertToSqliteAsync">Revert to SQLite</button>
+                        <p class="settings-hint">A restart is required for the backend switch to take effect.</p>
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private string _projectUrl = string.Empty;
+    private string _serviceRoleKey = string.Empty;
+    private bool _connectionOk;
+    private bool _schemaReady = false; // set to true by Step B (schema initialization)
+    private bool _isSupabaseActive;
+    private bool _isTesting;
+    private string _statusMessage = string.Empty;
+    private string _errorMessage = string.Empty;
+
+    private string ConnectionStatusLabel => _connectionOk ? "Connected" : (_isTesting ? "Testing…" : "Not configured");
+    private string ConnectionBadgeClass => _connectionOk ? "badge-pass" : "badge-warn";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _projectUrl = await CredentialStore.RetrieveAsync(CredentialKeys.SupabaseProjectUrl) ?? string.Empty;
+        _serviceRoleKey = await CredentialStore.RetrieveAsync(CredentialKeys.SupabaseServiceRoleKey) ?? string.Empty;
+        var backend = await CredentialStore.RetrieveAsync(CredentialKeys.DatabaseBackend) ?? "sqlite";
+        _isSupabaseActive = backend == "supabase";
+        _connectionOk = !string.IsNullOrEmpty(_projectUrl);
+    }
+
+    private async Task TestConnectionAsync()
+    {
+        _statusMessage = string.Empty;
+        _errorMessage = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_projectUrl) || string.IsNullOrWhiteSpace(_serviceRoleKey))
+        {
+            _errorMessage = "Enter a Project URL and Service Role Key first.";
+            return;
+        }
+
+        _isTesting = true;
+        try
+        {
+            var url = _projectUrl.TrimEnd('/') + "/rest/v1/";
+            using var client = Http.CreateClient();
+            client.DefaultRequestHeaders.Add("apikey", _serviceRoleKey);
+            client.DefaultRequestHeaders.Add("Authorization", $"Bearer {_serviceRoleKey}");
+            client.Timeout = TimeSpan.FromSeconds(10);
+
+            var response = await client.GetAsync(url);
+            if ((int)response.StatusCode != 401)
+            {
+                _connectionOk = true;
+                _statusMessage = "Connection successful.";
+                await CredentialStore.StoreAsync(CredentialKeys.SupabaseProjectUrl, _projectUrl);
+                await CredentialStore.StoreAsync(CredentialKeys.SupabaseServiceRoleKey, _serviceRoleKey);
+            }
+            else
+            {
+                _connectionOk = false;
+                _errorMessage = "Connection failed: invalid key (HTTP 401).";
+            }
+        }
+        catch (Exception ex)
+        {
+            _connectionOk = false;
+            _errorMessage = $"Connection failed: {ex.Message}";
+        }
+        finally { _isTesting = false; }
+    }
+
+    private Task InitializeSchemaAsync()
+    {
+        _statusMessage = "Schema initialization coming soon (Step B).";
+        return Task.CompletedTask;
+    }
+
+    private Task MigrateDataAsync()
+    {
+        _statusMessage = "Data migration coming soon (Step D).";
+        return Task.CompletedTask;
+    }
+
+    private Task SwitchBackendAsync()
+    {
+        _statusMessage = "Backend switching coming soon (Step E).";
+        return Task.CompletedTask;
+    }
+
+    private Task RevertToSqliteAsync()
+    {
+        _statusMessage = "Backend switching coming soon (Step E).";
+        return Task.CompletedTask;
+    }
+}
