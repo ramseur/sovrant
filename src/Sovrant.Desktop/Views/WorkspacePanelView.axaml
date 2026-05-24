@@ -16,12 +16,6 @@
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Projects}"
                     Foreground="{DynamicResource TextPrimary}" />
-            <Button Content="🔨  Code Scaffolds"
-                    Command="{Binding NavigateCommand}" CommandParameter="Code"
-                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Code}"
-                    Foreground="{DynamicResource TextPrimary}" />
 
             <!-- MCP opt-in switcher — visible only when MCP servers are configured -->
             <StackPanel IsVisible="{Binding ActiveContext.AvailableMcpServers.Count, Converter={x:Static conv:IntToBoolConverter.Instance}}"

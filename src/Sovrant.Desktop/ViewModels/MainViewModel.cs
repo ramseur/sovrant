@@ -203,7 +203,7 @@ public partial class MainViewModel : ViewModelBase
             "Integrations" => _services.GetRequiredService<IntegrationsViewModel>(),
             "Artifacts" => _services.GetRequiredService<ArtifactsViewModel>(),
             "Documents" => GetOrCreateDocumentsViewModel(),
-            "Code" => _services.GetRequiredService<CodeViewModel>(),
+
             "Tools" => _services.GetRequiredService<ToolsViewModel>(),
             "Skills" => _services.GetRequiredService<SkillsViewModel>(),
             "Memory" => _services.GetRequiredService<MemoryViewModel>(),

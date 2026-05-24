@@ -195,7 +195,6 @@ public partial class App : Application
         services.AddTransient<IntegrationsViewModel>();
         services.AddTransient<ArtifactsViewModel>();
         services.AddTransient<DocumentsViewModel>();
-        services.AddTransient<CodeViewModel>();
         services.AddTransient<ToolsViewModel>();
         services.AddTransient<SkillsViewModel>();
         services.AddTransient<MemoryViewModel>();
