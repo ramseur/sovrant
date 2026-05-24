@@ -36,47 +36,61 @@
                 <p class="text-secondary">@context.Description</p>
             }
 
-            <h3>Generate</h3>
-            <div class="render-controls" style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
-                <label>Format:
-                    <select @bind="_formatChoice">
-                        <option value="">(default: @FormatName(context.DefaultFormat))</option>
-                        <option value="markdown">Markdown</option>
-                        <option value="pdf">PDF</option>
-                        <option value="structured_pdf">Structured PDF</option>
-                        <option value="word">Word</option>
-                        <option value="excel">Excel</option>
-                        <option value="powerpoint">PowerPoint</option>
-                    </select>
-                </label>
-                <button class="btn-primary btn-sm" @onclick="RenderAsync" disabled="@_busy">
-                    @(_busy ? "Generating..." : "Generate")
-                </button>
-            </div>
-            <textarea @bind="_jsonInput" @bind:event="oninput" rows="12"
-                      placeholder='Enter JSON satisfying the field schema. Example: {"project_name": "..."}'
-                      style="width:100%; font-family: Consolas, monospace; font-size:13px;"></textarea>
+            <!-- Primary action: chat to create -->
+            <button class="btn-primary doc-chat-btn"
+                    @onclick="() => ChatToCreate(context)">
+                💬 Chat to create this document
+            </button>
+            <p class="text-muted text-sm" style="margin:4px 0 16px;">
+                The AI will ask for the information it needs and generate the document for you.
+            </p>
 
-            @if (!string.IsNullOrEmpty(_error))
-            {
-                <div class="text-danger" style="margin-top:8px; white-space:pre-wrap;">@_error</div>
-            }
+            <!-- Advanced: manual JSON fill -->
+            <details class="doc-advanced">
+                <summary class="doc-advanced-toggle">Advanced: fill manually with JSON</summary>
+                <div style="margin-top:12px;">
+                    <div class="render-controls" style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
+                        <label>Format:
+                            <select @bind="_formatChoice">
+                                <option value="">(default: @FormatName(context.DefaultFormat))</option>
+                                <option value="markdown">Markdown</option>
+                                <option value="pdf">PDF</option>
+                                <option value="structured_pdf">Structured PDF</option>
+                                <option value="word">Word</option>
+                                <option value="excel">Excel</option>
+                                <option value="powerpoint">PowerPoint</option>
+                            </select>
+                        </label>
+                        <button class="btn-secondary btn-sm" @onclick="RenderAsync" disabled="@_busy">
+                            @(_busy ? "Generating..." : "Generate")
+                        </button>
+                    </div>
+                    <textarea @bind="_jsonInput" @bind:event="oninput" rows="10"
+                              placeholder='Enter JSON satisfying the field schema. Example: {"project_name": "..."}'
+                              style="width:100%; font-family: Consolas, monospace; font-size:13px;"></textarea>
 
-            @if (_lastResult is not null)
-            {
-                <div class="render-result" style="margin-top:12px; padding:12px; border:1px solid var(--border,#333); border-radius:6px;">
-                    <div><strong>Generated:</strong> <code>@_lastResult.RelativePath</code></div>
-                    <div>@_lastResult.SizeBytes bytes &middot; @_lastResult.ContentType</div>
-                    @if (_lastResult.AccessUrl is not null)
+                    @if (!string.IsNullOrEmpty(_error))
                     {
-                        <div style="margin-top:8px;">
-                            <a class="btn-outline btn-sm" href="@_lastResult.AccessUrl" target="_blank">Open artifact</a>
+                        <div class="text-danger" style="margin-top:8px; white-space:pre-wrap;">@_error</div>
+                    }
+
+                    @if (_lastResult is not null)
+                    {
+                        <div class="render-result" style="margin-top:12px; padding:12px; border:1px solid var(--border,#333); border-radius:6px;">
+                            <div><strong>Generated:</strong> <code>@_lastResult.RelativePath</code></div>
+                            <div>@_lastResult.SizeBytes bytes &middot; @_lastResult.ContentType</div>
+                            @if (_lastResult.AccessUrl is not null)
+                            {
+                                <div style="margin-top:8px;">
+                                    <a class="btn-outline btn-sm" href="@_lastResult.AccessUrl" target="_blank">Open artifact</a>
+                                </div>
+                            }
                         </div>
                     }
                 </div>
-            }
+            </details>
 
-            <h3>Fields</h3>
+            <h3 style="margin-top:20px;">Fields</h3>
             @if (context.Fields.Count > 0)
             {
                 <table class="provider-table">
@@ -116,6 +130,7 @@
     [Inject] private ITemplateRegistry Registry { get; set; } = default!;
     [Inject] private IDocumentGeneratorRegistry Generators { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
+    [Inject] private NavigationManager Nav { get; set; } = default!;
 
     private List<TemplateItem> _all = [];
     private List<TemplateItem> _filtered = [];
@@ -146,6 +161,12 @@
             })
             .ToList();
         ApplyFilter();
+    }
+
+    private void ChatToCreate(TemplateItem template)
+    {
+        var prompt = Uri.EscapeDataString($"I'd like to create a {template.Name} document. Please help me fill in the required information.");
+        Nav.NavigateTo($"/chat?prompt={prompt}");
     }
 
     private Task SelectItem(TemplateItem item)

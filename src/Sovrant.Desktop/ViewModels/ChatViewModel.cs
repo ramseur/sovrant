@@ -93,6 +93,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         _agentSystemPrompt = systemPrompt;
     }
 
+    public void SeedInput(string text)
+    {
+        InputText = text;
+    }
+
     public async Task LoadSessionAsync(string sessionId, CancellationToken ct = default)
     {
         SessionId = sessionId;

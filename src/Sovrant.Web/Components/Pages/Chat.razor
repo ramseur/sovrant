@@ -181,6 +181,11 @@
             }
         }
 
+        if (query.TryGetValue("prompt", out var promptParam) && !string.IsNullOrWhiteSpace(promptParam))
+        {
+            _inputText = Uri.UnescapeDataString(promptParam.ToString());
+        }
+
         if (query.TryGetValue("session", out var sessionParam) &&
             !string.IsNullOrWhiteSpace(sessionParam) &&
             sessionParam.ToString() != _sessionId)

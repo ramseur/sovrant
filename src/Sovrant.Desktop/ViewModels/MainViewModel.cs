@@ -48,6 +48,7 @@ public partial class MainViewModel : ViewModelBase
     // Parked ChatViewModels whose turns are still running in background.
     private readonly Dictionary<string, ChatViewModel> _backgroundChats = [];
     private AgentsViewModel? _agentsViewModel;
+    private DocumentsViewModel? _documentsViewModel;
 
     public bool IsAdmin => _principal.IsAdmin;
 
@@ -201,7 +202,7 @@ public partial class MainViewModel : ViewModelBase
             "Diagnostics" => _services.GetRequiredService<DiagnosticsViewModel>(),
             "Integrations" => _services.GetRequiredService<IntegrationsViewModel>(),
             "Artifacts" => _services.GetRequiredService<ArtifactsViewModel>(),
-            "Documents" => _services.GetRequiredService<DocumentsViewModel>(),
+            "Documents" => GetOrCreateDocumentsViewModel(),
             "Code" => _services.GetRequiredService<CodeViewModel>(),
             "Tools" => _services.GetRequiredService<ToolsViewModel>(),
             "Skills" => _services.GetRequiredService<SkillsViewModel>(),
@@ -286,11 +287,31 @@ public partial class MainViewModel : ViewModelBase
         return _agentsViewModel;
     }
 
+    private DocumentsViewModel GetOrCreateDocumentsViewModel()
+    {
+        if (_documentsViewModel is not null) return _documentsViewModel;
+        _documentsViewModel = ActivatorUtilities.CreateInstance<DocumentsViewModel>(
+            _services,
+            (Action<string>)LaunchDocumentChat);
+        return _documentsViewModel;
+    }
+
     private void LaunchAgentChat(string agentName, string? systemPrompt)
     {
         ParkCurrentChatIfRunning();
         var chat = CreateChatViewModel();
         chat.SetAgentScope(agentName, systemPrompt);
+        CurrentPage = chat;
+        SelectedGroup = "chat";
+        OnSelectedGroupChanged("chat");
+        Sidebar.SelectedNavItem = "Chat";
+    }
+
+    private void LaunchDocumentChat(string seedText)
+    {
+        ParkCurrentChatIfRunning();
+        var chat = CreateChatViewModel();
+        chat.SeedInput(seedText);
         CurrentPage = chat;
         SelectedGroup = "chat";
         OnSelectedGroupChanged("chat");

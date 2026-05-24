@@ -121,41 +121,60 @@
                                            Foreground="{DynamicResource TextSecondary}" />
                             </StackPanel>
 
-                            <!-- Render controls -->
-                            <TextBlock Text="Generate" FontSize="14" FontWeight="SemiBold"
-                                       Foreground="{DynamicResource TextPrimary}" />
-                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                <TextBlock Text="Format:" VerticalAlignment="Center" FontSize="12" />
-                                <ComboBox ItemsSource="{Binding FormatOptions}"
-                                          SelectedValue="{Binding SelectedFormatKey}"
-                                          SelectedValueBinding="{Binding Key}"
-                                          Width="180">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate DataType="vm:FormatOption">
-                                            <TextBlock Text="{Binding Display}" />
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
-                                <Button Content="Generate"
-                                        Command="{Binding GenerateCommand}"
-                                        IsEnabled="{Binding !IsBusy}"
-                                        Padding="14,6"
-                                        CornerRadius="6"
-                                        Background="{DynamicResource BrandPrimary}"
-                                        Foreground="White" />
-                                <TextBlock Text="Generating..."
-                                           VerticalAlignment="Center" FontSize="11"
-                                           Foreground="{DynamicResource TextSecondary}"
-                                           IsVisible="{Binding IsBusy}" />
-                            </StackPanel>
+                            <!-- Primary: chat-to-create -->
+                            <Button Content="💬 Chat to create this document"
+                                    Command="{Binding ChatToCreateCommand}"
+                                    IsVisible="{Binding CanLaunchChat}"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Center"
+                                    Padding="14,10"
+                                    CornerRadius="8"
+                                    Background="{DynamicResource BrandPrimary}"
+                                    Foreground="White"
+                                    FontSize="14" />
+                            <TextBlock IsVisible="{Binding CanLaunchChat}"
+                                       Text="The AI will ask for the information it needs and generate the document for you."
+                                       FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextMuted}" />
 
-                            <TextBox Text="{Binding JsonInput}"
-                                     AcceptsReturn="True"
-                                     TextWrapping="NoWrap"
-                                     FontFamily="Consolas,Menlo,monospace"
-                                     FontSize="12"
-                                     MinHeight="200"
-                                     Watermark='Enter JSON satisfying the field schema. Example: {"project_name": "..."}' />
+                            <!-- Advanced: manual JSON fill (expander) -->
+                            <Expander Header="Advanced: fill manually with JSON"
+                                      Padding="0,4,0,0">
+                                <StackPanel Spacing="8" Margin="0,8,0,0">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <TextBlock Text="Format:" VerticalAlignment="Center" FontSize="12" />
+                                        <ComboBox ItemsSource="{Binding FormatOptions}"
+                                                  SelectedValue="{Binding SelectedFormatKey}"
+                                                  SelectedValueBinding="{Binding Key}"
+                                                  Width="180">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate DataType="vm:FormatOption">
+                                                    <TextBlock Text="{Binding Display}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <Button Content="Generate"
+                                                Command="{Binding GenerateCommand}"
+                                                IsEnabled="{Binding !IsBusy}"
+                                                Padding="14,6"
+                                                CornerRadius="6"
+                                                Background="{DynamicResource BrandPrimary}"
+                                                Foreground="White" />
+                                        <TextBlock Text="Generating..."
+                                                   VerticalAlignment="Center" FontSize="11"
+                                                   Foreground="{DynamicResource TextSecondary}"
+                                                   IsVisible="{Binding IsBusy}" />
+                                    </StackPanel>
+                                    <TextBox Text="{Binding JsonInput}"
+                                             AcceptsReturn="True"
+                                             TextWrapping="NoWrap"
+                                             FontFamily="Consolas,Menlo,monospace"
+                                             FontSize="12"
+                                             MinHeight="160"
+                                             Watermark='Enter JSON satisfying the field schema. Example: {"project_name": "..."}' />
+                                </StackPanel>
+                            </Expander>
 
                             <!-- Fields -->
                             <TextBlock Text="Fields" FontSize="14" FontWeight="SemiBold"
