@@ -9,11 +9,13 @@ using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Logging;
 using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Permissions;
+using Sovrant.Runtime.Storage;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
 using Sovrant.Web.Adapters;
 using Sovrant.Web.Services;
 using Sovrant.Client.Remote;
+using Sovrant.Storage.Postgres;
 
 namespace Sovrant.Web;
 
@@ -37,6 +39,25 @@ public static class Program
         var isRemote = string.Equals(runtimeMode, "remote", StringComparison.OrdinalIgnoreCase);
 
         var bootstrapConfig = BootstrapConfigLoader.Load(args);
+
+        // ── Phase 1: read bootstrap credentials (always from SQLite) ─────────
+        string? dbBackend   = null;
+        string? supabaseUrl = null;
+        string? supabaseKey = null;
+        if (!isRemote)
+        {
+            var minSvc = new ServiceCollection();
+            minSvc.AddSovrantStorage(bootstrapConfig);
+#pragma warning disable ASP0000 // standalone mini-container, not builder.Services
+            await using var minSp = minSvc.BuildServiceProvider();
+#pragma warning restore ASP0000
+            var minStorage = minSp.GetRequiredService<IStorageProvider>();
+            await minStorage.InitializeAsync().ConfigureAwait(false);
+            var minStore = minSp.GetRequiredService<ICredentialStore>();
+            dbBackend   = await minStore.RetrieveAsync(CredentialKeys.DatabaseBackend).ConfigureAwait(false);
+            supabaseUrl = await minStore.RetrieveAsync(CredentialKeys.SupabaseProjectUrl).ConfigureAwait(false);
+            supabaseKey = await minStore.RetrieveAsync(CredentialKeys.SupabaseServiceRoleKey).ConfigureAwait(false);
+        }
 
         const int WebHttpPort = 5100;
         const int WebHttpsPortDefault = 5101;
@@ -110,6 +131,14 @@ public static class Program
             {
                 client.Timeout = TimeSpan.FromSeconds(10);
             });
+
+            // Switch to Postgres if configured (Phase 40C).
+            if (string.Equals(dbBackend, "supabase", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrEmpty(supabaseUrl) && !string.IsNullOrEmpty(supabaseKey))
+            {
+                var connStr = Sovrant.Storage.Postgres.ServiceCollectionExtensions.BuildSupabaseConnectionString(supabaseUrl, supabaseKey);
+                builder.Services.AddSovrantPostgresStorage(connStr, bootstrapConfig.KeystorePath);
+            }
 
             // Web-specific overrides
             var mutableAuth = new MutableAuthProvider(config.ApiKey ?? string.Empty, config.BaseUrl);

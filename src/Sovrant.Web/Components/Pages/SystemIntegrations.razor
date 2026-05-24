@@ -1,9 +1,14 @@
 @page "/admin/system-integrations"
 @using Sovrant.Api.Auth
+@using Sovrant.Runtime.Config
 @using Sovrant.Runtime.Mcp
+@using Sovrant.Storage.Postgres
+@using Sovrant.Web.Services
 
-@inject ICredentialStore CredentialStore
 @inject IHttpClientFactory Http
+@inject BootstrapConfig Bootstrap
+@inject WebSessionService Session
+@inject NavigationManager Nav
 
 <div class="settings-page">
     <div class="diag-header">
@@ -57,7 +62,7 @@
                 <span class="settings-hint">Found in Supabase → Project Settings → API → service_role key.</span>
             </div>
 
-            <button class="btn-secondary" @onclick="TestConnectionAsync" disabled="@_isTesting">
+            <button class="btn-secondary" @onclick="TestConnectionAsync" disabled="@_isBusy">
                 @(_isTesting ? "Testing…" : "Test Connection")
             </button>
         </div>
@@ -70,7 +75,9 @@
                     Initialize the Sovrant schema in your Supabase project before switching backends.
                     Safe to run multiple times (idempotent).
                 </p>
-                <button class="btn-secondary" @onclick="InitializeSchemaAsync">Initialize Schema</button>
+                <button class="btn-secondary" @onclick="InitializeSchemaAsync" disabled="@_isBusy">
+                    @(_isInitializingSchema ? "Initializing…" : "Initialize Schema")
+                </button>
             </div>
 
             @if (_schemaReady && !_isSupabaseActive)
@@ -81,7 +88,9 @@
                         Copy all data from the local SQLite database to Supabase. The local database is kept
                         as a fallback until you explicitly switch backends.
                     </p>
-                    <button class="btn-secondary" @onclick="MigrateDataAsync">Migrate Data from SQLite</button>
+                    <button class="btn-secondary" @onclick="MigrateDataAsync" disabled="@_isBusy">
+                        @(_isMigrating ? "Migrating…" : "Migrate Data from SQLite")
+                    </button>
                 </div>
             }
 
@@ -105,31 +114,43 @@
 </div>
 
 @code {
+    private ICredentialStore? _bootstrapStore;
     private string _projectUrl = string.Empty;
     private string _serviceRoleKey = string.Empty;
     private bool _connectionOk;
-    private bool _schemaReady = false; // set to true by Step B (schema initialization)
+    private bool _schemaReady;
     private bool _isSupabaseActive;
     private bool _isTesting;
+    private bool _isInitializingSchema;
+    private bool _isMigrating;
     private string _statusMessage = string.Empty;
     private string _errorMessage = string.Empty;
 
+    private bool _isBusy => _isTesting || _isInitializingSchema || _isMigrating;
     private string ConnectionStatusLabel => _connectionOk ? "Connected" : (_isTesting ? "Testing…" : "Not configured");
     private string ConnectionBadgeClass => _connectionOk ? "badge-pass" : "badge-warn";
 
     protected override async Task OnInitializedAsync()
     {
-        _projectUrl = await CredentialStore.RetrieveAsync(CredentialKeys.SupabaseProjectUrl) ?? string.Empty;
-        _serviceRoleKey = await CredentialStore.RetrieveAsync(CredentialKeys.SupabaseServiceRoleKey) ?? string.Empty;
-        var backend = await CredentialStore.RetrieveAsync(CredentialKeys.DatabaseBackend) ?? "sqlite";
+        if (!Session.IsAdmin) { Nav.NavigateTo("/", forceLoad: false); return; }
+
+        _bootstrapStore = Sovrant.Runtime.ServiceCollectionExtensions.CreateBootstrapCredentialStore(Bootstrap);
+        _projectUrl     = await _bootstrapStore.RetrieveAsync(CredentialKeys.SupabaseProjectUrl) ?? string.Empty;
+        _serviceRoleKey = await _bootstrapStore.RetrieveAsync(CredentialKeys.SupabaseServiceRoleKey) ?? string.Empty;
+        var backend     = await _bootstrapStore.RetrieveAsync(CredentialKeys.DatabaseBackend) ?? "sqlite";
         _isSupabaseActive = backend == "supabase";
-        _connectionOk = !string.IsNullOrEmpty(_projectUrl);
+
+        if (!string.IsNullOrEmpty(_projectUrl) && !string.IsNullOrEmpty(_serviceRoleKey))
+        {
+            _connectionOk = true;
+            await CheckSchemaVersionAsync();
+        }
     }
 
     private async Task TestConnectionAsync()
     {
         _statusMessage = string.Empty;
-        _errorMessage = string.Empty;
+        _errorMessage  = string.Empty;
 
         if (string.IsNullOrWhiteSpace(_projectUrl) || string.IsNullOrWhiteSpace(_serviceRoleKey))
         {
@@ -151,8 +172,9 @@
             {
                 _connectionOk = true;
                 _statusMessage = "Connection successful.";
-                await CredentialStore.StoreAsync(CredentialKeys.SupabaseProjectUrl, _projectUrl);
-                await CredentialStore.StoreAsync(CredentialKeys.SupabaseServiceRoleKey, _serviceRoleKey);
+                await _bootstrapStore!.StoreAsync(CredentialKeys.SupabaseProjectUrl, _projectUrl);
+                await _bootstrapStore!.StoreAsync(CredentialKeys.SupabaseServiceRoleKey, _serviceRoleKey);
+                await CheckSchemaVersionAsync();
             }
             else
             {
@@ -168,27 +190,92 @@
         finally { _isTesting = false; }
     }
 
-    private Task InitializeSchemaAsync()
+    private async Task InitializeSchemaAsync()
     {
-        _statusMessage = "Schema initialization coming soon (Step B).";
-        return Task.CompletedTask;
+        _statusMessage = string.Empty;
+        _errorMessage  = string.Empty;
+        _isInitializingSchema = true;
+        try
+        {
+            var connStr    = Sovrant.Storage.Postgres.ServiceCollectionExtensions.BuildSupabaseConnectionString(_projectUrl, _serviceRoleKey);
+            var initializer = Sovrant.Storage.Postgres.ServiceCollectionExtensions.CreateSchemaInitializer(connStr);
+            await initializer.InitializeAsync();
+            await CheckSchemaVersionAsync();
+            _statusMessage = "Schema initialized successfully.";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Schema initialization failed: {ex.Message}";
+        }
+        finally { _isInitializingSchema = false; }
     }
 
-    private Task MigrateDataAsync()
+    private async Task MigrateDataAsync()
     {
-        _statusMessage = "Data migration coming soon (Step D).";
-        return Task.CompletedTask;
+        _statusMessage = string.Empty;
+        _errorMessage  = string.Empty;
+        _isMigrating   = true;
+        try
+        {
+            var home       = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var sqlitePath = Bootstrap.DbPath ?? Path.Combine(home, ".sovrant", "data", "sovrant.db");
+
+            if (!File.Exists(sqlitePath))
+            {
+                _errorMessage = $"SQLite database not found at {sqlitePath}.";
+                return;
+            }
+
+            var connStr  = Sovrant.Storage.Postgres.ServiceCollectionExtensions.BuildSupabaseConnectionString(_projectUrl, _serviceRoleKey);
+            var factory  = Sovrant.Storage.Postgres.ServiceCollectionExtensions.CreateConnectionFactory(connStr);
+            var migrator = new SqliteToPostgresMigrator(factory, sqlitePath);
+
+            MigrationResult? result = null;
+            var prog = new Progress<MigrationProgress>(p =>
+            {
+                _statusMessage = string.IsNullOrEmpty(p.Message)
+                    ? $"{p.Stage}: {p.Done}/{p.Total}"
+                    : p.Message;
+                InvokeAsync(StateHasChanged);
+            });
+
+            result = await migrator.MigrateAsync(prog);
+            _statusMessage = $"Migration complete — {result.SessionsCopied} sessions, " +
+                             $"{result.EntriesCopied} entries, {result.CredentialsCopied} credentials copied.";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Migration failed: {ex.Message}";
+        }
+        finally { _isMigrating = false; }
     }
 
-    private Task SwitchBackendAsync()
+    private async Task SwitchBackendAsync()
     {
-        _statusMessage = "Backend switching coming soon (Step E).";
-        return Task.CompletedTask;
+        await _bootstrapStore!.StoreAsync(CredentialKeys.DatabaseBackend, "supabase");
+        _isSupabaseActive = true;
+        _statusMessage = "Switched to Supabase. Restart Sovrant for the change to take effect.";
     }
 
-    private Task RevertToSqliteAsync()
+    private async Task RevertToSqliteAsync()
     {
-        _statusMessage = "Backend switching coming soon (Step E).";
-        return Task.CompletedTask;
+        await _bootstrapStore!.StoreAsync(CredentialKeys.DatabaseBackend, "sqlite");
+        _isSupabaseActive = false;
+        _statusMessage = "Reverted to SQLite. Restart Sovrant for the change to take effect.";
+    }
+
+    private async Task CheckSchemaVersionAsync()
+    {
+        try
+        {
+            var connStr     = Sovrant.Storage.Postgres.ServiceCollectionExtensions.BuildSupabaseConnectionString(_projectUrl, _serviceRoleKey);
+            var initializer = Sovrant.Storage.Postgres.ServiceCollectionExtensions.CreateSchemaInitializer(connStr);
+            var version     = await initializer.GetSchemaVersionAsync();
+            _schemaReady    = version.HasValue;
+        }
+        catch
+        {
+            _schemaReady = false;
+        }
     }
 }

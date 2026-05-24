@@ -653,4 +653,23 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Creates a SQLite-backed <see cref="Mcp.ICredentialStore"/> that always reads/writes
+    /// the local SQLite database. Use this for bootstrap-only keys
+    /// (<c>DatabaseBackend</c>, <c>SupabaseProjectUrl</c>, <c>SupabaseServiceRoleKey</c>)
+    /// that must survive backend switches and be readable during startup Phase 1.
+    /// </summary>
+    public static Mcp.ICredentialStore CreateBootstrapCredentialStore(Config.BootstrapConfig bootstrap)
+    {
+        ArgumentNullException.ThrowIfNull(bootstrap);
+        // CA2000: SqliteStorageProvider is intentionally unowned here; it holds no
+        // persistent connections — each command opens/closes independently.
+#pragma warning disable CA2000
+        var provider = new Storage.SqliteStorageProvider(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<Storage.SqliteStorageProvider>.Instance,
+            bootstrap.DbPath);
+#pragma warning restore CA2000
+        return new Storage.SqliteCredentialStore(provider, bootstrap.KeystorePath);
+    }
 }

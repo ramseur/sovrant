@@ -198,7 +198,8 @@ CREATE TABLE IF NOT EXISTS session_entries (
     tool_use_id   TEXT,
     is_error      INTEGER NOT NULL DEFAULT 0,
     -- Full-text search via PostgreSQL tsvector (replaces SQLite FTS5)
-    search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED
+    search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
+    CONSTRAINT uq_session_entries_uid UNIQUE (session_id, entry_uid)
 );
 
 CREATE TABLE IF NOT EXISTS token_usage (

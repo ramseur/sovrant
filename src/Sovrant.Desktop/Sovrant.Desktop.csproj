@@ -52,6 +52,7 @@
     <ProjectReference Include="..\Sovrant.Tools\Sovrant.Tools.csproj" />
     <ProjectReference Include="..\Sovrant.Commands\Sovrant.Commands.csproj" />
     <ProjectReference Include="..\Sovrant.Agents\Sovrant.Agents.csproj" />
+    <ProjectReference Include="..\Sovrant.Storage.Postgres\Sovrant.Storage.Postgres.csproj" />
   </ItemGroup>
 
 </Project>

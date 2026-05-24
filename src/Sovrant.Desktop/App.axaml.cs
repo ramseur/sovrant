@@ -20,6 +20,7 @@ using Sovrant.Runtime.Logging;
 using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Storage;
+using Sovrant.Storage.Postgres;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
 
@@ -96,6 +97,10 @@ public partial class App : Application
         string? remoteServerUrl = Environment.GetEnvironmentVariable("SOVRANT_SERVER_URL");
         string? remoteApiToken = null;
 
+        string? dbBackend = null;
+        string? supabaseUrl = null;
+        string? supabaseKey = null;
+
         if (string.IsNullOrEmpty(remoteServerUrl))
         {
             var minSvc = new ServiceCollection();
@@ -108,8 +113,11 @@ public partial class App : Application
             if (string.Equals(mode, "remote", StringComparison.OrdinalIgnoreCase))
             {
                 remoteServerUrl = await minStore.RetrieveAsync(CredentialKeys.RemoteServerUrl).ConfigureAwait(true);
-                remoteApiToken = await minStore.RetrieveAsync(CredentialKeys.RemoteApiToken).ConfigureAwait(true);
+                remoteApiToken  = await minStore.RetrieveAsync(CredentialKeys.RemoteApiToken).ConfigureAwait(true);
             }
+            dbBackend   = await minStore.RetrieveAsync(CredentialKeys.DatabaseBackend).ConfigureAwait(true);
+            supabaseUrl = await minStore.RetrieveAsync(CredentialKeys.SupabaseProjectUrl).ConfigureAwait(true);
+            supabaseKey = await minStore.RetrieveAsync(CredentialKeys.SupabaseServiceRoleKey).ConfigureAwait(true);
         }
         else
         {
@@ -158,6 +166,15 @@ public partial class App : Application
             {
                 client.Timeout = TimeSpan.FromSeconds(10);
             });
+
+            // Switch to Postgres if configured (Phase 40C).
+            // Registered AFTER AddSovrantRuntime so it overrides ISessionStore and ICredentialStore.
+            if (string.Equals(dbBackend, "supabase", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrEmpty(supabaseUrl) && !string.IsNullOrEmpty(supabaseKey))
+            {
+                var connStr = Sovrant.Storage.Postgres.ServiceCollectionExtensions.BuildSupabaseConnectionString(supabaseUrl, supabaseKey);
+                services.AddSovrantPostgresStorage(connStr, bootstrap.KeystorePath);
+            }
         }
 
         // Register mutableAuth AFTER AddSovrantRuntime so it wins as the final IAuthProvider.

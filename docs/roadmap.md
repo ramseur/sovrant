@@ -22,7 +22,7 @@ What we are actively working on and shipping next, in priority order.
 | **v1.1 — done** | Phase 50 | OpenClaw federation — `SwarmFederationMode`, bus client, manager-led + siloed routing, V029 migration ✅ |
 | **v1.1 — done** | Phase 73 | Code scaffolding — 21 templates, multi-component generation, manifest validation, 235 tests ✅ |
 | **v1.1 — wave 2** | Phase 85.5 | Local / remote mode selection — `sovrant connect <url>`, setup wizard mode picker |
-| **v1.1 — wave 2** | Phase 40C | Supabase backend + SSO — swap SQLite for Supabase/PostgreSQL on the server side |
+| **v1.1 — wave 2** | Phase 40C | Supabase backend (optional, admin-configured) — PostgreSQL stores for sessions + credentials; admin System Integrations UI; idempotent schema init; SQLite → Postgres migrator; boot-time DI switch; Web + Desktop parity ✅ |
 | **v1.2** | Phase 82.5 | OpenTelemetry — traces, metrics, and logs via OTLP (after data model is on Supabase) |
 
 > Items below v1.0 are planned but not yet scheduled. See [Still pending](#still-pending) for the full gap list.
@@ -156,7 +156,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Gap | Phase | Priority |
 |---|---|---|
 | Enterprise auth & external identity (OAuth/OIDC, SAML, SSO) | Phase 40B | Deferred |
-| Supabase backend — swap SQLite for Supabase (PostgreSQL) as the server-side database; Supabase Auth replaces the hand-rolled auth stack and delivers SSO (Google, GitHub, Azure AD, SAML, etc.) out of the box; admin UI for enabling/disabling providers per workspace | Phase 40C | High |
+| Supabase backend — Phase 40C shipped optional Postgres backend (sessions + credentials); SSO (Supabase Auth, OAuth/OIDC, SAML) and remaining tables remain on the backlog | Phase 40C | Partial ✅ — SSO deferred |
 | Granular feature permissions — workspace members can be granted or denied access to specific features (Chat, Agents, Teams, Swarms, Missions, MCP, Knowledge, Artifacts, Settings); current model is all-or-nothing per workspace role; Phase 40D adds a permission matrix admins configure per user or role | Phase 40D | Deferred |
 | DuckDB database provider — `IStorageProvider` implementation backed by DuckDB; columnar analytics for agent runs, session history, token usage, cost aggregations, and audit queries; embedded like SQLite, analytical like a data warehouse; ideal for self-hosted deployments that need fast cross-session reporting without standing up Supabase | Phase 104 | Deferred |
 | MCP server permissions — scope which MCP servers are available at the workspace and project level; admins allowlist/blocklist servers per workspace, project owners further restrict per project; users only see MCP tools their scope permits; replaces today's global MCP server list | Phase 105 | Deferred |

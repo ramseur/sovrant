@@ -1,7 +1,11 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Api.Auth;
+using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Mcp;
+using Sovrant.Storage.Postgres;
+using RuntimeSCE = Sovrant.Runtime.ServiceCollectionExtensions;
+using PostgresSCE = Sovrant.Storage.Postgres.ServiceCollectionExtensions;
 
 namespace Sovrant.Desktop.ViewModels;
 
@@ -10,7 +14,8 @@ public enum SupabaseSchemaStatus { Unknown, NotInitialized, UpToDate }
 
 public partial class SystemIntegrationsViewModel : ViewModelBase
 {
-    private readonly ICredentialStore _credentials;
+    private readonly ICredentialStore _bootstrapStore;
+    private readonly BootstrapConfig _bootstrap;
 
     [ObservableProperty] private string _projectUrl = string.Empty;
     [ObservableProperty] private string _serviceRoleKey = string.Empty;
@@ -34,22 +39,29 @@ public partial class SystemIntegrationsViewModel : ViewModelBase
     };
     public string ActiveBackendLabel => IsSupabaseActive ? "Supabase (PostgreSQL)" : "SQLite (local)";
 
-    public SystemIntegrationsViewModel(ICredentialStore credentials)
+    public SystemIntegrationsViewModel(BootstrapConfig bootstrap)
     {
-        _credentials = credentials;
+        _bootstrap      = bootstrap;
+        _bootstrapStore = RuntimeSCE.CreateBootstrapCredentialStore(bootstrap);
     }
 
     [RelayCommand]
     public async Task LoadAsync()
     {
-        ProjectUrl = await _credentials.RetrieveAsync(CredentialKeys.SupabaseProjectUrl).ConfigureAwait(true) ?? string.Empty;
-        ServiceRoleKey = await _credentials.RetrieveAsync(CredentialKeys.SupabaseServiceRoleKey).ConfigureAwait(true) ?? string.Empty;
-        var backend = await _credentials.RetrieveAsync(CredentialKeys.DatabaseBackend).ConfigureAwait(true) ?? "sqlite";
+        ProjectUrl     = await _bootstrapStore.RetrieveAsync(CredentialKeys.SupabaseProjectUrl).ConfigureAwait(true) ?? string.Empty;
+        ServiceRoleKey = await _bootstrapStore.RetrieveAsync(CredentialKeys.SupabaseServiceRoleKey).ConfigureAwait(true) ?? string.Empty;
+        var backend    = await _bootstrapStore.RetrieveAsync(CredentialKeys.DatabaseBackend).ConfigureAwait(true) ?? "sqlite";
         IsSupabaseActive = backend == "supabase";
 
-        ConnectionStatus = string.IsNullOrEmpty(ProjectUrl)
-            ? SupabaseConnectionStatus.NotConfigured
-            : SupabaseConnectionStatus.Connected;
+        if (!string.IsNullOrEmpty(ProjectUrl) && !string.IsNullOrEmpty(ServiceRoleKey))
+        {
+            ConnectionStatus = SupabaseConnectionStatus.Connected;
+            await CheckSchemaVersionAsync().ConfigureAwait(true);
+        }
+        else
+        {
+            ConnectionStatus = SupabaseConnectionStatus.NotConfigured;
+        }
 
         RefreshDerived();
     }
@@ -76,14 +88,13 @@ public partial class SystemIntegrationsViewModel : ViewModelBase
 
             var response = await client.GetAsync(new Uri(url)).ConfigureAwait(true);
 
-            // Supabase returns 200 (with empty JSON object) when credentials are valid.
-            // A 401 means the key is wrong. Any other status still indicates reachability.
             if ((int)response.StatusCode != 401)
             {
                 ConnectionStatus = SupabaseConnectionStatus.Connected;
+                await _bootstrapStore.StoreAsync(CredentialKeys.SupabaseProjectUrl, ProjectUrl).ConfigureAwait(true);
+                await _bootstrapStore.StoreAsync(CredentialKeys.SupabaseServiceRoleKey, ServiceRoleKey).ConfigureAwait(true);
+                await CheckSchemaVersionAsync().ConfigureAwait(true);
                 StatusMessage = "Connection successful.";
-                await _credentials.StoreAsync(CredentialKeys.SupabaseProjectUrl, ProjectUrl).ConfigureAwait(true);
-                await _credentials.StoreAsync(CredentialKeys.SupabaseServiceRoleKey, ServiceRoleKey).ConfigureAwait(true);
             }
             else
             {
@@ -103,33 +114,100 @@ public partial class SystemIntegrationsViewModel : ViewModelBase
     [RelayCommand]
     private async Task InitializeSchemaAsync()
     {
-        // Implemented in Step B — PostgreSQL schema initialization.
-        StatusMessage = "Schema initialization coming soon (Step B).";
-        await Task.CompletedTask;
+        if (!IsConnected) return;
+        IsLoading = true;
+        StatusMessage = "Initializing schema…";
+        try
+        {
+            var connStr     = PostgresSCE.BuildSupabaseConnectionString(ProjectUrl, ServiceRoleKey);
+            var initializer = PostgresSCE.CreateSchemaInitializer(connStr);
+            await initializer.InitializeAsync().ConfigureAwait(true);
+            await CheckSchemaVersionAsync().ConfigureAwait(true);
+            StatusMessage = "Schema initialized successfully.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Schema initialization failed: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+            RefreshDerived();
+        }
     }
 
     [RelayCommand]
     private async Task MigrateDataAsync()
     {
-        // Implemented in Step D — SQLite → Postgres migration tooling.
-        StatusMessage = "Data migration coming soon (Step D).";
-        await Task.CompletedTask;
+        if (!IsSchemaReady) return;
+        IsLoading = true;
+        StatusMessage = "Starting migration…";
+        try
+        {
+            var home       = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var sqlitePath = _bootstrap.DbPath ?? Path.Combine(home, ".sovrant", "data", "sovrant.db");
+
+            if (!File.Exists(sqlitePath))
+            {
+                StatusMessage = $"SQLite database not found at {sqlitePath}.";
+                return;
+            }
+
+            var connStr  = PostgresSCE.BuildSupabaseConnectionString(ProjectUrl, ServiceRoleKey);
+            var factory  = PostgresSCE.CreateConnectionFactory(connStr);
+            var migrator = new SqliteToPostgresMigrator(factory, sqlitePath);
+
+            var prog = new Progress<MigrationProgress>(p =>
+                StatusMessage = string.IsNullOrEmpty(p.Message)
+                    ? $"{p.Stage}: {p.Done}/{p.Total}"
+                    : p.Message);
+
+            var result = await migrator.MigrateAsync(prog).ConfigureAwait(true);
+            StatusMessage = $"Migration complete — {result.SessionsCopied} sessions, " +
+                            $"{result.EntriesCopied} entries, {result.CredentialsCopied} credentials copied.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Migration failed: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
     [RelayCommand]
     private async Task SwitchBackendAsync()
     {
-        // Implemented in Step E — boot-time DI switch.
-        StatusMessage = "Backend switching coming soon (Step E).";
-        await Task.CompletedTask;
+        if (!IsSchemaReady) return;
+        await _bootstrapStore.StoreAsync(CredentialKeys.DatabaseBackend, "supabase").ConfigureAwait(true);
+        IsSupabaseActive = true;
+        StatusMessage = "Switched to Supabase. Restart Sovrant for the change to take effect.";
+        RefreshDerived();
     }
 
     [RelayCommand]
     private async Task RevertToSqliteAsync()
     {
-        // Implemented in Step E — boot-time DI switch.
-        StatusMessage = "Backend switching coming soon (Step E).";
-        await Task.CompletedTask;
+        await _bootstrapStore.StoreAsync(CredentialKeys.DatabaseBackend, "sqlite").ConfigureAwait(true);
+        IsSupabaseActive = false;
+        StatusMessage = "Reverted to SQLite. Restart Sovrant for the change to take effect.";
+        RefreshDerived();
+    }
+
+    private async Task CheckSchemaVersionAsync()
+    {
+        try
+        {
+            var connStr     = PostgresSCE.BuildSupabaseConnectionString(ProjectUrl, ServiceRoleKey);
+            var initializer = PostgresSCE.CreateSchemaInitializer(connStr);
+            var version     = await initializer.GetSchemaVersionAsync().ConfigureAwait(true);
+            SchemaStatus    = version.HasValue ? SupabaseSchemaStatus.UpToDate : SupabaseSchemaStatus.NotInitialized;
+        }
+        catch
+        {
+            SchemaStatus = SupabaseSchemaStatus.NotInitialized;
+        }
     }
 
     private void RefreshDerived()
