@@ -18,7 +18,9 @@ public sealed record CatalogEntry(
     string? DefaultCommand = null,
     IReadOnlyList<string>? DefaultArgs = null,
     string? EndpointTemplate = null,
-    string? SettingsSection = null)
+    string? SettingsSection = null,
+    string? GroupName = null,
+    string? TabLabel = null)
 {
     public bool NeedsApiKey => ApiKeyLabel is not null;
     public bool NeedsEndpoint => EndpointLabel is not null;
@@ -39,7 +41,7 @@ public static class IntegrationCatalog
             "Expose your n8n workflows as MCP tools — agents call them as first-class actions.",
             IntegrationKind.McpHttp, IntegrationTier.Automation,
             EndpointLabel: "n8n MCP endpoint",
-            ApiKeyLabel: "API Key (optional)", ApiKeyHeader: "X-N8N-API-Key"),
+            ApiKeyLabel: "API Key", ApiKeyHeader: "X-N8N-API-Key"),
 
         new("zapier", "Zapier", "Automation", "🔌",
             "Run any Zapier action from an agent via the Zapier MCP bridge.",
@@ -59,12 +61,6 @@ public static class IntegrationCatalog
             IntegrationKind.McpStdio, IntegrationTier.Platform,
             ApiKeyLabel: "Personal Access Token", ApiKeyEnvVar: "GITHUB_TOKEN",
             DefaultCommand: "npx", DefaultArgs: ["-y", "@modelcontextprotocol/server-github"]),
-
-        new("filesystem", "Filesystem", "Platform", "📁",
-            "Give agents read/write access to a local directory via MCP.",
-            IntegrationKind.McpStdio, IntegrationTier.Platform,
-            EndpointLabel: "Directory path (e.g. /home/user/projects)",
-            DefaultCommand: "npx", DefaultArgs: ["-y", "@modelcontextprotocol/server-filesystem", "{ENDPOINT}"]),
 
         new("slack", "Slack", "Platform", "💬",
             "Read channels, send messages, and search Slack from agents.",
@@ -102,11 +98,12 @@ public static class IntegrationCatalog
             ApiKeyLabel: "Access Token",
             DefaultCommand: "npx", DefaultArgs: ["-y", "@supabase/mcp-server-supabase", "--access-token", "{API_KEY}"]),
 
-        new("filesystem", "Filesystem", "Platform", "📁",
-            "Give agents read/write access to a local directory via MCP.",
+        new("snowflake", "Snowflake", "Platform", "❄️",
+            "Run SQL queries and search Snowflake data warehouses directly from agents.",
             IntegrationKind.McpStdio, IntegrationTier.Platform,
-            EndpointLabel: "Directory path (e.g. /home/user/projects)",
-            DefaultCommand: "npx", DefaultArgs: ["-y", "@modelcontextprotocol/server-filesystem", "{ENDPOINT}"]),
+            ApiKeyLabel: "Password", ApiKeyEnvVar: "SNOWFLAKE_PASSWORD",
+            EndpointLabel: "Account identifier (e.g. myorg-myaccount)",
+            DefaultCommand: "npx", DefaultArgs: ["-y", "snowflake-mcp-server"]),
 
         // Search
         new("brave-search", "Brave Search", "Search", "🔍",
@@ -126,6 +123,35 @@ public static class IntegrationCatalog
             IntegrationKind.McpStdio, IntegrationTier.Platform,
             ApiKeyLabel: "API Key", ApiKeyEnvVar: "TAVILY_API_KEY",
             DefaultCommand: "npx", DefaultArgs: ["-y", "tavily-mcp"]),
+
+        // DXP / CMS / Data
+        new("sitecore-community", "Sitecore", "DXP", "🟩",
+            "Community MCP server by Anton Tishchenko. Exposes Sitecore content, items, and layout via GraphQL + ItemService. Install via npx.",
+            IntegrationKind.McpStdio, IntegrationTier.Platform,
+            ApiKeyLabel: "Authorization Header (optional)", ApiKeyEnvVar: "AUTORIZATION_HEADER",
+            EndpointLabel: "GraphQL endpoint (e.g. https://your-site/api/graph/edge)",
+            DefaultCommand: "npx", DefaultArgs: ["-y", "@antonytm/mcp-sitecore-server"],
+            GroupName: "Sitecore", TabLabel: "Community"),
+
+        new("sitecore-marketer", "Sitecore", "DXP", "🟩",
+            "Official Sitecore.AI Marketer MCP. Remote HTTPS endpoint — browser-based OAuth 2.0 via Sitecore Identity. No API key needed; auth is handled interactively on first connect.",
+            IntegrationKind.McpHttp, IntegrationTier.Platform,
+            EndpointLabel: "Marketer MCP endpoint (from Sitecore Cloud Portal)",
+            GroupName: "Sitecore", TabLabel: "Commercial"),
+
+        new("aem", "Adobe Experience Manager", "DXP", "🔴",
+            "Read and write AEM content, pages, assets, and Cloud Manager resources via the official Adobe MCP server.",
+            IntegrationKind.McpHttp, IntegrationTier.Platform,
+            ApiKeyLabel: "Adobe OAuth Token", ApiKeyHeader: "Authorization",
+            EndpointLabel: "AEM MCP endpoint (e.g. https://mcp.adobeaemcloud.com/adobe/mcp/content)"),
+
+        new("optimizely", "Optimizely CMS", "DXP", "🔵",
+            "Query and manage Optimizely CMS content via the Graph API and Content Management API.",
+            IntegrationKind.McpStdio, IntegrationTier.Platform,
+            ApiKeyLabel: "Graph Single Key", ApiKeyEnvVar: "GRAPH_SINGLE_KEY",
+            EndpointLabel: "CMA base URL (e.g. https://api.cms.optimizely.com/preview3)",
+            DefaultCommand: "npx", DefaultArgs: ["-y", "optimizely-cms-mcp"]),
+
 
     ];
 }

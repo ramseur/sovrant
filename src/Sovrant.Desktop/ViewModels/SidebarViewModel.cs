@@ -144,6 +144,14 @@ public partial class SidebarViewModel : ViewModelBase
         _credentials = credentials;
         _capabilityRegistry = capabilityRegistry;
         ActiveContext = activeContext;
+        ActiveContext.AvailableMcpServers.CollectionChanged += (_, e) =>
+        {
+            OnPropertyChanged(nameof(McpSummaryLabel));
+            // Subscribe to IsActive changes on newly added items so the label updates on toggle.
+            if (e.NewItems is null) return;
+            foreach (McpServerToggleItem item in e.NewItems)
+                item.PropertyChanged += (_, _) => OnPropertyChanged(nameof(McpSummaryLabel));
+        };
         _activeSessions = activeSessions;
         if (_activeSessions is not null)
         {
@@ -183,6 +191,36 @@ public partial class SidebarViewModel : ViewModelBase
     {
         if (value is null || _suppressProfileSwitch) return;
         SwitchToProfile(value);
+    }
+
+    [ObservableProperty]
+    private bool _isMcpDropdownOpen;
+
+    /// <summary>Summary text shown on the MCP switcher button in the context bar.</summary>
+    public string McpSummaryLabel
+    {
+        get
+        {
+            var available = ActiveContext.AvailableMcpServers;
+            if (available.Count == 0) return "Integrations";
+            var active = ActiveContext.ActiveMcpServers;
+            return active.Count switch
+            {
+                0 => "None active",
+                1 => active[0],
+                _ => $"{active.Count} active",
+            };
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleMcpDropdown() => IsMcpDropdownOpen = !IsMcpDropdownOpen;
+
+    [RelayCommand]
+    private void GoToIntegrations()
+    {
+        IsMcpDropdownOpen = false;
+        Navigate("Integrations");
     }
 
     [RelayCommand]

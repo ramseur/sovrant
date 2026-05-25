@@ -24,56 +24,95 @@
                     OnItemSelected="SelectItem"
                     OnSearch="Search">
     <ItemTemplate>
-        <div class="item-title">@context.FileName</div>
-        <div class="item-subtitle">@context.LastModified.LocalDateTime.ToString("MMM d, yyyy") &middot; @context.SizeDisplay</div>
+        @if (context.IsFolder)
+        {
+            <div class="item-title">📁 @context.FolderName</div>
+            <div class="item-subtitle">@context.LastModified.LocalDateTime.ToString("MMM d, yyyy") &middot; @(context.FolderFiles!.Count) files &middot; @context.SizeDisplay</div>
+        }
+        else
+        {
+            <div class="item-title">@context.FileName</div>
+            <div class="item-subtitle">@context.LastModified.LocalDateTime.ToString("MMM d, yyyy") &middot; @context.SizeDisplay</div>
+        }
     </ItemTemplate>
     <DetailTemplate>
         <div class="detail-content">
-            <h2>@context.FileName</h2>
-            <div class="detail-meta">
-                <span>@context.LastModified.LocalDateTime.ToString("MMM d, yyyy h:mm tt")</span>
-                <span>@context.SizeDisplay</span>
-                <span>@context.ContentType</span>
-            </div>
-            @if (!string.IsNullOrEmpty(context.AccessUrl))
+            @if (context.IsFolder)
             {
-                <div class="detail-meta" style="margin-top: 6px; gap: 10px;">
-                    <a href="@context.AccessUrl" target="_blank" rel="noopener" class="btn-outline btn-sm">Open</a>
-                    <a href="@context.AccessUrl" target="_blank" rel="noopener" download="@context.FileName" class="btn-outline btn-sm">Download</a>
-                    @if (!string.IsNullOrEmpty(context.ZipUrl))
+                <h2>📁 @context.FolderName</h2>
+                <div class="detail-meta">
+                    <span>@context.LastModified.LocalDateTime.ToString("MMM d, yyyy h:mm tt")</span>
+                    <span>@(context.FolderFiles!.Count) files</span>
+                    <span>@context.SizeDisplay total</span>
+                </div>
+                @if (!string.IsNullOrEmpty(context.ZipUrl))
+                {
+                    <div class="detail-meta" style="margin-top:6px;">
+                        <a href="@context.ZipUrl" download="@($"{context.FolderName}.zip")" class="btn-outline btn-sm">Download all (.zip)</a>
+                    </div>
+                }
+                <div class="artifact-file-list">
+                    @foreach (var f in context.FolderFiles!.OrderBy(f => f.ArtifactRelPath, StringComparer.OrdinalIgnoreCase))
                     {
-                        <a href="@context.ZipUrl" download="@($"{context.RunId}.zip")" class="btn-outline btn-sm">Download run (.zip)</a>
+                        <div class="artifact-file-row">
+                            <span class="artifact-file-path">@f.ArtifactRelPath</span>
+                            <span class="text-muted text-sm">@f.SizeDisplay</span>
+                            @if (!string.IsNullOrEmpty(f.AccessUrl))
+                            {
+                                <a href="@f.AccessUrl" target="_blank" rel="noopener" class="btn-outline btn-sm">Open</a>
+                            }
+                        </div>
                     }
                 </div>
             }
-            @if (context.IsPdf && !string.IsNullOrEmpty(context.AccessUrl))
+            else
             {
-                <iframe src="@context.AccessUrl" title="@context.FileName"
-                        style="width: 100%; height: 520px; border: 1px solid var(--surface-border); border-radius: 6px; margin-top: 10px; background: #fff;"></iframe>
-            }
-            else if (context.IsMarkdown && !string.IsNullOrEmpty(context.Preview))
-            {
-                <div class="detail-preview message-markdown">
-                    @((MarkupString)Markdown.ToHtml(context.Preview, _pipeline))
+                <h2>@context.FileName</h2>
+                <div class="detail-meta">
+                    <span>@context.LastModified.LocalDateTime.ToString("MMM d, yyyy h:mm tt")</span>
+                    <span>@context.SizeDisplay</span>
+                    <span>@context.ContentType</span>
                 </div>
-            }
-            else if (context.IsCode && !string.IsNullOrEmpty(_selectedEditorKey))
-            {
-                <div style="height: 480px; margin-top: 10px; border-radius: 6px; overflow: hidden;">
-                    <div @key="@_selectedEditorKey" style="height: 100%;">
-                        <StandaloneCodeEditor @ref="_codeEditor"
-                                              Id="@($"artifact-preview-{Math.Abs(_selectedEditorKey.GetHashCode()):x}")"
-                                              ConstructionOptions="GetCodePreviewOptions" />
+                @if (!string.IsNullOrEmpty(context.AccessUrl))
+                {
+                    <div class="detail-meta" style="margin-top: 6px; gap: 10px;">
+                        <a href="@context.AccessUrl" target="_blank" rel="noopener" class="btn-outline btn-sm">Open</a>
+                        <a href="@context.AccessUrl" target="_blank" rel="noopener" download="@context.FileName" class="btn-outline btn-sm">Download</a>
+                        @if (!string.IsNullOrEmpty(context.ZipUrl))
+                        {
+                            <a href="@context.ZipUrl" download="@($"{context.RunId}.zip")" class="btn-outline btn-sm">Download run (.zip)</a>
+                        }
                     </div>
-                </div>
-            }
-            else if (!string.IsNullOrEmpty(context.Preview))
-            {
-                <pre class="detail-preview" style="white-space: pre-wrap; font-size: 13px; font-family: Consolas, monospace;">@context.Preview</pre>
-            }
-            else if (!context.IsPdf && !context.IsCode)
-            {
-                <p class="text-muted">No preview available for this file type.</p>
+                }
+                @if (context.IsPdf && !string.IsNullOrEmpty(context.AccessUrl))
+                {
+                    <iframe src="@context.AccessUrl" title="@context.FileName"
+                            style="width: 100%; height: 520px; border: 1px solid var(--surface-border); border-radius: 6px; margin-top: 10px; background: #fff;"></iframe>
+                }
+                else if (context.IsMarkdown && !string.IsNullOrEmpty(context.Preview))
+                {
+                    <div class="detail-preview message-markdown">
+                        @((MarkupString)Markdown.ToHtml(context.Preview, _pipeline))
+                    </div>
+                }
+                else if (context.IsCode && !string.IsNullOrEmpty(_selectedEditorKey))
+                {
+                    <div style="height: 480px; margin-top: 10px; border-radius: 6px; overflow: hidden;">
+                        <div @key="@_selectedEditorKey" style="height: 100%;">
+                            <StandaloneCodeEditor @ref="_codeEditor"
+                                                  Id="@($"artifact-preview-{Math.Abs(_selectedEditorKey.GetHashCode()):x}")"
+                                                  ConstructionOptions="GetCodePreviewOptions" />
+                        </div>
+                    </div>
+                }
+                else if (!string.IsNullOrEmpty(context.Preview))
+                {
+                    <pre class="detail-preview" style="white-space: pre-wrap; font-size: 13px; font-family: Consolas, monospace;">@context.Preview</pre>
+                }
+                else if (!context.IsPdf && !context.IsCode)
+                {
+                    <p class="text-muted">No preview available for this file type.</p>
+                }
             }
         </div>
     </DetailTemplate>
@@ -159,6 +198,7 @@
                     FullDiskPath = file,
                     FileName = fileName,
                     Extension = ext,
+                    ArtifactRelPath = artifactPath,
                     SizeBytes = info.Length,
                     SizeDisplay = FormatSize(info.Length),
                     ContentType = GuessMime(ext),
@@ -173,7 +213,37 @@
                 });
             }
 
-            _all = items.OrderByDescending(a => a.LastModified).ToList();
+            // Group multi-file runs into folder items; single-file runs stay flat.
+            var grouped = new List<ArtifactItem>();
+            foreach (var runGroup in items.GroupBy(a => a.RunId))
+            {
+                var files = runGroup.ToList();
+                if (files.Count > 1)
+                {
+                    var first = files.OrderBy(f => f.LastModified).First();
+                    var folderName = first.ArtifactRelPath.Contains('/')
+                        ? first.ArtifactRelPath.Split('/')[0]
+                        : runGroup.Key;
+                    var totalBytes = files.Sum(f => f.SizeBytes);
+                    grouped.Add(new ArtifactItem
+                    {
+                        RunId = runGroup.Key,
+                        IsFolder = true,
+                        FolderName = folderName,
+                        FolderFiles = files,
+                        LastModified = files.Max(f => f.LastModified),
+                        SizeBytes = totalBytes,
+                        SizeDisplay = FormatSize(totalBytes),
+                        ZipUrl = files[0].ZipUrl,
+                    });
+                }
+                else
+                {
+                    grouped.Add(files[0]);
+                }
+            }
+
+            _all = grouped.OrderByDescending(a => a.LastModified).ToList();
             ApplyFilter();
         }
         catch (Exception ex)
@@ -230,9 +300,12 @@
 
     private void ApplyFilter()
     {
-        _filtered = string.IsNullOrWhiteSpace(_search)
-            ? _all
-            : _all.Where(a => a.FileName.Contains(_search, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (string.IsNullOrWhiteSpace(_search)) { _filtered = _all; return; }
+        _filtered = _all.Where(a =>
+            a.IsFolder
+                ? a.FolderName.Contains(_search, StringComparison.OrdinalIgnoreCase)
+                  || (a.FolderFiles?.Any(f => f.FileName.Contains(_search, StringComparison.OrdinalIgnoreCase)) ?? false)
+                : a.FileName.Contains(_search, StringComparison.OrdinalIgnoreCase)).ToList();
     }
 
     private static string FormatSize(long bytes)
@@ -286,6 +359,7 @@
         public string FullDiskPath { get; init; } = string.Empty;
         public string FileName { get; init; } = string.Empty;
         public string Extension { get; init; } = string.Empty;
+        public string ArtifactRelPath { get; init; } = string.Empty;
         public long SizeBytes { get; init; }
         public string SizeDisplay { get; init; } = string.Empty;
         public string ContentType { get; init; } = string.Empty;
@@ -298,5 +372,9 @@
         public string ZipUrl { get; init; } = string.Empty;
         public string RunId { get; init; } = string.Empty;
         public string? Preview { get; set; }
+        // Folder grouping
+        public bool IsFolder { get; set; }
+        public string FolderName { get; set; } = string.Empty;
+        public List<ArtifactItem>? FolderFiles { get; set; }
     }
 }

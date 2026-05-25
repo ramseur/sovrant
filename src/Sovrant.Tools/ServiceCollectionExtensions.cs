@@ -22,6 +22,15 @@ using Sovrant.Tools.Team;
 using Sovrant.Tools.Artifacts;
 using Sovrant.Tools.Documents;
 using Sovrant.Tools.Worktree;
+using Sovrant.Tools.Projects.Scaffolds.Node;
+using Sovrant.Tools.Projects.Scaffolds.DotNet;
+using Sovrant.Tools.Projects.Scaffolds.Python;
+using Sovrant.Tools.Projects.Scaffolds.Go;
+using Sovrant.Tools.Projects.Scaffolds.Rust;
+using Sovrant.Tools.Projects.Scaffolds.Java;
+using Sovrant.Tools.Projects.Scaffolds.Minimal;
+using Sovrant.Tools.Projects;
+using Sovrant.Runtime.Projects.Templates;
 
 namespace Sovrant.Tools;
 
@@ -155,6 +164,34 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITool, DocumentSuggestTemplateTool>();
         services.AddSingleton<ITool, DocumentPackageTool>();
         services.AddSingleton<ITool, DocumentListPackagesTool>();
+
+        // Phase 73 — project scaffold implementations
+        services.AddSingleton<IProjectTemplate, NodeCliScaffold>();
+        services.AddSingleton<IProjectTemplate, NodeExpressApiScaffold>();
+        services.AddSingleton<IProjectTemplate, NodeLibraryScaffold>();
+        services.AddSingleton<IProjectTemplate, NodeNextJsScaffold>();
+        services.AddSingleton<IProjectTemplate, NodeMonorepoScaffold>();
+        services.AddSingleton<IProjectTemplate, DotNetConsoleScaffold>();
+        services.AddSingleton<IProjectTemplate, DotNetWebApiScaffold>();
+        services.AddSingleton<IProjectTemplate, DotNetLibraryScaffold>();
+        services.AddSingleton<IProjectTemplate, DotNetWorkerScaffold>();
+        services.AddSingleton<IProjectTemplate, DotNetBlazorScaffold>();
+        services.AddSingleton<IProjectTemplate, PythonFastApiScaffold>();
+        services.AddSingleton<IProjectTemplate, PythonScriptScaffold>();
+        services.AddSingleton<IProjectTemplate, GoApiScaffold>();
+        services.AddSingleton<IProjectTemplate, RustCliScaffold>();
+        services.AddSingleton<IProjectTemplate, JavaMavenAppScaffold>();
+        services.AddSingleton<IProjectTemplate, KotlinConsoleScaffold>();
+        services.AddSingleton<IProjectTemplate, RubyScriptScaffold>();
+        services.AddSingleton<IProjectTemplate, SwiftCliScaffold>();
+        services.AddSingleton<IProjectTemplate, LuaScriptScaffold>();
+        services.AddSingleton<IProjectTemplate, ZigCliScaffold>();
+        services.AddSingleton<IProjectTemplate, CppCmakeScaffold>();
+
+        // Phase 73 — code creation tools
+        services.AddSingleton<ITool, CodeCreateTool>();
+        services.AddSingleton<ITool, CodeCreateMultiTool>();
+        services.AddSingleton<ITool, CodeListTemplatesTool>();
 
         // Quality / verification tools
         services.AddSingleton<ITool, VerifyTool>();

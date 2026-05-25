@@ -19,10 +19,7 @@ public partial class ChatView : UserControl
 
     private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
     {
-        // MCP servers may have been added via Integrations after this VM was
-        // built — refresh the Connections list each time the view becomes visible.
-        if (DataContext is ChatViewModel vm)
-            _ = vm.RefreshConnectionsAsync();
+        // No-op: MCP selection is managed globally by ActiveContextViewModel.
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

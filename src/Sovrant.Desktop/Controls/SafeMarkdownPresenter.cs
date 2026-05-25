@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -346,21 +347,19 @@ public class SafeMarkdownPresenter : ContentControl
                 break;
 
             case LinkInline link:
-                // Render link text in brand purple
+            {
+                var url = link.Url ?? "";
+                var textSb = new System.Text.StringBuilder();
                 foreach (var child in link)
-                {
-                    if (child is LiteralInline linkText)
-                    {
-                        inlines.Add(new Avalonia.Controls.Documents.Run(linkText.Content.ToString())
-                        {
-                            Foreground = ThemeBrush("BrandPrimary", "#6D52C6"),
-                        });
-                    }
-                    else
-                    {
-                        AddInline(inlines, child);
-                    }
-                }
+                    if (child is LiteralInline lt) textSb.Append(lt.Content.ToString());
+                var displayText = textSb.Length > 0 ? textSb.ToString() : url;
+                if (link.IsImage) displayText = "🖼 " + displayText;
+                inlines.Add(MakeLinkInline(displayText, url));
+                break;
+            }
+
+            case AutolinkInline autolink:
+                inlines.Add(MakeLinkInline(autolink.Url, autolink.Url));
                 break;
 
             default:
@@ -372,6 +371,37 @@ public class SafeMarkdownPresenter : ContentControl
                 }
                 break;
         }
+    }
+
+    private Avalonia.Controls.Documents.Inline MakeLinkInline(string displayText, string url)
+    {
+        if (string.IsNullOrEmpty(url))
+        {
+            return new Avalonia.Controls.Documents.Run(displayText)
+            {
+                Foreground = ThemeBrush("BrandPrimary", "#6D52C6"),
+            };
+        }
+
+        var btn = new Button
+        {
+            Content = displayText,
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0),
+            Cursor = new Cursor(StandardCursorType.Hand),
+            Foreground = ThemeBrush("BrandPrimary", "#6D52C6"),
+            FontSize = 14,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        btn.Click += (_, _) => OpenUrl(url);
+        return new Avalonia.Controls.Documents.InlineUIContainer { Child = btn };
+    }
+
+    private static void OpenUrl(string url)
+    {
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch { }
     }
 
     private static string GetCodeBlockText(LeafBlock codeBlock)

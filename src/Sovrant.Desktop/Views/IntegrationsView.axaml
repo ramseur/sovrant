@@ -9,6 +9,7 @@
 
     <UserControl.Resources>
         <conv:BoolToStatusBrushConverter x:Key="StatusBgConv" />
+        <conv:BoolToTabBrushConverter x:Key="TabActiveBrush" />
     </UserControl.Resources>
 
     <DockPanel>
@@ -57,7 +58,7 @@
             <!-- ── GALLERY: left list ──────────────────────────────────────── -->
             <ScrollViewer Grid.Column="0"
                           IsVisible="{Binding ActiveTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=gallery}">
-                <ItemsControl ItemsSource="{Binding CatalogEntries}">
+                <ItemsControl ItemsSource="{Binding GalleryDisplayEntries}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:CatalogEntryViewModel">
                             <Button Command="{Binding $parent[ItemsControl].((vm:IntegrationsViewModel)DataContext).SelectCatalogEntryCommand}"
@@ -213,6 +214,31 @@
                                                Foreground="{DynamicResource TextPrimary}" />
                                     <TextBlock Text="{Binding SelectedCatalogEntry.Category}"
                                                FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                                </StackPanel>
+
+                                <!-- Variant tab bar (shown only for grouped entries) -->
+                                <StackPanel Orientation="Horizontal" Spacing="4"
+                                            IsVisible="{Binding HasGroupTabs}">
+                                    <Button Content="{Binding GroupTab0Label}"
+                                            Command="{Binding SelectGroupTabCommand}" CommandParameter="0"
+                                            Padding="14,6" CornerRadius="6" FontSize="12" FontWeight="SemiBold"
+                                            Background="{DynamicResource BrandPrimary}" Foreground="White"
+                                            IsVisible="{Binding IsGroupTab0Active}" />
+                                    <Button Content="{Binding GroupTab0Label}"
+                                            Command="{Binding SelectGroupTabCommand}" CommandParameter="0"
+                                            Padding="14,6" CornerRadius="6" FontSize="12" FontWeight="SemiBold"
+                                            Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
+                                            IsVisible="{Binding !IsGroupTab0Active}" />
+                                    <Button Content="{Binding GroupTab1Label}"
+                                            Command="{Binding SelectGroupTabCommand}" CommandParameter="1"
+                                            Padding="14,6" CornerRadius="6" FontSize="12" FontWeight="SemiBold"
+                                            Background="{DynamicResource BrandPrimary}" Foreground="White"
+                                            IsVisible="{Binding IsGroupTab1Active}" />
+                                    <Button Content="{Binding GroupTab1Label}"
+                                            Command="{Binding SelectGroupTabCommand}" CommandParameter="1"
+                                            Padding="14,6" CornerRadius="6" FontSize="12" FontWeight="SemiBold"
+                                            Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
+                                            IsVisible="{Binding !IsGroupTab1Active}" />
                                 </StackPanel>
 
                                 <TextBlock Text="{Binding SelectedCatalogEntry.Description}"

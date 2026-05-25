@@ -1,4 +1,5 @@
 @page "/"
+@page "/chat"
 @using Sovrant.Runtime.Conversation
 @using Sovrant.Runtime.Mcp
 @using Sovrant.Runtime.Session
@@ -60,40 +61,6 @@
         }
     </div>
 
-    <!-- Connections selector -->
-    @if (_availableConnections.Count > 0)
-    {
-        <div class="chat-connections-row">
-            <button class="chat-connections-pill"
-                    type="button"
-                    title="Choose which MCP servers this session can call"
-                    @onclick="ToggleConnectionsMenu">
-                <span class="chat-connections-icon">&#128279;</span>
-                <span>Connections</span>
-                <span class="chat-connections-count">(@ConnectionsLabel)</span>
-            </button>
-            @if (_showConnectionsMenu)
-            {
-                <div class="chat-connections-menu" @onclick:stopPropagation="true">
-                    @foreach (var conn in _availableConnections)
-                    {
-                        var name = conn;
-                        <label class="chat-connections-item">
-                            <input type="checkbox"
-                                   checked="@_selectedConnections.Contains(name)"
-                                   @onchange="e => ToggleConnection(name, (bool)(e.Value ?? false))" />
-                            <span>@name</span>
-                        </label>
-                    }
-                    @if (_availableConnections.Count == 0)
-                    {
-                        <div class="chat-connections-empty">No MCP servers configured</div>
-                    }
-                </div>
-            }
-        </div>
-    }
-
     <!-- Input bar -->
     <div class="chat-input-bar">
         <div class="input-wrapper">
@@ -137,9 +104,9 @@
     [Inject] private ActiveSessionsService ActiveSessions { get; set; } = default!;
     [Inject] private SovrantConfig Config { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
-    [Inject] private IMcpServerStore McpServerStore { get; set; } = default!;
     [Inject] private Sovrant.Web.Services.WebSessionService Session { get; set; } = default!;
     [Inject] private Sovrant.Agents.Templates.AgentTemplateRegistry AgentRegistry { get; set; } = default!;
+    [Inject] private ChatSeedService ChatSeed { get; set; } = default!;
 
     private string _userDisplayName => LocalPart(Session.Email) ?? "You";
     private static string? LocalPart(string? email)
@@ -148,16 +115,6 @@
         var idx = email.IndexOf('@', StringComparison.Ordinal);
         return idx > 0 ? email[..idx] : null;
     }
-
-    private List<string> _availableConnections = [];
-    private HashSet<string> _selectedConnections = new(StringComparer.Ordinal);
-    private bool _showConnectionsMenu;
-    private bool _connectionsLoaded;
-
-    private string ConnectionsLabel =>
-        _selectedConnections.Count == _availableConnections.Count && _availableConnections.Count > 0
-            ? "all"
-            : _selectedConnections.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     private ElementReference _inputRef;
     private string _inputText = string.Empty;
@@ -210,7 +167,6 @@
         ActiveContext.OnChanged += OnContextChanged;
         ActiveContext.OnSessionResume += OnSessionResume;
         ActiveContext.OnNewSession += OnNewSession;
-        _ = LoadConnectionsAsync();
 
         // Resume from ?session=<id> in the URL (Command Center deep-link).
         var uri = new Uri(Nav.Uri);
@@ -226,6 +182,12 @@
                 _agentSystemPrompt = template.SystemPrompt;
             }
         }
+
+        if (query.TryGetValue("prompt", out var promptParam) && !string.IsNullOrWhiteSpace(promptParam))
+            _inputText = Uri.UnescapeDataString(promptParam.ToString());
+
+        if (string.IsNullOrEmpty(_inputText) && ChatSeed.TakePrompt() is { } seed)
+            _inputText = seed;
 
         if (query.TryGetValue("session", out var sessionParam) &&
             !string.IsNullOrWhiteSpace(sessionParam) &&
@@ -316,32 +278,6 @@
     {
         _pageError = message;
         InvokeAsync(StateHasChanged);
-    }
-
-    private async Task LoadConnectionsAsync()
-    {
-        try
-        {
-            var configs = await McpServerStore.GetAllAsync();
-            _availableConnections = configs.Keys.OrderBy(n => n, StringComparer.Ordinal).ToList();
-            // Opt-in: nothing selected by default. Users explicitly check the
-            // MCPs they want this session to be able to call.
-            _selectedConnections = new HashSet<string>(StringComparer.Ordinal);
-            _connectionsLoaded = true;
-            await InvokeAsync(StateHasChanged);
-        }
-        catch (Exception ex)
-        {
-            ShowPageError($"Couldn't load MCP connections: {ex.Message}");
-        }
-    }
-
-    private void ToggleConnectionsMenu() => _showConnectionsMenu = !_showConnectionsMenu;
-
-    private void ToggleConnection(string name, bool selected)
-    {
-        if (selected) _selectedConnections.Add(name);
-        else _selectedConnections.Remove(name);
     }
 
     private void DismissPageError()
@@ -592,13 +528,10 @@
             var pooled = await SessionPool.GetOrCreateAsync(sessionId,
                 agentSystemPrompt: _agentSystemPrompt, agentName: _agentName, ct: ct);
 
-            if (_connectionsLoaded)
-            {
-                var allSelected = _availableConnections.Count > 0
-                    && _selectedConnections.Count == _availableConnections.Count;
-                pooled.Config.AllowedMcpServers = allSelected ? null : _selectedConnections.ToList();
-                await SessionStore.SetMcpConnectionsAsync(sessionId, pooled.Config.AllowedMcpServers, ownerUserId: Sovrant.Web.Program.SovrantUserId);
-            }
+            // Apply the session-level MCP selection from the context bar (opt-in).
+            var activeMcps = ActiveContext.ActiveMcpServers;
+            pooled.Config.AllowedMcpServers = activeMcps.Count > 0 ? activeMcps : null;
+            await SessionStore.SetMcpConnectionsAsync(sessionId, pooled.Config.AllowedMcpServers, ownerUserId: Sovrant.Web.Program.SovrantUserId);
 
             using var _scope = SessionContext.Push(pooled.Config);
             await foreach (var ev in pooled.Runtime.RunTurnAsync(text, ct))

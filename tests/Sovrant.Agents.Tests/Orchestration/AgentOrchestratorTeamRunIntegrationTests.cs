@@ -302,6 +302,9 @@ public sealed class AgentOrchestratorTeamRunIntegrationTests
 
         public Task<string?> GetOwnerAsync(string swarmId, CancellationToken ct = default) =>
             Task.FromResult<string?>(null);
+
+        public Task<IReadOnlyList<string>> ListChildrenAsync(string parentSwarmId, int? limit = null, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
     }
 
     /// <summary>Minimal in-memory registry that supports team-level operations.</summary>

@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-05-23 (Phase 95 Integrations Gallery ✅ — catalog-first MCP onramp with Automation/Platform/Search tiers, encrypted credential store, web parity; MCP security migration ✅ — credentials moved to encrypted keystore, no plain-text JSON on disk; model switcher upgrade ✅ — configured + unconfigured providers with click-to-configure deep-link on Web and Desktop; agent run titles ✅ — prompt stored on agent_runs (V028), used as title in Recent Runs on both surfaces; Command Center owner column ✅ — resolves userId → username/email via IUserService; sidebar Cancel fix ✅ — BeginTurn replaces TryRegister so multi-turn cancel actually works)
+**Last updated:** 2026-05-23 (Phase 50 OpenClaw federation ✅ — `SwarmFederationMode` enum, `OpenClawBusClient`, `RouteResolver`, V029 migration adds `parent_swarm_id`, `/v1/swarm/manager` + `/v1/swarm/openclaw/routes` + `/v1/swarm/{id}/children` endpoints, swarm-manager agent template; session-level MCP opt-in ✅ — single `ActiveMcpServers` selector in context bar (Desktop: WorkspacePanelView; Web: TopContextBar), preference-persisted, replaces per-chat MCP selector; Phase 73 code scaffolding ✅ — 21 templates, `CodeCreateMultiTool` for multi-component generation, `ScaffoldManifestValidator` for dependency manifest validation, 235 new golden-path + manifest tests)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -19,10 +19,11 @@ What we are actively working on and shipping next, in priority order.
 | **v1.1 — done** | Phase 79 | Agents page — in-app create/edit of agent definitions + Launch chat button ✅ |
 | **v1.1 — done** | Phase 94 | Orchestration Studio — compose and run teams from the UI without chat commands ✅ |
 | **v1.1 — done** | Phase 95 | Integrations Gallery — catalog-first MCP onramp, encrypted credentials, Web + Desktop parity ✅ |
-| **v1.1 — wave 2** | Phase 85.5 | Local / remote mode selection — `sovrant connect <url>`, setup wizard mode picker |
-| **v1.1 — wave 2** | Phase 73 | Code creation — project scaffolding and app generation |
-| **v1.1 — wave 2** | Phase 40C | Supabase backend + SSO — swap SQLite for Supabase/PostgreSQL on the server side |
-| **v1.2** | Phase 82.5 | OpenTelemetry — traces, metrics, and logs via OTLP (after data model is on Supabase) |
+| **v1.1 — done** | Phase 50 | OpenClaw federation — `SwarmFederationMode`, bus client, manager-led + siloed routing, V029 migration ✅ |
+| **v1.1 — done** | Phase 73 | Code scaffolding — 21 templates, multi-component generation, manifest validation, 235 tests ✅ |
+| **v1.1 — done** | Phase 40C | Supabase backend (optional, admin-configured) — PostgreSQL stores for sessions + credentials; admin System Integrations UI; idempotent schema init; SQLite → Postgres migrator; boot-time DI switch; Web + Desktop parity ✅ |
+| **v1.2** | Phase 98 | User Dashboard — cross-workspace activity view for all users; public records only, no private rows; rail-nav accessible |
+| **v1.2** | Phase 99 | Private sessions and agent runs — per-record privacy toggle; masked in Command Center, excluded from User Dashboard |
 
 > Items below v1.0 are planned but not yet scheduled. See [Still pending](#still-pending) for the full gap list.
 
@@ -32,12 +33,12 @@ What we are actively working on and shipping next, in priority order.
 
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
-- **56 tools** across 17 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, missions, artifacts, documents, quality, swarm, coordination, LSP)
-- **1,689 tests** across 10 projects, 0 failures
+- **58 tools** across 18 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, missions, artifacts, documents, quality, swarm, coordination, LSP, code scaffolding)
+- **1,924 tests** across 10 projects, 0 failures
 - **115 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
-- SQLite persistence layer with 28 versioned migrations (V001–V028) — adds hooks, workspace settings, MCP/LSP servers, user preferences, provider profiles, workspace identity unification, auth credentials, agent run prompt on top of the Phase 32/42.5/51/52/57/78 foundation
+- SQLite persistence layer with 29 versioned migrations (V001–V029) — adds `parent_swarm_id` for federation child tracking on top of the prior foundation — adds hooks, workspace settings, MCP/LSP servers, user preferences, provider profiles, workspace identity unification, auth credentials, agent run prompt on top of the Phase 32/42.5/51/52/57/78 foundation
 - Single `.env` file configuration — `sovrant.config` removed; all bootstrap knobs are env vars; routing and swarm config fully DB-backed
 - **Integrations Gallery** on Web and Desktop — catalog-first MCP onramp with Automation (Composio, n8n, Zapier, Make), Platform (GitHub, Slack, Notion, Linear, Stripe, PostgreSQL, Supabase, Filesystem), and Search (Brave, Exa, Tavily) tiers; credentials stored in encrypted keystore (Phase 95 ✅)
 - **Model switcher with provider discovery** — configured providers selectable inline; unconfigured known providers shown with click-to-configure deep-link to Settings → Providers on both Web and Desktop
@@ -143,17 +144,19 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | 79 | Agents page — in-app create/edit of agent definitions (silent copy-on-write for built-ins), Launch chat, Run one-shot, prompt stored on agent_runs (V028), prompt as title in Recent Runs with agent badge on Web + Desktop |
 | 94 | Orchestration Studio — compose and run teams from the UI; team + member create forms; Run button with task prompt on Web + Desktop |
 | 95 | Integrations Gallery — catalog-first MCP onramp; 14 integrations (Automation: Composio, n8n, Zapier, Make; Platform: GitHub, Slack, Notion, Linear, Stripe, PostgreSQL, Supabase, Filesystem; Search: Brave, Exa, Tavily); encrypted credential keystore; model switcher upgrade with unconfigured-provider deep-link; Web + Desktop parity |
+| 50 | OpenClaw integration & federated swarms — `SwarmFederationMode` (Silo/Federated/ManagerLed), `OpenClawBusClient`, `RouteResolver`, V029 migration (`parent_swarm_id`), `ListChildrenAsync`, `/v1/swarm/manager` + `/v1/swarm/openclaw/routes` + `/v1/swarm/{id}/children` REST endpoints, swarm-manager agent template |
+| 73 | Code scaffolding — 21 project templates (Node/TS, .NET, Python, Go, Rust, Java, Kotlin, Ruby, Swift, Lua, Zig, C++), `CodeCreateTool`, `CodeCreateMultiTool` (multi-component), `CodeListTemplatesTool`, `ScaffoldManifestValidator`, 235 golden-path + manifest tests; session-level MCP opt-in lifted to context bar on Web + Desktop |
 
 ### Still pending
 
-> **Last audited:** 2026-05-23. Shipped since prior audit: Phase 79 Agents page ✅, Phase 94 Orchestration Studio ✅, Phase 95 Integrations Gallery ✅ (encrypted credentials, catalog with 14 integrations across 3 tiers, Web + Desktop parity). Model switcher upgraded — configured + unconfigured providers with click-to-configure deep-link. Agent run prompt stored (V028) and used as title in Recent Runs. Command Center Owner column resolves to username/email. Sidebar multi-turn Cancel fixed (BeginTurn replaces TryRegister). Phase 91 Knowledge Authoring deferred.
+> **Last audited:** 2026-05-23. Shipped since prior audit: Phase 79 Agents page ✅, Phase 94 Orchestration Studio ✅, Phase 95 Integrations Gallery ✅ (encrypted credentials, catalog with 14 integrations across 3 tiers, Web + Desktop parity). Phase 50 OpenClaw federation ✅ (SwarmFederationMode, bus client, manager-led routing, V029, 3 new API endpoints). Phase 73 code scaffolding ✅ (21 templates, CodeCreateMultiTool, ScaffoldManifestValidator, 235 tests). Session-level MCP opt-in lifted to context bar (Desktop WorkspacePanelView + Web TopContextBar). Phase 91 Knowledge Authoring deferred.
 >
 > Quality / polish / audit phases (62, 68, 69, 70, 71, 72, 75) and partial-completion phases (56) are tracked in their own sections below; this table is gap-only.
 
 | Gap | Phase | Priority |
 |---|---|---|
 | Enterprise auth & external identity (OAuth/OIDC, SAML, SSO) | Phase 40B | Deferred |
-| Supabase backend — swap SQLite for Supabase (PostgreSQL) as the server-side database; Supabase Auth replaces the hand-rolled auth stack and delivers SSO (Google, GitHub, Azure AD, SAML, etc.) out of the box; admin UI for enabling/disabling providers per workspace | Phase 40C | High |
+| Supabase backend ✅ — optional Postgres backend shipped (sessions + credentials, admin UI, schema init, SQLite→Postgres migrator, boot-time DI switch, Web + Desktop parity); SSO (Supabase Auth, OAuth/OIDC, SAML) remains deferred | Phase 40C | ✅ Done — SSO deferred |
 | Granular feature permissions — workspace members can be granted or denied access to specific features (Chat, Agents, Teams, Swarms, Missions, MCP, Knowledge, Artifacts, Settings); current model is all-or-nothing per workspace role; Phase 40D adds a permission matrix admins configure per user or role | Phase 40D | Deferred |
 | DuckDB database provider — `IStorageProvider` implementation backed by DuckDB; columnar analytics for agent runs, session history, token usage, cost aggregations, and audit queries; embedded like SQLite, analytical like a data warehouse; ideal for self-hosted deployments that need fast cross-session reporting without standing up Supabase | Phase 104 | Deferred |
 | MCP server permissions — scope which MCP servers are available at the workspace and project level; admins allowlist/blocklist servers per workspace, project owners further restrict per project; users only see MCP tools their scope permits; replaces today's global MCP server list | Phase 105 | Deferred |
@@ -162,18 +165,17 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |
 | Workspace backup, import & export | Phase 47 | Medium |
 | SearXNG web search backend (self-hosted, key-free) | Phase 49 | Low–Medium |
-| OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | Medium–High |
+| OpenClaw integration & federated swarms over a routed bus (manager-led + siloed modes) | Phase 50 | ✅ Done |
 | Hermes Agent integration via MCP — alternative claw/federation bus provider with self-improving skills | Phase 60 | Medium |
 | Cloud storage backends & workspace isolation (Google Docs, Box, Amazon S3) | Phase 64 | Medium |
 | Video generation — fal.ai, Kling AI, and pluggable provider support for text-to-video, image-to-video | Phase 65 | Medium |
 | Autonomous agent modes (swarm autonomy & alternate claws) | Phase 67 | Medium |
-| Code creation: project scaffolding & app generation | Phase 73 | Medium–High |
+| Code creation: project scaffolding & app generation | Phase 73 | ✅ Done |
 | Markdown-backed document templates | Phase 74 | Medium |
 | In-app document viewing | Phase 76 | Medium |
 | Project isolation with full feature parity | Phase 77 | Medium |
-| Agents page — in-app create/edit of agent definitions, Launch chat, Run one-shot with prompt history, agent badge in Recent Runs | Phase 79 | ✅ Done |
 | Composio MCP integration — first-class platform awareness for Composio's MCP catalog (250+ apps), in-app browse/enable, managed OAuth via Composio connections, per-user/workspace credential scoping, still routed through Sovrant's `MCPTool` proxy and permission model | Phase 80 | Medium |
-| OpenTelemetry observability — emit traces/metrics/logs for runs, turns, tool calls, router decisions, and provider HTTP via OTLP so operators can ship to any OTel-compatible backend (Honeycomb, Tempo, Jaeger, Datadog, etc.) | Phase 82.5 | Medium–High |
+| OpenTelemetry observability — emit traces/metrics/logs for runs, turns, tool calls, router decisions, and provider HTTP via OTLP so operators can ship to any OTel-compatible backend (Honeycomb, Tempo, Jaeger, Datadog, etc.) | Phase 82.5 | Deferred |
 | Pluggable memory backends — abstract `IMemoryStore` so the SQLite implementation can be swapped for distributed/remote stores (mem0, Pinecone-style vector DBs, Redis, Postgres+pgvector); enables shared/team memory across nodes | Phase 83 | Medium |
 | Prompt library: reusable, parameterised prompt templates across CLI / Web / Desktop | Phase 84 | Medium |
 | Local / remote mode selection — CLI + Desktop can run embedded (local DB) or connect to a shared `Sovrant.Server`; setup wizard mode picker; `sovrant connect <url>` | Phase 85.5 | High |
@@ -183,7 +185,16 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Active Sessions: up to 5 concurrent live tasks with return-anytime results; Settings UI on Web + Desktop, DB-backed; future admin console fallback | Phase 92 | ✅ Done |
 | Agents page — in-app create/edit, Launch chat, Run one-shot, prompt titles in ledger | Phase 79 | ✅ Done |
 | Orchestration Studio — compose and run teams from the UI; Run button with task prompt | Phase 94 | ✅ Done |
-| Integrations Gallery — 14 integrations across Automation/Platform/Search tiers, encrypted credential keystore, Web + Desktop parity; OpenClaw and Hermes pending details | Phase 95 | ✅ Done (OpenClaw + Hermes pending) |
+| Integrations Gallery — 14 integrations across Automation/Platform/Search tiers, encrypted credential keystore, Web + Desktop parity | Phase 95 | ✅ Done (Hermes pending details) |
+| MCP runtime variables — per-server variable store (name, value, secret flag) injected as env vars when the MCP server process is launched; variable editor in the Integrations UI lets users add/edit/remove variables at any time without reconfiguring the connection; covers servers like Sitecore MCP that require 10–20 env vars passed at runtime; encrypted at rest via existing keystore; Web + Desktop parity | Phase 96 | High |
+| User Dashboard — a personal activity dashboard for all users showing sessions, agent runs, missions, and data across every workspace and project the user has access to; only public records are shown — private records from the user or anyone else are excluded entirely (no masked rows, no placeholders); Command Center remains unchanged as the admin-only aggregated view and does show masked private rows for accountability; User Dashboard is accessible from the rail nav for all users; role gate enforced server-side so users never see records from workspaces they are not members of; Web + Desktop parity | Phase 98 | High |
+| Private sessions and agent runs — users can mark any session or agent run as private via a toggle in the chat header and Agents UI; private records appear in the Command Center as masked rows (title and content hidden, existence acknowledged for accountability) but are completely excluded from the User Dashboard; only the owning user can see the full title, prompt, content, and run history of their private records; server-side enforcement ensures private content is never returned in any query for any other user regardless of role; audit log records the privacy toggle event | Phase 99 | High |
+| Accurate cost reporting — replace the current placeholder cost display in the Command Center with real per-session cost calculated from token counts × model pricing; pull and cache OpenRouter's public `/api/v1/models` pricing data (prompt $/1k + completion $/1k per model) on a daily schedule; apply the correct rate for the model used in each turn; surface per-session cost, per-run cost, and a workspace total in the Command Center and activity detail views; cost shown as $0.00 for free-tier and local models; cached pricing refreshed automatically so rates stay current without manual updates | Phase 100 | Medium |
+| OAuth 2.1 + PKCE for MCP connections — replace API-key-only auth with a full OAuth 2.1 + PKCE flow for MCP servers that require it (Sitecore Marketer, Adobe AEM, and others); desktop uses authorization code + PKCE with loopback redirect `http://127.0.0.1:{port}/callback` via an ephemeral in-process HTTP listener; web uses ASP.NET Core OIDC middleware with an absolute redirect URI; RFC 8707 Resource Indicators bind each token to its specific MCP server so credentials cannot be replayed cross-server; tokens stored in the existing encrypted keystore (Windows Credential Manager on Desktop, encrypted DB on Web); automatic silent refresh with rotation before expiry; user-triggered revocation per server in the Integrations UI; no API keys exposed or pasted by the user — auth is entirely browser-driven on first connect | Phase 101 | High |
+| MCP quality and trust gates — add a policy layer between agents and connected MCP tools so destructive or high-impact actions require explicit approval before execution; company- or workspace-level rules define which tool call patterns are permitted, require confirmation, or are blocked outright (e.g. delete operations on more than N items, writes to production systems, bulk mutations); agents that violate a rule get a structured refusal with the policy reason so they can surface it to the user; quality gates optionally route tool call results through a validation step (schema check, output size cap, content policy) before returning to the agent; admins configure rules in the Integrations UI per MCP server; rule enforcement is server-side so no client-side bypass is possible; audit log records every gate decision (permitted, confirmed, blocked) per session | Phase 103 | High |
+| Agent identity in chat — audit and align the "talking to an agent" experience across Web and Desktop; Web and Desktop currently differ in how (and whether) they surface which agent the user is speaking with; both surfaces should clearly show the active agent name and avatar/icon in the chat header and in the context bar, keep it in sync when the agent changes mid-session, and show the agent description on hover or in a side panel; ensure the agents library page and the chat experience share the same agent resolution path so a user launching from the Agents page lands in a session that is visibly bound to that agent | Phase 106 | High |
+| Integration connection audit — systematically review and validate every gallery integration end-to-end; for each catalog entry confirm the npx package or HTTP endpoint is current and resolves correctly, verify the required credential fields match what the MCP server actually expects, test a live connection from both Web and Desktop, document any known setup steps or gotchas, and flag entries that require OAuth (Phase 101) so users are not left with a broken connect form; produce a connection matrix (integration × status × notes) that becomes the acceptance gate for the gallery going forward | Phase 107 | High |
+| Code template language management — surface the supported language and framework templates from Phase 73 scaffolding as editable knowledge pages; each language (TypeScript, Python, C#, Go, etc.) gets a template guideline page in the Knowledge section that defines coding conventions, preferred patterns, dependency standards, and generation hints used by the scaffolding engine; workspace admins can update guidelines to match company standards (e.g. internal package registries, required linting rules, banned dependencies); built-in guidelines are read-only with silent copy-on-write to user tier following the standard knowledge editing model; the scaffolding engine reads active guidelines at generation time so updates take effect immediately without rebuilding; Web + Desktop parity | Phase 108 | High |
 
 ### v1.0 release polish (in progress)
 
@@ -6943,6 +6954,49 @@ the rest of the LSP-supported surface.
 - [ ] CLI / Desktop / Web all surface a "Create project" entry point
 - [ ] Golden-path tests per language verify scaffold → build → test pipeline
 
+### Implementation Plan
+
+Research completed 2026-05-23. Implementation order:
+
+#### What already exists
+- `write_many` tool (`src/Sovrant.Tools/Artifacts/ArtifactTool.cs`) — already writes
+  batch files to `{root}/{workspace}/artifacts/{run}/`; no new write plumbing needed.
+- Web `Artifacts.razor` — zip download button already wired to
+  `/artifacts/{workspace}/{project}/{run}.zip` but the endpoint does not exist yet.
+- Desktop `ArtifactsView.axaml` — "Open folder" opens the run directory in File Explorer;
+  no download button yet.
+- CLI — `artifacts ls / open / rm` commands; no zip download.
+
+#### Step 1 — Zip download endpoint (quick win, ~50 lines)
+Add `GET /v1/artifacts/{runId}.zip` to `ArtifactRoutes.cs` using
+`System.IO.Compression.ZipArchive`. Unblocks the already-wired Web UI button with no
+new abstractions. Desktop and CLI wire a matching download button/command once the
+endpoint exists.
+
+#### Step 2 — `IProjectTemplate` interface + registry
+New location: `src/Sovrant.Runtime.Projects/Templates/`. Parallel to
+`IDocumentTemplate` (Phase 66) and the agent template pattern
+(`FileSystemTemplateLoader`). Registry selected by language + project kind. Each
+template produces a `IReadOnlyList<ArtifactFile>` (path + content pairs) that
+`write_many` flushes to the artifact store.
+
+#### Step 3 — Scaffold implementations
+Start with Node.js (CLI, Express API, Next.js, library, pnpm monorepo) and C#
+(console, web API, Blazor, library, worker). Each scaffold produces a project that
+builds and passes its first test on a clean box. Remaining LSP languages (Python, Go,
+Rust, Java, Kotlin, Ruby, Swift, C/C++, Lua, Zig) follow in order of user demand.
+
+#### Step 4 — `CodeCreateTool`
+Located in `src/Sovrant.Tools/Projects/`. Takes a natural-language brief, resolves
+language + kind via `IProjectTemplate` registry, collects missing inputs through
+conversation, then calls the scaffold and emits files. Integrates with Phase 58 Trust
+Boundary for dependency manifest validation.
+
+#### Step 5 — Surface in CLI / Desktop / Web
+- CLI: `sovrant create <language> [name]` command
+- Desktop: "Create project" button in Artifacts or Agents view
+- Web: "Create project" entry point in the Artifacts page
+
 ---
 
 ## Phase 74 — Markdown-Backed Document Templates
@@ -9559,7 +9613,7 @@ Anything that doesn't cleanly fit one bucket is a **design smell** — re-shape 
 
 ---
 
-## Phase 94 — Provider & Model Switch Context Continuity
+## Phase 94 (legacy planning section) — Provider & Model Switch Context Continuity
 
 **Status:** Planned
 **Goal:** Ensure that when a user switches provider or model mid-session, the active conversation context is correctly handed off to the new model — without redundant re-sends, token waste, or silent context loss.
@@ -9615,7 +9669,7 @@ In either case the user pays more than necessary or gets a degraded continuation
 
 ---
 
-## Phase 95 — Memory System Audit & Hardening
+## Phase 95 (legacy planning section) — Memory System Audit & Hardening
 
 **Status:** Planned
 **Goal:** Verify that both the backend (`SqliteMemoryStore` / `MemoryInjector`) and the session-end extraction pipeline (`SessionEndMemoryHandler`) are working correctly end-to-end, then close the known gaps that make memory injection expensive, noisy, or unreliable.
@@ -10071,7 +10125,7 @@ See the Phase 96 entry for the full smoke test checklist.
 
 ---
 
-## Phase 98 — CLI Workspace Commands in Remote Mode
+## Phase 98 (legacy planning section) — CLI Workspace Commands in Remote Mode
 
 **Status:** ⬜ Outstanding — last remaining pre-beta item.
 
@@ -10101,7 +10155,7 @@ Read-only. `workspace create`, `workspace add-member`, etc. are out of scope for
 
 ---
 
-## Phase 99 — Auth Hardening: Recovery, MFA, OAuth & Audit
+## Phase 99 (legacy planning section) — Auth Hardening: Recovery, MFA, OAuth & Audit
 
 **Status:** Planned. Post-beta evolution of the Phase 85 foundation.
 

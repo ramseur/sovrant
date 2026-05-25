@@ -1,0 +1,199 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.SystemIntegrationsView"
+             x:DataType="vm:SystemIntegrationsViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <ScrollViewer Padding="32,24">
+        <StackPanel MaxWidth="720" Spacing="24">
+
+            <!-- Header -->
+            <StackPanel Spacing="4">
+                <TextBlock Text="System Integrations" FontSize="24" FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="Platform-level integrations that control how Sovrant stores and manages data."
+                           FontSize="13" Foreground="{DynamicResource TextSecondary}" />
+            </StackPanel>
+
+            <!-- Active backend pill -->
+            <Border Padding="12,8" CornerRadius="8"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}"
+                    BorderThickness="1">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Ellipse Width="8" Height="8" Fill="{DynamicResource StatusPass}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding ActiveBackendLabel}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="ACTIVE DATABASE BACKEND" FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextMuted}" />
+                        <TextBlock Text="Change the backend only after initializing the schema and optionally migrating data."
+                                   FontSize="12" Foreground="{DynamicResource TextSecondary}" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- Status message -->
+            <Border Padding="12,10" CornerRadius="8"
+                    Background="{DynamicResource BrandPrimaryMuted}"
+                    IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <TextBlock Text="{Binding StatusMessage}" FontSize="13"
+                           Foreground="{DynamicResource BrandPrimary}" TextWrapping="Wrap" />
+            </Border>
+
+            <!-- ── Supabase card ─────────────────────────────────────────────── -->
+            <Border Padding="20" CornerRadius="12"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}"
+                    BorderThickness="1">
+                <StackPanel Spacing="16">
+
+                    <!-- Card header -->
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+                            <!-- Connection status badge -->
+                            <Border Padding="8,3" CornerRadius="10"
+                                    Background="{DynamicResource SurfaceBackground}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                                             Fill="{DynamicResource StatusPass}"
+                                             IsVisible="{Binding IsConnected}" />
+                                    <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                                             Fill="{DynamicResource StatusWarn}"
+                                             IsVisible="{Binding !IsConnected}" />
+                                    <TextBlock Text="{Binding ConnectionStatusLabel}" FontSize="11"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                        <StackPanel Spacing="2">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="🗄️" FontSize="20" VerticalAlignment="Center" />
+                                <TextBlock Text="Supabase" FontSize="17" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="PostgreSQL-backed storage via your Supabase project."
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" />
+                        </StackPanel>
+                    </DockPanel>
+
+                    <Border Height="1" Background="{DynamicResource SurfaceBorder}" />
+
+                    <!-- Config fields -->
+                    <StackPanel Spacing="12">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Project URL" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextSecondary}" />
+                            <TextBox Text="{Binding ProjectUrl}"
+                                     Watermark="https://your-project.supabase.co"
+                                     FontSize="13" CornerRadius="6" Padding="10,8" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Service Role Key" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextSecondary}" />
+                            <TextBox Text="{Binding ServiceRoleKey}"
+                                     Watermark="eyJ..."
+                                     PasswordChar="•"
+                                     FontSize="13" CornerRadius="6" Padding="10,8" />
+                            <TextBlock Text="Found in Supabase → Project Settings → API → service_role key."
+                                       FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Test Connection -->
+                    <Button Content="Test Connection"
+                            Command="{Binding TestConnectionCommand}"
+                            Padding="16,8" CornerRadius="8"
+                            Background="{DynamicResource BrandPrimaryMuted}"
+                            Foreground="{DynamicResource BrandPrimary}"
+                            FontWeight="SemiBold" FontSize="13"
+                            HorizontalAlignment="Left" />
+
+                    <!-- Schema section — visible only when connected -->
+                    <StackPanel Spacing="12" IsVisible="{Binding IsConnected}">
+                        <Border Height="1" Background="{DynamicResource SurfaceBorder}" />
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="DATABASE SCHEMA" FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextMuted}" />
+                            <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap">
+                                <TextBlock.Text>Initialize the Sovrant schema in your Supabase project before switching backends. This is safe to run multiple times (idempotent).
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <Button Content="Initialize Schema"
+                                Command="{Binding InitializeSchemaCommand}"
+                                Padding="16,8" CornerRadius="8"
+                                Background="{DynamicResource SurfaceMuted}"
+                                Foreground="{DynamicResource TextPrimary}"
+                                FontWeight="SemiBold" FontSize="13"
+                                HorizontalAlignment="Left" />
+                    </StackPanel>
+
+                    <!-- Migration section — visible when schema ready, not yet active -->
+                    <StackPanel Spacing="12" IsVisible="{Binding IsMigrationVisible}">
+                        <Border Height="1" Background="{DynamicResource SurfaceBorder}" />
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="MIGRATE EXISTING DATA" FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextMuted}" />
+                            <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap">
+                                Copy all data from the local SQLite database to Supabase. The local database is kept as a fallback until you explicitly switch backends.
+                            </TextBlock>
+                        </StackPanel>
+
+                        <Button Content="Migrate Data from SQLite"
+                                Command="{Binding MigrateDataCommand}"
+                                Padding="16,8" CornerRadius="8"
+                                Background="{DynamicResource SurfaceMuted}"
+                                Foreground="{DynamicResource TextPrimary}"
+                                FontWeight="SemiBold" FontSize="13"
+                                HorizontalAlignment="Left" />
+                    </StackPanel>
+
+                    <!-- Switch backend — visible when schema ready -->
+                    <StackPanel Spacing="10" IsVisible="{Binding IsSwitchVisible}">
+                        <Border Height="1" Background="{DynamicResource SurfaceBorder}" />
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="ACTIVE BACKEND" FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextMuted}" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Button Command="{Binding SwitchBackendCommand}"
+                                    IsVisible="{Binding !IsSupabaseActive}"
+                                    Content="Switch to Supabase"
+                                    Padding="16,8" CornerRadius="8"
+                                    Background="{DynamicResource BrandPrimary}"
+                                    Foreground="White"
+                                    FontWeight="SemiBold" FontSize="13" />
+                            <Button Command="{Binding RevertToSqliteCommand}"
+                                    IsVisible="{Binding IsSupabaseActive}"
+                                    Content="Revert to SQLite"
+                                    Padding="16,8" CornerRadius="8"
+                                    Background="#1FEF4444"
+                                    Foreground="#EF4444"
+                                    FontWeight="SemiBold" FontSize="13" />
+                        </StackPanel>
+
+                        <TextBlock IsVisible="{Binding IsSupabaseActive}"
+                                   Text="A restart is required for the backend switch to take effect."
+                                   FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                    </StackPanel>
+
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

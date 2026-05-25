@@ -5,6 +5,7 @@ using Sovrant.Agents.Coordination;
 using Sovrant.Agents.Orchestration;
 using Sovrant.Agents.Shared;
 using Sovrant.Agents.Swarm;
+using Sovrant.Agents.Swarm.Bus;
 using Sovrant.Agents.Teams;
 using Sovrant.Agents.Templates;
 
@@ -83,6 +84,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISwarmStateTracker>(sp => sp.GetRequiredService<SwarmStateTracker>());
         services.AddSingleton<SwarmSession>();
         services.AddSingleton<ISwarmDecomposer, LlmSwarmDecomposer>();
+        // OpenClaw bus client — optional; no-ops when McpClientRegistry has no "openclaw" entry.
+        services.AddSingleton<OpenClawBusClient>();
         services.AddSingleton<SwarmOrchestrator>();
         services.AddSingleton<ISwarmOrchestrator>(sp => sp.GetRequiredService<SwarmOrchestrator>());
         services.AddSingleton<SwarmQualityGate>();

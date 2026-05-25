@@ -29,20 +29,26 @@
         {
             <!-- Gallery: catalog entries grouped by tier -->
             <div class="master-list" style="padding:0 4px;">
-                @foreach (var group in IntegrationCatalog.All.GroupBy(e => e.Category))
+                @foreach (var catGroup in GetGalleryCards().GroupBy(c => c.Category))
                 {
                     <div style="padding:6px 8px 2px;font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:.05em;">
-                        @group.Key.ToUpperInvariant()
+                        @catGroup.Key.ToUpperInvariant()
                     </div>
-                    @foreach (var entry in group)
+                    @foreach (var card in catGroup)
                     {
-                        <button class="master-item @(ReferenceEquals(entry, _catalogEntry) ? "active" : "")"
-                                @onclick="() => SelectCatalogEntry(entry)">
-                            <div class="item-title">
-                                <span style="font-size:16px;line-height:1;margin-right:6px;">@entry.Icon</span>
-                                <span>@entry.Name</span>
+                        var isActive = _selectedGroup is not null && _selectedGroup[0].Id == card.Id;
+                        var isAnyConnected = (_selectedGroup?.Any(e => _isConnected(e.Id)) ?? false) || _isConnected(card.Id);
+                        <button class="master-item @(isActive ? "active" : "")"
+                                @onclick="() => SelectGalleryCard(card)">
+                            <div class="item-title" style="display:flex;align-items:center;gap:6px;">
+                                <span style="font-size:16px;line-height:1;">@card.Icon</span>
+                                <span>@card.Name</span>
+                                @if (isAnyConnected)
+                                {
+                                    <span class="status-dot connected" style="margin-left:2px;" title="Connected"></span>
+                                }
                             </div>
-                            <div class="item-subtitle" style="padding-left:26px;">@entry.Description</div>
+                            <div class="item-subtitle" style="padding-left:26px;">@card.Description</div>
                         </button>
                     }
                 }
@@ -69,13 +75,11 @@
                     {
                         <button class="master-item @(ReferenceEquals(s, _selected) ? "active" : "")"
                                 @onclick="() => Select(s)">
-                            <div class="item-title">
-                                <span class="outcome-badge @(s.IsConnected ? "success" : "unknown")">
-                                    @(s.IsConnected ? "OK" : "—")
-                                </span>
+                            <div class="item-title" style="display:flex;align-items:center;gap:8px;">
+                                <span class="status-dot @(s.IsConnected ? "connected" : "warning")" style="flex-shrink:0;"></span>
                                 <span>@s.Name</span>
                             </div>
-                            <div class="item-subtitle">
+                            <div class="item-subtitle" style="padding-left:16px;">
                                 @s.Transport@(s.ToolCount > 0 ? $" • {s.ToolCount} tool{(s.ToolCount == 1 ? "" : "s")}" : "")
                             </div>
                         </button>
@@ -104,6 +108,19 @@
                     </div>
                 </div>
 
+                @if (_selectedGroup?.Count > 1)
+                {
+                    <div style="display:flex;gap:4px;margin:12px 0 0;">
+                        @for (int i = 0; i < _selectedGroup.Count; i++)
+                        {
+                            var idx = i;
+                            var label = _selectedGroup[i].TabLabel ?? _selectedGroup[i].Name;
+                            <button class="btn-sm @(_selectedGroupTab == idx ? "btn-primary" : "btn-outline")"
+                                    @onclick="() => SelectGroupTab(idx)">@label</button>
+                        }
+                    </div>
+                }
+
                 <p style="margin:12px 0 20px;color:var(--text-secondary);">@_catalogEntry.Description</p>
 
                 @if (_catalogEntry.Kind == IntegrationKind.LlmProvider)
@@ -119,7 +136,7 @@
                     {
                         <div class="form-field">
                             <label>@_catalogEntry.ApiKeyLabel</label>
-                            <input type="password" @bind="_galleryApiKey"
+                            <input type="password" autocomplete="new-password" @bind="_galleryApiKey"
                                    placeholder="Paste your key here" />
                         </div>
                     }
@@ -127,7 +144,7 @@
                     {
                         <div class="form-field">
                             <label>@_catalogEntry.EndpointLabel</label>
-                            <input type="text" @bind="_galleryUrl" placeholder="" />
+                            <input type="text" autocomplete="off" @bind="_galleryUrl" placeholder="" />
                         </div>
                     }
 
@@ -152,11 +169,14 @@
             <div class="detail-content">
                 <div class="orch-detail-header">
                     <div>
-                        <span class="outcome-badge @(_selected.IsConnected ? "success" : "unknown")">
-                            @(_selected.IsConnected ? "Connected" : "Not Connected")
-                        </span>
-                        <h2>@_selected.Name</h2>
-                        <p class="text-secondary" style="margin:4px 0 0;">@_selected.Transport transport</p>
+                        <h2 style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+                            @_selected.Name
+                            <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;color:@(_selected.IsConnected ? "var(--status-pass)" : "var(--status-warn)");">
+                                <span class="status-dot @(_selected.IsConnected ? "connected" : "warning")"></span>
+                                @(_selected.IsConnected ? "Connected" : "Not connected")
+                            </span>
+                        </h2>
+                        <p class="text-secondary" style="margin:0;">@_selected.Transport transport@(_selected.ToolCount > 0 ? $" • {_selected.ToolCount} tools" : "")</p>
                     </div>
                     <button class="btn-sm btn-danger" @onclick="() => RemoveServerAsync(_selected.Name)">Remove</button>
                 </div>
@@ -275,11 +295,11 @@
                 {
                     <div class="form-field">
                         <label>Name</label>
-                        <input type="text" @bind="_newName" placeholder="my-server" />
+                        <input type="text" autocomplete="off" @bind="_newName" placeholder="my-server" />
                     </div>
                     <div class="form-field">
                         <label>Command</label>
-                        <input type="text" @bind="_newCommand" placeholder="npx" />
+                        <input type="text" autocomplete="off" @bind="_newCommand" placeholder="npx" />
                     </div>
                     <div class="form-field">
                         <label>Arguments (space-separated)</label>
@@ -291,15 +311,15 @@
                 {
                     <div class="form-field">
                         <label>Name</label>
-                        <input type="text" @bind="_newName" placeholder="my-server" />
+                        <input type="text" autocomplete="off" @bind="_newName" placeholder="my-server" />
                     </div>
                     <div class="form-field">
                         <label>URL</label>
-                        <input type="text" @bind="_newUrl" placeholder="https://mcp.example.com/sse" />
+                        <input type="text" autocomplete="off" @bind="_newUrl" placeholder="https://mcp.example.com/sse" />
                     </div>
                     <div class="form-field">
                         <label>Bearer Token (optional)</label>
-                        <input type="password" @bind="_newBearer" placeholder="sk-…" />
+                        <input type="password" autocomplete="new-password" @bind="_newBearer" placeholder="sk-…" />
                     </div>
                     <div class="form-field">
                         <label>Extra Headers JSON (optional)</label>
@@ -335,6 +355,8 @@
 
     // Gallery state
     private CatalogEntry? _catalogEntry;
+    private List<CatalogEntry>? _selectedGroup;
+    private int _selectedGroupTab;
     private string _galleryApiKey = string.Empty;
     private string _galleryUrl = string.Empty;
 
@@ -358,16 +380,45 @@
     {
         _activeTab = tab;
         _catalogEntry = null;
+        _selectedGroup = null;
+        _selectedGroupTab = 0;
         _selected = null;
         _status = string.Empty;
     }
 
-    private void SelectCatalogEntry(CatalogEntry entry)
+    private IEnumerable<CatalogEntry> GetGalleryCards()
     {
-        _catalogEntry = entry;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var entry in IntegrationCatalog.All)
+        {
+            var key = entry.GroupName ?? entry.Id;
+            if (seen.Add(key))
+                yield return entry;
+        }
+    }
+
+    private List<CatalogEntry> GetGroupFor(CatalogEntry representative) =>
+        representative.GroupName is { } gn
+            ? IntegrationCatalog.All.Where(e => e.GroupName == gn).ToList()
+            : [representative];
+
+    private void SelectGalleryCard(CatalogEntry representative)
+    {
+        _selectedGroup = GetGroupFor(representative);
+        _selectedGroupTab = 0;
+        _catalogEntry = _selectedGroup[0];
         _galleryApiKey = string.Empty;
         _galleryUrl = string.Empty;
         _status = string.Empty;
+    }
+
+    private void SelectGroupTab(int idx)
+    {
+        if (_selectedGroup is null || idx >= _selectedGroup.Count) return;
+        _selectedGroupTab = idx;
+        _catalogEntry = _selectedGroup[idx];
+        _galleryApiKey = string.Empty;
+        _galleryUrl = string.Empty;
     }
 
     private bool _isConnected(string entryId) =>

@@ -17,9 +17,9 @@ internal sealed class SqliteSwarmEventStore(ISqliteConnectionFactory connectionF
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
             INSERT INTO swarm_events
-                (swarm_id, event_type, agent_id, workspace_id, project_id, user_id, payload, timestamp)
+                (swarm_id, event_type, agent_id, workspace_id, project_id, user_id, parent_swarm_id, payload, timestamp)
             VALUES
-                ($swarmId, $eventType, $agentId, $workspaceId, $projectId, $userId, $payload, $timestamp)
+                ($swarmId, $eventType, $agentId, $workspaceId, $projectId, $userId, $parentSwarmId, $payload, $timestamp)
             """;
         cmd.Parameters.AddWithValue("$swarmId", record.SwarmId);
         cmd.Parameters.AddWithValue("$eventType", record.EventType);
@@ -27,6 +27,7 @@ internal sealed class SqliteSwarmEventStore(ISqliteConnectionFactory connectionF
         cmd.Parameters.AddWithValue("$workspaceId", (object?)record.WorkspaceId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$projectId", (object?)record.ProjectId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$userId", (object?)record.UserId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$parentSwarmId", (object?)record.ParentSwarmId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$payload", record.Payload);
         cmd.Parameters.AddWithValue("$timestamp", record.Timestamp.ToString("o", CultureInfo.InvariantCulture));
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
@@ -39,7 +40,7 @@ internal sealed class SqliteSwarmEventStore(ISqliteConnectionFactory connectionF
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            SELECT swarm_id, event_type, agent_id, workspace_id, project_id, user_id, payload, timestamp
+            SELECT swarm_id, event_type, agent_id, workspace_id, project_id, user_id, parent_swarm_id, payload, timestamp
             FROM swarm_events
             WHERE swarm_id = $swarmId
             ORDER BY id ASC
@@ -57,8 +58,9 @@ internal sealed class SqliteSwarmEventStore(ISqliteConnectionFactory connectionF
                 WorkspaceId: await reader.IsDBNullAsync(3, ct).ConfigureAwait(false) ? null : reader.GetString(3),
                 ProjectId: await reader.IsDBNullAsync(4, ct).ConfigureAwait(false) ? null : reader.GetString(4),
                 UserId: await reader.IsDBNullAsync(5, ct).ConfigureAwait(false) ? null : reader.GetString(5),
-                Payload: reader.GetString(6),
-                Timestamp: DateTimeOffset.Parse(reader.GetString(7), CultureInfo.InvariantCulture)));
+                ParentSwarmId: await reader.IsDBNullAsync(6, ct).ConfigureAwait(false) ? null : reader.GetString(6),
+                Payload: reader.GetString(7),
+                Timestamp: DateTimeOffset.Parse(reader.GetString(8), CultureInfo.InvariantCulture)));
         }
         return results;
     }
@@ -83,6 +85,11 @@ internal sealed class SqliteSwarmEventStore(ISqliteConnectionFactory connectionF
         {
             clauses.Add("project_id = $projectId");
             cmd.Parameters.AddWithValue("$projectId", filter.ProjectId);
+        }
+        if (filter?.ParentSwarmId is not null)
+        {
+            clauses.Add("parent_swarm_id = $parentSwarmId");
+            cmd.Parameters.AddWithValue("$parentSwarmId", filter.ParentSwarmId);
         }
         if (clauses.Count > 0)
         {
@@ -146,5 +153,38 @@ internal sealed class SqliteSwarmEventStore(ISqliteConnectionFactory connectionF
         cmd.Parameters.AddWithValue("$swarmId", swarmId);
         var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
         return result is DBNull or null ? null : (string)result;
+    }
+
+    public async Task<IReadOnlyList<string>> ListChildrenAsync(string parentSwarmId, int? limit = null, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(parentSwarmId);
+
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+
+        var sql = new StringBuilder("""
+            SELECT swarm_id, MAX(timestamp) AS last_ts
+            FROM swarm_events
+            WHERE parent_swarm_id = $parentSwarmId
+            GROUP BY swarm_id
+            ORDER BY last_ts DESC
+            """);
+
+        if (limit is int lim && lim > 0)
+        {
+            sql.Append(" LIMIT $limit");
+            cmd.Parameters.AddWithValue("$limit", lim);
+        }
+
+#pragma warning disable CA2100
+        cmd.CommandText = sql.ToString();
+#pragma warning restore CA2100
+        cmd.Parameters.AddWithValue("$parentSwarmId", parentSwarmId);
+
+        using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        var results = new List<string>();
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            results.Add(reader.GetString(0));
+        return results;
     }
 }

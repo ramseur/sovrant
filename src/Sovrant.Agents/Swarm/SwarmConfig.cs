@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Sovrant.Agents.Swarm.Bus;
 
 namespace Sovrant.Agents.Swarm;
 
@@ -61,4 +62,19 @@ public sealed class SwarmConfig
     /// </summary>
     [JsonPropertyName("templates")]
     public Dictionary<string, string> TemplateOverrides { get; init; } = [];
+
+    /// <summary>
+    /// MCP servers that swarm agents are allowed to use. When null or empty (the default)
+    /// agents receive no MCP tools — MCPs are opt-in at the orchestration level.
+    /// Example: <c>["github", "linear", "slack"]</c>.
+    /// </summary>
+    [JsonPropertyName("allowed_mcps")]
+    public IReadOnlyList<string> AllowedMcpServers { get; init; } = [];
+
+    /// <summary>
+    /// OpenClaw federation settings. When null (the default) the swarm runs in
+    /// <see cref="SwarmFederationMode.Silo"/> mode with no bus traffic.
+    /// </summary>
+    [JsonPropertyName("federation")]
+    public SwarmFederationConfig? Federation { get; init; }
 }

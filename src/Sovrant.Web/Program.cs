@@ -9,11 +9,13 @@ using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Logging;
 using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Permissions;
+using Sovrant.Runtime.Storage;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
 using Sovrant.Web.Adapters;
 using Sovrant.Web.Services;
 using Sovrant.Client.Remote;
+using Sovrant.Storage.Postgres;
 
 namespace Sovrant.Web;
 
@@ -37,6 +39,25 @@ public static class Program
         var isRemote = string.Equals(runtimeMode, "remote", StringComparison.OrdinalIgnoreCase);
 
         var bootstrapConfig = BootstrapConfigLoader.Load(args);
+
+        // ── Phase 1: read bootstrap credentials (always from SQLite) ─────────
+        string? dbBackend   = null;
+        string? supabaseUrl = null;
+        string? supabaseKey = null;
+        if (!isRemote)
+        {
+            var minSvc = new ServiceCollection();
+            minSvc.AddSovrantStorage(bootstrapConfig);
+#pragma warning disable ASP0000 // standalone mini-container, not builder.Services
+            await using var minSp = minSvc.BuildServiceProvider();
+#pragma warning restore ASP0000
+            var minStorage = minSp.GetRequiredService<IStorageProvider>();
+            await minStorage.InitializeAsync().ConfigureAwait(false);
+            var minStore = minSp.GetRequiredService<ICredentialStore>();
+            dbBackend   = await minStore.RetrieveAsync(CredentialKeys.DatabaseBackend).ConfigureAwait(false);
+            supabaseUrl = await minStore.RetrieveAsync(CredentialKeys.SupabaseProjectUrl).ConfigureAwait(false);
+            supabaseKey = await minStore.RetrieveAsync(CredentialKeys.SupabaseServiceRoleKey).ConfigureAwait(false);
+        }
 
         const int WebHttpPort = 5100;
         const int WebHttpsPortDefault = 5101;
@@ -89,6 +110,7 @@ public static class Program
             builder.Services.AddSovrantClient(remoteOptions);
             builder.Services.AddSingleton<ActiveContextService>();
             builder.Services.AddScoped<ActiveSessionsService>();
+            builder.Services.AddScoped<ChatSeedService>();
         }
         else
         {
@@ -111,6 +133,14 @@ public static class Program
                 client.Timeout = TimeSpan.FromSeconds(10);
             });
 
+            // Switch to Postgres if configured (Phase 40C).
+            if (string.Equals(dbBackend, "supabase", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrEmpty(supabaseUrl) && !string.IsNullOrEmpty(supabaseKey))
+            {
+                var connStr = Sovrant.Storage.Postgres.ServiceCollectionExtensions.BuildSupabaseConnectionString(supabaseUrl, supabaseKey);
+                builder.Services.AddSovrantPostgresStorage(connStr, bootstrapConfig.KeystorePath);
+            }
+
             // Web-specific overrides
             var mutableAuth = new MutableAuthProvider(config.ApiKey ?? string.Empty, config.BaseUrl);
             var permissionPolicy = new MutableCliPermissionPolicy(config.PermissionMode);
@@ -125,6 +155,7 @@ public static class Program
             builder.Services.AddSingleton(mutableAuth);
             builder.Services.AddSingleton<ActiveContextService>();
             builder.Services.AddScoped<ActiveSessionsService>();
+            builder.Services.AddScoped<ChatSeedService>();
         }
 
         builder.Services.AddRazorComponents()
@@ -337,7 +368,9 @@ public static class Program
                 relPath.Split('/').Select(Uri.UnescapeDataString));
 
             var rootFull = Path.GetFullPath(local.Root);
-            var fullPath = Path.GetFullPath(Path.Combine(rootFull, ws, proj, run, rel));
+            var runDir = FindRunDir(rootFull, ws, proj, run);
+            if (runDir is null) return Results.NotFound();
+            var fullPath = Path.GetFullPath(Path.Combine(runDir, rel));
             if (!fullPath.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
                 return Results.BadRequest();
             if (!File.Exists(fullPath))
@@ -350,7 +383,7 @@ public static class Program
         // Streams a zip of every file under {ws}/{proj}/{run}. Lets the user grab
         // an entire run as one download from the Artifacts page.
         app.MapGet("/artifacts/{workspaceId}/{projectId}/{runId}.zip",
-            (string workspaceId, string projectId, string runId,
+            async (string workspaceId, string projectId, string runId,
              Sovrant.Runtime.Artifacts.IArtifactStore store) =>
         {
             if (store is not Sovrant.Runtime.Artifacts.LocalArtifactStore local)
@@ -368,17 +401,14 @@ public static class Program
             var run = Uri.UnescapeDataString(runId);
 
             var rootFull = Path.GetFullPath(local.Root);
-            var runDir = Path.GetFullPath(Path.Combine(rootFull, ws, proj, run));
-            if (!runDir.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
-                return Results.BadRequest();
-            if (!Directory.Exists(runDir))
-                return Results.NotFound();
+            var runDir = FindRunDir(rootFull, ws, proj, run);
+            if (runDir is null) return Results.NotFound();
 
             var safeRun = SanitizeForFilename(run);
-            return Results.Stream(async (output) =>
+            var ms = new MemoryStream();
+            using (var archive = new System.IO.Compression.ZipArchive(
+                ms, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
             {
-                using var archive = new System.IO.Compression.ZipArchive(
-                    output, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: false);
                 foreach (var file in Directory.EnumerateFiles(runDir, "*", SearchOption.AllDirectories))
                 {
                     if (Path.GetFileName(file).Equals("_manifest.json", StringComparison.OrdinalIgnoreCase))
@@ -389,8 +419,34 @@ public static class Program
                     await using var fileStream = File.OpenRead(file);
                     await fileStream.CopyToAsync(entryStream).ConfigureAwait(false);
                 }
-            }, contentType: "application/zip", fileDownloadName: $"{safeRun}.zip");
+            }
+            ms.Position = 0;
+            return Results.File(ms, contentType: "application/zip", fileDownloadName: $"{safeRun}.zip");
         });
+    }
+
+    /// <summary>
+    /// Resolves the run directory, handling the optional <c>{id}__{name}</c> suffix
+    /// that <see cref="LocalArtifactStore"/> appends when a workspace or project has
+    /// a display name (e.g. <c>ws-personal-abc__myworkspace/artifacts/run-xyz</c>).
+    /// Returns <see langword="null"/> if the directory cannot be found.
+    /// </summary>
+    private static string? FindRunDir(string root, string ws, string proj, string run)
+    {
+        var wsDir = FindSegmentDir(root, ws);
+        if (wsDir is null) return null;
+        var projDir = FindSegmentDir(wsDir, proj);
+        if (projDir is null) return null;
+        var runDir = Path.Combine(projDir, run);
+        return Directory.Exists(runDir) ? runDir : null;
+    }
+
+    private static string? FindSegmentDir(string parent, string id)
+    {
+        if (!Directory.Exists(parent)) return null;
+        var exact = Path.Combine(parent, id);
+        if (Directory.Exists(exact)) return exact;
+        return Directory.EnumerateDirectories(parent, $"{id}__*").FirstOrDefault();
     }
 
     private static string SanitizeForFilename(string name)

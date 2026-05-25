@@ -45,6 +45,12 @@
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Diagnostics}"
                     Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="&#x1F50C;  System Integrations"
+                    Command="{Binding NavigateCommand}" CommandParameter="AdminSystemIntegrations"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=AdminSystemIntegrations}"
+                    Foreground="{DynamicResource TextPrimary}" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

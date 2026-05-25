@@ -5,6 +5,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Desktop.Auth;
 using Sovrant.Runtime.Auth;
+using Sovrant.Runtime.Mcp;
+using Sovrant.Runtime.Preferences;
 using Sovrant.Runtime.Projects;
 using Sovrant.Runtime.Workspaces;
 
@@ -20,6 +22,8 @@ public partial class ActiveContextViewModel : ViewModelBase
     private readonly IWorkspaceService _workspaceService;
     private readonly IProjectService _projectService;
     private readonly IPrincipalAccessor _principal;
+    private readonly IMcpServerStore? _mcpServerStore;
+    private readonly IUserPreferenceStore? _prefs;
 
     private string UserId => _principal.UserId
         ?? Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
@@ -53,6 +57,13 @@ public partial class ActiveContextViewModel : ViewModelBase
     public ObservableCollection<ProjectOption> Projects { get; } = [];
     public ObservableCollection<ProjectOption> ProjectChoices { get; } = [];
 
+    /// <summary>All MCP servers available in this session.</summary>
+    public ObservableCollection<McpServerToggleItem> AvailableMcpServers { get; } = [];
+
+    /// <summary>Server names the user has toggled on — read by chat, agent runs, orchestration.</summary>
+    public IReadOnlyList<string> ActiveMcpServers =>
+        AvailableMcpServers.Where(m => m.IsActive).Select(m => m.Name).ToList();
+
     /// <summary>Display name for the current user (local part of email). Never a raw ID.</summary>
     public string UserDisplayName { get; private set; } = string.Empty;
 
@@ -73,11 +84,15 @@ public partial class ActiveContextViewModel : ViewModelBase
     public ActiveContextViewModel(
         IWorkspaceService workspaceService,
         IProjectService projectService,
-        IPrincipalAccessor principal)
+        IPrincipalAccessor principal,
+        IMcpServerStore? mcpServerStore = null,
+        IUserPreferenceStore? prefs = null)
     {
         _workspaceService = workspaceService;
         _projectService = projectService;
         _principal = principal;
+        _mcpServerStore = mcpServerStore;
+        _prefs = prefs;
         _ = InitializeAsync();
     }
 
@@ -88,6 +103,7 @@ public partial class ActiveContextViewModel : ViewModelBase
             // Wait for runtime (DB migrations) before querying workspaces.
             await App.RuntimeReady.Task.ConfigureAwait(false);
             await LoadWorkspacesAsync();
+            await LoadMcpServersAsync();
 
             // Default to personal workspace.
             var personal = Workspaces.FirstOrDefault(w => w.Type.Equals("personal", StringComparison.OrdinalIgnoreCase));
@@ -303,6 +319,48 @@ public partial class ActiveContextViewModel : ViewModelBase
 #pragma warning restore MVVMTK0034
         OnPropertyChanged(nameof(SelectedProjectChoice));
     }
+
+    /// <summary>Re-loads MCP servers from the store. Call after adding/removing servers in the Integrations Gallery.</summary>
+    public Task RefreshMcpServersAsync() => LoadMcpServersAsync();
+
+    private async Task LoadMcpServersAsync()
+    {
+        if (_mcpServerStore is null) return;
+        try
+        {
+            var configs = await _mcpServerStore.GetAllAsync().ConfigureAwait(false);
+            var names = configs.Keys.OrderBy(n => n, StringComparer.Ordinal).ToList();
+
+            HashSet<string> saved = new(StringComparer.Ordinal);
+            if (_prefs is not null)
+            {
+                var raw = await _prefs.GetAsync(UserId, UserPreferenceKeys.ActiveMcpServers).ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(raw))
+                    saved = new HashSet<string>(
+                        raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                        StringComparer.Ordinal);
+            }
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                AvailableMcpServers.Clear();
+                foreach (var name in names)
+                    AvailableMcpServers.Add(new McpServerToggleItem(name, saved.Contains(name), PersistMcpSelectionAsync));
+            });
+        }
+        catch { /* non-fatal */ }
+    }
+
+    private async Task PersistMcpSelectionAsync()
+    {
+        if (_prefs is null) return;
+        try
+        {
+            var value = string.Join(',', ActiveMcpServers);
+            await _prefs.SetAsync(UserId, UserPreferenceKeys.ActiveMcpServers, value).ConfigureAwait(false);
+        }
+        catch { /* best effort */ }
+    }
 }
 
 public sealed class WorkspaceOption
@@ -317,4 +375,24 @@ public sealed class ProjectOption
     public string Id { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
     public string Slug { get; init; } = string.Empty;
+}
+
+/// <summary>A single MCP server entry in the active-MCPs selector.</summary>
+public sealed partial class McpServerToggleItem : ObservableObject
+{
+    private readonly Func<Task> _onToggle;
+
+    public string Name { get; }
+
+    [ObservableProperty]
+    private bool _isActive;
+
+    public McpServerToggleItem(string name, bool isActive, Func<Task> onToggle)
+    {
+        Name = name;
+        _isActive = isActive;
+        _onToggle = onToggle;
+    }
+
+    partial void OnIsActiveChanged(bool value) => _ = _onToggle();
 }

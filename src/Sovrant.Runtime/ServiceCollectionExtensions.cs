@@ -18,6 +18,7 @@ using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.Tools;
 using Sovrant.Runtime.Projects;
+using Sovrant.Runtime.Projects.Templates;
 using Sovrant.Runtime.Users;
 using Sovrant.Runtime.Workspaces;
 
@@ -402,6 +403,12 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<Metrics.ICostModel>(Metrics.NullCostModel.Instance);
         }
 
+        // Phase 73 — project template registry. Scaffold implementations register as
+        // IProjectTemplate singletons; the registry aggregates them via IEnumerable<T>.
+        // Empty until Step 3 scaffold implementations are added — registry gracefully
+        // handles zero templates.
+        services.AddSingleton<ProjectTemplateRegistry>();
+
         // Conversation runtime — transient so the pool creates independent instances per session.
         services.AddTransient<IConversationRuntime, ConversationRuntime>();
 
@@ -645,5 +652,24 @@ public static class ServiceCollectionExtensions
             new Storage.SqliteCredentialStore(sp.GetRequiredService<Storage.ISqliteConnectionFactory>(), bootstrap.KeystorePath));
 
         return services;
+    }
+
+    /// <summary>
+    /// Creates a SQLite-backed <see cref="Mcp.ICredentialStore"/> that always reads/writes
+    /// the local SQLite database. Use this for bootstrap-only keys
+    /// (<c>DatabaseBackend</c>, <c>SupabaseProjectUrl</c>, <c>SupabaseServiceRoleKey</c>)
+    /// that must survive backend switches and be readable during startup Phase 1.
+    /// </summary>
+    public static Mcp.ICredentialStore CreateBootstrapCredentialStore(Config.BootstrapConfig bootstrap)
+    {
+        ArgumentNullException.ThrowIfNull(bootstrap);
+        // CA2000: SqliteStorageProvider is intentionally unowned here; it holds no
+        // persistent connections — each command opens/closes independently.
+#pragma warning disable CA2000
+        var provider = new Storage.SqliteStorageProvider(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<Storage.SqliteStorageProvider>.Instance,
+            bootstrap.DbPath);
+#pragma warning restore CA2000
+        return new Storage.SqliteCredentialStore(provider, bootstrap.KeystorePath);
     }
 }

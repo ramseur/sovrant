@@ -36,6 +36,9 @@ public sealed class ArtifactsCommand : ISlashCommand
             "rm" or "delete" => parts.Length > 1
                 ? await DeleteArtifacts(parts[1], ct).ConfigureAwait(false)
                 : Err("usage: /artifacts rm <run_id>"),
+            "zip" or "download" => parts.Length > 1
+                ? await ZipRunAsync(parts[1], ParseOutputFlag(parts[2..]), ct).ConfigureAwait(false)
+                : Err("usage: /artifacts zip <run_id> [--output <path>]"),
             _ => await ListArtifacts(parts, ct).ConfigureAwait(false),
         };
     }
@@ -88,6 +91,67 @@ public sealed class ArtifactsCommand : ISlashCommand
 
         await _store.DeleteAsync(scope, ct).ConfigureAwait(false);
         return new SlashCommandResult($"Deleted artifacts for run: {runId}");
+    }
+
+    private async Task<SlashCommandResult> ZipRunAsync(string runId, string? outputPath, CancellationToken ct)
+    {
+        if (_store is not LocalArtifactStore localStore)
+            return Err("zip requires a local artifact store.");
+
+        var scope = new ArtifactScope { RunId = runId };
+
+        var count = 0;
+        await foreach (var _ in _store.ListAsync(scope, ct))
+            count++;
+
+        if (count == 0)
+            return new SlashCommandResult($"No artifacts found for run: {runId}");
+
+        // Resolve run directory without creating it, accounting for optional {id}__{name} suffix
+        var runDir = FindRunDir(localStore.Root, scope.WorkspaceId, runId);
+        if (runDir is null)
+            return Err($"Run directory not found for: {runId}");
+
+        var safeId = new string(runId.Select(c =>
+            Path.GetInvalidFileNameChars().Contains(c) ? '_' : c).ToArray());
+        var destination = outputPath ?? Path.Combine(Environment.CurrentDirectory, $"{safeId}.zip");
+
+        if (File.Exists(destination)) File.Delete(destination);
+
+        await Task.Run(() =>
+            System.IO.Compression.ZipFile.CreateFromDirectory(
+                runDir, destination,
+                System.IO.Compression.CompressionLevel.Fastest,
+                includeBaseDirectory: false), ct)
+            .ConfigureAwait(false);
+
+        var sizeKb = new FileInfo(destination).Length / 1024.0;
+        return new SlashCommandResult(
+            $"Created: {destination}\n{count} file(s), {sizeKb:F1} KB");
+    }
+
+    private static string? FindRunDir(string root, string workspaceId, string runId)
+    {
+        // Workspace dir may be bare id or id__name; artifacts always land under {ws}/artifacts/{run}
+        var wsDir = FindSegmentDir(root, workspaceId);
+        if (wsDir is null) return null;
+        var runDir = Path.Combine(wsDir, "artifacts", runId);
+        return Directory.Exists(runDir) ? runDir : null;
+    }
+
+    private static string? FindSegmentDir(string parent, string id)
+    {
+        if (!Directory.Exists(parent)) return null;
+        var exact = Path.Combine(parent, id);
+        if (Directory.Exists(exact)) return exact;
+        return Directory.EnumerateDirectories(parent, $"{id}__*").FirstOrDefault();
+    }
+
+    private static string? ParseOutputFlag(string[] args)
+    {
+        for (var i = 0; i < args.Length - 1; i++)
+            if (args[i] == "--output") return args[i + 1];
+        return null;
     }
 
     /// <summary>Parses --workspace, --project, --run flags from the argument list.</summary>

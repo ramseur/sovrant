@@ -15,6 +15,12 @@ public sealed class ActiveContextService
     public string Model { get; private set; } = string.Empty;
     public string Provider { get; private set; } = string.Empty;
 
+    /// <summary>
+    /// MCP server names the user has opted into for this session.
+    /// Empty list = no MCP tools exposed (opt-in by design).
+    /// </summary>
+    public IReadOnlyList<string> ActiveMcpServers { get; private set; } = [];
+
     /// <summary>Fires whenever any context property changes.</summary>
     public event Action? OnChanged;
 
@@ -56,6 +62,12 @@ public sealed class ActiveContextService
     {
         Model = model;
         Provider = provider;
+        OnChanged?.Invoke();
+    }
+
+    public void SetActiveMcpServers(IReadOnlyList<string> servers)
+    {
+        ActiveMcpServers = servers;
         OnChanged?.Invoke();
     }
 

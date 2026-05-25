@@ -15,6 +15,7 @@ public partial class DocumentsViewModel : ViewModelBase
     private readonly ITemplateRegistry _registry;
     private readonly IDocumentGeneratorRegistry _generators;
     private readonly ActiveContextViewModel _activeContext;
+    private readonly Action<string>? _launchChat;
     private readonly List<TemplateItemViewModel> _allTemplates = [];
 
     [ObservableProperty]
@@ -63,14 +64,18 @@ public partial class DocumentsViewModel : ViewModelBase
         new FormatOption { Key = "powerpoint", Display = "PowerPoint" },
     ];
 
+    public bool CanLaunchChat => _launchChat is not null;
+
     public DocumentsViewModel(
         ITemplateRegistry registry,
         IDocumentGeneratorRegistry generators,
-        ActiveContextViewModel activeContext)
+        ActiveContextViewModel activeContext,
+        Action<string>? launchChat = null)
     {
         _registry = registry;
         _generators = generators;
         _activeContext = activeContext;
+        _launchChat = launchChat;
         LoadTemplates();
     }
 
@@ -81,7 +86,17 @@ public partial class DocumentsViewModel : ViewModelBase
     private void SelectTemplate(TemplateItemViewModel? item)
     {
         SelectedTemplate = item;
+        ChatToCreateCommand.NotifyCanExecuteChanged();
     }
+
+    [RelayCommand(CanExecute = nameof(CanLaunchChatNow))]
+    private void ChatToCreate()
+    {
+        if (SelectedTemplate is null || _launchChat is null) return;
+        _launchChat($"I'd like to create a {SelectedTemplate.Name} document. Please help me fill in the required information.");
+    }
+
+    private bool CanLaunchChatNow() => SelectedTemplate is not null && _launchChat is not null;
 
     [RelayCommand]
     private async Task GenerateAsync()

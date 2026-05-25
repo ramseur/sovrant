@@ -13,6 +13,7 @@ public partial class IntegrationsViewModel : ViewModelBase
     private readonly IMcpServerStore _serverStore;
     private readonly McpClientRegistry _clientRegistry;
     private readonly McpToolRegistrar _registrar;
+    private readonly ActiveContextViewModel? _activeContext;
 
     // ── Tab ──────────────────────────────────────────────────────────────────
     /// <summary>"gallery" | "connected"</summary>
@@ -73,16 +74,42 @@ public partial class IntegrationsViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isGalleryConnecting;
 
+    // All catalog entries (for lookup)
     public ObservableCollection<CatalogEntryViewModel> CatalogEntries { get; } = [];
 
-    public IntegrationsViewModel(IMcpServerStore serverStore, McpClientRegistry clientRegistry, McpToolRegistrar registrar)
+    // Deduplicated gallery list — one card per group
+    public ObservableCollection<CatalogEntryViewModel> GalleryDisplayEntries { get; } = [];
+
+    // Variants for the currently selected group (null = single entry, not grouped)
+    [ObservableProperty]
+    private List<CatalogEntryViewModel>? _selectedGroupVariants;
+
+    [ObservableProperty]
+    private int _selectedGroupTabIndex;
+
+    public bool HasGroupTabs => SelectedGroupVariants?.Count > 1;
+    public string GroupTab0Label => SelectedGroupVariants?.Count > 0 ? (SelectedGroupVariants[0].TabLabel ?? SelectedGroupVariants[0].Name) : string.Empty;
+    public string GroupTab1Label => SelectedGroupVariants?.Count > 1 ? (SelectedGroupVariants[1].TabLabel ?? SelectedGroupVariants[1].Name) : string.Empty;
+    public bool IsGroupTab0Active => SelectedGroupTabIndex == 0;
+    public bool IsGroupTab1Active => SelectedGroupTabIndex == 1;
+    public string ActiveGroupTab => SelectedGroupTabIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    public IntegrationsViewModel(IMcpServerStore serverStore, McpClientRegistry clientRegistry, McpToolRegistrar registrar, ActiveContextViewModel? activeContext = null)
     {
         _serverStore = serverStore;
         _clientRegistry = clientRegistry;
         _registrar = registrar;
+        _activeContext = activeContext;
 
+        var seenGroups = new HashSet<string>(StringComparer.Ordinal);
         foreach (var entry in IntegrationCatalog.All)
-            CatalogEntries.Add(new CatalogEntryViewModel(entry));
+        {
+            var vm = new CatalogEntryViewModel(entry);
+            CatalogEntries.Add(vm);
+            var groupKey = entry.GroupName ?? entry.Id;
+            if (seenGroups.Add(groupKey))
+                GalleryDisplayEntries.Add(vm);
+        }
 
         _ = LoadServersAsync();
     }
@@ -93,18 +120,58 @@ public partial class IntegrationsViewModel : ViewModelBase
     {
         ActiveTab = tab;
         SelectedCatalogEntry = null;
+        SelectedGroupVariants = null;
+        SelectedGroupTabIndex = 0;
         SelectedServer = null;
         StatusMessage = string.Empty;
+    }
+
+    partial void OnSelectedGroupTabIndexChanged(int value)
+    {
+        OnPropertyChanged(nameof(IsGroupTab0Active));
+        OnPropertyChanged(nameof(IsGroupTab1Active));
+        OnPropertyChanged(nameof(ActiveGroupTab));
+    }
+
+    partial void OnSelectedGroupVariantsChanged(List<CatalogEntryViewModel>? value)
+    {
+        OnPropertyChanged(nameof(HasGroupTabs));
+        OnPropertyChanged(nameof(GroupTab0Label));
+        OnPropertyChanged(nameof(GroupTab1Label));
+        OnPropertyChanged(nameof(IsGroupTab0Active));
+        OnPropertyChanged(nameof(IsGroupTab1Active));
     }
 
     // ── Gallery commands ─────────────────────────────────────────────────────
     [RelayCommand]
     private void SelectCatalogEntry(CatalogEntryViewModel entry)
     {
-        SelectedCatalogEntry = entry;
+        var groupName = entry.GroupName;
+        if (groupName is not null)
+        {
+            SelectedGroupVariants = CatalogEntries.Where(e => e.GroupName == groupName).ToList();
+            SelectedGroupTabIndex = 0;
+            SelectedCatalogEntry = SelectedGroupVariants[0];
+        }
+        else
+        {
+            SelectedGroupVariants = null;
+            SelectedGroupTabIndex = 0;
+            SelectedCatalogEntry = entry;
+        }
         GalleryApiKey = string.Empty;
         GalleryUrl = string.Empty;
         StatusMessage = string.Empty;
+    }
+
+    [RelayCommand]
+    private void SelectGroupTab(string tabIndexStr)
+    {
+        if (!int.TryParse(tabIndexStr, out var idx) || SelectedGroupVariants is null || idx >= SelectedGroupVariants.Count) return;
+        SelectedGroupTabIndex = idx;
+        SelectedCatalogEntry = SelectedGroupVariants[idx];
+        GalleryApiKey = string.Empty;
+        GalleryUrl = string.Empty;
     }
 
     [RelayCommand]
@@ -193,6 +260,8 @@ public partial class IntegrationsViewModel : ViewModelBase
             StatusMessage = $"Failed to connect to '{name}': {ex.Message}";
             await LoadServersAsync().ConfigureAwait(true);
         }
+        if (_activeContext is not null)
+            await _activeContext.RefreshMcpServersAsync().ConfigureAwait(true);
     }
 
     [RelayCommand]
@@ -309,6 +378,8 @@ public partial class IntegrationsViewModel : ViewModelBase
             StatusMessage = $"Server '{server.Name}' removed. Restart to disconnect.";
         }
         catch (Exception ex) { StatusMessage = $"Failed to remove server: {ex.Message}"; }
+        if (_activeContext is not null)
+            await _activeContext.RefreshMcpServersAsync().ConfigureAwait(true);
     }
 
     private async Task LoadServersAsync()
@@ -345,9 +416,20 @@ public partial class IntegrationsViewModel : ViewModelBase
         TotalCount = _allServers.Count;
         ApplyFilter();
 
-        // Refresh "already connected" state on gallery entries
+        // Refresh "already connected" state on all entries
         foreach (var entry in CatalogEntries)
             entry.IsAlreadyConnected = _clientRegistry.Clients.ContainsKey(entry.Id);
+
+        // For grouped display entries, show connected if any variant is connected
+        foreach (var displayEntry in GalleryDisplayEntries)
+        {
+            if (displayEntry.GroupName is not null)
+            {
+                displayEntry.IsAlreadyConnected = CatalogEntries
+                    .Where(e => e.GroupName == displayEntry.GroupName)
+                    .Any(e => _clientRegistry.Clients.ContainsKey(e.Id));
+            }
+        }
     }
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
@@ -459,6 +541,8 @@ public partial class CatalogEntryViewModel : ViewModelBase
     public IReadOnlyList<string>? DefaultArgs => _entry.DefaultArgs;
     public string? EndpointTemplate => _entry.EndpointTemplate;
     public string? SettingsSection => _entry.SettingsSection;
+    public string? GroupName => _entry.GroupName;
+    public string? TabLabel => _entry.TabLabel;
     public bool IsLlmProvider => _entry.Kind == IntegrationKind.LlmProvider;
 }
 

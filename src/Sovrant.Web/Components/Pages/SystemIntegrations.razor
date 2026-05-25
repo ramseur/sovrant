@@ -1,0 +1,292 @@
+@page "/admin/system-integrations"
+@using Sovrant.Api.Auth
+@using Sovrant.Runtime.Config
+@using Sovrant.Runtime.Mcp
+@using Sovrant.Storage.Postgres
+@using Sovrant.Web.Services
+
+@inject IHttpClientFactory Http
+@inject BootstrapConfig Bootstrap
+@inject WebSessionService Session
+@inject NavigationManager Nav
+
+<div class="settings-page">
+    <div class="diag-header">
+        <h1>System Integrations</h1>
+        <span class="page-subtitle">Platform-level integrations that control how Sovrant stores and manages data.</span>
+    </div>
+
+    <!-- Active backend pill -->
+    <div class="sys-int-backend-pill">
+        <div>
+            <div class="sys-int-backend-label">ACTIVE DATABASE BACKEND</div>
+            <div class="text-secondary" style="font-size:12px;margin-top:2px;">Change the backend only after initializing the schema and optionally migrating data.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+            <span class="status-dot connected"></span>
+            <span class="sys-int-backend-value @(_isSupabaseActive ? "active-supabase" : "active-sqlite")">
+                @(_isSupabaseActive ? "Supabase (PostgreSQL)" : "SQLite (local)")
+            </span>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_statusMessage))
+    {
+        <div class="status-message">@_statusMessage</div>
+    }
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="page-error-banner" role="alert">
+            <span>⚠</span>
+            <span class="error-message">@_errorMessage</span>
+        </div>
+    }
+
+    <!-- Supabase card -->
+    <div class="sys-int-card">
+        <div class="sys-int-card-header">
+            <div class="sys-int-card-title">
+                <span class="sys-int-icon">🗄️</span>
+                <span class="sys-int-name">Supabase</span>
+                <div class="sys-int-status-pill" style="margin-left:auto;">
+                    <span class="status-dot @(_connectionOk ? "connected" : "warning")"></span>
+                    <span class="sys-int-status-label @(_connectionOk ? "status-connected" : "status-warn")">@ConnectionStatusLabel</span>
+                </div>
+            </div>
+            <p class="sys-int-desc">PostgreSQL-backed storage via your Supabase project.</p>
+        </div>
+
+        <div class="settings-section">
+            <div class="settings-field">
+                <label class="settings-label">Project URL</label>
+                <input class="settings-input" type="text"
+                       placeholder="https://your-project.supabase.co"
+                       autocomplete="off"
+                       @bind="_projectUrl" />
+            </div>
+            <div class="settings-field">
+                <label class="settings-label">Service Role Key</label>
+                <input class="settings-input" type="password"
+                       placeholder="eyJ…"
+                       autocomplete="new-password"
+                       @bind="_serviceRoleKey" />
+                <span class="settings-hint">Found in Supabase → Project Settings → API → service_role key.</span>
+            </div>
+
+            <button class="btn-secondary" @onclick="TestConnectionAsync" disabled="@_isBusy">
+                @(_isTesting ? "Testing…" : "Test Connection")
+            </button>
+        </div>
+
+        @if (_connectionOk)
+        {
+            <div class="sys-int-section">
+                <div class="sys-int-section-label">DATABASE SCHEMA</div>
+                <p class="sys-int-section-desc">
+                    Initialize the Sovrant schema in your Supabase project before switching backends.
+                    Safe to run multiple times (idempotent).
+                </p>
+                <button class="btn-secondary" @onclick="InitializeSchemaAsync" disabled="@_isBusy">
+                    @(_isInitializingSchema ? "Initializing…" : "Initialize Schema")
+                </button>
+            </div>
+
+            @if (_schemaReady && !_isSupabaseActive)
+            {
+                <div class="sys-int-section">
+                    <div class="sys-int-section-label">MIGRATE EXISTING DATA</div>
+                    <p class="sys-int-section-desc">
+                        Copy all data from the local SQLite database to Supabase. The local database is kept
+                        as a fallback until you explicitly switch backends.
+                    </p>
+                    <button class="btn-secondary" @onclick="MigrateDataAsync" disabled="@_isBusy">
+                        @(_isMigrating ? "Migrating…" : "Migrate Data from SQLite")
+                    </button>
+                </div>
+            }
+
+            @if (_schemaReady)
+            {
+                <div class="sys-int-section">
+                    <div class="sys-int-section-label">ACTIVE BACKEND</div>
+                    @if (!_isSupabaseActive)
+                    {
+                        <button class="btn-primary" @onclick="SwitchBackendAsync">Switch to Supabase</button>
+                    }
+                    else
+                    {
+                        <button class="btn-danger" @onclick="RevertToSqliteAsync">Revert to SQLite</button>
+                        <p class="settings-hint">A restart is required for the backend switch to take effect.</p>
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private ICredentialStore? _bootstrapStore;
+    private string _projectUrl = string.Empty;
+    private string _serviceRoleKey = string.Empty;
+    private bool _connectionOk;
+    private bool _schemaReady;
+    private bool _isSupabaseActive;
+    private bool _isTesting;
+    private bool _isInitializingSchema;
+    private bool _isMigrating;
+    private string _statusMessage = string.Empty;
+    private string _errorMessage = string.Empty;
+
+    private bool _isBusy => _isTesting || _isInitializingSchema || _isMigrating;
+    private string ConnectionStatusLabel => _connectionOk ? "Connected" : (_isTesting ? "Testing…" : "Not configured");
+    private string ConnectionBadgeClass => _connectionOk ? "badge-pass" : "badge-warn";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAdmin) { Nav.NavigateTo("/", forceLoad: false); return; }
+
+        _bootstrapStore = Sovrant.Runtime.ServiceCollectionExtensions.CreateBootstrapCredentialStore(Bootstrap);
+        _projectUrl     = await _bootstrapStore.RetrieveAsync(CredentialKeys.SupabaseProjectUrl) ?? string.Empty;
+        _serviceRoleKey = await _bootstrapStore.RetrieveAsync(CredentialKeys.SupabaseServiceRoleKey) ?? string.Empty;
+        var backend     = await _bootstrapStore.RetrieveAsync(CredentialKeys.DatabaseBackend) ?? "sqlite";
+        _isSupabaseActive = backend == "supabase";
+
+        if (!string.IsNullOrEmpty(_projectUrl) && !string.IsNullOrEmpty(_serviceRoleKey))
+        {
+            _connectionOk = true;
+            await CheckSchemaVersionAsync();
+        }
+    }
+
+    private async Task TestConnectionAsync()
+    {
+        _statusMessage = string.Empty;
+        _errorMessage  = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_projectUrl) || string.IsNullOrWhiteSpace(_serviceRoleKey))
+        {
+            _errorMessage = "Enter a Project URL and Service Role Key first.";
+            return;
+        }
+
+        _isTesting = true;
+        try
+        {
+            var url = _projectUrl.TrimEnd('/') + "/rest/v1/";
+            using var client = Http.CreateClient();
+            client.DefaultRequestHeaders.Add("apikey", _serviceRoleKey);
+            client.DefaultRequestHeaders.Add("Authorization", $"Bearer {_serviceRoleKey}");
+            client.Timeout = TimeSpan.FromSeconds(10);
+
+            var response = await client.GetAsync(url);
+            if ((int)response.StatusCode != 401)
+            {
+                _connectionOk = true;
+                _statusMessage = "Connection successful.";
+                await _bootstrapStore!.StoreAsync(CredentialKeys.SupabaseProjectUrl, _projectUrl);
+                await _bootstrapStore!.StoreAsync(CredentialKeys.SupabaseServiceRoleKey, _serviceRoleKey);
+                await CheckSchemaVersionAsync();
+            }
+            else
+            {
+                _connectionOk = false;
+                _errorMessage = "Connection failed: invalid key (HTTP 401).";
+            }
+        }
+        catch (Exception ex)
+        {
+            _connectionOk = false;
+            _errorMessage = $"Connection failed: {ex.Message}";
+        }
+        finally { _isTesting = false; }
+    }
+
+    private async Task InitializeSchemaAsync()
+    {
+        _statusMessage = string.Empty;
+        _errorMessage  = string.Empty;
+        _isInitializingSchema = true;
+        try
+        {
+            var connStr    = Sovrant.Storage.Postgres.ServiceCollectionExtensions.BuildSupabaseConnectionString(_projectUrl, _serviceRoleKey);
+            var initializer = Sovrant.Storage.Postgres.ServiceCollectionExtensions.CreateSchemaInitializer(connStr);
+            await initializer.InitializeAsync();
+            await CheckSchemaVersionAsync();
+            _statusMessage = "Schema initialized successfully.";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Schema initialization failed: {ex.Message}";
+        }
+        finally { _isInitializingSchema = false; }
+    }
+
+    private async Task MigrateDataAsync()
+    {
+        _statusMessage = string.Empty;
+        _errorMessage  = string.Empty;
+        _isMigrating   = true;
+        try
+        {
+            var home       = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var sqlitePath = Bootstrap.DbPath ?? Path.Combine(home, ".sovrant", "data", "sovrant.db");
+
+            if (!File.Exists(sqlitePath))
+            {
+                _errorMessage = $"SQLite database not found at {sqlitePath}.";
+                return;
+            }
+
+            var connStr  = Sovrant.Storage.Postgres.ServiceCollectionExtensions.BuildSupabaseConnectionString(_projectUrl, _serviceRoleKey);
+            var factory  = Sovrant.Storage.Postgres.ServiceCollectionExtensions.CreateConnectionFactory(connStr);
+            var migrator = new SqliteToPostgresMigrator(factory, sqlitePath);
+
+            MigrationResult? result = null;
+            var prog = new Progress<MigrationProgress>(p =>
+            {
+                _statusMessage = string.IsNullOrEmpty(p.Message)
+                    ? $"{p.Stage}: {p.Done}/{p.Total}"
+                    : p.Message;
+                InvokeAsync(StateHasChanged);
+            });
+
+            result = await migrator.MigrateAsync(prog);
+            _statusMessage = $"Migration complete — {result.SessionsCopied} sessions, " +
+                             $"{result.EntriesCopied} entries, {result.CredentialsCopied} credentials copied.";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Migration failed: {ex.Message}";
+        }
+        finally { _isMigrating = false; }
+    }
+
+    private async Task SwitchBackendAsync()
+    {
+        await _bootstrapStore!.StoreAsync(CredentialKeys.DatabaseBackend, "supabase");
+        _isSupabaseActive = true;
+        _statusMessage = "Switched to Supabase. Restart Sovrant for the change to take effect.";
+    }
+
+    private async Task RevertToSqliteAsync()
+    {
+        await _bootstrapStore!.StoreAsync(CredentialKeys.DatabaseBackend, "sqlite");
+        _isSupabaseActive = false;
+        _statusMessage = "Reverted to SQLite. Restart Sovrant for the change to take effect.";
+    }
+
+    private async Task CheckSchemaVersionAsync()
+    {
+        try
+        {
+            var connStr     = Sovrant.Storage.Postgres.ServiceCollectionExtensions.BuildSupabaseConnectionString(_projectUrl, _serviceRoleKey);
+            var initializer = Sovrant.Storage.Postgres.ServiceCollectionExtensions.CreateSchemaInitializer(connStr);
+            var version     = await initializer.GetSchemaVersionAsync();
+            _schemaReady    = version.HasValue;
+        }
+        catch
+        {
+            _schemaReady = false;
+        }
+    }
+}

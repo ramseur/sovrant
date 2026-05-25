@@ -177,4 +177,45 @@ public sealed class SqliteSwarmEventStoreTests : IAsyncDisposable
         Assert.Null(single.ProjectId);
         Assert.Null(single.AgentId);
     }
+
+    [Fact]
+    public async Task ListChildrenAsync_ReturnsOnlyMatchingParent()
+    {
+        var parent = "parent-swarm-1";
+        var child1 = new SwarmEventRecord("child-a", "PlanCreated", "{}", DateTimeOffset.UtcNow, ParentSwarmId: parent);
+        var child2 = new SwarmEventRecord("child-b", "PlanCreated", "{}", DateTimeOffset.UtcNow.AddSeconds(1), ParentSwarmId: parent);
+        var unrelated = new SwarmEventRecord("child-c", "PlanCreated", "{}", DateTimeOffset.UtcNow, ParentSwarmId: "other-parent");
+
+        await _store.RecordEventAsync(child1);
+        await _store.RecordEventAsync(child2);
+        await _store.RecordEventAsync(unrelated);
+
+        var children = await _store.ListChildrenAsync(parent);
+        Assert.Equal(2, children.Count);
+        Assert.Contains("child-a", children);
+        Assert.Contains("child-b", children);
+    }
+
+    [Fact]
+    public async Task ListChildrenAsync_RespectsLimit()
+    {
+        var parent = "parent-swarm-2";
+        for (var i = 0; i < 5; i++)
+            await _store.RecordEventAsync(new SwarmEventRecord($"child-{i}", "PlanCreated", "{}", DateTimeOffset.UtcNow.AddSeconds(i), ParentSwarmId: parent));
+
+        var children = await _store.ListChildrenAsync(parent, limit: 3);
+        Assert.Equal(3, children.Count);
+    }
+
+    [Fact]
+    public async Task ListSwarmsAsync_FilterByParentSwarmId()
+    {
+        var parent = "parent-swarm-3";
+        await _store.RecordEventAsync(new SwarmEventRecord("child-x", "PlanCreated", "{}", DateTimeOffset.UtcNow, ParentSwarmId: parent));
+        await _store.RecordEventAsync(new SwarmEventRecord("top-level", "PlanCreated", "{}", DateTimeOffset.UtcNow));
+
+        var results = await _store.ListSwarmsAsync(new SwarmListFilter(ParentSwarmId: parent));
+        Assert.Single(results);
+        Assert.Equal("child-x", results[0]);
+    }
 }

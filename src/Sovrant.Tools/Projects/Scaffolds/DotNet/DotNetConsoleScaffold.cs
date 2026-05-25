@@ -1,0 +1,124 @@
+using Sovrant.Runtime.Projects.Templates;
+
+namespace Sovrant.Tools.Projects.Scaffolds.DotNet;
+
+/// <summary>Phase 73 — .NET 10 console app scaffold with xUnit test project.</summary>
+public sealed class DotNetConsoleScaffold : IProjectTemplate
+{
+    public string Id => "dotnet/console";
+    public string Language => "dotnet";
+    public string Kind => "console";
+    public string Name => ".NET Console App";
+    public string Description => ".NET 10 console application with top-level statements, nullable enabled, and an xUnit test project.";
+    public IReadOnlyList<ScaffoldParameter> Parameters => [];
+
+    public IReadOnlyList<ProjectFile> Scaffold(ScaffoldContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var pascal = ScaffoldHelpers.ToPascalCase(context.ProjectName);
+
+        return
+        [
+            new($"{pascal}/{pascal}.csproj", $$"""
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net10.0</TargetFramework>
+                    <Nullable>enable</Nullable>
+                    <ImplicitUsings>enable</ImplicitUsings>
+                    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                    <AnalysisMode>All</AnalysisMode>
+                  </PropertyGroup>
+                </Project>
+                """),
+
+            new($"{pascal}/Program.cs", $$"""
+                var name = args.Length > 0 ? args[0] : "World";
+                Console.WriteLine(Greeter.Greet(name));
+
+                public static class Greeter
+                {
+                    public static string Greet(string name) => $"Hello, {name}!";
+                }
+                """),
+
+            new($"{pascal}.Tests/{pascal}.Tests.csproj", $$"""
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>net10.0</TargetFramework>
+                    <IsPackable>false</IsPackable>
+                    <Nullable>enable</Nullable>
+                    <ImplicitUsings>enable</ImplicitUsings>
+                  </PropertyGroup>
+                  <ItemGroup>
+                    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
+                    <PackageReference Include="xunit" Version="2.9.*" />
+                    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.*">
+                      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+                      <PrivateAssets>all</PrivateAssets>
+                    </PackageReference>
+                  </ItemGroup>
+                  <ItemGroup>
+                    <ProjectReference Include="../{{pascal}}/{{pascal}}.csproj" />
+                  </ItemGroup>
+                </Project>
+                """),
+
+            new($"{pascal}.Tests/GreeterTests.cs", $$"""
+                namespace {{pascal}}.Tests;
+
+                public sealed class GreeterTests
+                {
+                    [Fact]
+                    public void Greet_ReturnsSalutation()
+                    {
+                        var result = Greeter.Greet("Sovrant");
+                        Assert.Equal("Hello, Sovrant!", result);
+                    }
+
+                    [Theory]
+                    [InlineData("Alice")]
+                    [InlineData("Bob")]
+                    public void Greet_IncludesName(string name)
+                    {
+                        var result = Greeter.Greet(name);
+                        Assert.Contains(name, result);
+                    }
+                }
+                """),
+
+            new(".gitignore", """
+                bin/
+                obj/
+                *.user
+                .vs/
+                .vscode/
+                *.suo
+                """),
+
+            new("README.md", $$"""
+                # {{pascal}}
+
+                A .NET 10 console application.
+
+                ## Run
+
+                ```bash
+                dotnet run --project {{pascal}} -- World
+                ```
+
+                ## Test
+
+                ```bash
+                dotnet test
+                ```
+
+                ## Build
+
+                ```bash
+                dotnet build
+                ```
+                """),
+        ];
+    }
+}

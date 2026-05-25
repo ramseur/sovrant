@@ -4,6 +4,12 @@
 
 Sovrant is a clean-room C# reimplementation inspired by the architecture and feature set of [OpenClaude](https://github.com/Gitlawb/openclaude) (the community fork of Anthropic's Claude Code). **No Anthropic source code was copied, translated, or incorporated.** Every line of Sovrant is original C# / .NET 10 code written from scratch — the project uses OpenClaude only as a functional reference for what an agentic coding tool should be able to do, not as a source of code.
 
+We build Sovrant guided by three tenets:
+
+1. **Be ethical with AI** — Sovrant is designed with safety, trust boundaries, and responsible use at its core. We believe AI systems should be transparent, auditable, and operate within clearly defined human-controlled limits.
+2. **Drive AI spend toward zero** — by first-class support for free-tier and locally-hosted LLMs, Sovrant aims to make powerful AI accessible without recurring API costs. Paying for inference should be a choice, not a requirement.
+3. **Minimise compute footprint** — every architectural decision considers CPU, memory, and energy efficiency. Lower resource consumption means a smaller environmental impact and better performance on modest hardware.
+
 Sovrant is a command center for AI — from conversational chat and directed agents to persistent teams, long-running missions, and parallel swarms. Runs can be fully autonomous, human-watched, or anywhere in between. Sovrant also connects to Claws — fully autonomous agent runtimes such as Pico Claw, Hermes, and Open Claw — via MCP, letting you observe and steer them from a single cockpit; future releases will let you launch Claws directly from Sovrant to handle tasks. It is not limited to coding — Sovrant powers chat interfaces, research workflows, business process automation, content creation, project management, and any task that benefits from tool-augmented, session-persistent AI.
 
 The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **desktop application** (Windows/macOS/Linux), a **web application** (Blazor Server), an **MCP server** for IDE embedding, or via **webhooks** from Slack, Teams, Discord, and custom systems. Agents read and write files, execute shell commands, search the web, call tools autonomously, delegate to sub-agents, and maintain full conversation history across sessions — all with configurable permission controls.
