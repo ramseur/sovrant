@@ -33,6 +33,9 @@ public partial class ArtifactsViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isMarkdownPreview;
 
+    public bool IsSelectedFolder => SelectedArtifact?.IsFolder ?? false;
+    public bool IsSelectedFile => !(SelectedArtifact?.IsFolder ?? false);
+
     public ObservableCollection<ArtifactItemViewModel> FilteredArtifacts { get; } = [];
 
     public ArtifactsViewModel(IArtifactStore store)
@@ -118,8 +121,9 @@ public partial class ArtifactsViewModel : ViewModelBase
             if (root is null || !Directory.Exists(root))
                 return;
 
-            await Task.Run(() =>
+            var grouped = await Task.Run(() =>
             {
+                var rawItems = new List<ArtifactItemViewModel>();
                 foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
                 {
                     var fileName = Path.GetFileName(file);
@@ -129,40 +133,79 @@ public partial class ArtifactsViewModel : ViewModelBase
                     var relativePath = Path.GetRelativePath(root, file).Replace('\\', '/');
                     var info = new FileInfo(file);
 
-                    // Parse workspace/project/run from path: {workspace}/{project}/{run}/{rest}
                     var segments = relativePath.Split('/');
-                    var workspaceId = segments.Length > 0 ? segments[0] : "";
-                    var projectId = segments.Length > 1 ? segments[1] : "";
-                    var runId = segments.Length > 2 ? segments[2] : "";
-                    var artifactPath = segments.Length > 3
-                        ? string.Join('/', segments[3..])
-                        : fileName;
+                    if (segments.Length < 4) continue;
 
-                    Dispatcher.UIThread.Post(() =>
-                        _allArtifacts.Add(new ArtifactItemViewModel
-                        {
-                            FullDiskPath = file,
-                            RelativeFromRoot = relativePath,
-                            Path = artifactPath,
-                            FileName = fileName,
-                            Extension = Path.GetExtension(file).TrimStart('.'),
-                            SizeBytes = info.Length,
-                            SizeDisplay = FormatSize(info.Length),
-                            ContentType = GuessContentType(file),
-                            LastModified = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
-                            WorkspaceId = workspaceId,
-                            ProjectId = projectId,
-                            RunId = runId,
-                        }));
+                    var workspaceId = segments[0];
+                    var projectId = segments[1];
+                    var runId = segments[2];
+                    var artifactPath = string.Join('/', segments[3..]);
+
+                    rawItems.Add(new ArtifactItemViewModel
+                    {
+                        FullDiskPath = file,
+                        RelativeFromRoot = relativePath,
+                        Path = artifactPath,
+                        FileName = fileName,
+                        Extension = Path.GetExtension(file).TrimStart('.'),
+                        SizeBytes = info.Length,
+                        SizeDisplay = FormatSize(info.Length),
+                        ContentType = GuessContentType(file),
+                        LastModified = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
+                        WorkspaceId = workspaceId,
+                        ProjectId = projectId,
+                        RunId = runId,
+                    });
                 }
+
+                // Group multi-file runs into folder items.
+                var result = new List<ArtifactItemViewModel>();
+                foreach (var runGroup in rawItems.GroupBy(a => a.RunId))
+                {
+                    var files = runGroup.ToList();
+                    if (files.Count > 1)
+                    {
+                        var firstPath = files.OrderBy(f => f.LastModified).First().Path;
+                        var folderName = firstPath.Contains('/', StringComparison.Ordinal)
+                            ? firstPath.Split('/')[0]
+                            : runGroup.Key;
+                        var totalBytes = files.Sum(f => f.SizeBytes);
+                        var folder = new ArtifactItemViewModel
+                        {
+                            RunId = runGroup.Key,
+                            IsFolder = true,
+                            FolderName = folderName,
+                            FileName = folderName,
+                            SizeBytes = totalBytes,
+                            SizeDisplay = FormatSize(totalBytes),
+                            LastModified = files.Max(f => f.LastModified),
+                            WorkspaceId = files[0].WorkspaceId,
+                            ProjectId = files[0].ProjectId,
+                        };
+                        foreach (var f in files.OrderBy(f => f.Path, StringComparer.OrdinalIgnoreCase))
+                            folder.FolderFiles.Add(f);
+                        result.Add(folder);
+                    }
+                    else
+                    {
+                        result.Add(files[0]);
+                    }
+                }
+
+                result.Sort((a, b) => b.LastModified.CompareTo(a.LastModified));
+                return result;
             }).ConfigureAwait(false);
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                foreach (var item in grouped)
+                    _allArtifacts.Add(item);
+            });
         }
         finally
         {
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                // Sort newest first
-                _allArtifacts.Sort((a, b) => b.LastModified.CompareTo(a.LastModified));
                 TotalCount = _allArtifacts.Count;
                 ApplyFilter();
                 IsLoading = false;
@@ -174,12 +217,15 @@ public partial class ArtifactsViewModel : ViewModelBase
 
     partial void OnSelectedArtifactChanged(ArtifactItemViewModel? value)
     {
+        OnPropertyChanged(nameof(IsSelectedFolder));
+        OnPropertyChanged(nameof(IsSelectedFile));
         OpenRunFolderCommand.NotifyCanExecuteChanged();
         DownloadRunZipCommand.NotifyCanExecuteChanged();
 
-        if (value is null)
+        if (value is null || value.IsFolder)
         {
             DetailText = string.Empty;
+            IsMarkdownPreview = false;
             return;
         }
 
@@ -274,14 +320,17 @@ public partial class ArtifactsViewModel : ViewModelBase
 
         foreach (var artifact in _allArtifacts)
         {
-            if (query.Length > 0
-                && !artifact.Path.Contains(query, StringComparison.OrdinalIgnoreCase)
-                && !artifact.FileName.Contains(query, StringComparison.OrdinalIgnoreCase)
-                && !artifact.RunId.Contains(query, StringComparison.OrdinalIgnoreCase)
-                && !artifact.ContentType.Contains(query, StringComparison.OrdinalIgnoreCase)
-                && !artifact.WorkspaceId.Contains(query, StringComparison.OrdinalIgnoreCase))
+            if (query.Length > 0)
             {
-                continue;
+                bool match = artifact.IsFolder
+                    ? artifact.FolderName.Contains(query, StringComparison.OrdinalIgnoreCase)
+                      || artifact.FolderFiles.Any(f => f.FileName.Contains(query, StringComparison.OrdinalIgnoreCase))
+                    : artifact.Path.Contains(query, StringComparison.OrdinalIgnoreCase)
+                      || artifact.FileName.Contains(query, StringComparison.OrdinalIgnoreCase)
+                      || artifact.RunId.Contains(query, StringComparison.OrdinalIgnoreCase)
+                      || artifact.ContentType.Contains(query, StringComparison.OrdinalIgnoreCase)
+                      || artifact.WorkspaceId.Contains(query, StringComparison.OrdinalIgnoreCase);
+                if (!match) continue;
             }
 
             FilteredArtifacts.Add(artifact);
@@ -370,9 +419,26 @@ public partial class ArtifactItemViewModel : ViewModelBase
     [ObservableProperty]
     private string _projectId = string.Empty;
 
+    [ObservableProperty]
+    private bool _isFolder;
+
+    [ObservableProperty]
+    private string _folderName = string.Empty;
+
+    public string FolderDisplayName => $"📁 {FolderName}";
+
+    public ObservableCollection<ArtifactItemViewModel> FolderFiles { get; } = [];
+
     /// <summary>Full path on disk for preview reading.</summary>
     public string FullDiskPath { get; init; } = string.Empty;
 
     /// <summary>Path relative to the artifact store root.</summary>
     public string RelativeFromRoot { get; init; } = string.Empty;
+
+    [RelayCommand]
+    private void OpenFile()
+    {
+        if (!string.IsNullOrEmpty(FullDiskPath) && File.Exists(FullDiskPath))
+            Process.Start(new ProcessStartInfo { FileName = FullDiskPath, UseShellExecute = true });
+    }
 }

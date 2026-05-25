@@ -49,8 +49,29 @@
                                         BorderBrush="{DynamicResource SurfaceBorder}"
                                         BorderThickness="1">
                                     <StackPanel Spacing="4">
-                                        <DockPanel>
-                                            <!-- Size badge -->
+                                        <!-- Folder display -->
+                                        <DockPanel IsVisible="{Binding IsFolder}">
+                                            <TextBlock DockPanel.Dock="Right"
+                                                       Text="{Binding SizeDisplay}"
+                                                       FontSize="10"
+                                                       Foreground="{DynamicResource TextMuted}"
+                                                       VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding FolderDisplayName}"
+                                                       FontSize="13" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource BrandPrimary}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DockPanel>
+                                        <StackPanel IsVisible="{Binding IsFolder}" Orientation="Horizontal" Spacing="8">
+                                            <TextBlock FontSize="10" Foreground="{DynamicResource TextSecondary}">
+                                                <Run Text="{Binding FolderFiles.Count}" />
+                                                <Run Text=" files" />
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding LastModified, StringFormat='{}{0:yyyy-MM-dd}'}"
+                                                       FontSize="10" Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+
+                                        <!-- File display -->
+                                        <DockPanel IsVisible="{Binding !IsFolder}">
                                             <TextBlock DockPanel.Dock="Right"
                                                        Text="{Binding SizeDisplay}"
                                                        FontSize="10"
@@ -62,12 +83,13 @@
                                                        Foreground="{DynamicResource BrandPrimary}"
                                                        TextTrimming="CharacterEllipsis" />
                                         </DockPanel>
-                                        <TextBlock Text="{Binding Path}"
+                                        <TextBlock IsVisible="{Binding !IsFolder}"
+                                                   Text="{Binding Path}"
                                                    FontSize="10"
                                                    FontFamily="Consolas,Menlo,monospace"
                                                    Foreground="{DynamicResource TextSecondary}"
                                                    TextTrimming="CharacterEllipsis" />
-                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <StackPanel IsVisible="{Binding !IsFolder}" Orientation="Horizontal" Spacing="10">
                                             <TextBlock Text="{Binding WorkspaceId}"
                                                        FontSize="10"
                                                        Foreground="{DynamicResource TextMuted}" />
@@ -88,6 +110,7 @@
 
             <!-- Detail/preview pane -->
             <Grid Grid.Column="2">
+                <!-- Empty state -->
                 <Border CornerRadius="10"
                         Background="{DynamicResource SurfaceCard}"
                         BorderBrush="{DynamicResource SurfaceBorder}"
@@ -107,14 +130,93 @@
                                    IsVisible="{Binding !TotalCount}" />
                     </StackPanel>
                 </Border>
+
+                <!-- Folder detail -->
                 <Border CornerRadius="10"
                         Background="{DynamicResource SurfaceCard}"
                         BorderBrush="{DynamicResource SurfaceBorder}"
                         BorderThickness="1"
                         Padding="20,16"
-                        IsVisible="{Binding !!SelectedArtifact}">
+                        IsVisible="{Binding IsSelectedFolder}">
                     <DockPanel>
-                        <!-- Header row: filename + action buttons -->
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+                                <Button Content="Download .zip"
+                                        Command="{Binding DownloadRunZipCommand}"
+                                        Padding="10,5" CornerRadius="6"
+                                        Background="Transparent"
+                                        Foreground="{DynamicResource TextPrimary}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                        BorderThickness="1" />
+                                <Button Content="Open folder"
+                                        Command="{Binding OpenRunFolderCommand}"
+                                        Padding="10,5" CornerRadius="6"
+                                        Background="Transparent"
+                                        Foreground="{DynamicResource TextPrimary}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                        BorderThickness="1" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding SelectedArtifact.FolderDisplayName}"
+                                       FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="0,0,0,12">
+                            <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">
+                                <Run Text="{Binding SelectedArtifact.FolderFiles.Count}" />
+                                <Run Text=" files" />
+                            </TextBlock>
+                            <TextBlock Text="{Binding SelectedArtifact.SizeDisplay}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" />
+                            <TextBlock Text="{Binding SelectedArtifact.LastModified, StringFormat='{}{0:MMM d, yyyy h:mm tt}'}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" />
+                        </StackPanel>
+                        <ScrollViewer>
+                            <ItemsControl ItemsSource="{Binding SelectedArtifact.FolderFiles}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vm:ArtifactItemViewModel">
+                                        <Border Padding="10,8" Margin="0,2" CornerRadius="6"
+                                                Background="{DynamicResource SurfaceBackground}"
+                                                BorderBrush="{DynamicResource SurfaceBorder}"
+                                                BorderThickness="1">
+                                            <DockPanel>
+                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding SizeDisplay}"
+                                                               FontSize="10"
+                                                               Foreground="{DynamicResource TextMuted}"
+                                                               VerticalAlignment="Center" />
+                                                    <Button Content="Open"
+                                                            Command="{Binding OpenFileCommand}"
+                                                            Padding="8,4" CornerRadius="5" FontSize="11"
+                                                            Background="Transparent"
+                                                            Foreground="{DynamicResource TextPrimary}"
+                                                            BorderBrush="{DynamicResource SurfaceBorder}"
+                                                            BorderThickness="1" />
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding Path}"
+                                                           FontSize="12"
+                                                           FontFamily="Consolas,Menlo,monospace"
+                                                           Foreground="{DynamicResource TextPrimary}"
+                                                           VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+
+                <!-- File detail -->
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding IsSelectedFile}">
+                    <DockPanel>
                         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
                                 <Button Content="Download .zip"
@@ -142,10 +244,8 @@
 
                         <!-- Preview area -->
                         <Panel>
-                            <!-- Markdown preview for .md files -->
                             <ctrl:SafeMarkdownPresenter Markdown="{Binding DetailText}"
                                                         IsVisible="{Binding IsMarkdownPreview}" />
-                            <!-- Plain text / code preview -->
                             <ScrollViewer IsVisible="{Binding !IsMarkdownPreview}">
                                 <SelectableTextBlock Text="{Binding DetailText}"
                                                      TextWrapping="Wrap"
