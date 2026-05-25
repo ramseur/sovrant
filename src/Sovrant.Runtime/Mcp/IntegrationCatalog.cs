@@ -41,7 +41,7 @@ public static class IntegrationCatalog
             "Expose your n8n workflows as MCP tools — agents call them as first-class actions.",
             IntegrationKind.McpHttp, IntegrationTier.Automation,
             EndpointLabel: "n8n MCP endpoint",
-            ApiKeyLabel: "API Key (optional)", ApiKeyHeader: "X-N8N-API-Key"),
+            ApiKeyLabel: "API Key", ApiKeyHeader: "X-N8N-API-Key"),
 
         new("zapier", "Zapier", "Automation", "🔌",
             "Run any Zapier action from an agent via the Zapier MCP bridge.",
