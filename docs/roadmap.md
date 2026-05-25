@@ -189,6 +189,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Integrations Gallery — 14 integrations across Automation/Platform/Search tiers, encrypted credential keystore, Web + Desktop parity | Phase 95 | ✅ Done (Hermes pending details) |
 | MCP runtime variables — per-server variable store (name, value, secret flag) injected as env vars when the MCP server process is launched; variable editor in the Integrations UI lets users add/edit/remove variables at any time without reconfiguring the connection; covers servers like Sitecore MCP that require 10–20 env vars passed at runtime; encrypted at rest via existing keystore; Web + Desktop parity | Phase 96 | High |
 | Two-tier Command Center — regular users see a workspace/project-scoped Command Center showing only their own runs and sessions within the active workspace; admins see Mission Control, a higher-level aggregated view across all workspaces, projects, users, and agents; same cockpit surface with access-controlled scope; role gate enforced server-side | Phase 98 | High |
+| Private sessions — users can mark a session as private; private sessions are hidden from the Command Center, activity feeds, and any admin or peer views; only the owning user can see private session titles, content, and run history; server-side enforcement ensures private sessions never appear in aggregation queries regardless of role; Command Center and Mission Control skip private sessions entirely unless the viewer is the owner | Phase 99 | High |
 
 ### v1.0 release polish (in progress)
 
