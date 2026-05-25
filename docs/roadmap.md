@@ -174,7 +174,6 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Markdown-backed document templates | Phase 74 | Medium |
 | In-app document viewing | Phase 76 | Medium |
 | Project isolation with full feature parity | Phase 77 | Medium |
-| Agents page — in-app create/edit of agent definitions, Launch chat, Run one-shot with prompt history, agent badge in Recent Runs | Phase 79 | ✅ Done |
 | Composio MCP integration — first-class platform awareness for Composio's MCP catalog (250+ apps), in-app browse/enable, managed OAuth via Composio connections, per-user/workspace credential scoping, still routed through Sovrant's `MCPTool` proxy and permission model | Phase 80 | Medium |
 | OpenTelemetry observability — emit traces/metrics/logs for runs, turns, tool calls, router decisions, and provider HTTP via OTLP so operators can ship to any OTel-compatible backend (Honeycomb, Tempo, Jaeger, Datadog, etc.) | Phase 82.5 | Deferred |
 | Pluggable memory backends — abstract `IMemoryStore` so the SQLite implementation can be swapped for distributed/remote stores (mem0, Pinecone-style vector DBs, Redis, Postgres+pgvector); enables shared/team memory across nodes | Phase 83 | Medium |
@@ -9613,7 +9612,7 @@ Anything that doesn't cleanly fit one bucket is a **design smell** — re-shape 
 
 ---
 
-## Phase 94 — Provider & Model Switch Context Continuity
+## Phase 94 (legacy planning section) — Provider & Model Switch Context Continuity
 
 **Status:** Planned
 **Goal:** Ensure that when a user switches provider or model mid-session, the active conversation context is correctly handed off to the new model — without redundant re-sends, token waste, or silent context loss.
@@ -9669,7 +9668,7 @@ In either case the user pays more than necessary or gets a degraded continuation
 
 ---
 
-## Phase 95 — Memory System Audit & Hardening
+## Phase 95 (legacy planning section) — Memory System Audit & Hardening
 
 **Status:** Planned
 **Goal:** Verify that both the backend (`SqliteMemoryStore` / `MemoryInjector`) and the session-end extraction pipeline (`SessionEndMemoryHandler`) are working correctly end-to-end, then close the known gaps that make memory injection expensive, noisy, or unreliable.
@@ -10125,7 +10124,7 @@ See the Phase 96 entry for the full smoke test checklist.
 
 ---
 
-## Phase 98 — CLI Workspace Commands in Remote Mode
+## Phase 98 (legacy planning section) — CLI Workspace Commands in Remote Mode
 
 **Status:** ⬜ Outstanding — last remaining pre-beta item.
 
@@ -10155,7 +10154,7 @@ Read-only. `workspace create`, `workspace add-member`, etc. are out of scope for
 
 ---
 
-## Phase 99 — Auth Hardening: Recovery, MFA, OAuth & Audit
+## Phase 99 (legacy planning section) — Auth Hardening: Recovery, MFA, OAuth & Audit
 
 **Status:** Planned. Post-beta evolution of the Phase 85 foundation.
 
