@@ -2291,6 +2291,29 @@ details[open] .doc-advanced-toggle::before { content: "▼ "; }
     margin-top: 12px;
 }
 
+.artifact-file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 12px;
+}
+
+.artifact-file-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 6px 8px;
+    background: var(--surface-raised);
+    border-radius: 6px;
+}
+
+.artifact-file-path {
+    font-family: Consolas, monospace;
+    font-size: 12px;
+    flex: 1;
+    color: var(--text-primary);
+}
+
 .schema-block {
     background: var(--surface-card);
     border: 1px solid var(--surface-border);
