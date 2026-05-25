@@ -110,6 +110,7 @@ public static class Program
             builder.Services.AddSovrantClient(remoteOptions);
             builder.Services.AddSingleton<ActiveContextService>();
             builder.Services.AddScoped<ActiveSessionsService>();
+            builder.Services.AddScoped<ChatSeedService>();
         }
         else
         {
@@ -154,6 +155,7 @@ public static class Program
             builder.Services.AddSingleton(mutableAuth);
             builder.Services.AddSingleton<ActiveContextService>();
             builder.Services.AddScoped<ActiveSessionsService>();
+            builder.Services.AddScoped<ChatSeedService>();
         }
 
         builder.Services.AddRazorComponents()

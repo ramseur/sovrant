@@ -106,6 +106,7 @@
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private Sovrant.Web.Services.WebSessionService Session { get; set; } = default!;
     [Inject] private Sovrant.Agents.Templates.AgentTemplateRegistry AgentRegistry { get; set; } = default!;
+    [Inject] private ChatSeedService ChatSeed { get; set; } = default!;
 
     private string _userDisplayName => LocalPart(Session.Email) ?? "You";
     private static string? LocalPart(string? email)
@@ -183,9 +184,10 @@
         }
 
         if (query.TryGetValue("prompt", out var promptParam) && !string.IsNullOrWhiteSpace(promptParam))
-        {
             _inputText = Uri.UnescapeDataString(promptParam.ToString());
-        }
+
+        if (string.IsNullOrEmpty(_inputText) && ChatSeed.TakePrompt() is { } seed)
+            _inputText = seed;
 
         if (query.TryGetValue("session", out var sessionParam) &&
             !string.IsNullOrWhiteSpace(sessionParam) &&

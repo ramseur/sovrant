@@ -131,6 +131,7 @@
     [Inject] private IDocumentGeneratorRegistry Generators { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
+    [Inject] private ChatSeedService ChatSeed { get; set; } = default!;
 
     private List<TemplateItem> _all = [];
     private List<TemplateItem> _filtered = [];
@@ -165,8 +166,8 @@
 
     private void ChatToCreate(TemplateItem template)
     {
-        var prompt = Uri.EscapeDataString($"I'd like to create a {template.Name} document. Please help me fill in the required information.");
-        Nav.NavigateTo($"/chat?prompt={prompt}");
+        ChatSeed.Set($"I'd like to create a {template.Name} document. Please help me fill in the required information.");
+        Nav.NavigateTo("/chat");
     }
 
     private Task SelectItem(TemplateItem item)
