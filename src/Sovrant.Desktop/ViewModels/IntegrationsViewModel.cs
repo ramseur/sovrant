@@ -92,6 +92,7 @@ public partial class IntegrationsViewModel : ViewModelBase
     public string GroupTab1Label => SelectedGroupVariants?.Count > 1 ? (SelectedGroupVariants[1].TabLabel ?? SelectedGroupVariants[1].Name) : string.Empty;
     public bool IsGroupTab0Active => SelectedGroupTabIndex == 0;
     public bool IsGroupTab1Active => SelectedGroupTabIndex == 1;
+    public string ActiveGroupTab => SelectedGroupTabIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public IntegrationsViewModel(IMcpServerStore serverStore, McpClientRegistry clientRegistry, McpToolRegistrar registrar, ActiveContextViewModel? activeContext = null)
     {
@@ -129,6 +130,7 @@ public partial class IntegrationsViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsGroupTab0Active));
         OnPropertyChanged(nameof(IsGroupTab1Active));
+        OnPropertyChanged(nameof(ActiveGroupTab));
     }
 
     partial void OnSelectedGroupVariantsChanged(List<CatalogEntryViewModel>? value)
