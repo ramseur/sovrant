@@ -18,7 +18,9 @@ public sealed record CatalogEntry(
     string? DefaultCommand = null,
     IReadOnlyList<string>? DefaultArgs = null,
     string? EndpointTemplate = null,
-    string? SettingsSection = null)
+    string? SettingsSection = null,
+    string? GroupName = null,
+    string? TabLabel = null)
 {
     public bool NeedsApiKey => ApiKeyLabel is not null;
     public bool NeedsEndpoint => EndpointLabel is not null;
@@ -123,23 +125,19 @@ public static class IntegrationCatalog
             DefaultCommand: "npx", DefaultArgs: ["-y", "tavily-mcp"]),
 
         // DXP / CMS / Data
-        new("sitecore-graphql", "Sitecore (GraphQL)", "DXP", "🟩",
-            "Manage Sitecore content via GraphQL + ItemService. Uses @antonytm/mcp-sitecore-server — install with npx.",
+        new("sitecore-community", "Sitecore", "DXP", "🟩",
+            "Community MCP server by Anton Tishchenko. Exposes Sitecore content, items, and layout via GraphQL + ItemService. Install via npx.",
             IntegrationKind.McpStdio, IntegrationTier.Platform,
             ApiKeyLabel: "GraphQL API Key", ApiKeyEnvVar: "GRAPHQL_API_KEY",
             EndpointLabel: "GraphQL endpoint (e.g. https://your-site/api/graph/edge)",
-            DefaultCommand: "npx", DefaultArgs: ["-y", "@antonytm/mcp-sitecore-server"]),
+            DefaultCommand: "npx", DefaultArgs: ["-y", "@antonytm/mcp-sitecore-server"],
+            GroupName: "Sitecore", TabLabel: "Community"),
 
-        new("sitecore-community", "Sitecore Community MCP", "DXP", "🟩",
-            "Community MCP server by GaryWenneker. Clone https://github.com/GaryWenneker/SitecoreMCP, build, then run with node. Uses Sitecore host URL + API key.",
-            IntegrationKind.McpStdio, IntegrationTier.Platform,
-            ApiKeyLabel: "Sitecore API Key", ApiKeyEnvVar: "SITECORE_API_KEY",
-            EndpointLabel: "Sitecore host URL (e.g. https://your-site.com)"),
-
-        new("sitecore-marketer", "Sitecore Marketer MCP", "DXP", "🟩",
-            "Official Sitecore.AI MCP server. Remote HTTPS endpoint — connects via browser-based OAuth 2.0 (Sitecore Identity). No API key needed; auth is handled interactively on first connect.",
+        new("sitecore-marketer", "Sitecore", "DXP", "🟩",
+            "Official Sitecore.AI Marketer MCP. Remote HTTPS endpoint — browser-based OAuth 2.0 via Sitecore Identity. No API key needed; auth is handled interactively on first connect.",
             IntegrationKind.McpHttp, IntegrationTier.Platform,
-            EndpointLabel: "Marketer MCP endpoint (from Sitecore Cloud Portal)"),
+            EndpointLabel: "Marketer MCP endpoint (from Sitecore Cloud Portal)",
+            GroupName: "Sitecore", TabLabel: "Commercial"),
 
         new("aem", "Adobe Experience Manager", "DXP", "🔴",
             "Read and write AEM content, pages, assets, and Cloud Manager resources via the official Adobe MCP server.",

@@ -29,24 +29,26 @@
         {
             <!-- Gallery: catalog entries grouped by tier -->
             <div class="master-list" style="padding:0 4px;">
-                @foreach (var group in IntegrationCatalog.All.GroupBy(e => e.Category))
+                @foreach (var catGroup in GetGalleryCards().GroupBy(c => c.Category))
                 {
                     <div style="padding:6px 8px 2px;font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:.05em;">
-                        @group.Key.ToUpperInvariant()
+                        @catGroup.Key.ToUpperInvariant()
                     </div>
-                    @foreach (var entry in group)
+                    @foreach (var card in catGroup)
                     {
-                        <button class="master-item @(ReferenceEquals(entry, _catalogEntry) ? "active" : "")"
-                                @onclick="() => SelectCatalogEntry(entry)">
+                        var isActive = _selectedGroup is not null && _selectedGroup[0].Id == card.Id;
+                        var isAnyConnected = (_selectedGroup?.Any(e => _isConnected(e.Id)) ?? false) || _isConnected(card.Id);
+                        <button class="master-item @(isActive ? "active" : "")"
+                                @onclick="() => SelectGalleryCard(card)">
                             <div class="item-title" style="display:flex;align-items:center;gap:6px;">
-                                <span style="font-size:16px;line-height:1;">@entry.Icon</span>
-                                <span>@entry.Name</span>
-                                @if (_isConnected(entry.Id))
+                                <span style="font-size:16px;line-height:1;">@card.Icon</span>
+                                <span>@card.Name</span>
+                                @if (isAnyConnected)
                                 {
                                     <span class="status-dot connected" style="margin-left:2px;" title="Connected"></span>
                                 }
                             </div>
-                            <div class="item-subtitle" style="padding-left:26px;">@entry.Description</div>
+                            <div class="item-subtitle" style="padding-left:26px;">@card.Description</div>
                         </button>
                     }
                 }
@@ -105,6 +107,19 @@
                         <p class="text-secondary" style="margin:4px 0 0;">@_catalogEntry.Category</p>
                     </div>
                 </div>
+
+                @if (_selectedGroup?.Count > 1)
+                {
+                    <div style="display:flex;gap:4px;margin:12px 0 0;">
+                        @for (int i = 0; i < _selectedGroup.Count; i++)
+                        {
+                            var idx = i;
+                            var label = _selectedGroup[i].TabLabel ?? _selectedGroup[i].Name;
+                            <button class="btn-sm @(_selectedGroupTab == idx ? "btn-primary" : "btn-outline")"
+                                    @onclick="() => SelectGroupTab(idx)">@label</button>
+                        }
+                    </div>
+                }
 
                 <p style="margin:12px 0 20px;color:var(--text-secondary);">@_catalogEntry.Description</p>
 
@@ -340,6 +355,8 @@
 
     // Gallery state
     private CatalogEntry? _catalogEntry;
+    private List<CatalogEntry>? _selectedGroup;
+    private int _selectedGroupTab;
     private string _galleryApiKey = string.Empty;
     private string _galleryUrl = string.Empty;
 
@@ -363,16 +380,45 @@
     {
         _activeTab = tab;
         _catalogEntry = null;
+        _selectedGroup = null;
+        _selectedGroupTab = 0;
         _selected = null;
         _status = string.Empty;
     }
 
-    private void SelectCatalogEntry(CatalogEntry entry)
+    private IEnumerable<CatalogEntry> GetGalleryCards()
     {
-        _catalogEntry = entry;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var entry in IntegrationCatalog.All)
+        {
+            var key = entry.GroupName ?? entry.Id;
+            if (seen.Add(key))
+                yield return entry;
+        }
+    }
+
+    private List<CatalogEntry> GetGroupFor(CatalogEntry representative) =>
+        representative.GroupName is { } gn
+            ? IntegrationCatalog.All.Where(e => e.GroupName == gn).ToList()
+            : [representative];
+
+    private void SelectGalleryCard(CatalogEntry representative)
+    {
+        _selectedGroup = GetGroupFor(representative);
+        _selectedGroupTab = 0;
+        _catalogEntry = _selectedGroup[0];
         _galleryApiKey = string.Empty;
         _galleryUrl = string.Empty;
         _status = string.Empty;
+    }
+
+    private void SelectGroupTab(int idx)
+    {
+        if (_selectedGroup is null || idx >= _selectedGroup.Count) return;
+        _selectedGroupTab = idx;
+        _catalogEntry = _selectedGroup[idx];
+        _galleryApiKey = string.Empty;
+        _galleryUrl = string.Empty;
     }
 
     private bool _isConnected(string entryId) =>
