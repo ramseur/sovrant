@@ -96,6 +96,13 @@ public static class IntegrationCatalog
             ApiKeyLabel: "Access Token",
             DefaultCommand: "npx", DefaultArgs: ["-y", "@supabase/mcp-server-supabase", "--access-token", "{API_KEY}"]),
 
+        new("snowflake", "Snowflake", "Platform", "❄️",
+            "Run SQL queries and search Snowflake data warehouses directly from agents.",
+            IntegrationKind.McpStdio, IntegrationTier.Platform,
+            ApiKeyLabel: "Password", ApiKeyEnvVar: "SNOWFLAKE_PASSWORD",
+            EndpointLabel: "Account identifier (e.g. myorg-myaccount)",
+            DefaultCommand: "npx", DefaultArgs: ["-y", "snowflake-mcp-server"]),
+
         // Search
         new("brave-search", "Brave Search", "Search", "🔍",
             "Web and local search powered by the Brave Search API.",
@@ -136,12 +143,6 @@ public static class IntegrationCatalog
             EndpointLabel: "CMA base URL (e.g. https://api.cms.optimizely.com/preview3)",
             DefaultCommand: "npx", DefaultArgs: ["-y", "optimizely-cms-mcp"]),
 
-        new("snowflake", "Snowflake", "Platform", "❄️",
-            "Run SQL queries and search Snowflake data warehouses directly from agents.",
-            IntegrationKind.McpStdio, IntegrationTier.Platform,
-            ApiKeyLabel: "Password", ApiKeyEnvVar: "SNOWFLAKE_PASSWORD",
-            EndpointLabel: "Account identifier (e.g. myorg-myaccount)",
-            DefaultCommand: "npx", DefaultArgs: ["-y", "snowflake-mcp-server"]),
 
     ];
 }
