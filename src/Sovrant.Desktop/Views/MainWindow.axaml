@@ -107,7 +107,7 @@
                                     Background="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                     Foreground="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                            <Button Content="🏗" ToolTip.Tip="Projects"
+                            <Button Content="🗂" ToolTip.Tip="Projects"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="workspace"
                                     Width="31" Height="32" CornerRadius="7" FontSize="14" Padding="0"
                                     Background="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
