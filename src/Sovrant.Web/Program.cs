@@ -383,7 +383,7 @@ public static class Program
         // Streams a zip of every file under {ws}/{proj}/{run}. Lets the user grab
         // an entire run as one download from the Artifacts page.
         app.MapGet("/artifacts/{workspaceId}/{projectId}/{runId}.zip",
-            (string workspaceId, string projectId, string runId,
+            async (string workspaceId, string projectId, string runId,
              Sovrant.Runtime.Artifacts.IArtifactStore store) =>
         {
             if (store is not Sovrant.Runtime.Artifacts.LocalArtifactStore local)
@@ -405,10 +405,10 @@ public static class Program
             if (runDir is null) return Results.NotFound();
 
             var safeRun = SanitizeForFilename(run);
-            return Results.Stream(async (output) =>
+            var ms = new MemoryStream();
+            using (var archive = new System.IO.Compression.ZipArchive(
+                ms, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
             {
-                using var archive = new System.IO.Compression.ZipArchive(
-                    output, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: false);
                 foreach (var file in Directory.EnumerateFiles(runDir, "*", SearchOption.AllDirectories))
                 {
                     if (Path.GetFileName(file).Equals("_manifest.json", StringComparison.OrdinalIgnoreCase))
@@ -419,7 +419,9 @@ public static class Program
                     await using var fileStream = File.OpenRead(file);
                     await fileStream.CopyToAsync(entryStream).ConfigureAwait(false);
                 }
-            }, contentType: "application/zip", fileDownloadName: $"{safeRun}.zip");
+            }
+            ms.Position = 0;
+            return Results.File(ms, contentType: "application/zip", fileDownloadName: $"{safeRun}.zip");
         });
     }
 
