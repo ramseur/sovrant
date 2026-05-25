@@ -123,12 +123,23 @@ public static class IntegrationCatalog
             DefaultCommand: "npx", DefaultArgs: ["-y", "tavily-mcp"]),
 
         // DXP / CMS / Data
-        new("sitecore", "Sitecore", "DXP", "🟩",
-            "Manage Sitecore content, items, and pages via the community MCP server (GraphQL + ItemService).",
+        new("sitecore-graphql", "Sitecore (GraphQL)", "DXP", "🟩",
+            "Manage Sitecore content via GraphQL + ItemService. Uses @antonytm/mcp-sitecore-server — install with npx.",
             IntegrationKind.McpStdio, IntegrationTier.Platform,
             ApiKeyLabel: "GraphQL API Key", ApiKeyEnvVar: "GRAPHQL_API_KEY",
             EndpointLabel: "GraphQL endpoint (e.g. https://your-site/api/graph/edge)",
             DefaultCommand: "npx", DefaultArgs: ["-y", "@antonytm/mcp-sitecore-server"]),
+
+        new("sitecore-community", "Sitecore Community MCP", "DXP", "🟩",
+            "Community MCP server by GaryWenneker. Clone https://github.com/GaryWenneker/SitecoreMCP, build, then run with node. Uses Sitecore host URL + API key.",
+            IntegrationKind.McpStdio, IntegrationTier.Platform,
+            ApiKeyLabel: "Sitecore API Key", ApiKeyEnvVar: "SITECORE_API_KEY",
+            EndpointLabel: "Sitecore host URL (e.g. https://your-site.com)"),
+
+        new("sitecore-marketer", "Sitecore Marketer MCP", "DXP", "🟩",
+            "Official Sitecore.AI MCP server. Remote HTTPS endpoint — connects via browser-based OAuth 2.0 (Sitecore Identity). No API key needed; auth is handled interactively on first connect.",
+            IntegrationKind.McpHttp, IntegrationTier.Platform,
+            EndpointLabel: "Marketer MCP endpoint (from Sitecore Cloud Portal)"),
 
         new("aem", "Adobe Experience Manager", "DXP", "🔴",
             "Read and write AEM content, pages, assets, and Cloud Manager resources via the official Adobe MCP server.",
