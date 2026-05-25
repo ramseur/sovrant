@@ -136,7 +136,7 @@ public static class IntegrationCatalog
             EndpointLabel: "CMA base URL (e.g. https://api.cms.optimizely.com/preview3)",
             DefaultCommand: "npx", DefaultArgs: ["-y", "optimizely-cms-mcp"]),
 
-        new("snowflake", "Snowflake", "DXP", "❄️",
+        new("snowflake", "Snowflake", "Platform", "❄️",
             "Run SQL queries and search Snowflake data warehouses directly from agents.",
             IntegrationKind.McpStdio, IntegrationTier.Platform,
             ApiKeyLabel: "Password", ApiKeyEnvVar: "SNOWFLAKE_PASSWORD",
