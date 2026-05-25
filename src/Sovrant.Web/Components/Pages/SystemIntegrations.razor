@@ -18,10 +18,16 @@
 
     <!-- Active backend pill -->
     <div class="sys-int-backend-pill">
-        <span class="sys-int-backend-label">ACTIVE DATABASE BACKEND</span>
-        <span class="sys-int-backend-value @(_isSupabaseActive ? "active-supabase" : "active-sqlite")">
-            @(_isSupabaseActive ? "Supabase (PostgreSQL)" : "SQLite (local)")
-        </span>
+        <div>
+            <div class="sys-int-backend-label">ACTIVE DATABASE BACKEND</div>
+            <div class="text-secondary" style="font-size:12px;margin-top:2px;">Change the backend only after initializing the schema and optionally migrating data.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+            <span class="status-dot connected"></span>
+            <span class="sys-int-backend-value @(_isSupabaseActive ? "active-supabase" : "active-sqlite")">
+                @(_isSupabaseActive ? "Supabase (PostgreSQL)" : "SQLite (local)")
+            </span>
+        </div>
     </div>
 
     @if (!string.IsNullOrEmpty(_statusMessage))
@@ -42,7 +48,10 @@
             <div class="sys-int-card-title">
                 <span class="sys-int-icon">🗄️</span>
                 <span class="sys-int-name">Supabase</span>
-                <span class="sys-int-badge @ConnectionBadgeClass">@ConnectionStatusLabel</span>
+                <div class="sys-int-status-pill" style="margin-left:auto;">
+                    <span class="status-dot @(_connectionOk ? "connected" : "warning")"></span>
+                    <span class="sys-int-status-label @(_connectionOk ? "status-connected" : "status-warn")">@ConnectionStatusLabel</span>
+                </div>
             </div>
             <p class="sys-int-desc">PostgreSQL-backed storage via your Supabase project.</p>
         </div>

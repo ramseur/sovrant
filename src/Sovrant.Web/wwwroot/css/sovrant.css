@@ -3306,6 +3306,7 @@ details[open] .doc-advanced-toggle::before { content: "▼ "; }
 .sys-int-backend-pill {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 12px;
     background: var(--surface-card);
     border: 1px solid var(--surface-border);
@@ -3354,6 +3355,19 @@ details[open] .doc-advanced-toggle::before { content: "▼ "; }
 .sys-int-icon { font-size: 20px; }
 .sys-int-name { font-size: 17px; font-weight: 600; color: var(--text-primary); }
 .sys-int-desc { font-size: 12px; color: var(--text-secondary); margin: 0; }
+
+.sys-int-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 99px;
+    border: 1px solid var(--surface-border);
+    background: var(--surface-background);
+}
+.sys-int-status-label { font-size: 11px; font-weight: 600; }
+.sys-int-status-label.status-connected { color: var(--status-pass); }
+.sys-int-status-label.status-warn { color: var(--status-warn); }
 
 .sys-int-badge {
     font-size: 11px;
