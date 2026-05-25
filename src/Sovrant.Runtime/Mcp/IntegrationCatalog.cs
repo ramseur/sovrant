@@ -115,5 +115,33 @@ public static class IntegrationCatalog
             ApiKeyLabel: "API Key", ApiKeyEnvVar: "TAVILY_API_KEY",
             DefaultCommand: "npx", DefaultArgs: ["-y", "tavily-mcp"]),
 
+        // DXP / CMS / Data
+        new("sitecore", "Sitecore", "DXP", "🟩",
+            "Manage Sitecore content, items, and pages via the community MCP server (GraphQL + ItemService).",
+            IntegrationKind.McpStdio, IntegrationTier.Platform,
+            ApiKeyLabel: "GraphQL API Key", ApiKeyEnvVar: "GRAPHQL_API_KEY",
+            EndpointLabel: "GraphQL endpoint (e.g. https://your-site/api/graph/edge)",
+            DefaultCommand: "npx", DefaultArgs: ["-y", "@antonytm/mcp-sitecore-server"]),
+
+        new("aem", "Adobe Experience Manager", "DXP", "🔴",
+            "Read and write AEM content, pages, assets, and Cloud Manager resources via the official Adobe MCP server.",
+            IntegrationKind.McpHttp, IntegrationTier.Platform,
+            ApiKeyLabel: "Adobe OAuth Token", ApiKeyHeader: "Authorization",
+            EndpointLabel: "AEM MCP endpoint (e.g. https://mcp.adobeaemcloud.com/adobe/mcp/content)"),
+
+        new("optimizely", "Optimizely CMS", "DXP", "🔵",
+            "Query and manage Optimizely CMS content via the Graph API and Content Management API.",
+            IntegrationKind.McpStdio, IntegrationTier.Platform,
+            ApiKeyLabel: "Graph Single Key", ApiKeyEnvVar: "GRAPH_SINGLE_KEY",
+            EndpointLabel: "CMA base URL (e.g. https://api.cms.optimizely.com/preview3)",
+            DefaultCommand: "npx", DefaultArgs: ["-y", "optimizely-cms-mcp"]),
+
+        new("snowflake", "Snowflake", "DXP", "❄️",
+            "Run SQL queries and search Snowflake data warehouses directly from agents.",
+            IntegrationKind.McpStdio, IntegrationTier.Platform,
+            ApiKeyLabel: "Password", ApiKeyEnvVar: "SNOWFLAKE_PASSWORD",
+            EndpointLabel: "Account identifier (e.g. myorg-myaccount)",
+            DefaultCommand: "npx", DefaultArgs: ["-y", "snowflake-mcp-server"]),
+
     ];
 }
