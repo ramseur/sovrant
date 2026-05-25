@@ -221,14 +221,24 @@
                                             IsVisible="{Binding HasGroupTabs}">
                                     <Button Content="{Binding GroupTab0Label}"
                                             Command="{Binding SelectGroupTabCommand}" CommandParameter="0"
-                                            Padding="14,6" CornerRadius="6" FontSize="12"
-                                            Background="{Binding ActiveGroupTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=0, FallbackValue=Transparent}"
-                                            Foreground="{DynamicResource TextPrimary}" />
+                                            Padding="14,6" CornerRadius="6" FontSize="12" FontWeight="SemiBold"
+                                            Background="{DynamicResource BrandPrimary}" Foreground="White"
+                                            IsVisible="{Binding IsGroupTab0Active}" />
+                                    <Button Content="{Binding GroupTab0Label}"
+                                            Command="{Binding SelectGroupTabCommand}" CommandParameter="0"
+                                            Padding="14,6" CornerRadius="6" FontSize="12" FontWeight="SemiBold"
+                                            Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
+                                            IsVisible="{Binding !IsGroupTab0Active}" />
                                     <Button Content="{Binding GroupTab1Label}"
                                             Command="{Binding SelectGroupTabCommand}" CommandParameter="1"
-                                            Padding="14,6" CornerRadius="6" FontSize="12"
-                                            Background="{Binding ActiveGroupTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=1, FallbackValue=Transparent}"
-                                            Foreground="{DynamicResource TextPrimary}" />
+                                            Padding="14,6" CornerRadius="6" FontSize="12" FontWeight="SemiBold"
+                                            Background="{DynamicResource BrandPrimary}" Foreground="White"
+                                            IsVisible="{Binding IsGroupTab1Active}" />
+                                    <Button Content="{Binding GroupTab1Label}"
+                                            Command="{Binding SelectGroupTabCommand}" CommandParameter="1"
+                                            Padding="14,6" CornerRadius="6" FontSize="12" FontWeight="SemiBold"
+                                            Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
+                                            IsVisible="{Binding !IsGroupTab1Active}" />
                                 </StackPanel>
 
                                 <TextBlock Text="{Binding SelectedCatalogEntry.Description}"
