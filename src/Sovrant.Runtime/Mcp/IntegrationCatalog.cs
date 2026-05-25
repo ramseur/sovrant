@@ -128,7 +128,7 @@ public static class IntegrationCatalog
         new("sitecore-community", "Sitecore", "DXP", "🟩",
             "Community MCP server by Anton Tishchenko. Exposes Sitecore content, items, and layout via GraphQL + ItemService. Install via npx.",
             IntegrationKind.McpStdio, IntegrationTier.Platform,
-            ApiKeyLabel: "GraphQL API Key", ApiKeyEnvVar: "GRAPHQL_API_KEY",
+            ApiKeyLabel: "Authorization Header (optional)", ApiKeyEnvVar: "AUTORIZATION_HEADER",
             EndpointLabel: "GraphQL endpoint (e.g. https://your-site/api/graph/edge)",
             DefaultCommand: "npx", DefaultArgs: ["-y", "@antonytm/mcp-sitecore-server"],
             GroupName: "Sitecore", TabLabel: "Community"),
