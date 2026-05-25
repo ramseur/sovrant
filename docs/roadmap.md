@@ -188,6 +188,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Orchestration Studio — compose and run teams from the UI; Run button with task prompt | Phase 94 | ✅ Done |
 | Integrations Gallery — 14 integrations across Automation/Platform/Search tiers, encrypted credential keystore, Web + Desktop parity | Phase 95 | ✅ Done (Hermes pending details) |
 | MCP runtime variables — per-server variable store (name, value, secret flag) injected as env vars when the MCP server process is launched; variable editor in the Integrations UI lets users add/edit/remove variables at any time without reconfiguring the connection; covers servers like Sitecore MCP that require 10–20 env vars passed at runtime; encrypted at rest via existing keystore; Web + Desktop parity | Phase 96 | High |
+| Two-tier Command Center — regular users see a workspace/project-scoped Command Center showing only their own runs and sessions within the active workspace; admins see Mission Control, a higher-level aggregated view across all workspaces, projects, users, and agents; same cockpit surface with access-controlled scope; role gate enforced server-side | Phase 98 | High |
 
 ### v1.0 release polish (in progress)
 
