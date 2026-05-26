@@ -10,9 +10,11 @@
         <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="8">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding LastRefreshed}"
-                               IsVisible="{Binding LastRefreshed, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                               FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
+                                IsVisible="{Binding LastRefreshed, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Text="Last updated:" FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                        <TextBlock Text="{Binding LastRefreshed}" FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                    </StackPanel>
                     <Button Content="Refresh" Command="{Binding RefreshCommand}"
                             Padding="12,6" CornerRadius="6"
                             Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
@@ -130,6 +132,21 @@
                                Foreground="{DynamicResource TextSecondary}" />
                 </Grid>
             </Border>
+            <!-- Pager — must be declared before ScrollViewer so DockPanel places it at the bottom -->
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Center"
+                        Spacing="12" Margin="0,8,0,0"
+                        IsVisible="{Binding PageInfo, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <Button Content="← Prev" Command="{Binding PreviousPageCommand}"
+                        IsEnabled="{Binding HasPreviousPage}"
+                        Padding="12,5" CornerRadius="6"
+                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="{Binding PageInfo}" VerticalAlignment="Center"
+                           FontSize="12" Foreground="{DynamicResource TextMuted}" />
+                <Button Content="Next →" Command="{Binding NextPageCommand}"
+                        IsEnabled="{Binding HasNextPage}"
+                        Padding="12,5" CornerRadius="6"
+                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+            </StackPanel>
             <ScrollViewer>
                 <ItemsControl ItemsSource="{Binding PagedRows}">
                     <ItemsControl.ItemTemplate>
@@ -205,21 +222,6 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </ScrollViewer>
-            <!-- Pager -->
-            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Center"
-                        Spacing="12" Margin="0,8,0,0"
-                        IsVisible="{Binding PageInfo, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                <Button Content="← Prev" Command="{Binding PreviousPageCommand}"
-                        IsEnabled="{Binding HasPreviousPage}"
-                        Padding="12,5" CornerRadius="6"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-                <TextBlock Text="{Binding PageInfo}" VerticalAlignment="Center"
-                           FontSize="12" Foreground="{DynamicResource TextMuted}" />
-                <Button Content="Next →" Command="{Binding NextPageCommand}"
-                        IsEnabled="{Binding HasNextPage}"
-                        Padding="12,5" CornerRadius="6"
-                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
-            </StackPanel>
         </DockPanel>
     </DockPanel>
 </UserControl>
