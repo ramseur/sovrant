@@ -16,7 +16,7 @@
                         Background="Transparent"
                         Foreground="{DynamicResource TextPrimary}" />
                 <StackPanel>
-                    <TextBlock Text="User Dashboard" FontSize="24" FontWeight="Bold"
+                    <TextBlock Text="Dashboard" FontSize="24" FontWeight="Bold"
                                Foreground="{DynamicResource TextPrimary}" />
                     <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
                                TextWrapping="Wrap"
