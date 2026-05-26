@@ -63,6 +63,15 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
         _timer.Start();
     }
 
+    public event EventHandler<CommandCenterRowSelectedEventArgs>? RowSelected;
+
+    [RelayCommand]
+    private void SelectRow(UserDashboardRowViewModel? row)
+    {
+        if (row is null || string.IsNullOrEmpty(row.DetailRoute)) return;
+        RowSelected?.Invoke(this, new CommandCenterRowSelectedEventArgs(row.Kind, row.Id, row.DetailRoute));
+    }
+
     [RelayCommand]
     private async Task RefreshAsync() => await LoadAsync();
 
@@ -133,6 +142,7 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
                         Owner = r.OwnerLabel ?? string.Empty,
                         Preview = r.Preview ?? string.Empty,
                         Cost = r.CostUsd is null ? "—" : $"${r.CostUsd:F4}",
+                        DetailRoute = r.DetailRoute ?? string.Empty,
                         IsOwn = r.IsOwn,
                         IsPrivate = r.IsPrivate,
                     });
@@ -195,6 +205,7 @@ public partial class UserDashboardRowViewModel : ViewModelBase
     [ObservableProperty] private string _owner = string.Empty;
     [ObservableProperty] private string _preview = string.Empty;
     [ObservableProperty] private string _cost = string.Empty;
+    [ObservableProperty] private string _detailRoute = string.Empty;
     [ObservableProperty] private bool _isOwn;
     [ObservableProperty] private bool _isPrivate;
 }

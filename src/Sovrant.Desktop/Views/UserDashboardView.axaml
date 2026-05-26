@@ -132,9 +132,16 @@
                 <ItemsControl ItemsSource="{Binding Rows}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:UserDashboardRowViewModel">
-                            <Border Background="{DynamicResource SurfaceCard}"
-                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1,0,1,1"
-                                    Padding="14,10">
+                            <Button Command="{Binding $parent[ItemsControl].((vm:UserDashboardViewModel)DataContext).SelectRowCommand}"
+                                    CommandParameter="{Binding}"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Padding="14,10"
+                                    Background="{DynamicResource SurfaceCard}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1,0,1,1"
+                                    CornerRadius="0"
+                                    Cursor="Hand">
                                 <Grid ColumnDefinitions="120,*,90,150,110,80">
                                     <Border Grid.Column="0"
                                             Background="{DynamicResource SurfaceBackground}"
@@ -150,18 +157,9 @@
                                         </StackPanel>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
-                                        <StackPanel Orientation="Horizontal" Spacing="6">
-                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource TextPrimary}"
-                                                       TextTrimming="CharacterEllipsis" />
-                                            <Border Background="{DynamicResource BrandPrimary}"
-                                                    CornerRadius="999" Padding="6,1"
+                                        <DockPanel>
+                                            <Button DockPanel.Dock="Right"
                                                     IsVisible="{Binding IsOwn}"
-                                                    VerticalAlignment="Center">
-                                                <TextBlock Text="Mine" FontSize="9" FontWeight="SemiBold"
-                                                           Foreground="White" />
-                                            </Border>
-                                            <Button IsVisible="{Binding IsOwn}"
                                                     Command="{Binding $parent[ItemsControl].((vm:UserDashboardViewModel)DataContext).TogglePrivacyCommand}"
                                                     CommandParameter="{Binding}"
                                                     Padding="4,1"
@@ -173,7 +171,11 @@
                                                 <TextBlock Text="{Binding IsPrivate, Converter={x:Static vm:BoolToLockIconConverter.Instance}}"
                                                            FontSize="11" />
                                             </Button>
-                                        </StackPanel>
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextPrimary}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center" />
+                                        </DockPanel>
                                         <TextBlock Text="{Binding Preview}" FontSize="11"
                                                    Foreground="{DynamicResource TextMuted}"
                                                    TextTrimming="CharacterEllipsis"
@@ -196,7 +198,7 @@
                                                VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis" />
                                 </Grid>
-                            </Border>
+                            </Button>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

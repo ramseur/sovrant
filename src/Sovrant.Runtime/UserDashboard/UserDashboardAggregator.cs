@@ -169,7 +169,7 @@ public sealed class UserDashboardAggregator
                 CostUsd: r.CostUsd,
                 DetailRoute: isTeamRun
                     ? $"/orchestration?run={Uri.EscapeDataString(r.RunId)}"
-                    : $"/dashboard?run={Uri.EscapeDataString(r.RunId)}",
+                    : $"/command?run={Uri.EscapeDataString(r.RunId)}",
                 WorkspaceId: r.WorkspaceId,
                 ProjectId: r.ProjectId,
                 IsOwn: isOwn,

@@ -88,10 +88,6 @@
                             @row.Title
                             @if (row.IsOwn)
                             {
-                                <span class="cc-badge-mine" title="You own this record">Mine</span>
-                            }
-                            @if (row.IsOwn)
-                            {
                                 <button class="privacy-toggle-mini @(row.IsPrivate ? "private" : "public")"
                                         title="@(row.IsPrivate ? "Private — only you can see this. Click to make public." : "Public — visible to workspace admins. Click to make private.")"
                                         @onclick="@(() => TogglePrivacyAsync(row))"

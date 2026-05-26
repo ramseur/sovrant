@@ -66,6 +66,9 @@ public partial class MainViewModel : ViewModelBase
         _currentPage = cockpit;
         cockpit.RowSelected += OnCockpitRowSelected;
 
+        var dashboard = services.GetRequiredService<UserDashboardViewModel>();
+        dashboard.RowSelected += OnDashboardRowSelected;
+
         sidebar.NavigationRequested += OnNavigationRequested;
         sidebar.SessionResumeRequested += OnSessionResumeRequested;
         commandPalette.CommandExecuted += OnCommandExecuted;
@@ -98,6 +101,32 @@ public partial class MainViewModel : ViewModelBase
                 CurrentPage = _services.GetRequiredService<OrchestrationViewModel>();
                 break;
             // mission/claw — no dedicated detail view yet; keep cockpit visible.
+            default:
+                break;
+        }
+    }
+
+    private async void OnDashboardRowSelected(object? sender, CommandCenterRowSelectedEventArgs e)
+    {
+        switch (e.Kind)
+        {
+            case "session":
+                var chat = CreateChatViewModel();
+                CurrentPage = chat;
+                SelectedGroup = "chat";
+                OnSelectedGroupChanged("chat");
+                await chat.LoadSessionAsync(e.Id);
+                break;
+            case "agent-run":
+                var cockpit = _services.GetRequiredService<CommandCenterViewModel>();
+                CurrentPage = cockpit;
+                SelectedGroup = "dashboard"; // stay on dashboard group visually but show cockpit content
+                await cockpit.OpenRunAsync(e.Id);
+                break;
+            case "team-run":
+                CurrentPage = _services.GetRequiredService<OrchestrationViewModel>();
+                break;
+            // mission/claw — no dedicated detail view yet
             default:
                 break;
         }
