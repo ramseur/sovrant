@@ -79,7 +79,7 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
         _sessionStore = sessionStore;
         _auditStore = auditStore;
         _ = LoadAsync();
-        _timer = new System.Timers.Timer(2000);
+        _timer = new System.Timers.Timer(30000);
         _timer.Elapsed += async (_, _) => await LoadAsync();
         _timer.AutoReset = true;
         _timer.Start();
@@ -148,8 +148,7 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
                 OwnSessions = state.OwnSessions;
                 OthersPublicRows = state.OthersPublicRows;
                 Claws = state.Claws;
-                LastRefreshed = state.GeneratedAt.LocalDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-                CurrentPage = 0;
+                LastRefreshed = state.GeneratedAt.LocalDateTime.ToString("MMM d, h:mm tt", CultureInfo.InvariantCulture);
                 Rows.Clear();
                 foreach (var r in state.Rows)
                 {
@@ -170,6 +169,9 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
                     });
                 }
                 IsEmpty = Rows.Count == 0;
+                int totalPages = (int)Math.Ceiling(Rows.Count / (double)PageSize);
+                if (totalPages == 0) CurrentPage = 0;
+                else if (CurrentPage >= totalPages) CurrentPage = totalPages - 1;
                 RefreshPagedRows();
                 ErrorMessage = string.Empty;
             });
