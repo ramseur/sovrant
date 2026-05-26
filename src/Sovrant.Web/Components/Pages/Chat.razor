@@ -61,6 +61,26 @@
         }
     </div>
 
+    <!-- Privacy toggle + token count — sits between messages and input, matching Desktop layout -->
+    <div class="chat-bottom-bar">
+        <button class="privacy-toggle @(_isPrivate ? "private" : "public")"
+                title="@(_isPrivate ? "Private — only you can see this session" : "Public — visible to admins")"
+                @onclick="TogglePrivacyAsync">
+            <span class="privacy-icon">@(_isPrivate ? "🔒" : "🔓")</span>
+            <span class="privacy-label">@(_isPrivate ? "Private" : "Public")</span>
+        </button>
+        @if (_tokenCount > 0)
+        {
+            <div class="token-counter">
+                @_tokenCount.ToString("N0") tokens
+                @if (_sessionCost > 0)
+                {
+                    <span class="cost-indicator"> &middot; ~$@_sessionCost.ToString("F4")</span>
+                }
+            </div>
+        }
+    </div>
+
     <!-- Input bar -->
     <div class="chat-input-bar">
         <div class="input-wrapper">
@@ -78,26 +98,6 @@
         else
         {
             <button class="btn-primary send-btn" @onclick="SendAsync" disabled="@(!CanSend)">Send</button>
-        }
-    </div>
-
-    <!-- Privacy toggle + token count -->
-    <div class="chat-bottom-bar">
-        <button class="privacy-toggle @(_isPrivate ? "private" : "public")"
-                title="@(_isPrivate ? "Private — only you can see this session" : "Public — visible to admins")"
-                @onclick="TogglePrivacyAsync">
-            <span class="privacy-icon">@(_isPrivate ? "🔒" : "🔓")</span>
-            <span class="privacy-label">@(_isPrivate ? "Private" : "Public")</span>
-        </button>
-        @if (_tokenCount > 0)
-        {
-            <div class="token-counter">
-                @_tokenCount.ToString("N0") tokens
-                @if (_sessionCost > 0)
-                {
-                    <span class="cost-indicator"> &middot; ~$@_sessionCost.ToString("F4")</span>
-                }
-            </div>
         }
     </div>
 </div>

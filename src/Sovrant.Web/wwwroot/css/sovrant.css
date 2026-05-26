@@ -1615,8 +1615,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     color: var(--text-muted);
 }
 
-/* Phase 99 — chat-bottom-bar lays out the privacy toggle alongside the
-   token counter beneath the input. */
+/* chat-bottom-bar: privacy toggle + token counter, between messages and input (mirrors Desktop). */
 .chat-bottom-bar {
     display: flex;
     align-items: center;
