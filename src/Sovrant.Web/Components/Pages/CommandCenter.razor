@@ -107,7 +107,7 @@
             <div class="diag-header-right">
                 @if (_state is not null)
                 {
-                    <span class="text-muted text-sm">@_state.GeneratedAt.LocalDateTime.ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture) · auto-refresh 2s</span>
+                    <span class="text-muted text-sm">Last updated: @_state.GeneratedAt.LocalDateTime.ToString("MMM d, h:mm tt", System.Globalization.CultureInfo.InvariantCulture)</span>
                 }
                 <button class="btn-secondary" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Refreshing…" : "Refresh")</button>
             </div>
@@ -283,7 +283,7 @@
             // for the duration of the focus and a rolling refresh would clobber
             // the user's read.
             _timer = new System.Threading.Timer(_ => InvokeAsync(LoadAsync), null,
-                TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+                TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
         }
     }
 
@@ -308,7 +308,7 @@
                 _resolvingFocus = false;
                 await LoadAsync();
                 _timer ??= new System.Threading.Timer(_ => InvokeAsync(LoadAsync), null,
-                    TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+                    TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
                 StateHasChanged();
             }
         });
@@ -384,7 +384,10 @@
             // current user's. Pre-login chats land under a legacy owner ID and
             // would otherwise be invisible here.
             _state = await Aggregator.GetActiveStateAsync(ownerUserId: null);
-            _ccPage = 0;
+            int ccTotal = _state.Rows.Count;
+            int ccTotalPages = (int)Math.Ceiling(ccTotal / (double)PageSize);
+            if (ccTotalPages == 0) _ccPage = 0;
+            else if (_ccPage >= ccTotalPages) _ccPage = ccTotalPages - 1;
             _error = string.Empty;
         }
         catch (Exception ex)

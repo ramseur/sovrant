@@ -26,7 +26,7 @@
         <div class="diag-header-right">
             @if (_state is not null)
             {
-                <span class="text-muted text-sm">@_state.GeneratedAt.LocalDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture) · auto-refresh 2s</span>
+                <span class="text-muted text-sm">Last updated: @_state.GeneratedAt.LocalDateTime.ToString("MMM d, h:mm tt", CultureInfo.InvariantCulture)</span>
             }
             <button class="btn-secondary" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Refreshing…" : "Refresh")</button>
         </div>
@@ -151,7 +151,7 @@
 
         await LoadAsync();
         _timer = new System.Threading.Timer(_ => InvokeAsync(LoadAsync), null,
-            TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+            TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
     }
 
     private async Task LoadAsync()
@@ -162,7 +162,10 @@
         try
         {
             _state = await Aggregator.GetStateAsync(Session.UserId);
-            _dashPage = 0;
+            int dashTotal = _state.Rows.Count;
+            int dashTotalPages = (int)Math.Ceiling(dashTotal / (double)PageSize);
+            if (dashTotalPages == 0) _dashPage = 0;
+            else if (_dashPage >= dashTotalPages) _dashPage = dashTotalPages - 1;
             _error = string.Empty;
         }
         catch (Exception ex)
