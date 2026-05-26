@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-05-23 (Phase 50 OpenClaw federation ✅ — `SwarmFederationMode` enum, `OpenClawBusClient`, `RouteResolver`, V029 migration adds `parent_swarm_id`, `/v1/swarm/manager` + `/v1/swarm/openclaw/routes` + `/v1/swarm/{id}/children` endpoints, swarm-manager agent template; session-level MCP opt-in ✅ — single `ActiveMcpServers` selector in context bar (Desktop: WorkspacePanelView; Web: TopContextBar), preference-persisted, replaces per-chat MCP selector; Phase 73 code scaffolding ✅ — 21 templates, `CodeCreateMultiTool` for multi-component generation, `ScaffoldManifestValidator` for dependency manifest validation, 235 new golden-path + manifest tests)
+**Last updated:** 2026-05-26 (Phase 98 polish ✅ — Command Center + Dashboard pagination, header timestamps, 30s poll interval, page-preserve on refresh, guide panels, Shared stat redefined as own public items (not others' activity); default provider changed from OpenRouter → OpenAI in setup and admin; version bumped to 1.0.0)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -22,7 +22,7 @@ What we are actively working on and shipping next, in priority order.
 | **v1.1 — done** | Phase 50 | OpenClaw federation — `SwarmFederationMode`, bus client, manager-led + siloed routing, V029 migration ✅ |
 | **v1.1 — done** | Phase 73 | Code scaffolding — 21 templates, multi-component generation, manifest validation, 235 tests ✅ |
 | **v1.1 — done** | Phase 40C | Supabase backend (optional, admin-configured) — PostgreSQL stores for sessions + credentials; admin System Integrations UI; idempotent schema init; SQLite → Postgres migrator; boot-time DI switch; Web + Desktop parity ✅ |
-| **v1.2 — done** | Phase 98 | User Dashboard — cross-workspace activity view for all users; own private + own public + others' public in shared workspaces; others' private excluded entirely; V030 adds `is_private` to missions/agent_runs/sessions; Web + Desktop rail nav ✅ |
+| **v1.2 — done** | Phase 98 | User Dashboard — cross-workspace activity view; own public (Shared) + own private + teammates' public; V030 `is_private`; Web + Desktop rail nav; pagination, timestamps, 30s poll, guide panels, page-preserve on refresh ✅ |
 | **v1.2** | Phase 99 | Private sessions and agent runs — per-record privacy toggle; masked in Command Center, excluded from User Dashboard |
 
 > Items below v1.0 are planned but not yet scheduled. See [Still pending](#still-pending) for the full gap list.
@@ -34,7 +34,7 @@ What we are actively working on and shipping next, in priority order.
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
 - **58 tools** across 18 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, missions, artifacts, documents, quality, swarm, coordination, LSP, code scaffolding)
-- **1,924 tests** across 10 projects, 0 failures
+- **2,222 tests** across 10 projects, 0 failures
 - **115 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
@@ -43,7 +43,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 - **Integrations Gallery** on Web and Desktop — catalog-first MCP onramp with Automation (Composio, n8n, Zapier, Make), Platform (GitHub, Slack, Notion, Linear, Stripe, PostgreSQL, Supabase, Filesystem), and Search (Brave, Exa, Tavily) tiers; credentials stored in encrypted keystore (Phase 95 ✅)
 - **Model switcher with provider discovery** — configured providers selectable inline; unconfigured known providers shown with click-to-configure deep-link to Settings → Providers on both Web and Desktop
 - **Agent run prompt titles** — one-shot agent runs store the user's prompt (V028); Recent Runs list uses prompt as title with agent name badge on both Web and Desktop
-- **Command Center cockpit** at `/command` on Web and Desktop — read-only live grid aggregating active missions, team runs, agent runs, and sessions; Owner column resolves userId → username/email; click-through to existing detail pages (Phase 89/90 ✅)
+- **Command Center cockpit** at `/command` on Web and Desktop — read-only live grid aggregating active missions, team runs, agent runs, and sessions; Owner column resolves userId → username/email; click-through to existing detail pages; paginated grid with header timestamp, 30s auto-refresh, and page-preserve on navigation (Phase 89/90/98 polish ✅)
 - Mission engine with durable goals, re-planning, acceptance gates, and event journal (Phase 51 ✅)
 - Unified agent orchestration: SQLite-backed teams + swarm + agent run ledger (Phase 52 ✅)
 - Scoped artifact storage with workspace-first layout (Phase 53 ✅)
@@ -54,7 +54,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 - Remote server mode for web frontend — SignalR streaming, bearer auth, `AddSovrantClient()` DI abstraction (Phase 61 ✅)
 - Workspace/project/user hierarchy with membership, invites, config inheritance (Phases 35–37 ✅)
 - Per-user token auth with API token issuance/revocation (Phase 38 ✅)
-- Multi-provider support: OpenAI, Gemini, Ollama, native messages API, OpenAI Responses API
+- Multi-provider support: OpenAI, Gemini, Ollama, native messages API, OpenAI Responses API — OpenAI is the default provider in setup and admin (changed from OpenRouter)
 - Multi-tenant per-request credentials (`X-LLM-Api-Key` / `X-LLM-Base-Url` headers)
 - Per-session config overlay, rate limiting, token usage tracking
 - Session TTL eviction + LRU cap + per-session turn serialization
@@ -149,7 +149,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 
 ### Still pending
 
-> **Last audited:** 2026-05-23. Shipped since prior audit: Phase 79 Agents page ✅, Phase 94 Orchestration Studio ✅, Phase 95 Integrations Gallery ✅ (encrypted credentials, catalog with 14 integrations across 3 tiers, Web + Desktop parity). Phase 50 OpenClaw federation ✅ (SwarmFederationMode, bus client, manager-led routing, V029, 3 new API endpoints). Phase 73 code scaffolding ✅ (21 templates, CodeCreateMultiTool, ScaffoldManifestValidator, 235 tests). Session-level MCP opt-in lifted to context bar (Desktop WorkspacePanelView + Web TopContextBar). Phase 91 Knowledge Authoring deferred.
+> **Last audited:** 2026-05-26. Shipped since prior audit: Phase 79 Agents page ✅, Phase 94 Orchestration Studio ✅, Phase 95 Integrations Gallery ✅ (encrypted credentials, catalog with 14 integrations across 3 tiers, Web + Desktop parity). Phase 50 OpenClaw federation ✅ (SwarmFederationMode, bus client, manager-led routing, V029, 3 new API endpoints). Phase 73 code scaffolding ✅ (21 templates, CodeCreateMultiTool, ScaffoldManifestValidator, 235 tests). Session-level MCP opt-in lifted to context bar (Desktop WorkspacePanelView + Web TopContextBar). Phase 98 User Dashboard ✅ (Shared stat = own public items, pagination + timestamps + 30s poll + page-preserve on both surfaces, guide panels). Phase 91 Knowledge Authoring deferred.
 >
 > Quality / polish / audit phases (62, 68, 69, 70, 71, 72, 75) and partial-completion phases (56) are tracked in their own sections below; this table is gap-only.
 
@@ -187,7 +187,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Orchestration Studio — compose and run teams from the UI; Run button with task prompt | Phase 94 | ✅ Done |
 | Integrations Gallery — 14 integrations across Automation/Platform/Search tiers, encrypted credential keystore, Web + Desktop parity | Phase 95 | ✅ Done (Hermes pending details) |
 | MCP runtime variables — per-server variable store (name, value, secret flag) injected as env vars when the MCP server process is launched; variable editor in the Integrations UI lets users add/edit/remove variables at any time without reconfiguring the connection; covers servers like Sitecore MCP that require 10–20 env vars passed at runtime; encrypted at rest via existing keystore; Web + Desktop parity | Phase 96 | High |
-| User Dashboard — personal cross-workspace activity view: own public + own private + teammates' public records in shared workspaces; other users' private records excluded entirely (no masked rows); Command Center remains unchanged as the admin-only view; V030 migration adds `is_private` to missions/agent_runs/sessions; new `UserDashboardAggregator`, `/v1/user-dashboard/state` endpoint; Web `/dashboard` + Desktop view both reached via 👤 rail nav for all signed-in users; server-side workspace gating via `IWorkspaceService.ListForUserAsync`; 8 aggregator unit tests covering own/public/private/non-member/team-run visibility | Phase 98 | ✅ Done |
+| User Dashboard — personal cross-workspace activity view: own public + own private + teammates' public records in shared workspaces; other users' private records excluded entirely (no masked rows); Command Center remains unchanged as the admin-only view; V030 migration adds `is_private` to missions/agent_runs/sessions; new `UserDashboardAggregator`, `/v1/user-dashboard/state` endpoint; Web `/dashboard` + Desktop view both reached via 👤 rail nav for all signed-in users; server-side workspace gating via `IWorkspaceService.ListForUserAsync`; 8 aggregator unit tests covering own/public/private/non-member/team-run visibility; "Shared" stat redefined as own public items (not others' activity); both Command Center and Dashboard: paginated grid, header timestamp, 30s auto-refresh, page-preserve on refresh/navigation, guide panels | Phase 98 | ✅ Done |
 | Private sessions and agent runs — users can mark any session or agent run as private via a toggle in the chat header and Agents UI; private records appear in the Command Center as masked rows (title and content hidden, existence acknowledged for accountability) but are completely excluded from the User Dashboard; only the owning user can see the full title, prompt, content, and run history of their private records; server-side enforcement ensures private content is never returned in any query for any other user regardless of role; audit log records the privacy toggle event | Phase 99 | High |
 | Accurate cost reporting — replace the current placeholder cost display in the Command Center with real per-session cost calculated from token counts × model pricing; pull and cache OpenRouter's public `/api/v1/models` pricing data (prompt $/1k + completion $/1k per model) on a daily schedule; apply the correct rate for the model used in each turn; surface per-session cost, per-run cost, and a workspace total in the Command Center and activity detail views; cost shown as $0.00 for free-tier and local models; cached pricing refreshed automatically so rates stay current without manual updates | Phase 100 | Medium |
 | OAuth 2.1 + PKCE for MCP connections — replace API-key-only auth with a full OAuth 2.1 + PKCE flow for MCP servers that require it (Sitecore Marketer, Adobe AEM, and others); desktop uses authorization code + PKCE with loopback redirect `http://127.0.0.1:{port}/callback` via an ephemeral in-process HTTP listener; web uses ASP.NET Core OIDC middleware with an absolute redirect URI; RFC 8707 Resource Indicators bind each token to its specific MCP server so credentials cannot be replayed cross-server; tokens stored in the existing encrypted keystore (Windows Credential Manager on Desktop, encrypted DB on Web); automatic silent refresh with rotation before expiry; user-triggered revocation per server in the Integrations UI; no API keys exposed or pasted by the user — auth is entirely browser-driven on first connect | Phase 101 | High |

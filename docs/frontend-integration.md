@@ -450,8 +450,7 @@ const template = await client.getAgentTemplate("security-auditor");
 ### Command Center (Phase 89/90)
 
 ```ts
-// Aggregated state of every active mission, team run, agent run, and session
-// for the current user. Powers the /command page in Web and Desktop.
+// Aggregated in-flight activity for the current user. Powers the /command page in Web and Desktop.
 const state = await client.getCommandCenterState();
 // { active_missions, active_team_runs, active_agent_runs, active_sessions, rows, generated_at }
 
@@ -459,7 +458,18 @@ const state = await client.getCommandCenterState();
 const peerState = await client.getCommandCenterState({ owner_user_id: "user-123" });
 ```
 
-The cockpit polls this endpoint every ~2 seconds. Each row carries a `detail_route` pointing at an existing detail surface (`/activity?...`, `/orchestration/teams/{id}`, mission detail) — the cockpit never duplicates UIs, it composes them.
+The cockpit polls every 30 seconds. Each row carries a `detail_route` pointing at an existing detail surface. Private records are masked (`title` and `preview` are null) — their row is still returned so admins see activity counts are accurate.
+
+### User Dashboard (Phase 98)
+
+```ts
+// Cross-workspace personal activity view — own records plus teammates' public records.
+const dashboard = await client.getUserDashboardState();
+// { active_missions, active_team_runs, active_agent_runs, active_sessions, rows, generated_at }
+// Each row includes is_private: boolean and owner_username: string
+```
+
+Reached via the 👤 rail nav icon (`/dashboard` on Web, `UserDashboardView` on Desktop). Polls every 30 seconds. Other users' private records are **never returned** — the server excludes them entirely (no masked placeholder). Own private records are returned normally so users can manage their own privacy state.
 
 ### Usage Tracking
 
@@ -934,7 +944,7 @@ import type {
 
 ## Remote Mode — Dual-Mode Web Frontend (Phase 61)
 
-`Sovrant.Web` is the official Blazor Server frontend. After Phase 90 the homepage is the Command Center cockpit (`/command`) — the first-run wizard at `/setup` redirects there on completion. `Sovrant.Desktop` (Avalonia) ships the same experience with `CommandCenterView` as the default startup view (`MainViewModel` initializes `CurrentPage = CommandCenterViewModel`).
+`Sovrant.Web` is the official Blazor Server frontend. The default landing page after first-run setup is the Command Center cockpit (`/command`) — the first-run wizard at `/setup` redirects there on completion. The User Dashboard (`/dashboard`) is a separate personal view reached via the 👤 rail nav icon. `Sovrant.Desktop` (Avalonia) follows the same pattern with `CommandCenterView` as the default startup view and `UserDashboardView` accessible from the rail nav.
 
 `Sovrant.Web` supports two runtime modes, controlled by the `SOVRANT_RUNTIME_MODE` environment variable:
 

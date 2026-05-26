@@ -133,6 +133,20 @@ Per-workspace configuration (session TTL, max sessions, etc.) is stored in a `wo
 
 ---
 
+## Record-Level Privacy (Phase 98)
+
+Individual missions, agent runs, and sessions carry an `is_private` boolean (V030 migration, default FALSE). Privacy is enforced server-side — no client-side bypass is possible.
+
+| Surface | Private record behaviour |
+|---|---|
+| **Command Center** (`/v1/command-center/state`) | Row is returned but `title` and `preview` are set to `null` (masked). Existence is acknowledged for admin accountability. |
+| **User Dashboard** (`/v1/user-dashboard/state`) | Other users' private records are **excluded entirely** — not returned, not counted. Own private records are returned normally. |
+| **Direct record endpoints** (`GET /v1/sessions/{id}`, etc.) | Private records are accessible only to the owning user. Other users receive 403. |
+
+The `UserDashboardAggregator` enforces visibility at query time via workspace membership checks (`IWorkspaceService.ListForUserAsync`) combined with the `is_private` flag. Private records never leak across user boundaries regardless of admin role.
+
+---
+
 ## Session Management
 
 A background `SessionEvictionService` sweeps every 5 minutes and evicts sessions using a hybrid LRU + TTL strategy:
