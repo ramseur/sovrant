@@ -210,8 +210,9 @@ public sealed class UserDashboardAggregator
             .Take(150)
             .ToList();
 
-        // Count from the trimmed grid so the stat tile matches what the user actually sees.
-        var othersInGrid = resolved.Count(r => !r.IsOwn && r.Kind != "claw");
+        // "Shared" = own items the user has made public (visible to teammates).
+        // Counts from the trimmed grid so the stat matches what the user actually sees.
+        var sharedByMe = resolved.Count(r => r.IsOwn && !r.IsPrivate && r.Kind != "claw");
 
         return new UserDashboardState(
             GeneratedAt: now,
@@ -219,7 +220,7 @@ public sealed class UserDashboardAggregator
             OwnTeamRuns: ownTeamRuns,
             OwnAgentRuns: ownAgentRuns,
             OwnSessions: ownSessions,
-            OthersPublicRows: othersInGrid,
+            OthersPublicRows: sharedByMe,
             Claws: clawRows.Count,
             Rows: resolved);
     }

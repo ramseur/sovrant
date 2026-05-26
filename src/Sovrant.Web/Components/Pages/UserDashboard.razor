@@ -52,7 +52,7 @@
                 <dd>Chat conversations you started. Private sessions are only visible to you; public ones are visible to workspace admins.</dd>
 
                 <dt>Shared</dt>
-                <dd>Public activity from teammates in workspaces you share. Private records from teammates are never shown here.</dd>
+                <dd>Your own items you've made public — missions, runs, and sessions with the 🔓 lock open. These are visible to workspace admins and teammates.</dd>
 
                 <dt>Claws</dt>
                 <dd>External MCP systems Sovrant is connected to (n8n, Zapier, custom servers). Sovrant monitors and steers them from the Command Center.</dd>
@@ -77,7 +77,7 @@
         <CcStat Label="Sessions" Value="@(_state?.OwnSessions ?? 0)"
                 Tooltip="Chat conversations you started." />
         <CcStat Label="Shared" Value="@(_state?.OthersPublicRows ?? 0)"
-                Tooltip="Public activity from teammates in your workspaces." />
+                Tooltip="Your items you've made public — visible to workspace teammates." />
         <CcStat Label="Claws" Value="@(_state?.Claws ?? 0)"
                 Tooltip="External MCP systems Sovrant is connected to." />
     </div>

@@ -81,7 +81,7 @@
                                    Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
-                                   Text="Public activity from teammates in workspaces you share. Private records from teammates are never shown here." />
+                                   Text="Your own items you've made public — missions, runs, and sessions with the 🔓 lock open. These are visible to workspace admins and teammates." />
                     </Grid>
                     <Grid ColumnDefinitions="130,*">
                         <TextBlock Grid.Column="0" Text="Claws" FontWeight="SemiBold"
@@ -138,7 +138,7 @@
                 <Border Background="{DynamicResource SurfaceCard}"
                         BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                         CornerRadius="8" Padding="14,12" Margin="0,0,8,0"
-                        ToolTip.Tip="Public activity from teammates in your workspaces.">
+                        ToolTip.Tip="Your items you've made public — visible to workspace teammates.">
                     <StackPanel>
                         <TextBlock Text="SHARED (PUBLIC)" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
                         <TextBlock Text="{Binding OthersPublicRows}" FontSize="24" FontWeight="SemiBold"
