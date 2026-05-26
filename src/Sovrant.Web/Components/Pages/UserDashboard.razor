@@ -34,15 +34,15 @@
     }
 
     <div class="cc-stat-row">
-        <CcStat Label="My missions" Value="@(_state?.OwnMissions ?? 0)"
+        <CcStat Label="Missions" Value="@(_state?.OwnMissions ?? 0)"
                 Tooltip="Long-running goals you own." />
-        <CcStat Label="My team runs" Value="@(_state?.OwnTeamRuns ?? 0)"
+        <CcStat Label="Team runs" Value="@(_state?.OwnTeamRuns ?? 0)"
                 Tooltip="Team executions you kicked off." />
-        <CcStat Label="My agent runs" Value="@(_state?.OwnAgentRuns ?? 0)"
+        <CcStat Label="Agent runs" Value="@(_state?.OwnAgentRuns ?? 0)"
                 Tooltip="Solo agent runs you launched." />
-        <CcStat Label="My sessions" Value="@(_state?.OwnSessions ?? 0)"
+        <CcStat Label="Sessions" Value="@(_state?.OwnSessions ?? 0)"
                 Tooltip="Chat conversations you started." />
-        <CcStat Label="Shared (public)" Value="@(_state?.OthersPublicRows ?? 0)"
+        <CcStat Label="Shared" Value="@(_state?.OthersPublicRows ?? 0)"
                 Tooltip="Public activity from teammates in your workspaces." />
         <CcStat Label="Claws" Value="@(_state?.Claws ?? 0)"
                 Tooltip="External MCP systems Sovrant is connected to." />

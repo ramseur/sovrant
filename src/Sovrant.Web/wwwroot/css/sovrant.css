@@ -2862,7 +2862,7 @@ details[open] .doc-advanced-toggle::before { content: "▼ "; }
 /* ===== Command Center (Phase 90) ===== */
 .cc-stat-row {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
     gap: 12px;
     margin: 16px 0 12px;
 }
