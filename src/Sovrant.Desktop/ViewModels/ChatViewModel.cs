@@ -349,13 +349,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     {
         IsSending = false;
 
-        if (_isBackgroundSession && _activeSessions.HasSession(SessionId))
+        if (_activeSessions.HasSession(SessionId))
         {
             _activeSessions.Cancel(SessionId);
-            _isBackgroundSession = false;
-            return;
         }
-
+        _isBackgroundSession = false;
     }
 
     protected virtual void Dispose(bool disposing)
