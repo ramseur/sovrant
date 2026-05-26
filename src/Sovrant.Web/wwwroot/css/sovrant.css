@@ -2916,6 +2916,8 @@ details[open] .doc-advanced-toggle::before { content: "▼ "; }
 }
 .cc-grid-row:hover { background: var(--surface-hover); }
 .cc-grid-row:last-child { border-bottom: none; }
+.cc-row-masked { cursor: default; opacity: 0.6; }
+.cc-row-masked:hover { background: transparent; }
 
 .cc-kind-pill {
     display: inline-block;

@@ -182,7 +182,7 @@
                 </div>
                 @foreach (var row in _state.Rows)
                 {
-                    <a class="cc-grid-row @(row.IsMasked ? "cc-row-masked" : "")" href="@(row.DetailRoute ?? "#")">
+                    <a class="cc-grid-row @(row.IsMasked ? "cc-row-masked" : "")" href="@(string.IsNullOrEmpty(row.DetailRoute) ? null : row.DetailRoute)">
                         <div class="cc-col-kind">
                             <span class="cc-kind-pill cc-kind-@(row.Kind)">@KindIcon(row.Kind) @row.Kind</span>
                         </div>
