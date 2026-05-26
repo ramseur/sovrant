@@ -182,12 +182,22 @@
                 </div>
                 @foreach (var row in _state.Rows)
                 {
-                    <a class="cc-grid-row" href="@(row.DetailRoute ?? "#")">
+                    <a class="cc-grid-row @(row.IsMasked ? "cc-row-masked" : "")" href="@(row.DetailRoute ?? "#")">
                         <div class="cc-col-kind">
                             <span class="cc-kind-pill cc-kind-@(row.Kind)">@KindIcon(row.Kind) @row.Kind</span>
                         </div>
                         <div class="cc-col-title">
-                            <div class="cc-title">@row.Title</div>
+                            <div class="cc-title">
+                                @row.Title
+                                @if (row.IsPrivate && !row.IsMasked)
+                                {
+                                    <span class="cc-badge-private" title="Private — only visible to you">&#x1F512;</span>
+                                }
+                                else if (row.IsMasked)
+                                {
+                                    <span class="cc-badge-private" title="Private — content hidden">&#x1F512;</span>
+                                }
+                            </div>
                             @if (!string.IsNullOrEmpty(row.Preview))
                             {
                                 <div class="cc-preview text-muted text-sm">@row.Preview</div>
