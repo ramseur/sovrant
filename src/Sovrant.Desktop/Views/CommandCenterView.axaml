@@ -54,41 +54,41 @@
                     BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                     CornerRadius="8" Padding="16,12" Margin="0,8,0,0">
                 <StackPanel Spacing="10">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <TextBlock Text="🎯 mission" FontWeight="SemiBold" Width="120"
-                                   Foreground="{DynamicResource TextPrimary}" />
-                        <TextBlock TextWrapping="Wrap"
+                    <Grid ColumnDefinitions="120,*">
+                        <TextBlock Grid.Column="0" Text="🎯 mission" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
                                    Text="A long-running goal Sovrant decomposes into a plan, then runs through teams and agents until done. Survives restarts and waits for human input when needed." />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <TextBlock Text="👥 team run" FontWeight="SemiBold" Width="120"
-                                   Foreground="{DynamicResource TextPrimary}" />
-                        <TextBlock TextWrapping="Wrap"
+                    </Grid>
+                    <Grid ColumnDefinitions="120,*">
+                        <TextBlock Grid.Column="0" Text="👥 team run" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
                                    Text="One execution of a team — a group of agents running together under a profile (sequential, parallel, or swarm). Each member produces an agent run beneath it." />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <TextBlock Text="🤖 agent run" FontWeight="SemiBold" Width="120"
-                                   Foreground="{DynamicResource TextPrimary}" />
-                        <TextBlock TextWrapping="Wrap"
+                    </Grid>
+                    <Grid ColumnDefinitions="120,*">
+                        <TextBlock Grid.Column="0" Text="🤖 agent run" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
                                    Text="A single agent executing a task — either standalone (kicked off from the Agents page) or as a member of a team run. Has its own ledger row, turns, and review." />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <TextBlock Text="💬 session" FontWeight="SemiBold" Width="120"
-                                   Foreground="{DynamicResource TextPrimary}" />
-                        <TextBlock TextWrapping="Wrap"
+                    </Grid>
+                    <Grid ColumnDefinitions="120,*">
+                        <TextBlock Grid.Column="0" Text="💬 session" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
                                    Text="A chat conversation with the assistant. Click to resume; persists across restarts." />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <TextBlock Text="🔗 claw" FontWeight="SemiBold" Width="120"
-                                   Foreground="{DynamicResource TextPrimary}" />
-                        <TextBlock TextWrapping="Wrap"
+                    </Grid>
+                    <Grid ColumnDefinitions="120,*">
+                        <TextBlock Grid.Column="0" Text="🔗 claw" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
                                    Text="An autonomous external system Sovrant connects to over MCP (n8n, Zapier, custom servers). Sovrant monitors and steers them from here. Foundational — full claw runtime lands later." />
-                    </StackPanel>
+                    </Grid>
                 </StackPanel>
             </Border>
 

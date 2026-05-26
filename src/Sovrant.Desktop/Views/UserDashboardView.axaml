@@ -22,9 +22,17 @@
                 <StackPanel>
                     <TextBlock Text="Dashboard" FontSize="24" FontWeight="Bold"
                                Foreground="{DynamicResource TextPrimary}" />
-                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
-                               TextWrapping="Wrap"
-                               Text="Your activity across every workspace you belong to — plus your teammates' public activity in those workspaces." />
+                    <WrapPanel Orientation="Horizontal">
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                   Text="Your activity across every workspace you belong to — plus your teammates' public activity."
+                                   Margin="0,0,10,0" />
+                        <Button Command="{Binding ToggleHelpCommand}"
+                                Padding="0" Background="Transparent" BorderThickness="0"
+                                Foreground="{DynamicResource BrandPrimary}"
+                                FontSize="12" Cursor="Hand">
+                            <TextBlock Text="{Binding HelpToggleLabel}" TextDecorations="Underline" />
+                        </Button>
+                    </WrapPanel>
                 </StackPanel>
             </DockPanel>
 
@@ -33,6 +41,57 @@
                        Foreground="{DynamicResource StatusFail}"
                        IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                        TextWrapping="Wrap" />
+
+            <!-- Help / explainer panel -->
+            <Border IsVisible="{Binding ShowHelp}"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                    CornerRadius="8" Padding="16,12" Margin="0,8,0,0">
+                <StackPanel Spacing="10">
+                    <Grid ColumnDefinitions="130,*">
+                        <TextBlock Grid.Column="0" Text="Missions" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="Long-running goals you own across all workspaces. A mission decomposes into team runs and agent runs until the goal is complete." />
+                    </Grid>
+                    <Grid ColumnDefinitions="130,*">
+                        <TextBlock Grid.Column="0" Text="Team runs" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="Team executions you kicked off — a group of agents running together under a sequential, parallel, or swarm profile." />
+                    </Grid>
+                    <Grid ColumnDefinitions="130,*">
+                        <TextBlock Grid.Column="0" Text="Agent runs" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="Solo agent runs you launched directly from the Agents page, or as individual members of a team run." />
+                    </Grid>
+                    <Grid ColumnDefinitions="130,*">
+                        <TextBlock Grid.Column="0" Text="Sessions" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="Chat conversations you started. Private sessions are only visible to you; public ones are visible to workspace admins." />
+                    </Grid>
+                    <Grid ColumnDefinitions="130,*">
+                        <TextBlock Grid.Column="0" Text="Shared" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="Public activity from teammates in workspaces you share. Private records from teammates are never shown here." />
+                    </Grid>
+                    <Grid ColumnDefinitions="130,*">
+                        <TextBlock Grid.Column="0" Text="Claws" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="External MCP systems Sovrant is connected to (n8n, Zapier, custom servers). Sovrant monitors and steers them from the Command Center." />
+                    </Grid>
+                </StackPanel>
+            </Border>
 
             <!-- KPI tiles -->
             <UniformGrid Rows="1" Columns="6" Margin="0,8,0,0">

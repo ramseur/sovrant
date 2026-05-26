@@ -20,7 +20,10 @@
         <div>
             <h1>Dashboard</h1>
             <p class="text-secondary cc-subtitle">
-                Your activity across every workspace you belong to — plus the public activity of teammates in those workspaces.
+                Your activity across every workspace you belong to — plus your teammates' public activity.
+                <button type="button" class="btn-link cc-help-toggle" @onclick="() => _showHelp = !_showHelp">
+                    @(_showHelp ? "Hide guide" : "What are these?")
+                </button>
             </p>
         </div>
         <div class="diag-header-right">
@@ -31,6 +34,31 @@
             <button class="btn-secondary" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Refreshing…" : "Refresh")</button>
         </div>
     </div>
+
+    @if (_showHelp)
+    {
+        <div class="cc-help-panel">
+            <dl class="cc-help-grid">
+                <dt>Missions</dt>
+                <dd>Long-running goals you own across all workspaces. A mission decomposes into team runs and agent runs until the goal is complete.</dd>
+
+                <dt>Team runs</dt>
+                <dd>Team executions you kicked off — a group of agents running together under a sequential, parallel, or swarm profile.</dd>
+
+                <dt>Agent runs</dt>
+                <dd>Solo agent runs you launched directly from the Agents page, or as individual members of a team run.</dd>
+
+                <dt>Sessions</dt>
+                <dd>Chat conversations you started. Private sessions are only visible to you; public ones are visible to workspace admins.</dd>
+
+                <dt>Shared</dt>
+                <dd>Public activity from teammates in workspaces you share. Private records from teammates are never shown here.</dd>
+
+                <dt>Claws</dt>
+                <dd>External MCP systems Sovrant is connected to (n8n, Zapier, custom servers). Sovrant monitors and steers them from the Command Center.</dd>
+            </dl>
+        </div>
+    }
 
     @if (!string.IsNullOrEmpty(_error))
     {
@@ -138,6 +166,7 @@
 
     private UserDashboardState? _state;
     private bool _loading;
+    private bool _showHelp;
     private string _error = string.Empty;
     private System.Threading.Timer? _timer;
 

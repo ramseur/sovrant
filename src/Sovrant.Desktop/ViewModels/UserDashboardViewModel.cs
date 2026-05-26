@@ -39,6 +39,12 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private int _claws;
     [ObservableProperty] private string _lastRefreshed = string.Empty;
     [ObservableProperty] private bool _isEmpty = true;
+    [ObservableProperty] private bool _showHelp;
+
+    public string HelpToggleLabel => ShowHelp ? "Hide guide" : "What are these?";
+    partial void OnShowHelpChanged(bool value) => OnPropertyChanged(nameof(HelpToggleLabel));
+
+    [RelayCommand] private void ToggleHelp() => ShowHelp = !ShowHelp;
 
     public ObservableCollection<UserDashboardRowViewModel> Rows { get; } = [];
     public ObservableCollection<UserDashboardRowViewModel> PagedRows { get; } = [];
