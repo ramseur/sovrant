@@ -492,6 +492,82 @@ Both seeders are idempotent — they're safe to run on every boot, and they back
 
 ---
 
+## Supabase / PostgreSQL Backend (Phase 40C)
+
+An optional PostgreSQL storage backend ships in `Sovrant.Storage.Postgres`. When enabled, it **overrides** the SQLite registrations for `ISessionStore` and `ICredentialStore` only — the remaining 19 stores continue to use SQLite.
+
+### What stores are ported
+
+| Store | SQLite default | Postgres override |
+|---|---|---|
+| `ISessionStore` | `SqliteSessionStore` | `PostgresSessionStore` ✅ |
+| `ICredentialStore` | `SqliteCredentialStore` | `PostgresCredentialStore` ✅ |
+| All other stores (memory, audit, usage, workspaces, users, teams, missions, swarm, etc.) | SQLite | SQLite (deferred) |
+
+### Configuration
+
+Supabase credentials are stored in the encrypted `ICredentialStore` (never on disk as plaintext). The admin UI at `/admin/system-integrations` (Web) or the equivalent Desktop view sets these:
+
+| Credential key | Value |
+|---|---|
+| `system.supabase.project_url` | e.g. `https://xyz.supabase.co` |
+| `system.supabase.service_role_key` | Supabase service role secret key |
+| `system.database_backend` | `"supabase"` to activate; `"sqlite"` to revert |
+
+A restart is required after switching backends. The admin UI provides **Test Connection**, **Initialize Schema**, **Migrate Data from SQLite**, **Switch to Supabase**, and **Revert to SQLite** actions.
+
+### Boot-time DI switch
+
+Sovrant uses a two-phase bootstrap to avoid a chicken-and-egg problem (Supabase credentials must be read before the Postgres provider can be registered):
+
+```
+Phase 1 — mini SQLite container
+  AddSovrantStorage(bootstrapConfig) → read ICredentialStore
+  → retrieve system.database_backend, system.supabase.project_url, system.supabase.service_role_key
+
+Phase 2 — main container
+  if backend == "supabase" && url && key are present:
+    AddSovrantPostgresStorage(connectionString, keystorePath)
+    → registers PostgresSessionStore  (overrides SqliteSessionStore)
+    → registers PostgresCredentialStore (overrides SqliteCredentialStore)
+  else:
+    SQLite stores remain active (default)
+```
+
+`AddSovrantPostgresStorage` is called after `AddSovrantRuntime`, so its registrations win. Both `Sovrant.Web/Program.cs` and `Sovrant.Desktop/App.axaml.cs` follow this pattern.
+
+### Schema
+
+The embedded schema lives at `src/Sovrant.Runtime/Storage/PostgresSchema.sql` and is loaded by `PostgresSchemaInitializer`. It mirrors the SQLite migration history (currently at schema version 30) with these PostgreSQL-specific adaptations:
+
+- Timestamps stored as `TEXT (ISO 8601)` for wire compatibility with SQLite
+- Full-text search via `tsvector` + `plainto_tsquery` (replaces SQLite FTS5)
+- `BYTEA` columns for encrypted credential blobs
+- Idempotent `CREATE TABLE IF NOT EXISTS` / `INSERT ... ON CONFLICT DO NOTHING`
+
+Schema initialization is **manual** — the admin must click "Initialize Schema" in the UI. Sovrant will not auto-initialize Postgres on first boot.
+
+### SQLite → Postgres migration
+
+`SqliteToPostgresMigrator.MigrateAsync()` copies the sessions, session entries, and credentials tables from the local SQLite database into Postgres. It is:
+
+- **Idempotent** — uses `ON CONFLICT DO NOTHING`; safe to run multiple times
+- **Scoped** — only sessions, session\_entries, and credentials are migrated; memory, audit, and orchestration state stay in SQLite
+- **Non-destructive** — the source SQLite file is opened read-only; the original is never modified
+
+### Connection details
+
+`PostgresConnectionFactory` derives the host from the Supabase project URL (`https://xyz.supabase.co` → `db.xyz.supabase.co:5432`) and connects via Npgsql with SSL required, username `postgres`, and the service role key as the password. No connection pooling is used — each store operation opens a fresh connection.
+
+### Known limitations
+
+- **Only sessions + credentials use Postgres.** Memory, audit, workspace, user, team, mission, and swarm data remain in local SQLite. Horizontal scaling is not supported with this configuration.
+- **No Supabase Auth / SSO.** OAuth/OIDC and SAML integration (Supabase Auth) are deferred.
+- **No row-level security.** Schema has `workspace_id`/`project_id` columns but Postgres RLS policies are not applied — access control is enforced at the application layer.
+- **Keystore stays local.** The AES-256-GCM master key file (`~/.sovrant/credentials/.keystore`) is still on the local filesystem.
+
+---
+
 ## Environment Variables
 
 | Variable | Default | Description |
