@@ -41,6 +41,28 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _isEmpty = true;
 
     public ObservableCollection<UserDashboardRowViewModel> Rows { get; } = [];
+    public ObservableCollection<UserDashboardRowViewModel> PagedRows { get; } = [];
+
+    private const int PageSize = 10;
+    [ObservableProperty] private int _currentPage;
+    [ObservableProperty] private string _pageInfo = string.Empty;
+    [ObservableProperty] private bool _hasPreviousPage;
+    [ObservableProperty] private bool _hasNextPage;
+
+    [RelayCommand] private void PreviousPage() { CurrentPage--; RefreshPagedRows(); }
+    [RelayCommand] private void NextPage() { CurrentPage++; RefreshPagedRows(); }
+
+    private void RefreshPagedRows()
+    {
+        PagedRows.Clear();
+        foreach (var r in Rows.Skip(CurrentPage * PageSize).Take(PageSize))
+            PagedRows.Add(r);
+        int total = Rows.Count;
+        HasPreviousPage = CurrentPage > 0;
+        HasNextPage = (CurrentPage + 1) * PageSize < total;
+        PageInfo = total <= PageSize ? string.Empty
+            : $"{CurrentPage * PageSize + 1}–{Math.Min((CurrentPage + 1) * PageSize, total)} of {total}";
+    }
 
     public UserDashboardViewModel(
         UserDashboardAggregator aggregator,
@@ -127,7 +149,7 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
                 OthersPublicRows = state.OthersPublicRows;
                 Claws = state.Claws;
                 LastRefreshed = state.GeneratedAt.LocalDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-
+                CurrentPage = 0;
                 Rows.Clear();
                 foreach (var r in state.Rows)
                 {
@@ -148,6 +170,7 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
                     });
                 }
                 IsEmpty = Rows.Count == 0;
+                RefreshPagedRows();
                 ErrorMessage = string.Empty;
             });
         }

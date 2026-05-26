@@ -2024,6 +2024,20 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     justify-content: space-between;
     margin-bottom: 16px;
 }
+.diag-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+.cc-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 10px 0 4px;
+}
+.cc-pager-btn { padding: 4px 12px; font-size: 12px; }
 
 .btn-outline {
     padding: 6px 14px;

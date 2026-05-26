@@ -23,7 +23,13 @@
                 Your activity across every workspace you belong to — plus the public activity of teammates in those workspaces.
             </p>
         </div>
-        <button class="btn-secondary" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Refreshing…" : "Refresh")</button>
+        <div class="diag-header-right">
+            @if (_state is not null)
+            {
+                <span class="text-muted text-sm">@_state.GeneratedAt.LocalDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture) · auto-refresh 2s</span>
+            }
+            <button class="btn-secondary" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Refreshing…" : "Refresh")</button>
+        </div>
     </div>
 
     @if (!string.IsNullOrEmpty(_error))
@@ -77,7 +83,7 @@
                 <div class="cc-col-when">Last activity</div>
                 <div class="cc-col-cost">Cost</div>
             </div>
-            @foreach (var row in _state.Rows)
+            @foreach (var row in _state.Rows.Skip(_dashPage * PageSize).Take(PageSize))
             {
                 <a class="cc-grid-row" href="@(row.DetailRoute ?? "#")">
                     <div class="cc-col-kind">
@@ -115,13 +121,21 @@
                 </a>
             }
         </div>
-        <div class="text-muted text-sm cc-footer">
-            Last refreshed @_state.GeneratedAt.LocalDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture) · auto-refresh every 2s
-        </div>
+        @if (_state.Rows.Count > PageSize)
+        {
+            <div class="cc-pager">
+                <button class="btn-secondary cc-pager-btn" disabled="@(_dashPage == 0)" @onclick="() => _dashPage--">← Prev</button>
+                <span class="text-muted text-sm">@(_dashPage * PageSize + 1)–@(Math.Min((_dashPage + 1) * PageSize, _state.Rows.Count)) of @_state.Rows.Count</span>
+                <button class="btn-secondary cc-pager-btn" disabled="@((_dashPage + 1) * PageSize >= _state.Rows.Count)" @onclick="() => _dashPage++">Next →</button>
+            </div>
+        }
     }
 </div>
 
 @code {
+    private const int PageSize = 10;
+    private int _dashPage;
+
     private UserDashboardState? _state;
     private bool _loading;
     private string _error = string.Empty;
@@ -148,6 +162,7 @@
         try
         {
             _state = await Aggregator.GetStateAsync(Session.UserId);
+            _dashPage = 0;
             _error = string.Empty;
         }
         catch (Exception ex)

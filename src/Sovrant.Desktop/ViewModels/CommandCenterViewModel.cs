@@ -63,6 +63,28 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
     private void ToggleHelp() => ShowHelp = !ShowHelp;
 
     public ObservableCollection<CommandCenterRowViewModel> Rows { get; } = [];
+    public ObservableCollection<CommandCenterRowViewModel> PagedRows { get; } = [];
+
+    private const int PageSize = 10;
+    [ObservableProperty] private int _currentPage;
+    [ObservableProperty] private string _pageInfo = string.Empty;
+    [ObservableProperty] private bool _hasPreviousPage;
+    [ObservableProperty] private bool _hasNextPage;
+
+    [RelayCommand] private void PreviousPage() { CurrentPage--; RefreshPagedRows(); }
+    [RelayCommand] private void NextPage() { CurrentPage++; RefreshPagedRows(); }
+
+    private void RefreshPagedRows()
+    {
+        PagedRows.Clear();
+        foreach (var r in Rows.Skip(CurrentPage * PageSize).Take(PageSize))
+            PagedRows.Add(r);
+        int total = Rows.Count;
+        HasPreviousPage = CurrentPage > 0;
+        HasNextPage = (CurrentPage + 1) * PageSize < total;
+        PageInfo = total <= PageSize ? string.Empty
+            : $"{CurrentPage * PageSize + 1}–{Math.Min((CurrentPage + 1) * PageSize, total)} of {total}";
+    }
 
     /// <summary>
     /// Raised when the user clicks a row in the cockpit grid. MainViewModel
@@ -211,7 +233,7 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
                 ActiveSessions = state.ActiveSessions;
                 ActiveClaws = state.ActiveClaws;
                 LastRefreshed = state.GeneratedAt.LocalDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-
+                CurrentPage = 0;
                 Rows.Clear();
                 foreach (var r in state.Rows)
                 {
@@ -231,6 +253,7 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
                     });
                 }
                 IsEmpty = Rows.Count == 0;
+                RefreshPagedRows();
                 ErrorMessage = string.Empty;
             });
         }
