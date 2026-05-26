@@ -562,6 +562,12 @@
             var pooled = await SessionPool.GetOrCreateAsync(sessionId,
                 agentSystemPrompt: _agentSystemPrompt, agentName: _agentName, ct: ct);
 
+            // Sync privacy — the session row may have just been created with the
+            // default (is_private = true). If the user already toggled before
+            // sending (pre-message toggle), persist that choice now.
+            if (!_isPrivate)
+                await SessionStore.UpdatePrivacyAsync(sessionId, Sovrant.Web.Program.SovrantUserId, false, ct);
+
             // Apply the session-level MCP selection from the context bar (opt-in).
             var activeMcps = ActiveContext.ActiveMcpServers;
             pooled.Config.AllowedMcpServers = activeMcps.Count > 0 ? activeMcps : null;

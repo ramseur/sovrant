@@ -274,6 +274,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 agentName: _agentName,
                 ct: token).ConfigureAwait(false);
 
+            // Sync privacy — session row may have just been created with default
+            // is_private = true; persist any pre-message toggle the user made.
+            if (!IsSessionPrivate)
+                await _sessionStore.UpdatePrivacyAsync(SessionId, App.SovrantUserId, false, token).ConfigureAwait(false);
+
             // Apply the session-level MCP selection from ActiveContextViewModel (opt-in).
             var activeMcps = _activeContext.ActiveMcpServers;
             pooled.Config.AllowedMcpServers = activeMcps.Count > 0 ? activeMcps : null;
