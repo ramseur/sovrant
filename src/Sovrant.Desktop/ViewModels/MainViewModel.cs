@@ -82,11 +82,13 @@ public partial class MainViewModel : ViewModelBase
         switch (e.Kind)
         {
             case "session":
+                if (string.IsNullOrEmpty(e.DetailRoute)) return; // masked — private, not owned by viewer
                 var chat = CreateChatViewModel();
                 CurrentPage = chat;
                 await chat.LoadSessionAsync(e.Id);
                 break;
             case "agent-run":
+                if (string.IsNullOrEmpty(e.DetailRoute)) return; // masked — private, not owned by viewer
                 if (CurrentPage is CommandCenterViewModel cockpit)
                 {
                     await cockpit.OpenRunAsync(e.Id);

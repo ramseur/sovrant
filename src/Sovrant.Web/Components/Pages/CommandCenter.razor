@@ -304,6 +304,13 @@
             {
                 _focusError = $"Run '{runId}' not found in the agent-run ledger. It may have been pruned or originated from a different workspace.";
             }
+            else if (_focusedRun.IsPrivate &&
+                     !string.Equals(_focusedRun.UserId, Session.UserId, StringComparison.Ordinal))
+            {
+                // Private run owned by someone else — treat as not found to avoid leaking existence.
+                _focusedRun = null;
+                _focusError = "This run is private.";
+            }
             else
             {
                 try
