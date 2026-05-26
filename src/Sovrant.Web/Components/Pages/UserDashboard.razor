@@ -1,0 +1,262 @@
+@page "/dashboard"
+@using System.Globalization
+@using Sovrant.Runtime.UserDashboard
+@using Sovrant.Runtime.Missions
+@using Sovrant.Runtime.Storage
+@using Sovrant.Runtime.Session
+@using Sovrant.Runtime.Governance
+@using Sovrant.Web.Services
+@inject WebSessionService Session
+@inject UserDashboardAggregator Aggregator
+@inject IMissionStore MissionStore
+@inject IAgentRunStore RunStore
+@inject ISessionStore SessionStore
+@inject IAuditStore AuditStore
+@inject NavigationManager Nav
+@implements IDisposable
+
+<div class="settings-page cc-page">
+    <div class="diag-header">
+        <div>
+            <h1>Dashboard</h1>
+            <p class="text-secondary cc-subtitle">
+                Your activity across every workspace you belong to — plus your teammates' public activity.
+                <button type="button" class="btn-link cc-help-toggle" @onclick="() => _showHelp = !_showHelp">
+                    @(_showHelp ? "Hide guide" : "What are these?")
+                </button>
+            </p>
+        </div>
+        <div class="diag-header-right">
+            @if (_state is not null)
+            {
+                <span class="text-muted text-sm">Last updated: @_state.GeneratedAt.LocalDateTime.ToString("MMM d, h:mm tt", CultureInfo.InvariantCulture)</span>
+            }
+            <button class="btn-secondary" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Refreshing…" : "Refresh")</button>
+        </div>
+    </div>
+
+    @if (_showHelp)
+    {
+        <div class="cc-help-panel">
+            <dl class="cc-help-grid">
+                <dt>Missions</dt>
+                <dd>Long-running goals you own across all workspaces. A mission decomposes into team runs and agent runs until the goal is complete.</dd>
+
+                <dt>Team runs</dt>
+                <dd>Team executions you kicked off — a group of agents running together under a sequential, parallel, or swarm profile.</dd>
+
+                <dt>Agent runs</dt>
+                <dd>Solo agent runs you launched directly from the Agents page, or as individual members of a team run.</dd>
+
+                <dt>Sessions</dt>
+                <dd>Chat conversations you started. Private sessions are only visible to you; public ones are visible to workspace admins.</dd>
+
+                <dt>Shared</dt>
+                <dd>Your own items you've made public — missions, runs, and sessions with the 🔓 lock open. These are visible to workspace admins and teammates.</dd>
+
+                <dt>Claws</dt>
+                <dd>External MCP systems Sovrant is connected to (n8n, Zapier, custom servers). Sovrant monitors and steers them from the Command Center.</dd>
+            </dl>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="page-error-banner" role="alert">
+            <span>&#9888;</span><span class="error-message">@_error</span>
+        </div>
+    }
+
+    <div class="cc-stat-row">
+        <CcStat Label="Missions" Value="@(_state?.OwnMissions ?? 0)"
+                Tooltip="Long-running goals you own." />
+        <CcStat Label="Team runs" Value="@(_state?.OwnTeamRuns ?? 0)"
+                Tooltip="Team executions you kicked off." />
+        <CcStat Label="Agent runs" Value="@(_state?.OwnAgentRuns ?? 0)"
+                Tooltip="Solo agent runs you launched." />
+        <CcStat Label="Sessions" Value="@(_state?.OwnSessions ?? 0)"
+                Tooltip="Chat conversations you started." />
+        <CcStat Label="Shared" Value="@(_state?.OthersPublicRows ?? 0)"
+                Tooltip="Your items you've made public — visible to workspace teammates." />
+        <CcStat Label="Claws" Value="@(_state?.Claws ?? 0)"
+                Tooltip="External MCP systems Sovrant is connected to." />
+    </div>
+
+    @if (_state is null && _loading)
+    {
+        <div class="cc-empty"><p class="text-secondary">Loading…</p></div>
+    }
+    else if (_state is null || _state.Rows.Count == 0)
+    {
+        <div class="cc-empty">
+            <h2>Nothing yet</h2>
+            <p class="text-secondary">
+                Start a chat or run an agent template — your activity (and your teammates' public activity)
+                will appear here.
+            </p>
+            <div class="cc-empty-actions">
+                <a href="/" class="btn-primary">New chat</a>
+                <a href="/agents" class="btn-outline">Run an agent</a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="cc-grid">
+            <div class="cc-grid-header">
+                <div class="cc-col-kind">Kind</div>
+                <div class="cc-col-title">Title</div>
+                <div class="cc-col-status">Status</div>
+                <div class="cc-col-owner">Owner</div>
+                <div class="cc-col-when">Last activity</div>
+                <div class="cc-col-cost">Cost</div>
+            </div>
+            @foreach (var row in _state.Rows.Skip(_dashPage * PageSize).Take(PageSize))
+            {
+                <a class="cc-grid-row" href="@(row.DetailRoute ?? "#")">
+                    <div class="cc-col-kind">
+                        <span class="cc-kind-pill cc-kind-@(row.Kind)">@KindIcon(row.Kind) @row.Kind</span>
+                    </div>
+                    <div class="cc-col-title">
+                        <div class="cc-title">
+                            @row.Title
+                            @if (row.IsOwn)
+                            {
+                                <button class="privacy-toggle-mini @(row.IsPrivate ? "private" : "public")"
+                                        title="@(row.IsPrivate ? "Private — only you can see this. Click to make public." : "Public — visible to workspace admins. Click to make private.")"
+                                        @onclick="@(() => TogglePrivacyAsync(row))"
+                                        @onclick:stopPropagation="true"
+                                        @onclick:preventDefault="true">
+                                    @(row.IsPrivate ? "🔒" : "🔓")
+                                </button>
+                            }
+                            else if (row.IsPrivate)
+                            {
+                                <span class="cc-badge-private" title="Private — only visible to you">&#x1F512;</span>
+                            }
+                        </div>
+                        @if (!string.IsNullOrEmpty(row.Preview))
+                        {
+                            <div class="cc-preview text-muted text-sm">@row.Preview</div>
+                        }
+                    </div>
+                    <div class="cc-col-status">
+                        <span class="cc-status cc-status-@row.Status.ToLowerInvariant()">@row.Status</span>
+                    </div>
+                    <div class="cc-col-owner text-sm text-muted">@(row.OwnerLabel ?? "—")</div>
+                    <div class="cc-col-when text-sm text-muted">@FormatRelative(row.LastActivity)</div>
+                    <div class="cc-col-cost text-sm text-muted">@(row.CostUsd is null ? "—" : $"${row.CostUsd:F4}")</div>
+                </a>
+            }
+        </div>
+        @if (_state.Rows.Count > PageSize)
+        {
+            <div class="cc-pager">
+                <button class="btn-secondary cc-pager-btn" disabled="@(_dashPage == 0)" @onclick="() => _dashPage--">← Prev</button>
+                <span class="text-muted text-sm">@(_dashPage * PageSize + 1)–@(Math.Min((_dashPage + 1) * PageSize, _state.Rows.Count)) of @_state.Rows.Count</span>
+                <button class="btn-secondary cc-pager-btn" disabled="@((_dashPage + 1) * PageSize >= _state.Rows.Count)" @onclick="() => _dashPage++">Next →</button>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private const int PageSize = 10;
+    private int _dashPage;
+
+    private UserDashboardState? _state;
+    private bool _loading;
+    private bool _showHelp;
+    private string _error = string.Empty;
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login", forceLoad: false);
+            return;
+        }
+
+        await LoadAsync();
+        _timer = new System.Threading.Timer(_ => InvokeAsync(LoadAsync), null,
+            TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+    }
+
+    private async Task LoadAsync()
+    {
+        if (string.IsNullOrEmpty(Session.UserId)) return;
+
+        _loading = true;
+        try
+        {
+            _state = await Aggregator.GetStateAsync(Session.UserId);
+            int dashTotal = _state.Rows.Count;
+            int dashTotalPages = (int)Math.Ceiling(dashTotal / (double)PageSize);
+            if (dashTotalPages == 0) _dashPage = 0;
+            else if (_dashPage >= dashTotalPages) _dashPage = dashTotalPages - 1;
+            _error = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load dashboard: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string KindIcon(string kind) => kind switch
+    {
+        "mission" => "\U0001F3AF",
+        "team-run" => "\U0001F465",
+        "agent-run" => "\U0001F916",
+        "session" => "\U0001F4AC",
+        "claw" => "\U0001F517",
+        _ => "•",
+    };
+
+    private static string FormatRelative(DateTimeOffset when)
+    {
+        var delta = DateTimeOffset.UtcNow - when;
+        if (delta.TotalSeconds < 5) return "just now";
+        if (delta.TotalSeconds < 60) return $"{(int)delta.TotalSeconds}s ago";
+        if (delta.TotalMinutes < 60) return $"{(int)delta.TotalMinutes}m ago";
+        if (delta.TotalHours < 24) return $"{(int)delta.TotalHours}h ago";
+        return when.LocalDateTime.ToString("MMM d, HH:mm", CultureInfo.InvariantCulture);
+    }
+
+    private async Task TogglePrivacyAsync(UserDashboardRow row)
+    {
+        if (string.IsNullOrEmpty(Session.UserId)) return;
+        var newValue = !row.IsPrivate;
+        try
+        {
+            switch (row.Kind)
+            {
+                case "mission":
+                    await MissionStore.UpdatePrivacyAsync(row.Id, Session.UserId, newValue);
+                    await AuditStore.LogPrivacyChangeAsync(Session.UserId, "mission", row.Id, newValue);
+                    break;
+                case "agent-run":
+                case "team-run":
+                    await RunStore.UpdatePrivacyAsync(row.Id, Session.UserId, newValue);
+                    await AuditStore.LogPrivacyChangeAsync(Session.UserId, "agent_run", row.Id, newValue);
+                    break;
+                case "session":
+                    await SessionStore.UpdatePrivacyAsync(row.Id, Session.UserId, newValue);
+                    await AuditStore.LogPrivacyChangeAsync(Session.UserId, "session", row.Id, newValue);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to update privacy: {ex.Message}";
+        }
+        await LoadAsync();
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

@@ -31,10 +31,10 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
             cmd.CommandText = """
                 INSERT INTO missions
                     (id, goal, status, plan_json, created_at, updated_at,
-                     session_id, workspace_id, project_id, owner_user_id)
+                     session_id, workspace_id, project_id, owner_user_id, is_private)
                 VALUES
                     ($id, $goal, 'planning', '{}', $now, $now,
-                     $sessionId, $workspaceId, $projectId, $ownerUserId)
+                     $sessionId, $workspaceId, $projectId, $ownerUserId, 1)
                 """;
             cmd.Parameters.AddWithValue("$id", id);
             cmd.Parameters.AddWithValue("$goal", goal);
@@ -75,7 +75,8 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
             SessionId: sessionId,
             WorkspaceId: workspaceId,
             ProjectId: projectId,
-            OwnerUserId: ownerUserId);
+            OwnerUserId: ownerUserId,
+            IsPrivate: true);
     }
 
     public async Task<Mission?> GetAsync(string missionId, CancellationToken ct = default)
@@ -86,7 +87,7 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
             SELECT id, goal, status, plan_json, created_at, updated_at, completed_at,
-                   session_id, workspace_id, project_id, owner_user_id
+                   session_id, workspace_id, project_id, owner_user_id, is_private
             FROM missions
             WHERE id = $id
             """;
@@ -113,7 +114,7 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         {
             cmd.CommandText = """
                 SELECT id, goal, status, plan_json, created_at, updated_at, completed_at,
-                       session_id, workspace_id, project_id, owner_user_id
+                       session_id, workspace_id, project_id, owner_user_id, is_private
                 FROM missions
                 WHERE owner_user_id = $owner AND status = $status
                 ORDER BY created_at DESC
@@ -126,7 +127,7 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         {
             cmd.CommandText = """
                 SELECT id, goal, status, plan_json, created_at, updated_at, completed_at,
-                       session_id, workspace_id, project_id, owner_user_id
+                       session_id, workspace_id, project_id, owner_user_id, is_private
                 FROM missions
                 WHERE owner_user_id = $owner
                 ORDER BY created_at DESC
@@ -138,7 +139,7 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         {
             cmd.CommandText = """
                 SELECT id, goal, status, plan_json, created_at, updated_at, completed_at,
-                       session_id, workspace_id, project_id, owner_user_id
+                       session_id, workspace_id, project_id, owner_user_id, is_private
                 FROM missions
                 WHERE status = $status
                 ORDER BY created_at DESC
@@ -150,7 +151,7 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         {
             cmd.CommandText = """
                 SELECT id, goal, status, plan_json, created_at, updated_at, completed_at,
-                       session_id, workspace_id, project_id, owner_user_id
+                       session_id, workspace_id, project_id, owner_user_id, is_private
                 FROM missions
                 ORDER BY created_at DESC
                 LIMIT $limit
@@ -233,6 +234,24 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         return new MissionEvent(id, missionId, eventType, payloadJson, now, workspaceId, projectId);
     }
 
+    public async Task UpdatePrivacyAsync(
+        string missionId,
+        string ownerUserId,
+        bool isPrivate,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(missionId);
+        ArgumentNullException.ThrowIfNull(ownerUserId);
+
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "UPDATE missions SET is_private = $v WHERE id = $id AND owner_user_id = $owner";
+        cmd.Parameters.AddWithValue("$v", isPrivate ? 1 : 0);
+        cmd.Parameters.AddWithValue("$id", missionId);
+        cmd.Parameters.AddWithValue("$owner", ownerUserId);
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
     public async Task<IReadOnlyList<MissionEvent>> GetEventsAsync(
         string missionId,
         CancellationToken ct = default)
@@ -278,7 +297,8 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
             SessionId: r.IsDBNull(7) ? null : r.GetString(7),
             WorkspaceId: r.IsDBNull(8) ? null : r.GetString(8),
             ProjectId: r.IsDBNull(9) ? null : r.GetString(9),
-            OwnerUserId: r.IsDBNull(10) ? null : r.GetString(10));
+            OwnerUserId: r.IsDBNull(10) ? null : r.GetString(10),
+            IsPrivate: !r.IsDBNull(11) && r.GetInt64(11) != 0);
     }
 
     private static string StatusToString(MissionStatus s) => s switch

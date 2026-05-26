@@ -132,6 +132,17 @@
                                                        Foreground="{DynamicResource TextMuted}" />
                                             <TextBlock Text="{Binding WhenLabel}" FontSize="10"
                                                        Foreground="{DynamicResource TextMuted}" />
+                                            <Button IsVisible="{Binding IsOwn}"
+                                                    Command="{Binding $parent[ItemsControl].((vm:AgentsViewModel)DataContext).TogglePrivacyCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    Padding="4,1"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Cursor="Hand"
+                                                    ToolTip.Tip="Click to toggle privacy">
+                                                <TextBlock Text="{Binding IsPrivate, Converter={x:Static vm:BoolToLockIconConverter.Instance}}"
+                                                           FontSize="10" />
+                                            </Button>
                                         </StackPanel>
                                     </StackPanel>
                                 </DataTemplate>

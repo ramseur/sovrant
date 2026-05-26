@@ -5,15 +5,19 @@ namespace Sovrant.Agents.Tests.Shared;
 public class WorkspaceContextTests : IDisposable
 {
     private readonly string _tempDir;
+    private readonly string? _priorArtifactsRoot;
 
     public WorkspaceContextTests()
     {
         _tempDir = Path.Combine(Path.GetTempPath(), $"workspace-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_tempDir);
+        _priorArtifactsRoot = Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT");
+        Environment.SetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT", Path.Combine(_tempDir, "artifacts"));
     }
 
     public void Dispose()
     {
+        Environment.SetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT", _priorArtifactsRoot);
         if (Directory.Exists(_tempDir))
             Directory.Delete(_tempDir, recursive: true);
     }

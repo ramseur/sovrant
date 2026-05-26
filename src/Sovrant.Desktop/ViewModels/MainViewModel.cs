@@ -26,6 +26,7 @@ public partial class MainViewModel : ViewModelBase
     public bool IsAgentsGroup => SelectedGroup == "agents";
     public bool IsWorkspaceGroup => SelectedGroup == "workspace";
     public bool IsConnectGroup => SelectedGroup == "connect";
+    public bool IsDashboardGroup => SelectedGroup == "dashboard";
     public bool IsGovernanceGroup => SelectedGroup == "governance";
     public bool IsAdminGroup => SelectedGroup == "admin";
     public bool IsSettingsGroup => SelectedGroup == "settings";
@@ -37,6 +38,7 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsAgentsGroup));
         OnPropertyChanged(nameof(IsWorkspaceGroup));
         OnPropertyChanged(nameof(IsConnectGroup));
+        OnPropertyChanged(nameof(IsDashboardGroup));
         OnPropertyChanged(nameof(IsGovernanceGroup));
         OnPropertyChanged(nameof(IsAdminGroup));
         OnPropertyChanged(nameof(IsSettingsGroup));
@@ -64,6 +66,9 @@ public partial class MainViewModel : ViewModelBase
         _currentPage = cockpit;
         cockpit.RowSelected += OnCockpitRowSelected;
 
+        var dashboard = services.GetRequiredService<UserDashboardViewModel>();
+        dashboard.RowSelected += OnDashboardRowSelected;
+
         sidebar.NavigationRequested += OnNavigationRequested;
         sidebar.SessionResumeRequested += OnSessionResumeRequested;
         commandPalette.CommandExecuted += OnCommandExecuted;
@@ -80,11 +85,13 @@ public partial class MainViewModel : ViewModelBase
         switch (e.Kind)
         {
             case "session":
+                if (string.IsNullOrEmpty(e.DetailRoute)) return; // masked — private, not owned by viewer
                 var chat = CreateChatViewModel();
                 CurrentPage = chat;
                 await chat.LoadSessionAsync(e.Id);
                 break;
             case "agent-run":
+                if (string.IsNullOrEmpty(e.DetailRoute)) return; // masked — private, not owned by viewer
                 if (CurrentPage is CommandCenterViewModel cockpit)
                 {
                     await cockpit.OpenRunAsync(e.Id);
@@ -94,6 +101,32 @@ public partial class MainViewModel : ViewModelBase
                 CurrentPage = _services.GetRequiredService<OrchestrationViewModel>();
                 break;
             // mission/claw — no dedicated detail view yet; keep cockpit visible.
+            default:
+                break;
+        }
+    }
+
+    private async void OnDashboardRowSelected(object? sender, CommandCenterRowSelectedEventArgs e)
+    {
+        switch (e.Kind)
+        {
+            case "session":
+                var chat = CreateChatViewModel();
+                CurrentPage = chat;
+                SelectedGroup = "chat";
+                OnSelectedGroupChanged("chat");
+                await chat.LoadSessionAsync(e.Id);
+                break;
+            case "agent-run":
+                var cockpit = _services.GetRequiredService<CommandCenterViewModel>();
+                CurrentPage = cockpit;
+                SelectedGroup = "dashboard"; // stay on dashboard group visually but show cockpit content
+                await cockpit.OpenRunAsync(e.Id);
+                break;
+            case "team-run":
+                CurrentPage = _services.GetRequiredService<OrchestrationViewModel>();
+                break;
+            // mission/claw — no dedicated detail view yet
             default:
                 break;
         }
@@ -127,6 +160,9 @@ public partial class MainViewModel : ViewModelBase
             case "connect":
                 Sidebar.SelectedNavItem = "Integrations";
                 OnNavigationRequested(this, "Integrations");
+                break;
+            case "dashboard":
+                CurrentPage = _services.GetRequiredService<UserDashboardViewModel>();
                 break;
             case "settings":
                 Sidebar.SelectedNavItem = "Settings";

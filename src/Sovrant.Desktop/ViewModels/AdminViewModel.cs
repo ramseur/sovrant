@@ -93,7 +93,7 @@ public partial class AdminViewModel : ViewModelBase
 
     // Provider profile management
     [ObservableProperty] private string _wsNewProviderName = string.Empty;
-    [ObservableProperty] private string _wsNewProviderKind = "OpenRouter";
+    [ObservableProperty] private string _wsNewProviderKind = "OpenAI";
     [ObservableProperty] private string _wsNewProviderApiKey = string.Empty;
     [ObservableProperty] private string _wsNewProviderBaseUrl = string.Empty;
 

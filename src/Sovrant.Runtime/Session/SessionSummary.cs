@@ -7,4 +7,6 @@ public sealed record SessionListItem(
     string SessionId,
     string? Title,
     DateTimeOffset UpdatedAt,
-    string? OwnerUserId = null);
+    string? OwnerUserId = null,
+    string? WorkspaceId = null,
+    bool IsPrivate = false);

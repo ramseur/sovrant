@@ -7,6 +7,8 @@
 @inject WebSessionService Session
 
 <div class="rail-icons-row">
+    <button class="rail-icon @(Selected == "dashboard" ? "active" : "")"
+            title="User Dashboard" @onclick='() => OnSelect.InvokeAsync("dashboard")'>&#x1F4CA;</button>
     <button class="rail-icon @(Selected == "chat" ? "active" : "")"
             title="Chat" @onclick='() => OnSelect.InvokeAsync("chat")'>&#x1F4AC;</button>
     <button class="rail-icon @(Selected == "knowledge" ? "active" : "")"

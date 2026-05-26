@@ -49,5 +49,34 @@ internal sealed class SqliteAuditStore(ISqliteConnectionFactory connectionFactor
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
+    public async Task LogPrivacyChangeAsync(
+        string userId,
+        string entityKind,
+        string entityId,
+        bool newIsPrivate,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(userId);
+        ArgumentNullException.ThrowIfNull(entityKind);
+        ArgumentNullException.ThrowIfNull(entityId);
+
+        var reason = $$"""{"kind":"{{entityKind}}","id":"{{entityId}}","isPrivate":{{(newIsPrivate ? "true" : "false")}},"userId":"{{userId}}"}""";
+
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO audit_governance (timestamp, phase, tool, session_id, action, rule, reason)
+            VALUES ($ts, $phase, $tool, $sid, $action, $rule, $reason)
+            """;
+        cmd.Parameters.AddWithValue("$ts", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$phase", "privacy");
+        cmd.Parameters.AddWithValue("$tool", entityKind);
+        cmd.Parameters.AddWithValue("$sid", entityKind == "session" ? entityId : "n/a");
+        cmd.Parameters.AddWithValue("$action", newIsPrivate ? "made_private" : "made_public");
+        cmd.Parameters.AddWithValue("$rule", "privacy_changed");
+        cmd.Parameters.AddWithValue("$reason", reason);
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

@@ -83,4 +83,18 @@ public interface ISessionStore
     /// all MCP tools for the session.
     /// </summary>
     Task SetMcpConnectionsAsync(string sessionId, IReadOnlyList<string>? servers, string? ownerUserId = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Phase 99 — flips the privacy flag on a session. The owner predicate
+    /// is enforced inside the UPDATE so a mismatched owner is a silent
+    /// no-op (zero rows affected) and never leaks the session's existence.
+    /// </summary>
+    Task UpdatePrivacyAsync(string sessionId, string ownerUserId, bool isPrivate, CancellationToken ct = default);
+
+    /// <summary>
+    /// Phase 99 — returns the current privacy flag for the session, or
+    /// <c>null</c> when the session has no row yet (which the UI treats
+    /// as "use the default", currently private).
+    /// </summary>
+    Task<bool?> GetIsPrivateAsync(string sessionId, CancellationToken ct = default);
 }

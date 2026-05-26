@@ -692,6 +692,9 @@ public sealed class AgentOrchestratorTeamProfileTests
 
         public Task<IReadOnlyList<AgentRunRecord>> ListAsync(AgentRunFilter? filter = null, int limit = 50, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<AgentRunRecord>>([]);
+
+        public Task UpdatePrivacyAsync(string runId, string ownerUserId, bool isPrivate, CancellationToken ct = default) =>
+            Task.CompletedTask;
     }
 
     /// <summary>Minimal in-memory <see cref="ITeamRegistry"/> with team-level support.</summary>

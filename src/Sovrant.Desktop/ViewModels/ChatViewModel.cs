@@ -7,6 +7,7 @@ using Sovrant.Commands;
 using Sovrant.Desktop.Adapters;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Conversation;
+using Sovrant.Runtime.Governance;
 using Sovrant.Runtime.Session;
 
 namespace Sovrant.Desktop.ViewModels;
@@ -15,6 +16,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 {
     private readonly IRuntimeSessionPool _sessionPool;
     private readonly ISessionStore _sessionStore;
+    private readonly IAuditStore _auditStore;
     private readonly SlashCommandDispatcher _commandDispatcher;
     private readonly DesktopConfirmationHandler? _confirmationHandler;
     private readonly ActiveContextViewModel _activeContext;
@@ -48,6 +50,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private bool _showCommandSuggestions;
 
+    // Phase 99 — defaults to private; reads stored state on session resume.
+    [ObservableProperty]
+    private bool _isSessionPrivate = true;
+
     public ActiveContextViewModel ActiveContext => _activeContext;
     public ObservableCollection<MessageViewModel> Messages { get; } = [];
     public ObservableCollection<CommandSuggestion> CommandSuggestions { get; } = [];
@@ -58,6 +64,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     public event Action? TurnCompleted;
 
     public ChatViewModel(IRuntimeSessionPool sessionPool, ISessionStore sessionStore,
+        IAuditStore auditStore,
         SlashCommandDispatcher commandDispatcher, ActiveContextViewModel activeContext,
         ActiveSessionsViewModel activeSessions,
         SovrantConfig config,
@@ -65,6 +72,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     {
         _sessionPool = sessionPool;
         _sessionStore = sessionStore;
+        _auditStore = auditStore;
         _commandDispatcher = commandDispatcher;
         _confirmationHandler = confirmationHandler;
         _activeContext = activeContext;
@@ -102,6 +110,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     {
         SessionId = sessionId;
         Messages.Clear();
+
+        var storedPrivacy = await _sessionStore.GetIsPrivateAsync(sessionId, ct).ConfigureAwait(false);
+        IsSessionPrivate = storedPrivacy ?? true;
 
         var entries = await _sessionStore.LoadAsync(sessionId, ownerUserId: App.SovrantUserId, ct: ct);
         foreach (var entry in entries)
@@ -263,6 +274,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 agentName: _agentName,
                 ct: token).ConfigureAwait(false);
 
+            // Sync privacy — session row may have just been created with default
+            // is_private = true; persist any pre-message toggle the user made.
+            if (!IsSessionPrivate)
+                await _sessionStore.UpdatePrivacyAsync(SessionId, App.SovrantUserId, false, token).ConfigureAwait(false);
+
             // Apply the session-level MCP selection from ActiveContextViewModel (opt-in).
             var activeMcps = _activeContext.ActiveMcpServers;
             pooled.Config.AllowedMcpServers = activeMcps.Count > 0 ? activeMcps : null;
@@ -333,13 +349,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     {
         IsSending = false;
 
-        if (_isBackgroundSession && _activeSessions.HasSession(SessionId))
+        if (_activeSessions.HasSession(SessionId))
         {
             _activeSessions.Cancel(SessionId);
-            _isBackgroundSession = false;
-            return;
         }
-
+        _isBackgroundSession = false;
     }
 
     protected virtual void Dispose(bool disposing)
@@ -403,6 +417,23 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         InputText = text;
         if (SendCommand.CanExecute(null))
             SendCommand.Execute(null);
+    }
+
+    [RelayCommand]
+    private async Task TogglePrivacyAsync(CancellationToken ct)
+    {
+        var newValue = !IsSessionPrivate;
+        IsSessionPrivate = newValue;
+        try
+        {
+            await _sessionStore.UpdatePrivacyAsync(SessionId, App.SovrantUserId, newValue, ct).ConfigureAwait(false);
+            await _auditStore.LogPrivacyChangeAsync(App.SovrantUserId, "session", SessionId, newValue, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            IsSessionPrivate = !newValue;
+            throw;
+        }
     }
 
     private bool CanSend() => !IsSending && !string.IsNullOrWhiteSpace(InputText);

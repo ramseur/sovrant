@@ -210,6 +210,28 @@ internal sealed class PostgresSessionStore(IPostgresConnectionFactory factory) :
         return JsonSerializer.Deserialize<List<string>>(raw);
     }
 
+    public async Task UpdatePrivacyAsync(string sessionId, string ownerUserId, bool isPrivate, CancellationToken ct = default)
+    {
+        using var conn = factory.CreateConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE sessions SET is_private = $1 WHERE session_id = $2 AND user_id = $3";
+        cmd.Parameters.AddWithValue(isPrivate);
+        cmd.Parameters.AddWithValue(sessionId);
+        cmd.Parameters.AddWithValue(ownerUserId);
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task<bool?> GetIsPrivateAsync(string sessionId, CancellationToken ct = default)
+    {
+        using var conn = factory.CreateConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT is_private FROM sessions WHERE session_id = $1";
+        cmd.Parameters.AddWithValue(sessionId);
+        var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        if (result is null || result is DBNull) return null;
+        return (bool)result;
+    }
+
     public async Task SetMcpConnectionsAsync(string sessionId, IReadOnlyList<string>? servers, string? ownerUserId = null, CancellationToken ct = default)
     {
         using var conn = factory.CreateConnection();

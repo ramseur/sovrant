@@ -207,5 +207,8 @@ internal sealed class NullAuditStore : IAuditStore
     public Task LogBashCommandAsync(string command, string? sessionId, int exitCode, CancellationToken ct = default)
         => Task.CompletedTask;
 
+    public Task LogPrivacyChangeAsync(string userId, string entityKind, string entityId, bool newIsPrivate, CancellationToken ct = default)
+        => Task.CompletedTask;
+
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

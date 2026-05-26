@@ -61,6 +61,26 @@
         }
     </div>
 
+    <!-- Privacy toggle + token count — sits between messages and input, matching Desktop layout -->
+    <div class="chat-bottom-bar">
+        <button class="privacy-toggle @(_isPrivate ? "private" : "public")"
+                title="@(_isPrivate ? "Private — only you can see this session" : "Public — visible to admins")"
+                @onclick="TogglePrivacyAsync">
+            <span class="privacy-icon">@(_isPrivate ? "🔒" : "🔓")</span>
+            <span class="privacy-label">@(_isPrivate ? "Private" : "Public")</span>
+        </button>
+        @if (_tokenCount > 0)
+        {
+            <div class="token-counter">
+                @_tokenCount.ToString("N0") tokens
+                @if (_sessionCost > 0)
+                {
+                    <span class="cost-indicator"> &middot; ~$@_sessionCost.ToString("F4")</span>
+                }
+            </div>
+        }
+    </div>
+
     <!-- Input bar -->
     <div class="chat-input-bar">
         <div class="input-wrapper">
@@ -80,18 +100,6 @@
             <button class="btn-primary send-btn" @onclick="SendAsync" disabled="@(!CanSend)">Send</button>
         }
     </div>
-
-    <!-- Token count & cost -->
-    @if (_tokenCount > 0)
-    {
-        <div class="token-counter">
-            @_tokenCount.ToString("N0") tokens
-            @if (_sessionCost > 0)
-            {
-                <span class="cost-indicator"> &middot; ~$@_sessionCost.ToString("F4")</span>
-            }
-        </div>
-    }
 </div>
 
 @code {
@@ -107,6 +115,7 @@
     [Inject] private Sovrant.Web.Services.WebSessionService Session { get; set; } = default!;
     [Inject] private Sovrant.Agents.Templates.AgentTemplateRegistry AgentRegistry { get; set; } = default!;
     [Inject] private ChatSeedService ChatSeed { get; set; } = default!;
+    [Inject] private Sovrant.Runtime.Governance.IAuditStore AuditStore { get; set; } = default!;
 
     private string _userDisplayName => LocalPart(Session.Email) ?? "You";
     private static string? LocalPart(string? email)
@@ -129,6 +138,10 @@
     private string _sessionId = $"session-{Guid.NewGuid():N}";
     private string? _agentName;
     private string? _agentSystemPrompt;
+    // Phase 99 — defaults to private until a stored value (or user toggle)
+    // says otherwise. Reads true→private to keep the UI honest with what
+    // the server-side default does for new rows.
+    private bool _isPrivate = true;
 
     private readonly List<ChatMessageModel> _messages = [];
 
@@ -266,11 +279,32 @@
                     });
                 }
             }
+            var storedPrivacy = await SessionStore.GetIsPrivateAsync(sessionId);
+            _isPrivate = storedPrivacy ?? true;
             await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
         {
             ShowPageError($"Couldn't load session: {ex.Message}");
+        }
+    }
+
+    private async Task TogglePrivacyAsync()
+    {
+        var newValue = !_isPrivate;
+        _isPrivate = newValue;
+        StateHasChanged();
+        try
+        {
+            await SessionStore.UpdatePrivacyAsync(_sessionId, Sovrant.Web.Program.SovrantUserId, newValue);
+            await AuditStore.LogPrivacyChangeAsync(Sovrant.Web.Program.SovrantUserId, "session", _sessionId, newValue);
+        }
+        catch (Exception ex)
+        {
+            // Roll back the optimistic flip if the persistence call fails.
+            _isPrivate = !newValue;
+            ShowPageError($"Couldn't update privacy: {ex.Message}");
+            StateHasChanged();
         }
     }
 
@@ -527,6 +561,12 @@
             await Sovrant.Web.Program.RuntimeReady.Task.WaitAsync(ct);
             var pooled = await SessionPool.GetOrCreateAsync(sessionId,
                 agentSystemPrompt: _agentSystemPrompt, agentName: _agentName, ct: ct);
+
+            // Sync privacy — the session row may have just been created with the
+            // default (is_private = true). If the user already toggled before
+            // sending (pre-message toggle), persist that choice now.
+            if (!_isPrivate)
+                await SessionStore.UpdatePrivacyAsync(sessionId, Sovrant.Web.Program.SovrantUserId, false, ct);
 
             // Apply the session-level MCP selection from the context bar (opt-in).
             var activeMcps = ActiveContext.ActiveMcpServers;

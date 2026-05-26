@@ -796,6 +796,19 @@ public partial class SessionListItem : ViewModelBase
     [ObservableProperty]
     private ActiveSessionInfoViewModel? _activeInfo;
 
+    public bool IsRunning => ActiveInfo?.IsRunning ?? false;
+
+    partial void OnActiveInfoChanged(ActiveSessionInfoViewModel? value)
+    {
+        OnPropertyChanged(nameof(IsRunning));
+        if (value is not null)
+            value.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(ActiveSessionInfoViewModel.IsRunning))
+                    OnPropertyChanged(nameof(IsRunning));
+            };
+    }
+
     public void RefreshIsActive(ActiveSessionsViewModel? activeSessions)
     {
         IsActive = activeSessions?.HasSession(SessionId) ?? false;

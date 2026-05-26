@@ -281,6 +281,9 @@ public sealed class AgentOrchestratorTeamRunIntegrationTests
 
         public Task<IReadOnlyList<AgentRunRecord>> ListAsync(AgentRunFilter? filter = null, int limit = 50, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<AgentRunRecord>>([]);
+
+        public Task UpdatePrivacyAsync(string runId, string ownerUserId, bool isPrivate, CancellationToken ct = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class NoOpSwarmEventStore : ISwarmEventStore

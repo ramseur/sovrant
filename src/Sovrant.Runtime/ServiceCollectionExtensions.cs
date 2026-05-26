@@ -213,6 +213,12 @@ public static class ServiceCollectionExtensions
         // /command cockpit page (Web + Desktop) and GET /v1/command-center/state.
         services.AddSingleton<Sovrant.Runtime.CommandCenter.CommandCenterAggregator>();
 
+        // Phase 98 — User Dashboard aggregator. Per-user cross-workspace view
+        // that enforces "own (public+private) + others' public in shared
+        // workspaces" visibility; powers /dashboard (Web + Desktop) and
+        // GET /v1/user-dashboard/state.
+        services.AddSingleton<Sovrant.Runtime.UserDashboard.UserDashboardAggregator>();
+
         // Project service (Phase 36)
         services.AddSingleton<IProjectService>(sp =>
             new SqliteProjectStore(

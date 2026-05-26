@@ -24,7 +24,8 @@ public sealed record Mission(
     string? SessionId = null,
     string? WorkspaceId = null,
     string? ProjectId = null,
-    string? OwnerUserId = null);
+    string? OwnerUserId = null,
+    bool IsPrivate = true);
 
 /// <summary>
 /// Lifecycle state of a <see cref="Mission"/>. Corresponds 1:1 with the

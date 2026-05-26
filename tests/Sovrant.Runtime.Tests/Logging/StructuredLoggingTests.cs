@@ -222,5 +222,11 @@ public sealed class StructuredLoggingTests
 
         public Task SetMcpConnectionsAsync(string sessionId, IReadOnlyList<string>? servers, string? ownerUserId = null, CancellationToken ct = default)
             => Task.CompletedTask;
+
+        public Task UpdatePrivacyAsync(string sessionId, string ownerUserId, bool isPrivate, CancellationToken ct = default)
+            => Task.CompletedTask;
+
+        public Task<bool?> GetIsPrivateAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<bool?>(null);
     }
 }

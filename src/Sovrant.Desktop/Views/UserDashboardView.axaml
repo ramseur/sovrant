@@ -1,0 +1,286 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.UserDashboardView"
+             x:DataType="vm:UserDashboardViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel>
+        <!-- Header -->
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="8">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
+                                IsVisible="{Binding LastRefreshed, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Text="Last updated:" FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                        <TextBlock Text="{Binding LastRefreshed}" FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                    </StackPanel>
+                    <Button Content="Refresh" Command="{Binding RefreshCommand}"
+                            Padding="12,6" CornerRadius="6"
+                            Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="Dashboard" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <WrapPanel Orientation="Horizontal">
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                   Text="Your activity across every workspace you belong to — plus your teammates' public activity."
+                                   Margin="0,0,10,0" />
+                        <Button Command="{Binding ToggleHelpCommand}"
+                                Padding="0" Background="Transparent" BorderThickness="0"
+                                Foreground="{DynamicResource BrandPrimary}"
+                                FontSize="12" Cursor="Hand">
+                            <TextBlock Text="{Binding HelpToggleLabel}" TextDecorations="Underline" />
+                        </Button>
+                    </WrapPanel>
+                </StackPanel>
+            </DockPanel>
+
+            <TextBlock Text="{Binding ErrorMessage}"
+                       FontSize="11"
+                       Foreground="{DynamicResource StatusFail}"
+                       IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       TextWrapping="Wrap" />
+
+            <!-- Help / explainer panel -->
+            <Border IsVisible="{Binding ShowHelp}"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                    CornerRadius="8" Padding="16,12" Margin="0,8,0,0">
+                <StackPanel Spacing="10">
+                    <Grid ColumnDefinitions="130,*">
+                        <TextBlock Grid.Column="0" Text="Missions" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="Long-running goals you own across all workspaces. A mission decomposes into team runs and agent runs until the goal is complete." />
+                    </Grid>
+                    <Grid ColumnDefinitions="130,*">
+                        <TextBlock Grid.Column="0" Text="Team runs" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="Team executions you kicked off — a group of agents running together under a sequential, parallel, or swarm profile." />
+                    </Grid>
+                    <Grid ColumnDefinitions="130,*">
+                        <TextBlock Grid.Column="0" Text="Agent runs" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="Solo agent runs you launched directly from the Agents page, or as individual members of a team run." />
+                    </Grid>
+                    <Grid ColumnDefinitions="130,*">
+                        <TextBlock Grid.Column="0" Text="Sessions" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="Chat conversations you started. Private sessions are only visible to you; public ones are visible to workspace admins." />
+                    </Grid>
+                    <Grid ColumnDefinitions="130,*">
+                        <TextBlock Grid.Column="0" Text="Shared" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="Your own items you've made public — missions, runs, and sessions with the 🔓 lock open. These are visible to workspace admins and teammates." />
+                    </Grid>
+                    <Grid ColumnDefinitions="130,*">
+                        <TextBlock Grid.Column="0" Text="Claws" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                   Text="External MCP systems Sovrant is connected to (n8n, Zapier, custom servers). Sovrant monitors and steers them from the Command Center." />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- KPI tiles -->
+            <UniformGrid Rows="1" Columns="6" Margin="0,8,0,0">
+                <Border Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        CornerRadius="8" Padding="14,12" Margin="0,0,8,0"
+                        ToolTip.Tip="Long-running goals you own.">
+                    <StackPanel>
+                        <TextBlock Text="MY MISSIONS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="{Binding OwnMissions}" FontSize="24" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                    </StackPanel>
+                </Border>
+                <Border Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        CornerRadius="8" Padding="14,12" Margin="0,0,8,0"
+                        ToolTip.Tip="Team executions you kicked off.">
+                    <StackPanel>
+                        <TextBlock Text="MY TEAM RUNS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="{Binding OwnTeamRuns}" FontSize="24" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                    </StackPanel>
+                </Border>
+                <Border Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        CornerRadius="8" Padding="14,12" Margin="0,0,8,0"
+                        ToolTip.Tip="Solo agent runs you launched.">
+                    <StackPanel>
+                        <TextBlock Text="MY AGENT RUNS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="{Binding OwnAgentRuns}" FontSize="24" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                    </StackPanel>
+                </Border>
+                <Border Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        CornerRadius="8" Padding="14,12" Margin="0,0,8,0"
+                        ToolTip.Tip="Chat conversations you started.">
+                    <StackPanel>
+                        <TextBlock Text="MY SESSIONS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="{Binding OwnSessions}" FontSize="24" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                    </StackPanel>
+                </Border>
+                <Border Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        CornerRadius="8" Padding="14,12" Margin="0,0,8,0"
+                        ToolTip.Tip="Your items you've made public — visible to workspace teammates.">
+                    <StackPanel>
+                        <TextBlock Text="SHARED (PUBLIC)" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="{Binding OthersPublicRows}" FontSize="24" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                    </StackPanel>
+                </Border>
+                <Border Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        CornerRadius="8" Padding="14,12"
+                        ToolTip.Tip="External MCP systems Sovrant is connected to.">
+                    <StackPanel>
+                        <TextBlock Text="CLAWS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="{Binding Claws}" FontSize="24" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+        </StackPanel>
+
+        <!-- Empty state -->
+        <StackPanel DockPanel.Dock="Top" HorizontalAlignment="Center" Margin="0,40"
+                    Spacing="10" IsVisible="{Binding IsEmpty}">
+            <TextBlock Text="Nothing yet" FontSize="18" FontWeight="SemiBold"
+                       HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextPrimary}" />
+            <TextBlock TextWrapping="Wrap" MaxWidth="480"
+                       HorizontalAlignment="Center" TextAlignment="Center"
+                       Foreground="{DynamicResource TextSecondary}"
+                       Text="Start a chat or run an agent template — your activity and your teammates' public activity will appear here." />
+        </StackPanel>
+
+        <!-- Content -->
+        <DockPanel Margin="32,8,32,24" IsVisible="{Binding !IsEmpty}">
+            <Border DockPanel.Dock="Top"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                    CornerRadius="8,8,0,0" Padding="14,8" Margin="0,0,0,-1">
+                <Grid ColumnDefinitions="120,*,90,150,110,80">
+                    <TextBlock Grid.Column="0" Text="KIND" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <TextBlock Grid.Column="1" Text="TITLE" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <TextBlock Grid.Column="2" Text="STATUS" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <TextBlock Grid.Column="3" Text="OWNER" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <TextBlock Grid.Column="4" Text="LAST ACTIVITY" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <TextBlock Grid.Column="5" Text="COST" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                </Grid>
+            </Border>
+            <!-- Pager — must be declared before ScrollViewer so DockPanel places it at the bottom -->
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Center"
+                        Spacing="12" Margin="0,8,0,0"
+                        IsVisible="{Binding PageInfo, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <Button Content="← Prev" Command="{Binding PreviousPageCommand}"
+                        IsEnabled="{Binding HasPreviousPage}"
+                        Padding="12,5" CornerRadius="6"
+                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="{Binding PageInfo}" VerticalAlignment="Center"
+                           FontSize="12" Foreground="{DynamicResource TextMuted}" />
+                <Button Content="Next →" Command="{Binding NextPageCommand}"
+                        IsEnabled="{Binding HasNextPage}"
+                        Padding="12,5" CornerRadius="6"
+                        Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+            </StackPanel>
+            <ScrollViewer>
+                <ItemsControl ItemsSource="{Binding PagedRows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:UserDashboardRowViewModel">
+                            <Button Command="{Binding $parent[ItemsControl].((vm:UserDashboardViewModel)DataContext).SelectRowCommand}"
+                                    CommandParameter="{Binding}"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Padding="14,10"
+                                    Background="{DynamicResource SurfaceCard}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1,0,1,1"
+                                    CornerRadius="0"
+                                    Cursor="Hand">
+                                <Grid ColumnDefinitions="120,*,90,150,110,80">
+                                    <Border Grid.Column="0"
+                                            Background="{DynamicResource SurfaceBackground}"
+                                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                                            CornerRadius="999" Padding="8,2"
+                                            HorizontalAlignment="Left" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="{Binding KindIcon}" FontSize="11"
+                                                       VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding Kind}" FontSize="11"
+                                                       Foreground="{DynamicResource TextSecondary}"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <DockPanel>
+                                            <Button DockPanel.Dock="Right"
+                                                    IsVisible="{Binding IsOwn}"
+                                                    Command="{Binding $parent[ItemsControl].((vm:UserDashboardViewModel)DataContext).TogglePrivacyCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    Padding="4,1"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Cursor="Hand"
+                                                    ToolTip.Tip="Click to toggle privacy"
+                                                    VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding IsPrivate, Converter={x:Static vm:BoolToLockIconConverter.Instance}}"
+                                                           FontSize="11" />
+                                            </Button>
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextPrimary}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center" />
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding Preview}" FontSize="11"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   IsVisible="{Binding Preview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="{Binding Status}" FontSize="11"
+                                               Foreground="{DynamicResource StatusPass}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="3" Text="{Binding Owner}" FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="4" Text="{Binding LastActivity}" FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="5" Text="{Binding Cost}" FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </DockPanel>
+    </DockPanel>
+</UserControl>

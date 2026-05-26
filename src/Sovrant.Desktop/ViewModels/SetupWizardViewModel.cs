@@ -72,7 +72,7 @@ public partial class SetupWizardViewModel : ViewModelBase
         _isVisible = string.IsNullOrWhiteSpace(config.ApiKey);
 
         // Set initial provider.
-        SelectedProvider = "OpenRouter";
+        SelectedProvider = "OpenAI";
     }
 
     partial void OnSelectedProviderChanged(string value)
