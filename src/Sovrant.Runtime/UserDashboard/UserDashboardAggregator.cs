@@ -210,13 +210,16 @@ public sealed class UserDashboardAggregator
             .Take(150)
             .ToList();
 
+        // Count from the trimmed grid so the stat tile matches what the user actually sees.
+        var othersInGrid = resolved.Count(r => !r.IsOwn && r.Kind != "claw");
+
         return new UserDashboardState(
             GeneratedAt: now,
             OwnMissions: ownMissions,
             OwnTeamRuns: ownTeamRuns,
             OwnAgentRuns: ownAgentRuns,
             OwnSessions: ownSessions,
-            OthersPublicRows: othersPublic,
+            OthersPublicRows: othersInGrid,
             Claws: clawRows.Count,
             Rows: resolved);
     }
