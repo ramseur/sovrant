@@ -35,8 +35,8 @@ public sealed class SqliteStorageProviderTests : IAsyncDisposable
     {
         await _provider.InitializeAsync();
 
-        // Schema head bumped to 27 by V027 (workspace provider profiles).
-        Assert.Equal(27, _provider.SchemaVersion);
+        // Schema head bumped to 30 by V030 (activity is_private columns).
+        Assert.Equal(30, _provider.SchemaVersion);
     }
 
     [Fact]

@@ -26,6 +26,7 @@ public partial class MainViewModel : ViewModelBase
     public bool IsAgentsGroup => SelectedGroup == "agents";
     public bool IsWorkspaceGroup => SelectedGroup == "workspace";
     public bool IsConnectGroup => SelectedGroup == "connect";
+    public bool IsDashboardGroup => SelectedGroup == "dashboard";
     public bool IsGovernanceGroup => SelectedGroup == "governance";
     public bool IsAdminGroup => SelectedGroup == "admin";
     public bool IsSettingsGroup => SelectedGroup == "settings";
@@ -37,6 +38,7 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsAgentsGroup));
         OnPropertyChanged(nameof(IsWorkspaceGroup));
         OnPropertyChanged(nameof(IsConnectGroup));
+        OnPropertyChanged(nameof(IsDashboardGroup));
         OnPropertyChanged(nameof(IsGovernanceGroup));
         OnPropertyChanged(nameof(IsAdminGroup));
         OnPropertyChanged(nameof(IsSettingsGroup));
@@ -127,6 +129,9 @@ public partial class MainViewModel : ViewModelBase
             case "connect":
                 Sidebar.SelectedNavItem = "Integrations";
                 OnNavigationRequested(this, "Integrations");
+                break;
+            case "dashboard":
+                CurrentPage = _services.GetRequiredService<UserDashboardViewModel>();
                 break;
             case "settings":
                 Sidebar.SelectedNavItem = "Settings";

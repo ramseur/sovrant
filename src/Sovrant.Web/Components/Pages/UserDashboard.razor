@@ -1,0 +1,171 @@
+@page "/dashboard"
+@using System.Globalization
+@using Sovrant.Runtime.UserDashboard
+@using Sovrant.Web.Services
+@inject WebSessionService Session
+@inject UserDashboardAggregator Aggregator
+@inject NavigationManager Nav
+@implements IDisposable
+
+<div class="settings-page cc-page">
+    <div class="diag-header">
+        <div>
+            <h1>User Dashboard</h1>
+            <p class="text-secondary cc-subtitle">
+                Your activity across every workspace you belong to — plus the public activity of teammates in those workspaces.
+            </p>
+        </div>
+        <button class="btn-secondary" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Refreshing…" : "Refresh")</button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="page-error-banner" role="alert">
+            <span>&#9888;</span><span class="error-message">@_error</span>
+        </div>
+    }
+
+    <div class="cc-stat-row">
+        <CcStat Label="My missions" Value="@(_state?.OwnMissions ?? 0)"
+                Tooltip="Long-running goals you own." />
+        <CcStat Label="My team runs" Value="@(_state?.OwnTeamRuns ?? 0)"
+                Tooltip="Team executions you kicked off." />
+        <CcStat Label="My agent runs" Value="@(_state?.OwnAgentRuns ?? 0)"
+                Tooltip="Solo agent runs you launched." />
+        <CcStat Label="My sessions" Value="@(_state?.OwnSessions ?? 0)"
+                Tooltip="Chat conversations you started." />
+        <CcStat Label="Shared (public)" Value="@(_state?.OthersPublicRows ?? 0)"
+                Tooltip="Public activity from teammates in your workspaces." />
+        <CcStat Label="Claws" Value="@(_state?.Claws ?? 0)"
+                Tooltip="External MCP systems Sovrant is connected to." />
+    </div>
+
+    @if (_state is null && _loading)
+    {
+        <div class="cc-empty"><p class="text-secondary">Loading…</p></div>
+    }
+    else if (_state is null || _state.Rows.Count == 0)
+    {
+        <div class="cc-empty">
+            <h2>Nothing yet</h2>
+            <p class="text-secondary">
+                Start a chat or run an agent template — your activity (and your teammates' public activity)
+                will appear here.
+            </p>
+            <div class="cc-empty-actions">
+                <a href="/" class="btn-primary">New chat</a>
+                <a href="/agents" class="btn-outline">Run an agent</a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="cc-grid">
+            <div class="cc-grid-header">
+                <div class="cc-col-kind">Kind</div>
+                <div class="cc-col-title">Title</div>
+                <div class="cc-col-status">Status</div>
+                <div class="cc-col-owner">Owner</div>
+                <div class="cc-col-when">Last activity</div>
+                <div class="cc-col-cost">Cost</div>
+            </div>
+            @foreach (var row in _state.Rows)
+            {
+                <a class="cc-grid-row" href="@(row.DetailRoute ?? "#")">
+                    <div class="cc-col-kind">
+                        <span class="cc-kind-pill cc-kind-@(row.Kind)">@KindIcon(row.Kind) @row.Kind</span>
+                    </div>
+                    <div class="cc-col-title">
+                        <div class="cc-title">
+                            @row.Title
+                            @if (row.IsOwn)
+                            {
+                                <span class="cc-badge-mine" title="You own this record">Mine</span>
+                            }
+                            @if (row.IsPrivate)
+                            {
+                                <span class="cc-badge-private" title="Private — only visible to you">&#x1F512;</span>
+                            }
+                        </div>
+                        @if (!string.IsNullOrEmpty(row.Preview))
+                        {
+                            <div class="cc-preview text-muted text-sm">@row.Preview</div>
+                        }
+                    </div>
+                    <div class="cc-col-status">
+                        <span class="cc-status cc-status-@row.Status.ToLowerInvariant()">@row.Status</span>
+                    </div>
+                    <div class="cc-col-owner text-sm text-muted">@(row.OwnerLabel ?? "—")</div>
+                    <div class="cc-col-when text-sm text-muted">@FormatRelative(row.LastActivity)</div>
+                    <div class="cc-col-cost text-sm text-muted">@(row.CostUsd is null ? "—" : $"${row.CostUsd:F4}")</div>
+                </a>
+            }
+        </div>
+        <div class="text-muted text-sm cc-footer">
+            Last refreshed @_state.GeneratedAt.LocalDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture) · auto-refresh every 2s
+        </div>
+    }
+</div>
+
+@code {
+    private UserDashboardState? _state;
+    private bool _loading;
+    private string _error = string.Empty;
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login", forceLoad: false);
+            return;
+        }
+
+        await LoadAsync();
+        _timer = new System.Threading.Timer(_ => InvokeAsync(LoadAsync), null,
+            TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+    }
+
+    private async Task LoadAsync()
+    {
+        if (string.IsNullOrEmpty(Session.UserId)) return;
+
+        _loading = true;
+        try
+        {
+            _state = await Aggregator.GetStateAsync(Session.UserId);
+            _error = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load dashboard: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string KindIcon(string kind) => kind switch
+    {
+        "mission" => "\U0001F3AF",
+        "team-run" => "\U0001F465",
+        "agent-run" => "\U0001F916",
+        "session" => "\U0001F4AC",
+        "claw" => "\U0001F517",
+        _ => "•",
+    };
+
+    private static string FormatRelative(DateTimeOffset when)
+    {
+        var delta = DateTimeOffset.UtcNow - when;
+        if (delta.TotalSeconds < 5) return "just now";
+        if (delta.TotalSeconds < 60) return $"{(int)delta.TotalSeconds}s ago";
+        if (delta.TotalMinutes < 60) return $"{(int)delta.TotalMinutes}m ago";
+        if (delta.TotalHours < 24) return $"{(int)delta.TotalHours}h ago";
+        return when.LocalDateTime.ToString("MMM d, HH:mm", CultureInfo.InvariantCulture);
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

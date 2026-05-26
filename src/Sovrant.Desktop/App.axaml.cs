@@ -207,6 +207,7 @@ public partial class App : Application
         services.AddTransient<OrchestrationViewModel>();
         // Singleton: MainViewModel subscribes to RowSelected once at startup.
         services.AddSingleton<CommandCenterViewModel>();
+        services.AddSingleton<UserDashboardViewModel>();
         services.AddSingleton<CommandPaletteViewModel>();
         services.AddTransient<LoginViewModel>();
         services.AddTransient<AdminViewModel>();

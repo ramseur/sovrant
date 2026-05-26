@@ -17,6 +17,8 @@
             title="Projects" @onclick='() => OnSelect.InvokeAsync("workspace")'>&#x1F5C2;&#xFE0F;</button>
     <button class="rail-icon @(Selected == "connect" ? "active" : "")"
             title="Connect" @onclick='() => OnSelect.InvokeAsync("connect")'>&#x1F50C;</button>
+    <button class="rail-icon @(Selected == "dashboard" ? "active" : "")"
+            title="User Dashboard" @onclick='() => OnSelect.InvokeAsync("dashboard")'>&#x1F464;</button>
     <button class="rail-icon @(Selected == "settings" ? "active" : "")"
             title="Settings" @onclick='() => OnSelect.InvokeAsync("settings")'>&#9881;</button>
     @if (Session.IsAdmin)

@@ -64,6 +64,9 @@
         <DataTemplate DataType="vm:CommandCenterViewModel">
             <views:CommandCenterView />
         </DataTemplate>
+        <DataTemplate DataType="vm:UserDashboardViewModel">
+            <views:UserDashboardView />
+        </DataTemplate>
         <DataTemplate DataType="vm:PlaceholderViewModel">
             <views:PlaceholderView />
         </DataTemplate>
@@ -118,6 +121,12 @@
                                     Width="31" Height="32" CornerRadius="7" FontSize="14" Padding="0"
                                     Background="{Binding IsConnectGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                     Foreground="{Binding IsConnectGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
+                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
+                            <Button Content="👤" ToolTip.Tip="User Dashboard"
+                                    Command="{Binding SelectGroupCommand}" CommandParameter="dashboard"
+                                    Width="31" Height="32" CornerRadius="7" FontSize="14" Padding="0"
+                                    Background="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
+                                    Foreground="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
                             <Button Content="⚙" ToolTip.Tip="Settings"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="settings"

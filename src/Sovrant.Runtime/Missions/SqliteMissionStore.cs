@@ -86,7 +86,7 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
             SELECT id, goal, status, plan_json, created_at, updated_at, completed_at,
-                   session_id, workspace_id, project_id, owner_user_id
+                   session_id, workspace_id, project_id, owner_user_id, is_private
             FROM missions
             WHERE id = $id
             """;
@@ -113,7 +113,7 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         {
             cmd.CommandText = """
                 SELECT id, goal, status, plan_json, created_at, updated_at, completed_at,
-                       session_id, workspace_id, project_id, owner_user_id
+                       session_id, workspace_id, project_id, owner_user_id, is_private
                 FROM missions
                 WHERE owner_user_id = $owner AND status = $status
                 ORDER BY created_at DESC
@@ -126,7 +126,7 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         {
             cmd.CommandText = """
                 SELECT id, goal, status, plan_json, created_at, updated_at, completed_at,
-                       session_id, workspace_id, project_id, owner_user_id
+                       session_id, workspace_id, project_id, owner_user_id, is_private
                 FROM missions
                 WHERE owner_user_id = $owner
                 ORDER BY created_at DESC
@@ -138,7 +138,7 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         {
             cmd.CommandText = """
                 SELECT id, goal, status, plan_json, created_at, updated_at, completed_at,
-                       session_id, workspace_id, project_id, owner_user_id
+                       session_id, workspace_id, project_id, owner_user_id, is_private
                 FROM missions
                 WHERE status = $status
                 ORDER BY created_at DESC
@@ -150,7 +150,7 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         {
             cmd.CommandText = """
                 SELECT id, goal, status, plan_json, created_at, updated_at, completed_at,
-                       session_id, workspace_id, project_id, owner_user_id
+                       session_id, workspace_id, project_id, owner_user_id, is_private
                 FROM missions
                 ORDER BY created_at DESC
                 LIMIT $limit
@@ -278,7 +278,8 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
             SessionId: r.IsDBNull(7) ? null : r.GetString(7),
             WorkspaceId: r.IsDBNull(8) ? null : r.GetString(8),
             ProjectId: r.IsDBNull(9) ? null : r.GetString(9),
-            OwnerUserId: r.IsDBNull(10) ? null : r.GetString(10));
+            OwnerUserId: r.IsDBNull(10) ? null : r.GetString(10),
+            IsPrivate: !r.IsDBNull(11) && r.GetInt64(11) != 0);
     }
 
     private static string StatusToString(MissionStatus s) => s switch

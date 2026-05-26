@@ -28,7 +28,8 @@ public sealed record AgentRunRecord(
     int InputTokens = 0,
     int OutputTokens = 0,
     decimal? CostUsd = null,
-    string? Prompt = null);
+    string? Prompt = null,
+    bool IsPrivate = false);
 
 /// <summary>Filter for <see cref="IAgentRunStore.ListAsync"/>.</summary>
 public sealed record AgentRunFilter(
