@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/Sovrant.Desktop/Assets/icon.png" alt="Sovrant" width="128">
+  <img src="docs/images/logo.png" alt="Sovrant" width="128">
 </p>
 
 # Sovrant
