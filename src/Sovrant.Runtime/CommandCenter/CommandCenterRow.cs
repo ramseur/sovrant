@@ -17,7 +17,9 @@ public sealed record CommandCenterRow(
     decimal? CostUsd,
     string? DetailRoute,
     string? WorkspaceId = null,
-    string? ProjectId = null);
+    string? ProjectId = null,
+    bool IsPrivate = false,
+    bool IsMasked = false);
 
 /// <summary>The aggregated cockpit state at a single point in time.</summary>
 public sealed record CommandCenterState(

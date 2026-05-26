@@ -9,7 +9,6 @@ public sealed class InputValidationTests
     [InlineData("my-session")]
     [InlineData("session_1")]
     [InlineData("user.project:session")]
-    [InlineData("abc@def")]
     [InlineData("a")]
     public void IsValidSessionId_ValidIds_ReturnsTrue(string id) =>
         Assert.True(InputValidation.IsValidSessionId(id));
@@ -22,6 +21,7 @@ public sealed class InputValidationTests
     [InlineData("has;semicolon")]
     [InlineData("has\nnewline")]
     [InlineData("has<angle>brackets")]
+    [InlineData("abc@def")]
     public void IsValidSessionId_InvalidIds_ReturnsFalse(string? id) =>
         Assert.False(InputValidation.IsValidSessionId(id));
 

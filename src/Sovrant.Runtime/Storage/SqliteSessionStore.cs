@@ -36,10 +36,11 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
         // recorded owner, which is what makes ownership stable.
         using var ensureCmd = connection.CreateCommand();
         ensureCmd.CommandText = """
-            INSERT OR IGNORE INTO sessions (session_id, user_id, model, started_at, updated_at)
+            INSERT OR IGNORE INTO sessions (session_id, user_id, model, started_at, updated_at, is_private)
             VALUES ($sid, $uid, $model,
                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                    1)
             """;
         ensureCmd.Parameters.AddWithValue("$sid", sessionId);
         ensureCmd.Parameters.AddWithValue("$uid", ownerUserId ?? LegacyOwner);
@@ -214,8 +215,8 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
             // immediately when the user sends their first message).
             using var ensureCmd = connection.CreateCommand();
             ensureCmd.CommandText = """
-                INSERT OR IGNORE INTO sessions (session_id, user_id, started_at, updated_at)
-                VALUES ($sid, $uid, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                INSERT OR IGNORE INTO sessions (session_id, user_id, started_at, updated_at, is_private)
+                VALUES ($sid, $uid, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 1)
                 """;
             ensureCmd.Parameters.AddWithValue("$sid", sessionId);
             ensureCmd.Parameters.AddWithValue("$uid", ownerUserId);
@@ -322,10 +323,11 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
         // entries have been appended.
         using var ensureCmd = connection.CreateCommand();
         ensureCmd.CommandText = """
-            INSERT OR IGNORE INTO sessions (session_id, user_id, started_at, updated_at)
+            INSERT OR IGNORE INTO sessions (session_id, user_id, started_at, updated_at, is_private)
             VALUES ($sid, $uid,
                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                    1)
             """;
         ensureCmd.Parameters.AddWithValue("$sid", sessionId);
         ensureCmd.Parameters.AddWithValue("$uid", ownerUserId ?? LegacyOwner);
@@ -393,5 +395,36 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
                 UpdatedAt: DateTimeOffset.Parse(reader.GetString(2), CultureInfo.InvariantCulture)));
         }
         return results;
+    }
+
+    public async Task UpdatePrivacyAsync(
+        string sessionId,
+        string ownerUserId,
+        bool isPrivate,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(sessionId);
+        ArgumentNullException.ThrowIfNull(ownerUserId);
+
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "UPDATE sessions SET is_private = $v WHERE session_id = $sid AND user_id = $owner";
+        cmd.Parameters.AddWithValue("$v", isPrivate ? 1 : 0);
+        cmd.Parameters.AddWithValue("$sid", sessionId);
+        cmd.Parameters.AddWithValue("$owner", ownerUserId);
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task<bool?> GetIsPrivateAsync(string sessionId, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(sessionId);
+
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT is_private FROM sessions WHERE session_id = $sid";
+        cmd.Parameters.AddWithValue("$sid", sessionId);
+        var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        if (result is null || result is DBNull) return null;
+        return Convert.ToInt32(result, CultureInfo.InvariantCulture) != 0;
     }
 }

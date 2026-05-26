@@ -47,10 +47,15 @@ public sealed class CommandCenterAggregator
     /// </summary>
     public async Task<CommandCenterState> GetActiveStateAsync(
         string? ownerUserId = null,
+        string? viewerUserId = null,
         CancellationToken ct = default)
     {
         var rows = new List<CommandCenterRow>();
         var now = DateTimeOffset.UtcNow;
+        // Phase 99 — when no explicit viewer is provided, the viewer is the
+        // owner filter itself (non-admin case). Admin calls pass an explicit
+        // viewer so cross-owner masking still works on the all-rows view.
+        viewerUserId ??= ownerUserId;
 
         var runsSnapshot = await SafeListRunsAsync(ownerUserId, ct).ConfigureAwait(false);
 
@@ -79,9 +84,11 @@ public sealed class CommandCenterAggregator
             else if (m.UpdatedAt < now.AddDays(-7)) continue;
 
             var stepCount = TryCountPlanSteps(m.PlanJson);
-            var title = stepCount > 0
+            var rawTitle = stepCount > 0
                 ? $"{Truncate(m.Goal, 100)} · {stepCount} step{(stepCount == 1 ? "" : "s")}"
                 : Truncate(m.Goal, 120);
+            var masked = ShouldMask(m.IsPrivate, m.OwnerUserId, viewerUserId);
+            var title = masked ? "(private)" : rawTitle;
 
             rows.Add(new CommandCenterRow(
                 Kind: "mission",
@@ -93,9 +100,11 @@ public sealed class CommandCenterAggregator
                 OwnerLabel: m.OwnerUserId,
                 Preview: null,
                 CostUsd: null,
-                DetailRoute: $"/missions/{m.Id}",
+                DetailRoute: masked ? null : $"/missions/{m.Id}",
                 WorkspaceId: m.WorkspaceId,
-                ProjectId: m.ProjectId));
+                ProjectId: m.ProjectId,
+                IsPrivate: m.IsPrivate,
+                IsMasked: masked));
         }
 
         var activeTeamRuns = 0;
@@ -120,17 +129,20 @@ public sealed class CommandCenterAggregator
 
             // Team-run rows: append member counts so the user can see scope
             // without drilling. Leaf runs (agent-runs) keep the simple title.
-            string title;
+            string rawTitle;
             if (isTeamRun && childrenByParent.TryGetValue(r.RunId, out var stats))
             {
-                title = stats.Active > 0
+                rawTitle = stats.Active > 0
                     ? $"{baseTitle} · {stats.Total} member{(stats.Total == 1 ? "" : "s")} · {stats.Active} active"
                     : $"{baseTitle} · {stats.Total} member{(stats.Total == 1 ? "" : "s")}";
             }
             else
             {
-                title = baseTitle;
+                rawTitle = baseTitle;
             }
+
+            var masked = ShouldMask(r.IsPrivate, r.UserId, viewerUserId);
+            var title = masked ? "(private)" : rawTitle;
 
             rows.Add(new CommandCenterRow(
                 Kind: kind,
@@ -142,14 +154,18 @@ public sealed class CommandCenterAggregator
                 OwnerLabel: r.UserId,
                 Preview: null,
                 CostUsd: r.CostUsd,
-                DetailRoute: !string.IsNullOrEmpty(r.TeamId)
-                    ? $"/orchestration?run={Uri.EscapeDataString(r.RunId)}"
-                    : $"/command?run={Uri.EscapeDataString(r.RunId)}",
+                DetailRoute: masked
+                    ? null
+                    : (!string.IsNullOrEmpty(r.TeamId)
+                        ? $"/orchestration?run={Uri.EscapeDataString(r.RunId)}"
+                        : $"/command?run={Uri.EscapeDataString(r.RunId)}"),
                 WorkspaceId: r.WorkspaceId,
-                ProjectId: r.ProjectId));
+                ProjectId: r.ProjectId,
+                IsPrivate: r.IsPrivate,
+                IsMasked: masked));
         }
 
-        var sessionRows = await SafeRecentSessionsAsync(ownerUserId, ct).ConfigureAwait(false);
+        var sessionRows = await SafeRecentSessionsAsync(ownerUserId, viewerUserId, ct).ConfigureAwait(false);
         rows.AddRange(sessionRows);
 
         var clawRows = await SafeListClawsAsync(ct).ConfigureAwait(false);
@@ -264,7 +280,7 @@ public sealed class CommandCenterAggregator
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Cockpit aggregator must degrade gracefully if any one source fails — partial state is preferable to an exception propagating to the UI poll loop.")]
-    private async Task<List<CommandCenterRow>> SafeRecentSessionsAsync(string? ownerUserId, CancellationToken ct)
+    private async Task<List<CommandCenterRow>> SafeRecentSessionsAsync(string? ownerUserId, string? viewerUserId, CancellationToken ct)
     {
         try
         {
@@ -276,31 +292,56 @@ public sealed class CommandCenterAggregator
             {
                 if (summary.UpdatedAt < now.AddDays(-7)) continue;
 
+                var masked = ShouldMask(summary.IsPrivate, summary.OwnerUserId, viewerUserId);
+
+                // For masked rows, skip entry loading entirely — we won't show
+                // the content anyway, so don't waste a round-trip and don't
+                // need an entry-level ownership check to succeed.
                 IReadOnlyList<SessionEntry> entries;
-                try { entries = await _sessions.LoadAsync(summary.SessionId, ownerUserId, ct).ConfigureAwait(false); }
-                catch (Exception) { continue; }
-                if (entries.Count == 0) continue;
+                if (masked)
+                {
+                    entries = [];
+                }
+                else
+                {
+                    try { entries = await _sessions.LoadAsync(summary.SessionId, ownerUserId, ct).ConfigureAwait(false); }
+                    catch (Exception) { continue; }
+                    if (entries.Count == 0) continue;
+                }
 
-                var first = entries[0];
-                var last = entries[^1];
+                DateTimeOffset startedAt = masked ? summary.UpdatedAt : entries[0].Timestamp;
+                DateTimeOffset lastActivity = masked ? summary.UpdatedAt : entries[^1].Timestamp;
 
-                var firstUser = entries.FirstOrDefault(e => e.Role == "user");
-                var title = !string.IsNullOrEmpty(summary.Title)
-                    ? summary.Title
-                    : Truncate(firstUser?.Content ?? summary.SessionId, 80);
-                var status = (now - last.Timestamp) < TimeSpan.FromMinutes(2) ? "Active" : "Recent";
+                string rawTitle;
+                string? rawPreview;
+                if (masked)
+                {
+                    rawTitle = "(private)";
+                    rawPreview = null;
+                }
+                else
+                {
+                    var firstUser = entries.FirstOrDefault(e => e.Role == "user");
+                    rawTitle = !string.IsNullOrEmpty(summary.Title)
+                        ? summary.Title
+                        : Truncate(firstUser?.Content ?? summary.SessionId, 80);
+                    rawPreview = Truncate(entries[^1].Content, 160);
+                }
+                var status = (now - lastActivity) < TimeSpan.FromMinutes(2) ? "Active" : "Recent";
 
                 rows.Add(new CommandCenterRow(
                     Kind: "session",
                     Id: summary.SessionId,
-                    Title: title,
+                    Title: rawTitle,
                     Status: status,
-                    StartedAt: first.Timestamp,
-                    LastActivity: last.Timestamp,
+                    StartedAt: startedAt,
+                    LastActivity: lastActivity,
                     OwnerLabel: summary.OwnerUserId ?? ownerUserId,
-                    Preview: Truncate(last.Content, 160),
+                    Preview: rawPreview,
                     CostUsd: null,
-                    DetailRoute: $"/?session={Uri.EscapeDataString(summary.SessionId)}"));
+                    DetailRoute: masked ? null : $"/?session={Uri.EscapeDataString(summary.SessionId)}",
+                    IsPrivate: summary.IsPrivate,
+                    IsMasked: masked));
             }
             return rows;
         }
@@ -309,6 +350,19 @@ public sealed class CommandCenterAggregator
             LogSourceFailed(_logger, "sessions", ex.Message);
             return [];
         }
+    }
+
+    /// <summary>
+    /// Phase 99 — true when a row is private and the viewer is not its owner.
+    /// Masked rows show "(private)" as their title and no preview, but the
+    /// row's existence is still surfaced (admin accountability).
+    /// </summary>
+    private static bool ShouldMask(bool isPrivate, string? ownerUserId, string? viewerUserId)
+    {
+        if (!isPrivate) return false;
+        if (string.IsNullOrEmpty(ownerUserId)) return false;
+        if (string.IsNullOrEmpty(viewerUserId)) return true;
+        return !string.Equals(ownerUserId, viewerUserId, StringComparison.Ordinal);
     }
 
     private static string Truncate(string s, int max)

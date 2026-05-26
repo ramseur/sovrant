@@ -256,6 +256,22 @@ public sealed class FakeSessionStore : ISessionStore
         _mcpConnections[sessionId] = servers;
         return Task.CompletedTask;
     }
+
+    private readonly Dictionary<string, bool> _privacy = new(StringComparer.OrdinalIgnoreCase);
+
+    public Task UpdatePrivacyAsync(string sessionId, string ownerUserId, bool isPrivate, CancellationToken ct = default)
+    {
+        if (!_owners.TryGetValue(sessionId, out var owner) || !string.Equals(owner, ownerUserId, StringComparison.Ordinal))
+            return Task.CompletedTask;
+        _privacy[sessionId] = isPrivate;
+        return Task.CompletedTask;
+    }
+
+    public Task<bool?> GetIsPrivateAsync(string sessionId, CancellationToken ct = default)
+    {
+        if (_privacy.TryGetValue(sessionId, out var v)) return Task.FromResult<bool?>(v);
+        return Task.FromResult<bool?>(null);
+    }
 }
 
 /// <summary>Fake smart router that returns a canned provider list.</summary>
@@ -305,11 +321,19 @@ public sealed class FakeLlmProvider : ILlmProvider
 /// <summary>No-op audit store for server tests.</summary>
 public sealed class FakeAuditStore : IAuditStore
 {
+    public readonly List<(string UserId, string Kind, string Id, bool IsPrivate)> PrivacyLog = [];
+
     public Task LogGovernanceEventAsync(GovernanceContext context, GovernanceVerdict verdict, CancellationToken ct = default)
         => Task.CompletedTask;
 
     public Task LogBashCommandAsync(string command, string? sessionId, int exitCode, CancellationToken ct = default)
         => Task.CompletedTask;
+
+    public Task LogPrivacyChangeAsync(string userId, string entityKind, string entityId, bool newIsPrivate, CancellationToken ct = default)
+    {
+        PrivacyLog.Add((userId, entityKind, entityId, newIsPrivate));
+        return Task.CompletedTask;
+    }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

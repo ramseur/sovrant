@@ -64,4 +64,15 @@ public interface IMissionStore
     Task<IReadOnlyList<MissionEvent>> GetEventsAsync(
         string missionId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Phase 99 — flips the privacy flag on a mission. The owner predicate
+    /// is enforced inside the UPDATE so a mismatched owner is a silent
+    /// no-op (zero rows affected) and never leaks the row's existence.
+    /// </summary>
+    Task UpdatePrivacyAsync(
+        string missionId,
+        string ownerUserId,
+        bool isPrivate,
+        CancellationToken ct = default);
 }

@@ -4,6 +4,10 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.Auth;
+using Sovrant.Runtime.Governance;
+using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Session;
+using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.UserDashboard;
 
 namespace Sovrant.Desktop.ViewModels;
@@ -18,6 +22,10 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
 {
     private readonly UserDashboardAggregator _aggregator;
     private readonly IPrincipalAccessor _principal;
+    private readonly IMissionStore _missionStore;
+    private readonly IAgentRunStore _runStore;
+    private readonly ISessionStore _sessionStore;
+    private readonly IAuditStore _auditStore;
     private readonly System.Timers.Timer _timer;
     private bool _disposed;
 
@@ -34,10 +42,20 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<UserDashboardRowViewModel> Rows { get; } = [];
 
-    public UserDashboardViewModel(UserDashboardAggregator aggregator, IPrincipalAccessor principal)
+    public UserDashboardViewModel(
+        UserDashboardAggregator aggregator,
+        IPrincipalAccessor principal,
+        IMissionStore missionStore,
+        IAgentRunStore runStore,
+        ISessionStore sessionStore,
+        IAuditStore auditStore)
     {
         _aggregator = aggregator;
         _principal = principal;
+        _missionStore = missionStore;
+        _runStore = runStore;
+        _sessionStore = sessionStore;
+        _auditStore = auditStore;
         _ = LoadAsync();
         _timer = new System.Timers.Timer(2000);
         _timer.Elapsed += async (_, _) => await LoadAsync();
@@ -47,6 +65,40 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
 
     [RelayCommand]
     private async Task RefreshAsync() => await LoadAsync();
+
+    [RelayCommand]
+    private async Task TogglePrivacyAsync(UserDashboardRowViewModel? row)
+    {
+        if (row is null || !row.IsOwn) return;
+        var userId = _principal.UserId;
+        if (string.IsNullOrEmpty(userId)) return;
+
+        var newValue = !row.IsPrivate;
+        row.IsPrivate = newValue;
+        try
+        {
+            switch (row.Kind)
+            {
+                case "mission":
+                    await _missionStore.UpdatePrivacyAsync(row.Id, userId, newValue).ConfigureAwait(false);
+                    await _auditStore.LogPrivacyChangeAsync(userId, "mission", row.Id, newValue).ConfigureAwait(false);
+                    break;
+                case "agent-run":
+                case "team-run":
+                    await _runStore.UpdatePrivacyAsync(row.Id, userId, newValue).ConfigureAwait(false);
+                    await _auditStore.LogPrivacyChangeAsync(userId, "agent_run", row.Id, newValue).ConfigureAwait(false);
+                    break;
+                case "session":
+                    await _sessionStore.UpdatePrivacyAsync(row.Id, userId, newValue).ConfigureAwait(false);
+                    await _auditStore.LogPrivacyChangeAsync(userId, "session", row.Id, newValue).ConfigureAwait(false);
+                    break;
+            }
+        }
+        catch
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => row.IsPrivate = !newValue);
+        }
+    }
 
     private async Task LoadAsync()
     {

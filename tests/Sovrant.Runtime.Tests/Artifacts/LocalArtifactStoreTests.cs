@@ -282,7 +282,9 @@ public sealed class LocalArtifactStoreTests : IDisposable
 
         var handle = await _store.CreateRunScopeAsync(scope);
         Assert.Contains("ws-personal-", handle.Location, StringComparison.Ordinal);
-        Assert.Contains("default-project", handle.Location, StringComparison.Ordinal);
+        // Default project resolves to workspace-level layout: {root}/{ws}/artifacts/{run}
+        Assert.Equal("default-project", handle.Scope.ProjectId);
+        Assert.Contains(Path.DirectorySeparatorChar + "artifacts" + Path.DirectorySeparatorChar, handle.Location, StringComparison.Ordinal);
         // No user segment in the path
         Assert.DoesNotContain("default-user", handle.Location, StringComparison.Ordinal);
 

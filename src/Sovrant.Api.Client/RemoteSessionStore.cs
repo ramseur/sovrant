@@ -151,6 +151,23 @@ public sealed class RemoteSessionStore : ISessionStore
         return Task.CompletedTask;
     }
 
+    public async Task UpdatePrivacyAsync(string sessionId, string ownerUserId, bool isPrivate, CancellationToken ct = default)
+    {
+        using var content = new StringContent(
+            JsonSerializer.Serialize(new { isPrivate }),
+            System.Text.Encoding.UTF8,
+            "application/json");
+        await _http.PatchAsync(new Uri($"/v1/sessions/{Uri.EscapeDataString(sessionId)}/privacy", UriKind.Relative), content, ct);
+    }
+
+    public Task<bool?> GetIsPrivateAsync(string sessionId, CancellationToken ct = default)
+    {
+        // The remote sessions endpoint does not currently surface privacy on
+        // its detail payload. Treat unknown as "use the default" (the UI
+        // assumes private when null is returned).
+        return Task.FromResult<bool?>(null);
+    }
+
     public async Task<IReadOnlyList<SessionListItem>> SearchAsync(string query, string? ownerUserId = null, int limit = 50, CancellationToken ct = default)
     {
         var url = $"/v1/sessions?q={Uri.EscapeDataString(query)}";

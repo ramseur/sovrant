@@ -1615,6 +1615,48 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     color: var(--text-muted);
 }
 
+/* Phase 99 — chat-bottom-bar lays out the privacy toggle alongside the
+   token counter beneath the input. */
+.chat-bottom-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 24px;
+}
+
+.privacy-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px solid var(--border-subtle, #2a2a2a);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.privacy-toggle:hover { background: var(--surface-hover, rgba(255,255,255,0.04)); }
+.privacy-toggle.private { color: var(--accent, #d4a017); border-color: var(--accent, #d4a017); }
+.privacy-toggle.public { color: var(--text-muted); }
+.privacy-icon { font-size: 12px; }
+
+.privacy-toggle-mini {
+    background: transparent;
+    border: 1px solid var(--border-subtle, #2a2a2a);
+    border-radius: 999px;
+    padding: 2px 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    line-height: 1;
+}
+.privacy-toggle-mini:hover { background: var(--surface-hover, rgba(255,255,255,0.04)); }
+.privacy-toggle-mini.private { color: var(--accent, #d4a017); border-color: var(--accent, #d4a017); }
+.privacy-toggle-mini.public { color: var(--text-muted); }
+
 /* ===== Placeholder pages ===== */
 .placeholder-page {
     display: flex;

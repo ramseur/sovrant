@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using Sovrant.Agents.Models;
 using Sovrant.Agents.Shared;
 using Sovrant.Agents.Templates;
+using Sovrant.Runtime.Governance;
 using Sovrant.Runtime.Storage;
 
 namespace Sovrant.Desktop.ViewModels;
@@ -17,6 +18,7 @@ public partial class AgentsViewModel : ViewModelBase
     private readonly AgentDefinitionWriter _writer;
     private readonly AdHocAgentRunner _runner;
     private readonly IAgentRunStore _runStore;
+    private readonly IAuditStore _auditStore;
     private readonly ActiveContextViewModel _activeContext;
     private readonly Action<string, string?>? _launchChat;
     private readonly List<AgentTemplateItemViewModel> _allTemplates = [];
@@ -52,6 +54,7 @@ public partial class AgentsViewModel : ViewModelBase
         AgentDefinitionWriter writer,
         AdHocAgentRunner runner,
         IAgentRunStore runStore,
+        IAuditStore auditStore,
         ActiveContextViewModel activeContext,
         Action<string, string?>? launchChat = null)
     {
@@ -59,6 +62,7 @@ public partial class AgentsViewModel : ViewModelBase
         _writer = writer;
         _runner = runner;
         _runStore = runStore;
+        _auditStore = auditStore;
         _activeContext = activeContext;
         _launchChat = launchChat;
         LoadTemplates();
@@ -239,6 +243,24 @@ public partial class AgentsViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
+    private async Task TogglePrivacyAsync(RecentAgentRunViewModel? run)
+    {
+        if (run is null || !run.IsOwn) return;
+        var newValue = !run.IsPrivate;
+        run.IsPrivate = newValue;
+        try
+        {
+            await _runStore.UpdatePrivacyAsync(run.RunId, App.SovrantUserId, newValue).ConfigureAwait(false);
+            await _auditStore.LogPrivacyChangeAsync(App.SovrantUserId, "agent_run", run.RunId, newValue).ConfigureAwait(false);
+        }
+        catch
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => run.IsPrivate = !newValue);
+            throw;
+        }
+    }
+
     // ── Data ──────────────────────────────────────────────────────────────
 
     private async Task LoadRecentRunsAsync()
@@ -266,6 +288,8 @@ public partial class AgentsViewModel : ViewModelBase
                         AgentName = r.MemberId ?? string.Empty,
                         Status = r.Status,
                         WhenLabel = FormatRelative(r.EndedAt ?? r.StartedAt),
+                        IsPrivate = r.IsPrivate,
+                        IsOwn = string.Equals(r.UserId, App.SovrantUserId, StringComparison.Ordinal),
                     });
                 }
             });
@@ -393,4 +417,6 @@ public partial class RecentAgentRunViewModel : ViewModelBase
     [ObservableProperty] private string _agentName = string.Empty;
     [ObservableProperty] private string _status = string.Empty;
     [ObservableProperty] private string _whenLabel = string.Empty;
+    [ObservableProperty] private bool _isPrivate;
+    [ObservableProperty] private bool _isOwn;
 }

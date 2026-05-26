@@ -1,9 +1,17 @@
 @page "/dashboard"
 @using System.Globalization
 @using Sovrant.Runtime.UserDashboard
+@using Sovrant.Runtime.Missions
+@using Sovrant.Runtime.Storage
+@using Sovrant.Runtime.Session
+@using Sovrant.Runtime.Governance
 @using Sovrant.Web.Services
 @inject WebSessionService Session
 @inject UserDashboardAggregator Aggregator
+@inject IMissionStore MissionStore
+@inject IAgentRunStore RunStore
+@inject ISessionStore SessionStore
+@inject IAuditStore AuditStore
 @inject NavigationManager Nav
 @implements IDisposable
 
@@ -82,7 +90,17 @@
                             {
                                 <span class="cc-badge-mine" title="You own this record">Mine</span>
                             }
-                            @if (row.IsPrivate)
+                            @if (row.IsOwn)
+                            {
+                                <button class="privacy-toggle-mini @(row.IsPrivate ? "private" : "public")"
+                                        title="@(row.IsPrivate ? "Private — only you can see this. Click to make public." : "Public — visible to workspace admins. Click to make private.")"
+                                        @onclick="@(() => TogglePrivacyAsync(row))"
+                                        @onclick:stopPropagation="true"
+                                        @onclick:preventDefault="true">
+                                    @(row.IsPrivate ? "🔒" : "🔓")
+                                </button>
+                            }
+                            else if (row.IsPrivate)
                             {
                                 <span class="cc-badge-private" title="Private — only visible to you">&#x1F512;</span>
                             }
@@ -165,6 +183,36 @@
         if (delta.TotalMinutes < 60) return $"{(int)delta.TotalMinutes}m ago";
         if (delta.TotalHours < 24) return $"{(int)delta.TotalHours}h ago";
         return when.LocalDateTime.ToString("MMM d, HH:mm", CultureInfo.InvariantCulture);
+    }
+
+    private async Task TogglePrivacyAsync(UserDashboardRow row)
+    {
+        if (string.IsNullOrEmpty(Session.UserId)) return;
+        var newValue = !row.IsPrivate;
+        try
+        {
+            switch (row.Kind)
+            {
+                case "mission":
+                    await MissionStore.UpdatePrivacyAsync(row.Id, Session.UserId, newValue);
+                    await AuditStore.LogPrivacyChangeAsync(Session.UserId, "mission", row.Id, newValue);
+                    break;
+                case "agent-run":
+                case "team-run":
+                    await RunStore.UpdatePrivacyAsync(row.Id, Session.UserId, newValue);
+                    await AuditStore.LogPrivacyChangeAsync(Session.UserId, "agent_run", row.Id, newValue);
+                    break;
+                case "session":
+                    await SessionStore.UpdatePrivacyAsync(row.Id, Session.UserId, newValue);
+                    await AuditStore.LogPrivacyChangeAsync(Session.UserId, "session", row.Id, newValue);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to update privacy: {ex.Message}";
+        }
+        await LoadAsync();
     }
 
     public void Dispose() => _timer?.Dispose();

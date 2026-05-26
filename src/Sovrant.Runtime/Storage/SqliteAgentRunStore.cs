@@ -83,6 +83,20 @@ internal sealed class SqliteAgentRunStore(ISqliteConnectionFactory connectionFac
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
+    public async Task UpdatePrivacyAsync(string runId, string ownerUserId, bool isPrivate, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(runId);
+        ArgumentNullException.ThrowIfNull(ownerUserId);
+
+        using var conn = connectionFactory.CreateConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE agent_runs SET is_private = $v WHERE run_id = $id AND user_id = $owner";
+        cmd.Parameters.AddWithValue("$v", isPrivate ? 1 : 0);
+        cmd.Parameters.AddWithValue("$id", runId);
+        cmd.Parameters.AddWithValue("$owner", ownerUserId);
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
     public async Task<IReadOnlyList<AgentRunRecord>> ListAsync(AgentRunFilter? filter = null, int limit = 50, CancellationToken ct = default)
     {
         using var conn = connectionFactory.CreateConnection();

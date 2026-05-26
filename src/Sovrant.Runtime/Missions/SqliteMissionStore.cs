@@ -31,10 +31,10 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
             cmd.CommandText = """
                 INSERT INTO missions
                     (id, goal, status, plan_json, created_at, updated_at,
-                     session_id, workspace_id, project_id, owner_user_id)
+                     session_id, workspace_id, project_id, owner_user_id, is_private)
                 VALUES
                     ($id, $goal, 'planning', '{}', $now, $now,
-                     $sessionId, $workspaceId, $projectId, $ownerUserId)
+                     $sessionId, $workspaceId, $projectId, $ownerUserId, 1)
                 """;
             cmd.Parameters.AddWithValue("$id", id);
             cmd.Parameters.AddWithValue("$goal", goal);
@@ -75,7 +75,8 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
             SessionId: sessionId,
             WorkspaceId: workspaceId,
             ProjectId: projectId,
-            OwnerUserId: ownerUserId);
+            OwnerUserId: ownerUserId,
+            IsPrivate: true);
     }
 
     public async Task<Mission?> GetAsync(string missionId, CancellationToken ct = default)
@@ -231,6 +232,24 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         var id = Convert.ToInt64(idObj, CultureInfo.InvariantCulture);
 
         return new MissionEvent(id, missionId, eventType, payloadJson, now, workspaceId, projectId);
+    }
+
+    public async Task UpdatePrivacyAsync(
+        string missionId,
+        string ownerUserId,
+        bool isPrivate,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(missionId);
+        ArgumentNullException.ThrowIfNull(ownerUserId);
+
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "UPDATE missions SET is_private = $v WHERE id = $id AND owner_user_id = $owner";
+        cmd.Parameters.AddWithValue("$v", isPrivate ? 1 : 0);
+        cmd.Parameters.AddWithValue("$id", missionId);
+        cmd.Parameters.AddWithValue("$owner", ownerUserId);
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<MissionEvent>> GetEventsAsync(

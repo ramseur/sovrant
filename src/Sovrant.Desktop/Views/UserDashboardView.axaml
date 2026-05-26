@@ -161,10 +161,18 @@
                                                 <TextBlock Text="Mine" FontSize="9" FontWeight="SemiBold"
                                                            Foreground="White" />
                                             </Border>
-                                            <TextBlock Text="🔒" FontSize="11"
-                                                       ToolTip.Tip="Private — only visible to you"
-                                                       IsVisible="{Binding IsPrivate}"
-                                                       VerticalAlignment="Center" />
+                                            <Button IsVisible="{Binding IsOwn}"
+                                                    Command="{Binding $parent[ItemsControl].((vm:UserDashboardViewModel)DataContext).TogglePrivacyCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    Padding="4,1"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Cursor="Hand"
+                                                    ToolTip.Tip="Click to toggle privacy"
+                                                    VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding IsPrivate, Converter={x:Static vm:BoolToLockIconConverter.Instance}}"
+                                                           FontSize="11" />
+                                            </Button>
                                         </StackPanel>
                                         <TextBlock Text="{Binding Preview}" FontSize="11"
                                                    Foreground="{DynamicResource TextMuted}"

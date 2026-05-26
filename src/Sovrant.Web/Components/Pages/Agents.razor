@@ -9,6 +9,7 @@
 @inject AgentDefinitionWriter DefinitionWriter
 @inject AdHocAgentRunner Runner
 @inject IAgentRunStore RunStore
+@inject Sovrant.Runtime.Governance.IAuditStore AuditStore
 @inject ActiveContextService ActiveContext
 @inject NavigationManager Nav
 
@@ -186,6 +187,11 @@
                                     }
                                     <span class="recent-run-status @StatusClass(r.Status)">@r.Status</span>
                                     <span>@FormatRelative(r.EndedAt ?? r.StartedAt)</span>
+                                    <button class="privacy-toggle-mini @(r.IsPrivate ? "private" : "public")"
+                                            title="@(r.IsPrivate ? "Private — only you can see this run" : "Public — visible to admins")"
+                                            @onclick="@(() => TogglePrivacyAsync(r))">
+                                        @(r.IsPrivate ? "🔒" : "🔓")
+                                    </button>
                                 </div>
                             </div>
                         }
@@ -231,6 +237,14 @@
                             }
                             <span class="recent-run-status @StatusClass(r.Status)">@r.Status</span>
                             <span>@FormatRelative(r.EndedAt ?? r.StartedAt)</span>
+                            @if (string.Equals(r.UserId, Program.SovrantUserId, StringComparison.Ordinal))
+                            {
+                                <button class="privacy-toggle-mini @(r.IsPrivate ? "private" : "public")"
+                                        title="@(r.IsPrivate ? "Private — only you can see this run" : "Public — visible to admins")"
+                                        @onclick="@(() => TogglePrivacyAsync(r))">
+                                    @(r.IsPrivate ? "🔒" : "🔓")
+                                </button>
+                            }
                         </div>
                     </div>
                 }
@@ -497,6 +511,28 @@
         }
         catch { _agentRuns = []; }
         StateHasChanged();
+    }
+
+    // ── Privacy toggle ────────────────────────────────────────────────────
+
+    private async Task TogglePrivacyAsync(AgentRunRecord run)
+    {
+        var newValue = !run.IsPrivate;
+        try
+        {
+            await RunStore.UpdatePrivacyAsync(run.RunId, Program.SovrantUserId, newValue);
+            await AuditStore.LogPrivacyChangeAsync(Program.SovrantUserId, "agent_run", run.RunId, newValue);
+            await LoadRecentRunsAsync();
+            if (_selected is not null) await LoadAgentRunsAsync(_selected.Name);
+            StateHasChanged();
+        }
+        catch
+        {
+            // optimistic UI: reload to revert
+            await LoadRecentRunsAsync();
+            if (_selected is not null) await LoadAgentRunsAsync(_selected.Name);
+            StateHasChanged();
+        }
     }
 
     // ── Search ────────────────────────────────────────────────────────────

@@ -29,10 +29,11 @@ internal static class CommandCenterRoutes
             CancellationToken ct) =>
         {
             // Non-admin callers can only see their own cockpit state.
+            var viewerUserId = HttpContextAuthExtensions.GetUserId(ctx);
             if (!HttpContextAuthExtensions.IsAdmin(ctx))
-                owner_user_id = HttpContextAuthExtensions.GetUserId(ctx);
+                owner_user_id = viewerUserId;
 
-            var state = await aggregator.GetActiveStateAsync(owner_user_id, ct).ConfigureAwait(false);
+            var state = await aggregator.GetActiveStateAsync(owner_user_id, viewerUserId, ct).ConfigureAwait(false);
             return Results.Json(state, s_jsonOptions);
         });
     }
