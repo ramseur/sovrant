@@ -63,7 +63,8 @@ setup requirements. OAuth-required entries are flagged for Phase 101.
 | Sitecore Community | stdio | `npx -y @antonytm/mcp-sitecore-server` | `AUTORIZATION_HEADER` (optional) + GraphQL endpoint | ✅ | Env var name `AUTORIZATION_HEADER` is intentionally misspelled — matches the package's actual env var; not a catalog error |
 | Sitecore Marketer | HTTP | Endpoint from Sitecore Cloud Portal | OAuth only | 🔒 | No changes needed; OAuth flag added |
 | Adobe AEM | HTTP | AEM MCP endpoint | OAuth token → `Authorization` header | 🔒 | OAuth flag added |
-| Optimizely CMS | — | — | — | ❌ | Removed: `optimizely-cms-mcp` does not exist on npm; no official or widely-adopted community package found; re-add when an installable package ships |
+| Optimizely Experimentation | HTTP | `https://exp.mcp.opal.optimizely.com/mcp` | OAuth only | 🔒 | Official Optimizely remote MCP launched May 2026; OAuth via Optimizely Identity; no credentials to paste |
+| Optimizely CMS | stdio | Manual install — clone `github.com/first3things/optimizely-cms-mcp` | `GRAPH_SINGLE_KEY` + CMA endpoint | ⚠️ | Not on npm; requires local build; additional env vars (`GRAPH_ENDPOINT`, `CMA_BASE_URL`, `CMA_TOKEN_ENDPOINT`, `CMA_CLIENT_ID`, `CMA_CLIENT_SECRET`) need Phase 96; gallery form surfaces `GRAPH_SINGLE_KEY` and CMA base URL only |
 
 ---
 
@@ -79,6 +80,7 @@ The following entries require browser-based OAuth and are blocked on Phase 101
 | Supabase | Supabase OAuth (interactive default) |
 | Sitecore Marketer | Sitecore Identity OAuth 2.0 |
 | Adobe AEM | Adobe IMS OAuth 2.0 + PKCE |
+| Optimizely Experimentation | Optimizely Identity OAuth |
 
 ---
 

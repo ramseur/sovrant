@@ -150,5 +150,19 @@ public static class IntegrationCatalog
             EndpointLabel: "AEM MCP endpoint (e.g. https://mcp.adobeaemcloud.com/adobe/mcp/content)",
             RequiresOAuth: true),
 
+        new("optimizely-experimentation", "Optimizely", "DXP", "🔵",
+            "Official Optimizely Experimentation MCP. Remote HTTPS endpoint — browser-based OAuth via Optimizely Identity. Query, create, and update experiments, flags, and audiences.",
+            IntegrationKind.McpHttp, IntegrationTier.Platform,
+            EndpointTemplate: "https://exp.mcp.opal.optimizely.com/mcp",
+            GroupName: "Optimizely", TabLabel: "Experimentation",
+            RequiresOAuth: true),
+
+        new("optimizely-cms", "Optimizely", "DXP", "🔵",
+            "Community MCP server for Optimizely CMS (Graph API + Content Management API). Requires manual install from GitHub (github.com/first3things/optimizely-cms-mcp) — not available via npx. Additional env vars needed: GRAPH_ENDPOINT, CMA_BASE_URL, CMA_TOKEN_ENDPOINT, CMA_CLIENT_ID, CMA_CLIENT_SECRET.",
+            IntegrationKind.McpStdio, IntegrationTier.Platform,
+            ApiKeyLabel: "Graph Single Key", ApiKeyEnvVar: "GRAPH_SINGLE_KEY",
+            EndpointLabel: "CMA base URL (e.g. https://api.cms.optimizely.com/preview3)",
+            GroupName: "Optimizely", TabLabel: "CMS"),
+
     ];
 }

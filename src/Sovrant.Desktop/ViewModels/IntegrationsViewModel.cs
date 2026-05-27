@@ -225,7 +225,7 @@ public partial class IntegrationsViewModel : ViewModelBase
                     .Replace("{API_KEY}", apiKey, StringComparison.Ordinal))
                 .ToArray();
 
-            return new McpServerConfig { Command = entry.DefaultCommand!, Args = args, Env = env };
+            return new McpServerConfig { Command = entry.DefaultCommand ?? string.Empty, Args = args, Env = env };
         }
         else
         {
