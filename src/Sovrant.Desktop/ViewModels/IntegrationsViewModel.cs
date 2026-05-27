@@ -533,6 +533,7 @@ public partial class CatalogEntryViewModel : ViewModelBase
     public IntegrationTier Tier => _entry.Tier;
     public bool NeedsApiKey => _entry.NeedsApiKey;
     public bool NeedsEndpoint => _entry.NeedsEndpoint;
+    public bool RequiresOAuth => _entry.RequiresOAuth;
     public string? ApiKeyLabel => _entry.ApiKeyLabel;
     public string? ApiKeyEnvVar => _entry.ApiKeyEnvVar;
     public string? ApiKeyHeader => _entry.ApiKeyHeader;

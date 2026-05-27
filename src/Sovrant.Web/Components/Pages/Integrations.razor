@@ -132,6 +132,14 @@
                 }
                 else
                 {
+                    @if (_catalogEntry.RequiresOAuth)
+                    {
+                        <div class="callout-card" style="border-color:var(--brand);background:var(--surface-card);">
+                            <strong>🔒 OAuth required</strong> — This integration uses browser-based OAuth.
+                            Full support coming in a future release (Phase 101).
+                            You can still connect by entering your endpoint URL manually if your provider issues one.
+                        </div>
+                    }
                     @if (_catalogEntry.NeedsApiKey)
                     {
                         <div class="form-field">

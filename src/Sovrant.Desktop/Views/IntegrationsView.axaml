@@ -259,6 +259,17 @@
                                 <!-- MCP connect form -->
                                 <StackPanel IsVisible="{Binding !SelectedCatalogEntry.IsLlmProvider}" Spacing="12">
 
+                                    <!-- OAuth notice -->
+                                    <Border IsVisible="{Binding SelectedCatalogEntry.RequiresOAuth}"
+                                            Padding="12,9" CornerRadius="8"
+                                            Background="{DynamicResource SurfaceBackground}"
+                                            BorderBrush="{DynamicResource BrandPrimary}"
+                                            BorderThickness="1">
+                                        <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                                   TextWrapping="Wrap"
+                                                   Text="🔒 OAuth required — this integration uses browser-based OAuth. Full support coming in a future release. You can still connect manually by entering your endpoint URL below if your provider issues one." />
+                                    </Border>
+
                                     <Border IsVisible="{Binding SelectedCatalogEntry.IsAlreadyConnected}"
                                             Padding="10,7" CornerRadius="6"
                                             Background="{DynamicResource StatusOk}">

@@ -7,6 +7,25 @@ Versions correspond to tags on the `development` branch.
 
 ---
 
+## [1.0.2] — 2026-05-26
+
+### Changed
+
+- **Phase 107 — Integration connection audit:** all 19 gallery entries audited and corrected.
+  - Composio: API key header corrected (`Authorization` → `x-api-key`).
+  - Zapier: stale endpoint URL removed; replaced with user-supplied endpoint from Zapier dashboard; OAuth flag added.
+  - GitHub: env var corrected (`GITHUB_TOKEN` → `GITHUB_PERSONAL_ACCESS_TOKEN`); deprecation note added.
+  - Linear: switched from non-existent `@linear/mcp-server` npm package to Linear's official remote HTTP endpoint (`https://mcp.linear.app/mcp`) with OAuth flag.
+  - Snowflake: package name corrected (`snowflake-mcp-server` → `snowflake-mcp`); description updated to list all 6 required env vars.
+  - Optimizely CMS: removed — no installable npm package exists.
+  - OAuth badge added to connect forms (Web + Desktop) for Zapier, Linear, Supabase, Sitecore Marketer, and Adobe AEM.
+
+### Added
+
+- `docs/integration-connection-matrix.md` — connection status, credential fields, and open issues for all gallery integrations; serves as the acceptance gate going forward.
+
+---
+
 ## [1.0.1] — 2026-05-26
 
 ### Added
