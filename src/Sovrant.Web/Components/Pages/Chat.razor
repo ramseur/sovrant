@@ -193,6 +193,7 @@
             {
                 _agentName = template.Name;
                 _agentSystemPrompt = template.SystemPrompt;
+                ActiveContext.SetActiveAgent(template.Name);
             }
         }
 
@@ -281,6 +282,12 @@
             }
             var storedPrivacy = await SessionStore.GetIsPrivateAsync(sessionId);
             _isPrivate = storedPrivacy ?? true;
+            var storedAgent = await SessionStore.GetAgentNameAsync(sessionId);
+            if (storedAgent is not null)
+            {
+                _agentName = storedAgent;
+                ActiveContext.SetActiveAgent(storedAgent);
+            }
             await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
@@ -379,6 +386,9 @@
         _tokenCount = 0;
         _sessionCost = 0;
         _sessionId = $"session-{Guid.NewGuid():N}";
+        _agentName = null;
+        _agentSystemPrompt = null;
+        ActiveContext.SetActiveAgent(null);
         StateHasChanged();
     }
 
@@ -540,6 +550,8 @@
         {
             title = text.Length > 60 ? text[..60] + "..." : text;
             await SessionStore.SetTitleAsync(_sessionId, title, ownerUserId: Sovrant.Web.Program.SovrantUserId);
+            if (_agentName is not null)
+                await SessionStore.SetAgentNameAsync(_sessionId, _agentName, ownerUserId: Sovrant.Web.Program.SovrantUserId);
             ActiveContext.NotifyDataChanged();
         }
 

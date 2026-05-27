@@ -427,4 +427,46 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
         if (result is null || result is DBNull) return null;
         return Convert.ToInt32(result, CultureInfo.InvariantCulture) != 0;
     }
+
+    public async Task SetAgentNameAsync(
+        string sessionId,
+        string agentName,
+        string? ownerUserId = null,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(sessionId);
+        ArgumentNullException.ThrowIfNull(agentName);
+
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+
+        if (ownerUserId is null)
+        {
+            cmd.CommandText = "UPDATE sessions SET agent_name = $name WHERE session_id = $sid";
+            cmd.Parameters.AddWithValue("$name", agentName);
+            cmd.Parameters.AddWithValue("$sid", sessionId);
+        }
+        else
+        {
+            cmd.CommandText = "UPDATE sessions SET agent_name = $name WHERE session_id = $sid AND user_id = $owner";
+            cmd.Parameters.AddWithValue("$name", agentName);
+            cmd.Parameters.AddWithValue("$sid", sessionId);
+            cmd.Parameters.AddWithValue("$owner", ownerUserId);
+        }
+
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task<string?> GetAgentNameAsync(string sessionId, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(sessionId);
+
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT agent_name FROM sessions WHERE session_id = $sid";
+        cmd.Parameters.AddWithValue("$sid", sessionId);
+        var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        if (result is null || result is DBNull) return null;
+        return (string)result;
+    }
 }

@@ -7,6 +7,22 @@ Versions correspond to tags on the `development` branch.
 
 ---
 
+## [1.0.1] — 2026-05-26
+
+### Added
+
+- **Phase 106 — Agent identity in chat:** agent name is now persisted to the
+  `sessions` table (V031 migration: `agent_name` column) and restored on
+  session resume.  Both Web and Desktop surfaces show the active agent:
+  - **Chat hero state** — "Chatting with [AgentName]" badge when the session
+    is scoped to a named agent (Web + Desktop).
+  - **Top context bar** — permanent agent pill visible on all pages while
+    a scoped session is active (Web + Desktop).
+  - Agent context is cleared when the user starts a fresh session and
+    restored automatically when resuming a previous agent-scoped session.
+
+---
+
 ## [1.0.0] — 2026-05-26
 
 First stable release. Combines the 0.10.0 milestone bump with the Phase 98/99

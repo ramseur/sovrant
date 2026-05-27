@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:conv="using:Sovrant.Desktop.Converters"
              xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
              xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.ChatView"
@@ -162,6 +163,25 @@
                     <TextBlock Text="⚡" FontSize="24"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center" />
+                </Border>
+
+                <!-- Agent scope badge — visible when session is bound to an agent -->
+                <Border CornerRadius="12" Padding="10,4"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1"
+                        HorizontalAlignment="Center"
+                        IsVisible="{Binding AgentName,
+                                            Converter={x:Static conv:StringNotNullOrEmptyConverter.Instance}}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="🤖" FontSize="12" VerticalAlignment="Center" />
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                   VerticalAlignment="Center">
+                            <Run Text="Chatting with " />
+                            <Run Text="{Binding AgentName}" FontWeight="SemiBold"
+                                 Foreground="{DynamicResource TextPrimary}" />
+                        </TextBlock>
+                    </StackPanel>
                 </Border>
 
                 <TextBlock Text="What are you working on?"

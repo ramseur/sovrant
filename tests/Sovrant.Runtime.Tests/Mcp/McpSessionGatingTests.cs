@@ -114,6 +114,10 @@ public sealed class McpSessionGatingTests
             => Task.CompletedTask;
         public Task<bool?> GetIsPrivateAsync(string sessionId, CancellationToken ct = default)
             => Task.FromResult<bool?>(null);
+        public Task SetAgentNameAsync(string sessionId, string agentName, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<string?> GetAgentNameAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────

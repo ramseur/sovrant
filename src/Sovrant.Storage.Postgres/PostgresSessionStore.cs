@@ -291,4 +291,35 @@ internal sealed class PostgresSessionStore(IPostgresConnectionFactory factory) :
         }
         return items;
     }
+
+    public async Task SetAgentNameAsync(string sessionId, string agentName, string? ownerUserId = null, CancellationToken ct = default)
+    {
+        using var conn = factory.CreateConnection();
+        using var cmd = conn.CreateCommand();
+        if (ownerUserId is null)
+        {
+            cmd.CommandText = "UPDATE sessions SET agent_name = $1 WHERE session_id = $2";
+            cmd.Parameters.AddWithValue(agentName);
+            cmd.Parameters.AddWithValue(sessionId);
+        }
+        else
+        {
+            cmd.CommandText = "UPDATE sessions SET agent_name = $1 WHERE session_id = $2 AND user_id = $3";
+            cmd.Parameters.AddWithValue(agentName);
+            cmd.Parameters.AddWithValue(sessionId);
+            cmd.Parameters.AddWithValue(ownerUserId);
+        }
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task<string?> GetAgentNameAsync(string sessionId, CancellationToken ct = default)
+    {
+        using var conn = factory.CreateConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT agent_name FROM sessions WHERE session_id = $1";
+        cmd.Parameters.AddWithValue(sessionId);
+        var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        if (result is null || result is DBNull) return null;
+        return (string)result;
+    }
 }

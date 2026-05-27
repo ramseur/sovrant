@@ -299,6 +299,24 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .top-context-bar .tcb-mcp-footer-link:hover {
     background: var(--surface-background);
 }
+.top-context-bar .tcb-agent-badge {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: var(--surface-card);
+    border: 1px solid var(--surface-border);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+.top-context-bar .tcb-agent-name {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 /* ===== Sidebar (expanded) ===== */
 .sidebar {

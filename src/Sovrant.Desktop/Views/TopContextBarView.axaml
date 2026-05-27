@@ -311,6 +311,28 @@
                 </Panel>
             </StackPanel>
 
+            <!-- Agent indicator — only visible when a session is scoped to an agent -->
+            <Border CornerRadius="12"
+                    Padding="8,3"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}"
+                    BorderThickness="1"
+                    VerticalAlignment="Center"
+                    IsVisible="{Binding ActiveContext.ActiveAgentName,
+                                        Converter={x:Static conv:StringNotNullOrEmptyConverter.Instance}}"
+                    ToolTip.Tip="{Binding ActiveContext.ActiveAgentName,
+                                         StringFormat='Session scoped to agent: {0}'}">
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                    <TextBlock Text="🤖" FontSize="11" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding ActiveContext.ActiveAgentName}"
+                               FontSize="12" FontWeight="Medium"
+                               Foreground="{DynamicResource TextPrimary}"
+                               TextTrimming="CharacterEllipsis"
+                               MaxWidth="120"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+
         </StackPanel>
     </Border>
 </UserControl>

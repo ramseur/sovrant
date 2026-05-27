@@ -21,6 +21,12 @@ public sealed class ActiveContextService
     /// </summary>
     public IReadOnlyList<string> ActiveMcpServers { get; private set; } = [];
 
+    /// <summary>
+    /// Phase 106 — name of the agent scoped to the current chat session, or
+    /// <c>null</c> when chatting with the base assistant.
+    /// </summary>
+    public string? ActiveAgentName { get; private set; }
+
     /// <summary>Fires whenever any context property changes.</summary>
     public event Action? OnChanged;
 
@@ -68,6 +74,12 @@ public sealed class ActiveContextService
     public void SetActiveMcpServers(IReadOnlyList<string> servers)
     {
         ActiveMcpServers = servers;
+        OnChanged?.Invoke();
+    }
+
+    public void SetActiveAgent(string? agentName)
+    {
+        ActiveAgentName = agentName;
         OnChanged?.Invoke();
     }
 

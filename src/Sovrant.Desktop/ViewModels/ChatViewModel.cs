@@ -26,8 +26,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     // True while a turn for this session is owned by _activeSessions.
     private bool _isBackgroundSession;
 
-    private string? _agentName;
     private string? _agentSystemPrompt;
+
+    [ObservableProperty]
+    private string? _agentName;
 
     [ObservableProperty]
     private string _sessionId;
@@ -97,8 +99,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     public void SetAgentScope(string agentName, string? systemPrompt)
     {
-        _agentName = agentName;
+        AgentName = agentName;
         _agentSystemPrompt = systemPrompt;
+        _activeContext.ActiveAgentName = agentName;
     }
 
     public void SeedInput(string text)
@@ -113,6 +116,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
         var storedPrivacy = await _sessionStore.GetIsPrivateAsync(sessionId, ct).ConfigureAwait(false);
         IsSessionPrivate = storedPrivacy ?? true;
+
+        var storedAgent = await _sessionStore.GetAgentNameAsync(sessionId, ct).ConfigureAwait(false);
+        AgentName = storedAgent;
+        _activeContext.ActiveAgentName = storedAgent;
 
         var entries = await _sessionStore.LoadAsync(sessionId, ownerUserId: App.SovrantUserId, ct: ct);
         foreach (var entry in entries)
@@ -248,6 +255,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             title = text.Length > 60 ? text[..60] + "..." : text;
             await _sessionStore.SetTitleAsync(SessionId, title, ownerUserId: App.SovrantUserId, ct: CancellationToken.None)
                 .ConfigureAwait(false);
+            if (AgentName is not null)
+                await _sessionStore.SetAgentNameAsync(SessionId, AgentName, ownerUserId: App.SovrantUserId, ct: CancellationToken.None)
+                    .ConfigureAwait(false);
             await Dispatcher.UIThread.InvokeAsync(() => TurnCompleted?.Invoke());
         }
 
@@ -271,7 +281,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
             var pooled = await _sessionPool.GetOrCreateAsync(SessionId,
                 agentSystemPrompt: _agentSystemPrompt,
-                agentName: _agentName,
+                agentName: AgentName,
                 ct: token).ConfigureAwait(false);
 
             // Sync privacy — session row may have just been created with default
