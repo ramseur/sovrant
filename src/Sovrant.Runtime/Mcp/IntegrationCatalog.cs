@@ -21,10 +21,14 @@ public sealed record CatalogEntry(
     string? SettingsSection = null,
     string? GroupName = null,
     string? TabLabel = null,
-    bool RequiresOAuth = false)
+    bool RequiresOAuth = false,
+    Uri? OAuthAuthorizationUrl = null,
+    Uri? OAuthTokenUrl = null,
+    IReadOnlyList<string>? OAuthScopes = null)
 {
     public bool NeedsApiKey => ApiKeyLabel is not null;
     public bool NeedsEndpoint => EndpointLabel is not null;
+    public bool HasOAuthMetadata => OAuthAuthorizationUrl is not null && OAuthTokenUrl is not null;
 }
 
 public static class IntegrationCatalog
@@ -81,7 +85,10 @@ public static class IntegrationCatalog
             IntegrationKind.McpHttp, IntegrationTier.Platform,
             EndpointLabel: "Linear MCP endpoint",
             EndpointTemplate: "https://mcp.linear.app/mcp",
-            RequiresOAuth: true),
+            RequiresOAuth: true,
+            OAuthAuthorizationUrl: new Uri("https://linear.app/oauth/authorize"),
+            OAuthTokenUrl: new Uri("https://api.linear.app/oauth/token"),
+            OAuthScopes: ["read", "write"]),
 
         new("stripe", "Stripe", "Platform", "💳",
             "Query customers, payments, and subscriptions via the Stripe MCP server.",
@@ -146,16 +153,21 @@ public static class IntegrationCatalog
         new("aem", "Adobe Experience Manager", "DXP", "🔴",
             "Read and write AEM content, pages, assets, and Cloud Manager resources via the official Adobe MCP server.",
             IntegrationKind.McpHttp, IntegrationTier.Platform,
-            ApiKeyLabel: "Adobe OAuth Token", ApiKeyHeader: "Authorization",
             EndpointLabel: "AEM MCP endpoint (e.g. https://mcp.adobeaemcloud.com/adobe/mcp/content)",
-            RequiresOAuth: true),
+            RequiresOAuth: true,
+            OAuthAuthorizationUrl: new Uri("https://ims-na1.adobelogin.com/ims/authorize/v2"),
+            OAuthTokenUrl: new Uri("https://ims-na1.adobelogin.com/ims/token/v3"),
+            OAuthScopes: ["openid", "AdobeID", "read_organizations"]),
 
         new("optimizely-experimentation", "Optimizely", "DXP", "🔵",
             "Official Optimizely Experimentation MCP. Remote HTTPS endpoint — browser-based OAuth via Optimizely Identity. Query, create, and update experiments, flags, and audiences.",
             IntegrationKind.McpHttp, IntegrationTier.Platform,
             EndpointTemplate: "https://exp.mcp.opal.optimizely.com/mcp",
             GroupName: "Optimizely", TabLabel: "Experimentation",
-            RequiresOAuth: true),
+            RequiresOAuth: true,
+            OAuthAuthorizationUrl: new Uri("https://app.optimizely.com/oauth2/authorize"),
+            OAuthTokenUrl: new Uri("https://app.optimizely.com/oauth2/token"),
+            OAuthScopes: ["project.readonly"]),
 
         new("optimizely-cms", "Optimizely", "DXP", "🔵",
             "Community MCP server for Optimizely CMS (Graph API + Content Management API). Requires manual install from GitHub (github.com/first3things/optimizely-cms-mcp) — not available via npx. Additional env vars needed: GRAPH_ENDPOINT, CMA_BASE_URL, CMA_TOKEN_ENDPOINT, CMA_CLIENT_ID, CMA_CLIENT_SECRET.",

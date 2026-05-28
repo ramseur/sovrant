@@ -2,6 +2,8 @@
 @using System.Text.Json
 @using Sovrant.Runtime.Config
 @using Sovrant.Runtime.Mcp
+@inject IJSRuntime JS
+@inject NavigationManager Nav
 
 <div class="master-detail">
     <div class="master-panel">
@@ -132,36 +134,67 @@
                 }
                 else
                 {
-                    @if (_catalogEntry.RequiresOAuth)
-                    {
-                        <div class="callout-card" style="border-color:var(--brand);background:var(--surface-card);">
-                            <strong>🔒 OAuth required</strong> — This integration uses browser-based OAuth.
-                            Full support coming in a future release (Phase 101).
-                            You can still connect by entering your endpoint URL manually if your provider issues one.
-                        </div>
-                    }
-                    @if (_catalogEntry.NeedsApiKey)
-                    {
-                        <div class="form-field">
-                            <label>@_catalogEntry.ApiKeyLabel</label>
-                            <input type="password" autocomplete="new-password" @bind="_galleryApiKey"
-                                   placeholder="Paste your key here" />
-                        </div>
-                    }
-                    @if (_catalogEntry.NeedsEndpoint)
-                    {
-                        <div class="form-field">
-                            <label>@_catalogEntry.EndpointLabel</label>
-                            <input type="text" autocomplete="off" @bind="_galleryUrl" placeholder="" />
-                        </div>
-                    }
-
-                    <button class="btn-primary" style="max-width:200px;"
-                            @onclick="ConnectFromGalleryAsync">Connect</button>
-
                     @if (_isConnected(_catalogEntry.Id))
                     {
-                        <span class="outcome-badge success" style="margin-left:12px;">Already connected</span>
+                        <div class="callout-card" style="border-color:var(--status-ok);background:var(--surface-card);">
+                            <strong>&#10003; Already connected</strong> — Re-connect to update credentials.
+                        </div>
+                    }
+
+                    @if (_catalogEntry.RequiresOAuth)
+                    {
+                        <!-- OAuth connect path -->
+                        @if (_isOAuthWaiting)
+                        {
+                            <div class="callout-card" style="border-color:var(--brand);background:var(--surface-card);">
+                                <strong>&#x1F504; Waiting for authorization...</strong>
+                                Browser opened — complete the login and return here. Times out after 2 min.
+                            </div>
+                        }
+
+                        <div class="form-field">
+                            <label>OAuth Client ID</label>
+                            <input type="text" autocomplete="off" @bind="_galleryClientId"
+                                   placeholder="Your OAuth app client ID" />
+                        </div>
+
+                        @if (_catalogEntry.NeedsEndpoint)
+                        {
+                            <div class="form-field">
+                                <label>@_catalogEntry.EndpointLabel</label>
+                                <input type="text" autocomplete="off" @bind="_galleryUrl" placeholder="" />
+                            </div>
+                        }
+
+                        <button class="btn-primary" style="max-width:220px;" disabled="@_isOAuthConnecting"
+                                @onclick="ConnectWithOAuthAsync">Connect with OAuth</button>
+
+                        <p style="font-size:11px;color:var(--text-muted);margin-top:8px;">
+                            Register an OAuth app with the provider to get a Client ID.
+                            Sovrant will open your browser for authorization and handle the rest.
+                        </p>
+                    }
+                    else
+                    {
+                        <!-- Standard API key / endpoint connect path -->
+                        @if (_catalogEntry.NeedsApiKey)
+                        {
+                            <div class="form-field">
+                                <label>@_catalogEntry.ApiKeyLabel</label>
+                                <input type="password" autocomplete="new-password" @bind="_galleryApiKey"
+                                       placeholder="Paste your key here" />
+                            </div>
+                        }
+                        @if (_catalogEntry.NeedsEndpoint)
+                        {
+                            <div class="form-field">
+                                <label>@_catalogEntry.EndpointLabel</label>
+                                <input type="text" autocomplete="off" @bind="_galleryUrl" placeholder="" />
+                            </div>
+                        }
+
+                        <button class="btn-primary" style="max-width:200px;"
+                                @onclick="ConnectFromGalleryAsync">Connect</button>
                     }
                 }
             </div>
@@ -345,6 +378,7 @@
     [Inject] private IMcpServerStore ServerStore { get; set; } = default!;
     [Inject] private McpClientRegistry McpRegistry { get; set; } = default!;
     [Inject] private McpToolRegistrar McpRegistrar { get; set; } = default!;
+    [Inject] private McpOAuthService OAuthService { get; set; } = default!;
 
     private string _activeTab = "gallery";
     private string _addMode = "json";
@@ -367,6 +401,9 @@
     private int _selectedGroupTab;
     private string _galleryApiKey = string.Empty;
     private string _galleryUrl = string.Empty;
+    private string _galleryClientId = string.Empty;
+    private bool _isOAuthWaiting;
+    private bool _isOAuthConnecting;
 
     private const string _jsonPlaceholder = """
 {
@@ -417,6 +454,8 @@
         _catalogEntry = _selectedGroup[0];
         _galleryApiKey = string.Empty;
         _galleryUrl = string.Empty;
+        _galleryClientId = string.Empty;
+        _isOAuthWaiting = false;
         _status = string.Empty;
     }
 
@@ -427,6 +466,7 @@
         _catalogEntry = _selectedGroup[idx];
         _galleryApiKey = string.Empty;
         _galleryUrl = string.Empty;
+        _galleryClientId = string.Empty;
     }
 
     private bool _isConnected(string entryId) =>
@@ -459,6 +499,93 @@
         catch (Exception ex)
         {
             _status = $"Failed: {ex.Message}";
+        }
+    }
+
+    private async Task ConnectWithOAuthAsync()
+    {
+        if (_catalogEntry is null || _catalogEntry.Kind == IntegrationKind.LlmProvider) return;
+
+        var entry = _catalogEntry;
+        if (string.IsNullOrWhiteSpace(_galleryClientId))
+        {
+            _status = "OAuth Client ID is required.";
+            return;
+        }
+        if (entry.NeedsEndpoint && string.IsNullOrWhiteSpace(_galleryUrl))
+        {
+            _status = $"{entry.EndpointLabel} is required.";
+            return;
+        }
+
+        _isOAuthConnecting = true;
+        _status = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var urlStr = !string.IsNullOrEmpty(entry.EndpointTemplate) ? entry.EndpointTemplate : _galleryUrl.Trim();
+            Uri.TryCreate(urlStr, UriKind.Absolute, out var url);
+
+            var oauthConfig = new McpOAuthConfig
+            {
+                ClientId = _galleryClientId.Trim(),
+                AuthorizationUrl = entry.OAuthAuthorizationUrl,
+                TokenUrl = entry.OAuthTokenUrl,
+                Scopes = (IReadOnlyList<string>?)entry.OAuthScopes ?? [],
+            };
+
+            var config = new McpServerConfig { Url = url, OAuthConfig = oauthConfig };
+            await ServerStore.UpsertAsync(entry.Id, config).ConfigureAwait(false);
+
+            var redirectUri = Nav.BaseUri.TrimEnd('/') + "/v1/mcp/auth/callback";
+            var authUrl = await OAuthService.GenerateAuthorizationUrlAsync(
+                entry.Id, new Uri(redirectUri)).ConfigureAwait(false);
+
+            await JS.InvokeVoidAsync("open", authUrl, "_blank").ConfigureAwait(false);
+
+            _isOAuthWaiting = true;
+            StateHasChanged();
+
+            // Poll until the server appears as connected (token written by callback).
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            while (!cts.IsCancellationRequested)
+            {
+                await Task.Delay(2000, cts.Token).ConfigureAwait(false);
+                var stored = await ServerStore.GetAsync(entry.Id).ConfigureAwait(false);
+                if (stored?.Headers.ContainsKey("Authorization") == true)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        _isOAuthWaiting = false;
+                        _isOAuthConnecting = false;
+                        _activeTab = "connected";
+                        await LoadServersAsync().ConfigureAwait(false);
+                        _selected = _servers.FirstOrDefault(s => s.Name == entry.Id);
+                        _status = $"Connected to '{entry.Name}' via OAuth.";
+                        StateHasChanged();
+                    }).ConfigureAwait(false);
+                    return;
+                }
+            }
+
+            _isOAuthWaiting = false;
+            _status = "Authorization timed out. Please try again.";
+        }
+        catch (OperationCanceledException)
+        {
+            _isOAuthWaiting = false;
+            _status = "Authorization timed out. Please try again.";
+        }
+        catch (Exception ex)
+        {
+            _isOAuthWaiting = false;
+            _status = $"OAuth failed: {ex.Message}";
+        }
+        finally
+        {
+            _isOAuthConnecting = false;
+            StateHasChanged();
         }
     }
 

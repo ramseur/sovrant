@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Sovrant.Runtime.Config;
@@ -33,8 +34,8 @@ public sealed partial class McpOAuthService
     private readonly IHttpClientFactory _httpFactory;
     private readonly int _serverPort;
 
-    // state → (serverName, codeVerifier, expiry)
-    private readonly Dictionary<string, (string ServerName, string CodeVerifier, DateTimeOffset Expiry)>
+    // state → (serverName, codeVerifier, expiry, redirectUri)
+    private readonly Dictionary<string, (string ServerName, string CodeVerifier, DateTimeOffset Expiry, string RedirectUri)>
         _pendingStates = new(StringComparer.Ordinal);
 
     private readonly object _statesLock = new();
@@ -50,6 +51,14 @@ public sealed partial class McpOAuthService
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "OAuth callback received with unknown or expired state '{State}'")]
     private static partial void LogUnknownState(ILogger logger, string state);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "OAuth metadata discovered for endpoint '{Endpoint}'")]
+    private static partial void LogMetadataDiscovered(ILogger logger, string endpoint);
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "OAuth metadata discovery failed for endpoint '{Endpoint}': {Reason}")]
+    private static partial void LogDiscoveryFailed(ILogger logger, string endpoint, string reason);
 
     public McpOAuthService(
         IMcpServerStore serverStore,
@@ -71,11 +80,18 @@ public sealed partial class McpOAuthService
     /// Generates an OAuth 2.0 Authorization Code + PKCE authorization URL for the named MCP server.
     /// </summary>
     /// <param name="serverName">The MCP server name in <see cref="IMcpServerStore"/>.</param>
+    /// <param name="redirectUriOverride">
+    /// Optional redirect URI override. When provided (e.g. a loopback listener URI for Desktop),
+    /// it replaces the default server callback and the catalog/config value.
+    /// </param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The authorization URL the user must visit.</returns>
     /// <exception cref="KeyNotFoundException">The server is not in the store.</exception>
     /// <exception cref="InvalidOperationException">The server has no OAuth configuration.</exception>
-    public async Task<string> GenerateAuthorizationUrlAsync(string serverName, CancellationToken ct = default)
+    public async Task<string> GenerateAuthorizationUrlAsync(
+        string serverName,
+        Uri? redirectUriOverride = null,
+        CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(serverName);
 
@@ -91,7 +107,8 @@ public sealed partial class McpOAuthService
         var codeChallenge = GenerateCodeChallenge(codeVerifier);
         var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
 
-        var redirectUri = oauth.RedirectUri
+        var redirectUri = redirectUriOverride
+            ?? oauth.RedirectUri
             ?? new Uri($"http://localhost:{_serverPort}/v1/mcp/auth/callback");
 
         var queryParams = new List<(string Key, string Value)>
@@ -117,7 +134,7 @@ public sealed partial class McpOAuthService
         lock (_statesLock)
         {
             PurgeExpiredStates();
-            _pendingStates[state] = (serverName, codeVerifier, DateTimeOffset.UtcNow.Add(StateExpiry));
+            _pendingStates[state] = (serverName, codeVerifier, DateTimeOffset.UtcNow.Add(StateExpiry), redirectUri.ToString());
         }
 
         LogOAuthInitiated(_logger, serverName, state[..8] + "…");
@@ -139,6 +156,7 @@ public sealed partial class McpOAuthService
 
         string serverName;
         string codeVerifier;
+        string redirectUriStr;
 
         lock (_statesLock)
         {
@@ -151,6 +169,7 @@ public sealed partial class McpOAuthService
 
             serverName = entry.ServerName;
             codeVerifier = entry.CodeVerifier;
+            redirectUriStr = entry.RedirectUri;
             _pendingStates.Remove(state);
         }
 
@@ -158,8 +177,7 @@ public sealed partial class McpOAuthService
             ?? throw new KeyNotFoundException($"MCP server '{serverName}' is not configured.");
 
         var oauth = serverConfig.OAuthConfig!;
-        var redirectUri = oauth.RedirectUri
-            ?? new Uri($"http://localhost:{_serverPort}/v1/mcp/auth/callback");
+        var redirectUri = new Uri(redirectUriStr);
 
         // Client secret (if any) lives encrypted in the credential store, not the
         // server-config record. Confidential clients store it under
@@ -183,26 +201,109 @@ public sealed partial class McpOAuthService
 
         LogTokenExchanged(_logger, serverName);
 
-        // Reconnect the server process with the token injected as an environment variable.
-        if (!string.IsNullOrWhiteSpace(oauth.TokenEnvVar))
+        // Calculate token expiry for refresh scheduling.
+        DateTimeOffset? expiresAt = tokenResponse.ExpiresIn.HasValue
+            ? DateTimeOffset.UtcNow.AddSeconds(tokenResponse.ExpiresIn.Value)
+            : null;
+
+        // Reconnect the server with the token injected appropriately.
+        if (serverConfig.Url is not null)
         {
+            // HTTP transport: inject token as Authorization: Bearer header.
+            var headers = new Dictionary<string, string>(serverConfig.Headers, StringComparer.Ordinal)
+            {
+                ["Authorization"] = $"Bearer {tokenResponse.AccessToken}",
+            };
+            var updatedConfig = new McpServerConfig
+            {
+                Url = serverConfig.Url,
+                Headers = headers,
+                OAuthConfig = serverConfig.OAuthConfig,
+                TokenExpiresAt = expiresAt,
+            };
+            await _serverStore.UpsertAsync(serverName, updatedConfig, ct).ConfigureAwait(false);
+            await _toolRegistrar.ReconnectServerAsync(serverName, updatedConfig, ct).ConfigureAwait(false);
+        }
+        else if (!string.IsNullOrWhiteSpace(oauth.TokenEnvVar))
+        {
+            // stdio transport: inject token as environment variable.
             var env = new Dictionary<string, string>(serverConfig.Env, StringComparer.Ordinal)
             {
                 [oauth.TokenEnvVar] = tokenResponse.AccessToken,
             };
-
             var updatedConfig = new McpServerConfig
             {
                 Command = serverConfig.Command,
                 Args = serverConfig.Args,
                 Env = env,
                 OAuthConfig = serverConfig.OAuthConfig,
+                TokenExpiresAt = expiresAt,
             };
-
+            await _serverStore.UpsertAsync(serverName, updatedConfig, ct).ConfigureAwait(false);
             await _toolRegistrar.ReconnectServerAsync(serverName, updatedConfig, ct).ConfigureAwait(false);
         }
 
         return serverName;
+    }
+
+    // ── Discovery & token status ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Attempts to discover OAuth 2.0 server metadata from the MCP server's well-known endpoint
+    /// (<c>{endpoint}/.well-known/oauth-authorization-server</c>) per RFC 8414.
+    /// Returns <c>null</c> if discovery is not supported or fails.
+    /// </summary>
+    public async Task<McpOAuthDiscovery?> DiscoverMetadataAsync(Uri mcpEndpoint, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(mcpEndpoint);
+        var discoveryUrl = new Uri(
+            mcpEndpoint.GetLeftPart(UriPartial.Authority) + "/.well-known/oauth-authorization-server");
+
+        try
+        {
+            using var http = _httpFactory.CreateClient("McpOAuth");
+            using var response = await http.GetAsync(discoveryUrl, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) return null;
+
+            var doc = await response.Content
+                .ReadFromJsonAsync<JsonElement>(cancellationToken: ct)
+                .ConfigureAwait(false);
+
+            var authEndpoint = doc.TryGetProperty("authorization_endpoint", out var ae)
+                ? ae.GetString() : null;
+            var tokenEndpoint = doc.TryGetProperty("token_endpoint", out var te)
+                ? te.GetString() : null;
+            var scopesSupported = doc.TryGetProperty("scopes_supported", out var ss)
+                ? ss.EnumerateArray().Select(e => e.GetString() ?? string.Empty).ToArray()
+                : [];
+
+            if (authEndpoint is null || tokenEndpoint is null) return null;
+
+            LogMetadataDiscovered(_logger, mcpEndpoint.AbsoluteUri);
+            return new McpOAuthDiscovery(
+                new Uri(authEndpoint),
+                new Uri(tokenEndpoint),
+                scopesSupported);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
+        {
+            LogDiscoveryFailed(_logger, mcpEndpoint.AbsoluteUri, ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>Returns true if the named server has a stored (and not yet expired) access token.</summary>
+    public async Task<bool> HasTokenAsync(string serverName, CancellationToken ct = default)
+    {
+        var token = await _credentialStore.RetrieveAsync($"mcp.{serverName}.access_token", ct)
+            .ConfigureAwait(false);
+        if (string.IsNullOrEmpty(token)) return false;
+
+        var config = await _serverStore.GetAsync(serverName, ct).ConfigureAwait(false);
+        if (config?.TokenExpiresAt is { } expiry)
+            return expiry > DateTimeOffset.UtcNow.AddSeconds(30); // 30s grace
+
+        return true;
     }
 
     // ── PKCE helpers ─────────────────────────────────────────────────────────
@@ -291,3 +392,9 @@ public sealed partial class McpOAuthService
         public int? ExpiresIn { get; init; }
     }
 }
+
+/// <summary>OAuth 2.0 server metadata discovered via RFC 8414 well-known endpoint.</summary>
+public sealed record McpOAuthDiscovery(
+    Uri AuthorizationEndpoint,
+    Uri TokenEndpoint,
+    IReadOnlyList<string> ScopesSupported);

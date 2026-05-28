@@ -106,6 +106,12 @@ public sealed class McpServerConfig
     /// an access token, which is then injected as an environment variable on reconnect.
     /// </summary>
     public McpOAuthConfig? OAuthConfig { get; init; }
+
+    /// <summary>
+    /// When the current OAuth access token expires. Null if no token has been obtained
+    /// or if the token endpoint did not return an <c>expires_in</c> value.
+    /// </summary>
+    public DateTimeOffset? TokenExpiresAt { get; init; }
 }
 
 /// <summary>

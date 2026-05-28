@@ -259,17 +259,6 @@
                                 <!-- MCP connect form -->
                                 <StackPanel IsVisible="{Binding !SelectedCatalogEntry.IsLlmProvider}" Spacing="12">
 
-                                    <!-- OAuth notice -->
-                                    <Border IsVisible="{Binding SelectedCatalogEntry.RequiresOAuth}"
-                                            Padding="12,9" CornerRadius="8"
-                                            Background="{DynamicResource SurfaceBackground}"
-                                            BorderBrush="{DynamicResource BrandPrimary}"
-                                            BorderThickness="1">
-                                        <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
-                                                   TextWrapping="Wrap"
-                                                   Text="🔒 OAuth required — this integration uses browser-based OAuth. Full support coming in a future release. You can still connect manually by entering your endpoint URL below if your provider issues one." />
-                                    </Border>
-
                                     <Border IsVisible="{Binding SelectedCatalogEntry.IsAlreadyConnected}"
                                             Padding="10,7" CornerRadius="6"
                                             Background="{DynamicResource StatusOk}">
@@ -277,34 +266,85 @@
                                                    FontSize="12" Foreground="White" />
                                     </Border>
 
-                                    <!-- API key -->
-                                    <StackPanel Spacing="4"
-                                                IsVisible="{Binding SelectedCatalogEntry.NeedsApiKey}">
-                                        <TextBlock Text="{Binding SelectedCatalogEntry.ApiKeyLabel}"
-                                                   FontSize="12" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextSecondary}" />
-                                        <TextBox Text="{Binding GalleryApiKey}"
-                                                 PasswordChar="•"
-                                                 Watermark="Paste your key here"
-                                                 CornerRadius="6" Padding="10,7" />
+                                    <!-- ── OAuth connect path ────────────────────────── -->
+                                    <StackPanel IsVisible="{Binding SelectedCatalogEntry.RequiresOAuth}" Spacing="12">
+
+                                        <!-- Waiting state -->
+                                        <Border IsVisible="{Binding IsOAuthWaiting}"
+                                                Padding="12,10" CornerRadius="8"
+                                                Background="{DynamicResource SurfaceBackground}"
+                                                BorderBrush="{DynamicResource BrandPrimary}"
+                                                BorderThickness="1">
+                                            <TextBlock FontSize="12" Foreground="{DynamicResource BrandPrimary}"
+                                                       TextWrapping="Wrap"
+                                                       Text="🔄 Browser opened. Waiting for authorization... (times out after 2 min)" />
+                                        </Border>
+
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="OAuth Client ID"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextSecondary}" />
+                                            <TextBox Text="{Binding GalleryClientId}"
+                                                     Watermark="Your OAuth app client ID"
+                                                     CornerRadius="6" Padding="10,7" />
+                                        </StackPanel>
+
+                                        <!-- Endpoint override (for entries without a fixed template) -->
+                                        <StackPanel Spacing="4"
+                                                    IsVisible="{Binding SelectedCatalogEntry.NeedsEndpoint}">
+                                            <TextBlock Text="{Binding SelectedCatalogEntry.EndpointLabel}"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextSecondary}" />
+                                            <TextBox Text="{Binding GalleryUrl}"
+                                                     CornerRadius="6" Padding="10,7" />
+                                        </StackPanel>
+
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Button Content="Connect with OAuth"
+                                                    Command="{Binding ConnectWithOAuthCommand}"
+                                                    IsEnabled="{Binding !IsGalleryConnecting}"
+                                                    Padding="18,8" CornerRadius="6"
+                                                    Background="{DynamicResource BrandPrimary}"
+                                                    Foreground="White" />
+                                        </StackPanel>
+
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}"
+                                                   TextWrapping="Wrap"
+                                                   Text="Register an OAuth app with the provider to get a Client ID. Sovrant will open your browser for authorization and handle the rest." />
                                     </StackPanel>
 
-                                    <!-- Endpoint / path -->
-                                    <StackPanel Spacing="4"
-                                                IsVisible="{Binding SelectedCatalogEntry.NeedsEndpoint}">
-                                        <TextBlock Text="{Binding SelectedCatalogEntry.EndpointLabel}"
-                                                   FontSize="12" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextSecondary}" />
-                                        <TextBox Text="{Binding GalleryUrl}"
-                                                 CornerRadius="6" Padding="10,7" />
-                                    </StackPanel>
+                                    <!-- ── Non-OAuth connect path ────────────────────── -->
+                                    <StackPanel IsVisible="{Binding !SelectedCatalogEntry.RequiresOAuth}" Spacing="12">
 
-                                    <Button Content="Connect"
-                                            Command="{Binding ConnectFromGalleryCommand}"
-                                            IsEnabled="{Binding !IsGalleryConnecting}"
-                                            Padding="18,8" CornerRadius="6"
-                                            Background="{DynamicResource BrandPrimary}"
-                                            Foreground="White" />
+                                        <!-- API key -->
+                                        <StackPanel Spacing="4"
+                                                    IsVisible="{Binding SelectedCatalogEntry.NeedsApiKey}">
+                                            <TextBlock Text="{Binding SelectedCatalogEntry.ApiKeyLabel}"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextSecondary}" />
+                                            <TextBox Text="{Binding GalleryApiKey}"
+                                                     PasswordChar="•"
+                                                     Watermark="Paste your key here"
+                                                     CornerRadius="6" Padding="10,7" />
+                                        </StackPanel>
+
+                                        <!-- Endpoint / path -->
+                                        <StackPanel Spacing="4"
+                                                    IsVisible="{Binding SelectedCatalogEntry.NeedsEndpoint}">
+                                            <TextBlock Text="{Binding SelectedCatalogEntry.EndpointLabel}"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextSecondary}" />
+                                            <TextBox Text="{Binding GalleryUrl}"
+                                                     CornerRadius="6" Padding="10,7" />
+                                        </StackPanel>
+
+                                        <Button Content="Connect"
+                                                Command="{Binding ConnectFromGalleryCommand}"
+                                                IsEnabled="{Binding !IsGalleryConnecting}"
+                                                Padding="18,8" CornerRadius="6"
+                                                Background="{DynamicResource BrandPrimary}"
+                                                Foreground="White" />
+                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
                         </ScrollViewer>

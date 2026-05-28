@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -13,6 +14,7 @@ public partial class IntegrationsViewModel : ViewModelBase
     private readonly IMcpServerStore _serverStore;
     private readonly McpClientRegistry _clientRegistry;
     private readonly McpToolRegistrar _registrar;
+    private readonly McpOAuthService _oauthService;
     private readonly ActiveContextViewModel? _activeContext;
 
     // ── Tab ──────────────────────────────────────────────────────────────────
@@ -74,6 +76,12 @@ public partial class IntegrationsViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isGalleryConnecting;
 
+    [ObservableProperty]
+    private bool _isOAuthWaiting;
+
+    [ObservableProperty]
+    private string _galleryClientId = string.Empty;
+
     // All catalog entries (for lookup)
     public ObservableCollection<CatalogEntryViewModel> CatalogEntries { get; } = [];
 
@@ -94,11 +102,12 @@ public partial class IntegrationsViewModel : ViewModelBase
     public bool IsGroupTab1Active => SelectedGroupTabIndex == 1;
     public string ActiveGroupTab => SelectedGroupTabIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-    public IntegrationsViewModel(IMcpServerStore serverStore, McpClientRegistry clientRegistry, McpToolRegistrar registrar, ActiveContextViewModel? activeContext = null)
+    public IntegrationsViewModel(IMcpServerStore serverStore, McpClientRegistry clientRegistry, McpToolRegistrar registrar, McpOAuthService oauthService, ActiveContextViewModel? activeContext = null)
     {
         _serverStore = serverStore;
         _clientRegistry = clientRegistry;
         _registrar = registrar;
+        _oauthService = oauthService;
         _activeContext = activeContext;
 
         var seenGroups = new HashSet<string>(StringComparer.Ordinal);
@@ -161,6 +170,7 @@ public partial class IntegrationsViewModel : ViewModelBase
         }
         GalleryApiKey = string.Empty;
         GalleryUrl = string.Empty;
+        GalleryClientId = string.Empty;
         StatusMessage = string.Empty;
     }
 
@@ -172,6 +182,7 @@ public partial class IntegrationsViewModel : ViewModelBase
         SelectedCatalogEntry = SelectedGroupVariants[idx];
         GalleryApiKey = string.Empty;
         GalleryUrl = string.Empty;
+        GalleryClientId = string.Empty;
     }
 
     [RelayCommand]
@@ -209,6 +220,78 @@ public partial class IntegrationsViewModel : ViewModelBase
         {
             IsGalleryConnecting = false;
         }
+    }
+
+    [RelayCommand]
+    private async Task ConnectWithOAuthAsync()
+    {
+        var entry = SelectedCatalogEntry;
+        if (entry is null || entry.Kind == IntegrationKind.LlmProvider) return;
+
+        if (string.IsNullOrWhiteSpace(GalleryClientId))
+        {
+            StatusMessage = "OAuth Client ID is required.";
+            return;
+        }
+
+        IsGalleryConnecting = true;
+        IsOAuthWaiting = false;
+        StatusMessage = string.Empty;
+
+        try
+        {
+            var config = BuildOAuthConfig(entry, GalleryClientId.Trim(), GalleryUrl.Trim());
+            await _serverStore.UpsertAsync(entry.Id, config).ConfigureAwait(true);
+
+            await using var callbackListener = McpOAuthCallbackListener.Start();
+
+            var authUrl = await _oauthService.GenerateAuthorizationUrlAsync(
+                entry.Id, callbackListener.RedirectUri).ConfigureAwait(true);
+
+            Process.Start(new ProcessStartInfo(authUrl) { UseShellExecute = true });
+
+            IsOAuthWaiting = true;
+            StatusMessage = "Browser opened. Waiting for authorization...";
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+            var (code, state) = await callbackListener.WaitForCallbackAsync(cts.Token).ConfigureAwait(true);
+
+            await _oauthService.ExchangeCodeAsync(state, code).ConfigureAwait(true);
+
+            ActiveTab = "connected";
+            await LoadServersAsync().ConfigureAwait(true);
+            SelectedServer = FilteredServers.FirstOrDefault(s => s.Name == entry.Id);
+            StatusMessage = $"Connected to '{entry.Name}' via OAuth.";
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "Authorization timed out. Please try again.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"OAuth failed: {ex.Message}";
+        }
+        finally
+        {
+            IsGalleryConnecting = false;
+            IsOAuthWaiting = false;
+        }
+    }
+
+    private static McpServerConfig BuildOAuthConfig(CatalogEntryViewModel entry, string clientId, string endpointOverride)
+    {
+        var urlStr = !string.IsNullOrEmpty(entry.EndpointTemplate) ? entry.EndpointTemplate : endpointOverride;
+        Uri.TryCreate(urlStr, UriKind.Absolute, out var url);
+
+        var oauthConfig = new McpOAuthConfig
+        {
+            ClientId = clientId,
+            AuthorizationUrl = entry.OAuthAuthorizationUrl,
+            TokenUrl = entry.OAuthTokenUrl,
+            Scopes = (IReadOnlyList<string>?)entry.OAuthScopes ?? [],
+        };
+
+        return new McpServerConfig { Url = url, OAuthConfig = oauthConfig };
     }
 
     private static McpServerConfig BuildConfig(CatalogEntryViewModel entry, string apiKey, string endpoint)
@@ -545,6 +628,10 @@ public partial class CatalogEntryViewModel : ViewModelBase
     public string? GroupName => _entry.GroupName;
     public string? TabLabel => _entry.TabLabel;
     public bool IsLlmProvider => _entry.Kind == IntegrationKind.LlmProvider;
+    public Uri? OAuthAuthorizationUrl => _entry.OAuthAuthorizationUrl;
+    public Uri? OAuthTokenUrl => _entry.OAuthTokenUrl;
+    public IReadOnlyList<string>? OAuthScopes => _entry.OAuthScopes;
+    public bool HasOAuthMetadata => _entry.HasOAuthMetadata;
 }
 
 public partial class McpServerItem : ViewModelBase
