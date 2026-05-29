@@ -159,7 +159,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IToolConfirmationHandler, DenyAllConfirmationHandler>();
         // Phase 87 Track E — per-turn approval cache for "always allow this turn".
         services.AddSingleton<IPerTurnApprovalCache, PerTurnApprovalCache>();
-        services.AddSingleton<IToolExecutor, DefaultToolExecutor>();
+        services.AddSingleton<IToolExecutor>(sp => new Tools.DefaultToolExecutor(
+            sp.GetRequiredService<IToolRegistry>(),
+            sp.GetRequiredService<Permissions.IPermissionPolicy>(),
+            sp.GetRequiredService<Governance.IGovernanceMonitor>(),
+            sp.GetRequiredService<Permissions.IToolConfirmationHandler>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Tools.DefaultToolExecutor>>(),
+            sp.GetService<Permissions.IPerTurnApprovalCache>(),
+            sp.GetService<Mcp.IMcpTrustGate>(),
+            sp.GetService<Mcp.McpClientRegistry>(),
+            sp.GetService<Governance.IAuditStore>()));
 
         // Session store — SQLite primary, optional JSONL dual-write.
         services.AddSingleton<ISessionStore>(sp =>
@@ -390,6 +399,11 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromSeconds(30);
         });
         services.AddSingleton<McpOAuthService>();
+
+        // MCP trust gates (Phase 103)
+        services.AddSingleton<IMcpTrustRuleStore>(sp =>
+            new Storage.SqliteMcpTrustRuleStore(sp.GetRequiredService<Storage.ISqliteConnectionFactory>()));
+        services.AddSingleton<IMcpTrustGate, McpTrustGate>();
 
         // Cost tracking (Phase 55)
         var costProvider = Environment.GetEnvironmentVariable("SOVRANT_COST_PROVIDER") ?? "openrouter";

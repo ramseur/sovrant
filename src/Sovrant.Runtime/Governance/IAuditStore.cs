@@ -30,4 +30,17 @@ public interface IAuditStore : IAsyncDisposable
         string entityId,
         bool newIsPrivate,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Phase 103 — logs a decision made by the MCP trust gate for a tool call.
+    /// Stored in <c>audit_governance</c> with phase "mcp_trust".
+    /// </summary>
+    Task LogMcpTrustEventAsync(
+        string toolName,
+        string serverName,
+        string action,
+        string? matchedPattern,
+        string? reason,
+        string? sessionId,
+        CancellationToken ct = default);
 }

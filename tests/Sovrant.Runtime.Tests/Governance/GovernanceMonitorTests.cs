@@ -210,5 +210,8 @@ internal sealed class NullAuditStore : IAuditStore
     public Task LogPrivacyChangeAsync(string userId, string entityKind, string entityId, bool newIsPrivate, CancellationToken ct = default)
         => Task.CompletedTask;
 
+    public Task LogMcpTrustEventAsync(string toolName, string serverName, string action, string? matchedPattern, string? reason, string? sessionId, CancellationToken ct = default)
+        => Task.CompletedTask;
+
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

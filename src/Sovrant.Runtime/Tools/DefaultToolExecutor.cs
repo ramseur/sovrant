@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Sovrant.Runtime.Governance;
+using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Permissions;
 
 namespace Sovrant.Runtime.Tools;
@@ -15,6 +16,9 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
     private readonly IGovernanceMonitor _governance;
     private readonly IToolConfirmationHandler _confirmationHandler;
     private readonly IPerTurnApprovalCache? _approvalCache;
+    private readonly IMcpTrustGate? _trustGate;
+    private readonly McpClientRegistry? _mcpRegistry;
+    private readonly IAuditStore? _auditStore;
     private readonly ILogger<DefaultToolExecutor> _logger;
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Executing tool '{ToolName}'")]
@@ -38,19 +42,31 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
     [LoggerMessage(Level = LogLevel.Warning, Message = "Tool '{ToolName}' blocked by governance: {Reason}")]
     private static partial void LogGovernanceBlocked(ILogger logger, string toolName, string reason);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Tool '{ToolName}' blocked by MCP trust gate (pattern='{Pattern}'): {Reason}")]
+    private static partial void LogTrustBlocked(ILogger logger, string toolName, string pattern, string reason);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Tool '{ToolName}' requires MCP trust confirmation (pattern='{Pattern}')")]
+    private static partial void LogTrustConfirmation(ILogger logger, string toolName, string pattern);
+
     public DefaultToolExecutor(
         IToolRegistry registry,
         IPermissionPolicy policy,
         IGovernanceMonitor governance,
         IToolConfirmationHandler confirmationHandler,
         ILogger<DefaultToolExecutor> logger,
-        IPerTurnApprovalCache? approvalCache = null)
+        IPerTurnApprovalCache? approvalCache = null,
+        IMcpTrustGate? trustGate = null,
+        McpClientRegistry? mcpRegistry = null,
+        IAuditStore? auditStore = null)
     {
         _registry = registry;
         _policy = policy;
         _governance = governance;
         _confirmationHandler = confirmationHandler;
         _approvalCache = approvalCache;
+        _trustGate = trustGate;
+        _mcpRegistry = mcpRegistry;
+        _auditStore = auditStore;
         _logger = logger;
     }
 
@@ -92,6 +108,46 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
             LogNotFound(_logger, toolName);
             return new ToolExecutionResult(false,
                 $"Unknown tool: '{toolName}'.", IsError: true);
+        }
+
+        // MCP trust gate — only fires for tools that belong to a connected MCP server.
+        if (_trustGate is not null &&
+            _mcpRegistry?.ToolToServer.TryGetValue(toolName, out var mcpServerName) == true)
+        {
+            var trustVerdict = await _trustGate.EvaluateAsync(toolName, mcpServerName, ct).ConfigureAwait(false);
+
+            if (_auditStore is not null && trustVerdict.Action != McpTrustAction.Allow)
+            {
+                _ = _auditStore.LogMcpTrustEventAsync(
+                    toolName, mcpServerName, trustVerdict.Action.ToString(),
+                    trustVerdict.MatchedPattern, trustVerdict.Reason, sessionId: null, ct)
+                    .ContinueWith(static t => { }, CancellationToken.None,
+                        TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+            }
+
+            if (trustVerdict.Action == McpTrustAction.Block)
+            {
+                LogTrustBlocked(_logger, toolName, trustVerdict.MatchedPattern ?? "*", trustVerdict.Reason ?? string.Empty);
+                return new ToolExecutionResult(false,
+                    $"Blocked by MCP trust policy (pattern '{trustVerdict.MatchedPattern}'): {trustVerdict.Reason}",
+                    IsError: true);
+            }
+
+            if (trustVerdict.Action == McpTrustAction.RequireConfirmation &&
+                _approvalCache?.IsAllowed(toolName) != true)
+            {
+                LogTrustConfirmation(_logger, toolName, trustVerdict.MatchedPattern ?? "*");
+                var trustDecision = await _confirmationHandler
+                    .RequestConfirmationAsync(toolName, input, ct).ConfigureAwait(false);
+                if (trustDecision == ConfirmationDecision.Deny)
+                {
+                    LogDenied(_logger, toolName);
+                    return new ToolExecutionResult(false,
+                        $"Tool '{toolName}' was denied by the user.", IsError: true);
+                }
+                if (trustDecision == ConfirmationDecision.AllowForTurn)
+                    _approvalCache?.Allow(toolName);
+            }
         }
 
         // Pre-execution governance check

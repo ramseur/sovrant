@@ -78,5 +78,30 @@ internal sealed class SqliteAuditStore(ISqliteConnectionFactory connectionFactor
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
+    public async Task LogMcpTrustEventAsync(
+        string toolName,
+        string serverName,
+        string action,
+        string? matchedPattern,
+        string? reason,
+        string? sessionId,
+        CancellationToken ct = default)
+    {
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO audit_governance (timestamp, phase, tool, session_id, action, rule, reason)
+            VALUES ($ts, $phase, $tool, $sid, $action, $rule, $reason)
+            """;
+        cmd.Parameters.AddWithValue("$ts", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$phase", "mcp_trust");
+        cmd.Parameters.AddWithValue("$tool", $"{serverName}/{toolName}");
+        cmd.Parameters.AddWithValue("$sid", sessionId ?? "unknown");
+        cmd.Parameters.AddWithValue("$action", action);
+        cmd.Parameters.AddWithValue("$rule", matchedPattern ?? "built-in");
+        cmd.Parameters.AddWithValue("$reason", reason ?? string.Empty);
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }
