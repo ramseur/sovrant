@@ -1,7 +1,9 @@
 @page "/integrations"
 @using System.Text.Json
+@using Sovrant.Runtime.Auth
 @using Sovrant.Runtime.Config
 @using Sovrant.Runtime.Mcp
+@using Sovrant.Runtime.Workspaces
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
@@ -304,6 +306,76 @@
                         </div>
                     }
                 </div>
+
+                <!-- Trust Rules -->
+                <div class="orch-detail-section">
+                    <h3>Trust Rules</h3>
+                    <p class="text-muted text-sm" style="margin-bottom:10px;">
+                        Rules control how tool calls are handled before execution.
+                        Built-in defaults require confirmation for <code>delete_*</code>, <code>remove_*</code>, <code>bulk_*</code> and similar patterns.
+                    </p>
+
+                    @if (_trustRules.Count > 0)
+                    {
+                        <div class="gov-card" style="margin-bottom:12px;">
+                            @foreach (var rule in _trustRules)
+                            {
+                                <div class="gov-field-row" style="align-items:center;">
+                                    <span>
+                                        <span style="font-family:Consolas,monospace;font-size:12px;">@rule.ToolPattern</span>
+                                        @if (!string.IsNullOrEmpty(rule.Reason))
+                                        {
+                                            <span class="text-muted" style="font-size:11px;margin-left:6px;">— @rule.Reason</span>
+                                        }
+                                    </span>
+                                    <span style="display:flex;align-items:center;gap:8px;">
+                                        <span class="badge @(rule.Action == McpTrustAction.Block ? "badge-danger" : rule.Action == McpTrustAction.Allow ? "badge-success" : "badge-warning")"
+                                              style="font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600;">
+                                            @rule.Action
+                                        </span>
+                                        @if (_canManageRules)
+                                        {
+                                            <button class="btn-sm btn-danger" style="padding:2px 8px;font-size:11px;"
+                                                    @onclick="() => RemoveTrustRuleAsync(rule.RuleId)">✕</button>
+                                        }
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted text-sm" style="margin-bottom:10px;">No custom rules — built-in defaults apply.</p>
+                    }
+
+                    @if (_canManageRules)
+                    {
+                        <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:end;">
+                            <div class="form-field" style="margin:0;">
+                                <label style="font-size:11px;">Tool Pattern (glob)</label>
+                                <input type="text" @bind="_newRulePattern" placeholder="delete_* or *_remove" style="font-family:Consolas,monospace;font-size:12px;" />
+                            </div>
+                            <div class="form-field" style="margin:0;">
+                                <label style="font-size:11px;">Action</label>
+                                <select @bind="_newRuleAction" style="padding:6px 8px;border-radius:6px;border:1px solid var(--surface-border);background:var(--surface-card);color:var(--text-primary);font-size:12px;">
+                                    <option value="Allow">Allow</option>
+                                    <option value="RequireConfirmation">Require Confirmation</option>
+                                    <option value="Block">Block</option>
+                                </select>
+                            </div>
+                            <button class="btn-primary btn-sm" @onclick="AddTrustRuleAsync" style="margin-bottom:1px;">Add Rule</button>
+                        </div>
+                        <div class="form-field" style="margin-top:6px;">
+                            <label style="font-size:11px;">Reason (optional — shown to agent on block/confirmation)</label>
+                            <input type="text" @bind="_newRuleReason" placeholder="e.g. Bulk deletes require manager approval" />
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(_trustStatus))
+                    {
+                        <p class="text-sm" style="margin-top:6px;color:var(--text-secondary);">@_trustStatus</p>
+                    }
+                </div>
             </div>
         }
         else
@@ -379,6 +451,9 @@
     [Inject] private McpClientRegistry McpRegistry { get; set; } = default!;
     [Inject] private McpToolRegistrar McpRegistrar { get; set; } = default!;
     [Inject] private McpOAuthService OAuthService { get; set; } = default!;
+    [Inject] private IMcpTrustRuleStore TrustStore { get; set; } = default!;
+    [Inject] private IPrincipalAccessor Principal { get; set; } = default!;
+    [Inject] private IWorkspaceService WorkspaceSvc { get; set; } = default!;
 
     private string _activeTab = "gallery";
     private string _addMode = "json";
@@ -394,6 +469,15 @@
     private List<ServerView> _servers = [];
     private List<ServerView> _filtered = [];
     private ServerView? _selected;
+
+    // Trust rules state
+    private List<McpTrustRule> _trustRules = [];
+    private string? _workspaceId;
+    private bool _canManageRules;
+    private string _newRulePattern = string.Empty;
+    private string _newRuleAction = "RequireConfirmation";
+    private string _newRuleReason = string.Empty;
+    private string _trustStatus = string.Empty;
 
     // Gallery state
     private CatalogEntry? _catalogEntry;
@@ -419,7 +503,21 @@
 }
 """;
 
-    protected override async Task OnInitializedAsync() => await LoadServersAsync().ConfigureAwait(false);
+    protected override async Task OnInitializedAsync()
+    {
+        var uid = Principal.UserId;
+        if (uid is not null)
+        {
+            var ws = await WorkspaceSvc.GetPersonalAsync(uid).ConfigureAwait(false);
+            _workspaceId = ws?.WorkspaceId ?? Principal.WorkspaceId;
+        }
+        else
+        {
+            _workspaceId = Principal.WorkspaceId;
+        }
+        _canManageRules = true; // personal workspace — user is always owner
+        await LoadServersAsync().ConfigureAwait(false);
+    }
 
     private void SwitchTab(string tab)
     {
@@ -672,6 +770,53 @@
     private void Select(ServerView item)
     {
         _selected = item;
+        _trustRules = [];
+        _trustStatus = string.Empty;
+        _ = LoadTrustRulesAsync(item.Name);
+    }
+
+    private async Task LoadTrustRulesAsync(string serverName)
+    {
+        if (_workspaceId is null) return;
+        _trustRules = (await TrustStore.GetRulesAsync(_workspaceId, serverName).ConfigureAwait(false)).ToList();
+        await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+    }
+
+    private async Task AddTrustRuleAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newRulePattern) || _selected is null || _workspaceId is null)
+        {
+            _trustStatus = "Tool pattern is required.";
+            return;
+        }
+        if (!Enum.TryParse<McpTrustAction>(_newRuleAction, out _))
+        {
+            _trustStatus = "Invalid action.";
+            return;
+        }
+        var now = DateTimeOffset.UtcNow;
+        var rule = new McpTrustRule(
+            RuleId: Guid.NewGuid().ToString("N"),
+            WorkspaceId: _workspaceId,
+            ServerName: _selected.Name,
+            ToolPattern: _newRulePattern.Trim(),
+            Action: Enum.Parse<McpTrustAction>(_newRuleAction),
+            Reason: string.IsNullOrWhiteSpace(_newRuleReason) ? null : _newRuleReason.Trim(),
+            CreatedAt: now,
+            UpdatedAt: now);
+        await TrustStore.UpsertAsync(rule).ConfigureAwait(false);
+        _newRulePattern = string.Empty;
+        _newRuleReason = string.Empty;
+        _trustStatus = "Rule added.";
+        await LoadTrustRulesAsync(_selected.Name).ConfigureAwait(false);
+    }
+
+    private async Task RemoveTrustRuleAsync(string ruleId)
+    {
+        if (_workspaceId is null || _selected is null) return;
+        await TrustStore.DeleteAsync(ruleId, _workspaceId).ConfigureAwait(false);
+        _trustStatus = "Rule removed.";
+        await LoadTrustRulesAsync(_selected.Name).ConfigureAwait(false);
     }
 
     private async Task ConnectAndRefreshAsync(string name, McpServerConfig config)

@@ -482,29 +482,132 @@
                             BorderBrush="{DynamicResource SurfaceBorder}"
                             BorderThickness="1" Padding="20,16"
                             IsVisible="{Binding !!SelectedServer}">
-                        <DockPanel>
-                            <!-- Status + Remove row -->
-                            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
-                                <Button DockPanel.Dock="Right"
-                                        Content="Remove"
-                                        Command="{Binding RemoveServerCommand}"
-                                        CommandParameter="{Binding SelectedServer}"
-                                        Padding="12,6" CornerRadius="6"
-                                        Background="#44F44336" Foreground="{DynamicResource StatusFail}"
-                                        FontSize="12" />
-                                <TextBlock Text="{Binding StatusMessage}"
-                                           IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                           FontSize="12" Foreground="{DynamicResource TextSecondary}"
-                                           VerticalAlignment="Center" TextWrapping="Wrap" />
-                            </DockPanel>
-                            <ContentControl Content="{Binding SelectedServer}">
-                                <ContentControl.ContentTemplate>
-                                    <DataTemplate DataType="vm:McpServerItem">
-                                        <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
-                                    </DataTemplate>
-                                </ContentControl.ContentTemplate>
-                            </ContentControl>
-                        </DockPanel>
+                        <ScrollViewer>
+                            <StackPanel Spacing="12">
+                                <!-- Status + Remove row -->
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right"
+                                            Content="Remove"
+                                            Command="{Binding RemoveServerCommand}"
+                                            CommandParameter="{Binding SelectedServer}"
+                                            Padding="12,6" CornerRadius="6"
+                                            Background="#44F44336" Foreground="{DynamicResource StatusFail}"
+                                            FontSize="12" />
+                                    <TextBlock Text="{Binding StatusMessage}"
+                                               IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                               FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                               VerticalAlignment="Center" TextWrapping="Wrap" />
+                                </DockPanel>
+
+                                <!-- Server markdown -->
+                                <ctrl:SafeMarkdownPresenter Markdown="{Binding SelectedServer.Markdown}" />
+
+                                <!-- Trust Rules section -->
+                                <StackPanel Spacing="8"
+                                            IsVisible="{Binding !!SelectedServer}">
+                                    <TextBlock Text="Trust Rules"
+                                               FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimary}" />
+                                    <TextBlock TextWrapping="Wrap" FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}"
+                                               Text="Rules run before tool execution. Built-in defaults require confirmation for delete_*, remove_*, bulk_* and similar patterns." />
+
+                                    <!-- Rules list -->
+                                    <ItemsControl ItemsSource="{Binding SelectedServer.TrustRules}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="vm:TrustRuleViewModel">
+                                                <Border Background="{DynamicResource SurfaceBackground}"
+                                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                                        BorderThickness="1" CornerRadius="6"
+                                                        Padding="10,6" Margin="0,0,0,4">
+                                                    <DockPanel>
+                                                        <Button DockPanel.Dock="Right"
+                                                                Content="✕"
+                                                                Command="{Binding RemoveCommand}"
+                                                                Padding="6,3" CornerRadius="4"
+                                                                Background="#33F44336" Foreground="{DynamicResource StatusFail}"
+                                                                FontSize="10" />
+                                                        <Border DockPanel.Dock="Right"
+                                                                Background="{Binding ActionBadgeColor}"
+                                                                CornerRadius="8" Padding="7,2"
+                                                                Margin="0,0,8,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Action}"
+                                                                       FontSize="10" FontWeight="SemiBold"
+                                                                       Foreground="White" />
+                                                        </Border>
+                                                        <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding ToolPattern}"
+                                                                       FontFamily="Consolas,Menlo,monospace"
+                                                                       FontSize="12"
+                                                                       Foreground="{DynamicResource TextPrimary}" />
+                                                            <TextBlock Text="{Binding Reason}"
+                                                                       FontSize="11"
+                                                                       Foreground="{DynamicResource TextMuted}"
+                                                                       IsVisible="{Binding Reason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                        </StackPanel>
+                                                    </DockPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <!-- No custom rules notice -->
+                                    <TextBlock Text="No custom rules — built-in defaults apply."
+                                               FontSize="11" Foreground="{DynamicResource TextMuted}"
+                                               IsVisible="{Binding SelectedServer.TrustRules.Count, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=0}" />
+
+                                    <!-- Add rule form -->
+                                    <Border Background="{DynamicResource SurfaceBackground}"
+                                            BorderBrush="{DynamicResource SurfaceBorder}"
+                                            BorderThickness="1" CornerRadius="8"
+                                            Padding="12,10">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Text="Add Rule" FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextSecondary}" />
+                                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" >
+                                                <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4" Margin="0,0,8,0">
+                                                    <TextBlock Text="Tool Pattern (glob)" FontSize="11" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextSecondary}" />
+                                                    <TextBox Text="{Binding NewRulePattern}"
+                                                             Watermark="e.g. delete_* or *_remove"
+                                                             FontFamily="Consolas,Menlo,monospace"
+                                                             FontSize="12" CornerRadius="6" Padding="8,6" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4" Margin="0,0,8,0">
+                                                    <TextBlock Text="Reason (optional)" FontSize="11" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextSecondary}" />
+                                                    <TextBox Text="{Binding NewRuleReason}"
+                                                             Watermark="e.g. Bulk deletes require manager approval"
+                                                             FontSize="12" CornerRadius="6" Padding="8,6" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Row="2" Grid.Column="0" Spacing="4" Margin="0,0,8,0">
+                                                    <TextBlock Text="Action" FontSize="11" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextSecondary}" />
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <RadioButton Content="Allow"
+                                                                     IsChecked="{Binding NewRuleAction, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=Allow}"
+                                                                     FontSize="12" />
+                                                        <RadioButton Content="Require Confirmation"
+                                                                     IsChecked="{Binding NewRuleAction, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=RequireConfirmation}"
+                                                                     FontSize="12" />
+                                                        <RadioButton Content="Block"
+                                                                     IsChecked="{Binding NewRuleAction, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=Block}"
+                                                                     FontSize="12" />
+                                                    </StackPanel>
+                                                </StackPanel>
+                                                <Button Grid.Row="0" Grid.RowSpan="3" Grid.Column="1"
+                                                        Content="Add"
+                                                        Command="{Binding AddTrustRuleCommand}"
+                                                        VerticalAlignment="Center"
+                                                        Padding="16,8" CornerRadius="6"
+                                                        Background="{DynamicResource BrandPrimary}"
+                                                        Foreground="White" FontSize="12" />
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
                     </Border>
                 </Panel>
 

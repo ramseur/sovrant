@@ -4,8 +4,10 @@ using System.Globalization;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Runtime.Auth;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Mcp;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Desktop.ViewModels;
 
@@ -15,7 +17,11 @@ public partial class IntegrationsViewModel : ViewModelBase
     private readonly McpClientRegistry _clientRegistry;
     private readonly McpToolRegistrar _registrar;
     private readonly McpOAuthService _oauthService;
+    private readonly IMcpTrustRuleStore _trustRuleStore;
+    private readonly IWorkspaceService _workspaceSvc;
+    private readonly IPrincipalAccessor _principal;
     private readonly ActiveContextViewModel? _activeContext;
+    private string? _workspaceId;
 
     // ── Tab ──────────────────────────────────────────────────────────────────
     /// <summary>"gallery" | "connected"</summary>
@@ -82,6 +88,16 @@ public partial class IntegrationsViewModel : ViewModelBase
     [ObservableProperty]
     private string _galleryClientId = string.Empty;
 
+    // Trust rules form state
+    [ObservableProperty]
+    private string _newRulePattern = string.Empty;
+
+    [ObservableProperty]
+    private string _newRuleAction = "RequireConfirmation";
+
+    [ObservableProperty]
+    private string _newRuleReason = string.Empty;
+
     // All catalog entries (for lookup)
     public ObservableCollection<CatalogEntryViewModel> CatalogEntries { get; } = [];
 
@@ -102,12 +118,23 @@ public partial class IntegrationsViewModel : ViewModelBase
     public bool IsGroupTab1Active => SelectedGroupTabIndex == 1;
     public string ActiveGroupTab => SelectedGroupTabIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-    public IntegrationsViewModel(IMcpServerStore serverStore, McpClientRegistry clientRegistry, McpToolRegistrar registrar, McpOAuthService oauthService, ActiveContextViewModel? activeContext = null)
+    public IntegrationsViewModel(
+        IMcpServerStore serverStore,
+        McpClientRegistry clientRegistry,
+        McpToolRegistrar registrar,
+        McpOAuthService oauthService,
+        IMcpTrustRuleStore trustRuleStore,
+        IWorkspaceService workspaceSvc,
+        IPrincipalAccessor principal,
+        ActiveContextViewModel? activeContext = null)
     {
         _serverStore = serverStore;
         _clientRegistry = clientRegistry;
         _registrar = registrar;
         _oauthService = oauthService;
+        _trustRuleStore = trustRuleStore;
+        _workspaceSvc = workspaceSvc;
+        _principal = principal;
         _activeContext = activeContext;
 
         var seenGroups = new HashSet<string>(StringComparer.Ordinal);
@@ -120,7 +147,18 @@ public partial class IntegrationsViewModel : ViewModelBase
                 GalleryDisplayEntries.Add(vm);
         }
 
-        _ = LoadServersAsync();
+        _ = InitAsync();
+    }
+
+    private async Task InitAsync()
+    {
+        var uid = _principal.UserId;
+        if (uid is not null)
+        {
+            var ws = await _workspaceSvc.GetPersonalAsync(uid).ConfigureAwait(true);
+            _workspaceId = ws?.WorkspaceId;
+        }
+        await LoadServersAsync().ConfigureAwait(true);
     }
 
     // ── Tab commands ─────────────────────────────────────────────────────────
@@ -531,6 +569,70 @@ public partial class IntegrationsViewModel : ViewModelBase
         }
     }
 
+    partial void OnSelectedServerChanged(McpServerItem? value)
+    {
+        if (value is not null)
+            _ = LoadTrustRulesAsync(value);
+    }
+
+    private async Task LoadTrustRulesAsync(McpServerItem server)
+    {
+        if (_workspaceId is null) return;
+        var rules = await _trustRuleStore.GetRulesAsync(_workspaceId, server.Name).ConfigureAwait(true);
+        server.TrustRules.Clear();
+        foreach (var r in rules)
+        {
+            var ruleId = r.RuleId;
+            server.TrustRules.Add(new TrustRuleViewModel
+            {
+                RuleId = ruleId,
+                ToolPattern = r.ToolPattern,
+                Action = r.Action.ToString(),
+                Reason = r.Reason,
+                RemoveCommand = new RelayCommand(() => _ = RemoveTrustRuleByIdAsync(ruleId, server)),
+            });
+        }
+    }
+
+    private async Task RemoveTrustRuleByIdAsync(string ruleId, McpServerItem server)
+    {
+        if (_workspaceId is null) return;
+        await _trustRuleStore.DeleteAsync(ruleId, _workspaceId).ConfigureAwait(true);
+        StatusMessage = "Rule removed.";
+        await LoadTrustRulesAsync(server).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task AddTrustRule()
+    {
+        var server = SelectedServer;
+        if (server is null || string.IsNullOrWhiteSpace(NewRulePattern) || _workspaceId is null)
+        {
+            StatusMessage = "Tool pattern is required.";
+            return;
+        }
+        if (!Enum.TryParse<McpTrustAction>(NewRuleAction, out var action))
+        {
+            StatusMessage = "Invalid action.";
+            return;
+        }
+        var now = DateTimeOffset.UtcNow;
+        var rule = new McpTrustRule(
+            RuleId: Guid.NewGuid().ToString("N"),
+            WorkspaceId: _workspaceId,
+            ServerName: server.Name,
+            ToolPattern: NewRulePattern.Trim(),
+            Action: action,
+            Reason: string.IsNullOrWhiteSpace(NewRuleReason) ? null : NewRuleReason.Trim(),
+            CreatedAt: now,
+            UpdatedAt: now);
+        await _trustRuleStore.UpsertAsync(rule).ConfigureAwait(true);
+        NewRulePattern = string.Empty;
+        NewRuleReason = string.Empty;
+        StatusMessage = "Rule added.";
+        await LoadTrustRulesAsync(server).ConfigureAwait(true);
+    }
+
     private static string BuildServerMarkdown(McpServerItem server)
     {
         var sb = new StringBuilder();
@@ -646,7 +748,24 @@ public partial class McpServerItem : ViewModelBase
     [ObservableProperty] private int _toolCount;
 
     public ObservableCollection<string> ToolNames { get; } = [];
+    public ObservableCollection<TrustRuleViewModel> TrustRules { get; } = [];
     public Dictionary<string, string> EnvVars { get; init; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> Headers { get; init; } = new(StringComparer.Ordinal);
     public string Markdown { get; set; } = string.Empty;
+}
+
+public partial class TrustRuleViewModel : ViewModelBase
+{
+    public string RuleId { get; init; } = string.Empty;
+    public string ToolPattern { get; init; } = string.Empty;
+    public string Action { get; init; } = string.Empty;
+    public string? Reason { get; init; }
+    public IRelayCommand? RemoveCommand { get; init; }
+
+    public string ActionBadgeColor => Action switch
+    {
+        "Block" => "#cc3333",
+        "Allow" => "#16a34a",
+        _ => "#d97706",
+    };
 }
