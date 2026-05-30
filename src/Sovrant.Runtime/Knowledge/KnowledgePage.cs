@@ -56,7 +56,7 @@ public interface IKnowledgeStore
     Task DeleteAsync(string kind, string slug, string workspaceId = "", CancellationToken ct = default);
 }
 
-/// <summary>Well-known workspace_id scopes for the copy-on-write overlay model (Phase 109).</summary>
+/// <summary>Well-known workspace_id scopes for the copy-on-write overlay model (Phase 112).</summary>
 public static class KnowledgeScope
 {
     /// <summary>Immutable factory content seeded by migrations.</summary>
@@ -64,4 +64,11 @@ public static class KnowledgeScope
 
     /// <summary>User's installation-wide override/creation tier.</summary>
     public const string Global = "global";
+
+    /// <summary>
+    /// Returns a stable workspace_id for the given project root directory.
+    /// Uses the normalized absolute path so the same directory always maps to the same scope.
+    /// </summary>
+    public static string ProjectIdFor(string directory) =>
+        "project:" + Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 }

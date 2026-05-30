@@ -31,14 +31,8 @@ public sealed partial class AgentTemplateRegistry
         _logger = logger;
         _templates = new ConcurrentDictionary<string, AgentTemplate>(StringComparer.OrdinalIgnoreCase);
 
-        // Tier 1 (lowest priority): built-in templates from the install directory
-        var assemblyDir = Path.GetDirectoryName(typeof(AgentTemplateRegistry).Assembly.Location) ?? ".";
-        LoadFromDirectory(Path.Combine(assemblyDir, "agents"), isBuiltIn: true);
-
-        // Tier 2: project-local .sovrant/agents/ (overrides install-dir templates)
-        LoadFromDirectory(UserAgentsDir, isBuiltIn: false);
-
-        // Tier 3: additional loaders (e.g. database, cloud) — highest priority
+        // Phase 112: all tiers (BuiltIn, Global, Project) are provided by the DB
+        // via DbAgentTemplateLoader registered as an ITemplateLoader. No filesystem scans.
         if (loaders is not null)
         {
             foreach (var loader in loaders)

@@ -104,12 +104,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITool, EnterWorktreeTool>();
         services.AddSingleton<ITool, ExitWorktreeTool>();
 
-        // Skill system — registry, runner, tools
-        services.AddSingleton<SkillRegistry>();
+        // Skill system — registry reads/writes IKnowledgeStore (Phase 112)
+        services.AddSingleton<SkillRegistry>(sp => new SkillRegistry(
+            sp.GetRequiredService<Sovrant.Runtime.Knowledge.IKnowledgeStore>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SkillRegistry>>()));
         services.AddSingleton<SkillRunner>();
         services.AddSingleton<ICapabilityCatalog, CapabilityCatalog>();
         services.AddSingleton<ITool, SkillTool>();
-        services.AddSingleton<ITool, SkillCreateTool>();
+        services.AddSingleton<ITool>(sp => new SkillCreateTool(
+            sp.GetRequiredService<SkillRegistry>(),
+            sp.GetRequiredService<Sovrant.Runtime.Knowledge.IKnowledgeStore>()));
         services.AddSingleton<ITool, ToolSearchTool>();
 
         // User-authored markdown tool templates (3-tier filesystem). Distinct from

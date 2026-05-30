@@ -1,52 +1,48 @@
+using System.Text.Json;
 using Sovrant.Runtime.Documents.Templates;
 using Sovrant.Runtime.Knowledge;
 using Sovrant.Server.Auth;
-using Sovrant.Tools.Skills;
 using Sovrant.Tools.Templates;
-using System.Text.Json;
 
 namespace Sovrant.Server.Routes;
 
 /// <summary>
 /// Registers authoring endpoints under <c>/v1/knowledge/{kind}/{slug}</c> for the
-/// Knowledge UI's markdown editor. <c>kind</c> ∈ <c>documents | tools | skills</c>.
-/// Built-in (assembly-shipped) entries are read-only — saves and deletes require user-tier or new slugs.
-/// Writes are dual-pathed: filesystem (registry) + DB (IKnowledgeStore) for Phase 108 readiness.
+/// Knowledge UI's markdown editor. <c>kind</c> ∈ <c>skills | agents | documents | tools | guidelines</c>.
+/// Phase 112: skills and agents are DB-only (no filesystem). Documents and tools are still
+/// dual-registered pending Phase C.
 /// </summary>
 internal static class KnowledgeAuthoringRoutes
 {
     public static void Map(WebApplication app)
     {
-        // Read source markdown for editor pre-load
+        // Read source markdown for editor pre-load.
         app.MapGet("/v1/knowledge/{kind}/{slug}/source", async (
             string kind,
             string slug,
-            SkillRegistry skills,
             UserDocumentTemplateRegistry docs,
             UserToolTemplateRegistry tools,
             IKnowledgeStore knowledgeStore) =>
         {
             if (!IsValidSlug(slug)) return Results.BadRequest(new { error = "Invalid slug." });
 
-            if (kind.Equals("guidelines", StringComparison.OrdinalIgnoreCase))
-                return await GetGuidelineSourceAsync(slug, knowledgeStore).ConfigureAwait(false);
-
-            return kind.ToUpperInvariant() switch
+            return kind.ToLowerInvariant() switch
             {
-                "SKILLS" => GetSkillSource(slug, skills),
-                "DOCUMENTS" => GetDocSource(slug, docs),
-                "TOOLS" => GetToolSource(slug, tools),
-                _ => Results.NotFound(new { error = $"Unknown kind '{kind}'." }),
+                "guidelines" => await GetGuidelineSourceAsync(slug, knowledgeStore).ConfigureAwait(false),
+                "skills"     => await GetDbSourceAsync("skills", slug, knowledgeStore).ConfigureAwait(false),
+                "agents"     => await GetDbSourceAsync("agents", slug, knowledgeStore).ConfigureAwait(false),
+                "documents"  => GetDocSource(slug, docs),
+                "tools"      => GetToolSource(slug, tools),
+                _            => Results.NotFound(new { error = $"Unknown kind '{kind}'." }),
             };
         });
 
-        // Save markdown to user (global) tier — filesystem + DB dual-write.
+        // Save markdown to user (global) tier.
         app.MapPost("/v1/knowledge/{kind}/{slug}", async (
             string kind,
             string slug,
             HttpRequest request,
             HttpContext ctx,
-            SkillRegistry skills,
             UserDocumentTemplateRegistry docs,
             UserToolTemplateRegistry tools,
             IKnowledgeStore knowledgeStore) =>
@@ -63,28 +59,30 @@ internal static class KnowledgeAuthoringRoutes
 
             try
             {
-                var kindKey = kind.ToUpperInvariant();
-                string? path;
                 KnowledgePage? page;
+                string path;
 
-                switch (kindKey)
+                switch (kind.ToLowerInvariant())
                 {
-                    case "SKILLS":
-                        skills.SaveGlobal(slug, markdown);
-                        path = SkillRegistry.GlobalPathFor(slug);
-                        page = BuildSkillPage(slug, skills);
+                    case "skills":
+                        page = BuildSkillPage(slug, markdown);
+                        path = $"db://knowledge_pages/skills/{slug}";
                         break;
-                    case "DOCUMENTS":
+                    case "agents":
+                        page = BuildAgentPage(slug, markdown);
+                        path = $"db://knowledge_pages/agents/{slug}";
+                        break;
+                    case "documents":
                         docs.SaveGlobal(slug, markdown);
                         path = UserDocumentTemplateRegistry.GlobalPathFor(slug);
                         page = BuildDocPage(slug, docs);
                         break;
-                    case "TOOLS":
+                    case "tools":
                         tools.SaveGlobal(slug, markdown);
                         path = UserToolTemplateRegistry.GlobalPathFor(slug);
                         page = BuildToolPage(slug, tools);
                         break;
-                    case "GUIDELINES":
+                    case "guidelines":
                         page = ParseGuidelinePage(slug, markdown);
                         path = $"db://knowledge_pages/guidelines/{slug}";
                         break;
@@ -103,13 +101,11 @@ internal static class KnowledgeAuthoringRoutes
             }
         });
 
-        // Delete user-tier file (built-ins remain readable; 403 if no user-tier file exists).
-        // Also removes the DB record so the two stores stay in sync.
+        // Delete user-tier entry.
         app.MapDelete("/v1/knowledge/{kind}/{slug}", async (
             string kind,
             string slug,
             HttpContext ctx,
-            SkillRegistry skills,
             UserDocumentTemplateRegistry docs,
             UserToolTemplateRegistry tools,
             IKnowledgeStore knowledgeStore) =>
@@ -120,33 +116,39 @@ internal static class KnowledgeAuthoringRoutes
 
             var kindLower = kind.ToLowerInvariant();
 
-            if (kindLower == "guidelines")
+            switch (kindLower)
             {
-                // Guidelines are DB-only; delete the user override (reverts to built-in).
-                await knowledgeStore.DeleteAsync("guidelines", slug).ConfigureAwait(false);
-                return Results.Ok(new { slug });
+                case "guidelines":
+                case "skills":
+                case "agents":
+                    // DB-only: delete the User-tier overlay; BuiltIn base remains.
+                    await knowledgeStore.DeleteAsync(kindLower, slug, KnowledgeScope.Global).ConfigureAwait(false);
+                    return Results.Ok(new { slug });
+
+                case "documents":
+                {
+                    var deleted = docs.DeleteGlobal(slug);
+                    if (!deleted) return Results.StatusCode(403);
+                    await knowledgeStore.DeleteAsync(kindLower, slug, KnowledgeScope.Global).ConfigureAwait(false);
+                    return Results.Ok(new { slug });
+                }
+                case "tools":
+                {
+                    var deleted = tools.DeleteGlobal(slug);
+                    if (!deleted) return Results.StatusCode(403);
+                    await knowledgeStore.DeleteAsync(kindLower, slug, KnowledgeScope.Global).ConfigureAwait(false);
+                    return Results.Ok(new { slug });
+                }
+                default:
+                    return Results.NotFound(new { error = $"Unknown kind '{kind}'." });
             }
-
-            var deleted = kind.ToUpperInvariant() switch
-            {
-                "SKILLS" => skills.DeleteGlobal(slug),
-                "DOCUMENTS" => docs.DeleteGlobal(slug),
-                "TOOLS" => tools.DeleteGlobal(slug),
-                _ => (bool?)null,
-            };
-            if (deleted is null) return Results.NotFound(new { error = $"Unknown kind '{kind}'." });
-            if (deleted == false) return Results.StatusCode(403);
-
-            await knowledgeStore.DeleteAsync(kindLower, slug).ConfigureAwait(false);
-            return Results.Ok(new { slug });
         });
     }
 
-    // ── Guidelines (DB-only, no filesystem registry) ─────────────────────────
+    // ── Source readers ────────────────────────────────────────────────────────
 
     private static async Task<IResult> GetGuidelineSourceAsync(string slug, IKnowledgeStore store)
     {
-        // User override in DB wins; fall back to static built-in.
         var dbPage = await store.GetActiveAsync("guidelines", slug).ConfigureAwait(false);
         if (dbPage is not null)
         {
@@ -159,143 +161,23 @@ internal static class KnowledgeAuthoringRoutes
         return Results.Ok(new { slug, tier = "BuiltIn", readOnly = false, content = LanguageGuidelines.ToMarkdown(builtin) });
     }
 
-    private static KnowledgePage ParseGuidelinePage(string slug, string markdown)
+    private static async Task<IResult> GetDbSourceAsync(string kind, string slug, IKnowledgeStore store)
     {
-        var now = DateTimeOffset.UtcNow;
-        // Extract name and description from frontmatter; body is everything after.
-        var (name, description, body) = ExtractGuidelineParts(slug, markdown);
-        return new KnowledgePage(
-            KnowledgeId: $"guideline_{slug}",
-            Kind: "guidelines",
-            Slug: slug,
-            Name: name,
-            Description: description,
-            Tier: "User",
-            Body: body,
-            WorkspaceId: "",
-            CreatedAt: now,
-            UpdatedAt: now);
-    }
+        var page = await store.GetEffectiveAsync(kind, slug).ConfigureAwait(false);
+        if (page is null) return Results.NotFound(new { error = $"{kind[..^1]} '{slug}' not found." });
 
-    private static (string Name, string Description, string Body) ExtractGuidelineParts(string slug, string markdown)
-    {
-        var name = slug;
-        var description = string.Empty;
-        var body = markdown;
+        var content = kind == "agents"
+            ? ReconstructAgentMarkdown(page)
+            : ReconstructSkillMarkdown(page);
 
-        if (markdown.StartsWith("---", StringComparison.Ordinal))
-        {
-            var end = markdown.IndexOf("\n---", 3, StringComparison.Ordinal);
-            if (end >= 0)
-            {
-                var fm = markdown.Substring(3, end - 3);
-                body = markdown[(end + 4)..].TrimStart();
-                foreach (var line in fm.Split('\n'))
-                {
-                    var t = line.Trim();
-                    if (t.StartsWith("name:", StringComparison.OrdinalIgnoreCase))
-                        name = t[5..].Trim().Trim('"', '\'');
-                    else if (t.StartsWith("description:", StringComparison.OrdinalIgnoreCase))
-                        description = t[12..].Trim().Trim('"', '\'');
-                }
-            }
-        }
-        return (name, description, body);
-    }
-
-    // ── DB page builders (called after SaveGlobal so the registry is up to date) ──
-
-    private static KnowledgePage? BuildSkillPage(string slug, SkillRegistry skills)
-    {
-        var skill = skills.TryGetByName(slug);
-        if (skill is null) return null;
-
-        var now = DateTimeOffset.UtcNow;
-        return new KnowledgePage(
-            KnowledgeId:   $"skill_{slug}",
-            Kind:          "skills",
-            Slug:          slug,
-            Name:          skill.Name,
-            Description:   skill.Description,
-            Tier:          "User",
-            Body:          skill.Body,
-            WorkspaceId:   "",
-            CreatedAt:     now,
-            UpdatedAt:     now,
-            Trigger:       string.IsNullOrEmpty(skill.Trigger) ? null : skill.Trigger,
-            Agents:        skill.Agents.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(skill.Agents) : null,
-            Tools:         skill.Tools.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(skill.Tools) : null);
-    }
-
-    private static KnowledgePage? BuildDocPage(string slug, UserDocumentTemplateRegistry docs)
-    {
-        var t = docs.TryGet(slug);
-        if (t is null) return null;
-
-        var now = DateTimeOffset.UtcNow;
-        return new KnowledgePage(
-            KnowledgeId:   $"doc_{slug}",
-            Kind:          "documents",
-            Slug:          slug,
-            Name:          t.Name,
-            Description:   t.Description,
-            Tier:          "User",
-            Body:          t.Body,
-            WorkspaceId:   "",
-            CreatedAt:     now,
-            UpdatedAt:     now,
-            Industry:      t.Industry,
-            DefaultFormat: t.DefaultFormat);
-    }
-
-    private static KnowledgePage? BuildToolPage(string slug, UserToolTemplateRegistry tools)
-    {
-        var t = tools.TryGet(slug);
-        if (t is null) return null;
-
-        var now = DateTimeOffset.UtcNow;
-        return new KnowledgePage(
-            KnowledgeId:   $"tool_{slug}",
-            Kind:          "tools",
-            Slug:          slug,
-            Name:          t.Name,
-            Description:   t.Description,
-            Tier:          "User",
-            Body:          t.Body,
-            WorkspaceId:   "",
-            CreatedAt:     now,
-            UpdatedAt:     now,
-            Category:      t.Category);
-    }
-
-    // ── Source readers ─────────────────────────────────────────────────────
-
-    private static IResult GetSkillSource(string slug, SkillRegistry skills)
-    {
-        // Try by slug-as-name first; fall back to source path lookup by file basename.
-        var skill = skills.TryGetByName(slug);
-        if (skill is null)
-            return Results.NotFound(new { error = $"Skill '{slug}' not found." });
-
-        var source = skills.TryGetSource(skill.Name);
-        if (source is null) return Results.NotFound(new { error = "Skill has no on-disk source." });
-
-        try
-        {
-            var content = File.ReadAllText(source.Path);
-            return Results.Ok(new { slug, tier = source.Tier.ToString(), readOnly = source.Tier == SkillTier.BuiltIn, content });
-        }
-        catch (IOException ex)
-        {
-            return Results.Problem(detail: ex.Message, statusCode: 500);
-        }
+        var readOnly = page.Tier == "BuiltIn";
+        return Results.Ok(new { slug, tier = page.Tier, readOnly, content });
     }
 
     private static IResult GetDocSource(string slug, UserDocumentTemplateRegistry docs)
     {
         var template = docs.TryGet(slug);
         if (template is null) return Results.NotFound(new { error = $"Document template '{slug}' not found." });
-
         try
         {
             var content = File.ReadAllText(template.SourcePath);
@@ -311,7 +193,6 @@ internal static class KnowledgeAuthoringRoutes
     {
         var template = tools.TryGet(slug);
         if (template is null) return Results.NotFound(new { error = $"Tool template '{slug}' not found." });
-
         try
         {
             var content = File.ReadAllText(template.SourcePath);
@@ -323,36 +204,274 @@ internal static class KnowledgeAuthoringRoutes
         }
     }
 
-    /// <summary>Slugs must be alphanumeric + dash/underscore — keep filesystem writes safe.</summary>
+    // ── Markdown reconstruction ───────────────────────────────────────────────
+
+    private static string ReconstructSkillMarkdown(KnowledgePage p)
+    {
+        var ic = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("---");
+        sb.AppendLine(string.Create(ic, $"name: {p.Name}"));
+        if (!string.IsNullOrWhiteSpace(p.Description))
+            sb.AppendLine(string.Create(ic, $"description: {p.Description}"));
+        if (!string.IsNullOrWhiteSpace(p.Trigger))
+            sb.AppendLine(string.Create(ic, $"trigger: {p.Trigger}"));
+        if (!string.IsNullOrWhiteSpace(p.Agents))
+        {
+            var list = SafeDeserializeList(p.Agents);
+            if (list.Count > 0) sb.AppendLine(string.Create(ic, $"agents: [{string.Join(", ", list)}]"));
+        }
+        if (!string.IsNullOrWhiteSpace(p.Tools))
+        {
+            var list = SafeDeserializeList(p.Tools);
+            if (list.Count > 0) sb.AppendLine(string.Create(ic, $"tools: [{string.Join(", ", list)}]"));
+        }
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.Append(p.Body);
+        return sb.ToString();
+    }
+
+    private static string ReconstructAgentMarkdown(KnowledgePage p)
+    {
+        var ic = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("---");
+        sb.AppendLine(string.Create(ic, $"name: {p.Name}"));
+        if (!string.IsNullOrWhiteSpace(p.Description))
+            sb.AppendLine(string.Create(ic, $"description: {p.Description}"));
+        if (!string.IsNullOrWhiteSpace(p.Role))
+            sb.AppendLine(string.Create(ic, $"role: {p.Role}"));
+        if (!string.IsNullOrWhiteSpace(p.RecommendedLevel))
+            sb.AppendLine(string.Create(ic, $"recommended_level: {p.RecommendedLevel}"));
+        if (!string.IsNullOrWhiteSpace(p.Tools))
+        {
+            var list = SafeDeserializeList(p.Tools);
+            if (list.Count > 0) sb.AppendLine(string.Create(ic, $"allowed_tools: [{string.Join(", ", list)}]"));
+        }
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.Append(p.Body);
+        return sb.ToString();
+    }
+
+    private static List<string> SafeDeserializeList(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try { return JsonSerializer.Deserialize<List<string>>(json) ?? []; }
+        catch (JsonException) { return []; }
+    }
+
+    // ── DB page builders ──────────────────────────────────────────────────────
+
+    private static KnowledgePage BuildSkillPage(string slug, string markdown)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var (name, description, trigger, agents, tools, body) = ExtractSkillParts(slug, markdown);
+        return new KnowledgePage(
+            KnowledgeId:   $"skill_global_{slug}",
+            Kind:          "skills",
+            Slug:          slug,
+            Name:          name,
+            Description:   description,
+            Tier:          "User",
+            Body:          body,
+            WorkspaceId:   KnowledgeScope.Global,
+            CreatedAt:     now,
+            UpdatedAt:     now,
+            Trigger:       string.IsNullOrWhiteSpace(trigger) ? null : trigger,
+            Agents:        agents,
+            Tools:         tools);
+    }
+
+    private static KnowledgePage BuildAgentPage(string slug, string markdown)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var (name, description, role, level, tools, body) = ExtractAgentParts(slug, markdown);
+        return new KnowledgePage(
+            KnowledgeId:      $"agent_global_{slug}",
+            Kind:             "agents",
+            Slug:             slug,
+            Name:             name,
+            Description:      description,
+            Tier:             "User",
+            Body:             body,
+            WorkspaceId:      KnowledgeScope.Global,
+            CreatedAt:        now,
+            UpdatedAt:        now,
+            Tools:            tools,
+            Role:             string.IsNullOrWhiteSpace(role) ? null : role,
+            RecommendedLevel: string.IsNullOrWhiteSpace(level) ? null : level);
+    }
+
+    private static KnowledgePage? BuildDocPage(string slug, UserDocumentTemplateRegistry docs)
+    {
+        var t = docs.TryGet(slug);
+        if (t is null) return null;
+        var now = DateTimeOffset.UtcNow;
+        return new KnowledgePage(
+            KnowledgeId:   $"doc_{slug}",
+            Kind:          "documents",
+            Slug:          slug,
+            Name:          t.Name,
+            Description:   t.Description,
+            Tier:          "User",
+            Body:          t.Body,
+            WorkspaceId:   KnowledgeScope.Global,
+            CreatedAt:     now,
+            UpdatedAt:     now,
+            Industry:      t.Industry,
+            DefaultFormat: t.DefaultFormat);
+    }
+
+    private static KnowledgePage? BuildToolPage(string slug, UserToolTemplateRegistry tools)
+    {
+        var t = tools.TryGet(slug);
+        if (t is null) return null;
+        var now = DateTimeOffset.UtcNow;
+        return new KnowledgePage(
+            KnowledgeId:   $"tool_{slug}",
+            Kind:          "tools",
+            Slug:          slug,
+            Name:          t.Name,
+            Description:   t.Description,
+            Tier:          "User",
+            Body:          t.Body,
+            WorkspaceId:   KnowledgeScope.Global,
+            CreatedAt:     now,
+            UpdatedAt:     now,
+            Category:      t.Category);
+    }
+
+    private static KnowledgePage ParseGuidelinePage(string slug, string markdown)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var (name, description, body) = ExtractGuidelineParts(slug, markdown);
+        return new KnowledgePage(
+            KnowledgeId: $"guideline_{slug}",
+            Kind: "guidelines",
+            Slug: slug,
+            Name: name,
+            Description: description,
+            Tier: "User",
+            Body: body,
+            WorkspaceId: "",
+            CreatedAt: now,
+            UpdatedAt: now);
+    }
+
+    // ── Frontmatter parsers ───────────────────────────────────────────────────
+
+    private static (string Name, string Description, string Trigger, string? Agents, string? Tools, string Body)
+        ExtractSkillParts(string slug, string markdown)
+    {
+        var (meta, body) = ParseFrontmatter(markdown);
+        meta.TryGetValue("name", out var name);
+        meta.TryGetValue("description", out var description);
+        meta.TryGetValue("trigger", out var trigger);
+        string? agentsJson = null, toolsJson = null;
+        if (meta.TryGetValue("agents", out var agentsRaw))
+        {
+            var list = ParseList(agentsRaw);
+            if (list.Count > 0) agentsJson = JsonSerializer.Serialize(list);
+        }
+        if (meta.TryGetValue("tools", out var toolsRaw))
+        {
+            var list = ParseList(toolsRaw);
+            if (list.Count > 0) toolsJson = JsonSerializer.Serialize(list);
+        }
+        return (string.IsNullOrWhiteSpace(name) ? slug : name.Trim(),
+                description?.Trim() ?? string.Empty,
+                trigger?.Trim() ?? string.Empty,
+                agentsJson, toolsJson,
+                body);
+    }
+
+    private static (string Name, string Description, string Role, string Level, string? Tools, string Body)
+        ExtractAgentParts(string slug, string markdown)
+    {
+        var (meta, body) = ParseFrontmatter(markdown);
+        meta.TryGetValue("name", out var name);
+        meta.TryGetValue("description", out var description);
+        meta.TryGetValue("role", out var role);
+        meta.TryGetValue("recommended_level", out var level);
+        string? toolsJson = null;
+        if (meta.TryGetValue("allowed_tools", out var toolsRaw))
+        {
+            var list = ParseList(toolsRaw);
+            if (list.Count > 0) toolsJson = JsonSerializer.Serialize(list);
+        }
+        return (string.IsNullOrWhiteSpace(name) ? slug : name.Trim(),
+                description?.Trim() ?? string.Empty,
+                role?.Trim() ?? string.Empty,
+                level?.Trim() ?? string.Empty,
+                toolsJson, body);
+    }
+
+    private static (string Name, string Description, string Body) ExtractGuidelineParts(string slug, string markdown)
+    {
+        var (meta, body) = ParseFrontmatter(markdown);
+        meta.TryGetValue("name", out var name);
+        meta.TryGetValue("description", out var description);
+        return (string.IsNullOrWhiteSpace(name) ? slug : name.Trim().Trim('"', '\''),
+                description?.Trim().Trim('"', '\'') ?? string.Empty,
+                body);
+    }
+
+    private static (Dictionary<string, string> Meta, string Body) ParseFrontmatter(string markdown)
+    {
+        var meta = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var body = markdown;
+
+        if (!markdown.StartsWith("---", StringComparison.Ordinal))
+            return (meta, body);
+
+        var end = markdown.IndexOf("\n---", 3, StringComparison.Ordinal);
+        if (end < 0) return (meta, body);
+
+        var fm = markdown.Substring(3, end - 3);
+        body = markdown[(end + 4)..].TrimStart();
+
+        foreach (var line in fm.Split('\n'))
+        {
+            var colon = line.IndexOf(':', StringComparison.Ordinal);
+            if (colon < 0) continue;
+            var key = line[..colon].Trim();
+            var value = line[(colon + 1)..].Trim();
+            meta[key] = value;
+        }
+        return (meta, body);
+    }
+
+    private static IReadOnlyList<string> ParseList(string value)
+    {
+        var v = value.Trim();
+        if (v.StartsWith('[') && v.EndsWith(']')) v = v[1..^1];
+        return [.. v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+    }
+
     private static bool IsValidSlug(string slug)
     {
-        if (string.IsNullOrWhiteSpace(slug)) return false;
-        if (slug.Length > 80) return false;
+        if (string.IsNullOrWhiteSpace(slug) || slug.Length > 80) return false;
         foreach (var c in slug)
-        {
             if (!(char.IsLetterOrDigit(c) || c == '-' || c == '_')) return false;
-        }
         return true;
     }
 
-    /// <summary>Returns null if frontmatter is well-formed and contains a non-empty <c>name</c>; otherwise an error message.</summary>
     private static string? ValidateFrontmatter(string markdown)
     {
-        if (string.IsNullOrWhiteSpace(markdown))
-            return "Body cannot be empty.";
-        if (!markdown.StartsWith("---", StringComparison.Ordinal))
-            return "Missing YAML frontmatter (must start with ---).";
+        if (string.IsNullOrWhiteSpace(markdown)) return "Body cannot be empty.";
+        if (!markdown.StartsWith("---", StringComparison.Ordinal)) return "Missing YAML frontmatter (must start with ---)";
         var end = markdown.IndexOf("\n---", 3, StringComparison.Ordinal);
-        if (end < 0) return "Frontmatter is not closed (missing trailing ---).";
-
+        if (end < 0) return "Frontmatter is not closed (missing trailing ---)";
         var fm = markdown.Substring(3, end - 3);
         foreach (var line in fm.Split('\n'))
         {
-            var trimmed = line.Trim();
-            if (trimmed.StartsWith("name:", StringComparison.OrdinalIgnoreCase))
+            var t = line.Trim();
+            if (t.StartsWith("name:", StringComparison.OrdinalIgnoreCase))
             {
-                var value = trimmed[5..].Trim().Trim('"', '\'');
-                if (!string.IsNullOrEmpty(value)) return null;
+                var v = t[5..].Trim().Trim('"', '\'');
+                if (!string.IsNullOrEmpty(v)) return null;
             }
         }
         return "Frontmatter must include a non-empty 'name' field.";

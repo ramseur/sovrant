@@ -1,72 +1,104 @@
+using System.Text.Json;
 using Sovrant.Agents.Models;
+using Sovrant.Runtime.Knowledge;
 
 namespace Sovrant.Agents.Templates;
 
 /// <summary>
-/// Persists agent definitions to <c>.sovrant/agents/</c> (the user tier).
-/// Built-in agents are read-only; editing one triggers a silent copy-on-write
-/// that lands in the user tier and overrides the built-in going forward.
+/// Persists agent definitions to <see cref="IKnowledgeStore"/> at global user scope (Phase 112).
+/// Built-in agents are immutable base rows; editing one creates a User-tier overlay that
+/// wins via copy-on-write — the base row is never mutated. "Delete" removes the overlay,
+/// restoring the base.
 /// </summary>
 public sealed class AgentDefinitionWriter
 {
     private readonly AgentTemplateRegistry _registry;
+    private readonly IKnowledgeStore _store;
 
-    public AgentDefinitionWriter(AgentTemplateRegistry registry)
+    public AgentDefinitionWriter(AgentTemplateRegistry registry, IKnowledgeStore store)
     {
         _registry = registry;
+        _store = store;
     }
 
     /// <summary>
-    /// Writes <paramref name="template"/> to <c>.sovrant/agents/{name}.md</c> and
-    /// updates the live registry. Always writes to the user tier; if the template
-    /// was built-in the user copy takes precedence from this point on.
+    /// Upserts <paramref name="template"/> into the global user tier and updates the live registry.
+    /// If the template was built-in, the overlay takes precedence going forward; the base row is untouched.
     /// </summary>
     public async Task SaveAsync(AgentTemplate template, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(template);
 
-        Directory.CreateDirectory(AgentTemplateRegistry.UserAgentsDir);
+        var now = DateTimeOffset.UtcNow;
+        var page = new KnowledgePage(
+            KnowledgeId:      $"agent_global_{template.Name}",
+            Kind:             "agents",
+            Slug:             template.Name,
+            Name:             template.Name,
+            Description:      template.Description ?? string.Empty,
+            Tier:             "User",
+            Body:             template.SystemPrompt,
+            WorkspaceId:      KnowledgeScope.Global,
+            CreatedAt:        now,
+            UpdatedAt:        now,
+            Tools:            template.AllowedTools.Count > 0
+                                  ? JsonSerializer.Serialize(template.AllowedTools)
+                                  : null,
+            Role:             template.Role.ToString(),
+            RecommendedLevel: template.RecommendedLevel.ToString());
 
-        var path = AgentPath(template.Name);
-        var content = AgentTemplateRegistry.Serialize(template with { IsBuiltIn = false });
-
-        await File.WriteAllTextAsync(path, content, ct).ConfigureAwait(false);
-
+        await _store.UpsertAsync(page, ct).ConfigureAwait(false);
         _registry.Register(template with { IsBuiltIn = false });
     }
 
     /// <summary>
-    /// Deletes the user-tier markdown file for <paramref name="name"/> and removes
-    /// it from the live registry. If the name belongs to a built-in template, returns
-    /// <see langword="false"/> (built-ins cannot be deleted).
+    /// Deletes the global user-tier overlay for <paramref name="name"/>. Built-in agents
+    /// cannot be deleted (only their overlay can be removed, reverting to the built-in base).
+    /// Returns <see langword="false"/> if no user overlay exists.
     /// </summary>
-    public bool Delete(string name)
+    public async Task<bool> DeleteAsync(string name, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
+        // Only remove User-tier overlays; BuiltIn rows are owned by the migration.
         var existing = _registry.TryGet(name);
         if (existing?.IsBuiltIn == true) return false;
 
-        var path = AgentPath(name);
-        if (File.Exists(path))
-            File.Delete(path);
-
+        await _store.DeleteAsync("agents", name, KnowledgeScope.Global, ct).ConfigureAwait(false);
         _registry.Unregister(name);
+
+        // Restore the BuiltIn row into the live registry if one exists.
+        var baseRow = _store.GetAsync("agents", name, KnowledgeScope.Base, ct).GetAwaiter().GetResult();
+        if (baseRow is not null)
+        {
+            if (!Enum.TryParse<AgentRole>(baseRow.Role, ignoreCase: true, out var role))
+                role = AgentRole.General;
+            if (!Enum.TryParse<RecommendedLevel>(baseRow.RecommendedLevel, ignoreCase: true, out var level))
+                level = RecommendedLevel.Standard;
+            var tools = DeserializeList(baseRow.Tools);
+            _registry.Register(new AgentTemplate(baseRow.Name, role, level, tools, baseRow.Body, IsBuiltIn: true, baseRow.Description));
+        }
+
         return true;
     }
+
+    /// <summary>Synchronous delete shim for callers that have not yet migrated to async (legacy).</summary>
+    public bool Delete(string name) => DeleteAsync(name).GetAwaiter().GetResult();
 
     /// <summary>Returns the kebab-case name derived from a display name.</summary>
     public static string ToKebabCase(string displayName)
     {
         if (string.IsNullOrWhiteSpace(displayName)) return "new-agent";
-
-#pragma warning disable CA1308 // kebab-case explicitly requires lowercase output
+#pragma warning disable CA1308
         return System.Text.RegularExpressions.Regex.Replace(
-            displayName.Trim().ToLowerInvariant(),
-            @"[^a-z0-9]+", "-").Trim('-');
+            displayName.Trim().ToLowerInvariant(), @"[^a-z0-9]+", "-").Trim('-');
 #pragma warning restore CA1308
     }
 
-    private static string AgentPath(string name) =>
-        Path.Combine(AgentTemplateRegistry.UserAgentsDir, $"{name}.md");
+    private static List<string> DeserializeList(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try { return JsonSerializer.Deserialize<List<string>>(json) ?? []; }
+        catch (JsonException) { return []; }
+    }
 }
