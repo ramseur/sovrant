@@ -9,7 +9,8 @@ internal sealed class SqliteKnowledgeStore(ISqliteConnectionFactory connectionFa
 {
     private const string SelectColumns =
         "knowledge_id, kind, slug, name, description, tier, body, workspace_id, " +
-        "created_at, updated_at, trigger, agents, tools, industry, default_format, category";
+        "created_at, updated_at, trigger, agents, tools, industry, default_format, category, " +
+        "role, recommended_level";
 
     public async Task<IReadOnlyList<KnowledgePage>> GetAllAsync(
         string kind,
@@ -62,6 +63,74 @@ internal sealed class SqliteKnowledgeStore(ISqliteConnectionFactory connectionFa
         return pages.Count > 0 ? pages[0] : null;
     }
 
+    public async Task<KnowledgePage?> GetEffectiveAsync(
+        string kind,
+        string slug,
+        string projectId = "",
+        CancellationToken ct = default)
+    {
+        using var conn = connectionFactory.CreateConnection();
+        using var cmd = conn.CreateCommand();
+        // Layered resolution: project overlay > global overlay > base.
+        cmd.CommandText =
+            $"SELECT {SelectColumns} FROM knowledge_pages " +
+            "WHERE kind = $kind AND slug = $slug " +
+            "AND workspace_id IN ($base, $global, $project) " +
+            "ORDER BY " +
+            "  CASE workspace_id " +
+            "    WHEN $project THEN 0 " +
+            "    WHEN $global  THEN 1 " +
+            "    ELSE 2 " +
+            "  END " +
+            "LIMIT 1";
+        cmd.Parameters.AddWithValue("$kind", kind);
+        cmd.Parameters.AddWithValue("$slug", slug);
+        cmd.Parameters.AddWithValue("$base", KnowledgeScope.Base);
+        cmd.Parameters.AddWithValue("$global", KnowledgeScope.Global);
+        // When no project is in scope, reuse a sentinel that can't collide with a real
+        // workspace ('' and 'global' are already covered) so the IN clause stays valid.
+        cmd.Parameters.AddWithValue("$project",
+            string.IsNullOrEmpty(projectId) ? "\0__no_project__" : projectId);
+        var pages = await ReadPagesAsync(cmd, ct).ConfigureAwait(false);
+        return pages.Count > 0 ? pages[0] : null;
+    }
+
+    public async Task<IReadOnlyList<KnowledgePage>> GetAllEffectiveAsync(
+        string kind,
+        string projectId = "",
+        CancellationToken ct = default)
+    {
+        using var conn = connectionFactory.CreateConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            $"SELECT {SelectColumns} FROM knowledge_pages " +
+            "WHERE kind = $kind AND workspace_id IN ($base, $global, $project) " +
+            "ORDER BY slug";
+        cmd.Parameters.AddWithValue("$kind", kind);
+        cmd.Parameters.AddWithValue("$base", KnowledgeScope.Base);
+        cmd.Parameters.AddWithValue("$global", KnowledgeScope.Global);
+        cmd.Parameters.AddWithValue("$project",
+            string.IsNullOrEmpty(projectId) ? "\0__no_project__" : projectId);
+        var rows = await ReadPagesAsync(cmd, ct).ConfigureAwait(false);
+
+        // Collapse to one row per slug, project > global > base.
+        static int Rank(KnowledgePage p, string proj) =>
+            p.WorkspaceId == proj && !string.IsNullOrEmpty(proj) ? 0
+            : p.WorkspaceId == KnowledgeScope.Global ? 1
+            : 2;
+
+        var bySlug = new Dictionary<string, KnowledgePage>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            if (!bySlug.TryGetValue(row.Slug, out var existing) ||
+                Rank(row, projectId) < Rank(existing, projectId))
+            {
+                bySlug[row.Slug] = row;
+            }
+        }
+        return bySlug.Values.OrderBy(p => p.Slug, StringComparer.Ordinal).ToList();
+    }
+
     public async Task UpsertAsync(KnowledgePage page, CancellationToken ct = default)
     {
         using var conn = connectionFactory.CreateConnection();
@@ -69,22 +138,26 @@ internal sealed class SqliteKnowledgeStore(ISqliteConnectionFactory connectionFa
         cmd.CommandText = """
             INSERT INTO knowledge_pages
                 (knowledge_id, kind, slug, name, description, tier, body, workspace_id,
-                 created_at, updated_at, trigger, agents, tools, industry, default_format, category)
+                 created_at, updated_at, trigger, agents, tools, industry, default_format, category,
+                 role, recommended_level)
             VALUES
                 ($id, $kind, $slug, $name, $desc, $tier, $body, $wid,
-                 $cat, $uat, $trigger, $agents, $tools, $industry, $df, $category)
+                 $cat, $uat, $trigger, $agents, $tools, $industry, $df, $category,
+                 $role, $level)
             ON CONFLICT(kind, slug, workspace_id) DO UPDATE SET
-                name           = excluded.name,
-                description    = excluded.description,
-                tier           = excluded.tier,
-                body           = excluded.body,
-                updated_at     = excluded.updated_at,
-                trigger        = excluded.trigger,
-                agents         = excluded.agents,
-                tools          = excluded.tools,
-                industry       = excluded.industry,
-                default_format = excluded.default_format,
-                category       = excluded.category
+                name              = excluded.name,
+                description       = excluded.description,
+                tier              = excluded.tier,
+                body              = excluded.body,
+                updated_at        = excluded.updated_at,
+                trigger           = excluded.trigger,
+                agents            = excluded.agents,
+                tools             = excluded.tools,
+                industry          = excluded.industry,
+                default_format    = excluded.default_format,
+                category          = excluded.category,
+                role              = excluded.role,
+                recommended_level = excluded.recommended_level
             """;
 
         cmd.Parameters.AddWithValue("$id", page.KnowledgeId);
@@ -103,6 +176,8 @@ internal sealed class SqliteKnowledgeStore(ISqliteConnectionFactory connectionFa
         cmd.Parameters.AddWithValue("$industry", (object?)page.Industry ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$df", (object?)page.DefaultFormat ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$category", (object?)page.Category ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$role", (object?)page.Role ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$level", (object?)page.RecommendedLevel ?? DBNull.Value);
 
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
@@ -137,6 +212,8 @@ internal sealed class SqliteKnowledgeStore(ISqliteConnectionFactory connectionFa
             var n13 = await reader.IsDBNullAsync(13, ct).ConfigureAwait(false);
             var n14 = await reader.IsDBNullAsync(14, ct).ConfigureAwait(false);
             var n15 = await reader.IsDBNullAsync(15, ct).ConfigureAwait(false);
+            var n16 = await reader.IsDBNullAsync(16, ct).ConfigureAwait(false);
+            var n17 = await reader.IsDBNullAsync(17, ct).ConfigureAwait(false);
 
             results.Add(new KnowledgePage(
                 KnowledgeId:   reader.GetString(0),
@@ -154,7 +231,9 @@ internal sealed class SqliteKnowledgeStore(ISqliteConnectionFactory connectionFa
                 Tools:         n12 ? null : reader.GetString(12),
                 Industry:      n13 ? null : reader.GetString(13),
                 DefaultFormat: n14 ? null : reader.GetString(14),
-                Category:      n15 ? null : reader.GetString(15)));
+                Category:      n15 ? null : reader.GetString(15),
+                Role:          n16 ? null : reader.GetString(16),
+                RecommendedLevel: n17 ? null : reader.GetString(17)));
         }
         return results;
     }

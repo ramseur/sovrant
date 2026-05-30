@@ -198,6 +198,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Multi-agent session scoping — allow a user to scope more than one agent onto a single chat session; each scoped agent contributes its system prompt and tool set for the duration of the session; the chat header and top context bar show all active agents (expanding the single-agent badge from Phase 106); agents can be added or removed mid-session without clearing history; `sessions.agent_name` (V031 scalar) replaced or extended to support a list of agent IDs stored as a relation or JSON column (new migration required); `ActiveContextService` and `ActiveContextViewModel` updated to carry a collection; Web + Desktop parity | Phase 109 | Medium |
 | CLI first-run experience — improve the experience for users launching `sovrant` for the first time; guided setup that detects missing configuration (no provider, no API key) and walks the user through provider selection and key entry interactively; `sovrant init` command as a standalone setup entrypoint; `sovrant doctor` command that checks health of all configuration and connectivity (provider reachable, model list accessible, DB migrations current, tool count); friendly error messages when the runtime fails to start rather than raw stack traces; color-coded status output; `--help` improvements with grouped command categories and examples; Web + Desktop parity not required — CLI-only surface | Phase 110 | High |
 | Navigation overhaul — replace the current top-bar and rail navigation with a collapsible left-side panel following the modern sidebar pattern (VS Code, Linear, Notion, Slack); primary sections (Chat, Sessions, Agents, Teams, Missions, Knowledge, Artifacts, Settings, Command Center, Dashboard) listed in the sidebar with icons and labels; sidebar collapses to icon-only mode with tooltip labels; user-resizable panel width; active section highlighted; nested expansion for sections with sub-pages (e.g. Settings → Providers / Users / Workspace / System; Knowledge → Skills / Documents / Tools); keyboard shortcut to toggle sidebar; Web and Desktop parity; Desktop uses a single `SidebarView` Avalonia control replacing the current `RailNav`; Web replaces the current `<NavMenu>` component with a new `<Sidebar>` component; breadcrumb header remains on all pages; mobile breakpoint collapses sidebar to overlay drawer | Phase 111 | Medium |
+| Migrate built-in markdown knowledge into the DB — move all on-disk built-in markdown (32 skills, 25 agents) plus the 44 code-defined document templates out of the filesystem/C# and into the `knowledge_pages` table so users manage every template (base + their own) in the DB without code changes; copy-on-write overlay model (immutable base rows, user edits become `global`/project overlays that win, revert = delete overlay); built-ins seeded via SQL migration; registries flipped to read DB; document rendering becomes data-driven via a sandboxed templating engine; `.md` files and disk scans deleted once verified; SQLite-only (knowledge store is local even on Postgres backend) | Phase 112 | In progress |
 
 ### v1.0 release polish (in progress)
 
@@ -10562,6 +10563,77 @@ A server must be allowed at both the workspace level and the project level to ap
 6. Global admin UI: set `default_effect` per server (`allow` / `deny`)
 7. API routes: `GET/PUT /v1/workspaces/{id}/mcp-permissions`, `GET/PUT /v1/projects/{id}/mcp-permissions`
 8. Tests: workspace-level filtering, project-level override, default_effect fallback, filtered tools invisible to model, audit trail
+
+---
+
+## Phase 112 — Migrate all built-in markdown knowledge into the DB
+
+### Goal
+
+Make `knowledge_pages` (V033, Phase 108) the single source of truth for all
+markdown knowledge. Move the built-in **skills** (32) and **agents** (25) off the
+filesystem, and the 44 code-defined **document** templates out of C#, so users can
+manage every template — our base ones and the ones they create — entirely in the
+DB and change them without code changes. Once each registry reads from the DB, the
+loose `.md` files and disk-scan code paths are deleted.
+
+**Guiding principle:** smart code (loaders, parsers, renderers) stays compiled; all
+editable content (skill/agent/template bodies + field schemas) lives only in the DB.
+
+### Design
+
+- **Copy-on-write overlay model.** Base rows are immutable (`tier='BuiltIn'`,
+  `workspace_id=''`), seeded by migration. A user edit creates a separate overlay
+  row (`tier='User'`) at `workspace_id='global'` (installation-wide) or a project
+  scope; resolution is project → global → base. Editing a base item never mutates
+  it; "revert" deletes the overlay. Matches the existing inline-knowledge-editor UX.
+- **Seed via SQL migration.** Built-in content is baked into a `Vxxx` INSERT
+  migration generated from the former `.md`; future content updates ship as new
+  additive migrations that `UPDATE` the base row (never editing an applied migration).
+- **DB-only writes.** Built-in and user content both live in the DB; the
+  `~/.sovrant` / `.sovrant` filesystem tiers and the dual-write are removed.
+- **Documents become data-driven.** The 44 `IDocumentTemplate.Render()` classes are
+  replaced by DB-stored token templates + field schema (JSON), interpreted at render
+  time by a sandboxed templating engine; the existing `IDocumentGenerator` format
+  pipeline (Markdown/PDF/Word/Excel/PowerPoint) is unchanged.
+- **SQLite-only.** The knowledge store is always local SQLite even when the Postgres
+  backend is active (Postgres backs only sessions/credentials), so no Postgres store
+  is needed.
+
+### Delivery (A → B → C → D, each independently shippable)
+
+- **A — Schema + store foundation.** ✅ Done. `V034` adds `role` +
+  `recommended_level` columns; `KnowledgePage` and `IKnowledgeStore` extended with
+  `GetEffectiveAsync` / `GetAllEffectiveAsync` (overlay resolution); `KnowledgeScope`
+  constants; SqliteKnowledgeStore updated; 7 unit tests cover layered resolution and
+  base-preservation.
+- **B — Skills + Agents into the DB; delete the `.md`.** In progress.
+  - ✅ `V035` seed migration generated from the 57 built-in files (generator at
+    `tools/gen-seed-knowledge.ps1`); verified by a test asserting 32 skills + 25
+    agents seed as `BuiltIn`, with triggers, JSON tool/agent lists, and agent
+    role/level intact.
+  - ⏳ Remaining: flip `SkillRegistry` and `AgentTemplateRegistry` (via a new
+    `DbTemplateLoader`) to read the DB; flip `SaveGlobal`/`DeleteGlobal`/
+    `SkillCreateTool`/`AgentDefinitionWriter` to DB-only; update
+    `KnowledgeAuthoringRoutes` (add the `agents` kind, drop filesystem reads/writes);
+    delete `skills/*.md` + `agents/*.md` and their `.csproj` copy directives.
+- **C — Tools + user-document markdown into the DB.** Pending. No built-in `.md`
+  exist for these, so it is purely flipping `UserToolTemplateRegistry` and
+  `UserDocumentTemplateRegistry` read/write paths to DB-only.
+- **D — Document templating engine.** Pending (largest). Convert the 44 C# templates
+  to DB token templates + schema, build `DbDocumentTemplate` + sandboxed renderer,
+  seed via migration, gate each conversion with golden-file fidelity tests, then
+  remove the C# template classes.
+
+### Acceptance Criteria
+
+- Fresh install: `knowledge_pages` holds 32 skills + 25 agents + 44 documents as
+  `BuiltIn` rows; no knowledge `.md` files in source or build output.
+- Skills, agents, tools, and documents all list, run, and render reading only from
+  the DB.
+- Editing any base item creates a `User` overlay (base preserved); revert restores base.
+- Document output is byte-compatible with the pre-migration C# templates (golden-file).
+- Editing a document template body in the UI changes generated output with no rebuild.
 
 ---
 

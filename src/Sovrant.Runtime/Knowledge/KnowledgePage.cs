@@ -20,7 +20,10 @@ public sealed record KnowledgePage(
     string? Industry = null,
     string? DefaultFormat = null,
     // tool-templates-specific
-    string? Category = null);
+    string? Category = null,
+    // agents-specific
+    string? Role = null,
+    string? RecommendedLevel = null);
 
 /// <summary>Persistent store for <see cref="KnowledgePage"/> entries.</summary>
 public interface IKnowledgeStore
@@ -34,6 +37,31 @@ public interface IKnowledgeStore
     /// </summary>
     Task<KnowledgePage?> GetActiveAsync(string kind, string slug, CancellationToken ct = default);
 
+    /// <summary>
+    /// Resolves the effective row for a kind + slug using copy-on-write overlay layering
+    /// (Phase 109): project override (<paramref name="projectId"/>) wins over the global
+    /// user override (workspace_id = 'global'), which wins over the immutable base
+    /// (workspace_id = ''). Returns null if nothing matches.
+    /// </summary>
+    Task<KnowledgePage?> GetEffectiveAsync(string kind, string slug, string projectId = "", CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the effective set of rows for a kind: every base row, with any global or
+    /// project overlay shadowing the base of the same slug (project &gt; global &gt; base).
+    /// Used to populate the in-memory registries (skills, agents, tool/doc templates).
+    /// </summary>
+    Task<IReadOnlyList<KnowledgePage>> GetAllEffectiveAsync(string kind, string projectId = "", CancellationToken ct = default);
+
     Task UpsertAsync(KnowledgePage page, CancellationToken ct = default);
     Task DeleteAsync(string kind, string slug, string workspaceId = "", CancellationToken ct = default);
+}
+
+/// <summary>Well-known workspace_id scopes for the copy-on-write overlay model (Phase 109).</summary>
+public static class KnowledgeScope
+{
+    /// <summary>Immutable factory content seeded by migrations.</summary>
+    public const string Base = "";
+
+    /// <summary>User's installation-wide override/creation tier.</summary>
+    public const string Global = "global";
 }
