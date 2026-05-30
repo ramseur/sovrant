@@ -39,6 +39,12 @@
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Memory}"
                     Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="📐  Code Templates"
+                    Command="{Binding NavigateCommand}" CommandParameter="Guidelines"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Guidelines}"
+                    Foreground="{DynamicResource TextPrimary}" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

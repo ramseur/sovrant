@@ -1,0 +1,193 @@
+@page "/guidelines"
+@using Sovrant.Runtime.Knowledge
+@using Sovrant.Web.Components.Shared
+@using Markdig
+
+@if (_editing is not null)
+{
+    <div class="detail-content" style="padding:0; height:100%;">
+        <MarkdownEditor Value="@_editing.Source"
+                        Title="@_editing.Slug"
+                        ReadOnly="false"
+                        OnSave="HandleSave"
+                        OnCancel="@(() => { _editing = null; return Task.CompletedTask; })" />
+    </div>
+}
+else
+{
+    <MasterDetailLayout TItem="GuidelineItem"
+                        Title="Code Templates"
+                        ItemCount="@_items.Count"
+                        Items="@_items"
+                        SelectedItem="@_selected"
+                        EmptyMessage="No language guidelines found."
+                        OnRefresh="@(async () => await LoadAsync())"
+                        OnItemSelected="@(async item => { _selected = item; await Task.CompletedTask; })"
+                        OnSearch="Search">
+        <ItemTemplate>
+            <div class="item-title">
+                @context.Name
+                @if (context.HasUserOverride)
+                {
+                    <span class="tier-badge tier-user" title="User override">user</span>
+                }
+            </div>
+            <div class="item-subtitle">@context.Description</div>
+        </ItemTemplate>
+        <DetailTemplate>
+            <div class="detail-content">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+                    <h2 style="margin:0;">@context.Name</h2>
+                    <div style="display:flex;gap:8px;">
+                        @if (context.HasUserOverride)
+                        {
+                            <button class="btn-outline btn-sm" @onclick="@(() => RevertAsync(context))">Revert to built-in</button>
+                        }
+                        <button class="btn-primary btn-sm" @onclick="@(() => EditAsync(context))">Edit</button>
+                    </div>
+                </div>
+                <p class="text-secondary" style="margin:8px 0 16px;">@context.Description</p>
+                <div class="message-markdown">
+                    @((MarkupString)Markdown.ToHtml(context.Body, _pipeline))
+                </div>
+            </div>
+        </DetailTemplate>
+    </MasterDetailLayout>
+}
+
+@code {
+    [Inject] private IKnowledgeStore KnowledgeStore { get; set; } = default!;
+
+    private List<GuidelineItem> _all = [];
+    private List<GuidelineItem> _items = [];
+    private GuidelineItem? _selected;
+    private EditorState? _editing;
+    private string _searchText = string.Empty;
+
+    private static readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
+        .UseAdvancedExtensions().Build();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        // Fetch all user overrides from DB.
+        var dbRows = await KnowledgeStore.GetAllAsync("guidelines");
+        var overridesBySlug = dbRows
+            .Where(r => r.Tier == "User")
+            .ToDictionary(r => r.Slug, StringComparer.OrdinalIgnoreCase);
+
+        // Merge built-ins with DB overrides.
+        _all = LanguageGuidelines.All.Select(g =>
+        {
+            overridesBySlug.TryGetValue(g.Slug, out var dbRow);
+            return new GuidelineItem
+            {
+                Slug = g.Slug,
+                Name = dbRow?.Name ?? g.Name,
+                Description = dbRow?.Description ?? g.Description,
+                Body = dbRow?.Body ?? g.Body.TrimStart(),
+                HasUserOverride = dbRow is not null,
+            };
+        }).OrderBy(g => g.Name).ToList();
+
+        ApplySearch(_searchText);
+    }
+
+    private void Search(string text)
+    {
+        _searchText = text;
+        ApplySearch(text);
+    }
+
+    private void ApplySearch(string text)
+    {
+        _items = string.IsNullOrWhiteSpace(text)
+            ? [.. _all]
+            : _all.Where(g =>
+                g.Name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                g.Description.Contains(text, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
+    private async Task EditAsync(GuidelineItem item)
+    {
+        // Build full markdown (frontmatter + body) for the editor.
+        var source = $"---\nname: {item.Name}\ndescription: {item.Description}\n---\n\n{item.Body}";
+        _editing = new EditorState { Slug = item.Slug, Source = source };
+        await Task.CompletedTask;
+    }
+
+    private async Task HandleSave(string markdown)
+    {
+        if (_editing is null) return;
+        var slug = _editing.Slug;
+        _editing = null;
+
+        using var content = new StringContent(markdown, System.Text.Encoding.UTF8, "text/plain");
+        // POST via IKnowledgeStore directly (embedded mode — no HTTP round-trip needed).
+        var (name, description, body) = ExtractParts(slug, markdown);
+        var now = DateTimeOffset.UtcNow;
+        await KnowledgeStore.UpsertAsync(new KnowledgePage(
+            KnowledgeId: $"guideline_{slug}",
+            Kind: "guidelines",
+            Slug: slug,
+            Name: name,
+            Description: description,
+            Tier: "User",
+            Body: body,
+            WorkspaceId: "",
+            CreatedAt: now,
+            UpdatedAt: now));
+
+        await LoadAsync();
+        _selected = _items.FirstOrDefault(g => g.Slug == slug);
+    }
+
+    private async Task RevertAsync(GuidelineItem item)
+    {
+        await KnowledgeStore.DeleteAsync("guidelines", item.Slug);
+        await LoadAsync();
+        _selected = _items.FirstOrDefault(g => g.Slug == item.Slug);
+    }
+
+    private static (string Name, string Description, string Body) ExtractParts(string slug, string markdown)
+    {
+        var name = slug;
+        var description = string.Empty;
+        var body = markdown;
+
+        if (markdown.StartsWith("---", StringComparison.Ordinal))
+        {
+            var end = markdown.IndexOf("\n---", 3, StringComparison.Ordinal);
+            if (end >= 0)
+            {
+                var fm = markdown.Substring(3, end - 3);
+                body = markdown[(end + 4)..].TrimStart();
+                foreach (var line in fm.Split('\n'))
+                {
+                    var t = line.Trim();
+                    if (t.StartsWith("name:", StringComparison.OrdinalIgnoreCase))
+                        name = t[5..].Trim().Trim('"', '\'');
+                    else if (t.StartsWith("description:", StringComparison.OrdinalIgnoreCase))
+                        description = t[12..].Trim().Trim('"', '\'');
+                }
+            }
+        }
+        return (name, description, body);
+    }
+
+    private sealed class GuidelineItem
+    {
+        public string Slug { get; init; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
+        public string Description { get; init; } = string.Empty;
+        public string Body { get; init; } = string.Empty;
+        public bool HasUserOverride { get; init; }
+    }
+
+    private sealed class EditorState
+    {
+        public string Slug { get; init; } = string.Empty;
+        public string Source { get; init; } = string.Empty;
+    }
+}

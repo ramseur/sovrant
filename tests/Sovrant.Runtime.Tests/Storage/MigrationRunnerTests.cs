@@ -25,7 +25,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
     public async Task AllMigrations_RunSuccessfully()
     {
         await _provider.InitializeAsync();
-        Assert.Equal(32, _provider.SchemaVersion);
+        Assert.Equal(33, _provider.SchemaVersion);
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
     {
         await _provider.InitializeAsync();
         await _provider.InitializeAsync();
-        Assert.Equal(32, _provider.SchemaVersion);
+        Assert.Equal(33, _provider.SchemaVersion);
     }
 
     [Fact]
@@ -53,11 +53,12 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
             "teams", "team_members", "agent_runs",
             "coordination_events", "group_pm_assignments",
             "mcp_trust_rules",
+            "knowledge_pages",
         };
 
         // Verify tables exist by checking the DB file was created and schema version is correct.
         Assert.True(File.Exists(_dbPath));
-        Assert.Equal(32, _provider.SchemaVersion);
+        Assert.Equal(33, _provider.SchemaVersion);
     }
 
     [Fact]
@@ -245,7 +246,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
     {
         // First boot: apply migrations normally.
         await _provider.InitializeAsync();
-        Assert.Equal(32, _provider.SchemaVersion);
+        Assert.Equal(33, _provider.SchemaVersion);
 
         var factory = (ISqliteConnectionFactory)_provider;
 
@@ -287,7 +288,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
         using var probe = factory.CreateConnection();
         var runner = new MigrationRunner(NullLogger<MigrationRunner>.Instance);
         var version = runner.RunPendingMigrations(probe);
-        Assert.Equal(32, version);
+        Assert.Equal(33, version);
     }
 
     private static string FindMigrationFile(string name)

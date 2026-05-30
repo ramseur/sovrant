@@ -40,6 +40,9 @@
         <DataTemplate DataType="vm:MemoryViewModel">
             <views:MemoryView />
         </DataTemplate>
+        <DataTemplate DataType="vm:GuidelinesViewModel">
+            <views:GuidelinesView />
+        </DataTemplate>
         <DataTemplate DataType="vm:GovernanceViewModel">
             <views:GovernanceView />
         </DataTemplate>

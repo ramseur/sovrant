@@ -20,6 +20,7 @@ using Sovrant.Runtime.Tools;
 using Sovrant.Runtime.Projects;
 using Sovrant.Runtime.Projects.Templates;
 using Sovrant.Runtime.Users;
+using Sovrant.Runtime.Knowledge;
 using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime;
@@ -97,6 +98,10 @@ public static class ServiceCollectionExtensions
         // Audit store — SQLite primary, optional JSONL dual-write.
         services.AddSingleton<IAuditStore>(sp =>
             new SqliteAuditStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+
+        // Knowledge pages — DB-backed store for skills/documents/tools (Phase 108 foundation).
+        services.AddSingleton<IKnowledgeStore>(sp =>
+            new SqliteKnowledgeStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
         // Governance monitor — loads from env > workspace_settings DB > defaults.
         // Wrapped in ILiveSettings so the Settings UI can hot-reload secret

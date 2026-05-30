@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Sovrant.Api.Types;
 using Sovrant.Runtime.Artifacts;
+using Sovrant.Runtime.Knowledge;
 using Sovrant.Runtime.Projects.Templates;
 using Sovrant.Runtime.Workspaces;
 
@@ -26,11 +27,13 @@ public sealed class CodeCreateTool : ITool
 
     private readonly ProjectTemplateRegistry _registry;
     private readonly IArtifactStore _store;
+    private readonly IKnowledgeStore? _knowledgeStore;
 
-    public CodeCreateTool(ProjectTemplateRegistry registry, IArtifactStore store)
+    public CodeCreateTool(ProjectTemplateRegistry registry, IArtifactStore store, IKnowledgeStore? knowledgeStore = null)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _store = store ?? throw new ArgumentNullException(nameof(store));
+        _knowledgeStore = knowledgeStore;
     }
 
     public ToolDefinition Definition => s_definition;
@@ -122,6 +125,16 @@ public sealed class CodeCreateTool : ITool
             return $"Error: {ex.Message}";
         }
 
+        // Resolve active language guideline (user override > built-in) and surface
+        // it to the agent so it can apply conventions when writing additional code.
+        string? conventions = null;
+        if (_knowledgeStore is not null)
+        {
+            var dbGuideline = await _knowledgeStore.GetActiveAsync("guidelines", template.Language, ct).ConfigureAwait(false);
+            conventions = dbGuideline?.Body;
+        }
+        conventions ??= LanguageGuidelines.Get(template.Language)?.Body;
+
         return JsonSerializer.Serialize(new
         {
             status = errors.Count == 0 ? "created" : "partial",
@@ -135,6 +148,7 @@ public sealed class CodeCreateTool : ITool
             project_id = scope.ProjectId,
             files = written,
             errors,
+            conventions,
         });
     }
 

@@ -188,8 +188,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IProjectTemplate, ZigCliScaffold>();
         services.AddSingleton<IProjectTemplate, CppCmakeScaffold>();
 
-        // Phase 73 — code creation tools
-        services.AddSingleton<ITool, CodeCreateTool>();
+        // Phase 73 — code creation tools (Phase 108: inject IKnowledgeStore for language guidelines)
+        services.AddSingleton<ITool>(sp => new CodeCreateTool(
+            sp.GetRequiredService<ProjectTemplateRegistry>(),
+            sp.GetRequiredService<Sovrant.Runtime.Artifacts.IArtifactStore>(),
+            sp.GetService<Sovrant.Runtime.Knowledge.IKnowledgeStore>()));
         services.AddSingleton<ITool, CodeCreateMultiTool>();
         services.AddSingleton<ITool, CodeListTemplatesTool>();
 

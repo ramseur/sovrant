@@ -197,6 +197,7 @@ public partial class App : Application
         services.AddTransient<DocumentsViewModel>();
         services.AddTransient<ToolsViewModel>();
         services.AddTransient<SkillsViewModel>();
+        services.AddTransient<GuidelinesViewModel>();
         services.AddTransient<MemoryViewModel>();
         services.AddTransient<GovernanceViewModel>();
         services.AddTransient<TrustBoundaryViewModel>();
