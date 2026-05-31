@@ -10607,19 +10607,20 @@ editable content (skill/agent/template bodies + field schemas) lives only in the
   `GetEffectiveAsync` / `GetAllEffectiveAsync` (overlay resolution); `KnowledgeScope`
   constants; SqliteKnowledgeStore updated; 7 unit tests cover layered resolution and
   base-preservation.
-- **B — Skills + Agents into the DB; delete the `.md`.** In progress.
-  - ✅ `V035` seed migration generated from the 57 built-in files (generator at
-    `tools/gen-seed-knowledge.ps1`); verified by a test asserting 32 skills + 25
-    agents seed as `BuiltIn`, with triggers, JSON tool/agent lists, and agent
-    role/level intact.
-  - ⏳ Remaining: flip `SkillRegistry` and `AgentTemplateRegistry` (via a new
-    `DbTemplateLoader`) to read the DB; flip `SaveGlobal`/`DeleteGlobal`/
-    `SkillCreateTool`/`AgentDefinitionWriter` to DB-only; update
-    `KnowledgeAuthoringRoutes` (add the `agents` kind, drop filesystem reads/writes);
-    delete `skills/*.md` + `agents/*.md` and their `.csproj` copy directives.
-- **C — Tools + user-document markdown into the DB.** Pending. No built-in `.md`
-  exist for these, so it is purely flipping `UserToolTemplateRegistry` and
-  `UserDocumentTemplateRegistry` read/write paths to DB-only.
+- **B — Skills + Agents into the DB; delete the `.md`.** ✅ Done. `V035` seed
+  migration generated from all 57 built-in files (generator at
+  `tools/gen-seed-knowledge.ps1`); `SkillRegistry`, `AgentTemplateRegistry` (via
+  new `DbAgentTemplateLoader`), `SkillCreateTool`, and `AgentDefinitionWriter` all
+  read/write DB-only; `KnowledgeAuthoringRoutes` updated (agents kind added, filesystem
+  reads/writes removed); 32 skill + 25 agent `.md` files deleted with csproj copy
+  directives removed. 1,005 runtime tests + 405 tools tests green.
+- **C — Tools + user-document markdown into the DB.** ✅ Done. `UserToolTemplateRegistry`
+  and `UserDocumentTemplateRegistry` rewritten to read from `GetAllEffectiveAsync`
+  and write via `UpsertAsync`/`DeleteAsync` at `KnowledgeScope.Global`; no filesystem
+  reads or writes remain. `KnowledgeAuthoringRoutes` updated — all five kinds
+  (skills/agents/documents/tools/guidelines) now fully DB-only; `ReconstructDocMarkdown`
+  / `ReconstructToolMarkdown` helpers added. 89 doc tests + 405 tools tests + 1,005
+  runtime tests green.
 - **D — Document templating engine.** Pending (largest). Convert the 44 C# templates
   to DB token templates + schema, build `DbDocumentTemplate` + sandboxed renderer,
   seed via migration, gate each conversion with golden-file fidelity tests, then
