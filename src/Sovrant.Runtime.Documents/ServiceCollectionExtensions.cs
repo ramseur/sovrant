@@ -95,10 +95,12 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<ITemplateRegistry, TemplateRegistry>();
 
-        // User-authored markdown templates (3-tier filesystem). Coexists with the
-        // code-defined IDocumentTemplate registry above; the Knowledge UI renders
-        // both alongside each other.
-        services.AddSingleton<UserDocumentTemplateRegistry>();
+        // User-authored document templates — DB-backed (Phase 112C). Coexists with the
+        // code-defined IDocumentTemplate registry above; the Knowledge UI renders both.
+        services.AddSingleton<UserDocumentTemplateRegistry>(sp =>
+            new UserDocumentTemplateRegistry(
+                sp.GetRequiredService<Sovrant.Runtime.Knowledge.IKnowledgeStore>(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<UserDocumentTemplateRegistry>>()));
 
         // Document packages — bundles of templates rendered against shared data.
         foreach (var pkg in BuiltInDocumentPackages.All)

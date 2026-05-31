@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
+using Sovrant.Runtime.Knowledge;
 using Sovrant.Tools.Skills;
 
 namespace Sovrant.Tools.Tests.Skills;
@@ -11,7 +12,13 @@ public sealed class SkillToolTests
 
     private static SkillTool CreateTool()
     {
-        var registry = new SkillRegistry(NullLogger<SkillRegistry>.Instance);
+        var store = new FakeSkillStore();
+        var now = DateTimeOffset.UtcNow;
+        store.Seed(new KnowledgePage("skill_tdd", "skills", "tdd-workflow", "tdd-workflow", "", "BuiltIn",
+            "## Red-Green-Refactor\nWrite a failing test first.", "", now, now, Trigger: "/tdd"));
+        store.Seed(new KnowledgePage("skill_review", "skills", "code-review", "code-review", "", "BuiltIn",
+            "## Code review steps", "", now, now, Trigger: "/review"));
+        var registry = new SkillRegistry(store, NullLogger<SkillRegistry>.Instance);
         var runner = new SkillRunner(registry);
         return new SkillTool(runner);
     }

@@ -116,10 +116,11 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<Sovrant.Runtime.Knowledge.IKnowledgeStore>()));
         services.AddSingleton<ITool, ToolSearchTool>();
 
-        // User-authored markdown tool templates (3-tier filesystem). Distinct from
-        // ITool — these are instructional guides shown in the Knowledge UI; they
-        // do not register handlers in IToolRegistry.
-        services.AddSingleton<Sovrant.Tools.Templates.UserToolTemplateRegistry>();
+        // User-authored tool templates — DB-backed (Phase 112C).
+        services.AddSingleton<Sovrant.Tools.Templates.UserToolTemplateRegistry>(sp =>
+            new Sovrant.Tools.Templates.UserToolTemplateRegistry(
+                sp.GetRequiredService<Sovrant.Runtime.Knowledge.IKnowledgeStore>(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Sovrant.Tools.Templates.UserToolTemplateRegistry>>()));
 
         // MCP resource tools, dynamic proxy, and OAuth
         services.AddSingleton<ITool, ListMcpResourcesTool>();

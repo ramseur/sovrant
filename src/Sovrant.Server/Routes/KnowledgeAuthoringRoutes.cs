@@ -1,16 +1,13 @@
 using System.Text.Json;
-using Sovrant.Runtime.Documents.Templates;
 using Sovrant.Runtime.Knowledge;
 using Sovrant.Server.Auth;
-using Sovrant.Tools.Templates;
 
 namespace Sovrant.Server.Routes;
 
 /// <summary>
 /// Registers authoring endpoints under <c>/v1/knowledge/{kind}/{slug}</c> for the
 /// Knowledge UI's markdown editor. <c>kind</c> ∈ <c>skills | agents | documents | tools | guidelines</c>.
-/// Phase 112: skills and agents are DB-only (no filesystem). Documents and tools are still
-/// dual-registered pending Phase C.
+/// Phase 112C: all five kinds are DB-only (no filesystem reads or writes).
 /// </summary>
 internal static class KnowledgeAuthoringRoutes
 {
@@ -20,8 +17,6 @@ internal static class KnowledgeAuthoringRoutes
         app.MapGet("/v1/knowledge/{kind}/{slug}/source", async (
             string kind,
             string slug,
-            UserDocumentTemplateRegistry docs,
-            UserToolTemplateRegistry tools,
             IKnowledgeStore knowledgeStore) =>
         {
             if (!IsValidSlug(slug)) return Results.BadRequest(new { error = "Invalid slug." });
@@ -31,8 +26,8 @@ internal static class KnowledgeAuthoringRoutes
                 "guidelines" => await GetGuidelineSourceAsync(slug, knowledgeStore).ConfigureAwait(false),
                 "skills"     => await GetDbSourceAsync("skills", slug, knowledgeStore).ConfigureAwait(false),
                 "agents"     => await GetDbSourceAsync("agents", slug, knowledgeStore).ConfigureAwait(false),
-                "documents"  => GetDocSource(slug, docs),
-                "tools"      => GetToolSource(slug, tools),
+                "documents"  => await GetDbSourceAsync("documents", slug, knowledgeStore).ConfigureAwait(false),
+                "tools"      => await GetDbSourceAsync("tools", slug, knowledgeStore).ConfigureAwait(false),
                 _            => Results.NotFound(new { error = $"Unknown kind '{kind}'." }),
             };
         });
@@ -43,8 +38,6 @@ internal static class KnowledgeAuthoringRoutes
             string slug,
             HttpRequest request,
             HttpContext ctx,
-            UserDocumentTemplateRegistry docs,
-            UserToolTemplateRegistry tools,
             IKnowledgeStore knowledgeStore) =>
         {
             if (!HttpContextAuthExtensions.IsAdmin(ctx))
@@ -57,48 +50,33 @@ internal static class KnowledgeAuthoringRoutes
             var validation = ValidateFrontmatter(markdown);
             if (validation is not null) return Results.BadRequest(new { error = validation });
 
-            try
+            KnowledgePage? page;
+            var kindLower = kind.ToLowerInvariant();
+            switch (kindLower)
             {
-                KnowledgePage? page;
-                string path;
-
-                switch (kind.ToLowerInvariant())
-                {
-                    case "skills":
-                        page = BuildSkillPage(slug, markdown);
-                        path = $"db://knowledge_pages/skills/{slug}";
-                        break;
-                    case "agents":
-                        page = BuildAgentPage(slug, markdown);
-                        path = $"db://knowledge_pages/agents/{slug}";
-                        break;
-                    case "documents":
-                        docs.SaveGlobal(slug, markdown);
-                        path = UserDocumentTemplateRegistry.GlobalPathFor(slug);
-                        page = BuildDocPage(slug, docs);
-                        break;
-                    case "tools":
-                        tools.SaveGlobal(slug, markdown);
-                        path = UserToolTemplateRegistry.GlobalPathFor(slug);
-                        page = BuildToolPage(slug, tools);
-                        break;
-                    case "guidelines":
-                        page = ParseGuidelinePage(slug, markdown);
-                        path = $"db://knowledge_pages/guidelines/{slug}";
-                        break;
-                    default:
-                        return Results.NotFound(new { error = $"Unknown kind '{kind}'." });
-                }
-
-                if (page is not null)
-                    await knowledgeStore.UpsertAsync(page).ConfigureAwait(false);
-
-                return Results.Ok(new { slug, path });
+                case "skills":
+                    page = BuildSkillPage(slug, markdown);
+                    break;
+                case "agents":
+                    page = BuildAgentPage(slug, markdown);
+                    break;
+                case "documents":
+                    page = BuildDocPageFromMarkdown(slug, markdown);
+                    break;
+                case "tools":
+                    page = BuildToolPageFromMarkdown(slug, markdown);
+                    break;
+                case "guidelines":
+                    page = ParseGuidelinePage(slug, markdown);
+                    break;
+                default:
+                    return Results.NotFound(new { error = $"Unknown kind '{kind}'." });
             }
-            catch (IOException ex)
-            {
-                return Results.Problem(detail: ex.Message, statusCode: 500);
-            }
+
+            if (page is not null)
+                await knowledgeStore.UpsertAsync(page).ConfigureAwait(false);
+
+            return Results.Ok(new { slug, path = $"db://knowledge_pages/{kindLower}/{slug}" });
         });
 
         // Delete user-tier entry.
@@ -106,8 +84,6 @@ internal static class KnowledgeAuthoringRoutes
             string kind,
             string slug,
             HttpContext ctx,
-            UserDocumentTemplateRegistry docs,
-            UserToolTemplateRegistry tools,
             IKnowledgeStore knowledgeStore) =>
         {
             if (!HttpContextAuthExtensions.IsAdmin(ctx))
@@ -121,24 +97,11 @@ internal static class KnowledgeAuthoringRoutes
                 case "guidelines":
                 case "skills":
                 case "agents":
-                    // DB-only: delete the User-tier overlay; BuiltIn base remains.
-                    await knowledgeStore.DeleteAsync(kindLower, slug, KnowledgeScope.Global).ConfigureAwait(false);
-                    return Results.Ok(new { slug });
-
                 case "documents":
-                {
-                    var deleted = docs.DeleteGlobal(slug);
-                    if (!deleted) return Results.StatusCode(403);
-                    await knowledgeStore.DeleteAsync(kindLower, slug, KnowledgeScope.Global).ConfigureAwait(false);
-                    return Results.Ok(new { slug });
-                }
                 case "tools":
-                {
-                    var deleted = tools.DeleteGlobal(slug);
-                    if (!deleted) return Results.StatusCode(403);
+                    // DB-only: delete the User-tier overlay at global scope; BuiltIn base remains.
                     await knowledgeStore.DeleteAsync(kindLower, slug, KnowledgeScope.Global).ConfigureAwait(false);
                     return Results.Ok(new { slug });
-                }
                 default:
                     return Results.NotFound(new { error = $"Unknown kind '{kind}'." });
             }
@@ -164,44 +127,18 @@ internal static class KnowledgeAuthoringRoutes
     private static async Task<IResult> GetDbSourceAsync(string kind, string slug, IKnowledgeStore store)
     {
         var page = await store.GetEffectiveAsync(kind, slug).ConfigureAwait(false);
-        if (page is null) return Results.NotFound(new { error = $"{kind[..^1]} '{slug}' not found." });
+        if (page is null) return Results.NotFound(new { error = $"{kind.TrimEnd('s')} '{slug}' not found." });
 
-        var content = kind == "agents"
-            ? ReconstructAgentMarkdown(page)
-            : ReconstructSkillMarkdown(page);
+        var content = kind switch
+        {
+            "agents"    => ReconstructAgentMarkdown(page),
+            "documents" => ReconstructDocMarkdown(page),
+            "tools"     => ReconstructToolMarkdown(page),
+            _           => ReconstructSkillMarkdown(page),
+        };
 
         var readOnly = page.Tier == "BuiltIn";
         return Results.Ok(new { slug, tier = page.Tier, readOnly, content });
-    }
-
-    private static IResult GetDocSource(string slug, UserDocumentTemplateRegistry docs)
-    {
-        var template = docs.TryGet(slug);
-        if (template is null) return Results.NotFound(new { error = $"Document template '{slug}' not found." });
-        try
-        {
-            var content = File.ReadAllText(template.SourcePath);
-            return Results.Ok(new { slug, tier = template.Tier.ToString(), readOnly = template.Tier == UserTemplateTier.BuiltIn, content });
-        }
-        catch (IOException ex)
-        {
-            return Results.Problem(detail: ex.Message, statusCode: 500);
-        }
-    }
-
-    private static IResult GetToolSource(string slug, UserToolTemplateRegistry tools)
-    {
-        var template = tools.TryGet(slug);
-        if (template is null) return Results.NotFound(new { error = $"Tool template '{slug}' not found." });
-        try
-        {
-            var content = File.ReadAllText(template.SourcePath);
-            return Results.Ok(new { slug, tier = template.Tier.ToString(), readOnly = template.Tier == UserToolTier.BuiltIn, content });
-        }
-        catch (IOException ex)
-        {
-            return Results.Problem(detail: ex.Message, statusCode: 500);
-        }
     }
 
     // ── Markdown reconstruction ───────────────────────────────────────────────
@@ -249,6 +186,40 @@ internal static class KnowledgeAuthoringRoutes
             var list = SafeDeserializeList(p.Tools);
             if (list.Count > 0) sb.AppendLine(string.Create(ic, $"allowed_tools: [{string.Join(", ", list)}]"));
         }
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.Append(p.Body);
+        return sb.ToString();
+    }
+
+    private static string ReconstructDocMarkdown(KnowledgePage p)
+    {
+        var ic = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("---");
+        sb.AppendLine(string.Create(ic, $"name: {p.Name}"));
+        if (!string.IsNullOrWhiteSpace(p.Description))
+            sb.AppendLine(string.Create(ic, $"description: {p.Description}"));
+        if (!string.IsNullOrWhiteSpace(p.Industry))
+            sb.AppendLine(string.Create(ic, $"industry: {p.Industry}"));
+        if (!string.IsNullOrWhiteSpace(p.DefaultFormat))
+            sb.AppendLine(string.Create(ic, $"default_format: {p.DefaultFormat}"));
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.Append(p.Body);
+        return sb.ToString();
+    }
+
+    private static string ReconstructToolMarkdown(KnowledgePage p)
+    {
+        var ic = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("---");
+        sb.AppendLine(string.Create(ic, $"name: {p.Name}"));
+        if (!string.IsNullOrWhiteSpace(p.Description))
+            sb.AppendLine(string.Create(ic, $"description: {p.Description}"));
+        if (!string.IsNullOrWhiteSpace(p.Category))
+            sb.AppendLine(string.Create(ic, $"category: {p.Category}"));
         sb.AppendLine("---");
         sb.AppendLine();
         sb.Append(p.Body);
@@ -304,43 +275,41 @@ internal static class KnowledgeAuthoringRoutes
             RecommendedLevel: string.IsNullOrWhiteSpace(level) ? null : level);
     }
 
-    private static KnowledgePage? BuildDocPage(string slug, UserDocumentTemplateRegistry docs)
+    private static KnowledgePage BuildDocPageFromMarkdown(string slug, string markdown)
     {
-        var t = docs.TryGet(slug);
-        if (t is null) return null;
         var now = DateTimeOffset.UtcNow;
+        var (name, description, industry, defaultFormat, body) = ExtractDocParts(slug, markdown);
         return new KnowledgePage(
-            KnowledgeId:   $"doc_{slug}",
+            KnowledgeId:   $"doc_global_{slug}",
             Kind:          "documents",
             Slug:          slug,
-            Name:          t.Name,
-            Description:   t.Description,
+            Name:          name,
+            Description:   description,
             Tier:          "User",
-            Body:          t.Body,
+            Body:          body,
             WorkspaceId:   KnowledgeScope.Global,
             CreatedAt:     now,
             UpdatedAt:     now,
-            Industry:      t.Industry,
-            DefaultFormat: t.DefaultFormat);
+            Industry:      industry,
+            DefaultFormat: defaultFormat);
     }
 
-    private static KnowledgePage? BuildToolPage(string slug, UserToolTemplateRegistry tools)
+    private static KnowledgePage BuildToolPageFromMarkdown(string slug, string markdown)
     {
-        var t = tools.TryGet(slug);
-        if (t is null) return null;
         var now = DateTimeOffset.UtcNow;
+        var (name, description, category, body) = ExtractToolParts(slug, markdown);
         return new KnowledgePage(
-            KnowledgeId:   $"tool_{slug}",
-            Kind:          "tools",
-            Slug:          slug,
-            Name:          t.Name,
-            Description:   t.Description,
-            Tier:          "User",
-            Body:          t.Body,
-            WorkspaceId:   KnowledgeScope.Global,
-            CreatedAt:     now,
-            UpdatedAt:     now,
-            Category:      t.Category);
+            KnowledgeId:  $"tool_global_{slug}",
+            Kind:         "tools",
+            Slug:         slug,
+            Name:         name,
+            Description:  description,
+            Tier:         "User",
+            Body:         body,
+            WorkspaceId:  KnowledgeScope.Global,
+            CreatedAt:    now,
+            UpdatedAt:    now,
+            Category:     category);
     }
 
     private static KnowledgePage ParseGuidelinePage(string slug, string markdown)
@@ -406,6 +375,34 @@ internal static class KnowledgeAuthoringRoutes
                 role?.Trim() ?? string.Empty,
                 level?.Trim() ?? string.Empty,
                 toolsJson, body);
+    }
+
+    private static (string Name, string Description, string Industry, string DefaultFormat, string Body)
+        ExtractDocParts(string slug, string markdown)
+    {
+        var (meta, body) = ParseFrontmatter(markdown);
+        meta.TryGetValue("name", out var name);
+        meta.TryGetValue("description", out var description);
+        meta.TryGetValue("industry", out var industry);
+        meta.TryGetValue("default_format", out var defaultFormat);
+        return (string.IsNullOrWhiteSpace(name) ? slug : name.Trim(),
+                description?.Trim() ?? string.Empty,
+                (industry ?? "general").Trim(),
+                (defaultFormat ?? "markdown").Trim(),
+                body);
+    }
+
+    private static (string Name, string Description, string Category, string Body)
+        ExtractToolParts(string slug, string markdown)
+    {
+        var (meta, body) = ParseFrontmatter(markdown);
+        meta.TryGetValue("name", out var name);
+        meta.TryGetValue("description", out var description);
+        meta.TryGetValue("category", out var category);
+        return (string.IsNullOrWhiteSpace(name) ? slug : name.Trim(),
+                description?.Trim() ?? string.Empty,
+                (category ?? "general").Trim(),
+                body);
     }
 
     private static (string Name, string Description, string Body) ExtractGuidelineParts(string slug, string markdown)
