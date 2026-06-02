@@ -10621,10 +10621,14 @@ editable content (skill/agent/template bodies + field schemas) lives only in the
   (skills/agents/documents/tools/guidelines) now fully DB-only; `ReconstructDocMarkdown`
   / `ReconstructToolMarkdown` helpers added. 89 doc tests + 405 tools tests + 1,005
   runtime tests green.
-- **D — Document templating engine.** Pending (largest). Convert the 44 C# templates
-  to DB token templates + schema, build `DbDocumentTemplate` + sandboxed renderer,
-  seed via migration, gate each conversion with golden-file fidelity tests, then
-  remove the C# template classes.
+- **D — Document templating engine.** ✅ Done. Added Scriban dependency; V036
+  migration adds `fields_json` + `filename_template` columns; V037 seeds 42 built-in
+  Scriban templates (`kind='document-templates'`, `tier='BuiltIn'`) for all industries
+  (business/construction/education/finance/healthcare/legal/real-estate); 42 C# template
+  classes deleted; `DbDocumentTemplate` + `ScribanRenderer` + `TemplateFieldSerializer`
+  wired into `TemplateRegistry`; 2 Excel-format templates (ExpenseReport,
+  LoanAmortization) remain as C# (they emit structured JSON, not Markdown). Schema
+  version 37. 1,464 total tests green.
 
 ### Acceptance Criteria
 

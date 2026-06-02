@@ -23,7 +23,10 @@ public sealed record KnowledgePage(
     string? Category = null,
     // agents-specific
     string? Role = null,
-    string? RecommendedLevel = null);
+    string? RecommendedLevel = null,
+    // document-templates-specific (Phase 112D)
+    string? FieldsJson = null,
+    string? FilenameTemplate = null);
 
 /// <summary>Persistent store for <see cref="KnowledgePage"/> entries.</summary>
 public interface IKnowledgeStore

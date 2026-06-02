@@ -10,7 +10,7 @@ internal sealed class SqliteKnowledgeStore(ISqliteConnectionFactory connectionFa
     private const string SelectColumns =
         "knowledge_id, kind, slug, name, description, tier, body, workspace_id, " +
         "created_at, updated_at, trigger, agents, tools, industry, default_format, category, " +
-        "role, recommended_level";
+        "role, recommended_level, fields_json, filename_template";
 
     public async Task<IReadOnlyList<KnowledgePage>> GetAllAsync(
         string kind,
@@ -139,11 +139,11 @@ internal sealed class SqliteKnowledgeStore(ISqliteConnectionFactory connectionFa
             INSERT INTO knowledge_pages
                 (knowledge_id, kind, slug, name, description, tier, body, workspace_id,
                  created_at, updated_at, trigger, agents, tools, industry, default_format, category,
-                 role, recommended_level)
+                 role, recommended_level, fields_json, filename_template)
             VALUES
                 ($id, $kind, $slug, $name, $desc, $tier, $body, $wid,
                  $cat, $uat, $trigger, $agents, $tools, $industry, $df, $category,
-                 $role, $level)
+                 $role, $level, $fieldsJson, $filenameTpl)
             ON CONFLICT(kind, slug, workspace_id) DO UPDATE SET
                 name              = excluded.name,
                 description       = excluded.description,
@@ -157,7 +157,9 @@ internal sealed class SqliteKnowledgeStore(ISqliteConnectionFactory connectionFa
                 default_format    = excluded.default_format,
                 category          = excluded.category,
                 role              = excluded.role,
-                recommended_level = excluded.recommended_level
+                recommended_level = excluded.recommended_level,
+                fields_json       = excluded.fields_json,
+                filename_template = excluded.filename_template
             """;
 
         cmd.Parameters.AddWithValue("$id", page.KnowledgeId);
@@ -178,6 +180,8 @@ internal sealed class SqliteKnowledgeStore(ISqliteConnectionFactory connectionFa
         cmd.Parameters.AddWithValue("$category", (object?)page.Category ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$role", (object?)page.Role ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$level", (object?)page.RecommendedLevel ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$fieldsJson", (object?)page.FieldsJson ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$filenameTpl", (object?)page.FilenameTemplate ?? DBNull.Value);
 
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
@@ -214,26 +218,30 @@ internal sealed class SqliteKnowledgeStore(ISqliteConnectionFactory connectionFa
             var n15 = await reader.IsDBNullAsync(15, ct).ConfigureAwait(false);
             var n16 = await reader.IsDBNullAsync(16, ct).ConfigureAwait(false);
             var n17 = await reader.IsDBNullAsync(17, ct).ConfigureAwait(false);
+            var n18 = await reader.IsDBNullAsync(18, ct).ConfigureAwait(false);
+            var n19 = await reader.IsDBNullAsync(19, ct).ConfigureAwait(false);
 
             results.Add(new KnowledgePage(
-                KnowledgeId:   reader.GetString(0),
-                Kind:          reader.GetString(1),
-                Slug:          reader.GetString(2),
-                Name:          reader.GetString(3),
-                Description:   reader.GetString(4),
-                Tier:          reader.GetString(5),
-                Body:          reader.GetString(6),
-                WorkspaceId:   reader.GetString(7),
-                CreatedAt:     DateTimeOffset.Parse(reader.GetString(8), null, DateTimeStyles.RoundtripKind),
-                UpdatedAt:     DateTimeOffset.Parse(reader.GetString(9), null, DateTimeStyles.RoundtripKind),
-                Trigger:       n10 ? null : reader.GetString(10),
-                Agents:        n11 ? null : reader.GetString(11),
-                Tools:         n12 ? null : reader.GetString(12),
-                Industry:      n13 ? null : reader.GetString(13),
-                DefaultFormat: n14 ? null : reader.GetString(14),
-                Category:      n15 ? null : reader.GetString(15),
-                Role:          n16 ? null : reader.GetString(16),
-                RecommendedLevel: n17 ? null : reader.GetString(17)));
+                KnowledgeId:      reader.GetString(0),
+                Kind:             reader.GetString(1),
+                Slug:             reader.GetString(2),
+                Name:             reader.GetString(3),
+                Description:      reader.GetString(4),
+                Tier:             reader.GetString(5),
+                Body:             reader.GetString(6),
+                WorkspaceId:      reader.GetString(7),
+                CreatedAt:        DateTimeOffset.Parse(reader.GetString(8), null, DateTimeStyles.RoundtripKind),
+                UpdatedAt:        DateTimeOffset.Parse(reader.GetString(9), null, DateTimeStyles.RoundtripKind),
+                Trigger:          n10 ? null : reader.GetString(10),
+                Agents:           n11 ? null : reader.GetString(11),
+                Tools:            n12 ? null : reader.GetString(12),
+                Industry:         n13 ? null : reader.GetString(13),
+                DefaultFormat:    n14 ? null : reader.GetString(14),
+                Category:         n15 ? null : reader.GetString(15),
+                Role:             n16 ? null : reader.GetString(16),
+                RecommendedLevel: n17 ? null : reader.GetString(17),
+                FieldsJson:       n18 ? null : reader.GetString(18),
+                FilenameTemplate: n19 ? null : reader.GetString(19)));
         }
         return results;
     }

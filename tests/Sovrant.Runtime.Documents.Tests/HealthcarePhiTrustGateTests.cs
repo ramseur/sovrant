@@ -1,7 +1,7 @@
 using System.Text.Json;
-using Sovrant.Runtime.Documents.Templates.Healthcare;
-using Sovrant.Runtime.Documents.Templates.Legal;
+using Sovrant.Runtime.Documents.Templates;
 using Sovrant.Runtime.Documents.Trust;
+using Sovrant.Runtime.Knowledge;
 
 namespace Sovrant.Runtime.Documents.Tests;
 
@@ -12,7 +12,8 @@ public class HealthcarePhiTrustGateTests
     [Fact]
     public void Allows_NonHealthcare_TemplateAlways()
     {
-        var template = new NdaTemplate();
+        // legal/nda is now DB-backed — use a stub with the right industry
+        var template = MakeDbTemplate("legal/nda", "legal");
         var data = JsonDocument.Parse("{}").RootElement;
 
         var decision = _gate.Evaluate(template, data);
@@ -24,7 +25,7 @@ public class HealthcarePhiTrustGateTests
     [Fact]
     public void Denies_Healthcare_WithoutConsent()
     {
-        var template = new PatientIntakeTemplate();
+        var template = MakeDbTemplate("healthcare/patient-intake", "healthcare");
         var data = JsonDocument.Parse("""{ "patient_name": "Jane" }""").RootElement;
 
         var decision = _gate.Evaluate(template, data);
@@ -37,7 +38,7 @@ public class HealthcarePhiTrustGateTests
     [Fact]
     public void Denies_Healthcare_WhenConsentIsFalse()
     {
-        var template = new PatientIntakeTemplate();
+        var template = MakeDbTemplate("healthcare/patient-intake", "healthcare");
         var data = JsonDocument.Parse("""{ "consent_acknowledged": false }""").RootElement;
 
         var decision = _gate.Evaluate(template, data);
@@ -48,7 +49,7 @@ public class HealthcarePhiTrustGateTests
     [Fact]
     public void Allows_Healthcare_WhenConsentIsTrue()
     {
-        var template = new PatientIntakeTemplate();
+        var template = MakeDbTemplate("healthcare/patient-intake", "healthcare");
         var data = JsonDocument.Parse("""{ "consent_acknowledged": true }""").RootElement;
 
         var decision = _gate.Evaluate(template, data);
@@ -67,7 +68,28 @@ public class HealthcarePhiTrustGateTests
         Assert.False(decision.IsAllowed);
     }
 
-    private sealed class HealthcareLikeTemplate : Sovrant.Runtime.Documents.Templates.IDocumentTemplate
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private static DbDocumentTemplate MakeDbTemplate(string slug, string industry)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var page = new KnowledgePage(
+            KnowledgeId:   $"doctempl_{slug.Replace('/', '-')}",
+            Kind:          "document-templates",
+            Slug:          slug,
+            Name:          slug,
+            Description:   string.Empty,
+            Tier:          "BuiltIn",
+            Body:          "stub",
+            WorkspaceId:   string.Empty,
+            CreatedAt:     now,
+            UpdatedAt:     now,
+            Industry:      industry,
+            DefaultFormat: "Word");
+        return new DbDocumentTemplate(page);
+    }
+
+    private sealed class HealthcareLikeTemplate : IDocumentTemplate
     {
         public HealthcareLikeTemplate(string industry) => Industry = industry;
         public string Id => "stub/test";
@@ -75,8 +97,8 @@ public class HealthcarePhiTrustGateTests
         public string Industry { get; }
         public string Description => "";
         public DocumentFormat DefaultFormat => DocumentFormat.Markdown;
-        public IReadOnlyList<Sovrant.Runtime.Documents.Templates.TemplateField> Fields { get; } = new List<Sovrant.Runtime.Documents.Templates.TemplateField>();
-        public Sovrant.Runtime.Documents.Templates.TemplateRenderResult Render(JsonElement data) =>
+        public IReadOnlyList<TemplateField> Fields { get; } = [];
+        public TemplateRenderResult Render(JsonElement data) =>
             new(DocumentFormat.Markdown, "", "stub.md");
     }
 }
