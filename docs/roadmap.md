@@ -200,6 +200,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Navigation overhaul — replace the current top-bar and rail navigation with a collapsible left-side panel following the modern sidebar pattern (VS Code, Linear, Notion, Slack); primary sections (Chat, Sessions, Agents, Teams, Missions, Knowledge, Artifacts, Settings, Command Center, Dashboard) listed in the sidebar with icons and labels; sidebar collapses to icon-only mode with tooltip labels; user-resizable panel width; active section highlighted; nested expansion for sections with sub-pages (e.g. Settings → Providers / Users / Workspace / System; Knowledge → Skills / Documents / Tools); keyboard shortcut to toggle sidebar; Web and Desktop parity; Desktop uses a single `SidebarView` Avalonia control replacing the current `RailNav`; Web replaces the current `<NavMenu>` component with a new `<Sidebar>` component; breadcrumb header remains on all pages; mobile breakpoint collapses sidebar to overlay drawer | Phase 111 | Medium |
 | Migrate built-in markdown knowledge into the DB — move all on-disk built-in markdown (32 skills, 25 agents) plus the 44 code-defined document templates out of the filesystem/C# and into the `knowledge_pages` table so users manage every template (base + their own) in the DB without code changes; copy-on-write overlay model (immutable base rows, user edits become `global`/project overlays that win, revert = delete overlay); built-ins seeded via SQL migration; registries flipped to read DB; document rendering becomes data-driven via a sandboxed templating engine; `.md` files and disk scans deleted once verified; SQLite-only (knowledge store is local even on Postgres backend) | Phase 112 | Done ✅ |
 | Caching: DB read cache + Phase 31 invalidation fix — `CachedKnowledgeStore` decorator wraps `IKnowledgeStore` with TTL-based in-process caching for rarely-changing content (skills, agents, document templates, tool/doc guides) and fires a `KnowledgePageChanged` event on every write; repairs Phase 31's `CacheInvalidator` whose file-watcher triggers were deleted by Phase 112, restoring HTTP-cache invalidation for `skills:list`, `templates:list`, and `knowledge:*` keys; opt-out via `SOVRANT_KNOWLEDGE_CACHE_TTL=0` | Phase 113 | Planned |
+| Enrich built-in skill definitions — review and improve all 32 built-in skill descriptions (2-3 sentences), workflow bodies (≥5 concrete steps), agents/tools lists, and trigger phrases; ship as a `V038__enrich_builtin_skills.sql` additive migration that UPDATEs only the BuiltIn base rows; user overlays are unaffected | Phase 114 | Planned |
 
 ### v1.0 release polish (in progress)
 
@@ -10720,6 +10721,43 @@ second request for the same page hits the in-process cache, not SQLite.
 - Phase 31's `skills:list` HTTP response cache is evicted after any knowledge-page write with `kind=skills`.
 - `SOVRANT_KNOWLEDGE_CACHE_TTL=0` makes every call hit SQLite directly (verified by test).
 - All 1,464 existing tests continue to pass.
+
+---
+
+## Phase 114 — Enrich Built-in Skill Definitions
+
+### Goal
+
+The 32 built-in skills seeded by V035 each have a short name, trigger, and workflow body,
+but the descriptions are often sparse (one line) and the body steps are thin. Users seeing
+the Skills page in the desktop app get little signal about *when* to invoke a skill or what
+outcome to expect. Richer definitions improve agent routing, the `SkillTool` "list" view,
+and the `DocumentListTemplatesTool` equivalent for skills.
+
+### What to improve per skill
+
+Each built-in skill (`kind='skills'`, `tier='BuiltIn'`) should have:
+
+- **Description** (2-3 sentences): what the skill does, when to reach for it, what output to expect.
+- **Body** (workflow steps): concrete numbered steps, including what the model should *check* before
+  proceeding, how to handle edge cases, and what a successful result looks like.
+- **Trigger** phrase: verify each trigger is intuitive and doesn't collide.
+- **Agents / Tools lists**: populated for skills that have natural delegations (e.g. `tdd-workflow`
+  uses the `coder` + `code-reviewer` agents and the `Bash` + `Read` + `Write` tools).
+
+### Delivery
+
+1. Review all 32 skills in the DB (query `knowledge_pages WHERE kind='skills' AND tier='BuiltIn'`).
+2. Decide which need enrichment (description too short, body has fewer than 5 steps, agents/tools empty).
+3. Write a `V038__enrich_builtin_skills.sql` migration with `UPDATE knowledge_pages SET ... WHERE slug='...'`
+   for each improved skill — additive, never editing prior migrations.
+4. Smoke-test in the desktop Skills page: descriptions readable, workflow steps actionable.
+
+### Note
+
+User-created or overridden skills (User overlay rows) are unaffected — the migration only updates
+the `BuiltIn` base rows (`workspace_id=''`), so any user customisations continue to win via the
+copy-on-write overlay.
 
 ---
 
