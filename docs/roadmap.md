@@ -198,7 +198,8 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Multi-agent session scoping — allow a user to scope more than one agent onto a single chat session; each scoped agent contributes its system prompt and tool set for the duration of the session; the chat header and top context bar show all active agents (expanding the single-agent badge from Phase 106); agents can be added or removed mid-session without clearing history; `sessions.agent_name` (V031 scalar) replaced or extended to support a list of agent IDs stored as a relation or JSON column (new migration required); `ActiveContextService` and `ActiveContextViewModel` updated to carry a collection; Web + Desktop parity | Phase 109 | Medium |
 | CLI first-run experience — improve the experience for users launching `sovrant` for the first time; guided setup that detects missing configuration (no provider, no API key) and walks the user through provider selection and key entry interactively; `sovrant init` command as a standalone setup entrypoint; `sovrant doctor` command that checks health of all configuration and connectivity (provider reachable, model list accessible, DB migrations current, tool count); friendly error messages when the runtime fails to start rather than raw stack traces; color-coded status output; `--help` improvements with grouped command categories and examples; Web + Desktop parity not required — CLI-only surface | Phase 110 | High |
 | Navigation overhaul — replace the current top-bar and rail navigation with a collapsible left-side panel following the modern sidebar pattern (VS Code, Linear, Notion, Slack); primary sections (Chat, Sessions, Agents, Teams, Missions, Knowledge, Artifacts, Settings, Command Center, Dashboard) listed in the sidebar with icons and labels; sidebar collapses to icon-only mode with tooltip labels; user-resizable panel width; active section highlighted; nested expansion for sections with sub-pages (e.g. Settings → Providers / Users / Workspace / System; Knowledge → Skills / Documents / Tools); keyboard shortcut to toggle sidebar; Web and Desktop parity; Desktop uses a single `SidebarView` Avalonia control replacing the current `RailNav`; Web replaces the current `<NavMenu>` component with a new `<Sidebar>` component; breadcrumb header remains on all pages; mobile breakpoint collapses sidebar to overlay drawer | Phase 111 | Medium |
-| Migrate built-in markdown knowledge into the DB — move all on-disk built-in markdown (32 skills, 25 agents) plus the 44 code-defined document templates out of the filesystem/C# and into the `knowledge_pages` table so users manage every template (base + their own) in the DB without code changes; copy-on-write overlay model (immutable base rows, user edits become `global`/project overlays that win, revert = delete overlay); built-ins seeded via SQL migration; registries flipped to read DB; document rendering becomes data-driven via a sandboxed templating engine; `.md` files and disk scans deleted once verified; SQLite-only (knowledge store is local even on Postgres backend) | Phase 112 | In progress |
+| Migrate built-in markdown knowledge into the DB — move all on-disk built-in markdown (32 skills, 25 agents) plus the 44 code-defined document templates out of the filesystem/C# and into the `knowledge_pages` table so users manage every template (base + their own) in the DB without code changes; copy-on-write overlay model (immutable base rows, user edits become `global`/project overlays that win, revert = delete overlay); built-ins seeded via SQL migration; registries flipped to read DB; document rendering becomes data-driven via a sandboxed templating engine; `.md` files and disk scans deleted once verified; SQLite-only (knowledge store is local even on Postgres backend) | Phase 112 | Done ✅ |
+| Knowledge-page read cache — wrap `IKnowledgeStore` with a `CachedKnowledgeStore` decorator (TTL-based, invalidation-aware) to avoid repeated SQLite reads for rarely-changing content (templates, skills, agents); fix Phase 31's stale HTTP-cache invalidation triggers, which were wired to now-deleted file watchers, by replacing them with `KnowledgePageChanged` events fired on every `UpsertAsync`/`DeleteAsync`; opt-out via `SOVRANT_KNOWLEDGE_CACHE_TTL=0` | Phase 113 | Planned |
 
 ### v1.0 release polish (in progress)
 
@@ -10639,6 +10640,72 @@ editable content (skill/agent/template bodies + field schemas) lives only in the
 - Editing any base item creates a `User` overlay (base preserved); revert restores base.
 - Document output is byte-compatible with the pre-migration C# templates (golden-file).
 - Editing a document template body in the UI changes generated output with no rebuild.
+
+---
+
+## Phase 113 — Knowledge-page Read Cache
+
+### Goal
+
+Reduce SQLite round-trips for content that changes rarely (templates, skills, agent definitions)
+by adding a lightweight, invalidation-aware read cache in front of `IKnowledgeStore`.
+
+### Background
+
+After Phase 112 all knowledge lives in the DB, and the singleton registries (`SkillRegistry`,
+`TemplateRegistry`, etc.) already act as an in-process cache at startup.  Two gaps remain:
+
+1. **Authoring-route reads** — every `GET /v1/knowledge/{kind}/{slug}/source` request calls
+   `GetEffectiveAsync` against SQLite with no caching. For content that changes at human
+   cadence (someone edits a skill once a week), hitting the DB per request is wasteful.
+
+2. **Phase 31 invalidation triggers are stale** — Phase 31's `CacheInvalidator` was wired to
+   file-system watchers (`.sovrant/skills/`, `.sovrant/agents/`) and `SkillCreate` tool
+   events; those paths no longer exist. The HTTP response cache (`skills:list`,
+   `templates:list`, etc.) now has no invalidation path when a user edits a knowledge page
+   via the authoring API, so cached responses can serve stale data indefinitely.
+
+### Design
+
+**Cache layer** — wrap `SqliteKnowledgeStore` with a `CachedKnowledgeStore` decorator that:
+- Caches `GetAllEffectiveAsync` + `GetEffectiveAsync` results keyed on `(kind, slug, projectId)`.
+- Default TTL: **5 minutes** for `document-templates` / `agents` / `skills` (change infrequently);
+  **30 seconds** for `guidelines` (edited more often in live sessions).
+- Invalidates the affected key on any `UpsertAsync` or `DeleteAsync` call, then fires a
+  `KnowledgePageChanged` event so Phase 31's `CacheInvalidator` can also clear HTTP caches
+  (the `skills:list`, `templates:list`, etc. entries).
+
+**Registry reload** — `SkillRegistry.SaveGlobal` / `DeleteGlobal` already calls `Reload()`
+synchronously. After this phase, `Reload()` reads from the decorator (warm cache if unchanged,
+fresh from DB on first call after an invalidation).
+
+**HTTP response cache** — update Phase 31's invalidation table:
+
+| Old trigger | New trigger |
+|---|---|
+| File watcher on `.sovrant/skills/` | `KnowledgePageChanged` event, kind = `skills` |
+| File watcher on `.sovrant/agents/` | `KnowledgePageChanged` event, kind = `agents` |
+| `SkillCreate` tool execution | `KnowledgePageChanged` event (already fired by `CachedKnowledgeStore`) |
+
+**Opt-out** — `SOVRANT_KNOWLEDGE_CACHE_TTL=0` disables caching entirely (useful in dev when
+editing templates frequently).
+
+### What does NOT change
+
+- The singleton registry in-process dictionaries — they stay as-is; the cache decorator sits
+  below them at the `IKnowledgeStore` boundary.
+- The overlay resolution logic in `SqliteKnowledgeStore` — unchanged.
+- User-visible behaviour — a write always invalidates immediately; there is no stale-read window
+  for the authoring user.
+
+### Acceptance Criteria
+
+- `GET /v1/knowledge/skills/tdd-workflow/source` served from cache on the second request
+  (measurable via a test that counts DB calls).
+- After `POST /v1/knowledge/skills/tdd-workflow`, the next GET reflects the new content (cache
+  was invalidated).
+- Phase 31 HTTP response cache for `skills:list` is cleared after a `POST /v1/knowledge/skills/*`.
+- `SOVRANT_KNOWLEDGE_CACHE_TTL=0` skips the cache entirely and all reads hit SQLite directly.
 
 ---
 
