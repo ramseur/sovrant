@@ -230,8 +230,8 @@ internal sealed class SqliteKnowledgeStore(ISqliteConnectionFactory connectionFa
                 Tier:             reader.GetString(5),
                 Body:             reader.GetString(6),
                 WorkspaceId:      reader.GetString(7),
-                CreatedAt:        DateTimeOffset.Parse(reader.GetString(8), null, DateTimeStyles.RoundtripKind),
-                UpdatedAt:        DateTimeOffset.Parse(reader.GetString(9), null, DateTimeStyles.RoundtripKind),
+                CreatedAt:        ParseTimestamp(reader.GetString(8)),
+                UpdatedAt:        ParseTimestamp(reader.GetString(9)),
                 Trigger:          n10 ? null : reader.GetString(10),
                 Agents:           n11 ? null : reader.GetString(11),
                 Tools:            n12 ? null : reader.GetString(12),
@@ -245,4 +245,11 @@ internal sealed class SqliteKnowledgeStore(ISqliteConnectionFactory connectionFa
         }
         return results;
     }
+
+    // Accepts both ISO 8601 round-trip strings (written by UpsertAsync) and raw Unix
+    // epoch seconds (written by unixepoch() in SQL seed migrations like V037).
+    private static DateTimeOffset ParseTimestamp(string value) =>
+        long.TryParse(value, out var unix)
+            ? DateTimeOffset.FromUnixTimeSeconds(unix)
+            : DateTimeOffset.Parse(value, null, DateTimeStyles.RoundtripKind);
 }

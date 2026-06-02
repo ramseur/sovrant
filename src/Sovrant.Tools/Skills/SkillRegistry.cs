@@ -138,7 +138,8 @@ public sealed partial class SkillRegistry
                 page.Trigger ?? string.Empty,
                 agents,
                 tools,
-                string.IsNullOrWhiteSpace(page.Body) ? $"Execute the {page.Name} skill." : page.Body);
+                string.IsNullOrWhiteSpace(page.Body) ? $"Execute the {page.Name} skill." : page.Body,
+                page.Tier);
 
             byName[skill.Name] = skill;
             if (!string.IsNullOrWhiteSpace(skill.Trigger))
