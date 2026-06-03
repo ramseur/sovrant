@@ -13,6 +13,7 @@ public sealed class PromptSanitizer : IPromptSanitizer, IDisposable
 {
     private readonly IDisposable? _changedSubscription;
     private IReadOnlyList<IPatternDetector> _detectors;
+    private volatile bool _enabled = true;
 
     public PromptSanitizer(IEnumerable<IPatternDetector> detectors)
     {
@@ -30,8 +31,12 @@ public sealed class PromptSanitizer : IPromptSanitizer, IDisposable
     {
         ArgumentNullException.ThrowIfNull(liveConfig);
         _detectors = BuildDetectors(liveConfig.Current);
+        _enabled = liveConfig.Current.Sanitizer.Enabled;
         _changedSubscription = liveConfig.OnChanged(fresh =>
-            Volatile.Write(ref _detectors, BuildDetectors(fresh)));
+        {
+            Volatile.Write(ref _detectors, BuildDetectors(fresh));
+            _enabled = fresh.Sanitizer.Enabled;
+        });
     }
 
     private static IPatternDetector[] BuildDetectors(TrustBoundaryConfig config)
@@ -83,6 +88,15 @@ public sealed class PromptSanitizer : IPromptSanitizer, IDisposable
     {
         ArgumentNullException.ThrowIfNull(map);
         return map.Restore(response ?? string.Empty);
+    }
+
+    /// <inheritdoc/>
+    public string SanitizeRawText(string text)
+    {
+        if (!_enabled || string.IsNullOrEmpty(text)) return text;
+        var map = new RedactionMap();
+        return SanitizeText(text, map);
+        // map is discarded — one-way sanitization, no restore path
     }
 
     private InputMessage SanitizeMessage(InputMessage msg, RedactionMap map)

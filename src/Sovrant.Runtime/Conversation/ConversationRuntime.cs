@@ -41,6 +41,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly Permissions.IPerTurnApprovalCache? _approvalCache;
     private readonly McpClientRegistry? _mcpClients;
     private readonly IArtifactStore? _artifactStore;
+    private readonly TrustBoundary.IPromptSanitizer? _sanitizer;
     private readonly List<InputMessage> _history = [];
     private string _systemPrompt;
     /// <summary>Once true, all subsequent turns expose tools (session used tools at least once).</summary>
@@ -120,7 +121,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         Permissions.IPerTurnApprovalCache? approvalCache = null,
         McpClientRegistry? mcpClients = null,
         Prompt.ICapabilityCatalog? capabilityCatalog = null,
-        IArtifactStore? artifactStore = null)
+        IArtifactStore? artifactStore = null,
+        TrustBoundary.IPromptSanitizer? sanitizer = null)
     {
         _router = router;
         _toolExecutor = toolExecutor;
@@ -141,6 +143,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         _approvalCache = approvalCache;
         _mcpClients = mcpClients;
         _artifactStore = artifactStore;
+        _sanitizer = sanitizer;
         _systemPrompt = systemPromptOverride ?? BuildSystemPrompt(capabilityCatalog);
     }
 
@@ -533,24 +536,30 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 toolSw.Stop();
                 LogToolResult(_logger, tu.Name, toolSw.ElapsedMilliseconds, execResult.IsError);
 
-                yield return new RuntimeEvent.ToolResult(tu.Id, tu.Name, execResult.Output, execResult.IsError);
+                // Step C: sanitize the tool output once before it reaches the UI, history,
+                // session_entries, or hooks. PII in file content, web responses, and shell
+                // output is replaced with deterministic placeholders here so it never
+                // appears in storage or in subsequent LLM context.
+                var toolOutput = _sanitizer?.SanitizeRawText(execResult.Output) ?? execResult.Output;
 
-                if (!execResult.Success && execResult.Output.Contains("denied", StringComparison.OrdinalIgnoreCase))
-                    yield return new RuntimeEvent.PermissionDenied(tu.Name, execResult.Output);
+                yield return new RuntimeEvent.ToolResult(tu.Id, tu.Name, toolOutput, execResult.IsError);
+
+                if (!execResult.Success && toolOutput.Contains("denied", StringComparison.OrdinalIgnoreCase))
+                    yield return new RuntimeEvent.PermissionDenied(tu.Name, toolOutput);
 
                 // PostToolUse / PostToolUseFailure: fire-and-forget.
                 var postEvent = execResult.IsError ? HookEvent.PostToolUseFailure : HookEvent.PostToolUse;
                 var postCtx = new HookContext(postEvent, SessionId,
                     ToolName: tu.Name,
-                    ToolOutput: execResult.Output,
+                    ToolOutput: toolOutput,
                     FilePath: TryExtractFilePath(tu.Input),
                     IsError: execResult.IsError);
                 _ = _hookRunner.RunAsync(postEvent, postCtx, CancellationToken.None)
                     .ContinueWith(static t => { if (t.IsFaulted) _ = t.Exception; }, TaskScheduler.Default);
 
-                toolResultPairs.Add((new ToolResultContentBlock.TextBlock(execResult.Output), execResult.IsError));
+                toolResultPairs.Add((new ToolResultContentBlock.TextBlock(toolOutput), execResult.IsError));
 
-                await AppendSessionEntryAsync("tool_result", execResult.Output, ct,
+                await AppendSessionEntryAsync("tool_result", toolOutput, ct,
                     toolName: tu.Name, toolUseId: tu.Id, isError: execResult.IsError)
                     .ConfigureAwait(false);
 
@@ -569,7 +578,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                         LogInternalErrorRepeat(_logger, tu.Name, SessionId);
                         deterministicFailureDetected = true;
                         deterministicFailureTool = tu.Name;
-                        deterministicFailureMessage = execResult.Output;
+                        deterministicFailureMessage = toolOutput;
                     }
                 }
             }
@@ -1223,7 +1232,11 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     if (!string.IsNullOrWhiteSpace(trigger))
                         sb.Append(" (").Append(trigger).Append(')');
                     if (!string.IsNullOrWhiteSpace(description))
-                        sb.Append(": ").Append(description);
+                    {
+                        // Step B: sanitize user-authored description before injecting into system prompt.
+                        var safeDesc = _sanitizer?.SanitizeRawText(description) ?? description;
+                        sb.Append(": ").Append(safeDesc);
+                    }
                 }
             }
 
@@ -1247,8 +1260,12 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     }
                     sb.Append("\n\n### ").Append(name);
                     if (!string.IsNullOrWhiteSpace(description))
-                        sb.Append('\n').Append(description);
-                    sb.Append('\n').Append(body);
+                    {
+                        // Step B: sanitize user-authored description.
+                        sb.Append('\n').Append(_sanitizer?.SanitizeRawText(description) ?? description);
+                    }
+                    // Step B: sanitize tool guide body before injecting into system prompt.
+                    sb.Append('\n').Append(_sanitizer?.SanitizeRawText(body) ?? body);
                 }
             }
         }
