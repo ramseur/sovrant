@@ -1233,6 +1233,24 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 sb.Append("\n\nAvailable agent templates (pass as 'template' to the Agent tool): ")
                   .Append(names).Append('.');
             }
+
+            if (catalog.ToolGuides.Count > 0)
+            {
+                sb.Append("\n\nTool usage guides (authored knowledge for specific tools):");
+                string? currentCategory = null;
+                foreach (var (slug, name, description, category, body) in catalog.ToolGuides)
+                {
+                    if (!string.Equals(category, currentCategory, StringComparison.OrdinalIgnoreCase))
+                    {
+                        currentCategory = category;
+                        sb.Append("\n\n[").Append(category).Append(']');
+                    }
+                    sb.Append("\n\n### ").Append(name);
+                    if (!string.IsNullOrWhiteSpace(description))
+                        sb.Append('\n').Append(description);
+                    sb.Append('\n').Append(body);
+                }
+            }
         }
 
         return sb.ToString();

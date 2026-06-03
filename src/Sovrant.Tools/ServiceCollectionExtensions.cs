@@ -109,7 +109,10 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<Sovrant.Runtime.Knowledge.IKnowledgeStore>(),
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SkillRegistry>>()));
         services.AddSingleton<SkillRunner>();
-        services.AddSingleton<ICapabilityCatalog, CapabilityCatalog>();
+        services.AddSingleton<ICapabilityCatalog>(sp => new CapabilityCatalog(
+            sp.GetRequiredService<SkillRegistry>(),
+            sp.GetRequiredService<Sovrant.Agents.Templates.AgentTemplateRegistry>(),
+            sp.GetRequiredService<Sovrant.Tools.Templates.UserToolTemplateRegistry>()));
         services.AddSingleton<ITool, SkillTool>();
         services.AddSingleton<ITool>(sp => new SkillCreateTool(
             sp.GetRequiredService<SkillRegistry>(),
