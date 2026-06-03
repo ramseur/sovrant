@@ -11,7 +11,10 @@ namespace Sovrant.Runtime.Documents.Templates;
 /// </summary>
 public sealed partial class TemplateRegistry : ITemplateRegistry
 {
-    private readonly Dictionary<string, IDocumentTemplate> _byId;
+    private readonly IDocumentTemplate[] _csharpTemplates;
+    private readonly IKnowledgeStore _knowledgeStore;
+    private readonly ILogger<TemplateRegistry> _logger;
+    private Dictionary<string, IDocumentTemplate> _byId;
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to load document templates from DB: {Error}")]
     private static partial void LogLoadError(ILogger logger, string error);
@@ -24,28 +27,40 @@ public sealed partial class TemplateRegistry : ITemplateRegistry
         ArgumentNullException.ThrowIfNull(csharpTemplates);
         ArgumentNullException.ThrowIfNull(knowledgeStore);
 
-        _byId = new Dictionary<string, IDocumentTemplate>(StringComparer.OrdinalIgnoreCase);
+        _csharpTemplates = [.. csharpTemplates];
+        _knowledgeStore = knowledgeStore;
+        _logger = logger;
+        _byId = Load();
+    }
+
+    public void Reload() => _byId = Load();
+
+    private Dictionary<string, IDocumentTemplate> Load()
+    {
+        var byId = new Dictionary<string, IDocumentTemplate>(StringComparer.OrdinalIgnoreCase);
 
         // C# templates first (lowest priority)
-        foreach (var t in csharpTemplates)
-            _byId[t.Id] = t;
+        foreach (var t in _csharpTemplates)
+            byId[t.Id] = t;
 
         // DB templates override (supports user overlays + base seeded templates)
         try
         {
-            var pages = knowledgeStore.GetAllEffectiveAsync("document-templates")
-                                      .GetAwaiter().GetResult();
+            var pages = _knowledgeStore.GetAllEffectiveAsync("document-templates")
+                                       .GetAwaiter().GetResult();
             foreach (var page in pages)
             {
                 var dbt = new DbDocumentTemplate(page);
-                _byId[dbt.Id] = dbt;
+                byId[dbt.Id] = dbt;
             }
         }
         catch (SqliteException ex)
         {
             // DB not yet migrated — fall back to C# templates only
-            LogLoadError(logger, ex.Message);
+            LogLoadError(_logger, ex.Message);
         }
+
+        return byId;
     }
 
     public IDocumentTemplate Resolve(string id)

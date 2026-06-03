@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Runtime.Auth;
 using Sovrant.Tools.Skills;
 
 namespace Sovrant.Desktop.ViewModels;
@@ -10,6 +11,7 @@ namespace Sovrant.Desktop.ViewModels;
 public partial class SkillsViewModel : ViewModelBase
 {
     private readonly SkillRegistry _registry;
+    private readonly IPrincipalAccessor _principal;
     private readonly List<SkillItemViewModel> _allSkills = [];
 
     [ObservableProperty]
@@ -33,11 +35,17 @@ public partial class SkillsViewModel : ViewModelBase
     [ObservableProperty]
     private string? _editingSlug;
 
+    [ObservableProperty]
+    private bool _canEdit;
+
+    public bool IsAdmin => _principal.IsAdmin;
+
     public ObservableCollection<SkillItemViewModel> FilteredSkills { get; } = [];
 
-    public SkillsViewModel(SkillRegistry registry)
+    public SkillsViewModel(SkillRegistry registry, IPrincipalAccessor principal)
     {
         _registry = registry;
+        _principal = principal;
         LoadSkills();
     }
 
@@ -60,9 +68,20 @@ public partial class SkillsViewModel : ViewModelBase
     {
         if (IsEditing) CancelEdit();
         SelectedSkill = skill;
+        CanEdit = skill.IsUserAuthored || _principal.IsAdmin;
     }
 
     [RelayCommand]
+    private void RevertSkill()
+    {
+        if (SelectedSkill is null || !SelectedSkill.IsUserAuthored) return;
+        _registry.DeleteGlobal(SelectedSkill.Name);
+        SelectedSkill = null;
+        CanEdit = false;
+        LoadSkills();
+    }
+
+    [RelayCommand(CanExecute = nameof(IsAdmin))]
     private void NewSkill() => BeginEdit(slug: string.Empty, source: NewSkillTemplate, title: "New skill");
 
     [RelayCommand]

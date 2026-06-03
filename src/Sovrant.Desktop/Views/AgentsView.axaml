@@ -13,6 +13,7 @@
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
                     <Button Content="+ New"
                             Command="{Binding NewAgentCommand}"
+                            IsVisible="{Binding IsAdmin}"
                             Padding="12,6" CornerRadius="6"
                             Background="{DynamicResource BrandPrimary}"
                             Foreground="White" />
@@ -184,16 +185,19 @@
                                         Foreground="White" />
                                 <Button Content="Edit"
                                         Command="{Binding EditAgentCommand}"
+                                        IsVisible="{Binding IsAdmin}"
                                         Padding="12,6" CornerRadius="6"
                                         Background="Transparent"
                                         Foreground="{DynamicResource TextPrimary}" />
                                 <Button Content="Clone"
                                         Command="{Binding CloneAgentCommand}"
+                                        IsVisible="{Binding IsAdmin}"
                                         Padding="12,6" CornerRadius="6"
                                         Background="Transparent"
                                         Foreground="{DynamicResource TextPrimary}" />
                                 <Button Content="Delete"
                                         Command="{Binding DeleteAgentCommand}"
+                                        IsVisible="{Binding IsAdmin}"
                                         Padding="12,6" CornerRadius="6"
                                         Background="Transparent"
                                         Foreground="{DynamicResource StatusFail}" />
