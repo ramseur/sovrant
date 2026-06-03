@@ -10768,3 +10768,93 @@ copy-on-write overlay.
 **Expected:** Per-user selected model is stored in the DB user-settings row (Phase 88 pattern) and re-applied when the session pool initialises on the next launch.
 **Likely location:** `ChatViewModel` (Desktop) / `Chat.razor` (Web) — the model picker writes to an in-memory `SessionConfig` but may not persist the selection to the `IUserSettings` DB store. On reload the pool creates a fresh `SessionConfig` from the stored defaults, losing the in-session override.
 **Fix scope:** Small — wire the model-picker selection through to `IUserSettings.SetModelAsync(...)` (or equivalent) so it survives restarts. Same fix applies to both surfaces.
+
+---
+
+## Phase 115 — Conversation Compaction and Clear (Surface Parity)
+
+### Goal
+
+Make conversation compaction and clearing consistent, visible, and user-controlled
+across all three surfaces (Desktop, Web, CLI). Today auto-compaction fires silently
+(no UI feedback), `/compact` does a dumb reset instead of an LLM-backed summarize-then-
+reinject, and neither surface exposes a manual compact or clear button in the chat UI.
+
+### Current state
+
+| Feature | CLI (`/compact`) | Desktop | Web |
+|---|---|---|---|
+| Auto-compaction (threshold-triggered) | ✅ `ConversationRuntime.MaybeCompactHistoryAsync` — LLM summary re-injected | ✅ same | ✅ same |
+| Manual compact (slash command) | `/compact` → `_runtime.Reset()` — **no summary, just clears** | `/compact` same | `/compact` same |
+| Manual compact button | ✗ | ✗ | ✗ |
+| Clear conversation button | ✗ | ✗ (only Ctrl+L / slash) | Ctrl+L only |
+| User-visible indicator when auto-compact fires | ✗ silent log only | ✗ | ✗ |
+
+`ConversationRuntime.MaybeCompactHistoryAsync` (Phase 31 / Phase 51) already does the
+right thing for auto-compaction: it calls `LlmContextCompactor`, re-injects a summary
+message into `_history`, and writes a `compaction` session entry. `CompactCommand`
+(`/compact`) bypasses all of this and just calls `_runtime.Reset()` — the comment in
+that file already flags this as a known gap ("A future version will first ask the model
+to produce a summary that is re-injected.").
+
+### What Phase 115 ships
+
+**1 — Fix `/compact` to be LLM-backed**
+- `CompactCommand.ExecuteAsync` calls a new `IConversationRuntime.CompactAsync(ct)`
+  method (or invokes `MaybeCompactHistoryAsync` directly with `force: true`) instead of
+  `Reset()`. Same summarize-then-reinject path as auto-compaction; the compacted summary
+  message is re-injected so the model retains context.
+- `ShouldClearHistory: true` is still returned so the UI flushes its visible bubble list
+  (matching the existing contract); the runtime's `_history` is already updated internally.
+- `/compact` on an empty or short conversation (below threshold) does nothing and returns
+  a "Nothing to compact" message.
+
+**2 — Compaction indicator in chat UI (all surfaces)**
+- When auto-compaction fires, `ConversationRuntime` already appends a
+  `[Conversation history summary — auto-compacted at N tokens]` user message to
+  `_history`. Surface this as a distinct styled event bubble (not a regular user message)
+  so users know compaction happened.
+- Desktop: `ChatViewModel` detects the `[Conversation history summary…]` prefix on
+  incoming messages and renders them as a `CompactionEventViewModel` (grey pill, "Context
+  compacted — N messages summarized"). Alternatively, expose a `Compacted` event from
+  `IConversationRuntime` that the ViewModel subscribes to.
+- Web: same approach — `Chat.razor` renders a distinct styled `<div class="compact-event">` bubble.
+- The manual `/compact` flow uses the same indicator (the re-injected summary message IS the indicator).
+
+**3 — "New Conversation" / "Clear" buttons in chat header**
+- Desktop: add a `Clear` (or `New Conversation`) button to the `ChatView` header toolbar.
+  Wires to the existing `ClearChat()` private method (make it a command). Confirm dialog
+  if there are more than 5 messages (prevents accidental clear; skip confirm when the
+  conversation is empty).
+- Web: add the same button to `Chat.razor`'s header row (already has a `New Session`
+  event path via `ActiveContext.OnNewSession` — expose a button that triggers it).
+- CLI: `/clear` command (alias of `/compact` or a separate command) explicitly documented
+  as "wipes history without summarising" vs. `/compact` = "summarise then compact".
+
+**4 — Surface parity checklist**
+
+| Feature | Desktop | Web | CLI |
+|---|---|---|---|
+| Auto-compact indicator | ✅ Phase 115 | ✅ Phase 115 | `/compact` returns summary text already |
+| Manual compact (LLM-backed) | `/compact` | `/compact` | ✅ Phase 115 fixes this |
+| Compact button in UI | ✅ Phase 115 | ✅ Phase 115 | n/a (slash only) |
+| Clear (no summary) button | ✅ Phase 115 | ✅ Phase 115 | `/clear` alias |
+| Threshold configurable | `SOVRANT_COMPACT_THRESHOLD` / workspace settings | same | same |
+
+### What does NOT change
+
+- `ConversationRuntime.MaybeCompactHistoryAsync` — the auto-compaction path is correct; no changes.
+- `CompactionSettings` / `SOVRANT_COMPACT_THRESHOLD` — threshold resolution unchanged.
+- `LlmContextCompactor` / `NaiveContextCompactor` — unchanged; `/compact` will just call through the
+  same path that auto-compaction uses.
+- Session persistence (`session_entries` rows) — compaction events already appended there; unchanged.
+
+### Acceptance Criteria
+
+- `/compact` on a conversation with > 10 messages produces a visible summary bubble and the runtime
+  `_history` shrinks to the summary + recent tail (not empty).
+- `/compact` on an empty session returns "Nothing to compact" without mutating state.
+- Auto-compaction (threshold-triggered) shows the same styled indicator bubble on Desktop and Web.
+- Desktop chat header has a "Clear" button; clicking it after > 5 messages shows a confirm dialog.
+- Web chat header has a "Clear" / "New Chat" button wired to `OnNewSession`.
+- All existing tests pass; add unit tests for `CompactCommand` covering the LLM-backed and empty-session cases.
