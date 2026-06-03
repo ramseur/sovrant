@@ -1,4 +1,5 @@
 @using Markdig
+@inject IJSRuntime JS
 
 <div class="message">
     @if (Message.IsUser)
@@ -26,6 +27,10 @@
                 @if (Message.IsComplete && !string.IsNullOrEmpty(Message.ActionSummary))
                 {
                     <span class="action-summary">@Message.ActionSummary</span>
+                }
+                @if (Message.IsComplete)
+                {
+                    <button class="btn-copy-message" @onclick="CopyMessageAsync">@_copyLabel</button>
                 }
             </div>
 
@@ -149,6 +154,22 @@
     [Parameter] public EventCallback<ToolUseModel> OnApprove { get; set; }
     [Parameter] public EventCallback<ToolUseModel> OnApproveForTurn { get; set; }
     [Parameter] public EventCallback<ToolUseModel> OnDeny { get; set; }
+
+    private string _copyLabel = "Copy";
+
+    private async Task CopyMessageAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", Message.Text);
+            _copyLabel = "Copied!";
+            StateHasChanged();
+            await Task.Delay(1500);
+            _copyLabel = "Copy";
+            StateHasChanged();
+        }
+        catch { }
+    }
 
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions()

@@ -1320,6 +1320,18 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     margin-left: 8px;
 }
 
+.btn-copy-message {
+    font-size: 10px;
+    padding: 2px 8px;
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--surface-border);
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 8px;
+}
+.btn-copy-message:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+
 /* ===== Tool use blocks ===== */
 .tool-use-block {
     margin: 8px 0;
