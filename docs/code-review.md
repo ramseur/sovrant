@@ -1513,3 +1513,102 @@ var dir = Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT")
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         ".sovrant", "artifacts");
 ```
+
+---
+
+# Round 5 — Knowledge Seeding Architecture Review (2026-06-03)
+
+**Scope:** How skills, agents, tool guides, document templates, guidelines, and PII sanitization flow from `knowledge_pages` into conversation context across CLI, Web, Desktop, and Server. Phase 112–113 completed the DB migration; this round audits what actually reaches the LLM and what is missing.
+**Build at time of review:** 2,222 tests passing. Schema V037. Phase 113 (CachedKnowledgeStore) shipped same day.
+
+---
+
+## 26. Knowledge Seeding — Current State Inventory
+
+### What reaches the LLM and how
+
+| Knowledge type | Injection point | Mechanism | Status |
+|---|---|---|---|
+| Skills (32 built-in + user) | `ConversationRuntime.BuildSystemPrompt()` | Full name + description + trigger for every skill, injected as static catalog block at session init | ⚠️ All-or-nothing — no relevance filtering |
+| Agent templates (25 built-in + user) | `ConversationRuntime.BuildSystemPrompt()` | Names only listed — no system prompts, no role descriptions | ⚠️ Name-only; LLM must infer when to delegate |
+| Tool guides (`kind='tools'`) | **Never injected** | `UserToolTemplateRegistry` loaded in DI but not referenced by any context-building path | ❌ Invisible to LLM |
+| Document templates | On-demand via `DocumentListTemplatesTool` | LLM must explicitly call the tool; templates not surfaced proactively | ⚠️ Pull-only; no proactive suggestion |
+| Language guidelines | `CodeCreateTool` fetches at generation time | Injected inside the tool call, not in the base system prompt | ⚠️ Tool-scoped only; not available conversationally |
+| Memory (session summaries, patterns) | `MemoryInjector.BuildMemorySectionAsync()` at session init | Up to 15 patterns + 10 instincts + 10 workspace memories appended to system prompt | ✅ Works |
+| PII sanitization (user input) | `TrustBoundary.PromptSanitizer` before each turn | Strips email, phone, SSN, CC numbers from user message | ✅ Wired for user input |
+| PII sanitization (knowledge content) | **Not implemented** | Agent system prompts, skill bodies, and tool results are never sanitized | ❌ Gap |
+| Attribution / provenance | **Not implemented** | `RuntimeEvent.ToolUseRequested` fires but no mapping to which knowledge resource drove the call | ❌ Gap |
+
+---
+
+## 27. HIGH Findings — Knowledge Seeding
+
+### 27.1 Tool Guides Never Reach the LLM
+**Layer:** Runtime — system prompt assembly
+**Files:** `src/Sovrant.Runtime/Conversation/ConversationRuntime.cs` (`BuildSystemPrompt`), `src/Sovrant.Tools/Templates/UserToolTemplateRegistry.cs`
+**Problem:** `UserToolTemplateRegistry` is a DI singleton that reads `kind='tools'` knowledge pages with full markdown bodies describing when and how to use each tool. Nothing in `BuildSystemPrompt`, `CapabilityCatalog`, or any per-turn injection path references these guides. The LLM has no awareness that tool guides exist.
+**Impact:** Users who author tool guides to influence model behaviour see zero effect. The feature exists in the DB and the UI but is functionally a no-op at inference time.
+**Fix:** Include a tool guides section in `ICapabilityCatalog` (alongside `Skills` and `AgentTemplateNames`) and inject it in `BuildSystemPrompt`. For the dynamic routing vision (see 27.4), tool guides become prime candidates for relevance-filtered injection.
+
+### 27.2 Skills Catalog Injected Statically — No Relevance Filtering
+**Layer:** Runtime — system prompt assembly
+**File:** `src/Sovrant.Runtime/Conversation/ConversationRuntime.cs:BuildSystemPrompt`
+**Problem:** All 32 (or more) skills are injected as a single catalog block on every turn, regardless of whether they are relevant to the user's intent. A coding session doesn't need the full business-process skills catalog. A document-generation request doesn't need tdd-workflow. The static injection wastes tokens (each skill description is 30–80 tokens), dilutes the LLM's attention, and increases the risk of irrelevant skill suggestions.
+**Note:** This is a design limitation, not a bug — it was the correct initial approach. The next step is relevance filtering (see 27.4).
+
+### 27.3 Document Templates Pull-Only — No Proactive Surfacing
+**Layer:** Runtime — per-turn context
+**File:** `src/Sovrant.Tools/Documents/DocumentListTemplatesTool.cs`
+**Problem:** Document templates are only discoverable if the LLM explicitly calls `DocumentListTemplatesTool`. If a user says "create a construction contract for 3 months' work" without prior context that structured templates exist, the model generates prose instead of using the purpose-built template. The model must already know to look for templates.
+**Impact:** The document template system is underutilised in practice. Users who don't know templates exist never benefit from them.
+**Fix:** Detect document-creation intent in the input analyzer (see 27.4) and proactively inject the relevant template summaries for the inferred industry/type. Alternatively, include a brief "document templates available" catalog hint in the system prompt when the template registry is non-empty.
+
+### 27.4 No Intelligent Knowledge Routing — Static Full-Catalog Injection
+**Layer:** Runtime — system prompt assembly
+**File:** `src/Sovrant.Runtime/Conversation/ConversationRuntime.cs:BuildSystemPrompt`
+**Problem:** The system prompt is built once at session init and contains everything — regardless of what the user will actually ask. A session that starts with a coding question and later asks for a financial report carries the full catalog for both domains throughout. `SemanticIntentGate` already classifies intent per turn but its classification is used only for governance, not for knowledge selection.
+**Vision (Phase 116):** An intelligent knowledge router that:
+1. Runs intent classification on the incoming message (reuse `SemanticIntentGate` or a lightweight keyword classifier)
+2. Selects the top-k relevant skills, agents, and document templates based on intent signal + embedding similarity
+3. Injects only the selected knowledge into the per-turn context (either as a system prompt addendum or as a pre-turn injection message)
+4. Passes unused knowledge through the cache so subsequent turns incur no extra DB cost
+
+### 27.5 PII Sanitization Covers User Input Only — Knowledge Content and Tool Results Not Sanitized
+**Layer:** TrustBoundary — sanitization pipeline
+**Files:** `src/Sovrant.Runtime/TrustBoundary/PromptSanitizer.cs`, `ConversationRuntime.cs`
+**Problem:** `PromptSanitizer.SanitizeAsync(userMessage)` is called before sending to the LLM. It strips PII from the user's text. But:
+- **Agent system prompts** (injected into `BuildSystemPrompt`) may contain PII if an admin authored a system prompt referencing real people or internal system names. These are never sanitized.
+- **Skill bodies** similarly may embed examples with real data.
+- **Tool results** (file reads, web fetches, bash output) return to the LLM unsanitized. A `ReadFile` on a credentials file sends its full plaintext to the LLM context.
+**Fix:** Extend `PromptSanitizer` with a `SanitizeKnowledgeContentAsync` path run when loading skill/agent bodies into the system prompt, and a `SanitizeToolResultAsync` path run on every `ToolResult` before it enters the conversation history.
+
+### 27.6 No Knowledge Attribution / Provenance Tracking
+**Layer:** Runtime — turn lifecycle
+**File:** `src/Sovrant.Runtime/Conversation/ConversationRuntime.cs` (tool execution path)
+**Problem:** When a turn completes, there is no record of which skills, agents, or document templates were invoked to produce the response. `RuntimeEvent.ToolUseRequested` fires with `ToolName` but does not record the knowledge resource that prompted or configured the tool call. The `AuditStore` logs events without knowledge provenance. Users and admins have no way to see "this response used the tdd-workflow skill and the coder agent."
+**Fix (Phase 116):** Track knowledge attribution as part of the turn lifecycle:
+- When `SkillTool.ExecuteAsync` runs, emit a `KnowledgeUsed(kind: "skill", slug: "tdd-workflow")` event alongside `ToolUseRequested`
+- When `AgentDelegateTool` selects an agent template, emit `KnowledgeUsed(kind: "agent", slug: "coder")`
+- When `DocumentFromTemplatesTool` runs, emit `KnowledgeUsed(kind: "document-templates", slug: "construction-contract")`
+- Persist these in a `knowledge_attributions` table (turn_id, kind, slug, timestamp)
+- Surface as a "Sources" panel in the chat UI showing which knowledge resources influenced the response
+
+---
+
+## 28. Recommended Fix Order (Round 5)
+
+### Phase 116 — Intelligent Knowledge Harness
+
+Deliverable order (each independently shippable):
+
+| Step | What | Files touched | Effort |
+|---|---|---|---|
+| A | **Wire tool guides into `ICapabilityCatalog`** — add `ToolGuides` property, inject in `BuildSystemPrompt` | `CapabilityCatalog.cs`, `ConversationRuntime.cs`, `ICapabilityCatalog` | Small |
+| B | **PII sanitization for knowledge content** — extend `PromptSanitizer` with `SanitizeKnowledgeContentAsync`; call it when building agent/skill system prompt blocks | `PromptSanitizer.cs`, `ConversationRuntime.cs` | Small–Medium |
+| C | **PII sanitization for tool results** — call `SanitizeToolResultAsync` on every `ToolResult` event before it enters `_history` | `ConversationRuntime.cs` (tool result handling) | Small |
+| D | **Proactive document template surfacing** — detect document-creation intent keywords and inject relevant template summaries as a pre-turn system addendum | `ConversationRuntime.cs` or new `DocumentContextInjector` | Medium |
+| E | **Knowledge attribution events** — emit `KnowledgeUsed` events from `SkillTool`, `AgentDelegateTool`, `DocumentFromTemplatesTool`; persist to `knowledge_attributions` table | New V038+ migration, tool files, `RuntimeEvent` | Medium |
+| F | **Dynamic knowledge routing** — replace static full-catalog injection with per-turn relevance-filtered injection driven by intent classification | `ConversationRuntime.cs`, `ICapabilityCatalog`, `SemanticIntentGate` | Large |
+| G | **Attribution UI** — "Sources" panel in Web + Desktop showing which knowledge resources were used per turn | `ChatMessage.razor`, `ChatView.axaml` | Medium |
+
+Steps A–C are high-value, low-risk and can ship without the full routing vision. D–E are independent of F–G. F is the largest change and should be the last step.
