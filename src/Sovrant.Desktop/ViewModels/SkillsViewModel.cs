@@ -38,6 +38,9 @@ public partial class SkillsViewModel : ViewModelBase
     [ObservableProperty]
     private bool _canEdit;
 
+    [ObservableProperty]
+    private string _errorMessage = string.Empty;
+
     public bool IsAdmin => _principal.IsAdmin;
 
     public ObservableCollection<SkillItemViewModel> FilteredSkills { get; } = [];
@@ -138,15 +141,23 @@ public partial class SkillsViewModel : ViewModelBase
     {
         var resolvedSlug = ExtractSlug(source) ?? EditingSlug ?? string.Empty;
         if (string.IsNullOrWhiteSpace(resolvedSlug)) return;
-        _registry.SaveGlobal(resolvedSlug, source);
+
+        ErrorMessage = string.Empty;
+        try
+        {
+            _registry.SaveGlobal(resolvedSlug, source);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            return;
+        }
+
         var savedName = ExtractName(source);
         EndEdit();
         LoadSkills();
-        if (!string.IsNullOrEmpty(savedName))
-        {
-            SelectedSkill = _allSkills.FirstOrDefault(s =>
-                string.Equals(s.Name, savedName, StringComparison.OrdinalIgnoreCase));
-        }
+        SelectedSkill = _allSkills.FirstOrDefault(s =>
+            string.Equals(s.Name, savedName ?? resolvedSlug, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string? ExtractName(string markdown)

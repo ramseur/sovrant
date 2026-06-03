@@ -191,6 +191,13 @@
                                              FontFamily="Consolas,Menlo,monospace" FontSize="12" />
                                 </StackPanel>
 
+                                <Border IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                        Background="#332d1b1b" BorderBrush="#c94a4a"
+                                        BorderThickness="1" CornerRadius="6" Padding="12,8">
+                                    <TextBlock Text="{Binding ErrorMessage}"
+                                               FontSize="12" Foreground="#ff8080" TextWrapping="Wrap" />
+                                </Border>
+
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <Button Content="Save"
                                             Command="{Binding ActiveEditor.SaveCommand}"

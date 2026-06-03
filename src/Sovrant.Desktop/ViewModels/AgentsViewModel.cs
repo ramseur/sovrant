@@ -180,9 +180,10 @@ public partial class AgentsViewModel : ViewModelBase
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 LoadTemplates();
+                SelectedTemplate = FilteredTemplates.FirstOrDefault(t => t.Name == name);
+                // Dismiss editor only after list is confirmed updated.
                 IsEditing = false;
                 IsNew = false;
-                SelectedTemplate = FilteredTemplates.FirstOrDefault(t => t.Name == name);
             });
         }
         catch (Exception ex)

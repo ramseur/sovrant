@@ -60,7 +60,8 @@ public sealed partial class SkillRegistry
         ArgumentNullException.ThrowIfNull(markdown);
 
         var skill = SkillParser.Parse(markdown);
-        if (skill is null) return;
+        if (skill is null)
+            throw new InvalidOperationException("Skill markdown could not be parsed — check that the frontmatter starts with ---, contains a non-empty 'name' field, and has a closing --- followed by a newline.");
 
         var now = DateTimeOffset.UtcNow;
         var page = new KnowledgePage(

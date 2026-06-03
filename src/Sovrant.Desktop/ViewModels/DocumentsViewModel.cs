@@ -179,8 +179,9 @@ public partial class DocumentsViewModel : ViewModelBase
                 FilenameTemplate: string.IsNullOrWhiteSpace(filenameTemplate) ? null : filenameTemplate))
                 .ConfigureAwait(true);
 
-            EndEdit();
+            // Reload list before dismissing editor so any reload failure keeps the editor open.
             ReloadAndReselect(slug);
+            EndEdit();
         }
         catch (Exception ex)
         {
