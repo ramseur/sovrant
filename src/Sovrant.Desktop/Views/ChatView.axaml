@@ -48,7 +48,7 @@
                     <TextBox x:Name="InputBox"
                              Text="{Binding InputText}"
                              Watermark="Type a message or / for commands..."
-                             AcceptsReturn="False"
+                             AcceptsReturn="True"
                              TextWrapping="Wrap"
                              KeyDown="OnInputKeyDown"
                              MinHeight="60"
@@ -331,6 +331,18 @@
                                                            Foreground="{DynamicResource TextMuted}"
                                                            VerticalAlignment="Center" Margin="4,0,0,0"
                                                            IsVisible="{Binding ActionSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                <Button Content="Copy"
+                                                        FontSize="10"
+                                                        Padding="8,2"
+                                                        CornerRadius="4"
+                                                        Background="Transparent"
+                                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                                        BorderThickness="1"
+                                                        Foreground="{DynamicResource TextMuted}"
+                                                        VerticalAlignment="Center"
+                                                        Margin="8,0,0,0"
+                                                        Click="OnCopyMessageButtonClick"
+                                                        IsVisible="{Binding IsComplete}" />
                                             </StackPanel>
 
                                             <!-- Intent narration — what the system thinks the user wants -->

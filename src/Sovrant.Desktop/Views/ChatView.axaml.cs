@@ -151,4 +151,13 @@ public partial class ChatView : UserControl
             await clipboard.SetTextAsync(msg.Text);
         }
     }
+
+    private async void OnCopyMessageButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: MessageViewModel msg } &&
+            TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(msg.Text);
+        }
+    }
 }
