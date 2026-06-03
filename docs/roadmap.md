@@ -10858,3 +10858,173 @@ to produce a summary that is re-injected.").
 - Desktop chat header has a "Clear" button; clicking it after > 5 messages shows a confirm dialog.
 - Web chat header has a "Clear" / "New Chat" button wired to `OnNewSession`.
 - All existing tests pass; add unit tests for `CompactCommand` covering the LLM-backed and empty-session cases.
+
+---
+
+## Phase 116 — Intelligent Knowledge Harness
+
+> **Status:** Pending. On-demand, session-scoped knowledge and integration loading — the runtime becomes smart about *what* to make available and *when*, rather than pre-loading everything for every session.
+
+### Tenets driving this phase
+
+Two of Sovrant's three core tenets are load-bearing here:
+
+- **Drive AI spend toward zero** — pre-loading the full knowledge catalog on every turn wastes tokens, degrades prompt-cache hit rates, and adds latency. Hundreds of concurrent sessions cannot afford a 2,000-token knowledge dump per request.
+- **Be ethical with AI** — PII flowing from file reads, web fetches, and authored knowledge content (agent system prompts, skill bodies) into LLM context unchecked is a trust-boundary failure. Sanitization must cover the full round-trip, not just user input.
+
+### Problem statement
+
+Today the knowledge pipeline has two failure modes:
+
+**Over-injection (performance and cost):**
+- All 32+ skills and 25+ agent names are injected into every session's system prompt at init, regardless of whether the user will ever need a skill or delegate to an agent.
+- The static system prompt grows with each new skill or agent added to the DB, silently increasing token cost for every existing session.
+- Tool guides (`kind='tools'`) and document templates are never injected at all — the LLM cannot discover them unless it already knows to call a specific tool.
+- MCP server tool lists for connected integrations are available but not relevance-filtered — a session with 8 integrations connected gets all 80+ tools in every turn regardless of intent.
+
+**Under-sanitization (ethics and trust):**
+- `PromptSanitizer` runs only on user input. Agent system prompts, skill bodies, and tool results (file content, web responses, bash output) travel to the LLM raw.
+- A `ReadFile` call on a `.env` or credentials file sends its full plaintext into the conversation history. A skill body authored with a real person's name or an internal IP address embeds PII into every session that loads it.
+
+### Architecture: stable base + dynamic per-turn addendum
+
+The key design principle is **not to replace the static system prompt** — it must remain stable across turns so that LLM provider-side prompt caching works. Instead, a small **dynamic knowledge addendum** is prepended to each turn's user message (as an additional context block, not a system prompt mutation):
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  STABLE SYSTEM PROMPT  (built once at session init)          │
+│  · Runtime identity, shell hints, permission mode            │
+│  · Artifact discipline, orchestration strategy               │
+│  · Memory section (summaries, patterns, instincts)           │
+│  · Git context                                               │
+│  ← This never changes between turns; provider caches it →   │
+└─────────────────────────────────────────────────────────────┘
+                            +
+┌─────────────────────────────────────────────────────────────┐
+│  DYNAMIC PER-TURN ADDENDUM  (assembled fresh each turn)      │
+│  · Top-k relevant skills for this input (3–5 max)            │
+│  · Relevant agent summaries if delegation likely             │
+│  · Relevant document template hints if creation intent       │
+│  · Tool guides for tools likely to be called                 │
+│  · Active MCP integration tool list (session-scoped)         │
+│  ← Small, targeted, changes per turn; not cached →          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+This preserves prompt-caching economics on the stable portion (the large block) while making the small dynamic portion turn-aware.
+
+### Knowledge Router
+
+A new `IKnowledgeRouter` service sits between the incoming turn message and the context assembler:
+
+```
+Turn input
+  → PII sanitizer (user message)          [already exists, unchanged]
+  → Intent classifier                      [reuse SemanticIntentGate or keyword scorer]
+  → Knowledge selector                     [NEW — queries CachedKnowledgeStore]
+      · GetAllEffectiveAsync("skills")     already cached in-process (5 min TTL)
+      · GetAllEffectiveAsync("agents")     already cached in-process (5 min TTL)
+      · GetAllEffectiveAsync("document-templates") already cached (10 min TTL)
+      · GetAllEffectiveAsync("tools")      already cached (5 min TTL)
+      → score each item against intent signal
+      → return top-k per kind (configurable, default 5/3/3/3)
+  → PII sanitizer (selected knowledge content)  [NEW — SanitizeKnowledgeContentAsync]
+  → Addendum assembler                     [NEW — formats selected items as context block]
+  → LLM (stable system prompt + addendum + user message)
+  → Tool results → PII sanitizer           [NEW — SanitizeToolResultAsync]
+  → Attribution tracker                    [NEW — records which knowledge was used]
+  → Response + provenance metadata
+```
+
+### Relevance scoring (lightweight, no LLM call)
+
+The selector scores each knowledge item against the turn input using a fast heuristic — no embedding model, no extra LLM call:
+
+1. **Keyword overlap** — tokenise the user message and the item's `name + description + trigger`; score = intersection / union (Jaccard).
+2. **Trigger match** — if a skill's trigger phrase appears verbatim in the input (e.g. `/tdd`), it scores 1.0.
+3. **Intent-to-kind affinity** — if the intent gate classifies the input as `CodeGeneration`, skills and tool guides score higher; if `DocumentCreation`, document templates score higher; if `AgentDelegation`, agent templates score higher.
+4. **Session history signal** — skills or agents used in the last 3 turns of this session score a recency bonus.
+
+Scores are computed entirely in-process against the already-cached in-memory dictionaries from `CachedKnowledgeStore`. No DB round-trip per turn.
+
+### PII sanitization — full round-trip
+
+Extend `PromptSanitizer` (Phase 58) with two new paths:
+
+**`SanitizeKnowledgeContentAsync(string body)`**
+- Called on each selected knowledge item's body before it enters the addendum.
+- Same detector set as the user-input path (email, phone, SSN, credit card, IP addresses).
+- Items that fail sanitization are excluded from the addendum and logged; the session continues without them.
+
+**`SanitizeToolResultAsync(string toolResult, string toolName)`**
+- Called on every `ToolResult` event before it is appended to `_history`.
+- Configurable per tool class: file-reading tools (`ReadFile`, `Glob`, `Grep`) run full PII scanning; bash/shell output runs a lighter pass (strip only credential-shaped patterns — `sk-`, `ghp_`, `xoxb-`, etc.).
+- If a result is partially sanitized, the redacted version is stored in history; the original is never written to `session_entries`.
+
+Both paths are governed by the existing `TrustBoundaryConfig.EnablePiiDetection` flag — when disabled (air-gapped or development installs), both paths are bypassed.
+
+### MCP integration scoping
+
+MCP server tool lists are already session-scoped via `SessionConfig.AllowedMcpServers`. Phase 116 extends this:
+
+- When the knowledge selector runs, it also evaluates which connected MCP tools are relevant to the current intent.
+- Only the relevant MCP tools are included in the turn's tool list, rather than passing all connected tools every turn.
+- The existing `FilteredToolRegistry` pattern (Phase 58) is extended to accept a per-turn `IReadOnlyList<string>? allowedTools` override that the selector populates.
+- Tools not in the filtered list are still registered (so the LLM can call them if it reasons its way there), but they are not mentioned in the system prompt or addendum, reducing token pressure.
+
+### Attribution tracking
+
+A new `knowledge_attributions` table records which knowledge resources influenced each turn:
+
+```sql
+CREATE TABLE knowledge_attributions (
+    id          INTEGER PRIMARY KEY,
+    session_id  TEXT NOT NULL,
+    turn_index  INTEGER NOT NULL,
+    kind        TEXT NOT NULL,   -- 'skills', 'agents', 'document-templates', 'tools'
+    slug        TEXT NOT NULL,
+    used_at     TEXT NOT NULL    -- ISO 8601
+);
+```
+
+Events:
+- `SkillTool.ExecuteAsync` → writes `kind='skills', slug=<name>`
+- `AgentDelegateTool` / `TeamDelegateTool` → writes `kind='agents', slug=<name>`
+- `DocumentFromTemplatesTool` → writes `kind='document-templates', slug=<id>`
+- Any tool guided by a `kind='tools'` entry → writes `kind='tools', slug=<slug>`
+
+The attribution table is lightweight (no body storage) and append-only. It feeds the provenance surface in the UI.
+
+### Delivery (A → G, each independently shippable)
+
+| Step | What | Effort | Value |
+|---|---|---|---|
+| **A** | Wire tool guides into `ICapabilityCatalog` + inject in system prompt (static, no routing yet) | Small | Tool guides immediately visible to LLM |
+| **B** | `SanitizeKnowledgeContentAsync` — PII sanitization for selected knowledge bodies | Small | Ethical gap closed for knowledge content |
+| **C** | `SanitizeToolResultAsync` — PII sanitization for tool results before history write | Small | Ethical gap closed for file/web/shell output |
+| **D** | `IKnowledgeRouter` + relevance scorer — lightweight keyword/trigger/intent scoring, no LLM call | Medium | Per-turn knowledge selection; token cost drops |
+| **E** | Dynamic per-turn addendum — assemble and inject only selected knowledge as context block, remove full catalog from static system prompt | Medium | Prompt cache preserved; addendum is small and targeted |
+| **F** | `knowledge_attributions` table + `KnowledgeUsed` events from `SkillTool`, `AgentDelegateTool`, `DocumentFromTemplatesTool` | Medium | Attribution data available |
+| **G** | MCP tool relevance filtering — extend `FilteredToolRegistry` with per-turn intent-scoped allow list | Medium | Reduces MCP token pressure in multi-integration sessions |
+| **H** | Provenance UI — "Sources" section in Web + Desktop chat showing which skills/agents/templates were used | Medium | User transparency; supports the ethics tenet |
+
+Steps A–C are pure improvements with no architectural risk — they can ship any time. D–E are the core routing change and should ship together. F–H are independent of each other.
+
+### What does NOT change
+
+- `ConversationRuntime.BuildSystemPrompt()` structure — the stable base prompt is unchanged; we only add an addendum mechanism.
+- `CachedKnowledgeStore` TTLs — the per-kind cache is already correct; the router reads from the same in-memory cache.
+- `SkillRegistry`, `AgentTemplateRegistry`, `TemplateRegistry` — all read from `IKnowledgeStore` as today; no changes to registry internals.
+- `PromptSanitizer` user-input path — unchanged; we add two new methods alongside it.
+- `TrustBoundaryConfig.EnablePiiDetection` — governs all three sanitization paths uniformly.
+
+### Acceptance Criteria
+
+- A coding-focused input ("write unit tests for this function") injects tdd-workflow and coder agent, not business-process skills or financial document templates.
+- A document-creation input ("I need a construction contract") proactively surfaces the construction-contract template summary without the user calling `DocumentListTemplatesTool`.
+- A session with 8 MCP integrations connected does not include all 80+ tools in the prompt for a simple "explain this code" turn.
+- `ReadFile` on a file containing `email@example.com` stores the redacted version in `session_entries`; the original never appears in `_history`.
+- A skill body containing a mock SSN is sanitized before being included in the addendum.
+- After a turn that uses the tdd-workflow skill, `knowledge_attributions` has a row with `kind='skills', slug='tdd-workflow'`.
+- Stable system prompt hash does not change between turns (verifiable: provider-side cache hit rate does not drop vs. pre-Phase-116 baseline).
+- All existing tests pass; new unit tests cover the relevance scorer (trigger match, keyword overlap, intent affinity) and both PII sanitization paths.
