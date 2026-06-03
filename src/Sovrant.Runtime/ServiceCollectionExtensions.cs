@@ -100,8 +100,17 @@ public static class ServiceCollectionExtensions
             new SqliteAuditStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
         // Knowledge pages — DB-backed store for skills/documents/tools (Phase 108 foundation).
+        // Phase 113: wrapped in CachedKnowledgeStore unless SOVRANT_KNOWLEDGE_CACHE_TTL=0.
         services.AddSingleton<IKnowledgeStore>(sp =>
-            new SqliteKnowledgeStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+        {
+            IKnowledgeStore inner = new SqliteKnowledgeStore(sp.GetRequiredService<ISqliteConnectionFactory>());
+            if (Environment.GetEnvironmentVariable("SOVRANT_KNOWLEDGE_CACHE_TTL") is "0")
+                return inner;
+            return new CachedKnowledgeStore(
+                inner,
+                sp.GetRequiredService<ICacheProvider>(),
+                sp.GetRequiredService<CacheInvalidator>());
+        });
 
         // Governance monitor — loads from env > workspace_settings DB > defaults.
         // Wrapped in ILiveSettings so the Settings UI can hot-reload secret

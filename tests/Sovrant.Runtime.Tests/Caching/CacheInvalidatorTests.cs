@@ -70,6 +70,38 @@ public sealed class CacheInvalidatorTests : IDisposable
     }
 
     [Fact]
+    public async Task InvalidateKnowledgeAsync_SkillsKind_ClearsKnowledgeAndHttpResponseCacheKeys()
+    {
+        await _cache.SetAsync("knowledge:skills:alpha:", "a", TimeSpan.FromMinutes(5));
+        await _cache.SetAsync("knowledge:skills:all:", "b", TimeSpan.FromMinutes(5));
+        await _cache.SetAsync("skills:list", "c", TimeSpan.FromMinutes(5));
+        await _cache.SetAsync("skills:alpha", "d", TimeSpan.FromMinutes(5));
+        await _cache.SetAsync("templates:list", "e", TimeSpan.FromMinutes(5));
+
+        await _invalidator.InvalidateKnowledgeAsync("skills");
+
+        Assert.Null(await _cache.GetAsync<string>("knowledge:skills:alpha:"));
+        Assert.Null(await _cache.GetAsync<string>("knowledge:skills:all:"));
+        Assert.Null(await _cache.GetAsync<string>("skills:list"));
+        Assert.Null(await _cache.GetAsync<string>("skills:alpha"));
+        Assert.Equal("e", await _cache.GetAsync<string>("templates:list")); // unaffected
+    }
+
+    [Fact]
+    public async Task InvalidateKnowledgeAsync_AgentsKind_ClearsKnowledgeAndTemplatesCacheKeys()
+    {
+        await _cache.SetAsync("knowledge:agents:researcher:", "a", TimeSpan.FromMinutes(5));
+        await _cache.SetAsync("templates:list", "b", TimeSpan.FromMinutes(5));
+        await _cache.SetAsync("skills:list", "c", TimeSpan.FromMinutes(5));
+
+        await _invalidator.InvalidateKnowledgeAsync("agents");
+
+        Assert.Null(await _cache.GetAsync<string>("knowledge:agents:researcher:"));
+        Assert.Null(await _cache.GetAsync<string>("templates:list"));
+        Assert.Equal("c", await _cache.GetAsync<string>("skills:list")); // unaffected
+    }
+
+    [Fact]
     public async Task InvalidateAllAsync_ClearsEverything()
     {
         await _cache.SetAsync("tools:list", "a", TimeSpan.FromMinutes(5));
