@@ -50,7 +50,6 @@
                              Watermark="Type a message or / for commands..."
                              AcceptsReturn="True"
                              TextWrapping="Wrap"
-                             KeyDown="OnInputKeyDown"
                              MinHeight="60"
                              MaxHeight="300"
                              Padding="12,10"
