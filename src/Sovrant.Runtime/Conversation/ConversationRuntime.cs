@@ -42,6 +42,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly McpClientRegistry? _mcpClients;
     private readonly IArtifactStore? _artifactStore;
     private readonly TrustBoundary.IPromptSanitizer? _sanitizer;
+    private readonly Prompt.IKnowledgeRouter? _knowledgeRouter;
     private readonly List<InputMessage> _history = [];
     private string _systemPrompt;
     /// <summary>Once true, all subsequent turns expose tools (session used tools at least once).</summary>
@@ -63,6 +64,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to build MCP hint; continuing without it")]
     private static partial void LogMcpHintFailed(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Knowledge routing failed; continuing without addendum")]
+    private static partial void LogKnowledgeRoutingFailed(ILogger logger, Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Tool call loop detected: '{ToolName}' called {Count} times consecutively for session '{SessionId}' — breaking loop")]
     private static partial void LogToolCallLoop(ILogger logger, string toolName, int count, string sessionId);
@@ -122,7 +126,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         McpClientRegistry? mcpClients = null,
         Prompt.ICapabilityCatalog? capabilityCatalog = null,
         IArtifactStore? artifactStore = null,
-        TrustBoundary.IPromptSanitizer? sanitizer = null)
+        TrustBoundary.IPromptSanitizer? sanitizer = null,
+        Prompt.IKnowledgeRouter? knowledgeRouter = null)
     {
         _router = router;
         _toolExecutor = toolExecutor;
@@ -144,6 +149,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         _mcpClients = mcpClients;
         _artifactStore = artifactStore;
         _sanitizer = sanitizer;
+        _knowledgeRouter = knowledgeRouter;
         _systemPrompt = systemPromptOverride ?? BuildSystemPrompt(capabilityCatalog);
     }
 
@@ -309,10 +315,47 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     _systemPrompt += hint;
             }
 
+            // Phase 116 D+E — per-turn knowledge addendum.
+            // Routed items are injected as an extra text block prepended to the
+            // current user message. _history is NOT mutated; the addendum only
+            // travels to the LLM for this turn and is never stored in session_entries.
+            IReadOnlyList<InputMessage> messagesForRequest = _history;
+            if (round == 0 && _knowledgeRouter is not null)
+            {
+                Prompt.KnowledgeSelection? selection = null;
+#pragma warning disable CA1031
+                try
+                {
+                    selection = await _knowledgeRouter.SelectAsync(userMessage, ct: ct)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    LogKnowledgeRoutingFailed(_logger, ex);
+                }
+#pragma warning restore CA1031
+                if (selection is { IsEmpty: false })
+                {
+                    var addendum = BuildKnowledgeAddendum(selection);
+                    if (addendum.Length > 0)
+                    {
+                        var withAddendum = new List<InputMessage>(_history);
+                        var lastMsg = withAddendum[^1];
+                        var blocks = new List<InputContentBlock>(lastMsg.Content.Count + 1)
+                        {
+                            new InputContentBlock.TextBlock(addendum),
+                        };
+                        blocks.AddRange(lastMsg.Content);
+                        withAddendum[^1] = new InputMessage(lastMsg.Role, blocks);
+                        messagesForRequest = withAddendum;
+                    }
+                }
+            }
+
             var request = new MessagesRequest(
                 _config.Model,
                 CapMaxTokens(_config.Model, _config.MaxTokens),
-                _history)
+                messagesForRequest)
             {
                 System = _systemPrompt,
                 Tools = tools.Count > 0 ? tools : null,
@@ -1219,54 +1262,119 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         // Git context: branch, status, recent commits
         AppendGitContext(sb, Directory.GetCurrentDirectory());
 
-        // Skills and agent templates — list names once at construction so the
-        // model knows what's available without spending a tool-call round on discovery.
         if (catalog is not null)
         {
-            if (catalog.Skills.Count > 0)
+            var hasItems = catalog.Skills.Count > 0 || catalog.AgentTemplateNames.Count > 0
+                || catalog.ToolGuides.Count > 0;
+
+            if (_knowledgeRouter is not null)
             {
-                sb.Append("\n\nAvailable skills (invoke via the Skill tool, e.g. Skill name=\"review\"):");
-                foreach (var (name, description, trigger) in catalog.Skills)
+                // Phase 116 E — dynamic routing is active. Inject only a capability hint;
+                // relevant items are delivered per-turn via the knowledge addendum so the
+                // stable base prompt stays cacheable.
+                if (hasItems)
+                    sb.Append("\n\nYou have access to custom skills (use the Skill tool, e.g. Skill name=\"review\"), ")
+                      .Append("agent templates (use the Agent tool with template=), and document templates ")
+                      .Append("(use DocumentFromTemplate). Relevant items are provided as context with each request.");
+            }
+            else
+            {
+                // Static fallback — inject full catalog when no router is registered.
+                if (catalog.Skills.Count > 0)
                 {
-                    sb.Append("\n- ").Append(name);
-                    if (!string.IsNullOrWhiteSpace(trigger))
-                        sb.Append(" (").Append(trigger).Append(')');
-                    if (!string.IsNullOrWhiteSpace(description))
+                    sb.Append("\n\nAvailable skills (invoke via the Skill tool, e.g. Skill name=\"review\"):");
+                    foreach (var (name, description, trigger) in catalog.Skills)
                     {
-                        // Step B: sanitize user-authored description before injecting into system prompt.
-                        var safeDesc = _sanitizer?.SanitizeRawText(description) ?? description;
-                        sb.Append(": ").Append(safeDesc);
+                        sb.Append("\n- ").Append(name);
+                        if (!string.IsNullOrWhiteSpace(trigger))
+                            sb.Append(" (").Append(trigger).Append(')');
+                        if (!string.IsNullOrWhiteSpace(description))
+                        {
+                            var safeDesc = _sanitizer?.SanitizeRawText(description) ?? description;
+                            sb.Append(": ").Append(safeDesc);
+                        }
+                    }
+                }
+
+                if (catalog.AgentTemplateNames.Count > 0)
+                {
+                    var names = string.Join(", ", catalog.AgentTemplateNames);
+                    sb.Append("\n\nAvailable agent templates (pass as 'template' to the Agent tool): ")
+                      .Append(names).Append('.');
+                }
+
+                if (catalog.ToolGuides.Count > 0)
+                {
+                    sb.Append("\n\nTool usage guides (authored knowledge for specific tools):");
+                    string? currentCategory = null;
+                    foreach (var (slug, name, description, category, body) in catalog.ToolGuides)
+                    {
+                        if (!string.Equals(category, currentCategory, StringComparison.OrdinalIgnoreCase))
+                        {
+                            currentCategory = category;
+                            sb.Append("\n\n[").Append(category).Append(']');
+                        }
+                        sb.Append("\n\n### ").Append(name);
+                        if (!string.IsNullOrWhiteSpace(description))
+                            sb.Append('\n').Append(_sanitizer?.SanitizeRawText(description) ?? description);
+                        sb.Append('\n').Append(_sanitizer?.SanitizeRawText(body) ?? body);
                     }
                 }
             }
+        }
 
-            if (catalog.AgentTemplateNames.Count > 0)
+        return sb.ToString();
+    }
+
+    private string BuildKnowledgeAddendum(Prompt.KnowledgeSelection selection)
+    {
+        var sb = new StringBuilder("[Relevant knowledge context for this request]");
+
+        if (selection.Skills.Count > 0)
+        {
+            sb.Append("\n\n**Skills** (invoke via the Skill tool, e.g. Skill name=\"review\"):");
+            foreach (var s in selection.Skills)
             {
-                var names = string.Join(", ", catalog.AgentTemplateNames);
-                sb.Append("\n\nAvailable agent templates (pass as 'template' to the Agent tool): ")
-                  .Append(names).Append('.');
+                sb.Append("\n- ").Append(s.Name);
+                if (!string.IsNullOrWhiteSpace(s.Trigger))
+                    sb.Append(" (trigger: ").Append(s.Trigger).Append(')');
+                if (!string.IsNullOrWhiteSpace(s.Description))
+                    sb.Append(": ").Append(_sanitizer?.SanitizeRawText(s.Description) ?? s.Description);
             }
+        }
 
-            if (catalog.ToolGuides.Count > 0)
+        if (selection.Agents.Count > 0)
+        {
+            sb.Append("\n\n**Agent templates** (invoke via the Agent tool with template=):");
+            foreach (var a in selection.Agents)
             {
-                sb.Append("\n\nTool usage guides (authored knowledge for specific tools):");
-                string? currentCategory = null;
-                foreach (var (slug, name, description, category, body) in catalog.ToolGuides)
-                {
-                    if (!string.Equals(category, currentCategory, StringComparison.OrdinalIgnoreCase))
-                    {
-                        currentCategory = category;
-                        sb.Append("\n\n[").Append(category).Append(']');
-                    }
-                    sb.Append("\n\n### ").Append(name);
-                    if (!string.IsNullOrWhiteSpace(description))
-                    {
-                        // Step B: sanitize user-authored description.
-                        sb.Append('\n').Append(_sanitizer?.SanitizeRawText(description) ?? description);
-                    }
-                    // Step B: sanitize tool guide body before injecting into system prompt.
-                    sb.Append('\n').Append(_sanitizer?.SanitizeRawText(body) ?? body);
-                }
+                sb.Append("\n- ").Append(a.Name);
+                if (!string.IsNullOrWhiteSpace(a.Description))
+                    sb.Append(": ").Append(_sanitizer?.SanitizeRawText(a.Description) ?? a.Description);
+            }
+        }
+
+        if (selection.DocumentTemplates.Count > 0)
+        {
+            sb.Append("\n\n**Document templates** (invoke via the DocumentFromTemplate tool):");
+            foreach (var d in selection.DocumentTemplates)
+            {
+                sb.Append("\n- ").Append(d.Name);
+                if (!string.IsNullOrWhiteSpace(d.Description))
+                    sb.Append(": ").Append(_sanitizer?.SanitizeRawText(d.Description) ?? d.Description);
+            }
+        }
+
+        if (selection.ToolGuides.Count > 0)
+        {
+            sb.Append("\n\n**Tool guides** (usage instructions for relevant tools):");
+            foreach (var t in selection.ToolGuides)
+            {
+                sb.Append("\n\n### ").Append(t.Name);
+                if (!string.IsNullOrWhiteSpace(t.Description))
+                    sb.Append('\n').Append(_sanitizer?.SanitizeRawText(t.Description) ?? t.Description);
+                if (!string.IsNullOrWhiteSpace(t.Body))
+                    sb.Append('\n').Append(_sanitizer?.SanitizeRawText(t.Body) ?? t.Body);
             }
         }
 
