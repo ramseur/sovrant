@@ -211,6 +211,77 @@ An in-memory `EthicalAuditLog` (capped at 10,000 entries, thread-safe) records g
 
 ---
 
+## Trust Boundary & LLM Data Pipeline
+
+Sovrant treats every path that touches the LLM as a trust boundary: user messages going out, knowledge content baked into prompts, tool results returning from external systems, and model responses coming back in. The trust pipeline has two phases.
+
+### Phase 58 — PromptSanitizer (user input path)
+
+`TrustBoundaryProvider` wraps every `ILlmProvider` and intercepts each `MessagesRequest` before it leaves the process:
+
+1. `PromptSanitizer.Sanitize(request)` runs all registered `IPatternDetector` instances over every text field in the request (system prompt, user/assistant messages, tool-use inputs, tool-result content).
+2. Detected PII is replaced with deterministic placeholders: `[EMAIL_1]`, `[PHONE_1]`, `[SSN_1]`, etc.
+3. A `RedactionMap` records the original ↔ placeholder mapping for this request.
+4. After the model responds, `Restore(response, map)` rewrites placeholders back to originals before the text is surfaced to the user.
+
+Three detector classes run in this pipeline:
+
+| Detector | Patterns |
+|---|---|
+| `PiiDetector` | Email, phone, SSN, credit card, IPv4/IPv6, dates (when adjacent to other PII) |
+| `CorporateDataDetector` | Corporate email domains, internal hostnames, configured allow-list |
+| `CustomPatternRegistry` | User-defined regex patterns from `TrustBoundaryConfig.CustomPatterns` |
+
+Configuration is hot-reloadable: when the Settings UI saves a trust-boundary change, `PromptSanitizer` swaps its detector list atomically without dropping in-flight requests. The sanitizer is governed by `TrustBoundaryConfig.Sanitizer.Enabled`; when `false` (development or air-gapped installs), the pipeline is a no-op.
+
+### Phase 116 — Intelligent Knowledge Harness
+
+Phase 116 extends the trust boundary to cover two previously unprotected paths: **knowledge content injected into prompts** and **tool results written to session history**.
+
+#### SanitizeRawText — one-way sanitization
+
+`IPromptSanitizer.SanitizeRawText(string)` is a one-way variant: PII is replaced using the same detector set, but no `RedactionMap` is retained and originals are never restored. It is used where content must not contain PII before it reaches the LLM or lands in storage.
+
+**Knowledge content (Step B):** Skill descriptions, tool guide descriptions, and tool guide bodies are sanitized with `SanitizeRawText` before they are injected into either the static system prompt (fallback path) or the per-turn knowledge addendum (router path). PII authored accidentally in a skill or tool guide is stripped before it reaches any model.
+
+**Tool results (Step C):** `execResult.Output` is sanitized once immediately after tool execution. The sanitized string (`toolOutput`) is then used everywhere downstream: the `ToolResult` UI event, the `PermissionDenied` event, the PostToolUse hook context, `toolResultPairs` (→ `_history`), and `AppendSessionEntryAsync` (→ `session_entries`). A file read of a `.env` file or credentials file never stores or transmits plaintext secrets.
+
+#### IKnowledgeRouter — per-turn knowledge selection (Step D)
+
+A new `IKnowledgeRouter` service selects the top-k most relevant knowledge items for each turn before the `MessagesRequest` is built. Selection uses four heuristic signals — no LLM call:
+
+| Signal | Weight | Description |
+|---|---|---|
+| Trigger match | 1.5 (always wins) | Trigger phrase appears verbatim in the input (e.g. `/tdd`) |
+| Jaccard overlap | ×0.6 | Intersection/union of lowercased word sets: input vs. name+description+trigger |
+| Intent-to-kind affinity | 0–0.4 | Code intents boost skills; document intents boost templates; research/planning boosts agents |
+| Recency bonus | +0.3 | Item was used in a recent turn of this session |
+
+Defaults: top-5 skills, top-3 agents, top-3 document templates, top-3 tool guides. Items scoring below 0.05 are excluded. Items that trigger exact trigger-phrase matching bypass scoring and are always included.
+
+`KnowledgeRouter` reads from `IKnowledgeStore`, which is wrapped by `CachedKnowledgeStore` (5-minute TTL per kind). After the first warm-up call, all four parallel `GetAllEffectiveAsync` calls are served from the in-process `ConcurrentDictionary` — no SQLite round-trip per turn.
+
+#### Dynamic per-turn addendum (Step E)
+
+Rather than injecting the full knowledge catalog into the static system prompt (which would grow unboundedly and break provider-side prompt caching), Phase 116 uses a stable base + dynamic addendum architecture:
+
+```
+STABLE SYSTEM PROMPT          Capability hint only: "You have access to skills, agents, templates."
+       +
+DYNAMIC ADDENDUM              Top-k selected items, sanitized, freshly assembled each turn.
+  (prepended to user msg)     Never stored in _history or session_entries.
+```
+
+The addendum is injected as an extra `TextBlock` prepended to the current turn's user message content in `MessagesRequest`. `_history` is never mutated — the addendum is ephemeral and invisible to session replay or history compaction.
+
+When no items score above threshold (empty selection), no addendum is produced and no tokens are spent. A routing failure is logged and the turn continues without an addendum rather than failing.
+
+#### Configuration
+
+All three sanitization paths (`Sanitize`, `SanitizeRawText` for knowledge content, `SanitizeRawText` for tool results) are governed by the single `TrustBoundaryConfig.Sanitizer.Enabled` flag. Set `SOVRANT_KNOWLEDGE_CACHE_TTL=0` to bypass `CachedKnowledgeStore` for testing; this causes `KnowledgeRouter` to hit SQLite on every turn.
+
+---
+
 ## Artifact Path Security
 
 ### Path Traversal Defense
