@@ -116,6 +116,7 @@
     [Inject] private Sovrant.Agents.Templates.AgentTemplateRegistry AgentRegistry { get; set; } = default!;
     [Inject] private ChatSeedService ChatSeed { get; set; } = default!;
     [Inject] private Sovrant.Runtime.Governance.IAuditStore AuditStore { get; set; } = default!;
+    [Inject] private Sovrant.Runtime.Knowledge.IKnowledgeAttributionStore AttributionStore { get; set; } = default!;
 
     private string _userDisplayName => LocalPart(Session.Email) ?? "You";
     private static string? LocalPart(string? email)
@@ -134,6 +135,8 @@
     private bool _stopRequested;
     private int _tokenCount;
     private decimal _sessionCost;
+    // Phase 116 H — incremented for each assistant turn to match knowledge_attributions.turn_index.
+    private int _nextTurnIndex;
     private string _pageError = string.Empty;
     private string _sessionId = $"session-{Guid.NewGuid():N}";
     private string? _agentName;
@@ -538,7 +541,7 @@
         if (_messages.Count == 0 || _messages[^1].Role != "user" || _messages[^1].Text != text)
             _messages.Add(new ChatMessageModel { Role = "user", Text = text, IsComplete = true, UserDisplayName = _userDisplayName });
 
-        var assistantMsg = new ChatMessageModel { Role = "assistant", ModelName = Config.Model };
+        var assistantMsg = new ChatMessageModel { Role = "assistant", ModelName = Config.Model, TurnIndex = _nextTurnIndex++ };
         assistantMsg.StartThinking(text);
         _messages.Add(assistantMsg);
         _streamingMsg = assistantMsg;
@@ -604,12 +607,26 @@
         finally
         {
             SessionPool.EndTurn(sessionId, Sovrant.Web.Program.SovrantUserId);
+
+            // Phase 116 H — load attributions for this turn off the UI thread.
+            List<Sovrant.Runtime.Knowledge.KnowledgeAttribution>? sources = null;
+#pragma warning disable CA1031
+            try
+            {
+                var all = await AttributionStore.GetBySessionAsync(sessionId);
+                sources = all.Where(a => a.TurnIndex == assistantMsg.TurnIndex).ToList();
+            }
+            catch { /* best-effort */ }
+#pragma warning restore CA1031
+
             await InvokeAsync(async () =>
             {
                 _isSending = false;
                 _streamingMsg = null;
                 _isBackgroundSession = false;
                 assistantMsg.CompleteStreaming();
+                if (sources is not null)
+                    foreach (var a in sources) assistantMsg.Sources.Add(a);
                 StateHasChanged();
                 await ScrollToBottom();
                 await FocusInput();

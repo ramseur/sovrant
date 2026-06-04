@@ -1332,6 +1332,43 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 }
 .btn-copy-message:hover { color: var(--text-primary); border-color: var(--text-secondary); }
 
+/* ===== Phase 116 H — Sources / provenance ===== */
+.msg-sources {
+    margin: 8px 0 4px;
+    font-size: 11px;
+}
+.sources-summary {
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 11px;
+    user-select: none;
+}
+.sources-summary:hover { color: var(--text-primary); }
+.sources-count { opacity: 0.7; }
+.sources-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 6px;
+}
+.source-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-family: var(--font-mono, monospace);
+    background: var(--tool-use-bg);
+    border: 1px solid var(--tool-use-border);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.source-kind-skills { border-color: #3b82f640; background: #3b82f610; }
+.source-kind-agents { border-color: #8b5cf640; background: #8b5cf610; }
+.source-kind-documenttemplates { border-color: #10b98140; background: #10b98110; }
+.source-kind-tools { border-color: #f5940040; background: #f5940010; }
+
 /* ===== Tool use blocks ===== */
 .tool-use-block {
     margin: 8px 0;

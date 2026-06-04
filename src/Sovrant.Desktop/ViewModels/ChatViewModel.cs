@@ -8,6 +8,7 @@ using Sovrant.Desktop.Adapters;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Governance;
+using Sovrant.Runtime.Knowledge;
 using Sovrant.Runtime.Session;
 
 namespace Sovrant.Desktop.ViewModels;
@@ -17,6 +18,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private readonly IRuntimeSessionPool _sessionPool;
     private readonly ISessionStore _sessionStore;
     private readonly IAuditStore _auditStore;
+    private readonly IKnowledgeAttributionStore? _attributionStore;
     private readonly SlashCommandDispatcher _commandDispatcher;
     private readonly DesktopConfirmationHandler? _confirmationHandler;
     private readonly ActiveContextViewModel _activeContext;
@@ -70,11 +72,13 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         SlashCommandDispatcher commandDispatcher, ActiveContextViewModel activeContext,
         ActiveSessionsViewModel activeSessions,
         SovrantConfig config,
-        DesktopConfirmationHandler? confirmationHandler = null)
+        DesktopConfirmationHandler? confirmationHandler = null,
+        IKnowledgeAttributionStore? attributionStore = null)
     {
         _sessionPool = sessionPool;
         _sessionStore = sessionStore;
         _auditStore = auditStore;
+        _attributionStore = attributionStore;
         _commandDispatcher = commandDispatcher;
         _confirmationHandler = confirmationHandler;
         _activeContext = activeContext;
@@ -236,8 +240,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var assistantMsg = new MessageViewModel { Role = "assistant", ModelName = _config.Model };
         var isFirstMessage = Messages.All(m => m.Role != "user");
+        // Phase 116 H — turn index = number of assistant messages already in the list.
+        var turnIndex = Messages.Count(m => !m.IsUser);
+        var assistantMsg = new MessageViewModel { Role = "assistant", ModelName = _config.Model, TurnIndex = turnIndex };
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
@@ -318,10 +324,30 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         finally
         {
             _sessionPool.EndTurn(SessionId, App.SovrantUserId);
+
+            // Phase 116 H — load attributions off the UI thread before the UI update.
+            List<KnowledgeAttribution>? sources = null;
+#pragma warning disable CA1031
+            try
+            {
+                if (_attributionStore is not null)
+                {
+                    var all = await _attributionStore.GetBySessionAsync(SessionId, CancellationToken.None);
+                    sources = all.Where(a => a.TurnIndex == assistantMsg.TurnIndex).ToList();
+                }
+            }
+            catch { /* best-effort */ }
+#pragma warning restore CA1031
+
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 IsSending = false;
                 assistantMsg.CompleteStreaming();
+                if (sources is not null)
+                {
+                    foreach (var a in sources) assistantMsg.Sources.Add(a);
+                    if (sources.Count > 0) assistantMsg.HasSources = true;
+                }
                 TurnCompleted?.Invoke();
             });
         }

@@ -134,6 +134,19 @@
                 </div>
             }
 
+            @if (Message.HasSources)
+            {
+                <details class="msg-sources msg-indent">
+                    <summary class="sources-summary">Sources <span class="sources-count">(@Message.Sources.Count)</span></summary>
+                    <div class="sources-list">
+                        @foreach (var source in Message.Sources)
+                        {
+                            <span class="source-chip source-kind-@source.Kind.Replace("-", "")">@SourceLabel(source.Kind) @source.Slug</span>
+                        }
+                    </div>
+                </details>
+            }
+
             @if (Message.HasError)
             {
                 <div class="message-error msg-indent">
@@ -170,6 +183,15 @@
         }
         catch { }
     }
+
+    private static string SourceLabel(string kind) => kind switch
+    {
+        "skills" => "Skill:",
+        "agents" => "Agent:",
+        "document-templates" => "Template:",
+        "tools" => "Guide:",
+        _ => kind + ":",
+    };
 
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions()

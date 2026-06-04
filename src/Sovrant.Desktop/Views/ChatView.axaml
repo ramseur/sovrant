@@ -4,6 +4,7 @@
              xmlns:conv="using:Sovrant.Desktop.Converters"
              xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
              xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             xmlns:knowledge="using:Sovrant.Runtime.Knowledge"
              x:Class="Sovrant.Desktop.Views.ChatView"
              x:DataType="vm:ChatViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -512,6 +513,46 @@
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
+
+                                            <!-- Phase 116 H — Sources / provenance -->
+                                            <StackPanel Margin="42,6,0,2"
+                                                        IsVisible="{Binding HasSources}"
+                                                        Spacing="4">
+                                                <TextBlock Text="SOURCES"
+                                                           FontSize="10"
+                                                           Foreground="{DynamicResource TextMuted}"
+                                                           FontWeight="SemiBold" />
+                                                <ItemsControl ItemsSource="{Binding Sources}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <WrapPanel Orientation="Horizontal" />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate DataType="{x:Type knowledge:KnowledgeAttribution}">
+                                                            <Border Margin="0,0,5,4"
+                                                                    Padding="5,2"
+                                                                    CornerRadius="8"
+                                                                    Background="{DynamicResource SurfaceCard}"
+                                                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                                                    BorderThickness="1">
+                                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                                    <TextBlock Text="{Binding Kind}"
+                                                                               FontSize="9"
+                                                                               Foreground="{DynamicResource TextMuted}"
+                                                                               FontFamily="{DynamicResource MonoFont}"
+                                                                               VerticalAlignment="Center" />
+                                                                    <TextBlock Text="{Binding Slug}"
+                                                                               FontSize="10"
+                                                                               Foreground="{DynamicResource TextSecondary}"
+                                                                               FontFamily="{DynamicResource MonoFont}"
+                                                                               VerticalAlignment="Center" />
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
 
                                             <!-- Error banner with retry -->
                                             <Border Margin="42,6,0,0"
