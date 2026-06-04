@@ -35,8 +35,8 @@ public sealed class SqliteStorageProviderTests : IAsyncDisposable
     {
         await _provider.InitializeAsync();
 
-        // Schema head bumped to 37 by V036 (fields_json/filename_template columns) + V037 (seed 42 document templates).
-        Assert.Equal(37, _provider.SchemaVersion);
+        // Schema head bumped to 38 by V038 (knowledge_attributions table).
+        Assert.Equal(38, _provider.SchemaVersion);
     }
 
     [Fact]

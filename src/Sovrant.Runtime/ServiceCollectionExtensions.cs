@@ -142,6 +142,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Prompt.IKnowledgeRouter>(sp =>
             new Prompt.KnowledgeRouter(sp.GetRequiredService<Knowledge.IKnowledgeStore>()));
 
+        // Phase 116 F — knowledge attribution store: append-only provenance log.
+        services.AddSingleton<Knowledge.IKnowledgeAttributionStore>(sp =>
+            new Storage.SqliteKnowledgeAttributionStore(sp.GetRequiredService<Storage.ISqliteConnectionFactory>()));
+
         // Phase 58 — Trust Boundary: sanitization, ethical harness, intent verification.
         // Hot-reloadable since Bucket-B step 4: the live wrapper subscribes the
         // sanitizer / ethical harness so they atomically swap their detector list

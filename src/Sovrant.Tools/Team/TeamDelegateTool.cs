@@ -4,6 +4,7 @@ using Sovrant.Agents.Abstractions;
 using Sovrant.Agents.Models;
 using Sovrant.Agents.Teams;
 using Sovrant.Api.Types;
+using Sovrant.Runtime.Knowledge;
 
 namespace Sovrant.Tools.Team;
 
@@ -69,6 +70,12 @@ public sealed class TeamDelegateTool : ITool
             member.Status = TeamMemberStatus.Completed;
             member.LastOutput = result.Output;
             member.LastError = null;
+
+            // Phase 116 F — attribute the agent template (or member name) used.
+            var slug = !string.IsNullOrWhiteSpace(member.Template) ? member.Template : member.Name;
+            var scope = AttributionScope.Current;
+            if (scope is not null)
+                await scope.RecordAsync("agents", slug, ct).ConfigureAwait(false);
         }
         else
         {

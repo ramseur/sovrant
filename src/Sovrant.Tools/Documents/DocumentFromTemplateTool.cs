@@ -4,6 +4,7 @@ using Sovrant.Runtime.Artifacts;
 using Sovrant.Runtime.Documents;
 using Sovrant.Runtime.Documents.Templates;
 using Sovrant.Runtime.Documents.Trust;
+using Sovrant.Runtime.Knowledge;
 using Sovrant.Runtime.Workspaces;
 using DocFormat = Sovrant.Runtime.Documents.DocumentFormat;
 
@@ -109,6 +110,11 @@ public sealed class DocumentFromTemplateTool : ITool
         {
             var generator = _generators.Resolve(format);
             var result = await generator.GenerateAsync(request, ct).ConfigureAwait(false);
+
+            // Phase 116 F — record attribution for the document template used.
+            var attributionScope = AttributionScope.Current;
+            if (attributionScope is not null)
+                await attributionScope.RecordAsync("document-templates", template.Id, ct).ConfigureAwait(false);
 
             return JsonSerializer.Serialize(new
             {

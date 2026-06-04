@@ -43,6 +43,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly IArtifactStore? _artifactStore;
     private readonly TrustBoundary.IPromptSanitizer? _sanitizer;
     private readonly Prompt.IKnowledgeRouter? _knowledgeRouter;
+    private readonly Knowledge.IKnowledgeAttributionStore? _attributionStore;
     private readonly List<InputMessage> _history = [];
     private string _systemPrompt;
     /// <summary>Once true, all subsequent turns expose tools (session used tools at least once).</summary>
@@ -127,7 +128,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         Prompt.ICapabilityCatalog? capabilityCatalog = null,
         IArtifactStore? artifactStore = null,
         TrustBoundary.IPromptSanitizer? sanitizer = null,
-        Prompt.IKnowledgeRouter? knowledgeRouter = null)
+        Prompt.IKnowledgeRouter? knowledgeRouter = null,
+        Knowledge.IKnowledgeAttributionStore? attributionStore = null)
     {
         _router = router;
         _toolExecutor = toolExecutor;
@@ -150,6 +152,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         _artifactStore = artifactStore;
         _sanitizer = sanitizer;
         _knowledgeRouter = knowledgeRouter;
+        _attributionStore = attributionStore;
         _systemPrompt = systemPromptOverride ?? BuildSystemPrompt(capabilityCatalog);
     }
 
@@ -224,6 +227,13 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
         _history.Add(InputMessage.UserText(userMessage));
         await AppendSessionEntryAsync("user", userMessage, ct).ConfigureAwait(false);
+
+        // Phase 116 F — set ambient attribution scope for this turn so tools can record
+        // provenance without needing a store reference. Turn index = completed turn pairs.
+        var turnIndex = (_history.Count - 1) / 2;
+        using var attributionScopeDisposable = _attributionStore is not null
+            ? Knowledge.AttributionScope.Begin(_sessionId, turnIndex, _attributionStore)
+            : null;
 
         var turnTimeoutSeconds = int.TryParse(
             Environment.GetEnvironmentVariable("SOVRANT_TURN_TIMEOUT_SECONDS"), out var tts) && tts > 0 ? tts : 300;

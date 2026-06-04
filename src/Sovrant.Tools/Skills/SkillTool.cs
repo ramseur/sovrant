@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Sovrant.Api.Types;
+using Sovrant.Runtime.Knowledge;
 
 namespace Sovrant.Tools.Skills;
 
@@ -24,18 +25,27 @@ public sealed class SkillTool : ITool
 
     public ToolDefinition Definition => s_definition;
 
-    public Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
+    public async Task<string> ExecuteAsync(JsonElement input, CancellationToken ct = default)
     {
         var name = input.GetStringProp("name");
         if (string.IsNullOrWhiteSpace(name))
-            return Task.FromResult("Error: name is required.");
+            return "Error: name is required.";
 
-        // Special: list all skills
         if (name.Equals("list", StringComparison.OrdinalIgnoreCase))
-            return Task.FromResult(_runner.ListSkills());
+            return _runner.ListSkills();
 
         var args = input.GetStringProp("args");
-        return Task.FromResult(_runner.Execute(name, string.IsNullOrEmpty(args) ? null : args));
+        var result = _runner.Execute(name, string.IsNullOrEmpty(args) ? null : args);
+
+        // Phase 116 F — record attribution when the skill was found and its body returned.
+        if (!result.StartsWith("Error:", StringComparison.Ordinal))
+        {
+            var scope = AttributionScope.Current;
+            if (scope is not null)
+                await scope.RecordAsync("skills", name, ct).ConfigureAwait(false);
+        }
+
+        return result;
     }
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
