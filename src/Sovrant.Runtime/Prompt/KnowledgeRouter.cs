@@ -1,4 +1,5 @@
 using Sovrant.Api.Routing;
+using Sovrant.Api.Types;
 using Sovrant.Runtime.Knowledge;
 
 namespace Sovrant.Runtime.Prompt;
@@ -26,6 +27,10 @@ internal sealed class KnowledgeRouter : IKnowledgeRouter
 
     private const float MinScore = 0.05f;
     private const float TriggerScore = 1.5f;
+    // MCP tool selection: return all tools if fewer than this score above MinScore.
+    private const int MinMcpToolsBeforeFallback = 3;
+    // Hard cap on MCP tools sent per turn to limit token pressure.
+    private const int MaxMcpToolsPerTurn = 20;
     private const float JaccardWeight = 0.6f;
     private const float IntentAffinityMax = 0.4f;
     private const float RecencyBonus = 0.3f;
@@ -168,6 +173,38 @@ internal sealed class KnowledgeRouter : IKnowledgeRouter
         if (intersection == 0) return 0f;
         var union = a.Count + b.Count - intersection;
         return (float)intersection / union;
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<ToolDefinition> SelectMcpTools(
+        string userMessage,
+        IReadOnlyList<ToolDefinition> mcpTools)
+    {
+        if (string.IsNullOrWhiteSpace(userMessage) || mcpTools.Count == 0)
+            return mcpTools;
+
+#pragma warning disable CA1308
+        var inputTokens = Tokenize(userMessage.ToLowerInvariant());
+#pragma warning restore CA1308
+
+        var scored = new List<(ToolDefinition Tool, float Score)>(mcpTools.Count);
+        foreach (var tool in mcpTools)
+        {
+#pragma warning disable CA1308
+            var itemTokens = Tokenize($"{tool.Name} {tool.Description}".ToLowerInvariant());
+#pragma warning restore CA1308
+            var score = Jaccard(inputTokens, itemTokens);
+            if (score >= MinScore)
+                scored.Add((tool, score));
+        }
+
+        // Safety fallback: if scoring finds very few relevant tools, keep all so the
+        // LLM retains full access rather than losing potentially useful capabilities.
+        if (scored.Count < MinMcpToolsBeforeFallback)
+            return mcpTools;
+
+        scored.Sort(static (a, b) => b.Score.CompareTo(a.Score));
+        return scored.Take(MaxMcpToolsPerTurn).Select(static x => x.Tool).ToList();
     }
 
     // Input must already be lowercased by the caller.

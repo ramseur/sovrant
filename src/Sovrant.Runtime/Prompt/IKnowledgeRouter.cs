@@ -1,3 +1,4 @@
+using Sovrant.Api.Types;
 using Sovrant.Runtime.Knowledge;
 
 namespace Sovrant.Runtime.Prompt;
@@ -38,4 +39,14 @@ public interface IKnowledgeRouter
         string userMessage,
         IReadOnlySet<string>? recentSlugs = null,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Phase 116 G — scores the supplied MCP tool definitions against
+    /// <paramref name="userMessage"/> using Jaccard keyword overlap and returns the
+    /// relevant subset. If fewer than the minimum relevant threshold score above the
+    /// cut-off, all tools are returned (safety fallback — never over-filter).
+    /// </summary>
+    IReadOnlyList<ToolDefinition> SelectMcpTools(
+        string userMessage,
+        IReadOnlyList<ToolDefinition> mcpTools);
 }

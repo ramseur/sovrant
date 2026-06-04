@@ -244,6 +244,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
         var round = 0;
         var timedOut = false;
+        IReadOnlySet<string>? mcpToolFilter = null; // Phase 116 G: set on round 0, reused per turn
         var consecutiveToolCalls = new Dictionary<string, int>(StringComparer.Ordinal);
         // Tracks (toolName|inputHash) → count for error results. If the same tool
         // is invoked with identical inputs and errors twice, we abort — it's a
@@ -266,6 +267,26 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 LogToolRound(_logger, round, MaxToolRounds, SessionId);
 
             var allTools = _toolRegistry.GetDefinitions();
+
+            // Phase 116 G — on the first round, score MCP tools for this turn's intent
+            // and build a per-turn allow-set. Subsequent tool rounds reuse the same filter.
+            if (round == 0 && _knowledgeRouter is not null && _mcpClients is not null
+                && _mcpClients.ToolToServer.Count > 0)
+            {
+                var mcpDefs = allTools
+                    .Where(t => _mcpClients.ToolToServer.ContainsKey(t.Name))
+                    .ToList();
+                if (mcpDefs.Count > 0)
+                {
+                    var selected = _knowledgeRouter.SelectMcpTools(userMessage, mcpDefs);
+                    // Only apply the filter if it actually reduces the MCP tool set.
+                    if (selected.Count < mcpDefs.Count)
+                        mcpToolFilter = selected
+                            .Select(t => t.Name)
+                            .ToHashSet(StringComparer.Ordinal);
+                }
+            }
+
             // Phase 59a — On the first round, use the semantic intent gate (if
             // available) to decide whether tools should be exposed. Falls back
             // to the legacy keyword matcher when no gate is registered.
@@ -278,7 +299,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             {
                 // Tool-use rounds, sessions that already used tools, and sessions
                 // with MCP servers enabled always get the full tool list.
-                tools = FilterToolsForModel(allTools);
+                tools = FilterToolsForModel(allTools, mcpToolFilter);
             }
             else if (round == 0)
             {
@@ -295,20 +316,20 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                         yield return new RuntimeEvent.IntentNarrated(gateResult.Narration);
 
                     tools = gateResult.RequiresTools
-                        ? FilterToolsForModel(allTools)
+                        ? FilterToolsForModel(allTools, mcpToolFilter)
                         : [];
                 }
                 else
                 {
                     // Legacy fallback — will be removed once IIntentGate is fully validated.
                     tools = LooksLikeToolRequest(userMessage)
-                        ? FilterToolsForModel(allTools)
+                        ? FilterToolsForModel(allTools, mcpToolFilter)
                         : [];
                 }
             }
             else
             {
-                tools = FilterToolsForModel(allTools);
+                tools = FilterToolsForModel(allTools, mcpToolFilter);
             }
             // Inject the MCP hint into _systemPrompt exactly once per session the
             // first time MCP servers are active. Baking it in (rather than
@@ -1631,7 +1652,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     /// returns empty. If <see cref="SessionConfig.AllowedMcpServers"/> is set,
     /// MCP-sourced tools whose server isn't on the list are dropped.
     /// </summary>
-    private IReadOnlyList<ToolDefinition> FilterToolsForModel(IReadOnlyList<ToolDefinition> tools)
+    private IReadOnlyList<ToolDefinition> FilterToolsForModel(
+        IReadOnlyList<ToolDefinition> tools,
+        IReadOnlySet<string>? mcpToolFilter = null)
     {
         if (tools.Count == 0)
             return tools;
@@ -1645,6 +1668,17 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             tools = tools
                 .Where(t => !_mcpClients.ToolToServer.TryGetValue(t.Name, out var server)
                             || allowSet.Contains(server))
+                .ToList();
+        }
+
+        // Phase 116 G — per-turn MCP tool relevance filter. When the knowledge router
+        // scored MCP tools and produced a non-null filter, drop MCP tools not in the set.
+        // Non-MCP tools (not in ToolToServer) are always passed through unchanged.
+        if (mcpToolFilter is not null && _mcpClients is not null)
+        {
+            tools = tools
+                .Where(t => !_mcpClients.ToolToServer.ContainsKey(t.Name)
+                            || mcpToolFilter.Contains(t.Name))
                 .ToList();
         }
 
