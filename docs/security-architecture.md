@@ -276,6 +276,36 @@ The addendum is injected as an extra `TextBlock` prepended to the current turn's
 
 When no items score above threshold (empty selection), no addendum is produced and no tokens are spent. A routing failure is logged and the turn continues without an addendum rather than failing.
 
+#### MCP tool relevance filtering (Step G)
+
+MCP integrations can expose dozens of tools per server. Sending all of them on every turn wastes tokens and degrades prompt-cache efficiency. Phase 116 adds a per-turn filter that narrows the MCP tool list to tools relevant to the current request.
+
+On round 0 of each turn, `ConversationRuntime` collects the MCP tool definitions from `allTools` (identified via `McpClientRegistry.ToolToServer`), calls `IKnowledgeRouter.SelectMcpTools(userMessage, mcpDefs)`, and stores the resulting `IReadOnlySet<string>? mcpToolFilter`. This filter is reused for all subsequent tool rounds within the same turn.
+
+`SelectMcpTools` scores each MCP tool's `Name + Description` against the user message using the same Jaccard tokenizer as knowledge routing — no LLM call. Two safety guards prevent over-filtering:
+
+- **Minimum threshold**: if fewer than 3 tools score above 0.05, all tools are returned unchanged. A query that matches nothing known must not silently hide useful integrations.
+- **Maximum cap**: at most 20 MCP tools are sent per turn even when many score above threshold.
+
+`FilterToolsForModel` applies filters in order: (1) session-level `AllowedMcpServers` opt-in, (2) per-turn `mcpToolFilter`. Non-MCP tools are unaffected by either filter.
+
+#### Attribution tracking (Step F)
+
+A `knowledge_attributions` table records which knowledge items influenced each turn. One row is written per tool invocation on the success path:
+
+| Tool | `kind` | `slug` |
+|---|---|---|
+| `SkillTool` | `skills` | skill name |
+| `AgentTool` (template path) | `agents` | template name |
+| `TeamDelegateTool` | `agents` | `member.Template ?? member.Name` |
+| `DocumentFromTemplateTool` | `document-templates` | `template.Id` |
+
+`AttributionScope` (an `AsyncLocal<AttributionContext?>`) propagates session + turn identity into tool executions without requiring a store reference on every tool. `ConversationRuntime` calls `AttributionScope.Begin(sessionId, turnIndex, store)` at the start of each turn; `Dispose()` restores the previous context so nested sub-agent scopes attribute to their own session.
+
+#### Provenance UI (Step H)
+
+After each turn completes, the Web (`Chat.razor`) and Desktop (`ChatViewModel`) surfaces query `IKnowledgeAttributionStore.GetBySessionAsync` and filter to the current turn index. Results are displayed as a collapsible **Sources** section beneath the assistant's response — skill chips, agent chips, template chips, and tool-guide chips each with distinct colour coding. Attribution load failures are silently swallowed so they never block turn completion.
+
 #### Configuration
 
 All three sanitization paths (`Sanitize`, `SanitizeRawText` for knowledge content, `SanitizeRawText` for tool results) are governed by the single `TrustBoundaryConfig.Sanitizer.Enabled` flag. Set `SOVRANT_KNOWLEDGE_CACHE_TTL=0` to bypass `CachedKnowledgeStore` for testing; this causes `KnowledgeRouter` to hit SQLite on every turn.
