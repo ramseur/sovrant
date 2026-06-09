@@ -32,11 +32,11 @@ public static class BootstrapConfigLoader
 
         return new BootstrapConfig
         {
-            DbPath          = dbPathOverride ?? env.DbPath,
-            LogFile         = env.LogFile,
-            ArtifactsRoot   = env.ArtifactsRoot,
-            KeystorePath    = env.KeystorePath,
-            TlsCertPath     = env.TlsCertPath,
+            DbPath               = dbPathOverride ?? env.DbPath,
+            LogFile              = env.LogFile,
+            ArtifactsRoot        = env.ArtifactsRoot,
+            LegacyKeystorePath   = env.LegacyKeystorePath,
+            TlsCertPath          = env.TlsCertPath,
             TlsCertPassword = env.TlsCertPassword,
             TlsKeyPath      = env.TlsKeyPath,
             TlsHttpsPort    = env.TlsHttpsPort,
@@ -90,10 +90,10 @@ public static class BootstrapConfigLoader
 
     private static BootstrapConfig ReadEnvironment() => new()
     {
-        DbPath          = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_DB_PATH")),
-        LogFile         = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_LOG_FILE")),
-        ArtifactsRoot   = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT")),
-        KeystorePath    = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_KEYSTORE_PATH")),
+        DbPath               = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_DB_PATH")),
+        LogFile              = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_LOG_FILE")),
+        ArtifactsRoot        = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT")),
+        LegacyKeystorePath   = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_KEYSTORE_PATH")),
         TlsCertPath     = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_TLS_CERT")),
         TlsCertPassword = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_TLS_CERT_PASSWORD")),
         TlsKeyPath      = NullIfEmpty(Environment.GetEnvironmentVariable("SOVRANT_TLS_KEY")),

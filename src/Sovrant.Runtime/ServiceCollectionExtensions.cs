@@ -407,7 +407,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<McpClientRegistry>();
         services.AddSingleton<McpToolRegistrar>();
         services.AddSingleton<ICredentialStore>(sp =>
-            new SqliteCredentialStore(sp.GetRequiredService<ISqliteConnectionFactory>(), bootstrap.KeystorePath));
+            new SqliteCredentialStore(sp.GetRequiredService<ISqliteConnectionFactory>(), bootstrap.LegacyKeystorePath));
         // MCP server store — full config (headers, env, args) encrypted in ICredentialStore.
         // SqliteMcpServerStore is kept for the one-shot migration only; McpServerStoreMigrator
         // copies its rows into the credential store on first boot then the SQLite table is ignored.
@@ -691,7 +691,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IStorageProvider>(sp => sp.GetRequiredService<Storage.SqliteStorageProvider>());
         services.AddSingleton<Storage.ISqliteConnectionFactory>(sp => sp.GetRequiredService<Storage.SqliteStorageProvider>());
         services.AddSingleton<Mcp.ICredentialStore>(sp =>
-            new Storage.SqliteCredentialStore(sp.GetRequiredService<Storage.ISqliteConnectionFactory>(), bootstrap.KeystorePath));
+            new Storage.SqliteCredentialStore(sp.GetRequiredService<Storage.ISqliteConnectionFactory>(), bootstrap.LegacyKeystorePath));
 
         return services;
     }
@@ -712,6 +712,6 @@ public static class ServiceCollectionExtensions
             Microsoft.Extensions.Logging.Abstractions.NullLogger<Storage.SqliteStorageProvider>.Instance,
             bootstrap.DbPath);
 #pragma warning restore CA2000
-        return new Storage.SqliteCredentialStore(provider, bootstrap.KeystorePath);
+        return new Storage.SqliteCredentialStore(provider, bootstrap.LegacyKeystorePath);
     }
 }

@@ -173,7 +173,7 @@ public partial class App : Application
                 && !string.IsNullOrEmpty(supabaseUrl) && !string.IsNullOrEmpty(supabaseKey))
             {
                 var connStr = Sovrant.Storage.Postgres.ServiceCollectionExtensions.BuildSupabaseConnectionString(supabaseUrl, supabaseKey);
-                services.AddSovrantPostgresStorage(connStr, bootstrap.KeystorePath);
+                services.AddSovrantPostgresStorage(connStr, bootstrap.LegacyKeystorePath);
             }
         }
 
