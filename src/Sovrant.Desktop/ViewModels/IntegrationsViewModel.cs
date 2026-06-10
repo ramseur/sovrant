@@ -641,12 +641,12 @@ public partial class IntegrationsViewModel : ViewModelBase
                 Env = newEnv,
             };
             await _serverStore.UpsertAsync(server.Name, updated).ConfigureAwait(true);
-            server.EnvVars.Clear();
-            foreach (var (k, v) in newEnv) server.EnvVars[k] = v;
-            server.EnvEditing = false;
-            server.EnvEditRows.Clear();
-            server.EnvStatus = $"Saved {newEnv.Count} variable{(newEnv.Count == 1 ? "" : "s")}.";
-            server.Markdown = BuildServerMarkdown(server);
+            var savedCount = newEnv.Count;
+            var serverName = server.Name;
+            await LoadServersAsync().ConfigureAwait(true);
+            SelectedServer = FilteredServers.FirstOrDefault(s => s.Name == serverName);
+            if (SelectedServer is not null)
+                SelectedServer.EnvStatus = $"Saved {savedCount} variable{(savedCount == 1 ? "" : "s")}.";
         }
         catch (Exception ex) { server.EnvStatus = $"Failed: {ex.Message}"; }
     }
