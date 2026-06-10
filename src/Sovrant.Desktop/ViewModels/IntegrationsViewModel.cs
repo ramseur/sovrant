@@ -59,6 +59,9 @@ public partial class IntegrationsViewModel : ViewModelBase
     [ObservableProperty]
     private string _newServerJson = string.Empty;
 
+    [ObservableProperty]
+    private string _newServerEnvVars = string.Empty;
+
     /// <summary>"json" | "stdio" | "http"</summary>
     [ObservableProperty]
     private string _addMode = "json";
@@ -418,7 +421,8 @@ public partial class IntegrationsViewModel : ViewModelBase
             var args = string.IsNullOrWhiteSpace(NewServerArgs)
                 ? []
                 : NewServerArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var config = new McpServerConfig { Command = command, Args = args, Env = new Dictionary<string, string>(StringComparer.Ordinal) };
+            var env = ParseEnvVarLines(NewServerEnvVars);
+            var config = new McpServerConfig { Command = command, Args = args, Env = env };
             await _serverStore.UpsertAsync(name, config).ConfigureAwait(true);
             ResetAddForm();
             await ConnectAndRefreshAsync(name, config).ConfigureAwait(true);
@@ -474,16 +478,21 @@ public partial class IntegrationsViewModel : ViewModelBase
             if (entries.Count == 0) { StatusMessage = "No valid mcpServers entries found."; return; }
             foreach (var (name, config) in entries)
                 await _serverStore.UpsertAsync(name, config).ConfigureAwait(true);
+            var names = string.Join(", ", entries.Keys.Select(n => $"'{n}'"));
+            var envCount = entries.Values.Sum(c => c.Env.Count);
             ResetAddForm();
             foreach (var (name, config) in entries)
                 await ConnectAndRefreshAsync(name, config).ConfigureAwait(true);
+            StatusMessage = envCount > 0
+                ? $"Imported: {names} ({envCount} env var{(envCount == 1 ? "" : "s")})."
+                : $"Imported: {names}.";
         }
         catch (Exception ex) { StatusMessage = $"Failed to add server: {ex.Message}"; }
     }
 
     private void ResetAddForm()
     {
-        NewServerName = NewServerCommand = NewServerArgs = NewServerUrl = NewServerBearer = NewServerHeadersJson = NewServerJson = string.Empty;
+        NewServerName = NewServerCommand = NewServerArgs = NewServerUrl = NewServerBearer = NewServerHeadersJson = NewServerJson = NewServerEnvVars = string.Empty;
     }
 
     [RelayCommand]
@@ -573,6 +582,73 @@ public partial class IntegrationsViewModel : ViewModelBase
     {
         if (value is not null)
             _ = LoadTrustRulesAsync(value);
+    }
+
+    // ── Env var editing commands ──────────────────────────────────────────────
+    [RelayCommand]
+    private void StartEditEnv()
+    {
+        var server = SelectedServer;
+        if (server is null) return;
+        server.EnvEditRows.Clear();
+        foreach (var (k, v) in server.EnvVars)
+            server.EnvEditRows.Add(new EnvVarRowViewModel { Key = k, Value = v });
+        server.EnvStatus = string.Empty;
+        server.EnvEditing = true;
+    }
+
+    [RelayCommand]
+    private void AddEnvRow()
+    {
+        SelectedServer?.EnvEditRows.Add(new EnvVarRowViewModel());
+    }
+
+    [RelayCommand]
+    private void RemoveEnvRow(EnvVarRowViewModel row)
+    {
+        SelectedServer?.EnvEditRows.Remove(row);
+    }
+
+    [RelayCommand]
+    private void CancelEditEnv()
+    {
+        var server = SelectedServer;
+        if (server is null) return;
+        server.EnvEditing = false;
+        server.EnvEditRows.Clear();
+        server.EnvStatus = string.Empty;
+    }
+
+    [RelayCommand]
+    private async Task SaveEnvAsync()
+    {
+        var server = SelectedServer;
+        if (server is null) return;
+        try
+        {
+            var current = await _serverStore.GetAsync(server.Name).ConfigureAwait(true);
+            if (current is null) { server.EnvStatus = "Server not found."; return; }
+            var newEnv = server.EnvEditRows
+                .Where(r => !string.IsNullOrWhiteSpace(r.Key))
+                .ToDictionary(r => r.Key.Trim(), r => r.Value, StringComparer.Ordinal);
+            var updated = new McpServerConfig
+            {
+                Command = current.Command,
+                Args = current.Args,
+                Url = current.Url,
+                Headers = current.Headers,
+                OAuthConfig = current.OAuthConfig,
+                Env = newEnv,
+            };
+            await _serverStore.UpsertAsync(server.Name, updated).ConfigureAwait(true);
+            server.EnvVars.Clear();
+            foreach (var (k, v) in newEnv) server.EnvVars[k] = v;
+            server.EnvEditing = false;
+            server.EnvEditRows.Clear();
+            server.EnvStatus = $"Saved {newEnv.Count} variable{(newEnv.Count == 1 ? "" : "s")}.";
+            server.Markdown = BuildServerMarkdown(server);
+        }
+        catch (Exception ex) { server.EnvStatus = $"Failed: {ex.Message}"; }
     }
 
     private async Task LoadTrustRulesAsync(McpServerItem server)
@@ -690,6 +766,22 @@ public partial class IntegrationsViewModel : ViewModelBase
         return sb.ToString();
     }
 
+    private static Dictionary<string, string> ParseEnvVarLines(string text)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(text)) return result;
+        foreach (var line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var eq = line.IndexOf('=', StringComparison.Ordinal);
+            if (eq <= 0) continue;
+            var key = line[..eq].Trim();
+            var value = line[(eq + 1)..].Trim();
+            if (!string.IsNullOrEmpty(key))
+                result[key] = value;
+        }
+        return result;
+    }
+
     private static bool IsSensitiveKey(string key) =>
         key.Contains("KEY", StringComparison.OrdinalIgnoreCase)
         || key.Contains("SECRET", StringComparison.OrdinalIgnoreCase)
@@ -746,9 +838,12 @@ public partial class McpServerItem : ViewModelBase
     [ObservableProperty] private bool _hasOAuth;
     [ObservableProperty] private bool _isConnected;
     [ObservableProperty] private int _toolCount;
+    [ObservableProperty] private bool _envEditing;
+    [ObservableProperty] private string _envStatus = string.Empty;
 
     public ObservableCollection<string> ToolNames { get; } = [];
     public ObservableCollection<TrustRuleViewModel> TrustRules { get; } = [];
+    public ObservableCollection<EnvVarRowViewModel> EnvEditRows { get; } = [];
     public Dictionary<string, string> EnvVars { get; init; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> Headers { get; init; } = new(StringComparer.Ordinal);
     public string Markdown { get; set; } = string.Empty;
@@ -768,4 +863,10 @@ public partial class TrustRuleViewModel : ViewModelBase
         "Allow" => "#16a34a",
         _ => "#d97706",
     };
+}
+
+public partial class EnvVarRowViewModel : ViewModelBase
+{
+    [ObservableProperty] private string _key = string.Empty;
+    [ObservableProperty] private string _value = string.Empty;
 }

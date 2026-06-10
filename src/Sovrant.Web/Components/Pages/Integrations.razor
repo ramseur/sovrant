@@ -267,21 +267,61 @@
                     </div>
                 }
 
-                @if (_selected.EnvVars.Count > 0)
-                {
-                    <div class="orch-detail-section">
-                        <h3>Environment</h3>
+                <div class="orch-detail-section">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <h3 style="margin:0;">Environment Variables</h3>
+                        @if (!_editingEnv)
+                        {
+                            <button class="btn-sm btn-outline" @onclick="StartEditEnv">
+                                @(_selected.EnvVars.Count > 0 ? "Edit" : "+ Add")
+                            </button>
+                        }
+                    </div>
+                    @if (_editingEnv)
+                    {
+                        @for (int i = 0; i < _envEdits.Count; i++)
+                        {
+                            var idx = i;
+                            <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:6px;margin-bottom:6px;align-items:center;">
+                                <input type="text" autocomplete="off"
+                                       @bind="_envEdits[idx].Key"
+                                       placeholder="VARIABLE_NAME"
+                                       style="font-family:Consolas,monospace;font-size:12px;" />
+                                <input type="text" autocomplete="new-password"
+                                       @bind="_envEdits[idx].Value"
+                                       placeholder="value"
+                                       style="font-family:Consolas,monospace;font-size:12px;" />
+                                <button class="btn-sm btn-danger" style="padding:4px 8px;"
+                                        @onclick="() => _envEdits.RemoveAt(idx)">✕</button>
+                            </div>
+                        }
+                        <div style="display:flex;gap:8px;margin-top:4px;">
+                            <button class="btn-sm btn-outline" @onclick="AddEnvRow">+ Add variable</button>
+                            <button class="btn-primary btn-sm" @onclick="SaveEnvAsync">Save</button>
+                            <button class="btn-sm btn-outline" @onclick="CancelEditEnv">Cancel</button>
+                        </div>
+                    }
+                    else if (_selected.EnvVars.Count > 0)
+                    {
                         <div class="gov-card">
                             @foreach (var kv in _selected.EnvVars)
                             {
                                 <div class="gov-field-row">
-                                    <span>@kv.Key</span>
+                                    <span style="font-family:Consolas,monospace;font-size:12px;">@kv.Key</span>
                                     <span class="text-sm" style="font-family:Consolas,monospace;">@MaskSecret(kv.Key, kv.Value)</span>
                                 </div>
                             }
                         </div>
-                    </div>
-                }
+                    }
+                    else
+                    {
+                        <p class="text-muted text-sm">No environment variables configured.</p>
+                    }
+                    @if (!string.IsNullOrEmpty(_envStatus))
+                    {
+                        <p class="text-sm" style="margin-top:6px;color:var(--text-secondary);">@_envStatus</p>
+                    }
+                </div>
 
                 <div class="orch-detail-section">
                     <h3>Tools (@_selected.ToolCount)</h3>
@@ -418,6 +458,12 @@
                         <label>Arguments (space-separated)</label>
                         <input type="text" @bind="_newArgs" placeholder="-y @@modelcontextprotocol/server-filesystem /tmp" />
                     </div>
+                    <div class="form-field">
+                        <label>Environment Variables (optional — one KEY=VALUE per line)</label>
+                        <textarea rows="4" @bind="_newEnvVars"
+                                  placeholder="GITHUB_PERSONAL_ACCESS_TOKEN=ghp_...&#10;DEBUG=false"
+                                  style="font-family:Consolas,monospace;font-size:12px;width:100%;resize:vertical;"></textarea>
+                    </div>
                     <button class="btn-primary" @onclick="AddStdioServerAsync">Add</button>
                 }
                 else
@@ -460,11 +506,15 @@
     private string _newName = string.Empty;
     private string _newCommand = string.Empty;
     private string _newArgs = string.Empty;
+    private string _newEnvVars = string.Empty;
     private string _newUrl = string.Empty;
     private string _newBearer = string.Empty;
     private string _newHeadersJson = string.Empty;
     private string _jsonInput = string.Empty;
     private string _status = string.Empty;
+    private bool _editingEnv;
+    private List<EnvEditRow> _envEdits = [];
+    private string _envStatus = string.Empty;
     private string _search = string.Empty;
     private List<ServerView> _servers = [];
     private List<ServerView> _filtered = [];
@@ -492,11 +542,16 @@
     private const string _jsonPlaceholder = """
 {
   "mcpServers": {
-    "pixellab": {
-      "url": "https://api.pixellab.ai/mcp",
-      "transport": "http",
-      "headers": {
-        "Authorization": "Bearer YOUR_TOKEN"
+    "sitecore": {
+      "command": "npx",
+      "args": ["-y", "@antonytm/mcp-sitecore-server@latest"],
+      "env": {
+        "TRANSPORT": "stdio",
+        "GRAPHQL_ENDPOINT": "https://your-sitecore-cm.dev",
+        "GRAPHQL_API_KEY": "your-api-key",
+        "ITEM_SERVICE_SERVER_URL": "https://your-sitecore-cm.dev",
+        "ITEM_SERVICE_USERNAME": "admin",
+        "ITEM_SERVICE_PASSWORD": "your-password"
       }
     }
   }
@@ -772,6 +827,9 @@
         _selected = item;
         _trustRules = [];
         _trustStatus = string.Empty;
+        _editingEnv = false;
+        _envEdits = [];
+        _envStatus = string.Empty;
         _ = LoadTrustRulesAsync(item.Name);
     }
 
@@ -854,7 +912,7 @@
             {
                 Command = _newCommand.Trim(),
                 Args = args,
-                Env = new Dictionary<string, string>(StringComparer.Ordinal),
+                Env = ParseEnvVarLines(_newEnvVars),
             };
             await ServerStore.UpsertAsync(name, config).ConfigureAwait(false);
             ResetForm();
@@ -911,6 +969,11 @@
             foreach (var (name, config) in entries)
                 await ServerStore.UpsertAsync(name, config).ConfigureAwait(false);
 
+            var envCount = entries.Values.Sum(c => c.Env.Count);
+            var names = string.Join(", ", entries.Keys);
+            _status = envCount > 0
+                ? $"Imported: {names} ({envCount} env var{(envCount == 1 ? "" : "s")})."
+                : $"Imported: {names}.";
             _jsonInput = string.Empty;
             foreach (var (name, config) in entries)
                 await ConnectAndRefreshAsync(name, config).ConfigureAwait(false);
@@ -920,7 +983,78 @@
 
     private void ResetForm()
     {
-        _newName = _newCommand = _newArgs = _newUrl = _newBearer = _newHeadersJson = string.Empty;
+        _newName = _newCommand = _newArgs = _newEnvVars = _newUrl = _newBearer = _newHeadersJson = string.Empty;
+    }
+
+    // ── Env var editor ────────────────────────────────────────────────────────
+
+    private void StartEditEnv()
+    {
+        _envEdits = (_selected?.EnvVars ?? [])
+            .Select(kv => new EnvEditRow { Key = kv.Key, Value = kv.Value })
+            .ToList();
+        _envStatus = string.Empty;
+        _editingEnv = true;
+    }
+
+    private void AddEnvRow() => _envEdits.Add(new EnvEditRow());
+
+    private void CancelEditEnv()
+    {
+        _editingEnv = false;
+        _envEdits = [];
+        _envStatus = string.Empty;
+    }
+
+    private async Task SaveEnvAsync()
+    {
+        if (_selected is null) return;
+        try
+        {
+            var current = await ServerStore.GetAsync(_selected.Name).ConfigureAwait(false);
+            if (current is null) { _envStatus = "Server not found."; return; }
+
+            var newEnv = _envEdits
+                .Where(r => !string.IsNullOrWhiteSpace(r.Key))
+                .ToDictionary(r => r.Key.Trim(), r => r.Value, StringComparer.Ordinal);
+
+            var updated = new McpServerConfig
+            {
+                Command = current.Command,
+                Args = current.Args,
+                Env = newEnv,
+                OAuthConfig = current.OAuthConfig,
+                Url = current.Url,
+                Headers = current.Headers,
+            };
+            await ServerStore.UpsertAsync(_selected.Name, updated).ConfigureAwait(false);
+            _editingEnv = false;
+            _envEdits = [];
+            _envStatus = $"{newEnv.Count} variable{(newEnv.Count == 1 ? "" : "s")} saved.";
+            await LoadServersAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex) { _envStatus = $"Failed: {ex.Message}"; }
+    }
+
+    private static Dictionary<string, string> ParseEnvVarLines(string text)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(text)) return result;
+        foreach (var line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Length == 0 || trimmed.StartsWith('#')) continue;
+            var eq = trimmed.IndexOf('=', StringComparison.Ordinal);
+            if (eq <= 0) continue;
+            result[trimmed[..eq].Trim()] = trimmed[(eq + 1)..];
+        }
+        return result;
+    }
+
+    private sealed class EnvEditRow
+    {
+        public string Key { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
     }
 
     private async Task RemoveServerAsync(string name)

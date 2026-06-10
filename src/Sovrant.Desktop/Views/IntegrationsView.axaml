@@ -429,6 +429,15 @@
                                                  FontFamily="Consolas,Menlo,monospace"
                                                  CornerRadius="6" Padding="10,7" />
                                     </StackPanel>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Environment Variables (optional — one KEY=VALUE per line)" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextSecondary}" />
+                                        <TextBox Text="{Binding NewServerEnvVars}"
+                                                 AcceptsReturn="True" MinHeight="72"
+                                                 Watermark="GITHUB_PERSONAL_ACCESS_TOKEN=ghp_..."
+                                                 FontFamily="Consolas,Menlo,monospace"
+                                                 FontSize="11" Padding="8,6" CornerRadius="6" />
+                                    </StackPanel>
                                 </StackPanel>
 
                                 <!-- HTTP -->
@@ -501,6 +510,102 @@
 
                                 <!-- Server markdown -->
                                 <ctrl:SafeMarkdownPresenter Markdown="{Binding SelectedServer.Markdown}" />
+
+                                <!-- Environment Variables section -->
+                                <StackPanel Spacing="8"
+                                            IsVisible="{Binding !!SelectedServer}">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right"
+                                                Content="Edit"
+                                                Command="{Binding StartEditEnvCommand}"
+                                                IsVisible="{Binding !SelectedServer.EnvEditing}"
+                                                Padding="10,4" CornerRadius="6" FontSize="11"
+                                                Background="{DynamicResource SurfaceBackground}"
+                                                Foreground="{DynamicResource TextSecondary}" />
+                                        <TextBlock Text="Environment Variables"
+                                                   FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+
+                                    <!-- View mode: show existing vars -->
+                                    <StackPanel IsVisible="{Binding !SelectedServer.EnvEditing}" Spacing="4">
+                                        <TextBlock Text="No environment variables configured."
+                                                   FontSize="11" Foreground="{DynamicResource TextMuted}"
+                                                   IsVisible="{Binding SelectedServer.EnvVars.Count, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=0}" />
+                                        <ItemsControl ItemsSource="{Binding SelectedServer.EnvVars}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="{DynamicResource SurfaceBackground}"
+                                                            BorderBrush="{DynamicResource SurfaceBorder}"
+                                                            BorderThickness="1" CornerRadius="4"
+                                                            Padding="8,5" Margin="0,0,0,3">
+                                                        <TextBlock FontFamily="Consolas,Menlo,monospace"
+                                                                   FontSize="11"
+                                                                   Foreground="{DynamicResource TextPrimary}"
+                                                                   Text="{Binding Key}" />
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+
+                                    <!-- Edit mode -->
+                                    <StackPanel IsVisible="{Binding SelectedServer.EnvEditing}" Spacing="6">
+                                        <ItemsControl ItemsSource="{Binding SelectedServer.EnvEditRows}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="vm:EnvVarRowViewModel">
+                                                    <Grid ColumnDefinitions="*,16,2*,Auto" Margin="0,0,0,4">
+                                                        <TextBox Grid.Column="0"
+                                                                 Text="{Binding Key}"
+                                                                 Watermark="KEY"
+                                                                 FontFamily="Consolas,Menlo,monospace"
+                                                                 FontSize="11" CornerRadius="5" Padding="8,5" />
+                                                        <TextBlock Grid.Column="1" Text="=" VerticalAlignment="Center"
+                                                                   HorizontalAlignment="Center"
+                                                                   Foreground="{DynamicResource TextMuted}" FontSize="12" />
+                                                        <TextBox Grid.Column="2"
+                                                                 Text="{Binding Value}"
+                                                                 Watermark="value"
+                                                                 FontFamily="Consolas,Menlo,monospace"
+                                                                 FontSize="11" CornerRadius="5" Padding="8,5" />
+                                                        <Button Grid.Column="3"
+                                                                Content="✕" Margin="6,0,0,0"
+                                                                Command="{Binding $parent[ItemsControl].((vm:IntegrationsViewModel)DataContext).RemoveEnvRowCommand}"
+                                                                CommandParameter="{Binding}"
+                                                                Padding="6,4" CornerRadius="4"
+                                                                Background="#33F44336"
+                                                                Foreground="{DynamicResource StatusFail}"
+                                                                FontSize="10" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <Button Content="+ Add Variable"
+                                                Command="{Binding AddEnvRowCommand}"
+                                                Padding="10,5" CornerRadius="6" FontSize="11"
+                                                Background="Transparent"
+                                                Foreground="{DynamicResource BrandPrimary}" />
+
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button Content="Save"
+                                                    Command="{Binding SaveEnvCommand}"
+                                                    Padding="16,7" CornerRadius="6" FontSize="12"
+                                                    Background="{DynamicResource BrandPrimary}"
+                                                    Foreground="White" />
+                                            <Button Content="Cancel"
+                                                    Command="{Binding CancelEditEnvCommand}"
+                                                    Padding="12,7" CornerRadius="6" FontSize="12"
+                                                    Background="{DynamicResource SurfaceBackground}"
+                                                    Foreground="{DynamicResource TextSecondary}" />
+                                        </StackPanel>
+
+                                        <TextBlock Text="{Binding SelectedServer.EnvStatus}"
+                                                   IsVisible="{Binding SelectedServer.EnvStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                   FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                                    </StackPanel>
+                                </StackPanel>
 
                                 <!-- Trust Rules section -->
                                 <StackPanel Spacing="8"
