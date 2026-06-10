@@ -7,6 +7,27 @@ Versions correspond to tags on the `development` branch.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Phase 96 — MCP runtime variables:** per-server env var editor on Web and Desktop.
+  - Inline key/value editor in the server detail pane (Integrations → Connected tab). Edit mode shows existing vars as editable rows; Save fetches the full server config and updates only the `Env` dict; Cancel discards.
+  - `+ Add Variable` button adds blank rows; `✕` removes a row.
+  - STATUS message shows how many variables were saved.
+  - `KEY=VALUE` textarea in the stdio add form — env vars set at creation time.
+  - JSON paste (`mcpServers` block) already populated `Env` from the `env` field; feedback message now reports env var count: `Imported: 'sitecore' (12 env vars).`
+  - `EnvVarRowViewModel` observable class for Desktop MVVM two-way binding.
+  - `ParseEnvVarLines()` helper shared across stdio-add and is symmetrical to the Web implementation.
+
+- **Phase 96 — Keystore in DB (V039):** master AES-256-GCM key moved from `.keystore` disk file into a `keystore` SQLite table.
+  - V039 migration adds `keystore (scope TEXT PK, key_hex TEXT, created_at TEXT)`.
+  - `SqliteCredentialStore.LoadOrCreateKeyAsync` reads key from DB first; one-time migration reads legacy `.keystore` file, writes to DB, then best-effort deletes the file.
+  - `BootstrapConfig.KeystorePath` renamed to `LegacyKeystorePath`; `SOVRANT_KEYSTORE_PATH` env var still honoured for the migration path.
+  - All credentials (MCP server configs, env vars, API keys) are encrypted at rest in a single DB file with no external key file.
+
+---
+
 ## [1.0.2] — 2026-05-26
 
 ### Changed
