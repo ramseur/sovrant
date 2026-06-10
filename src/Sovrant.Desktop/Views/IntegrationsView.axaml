@@ -555,28 +555,28 @@
                                         <ItemsControl ItemsSource="{Binding SelectedServer.EnvEditRows}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate DataType="vm:EnvVarRowViewModel">
-                                                    <Grid ColumnDefinitions="*,16,2*,Auto" Margin="0,0,0,4">
-                                                        <TextBox Grid.Column="0"
-                                                                 Text="{Binding Key}"
-                                                                 Watermark="KEY"
-                                                                 FontFamily="Consolas,Menlo,monospace"
-                                                                 FontSize="11" CornerRadius="5" Padding="8,5" />
-                                                        <TextBlock Grid.Column="1" Text="=" VerticalAlignment="Center"
-                                                                   HorizontalAlignment="Center"
-                                                                   Foreground="{DynamicResource TextMuted}" FontSize="12" />
-                                                        <TextBox Grid.Column="2"
-                                                                 Text="{Binding Value}"
-                                                                 Watermark="value"
-                                                                 FontFamily="Consolas,Menlo,monospace"
-                                                                 FontSize="11" CornerRadius="5" Padding="8,5" />
-                                                        <Button Grid.Column="3"
-                                                                Content="✕" Margin="6,0,0,0"
+                                                    <Grid ColumnDefinitions="Auto,8,*,12,2*" Margin="0,0,0,4">
+                                                        <Button Grid.Column="0"
+                                                                Content="✕"
                                                                 Command="{Binding $parent[ItemsControl].((vm:IntegrationsViewModel)DataContext).RemoveEnvRowCommand}"
                                                                 CommandParameter="{Binding}"
                                                                 Padding="6,4" CornerRadius="4"
                                                                 Background="#33F44336"
                                                                 Foreground="{DynamicResource StatusFail}"
                                                                 FontSize="10" />
+                                                        <TextBox Grid.Column="2"
+                                                                 Text="{Binding Key}"
+                                                                 Watermark="KEY"
+                                                                 FontFamily="Consolas,Menlo,monospace"
+                                                                 FontSize="11" CornerRadius="5" Padding="8,5" />
+                                                        <TextBlock Grid.Column="3" Text="=" VerticalAlignment="Center"
+                                                                   HorizontalAlignment="Center"
+                                                                   Foreground="{DynamicResource TextMuted}" FontSize="12" />
+                                                        <TextBox Grid.Column="4"
+                                                                 Text="{Binding Value}"
+                                                                 Watermark="value"
+                                                                 FontFamily="Consolas,Menlo,monospace"
+                                                                 FontSize="11" CornerRadius="5" Padding="8,5" />
                                                     </Grid>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
