@@ -1,4 +1,4 @@
-@page "/integrations"
+@page "/admin/integrations"
 @using System.Text.Json
 @using Sovrant.Runtime.Auth
 @using Sovrant.Runtime.Config
@@ -10,7 +10,7 @@
 <div class="master-detail">
     <div class="master-panel">
         <div class="master-header">
-            <h1>Integrations</h1>
+            <h1>Platform Integrations</h1>
             <div class="master-header-right">
                 @if (_activeTab == "connected")
                 {
@@ -560,6 +560,12 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (!Principal.IsAdmin)
+        {
+            Nav.NavigateTo("/", forceLoad: false);
+            return;
+        }
+
         var uid = Principal.UserId;
         if (uid is not null)
         {

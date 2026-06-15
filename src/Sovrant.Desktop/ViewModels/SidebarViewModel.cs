@@ -223,7 +223,7 @@ public partial class SidebarViewModel : ViewModelBase
     private void GoToIntegrations()
     {
         IsMcpDropdownOpen = false;
-        Navigate("Integrations");
+        Navigate("AdminPlatformIntegrations");
     }
 
     [RelayCommand]

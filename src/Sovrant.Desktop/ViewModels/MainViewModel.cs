@@ -157,10 +157,6 @@ public partial class MainViewModel : ViewModelBase
                 Sidebar.SelectedNavItem = "Projects";
                 OnNavigationRequested(this, "Projects");
                 break;
-            case "connect":
-                Sidebar.SelectedNavItem = "Integrations";
-                OnNavigationRequested(this, "Integrations");
-                break;
             case "dashboard":
                 CurrentPage = _services.GetRequiredService<UserDashboardViewModel>();
                 break;
@@ -254,6 +250,7 @@ public partial class MainViewModel : ViewModelBase
             "CommandCenter" => ResetCockpitToGrid(),
             "Admin" => ResolveAdmin("users"),
             "AdminWorkspaces" => ResolveAdmin("workspaces"),
+            "AdminPlatformIntegrations" => _services.GetRequiredService<IntegrationsViewModel>(),
             "AdminSystemIntegrations" => _services.GetRequiredService<SystemIntegrationsViewModel>(),
             _ => CurrentPage,
         };

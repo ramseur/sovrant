@@ -153,10 +153,13 @@
                     <p class="tcb-mcp-empty">No integrations connected.</p>
                 }
 
-                <div class="tcb-mcp-footer-divider"></div>
-                <a class="tcb-mcp-footer-link" href="/integrations" @onclick="() => _mcpDropdownOpen = false">
-                    Manage Integrations →
-                </a>
+                @if (Session.IsAdmin)
+                {
+                    <div class="tcb-mcp-footer-divider"></div>
+                    <a class="tcb-mcp-footer-link" href="/admin/integrations" @onclick="() => _mcpDropdownOpen = false">
+                        Manage Integrations →
+                    </a>
+                }
             </div>
         }
     </div>

@@ -125,12 +125,6 @@
                                     Background="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                     Foreground="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                            <Button Content="🔌" ToolTip.Tip="Connect"
-                                    Command="{Binding SelectGroupCommand}" CommandParameter="connect"
-                                    Width="27" Height="30" CornerRadius="6" FontSize="13" Padding="0"
-                                    Background="{Binding IsConnectGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsConnectGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
                             <Button Content="⚙" ToolTip.Tip="Settings"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="settings"
                                     Width="27" Height="30" CornerRadius="6" FontSize="13" Padding="0"
@@ -190,8 +184,6 @@
                                                IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsAgentsGroup}" />
                         <views:WorkspacePanelView DataContext="{Binding Sidebar}"
                                                   IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsWorkspaceGroup}" />
-                        <views:ConnectPanelView DataContext="{Binding Sidebar}"
-                                                IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsConnectGroup}" />
                         <views:AdminPanelView DataContext="{Binding Sidebar}"
                                              IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsAdminGroup}" />
                     </Panel>

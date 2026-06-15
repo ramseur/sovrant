@@ -45,7 +45,13 @@
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Diagnostics}"
                     Foreground="{DynamicResource TextPrimary}" />
-            <Button Content="&#x1F50C;  System Integrations"
+            <Button Content="&#x1F50C;  Platform Integrations"
+                    Command="{Binding NavigateCommand}" CommandParameter="AdminPlatformIntegrations"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=AdminPlatformIntegrations}"
+                    Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="&#x1F5A5;  System Integrations"
                     Command="{Binding NavigateCommand}" CommandParameter="AdminSystemIntegrations"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
