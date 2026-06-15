@@ -54,6 +54,21 @@ public partial class MainViewModel : ViewModelBase
 
     public bool IsAdmin => _principal.IsAdmin;
 
+    [ObservableProperty]
+    private bool _isNavCollapsed;
+
+    public bool IsNavExpanded => !IsNavCollapsed;
+    public double NavWidth => IsNavCollapsed ? 44 : 240;
+
+    partial void OnIsNavCollapsedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsNavExpanded));
+        OnPropertyChanged(nameof(NavWidth));
+    }
+
+    [RelayCommand]
+    private void ToggleNav() => IsNavCollapsed = !IsNavCollapsed;
+
     public MainViewModel(SidebarViewModel sidebar, CommandPaletteViewModel commandPalette, IServiceProvider services, IPrincipalAccessor principal, ActiveSessionsViewModel activeSessions)
     {
         ArgumentNullException.ThrowIfNull(sidebar);

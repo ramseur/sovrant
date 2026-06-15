@@ -2,11 +2,31 @@
 @implements IDisposable
 
 <div class="app-shell">
-    <aside class="rail-secondary">
-        <button class="rail-brand" @onclick='() => { _selectedGroup = "chat"; Nav.NavigateTo("/"); }' title="Home">
-            <span class="rail-brand-icon">&#9889;</span>
-            <span class="rail-brand-text">Sovrant</span>
-        </button>
+    <aside class="rail-secondary @(_collapsed ? "collapsed" : "")">
+        <div class="rail-brand-row">
+            <button class="rail-brand" @onclick='() => { _selectedGroup = "chat"; Nav.NavigateTo("/"); }' title="Home">
+                <span class="rail-brand-icon">&#9889;</span>
+                <span class="rail-brand-text">Sovrant</span>
+            </button>
+            <button class="rail-collapse-btn" @onclick="() => _collapsed = !_collapsed"
+                    title="@(_collapsed ? "Expand sidebar" : "Collapse sidebar")">
+                @if (_collapsed)
+                {
+                    <svg width="16" height="14" viewBox="0 0 16 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <rect x="1" y="1" width="14" height="12" rx="1.75" stroke="currentColor" stroke-width="1.3"/>
+                        <path d="M5.5 1V13" stroke="currentColor" stroke-width="1.3"/>
+                    </svg>
+                }
+                else
+                {
+                    <svg width="16" height="14" viewBox="0 0 16 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <rect x="1" y="1" width="14" height="12" rx="1.75" stroke="currentColor" stroke-width="1.3"/>
+                        <path d="M5.5 1V13" stroke="currentColor" stroke-width="1.3"/>
+                        <rect x="1.65" y="1.65" width="3.2" height="10.7" rx="0.75" fill="currentColor" opacity="0.55"/>
+                    </svg>
+                }
+            </button>
+        </div>
         <RailNav Selected="@_selectedGroup" OnSelect="OnGroupSelected" />
 
         <div class="rail-secondary-body">
@@ -62,6 +82,7 @@
     [Inject] private Sovrant.Web.Services.WebSessionService Session { get; set; } = default!;
 
     private string _selectedGroup = "chat";
+    private bool _collapsed;
     private CommandPalette? _palette;
     private DotNetObjectReference<MainLayout>? _dotNetRef;
 
