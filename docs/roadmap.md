@@ -205,6 +205,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Enrich built-in skill definitions — review and improve all 32 built-in skill descriptions (2-3 sentences), workflow bodies (≥5 concrete steps), agents/tools lists, and trigger phrases; ship as a `V038__enrich_builtin_skills.sql` additive migration that UPDATEs only the BuiltIn base rows; user overlays are unaffected | Phase 114 | Planned |
 | API endpoint integration — connect REST and GraphQL APIs as first-class platform integrations alongside MCP servers; harness auto-discovers endpoints via OpenAPI/Swagger spec import or GraphQL introspection, or admin can manually describe specific endpoints; discovered endpoints exposed as typed tools through the same `MCPTool` proxy layer (trust rules, session picker, `FilteredToolRegistry`); admin configures per workspace; credentials stored in encrypted keystore; Web + Desktop parity | Phase 117 | Planned |
 | Bootstrap configuration — declarative YAML file (`sovrant.bootstrap.yaml`) that pre-configures a Sovrant installation before or at first run; covers providers, MCP servers, knowledge/skills, agent templates, workspace setup, admin users, permission defaults, and branding; Sovrant installs and starts normally then applies the bootstrap idempotently; enables sales-assisted and partner-delivered custom installs without code changes | Phase 118 | Planned |
+| Orchestration improvements — enhanced mission run-mode for teams and swarms; missions get a named run-mode (autonomous, supervised, step-through) set at launch rather than inherited from global permission; Claws sourced from configured platform integrations can be added as team members if the integration is connected, giving orchestrations access to external agents alongside local ones | Phase 119 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -11169,3 +11170,50 @@ branding:
 - A bootstrap file with a structural error (wrong YAML, unknown section, invalid provider name) is rejected at startup with a human-readable message; Sovrant continues to run without applying anything
 - Web admin panel shows the bootstrap status card (applied date, applied-by, item count)
 - All existing provider, MCP, and knowledge tests continue to pass
+
+---
+
+## Phase 119 — Orchestration Improvements
+
+**Status:** Planned
+
+### Why
+
+Orchestration today inherits the global permission mode, which means a supervised workspace forces step-by-step confirmation even on batch missions that are designed to run unattended. Teams and swarms also lack a formal concept of a "mission" — a named, scoped run with a declared run-mode, progress tracking, and a clear lifecycle. Separately, integrations already bring external agents (Claws) into the workspace, but there is no way to assign them as members of a team; they exist as tools only.
+
+This phase closes both gaps: missions become a first-class orchestration primitive with their own run-mode, and integration-sourced Claws become addressable team members.
+
+### What ships
+
+**Mission run-mode**
+
+A mission is a named, bounded orchestration run assigned to a team or swarm. When launching a mission the operator (human or automated trigger) declares one of three run-modes:
+
+| Mode | Behaviour |
+|---|---|
+| `autonomous` | The team executes fully without confirmation gates; tool calls subject to trust rules but no human step-through |
+| `supervised` | Agent actions are confirmed by the session owner turn-by-turn; mirrors the current global supervised behaviour |
+| `step-through` | Each agent step pauses and surfaces a summary to the operator before proceeding |
+
+The declared mode overrides the workspace permission setting for the lifetime of the mission. Mission metadata (name, team, run-mode, status, started-at, completed-at, output summary) is stored in the DB and visible in the Command Center.
+
+**Integration-sourced Claws as team members**
+
+When an admin has a platform integration connected that exposes external agents (e.g. a remote Claw endpoint via MCP or a registered agent API), those agents appear in a new "Available Members" picker when building or editing a team. The picker lists:
+
+- Local Claws (existing behaviour)
+- Integration-sourced Claws — shown only if the backing integration is connected at the time of team composition; labelled with the integration name (e.g. `via GitHub Copilot`)
+
+Integration members participate in orchestration the same way local Claws do — routed via the existing `AgentRouter` — but their tool calls go through the integration's MCP proxy layer so trust rules and session selection still apply. If the integration is disconnected at mission launch, the affected member is skipped and the mission log records a `member_unavailable` event.
+
+**Web + Desktop parity:** mission launch UI on both surfaces; Command Center shows live mission status; team editor picker updated on both.
+
+### Acceptance criteria
+
+- Launching a mission with `autonomous` run-mode in a supervised workspace executes without confirmation prompts; trust rules still fire normally
+- Launching with `step-through` pauses after each agent action and waits for operator acknowledgement before proceeding
+- A connected integration that exposes agent endpoints surfaces those agents in the team member picker with the integration label
+- Removing or disconnecting an integration removes its Claws from the picker; existing team definitions retain the member reference but show a "disconnected" badge
+- A mission started with an unavailable integration member logs `member_unavailable` and continues with the remaining members rather than failing the whole mission
+- Mission history (name, run-mode, status, timing) is visible in the Command Center for completed and in-progress missions
+- All existing orchestration, team, and agent tests continue to pass

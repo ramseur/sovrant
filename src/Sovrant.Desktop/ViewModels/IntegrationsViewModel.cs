@@ -26,7 +26,7 @@ public partial class IntegrationsViewModel : ViewModelBase
     // ── Tab ──────────────────────────────────────────────────────────────────
     /// <summary>"gallery" | "connected"</summary>
     [ObservableProperty]
-    private string _activeTab = "gallery";
+    private string _activeTab = "connected";
 
     // ── Connected tab ────────────────────────────────────────────────────────
     [ObservableProperty]

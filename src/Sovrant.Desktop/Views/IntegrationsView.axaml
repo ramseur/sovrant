@@ -32,11 +32,6 @@
 
             <!-- Tab bar -->
             <StackPanel Orientation="Horizontal" Spacing="4">
-                <Button Content="Gallery"
-                        Command="{Binding SwitchTabCommand}" CommandParameter="gallery"
-                        Padding="14,6" CornerRadius="6" FontSize="12"
-                        Background="{Binding ActiveTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=gallery, FallbackValue=Transparent}"
-                        Foreground="{DynamicResource TextPrimary}" />
                 <Button Padding="14,6" CornerRadius="6" FontSize="12"
                         Command="{Binding SwitchTabCommand}" CommandParameter="connected"
                         Background="{Binding ActiveTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=connected, FallbackValue=Transparent}"
@@ -49,6 +44,11 @@
                         </Border>
                     </StackPanel>
                 </Button>
+                <Button Content="Gallery"
+                        Command="{Binding SwitchTabCommand}" CommandParameter="gallery"
+                        Padding="14,6" CornerRadius="6" FontSize="12"
+                        Background="{Binding ActiveTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=gallery, FallbackValue=Transparent}"
+                        Foreground="{DynamicResource TextPrimary}" />
             </StackPanel>
         </StackPanel>
 

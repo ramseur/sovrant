@@ -151,7 +151,7 @@
                            FontSize="12"
                            Foreground="{DynamicResource StatusPass}" />
 
-                <TextBlock Text="Provider profiles are stored in the local database; API keys are stored in the OS keystore (Windows Credential Manager / macOS Keychain / libsecret). Switch between providers from the sidebar dropdown above."
+                <TextBlock Text="API keys are encrypted with AES-256-GCM and stored in the Sovrant database. Switch between providers from the sidebar dropdown above."
                            FontSize="11" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextMuted}" />
             </StackPanel>
