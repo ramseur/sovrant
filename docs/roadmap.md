@@ -203,6 +203,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Caching: DB read cache + Phase 31 invalidation fix — `CachedKnowledgeStore` decorator wraps `IKnowledgeStore` with TTL-based in-process caching for rarely-changing content (skills, agents, document templates, tool/doc guides) and fires a `KnowledgePageChanged` event on every write; repairs Phase 31's `CacheInvalidator` whose file-watcher triggers were deleted by Phase 112, restoring HTTP-cache invalidation for `skills:list`, `templates:list`, and `knowledge:*` keys; opt-out via `SOVRANT_KNOWLEDGE_CACHE_TTL=0` | Phase 113 | ✅ Done |
 | Intelligent Knowledge Harness — on-demand per-turn knowledge loading via `IKnowledgeRouter` (keyword/trigger/intent scoring, no LLM call); dynamic per-turn addendum preserves stable system-prompt cache; full-round-trip PII sanitization for knowledge bodies and tool results; `knowledge_attributions` table; MCP tool relevance filtering per turn; provenance Sources section in Web + Desktop chat | Phase 116 | ✅ Done |
 | Enrich built-in skill definitions — review and improve all 32 built-in skill descriptions (2-3 sentences), workflow bodies (≥5 concrete steps), agents/tools lists, and trigger phrases; ship as a `V038__enrich_builtin_skills.sql` additive migration that UPDATEs only the BuiltIn base rows; user overlays are unaffected | Phase 114 | Planned |
+| API endpoint integration — connect REST and GraphQL APIs as first-class platform integrations alongside MCP servers; harness auto-discovers endpoints via OpenAPI/Swagger spec import or GraphQL introspection, or admin can manually describe specific endpoints; discovered endpoints exposed as typed tools through the same `MCPTool` proxy layer (trust rules, session picker, `FilteredToolRegistry`); admin configures per workspace; credentials stored in encrypted keystore; Web + Desktop parity | Phase 117 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -11030,3 +11031,48 @@ Steps A–C are pure improvements with no architectural risk — they can ship a
 - After a turn that uses the tdd-workflow skill, `knowledge_attributions` has a row with `kind='skills', slug='tdd-workflow'`.
 - Stable system prompt hash does not change between turns (verifiable: provider-side cache hit rate does not drop vs. pre-Phase-116 baseline).
 - All existing tests pass; new unit tests cover the relevance scorer (trigger match, keyword overlap, intent affinity) and both PII sanitization paths.
+
+## Phase 117 — API Endpoint Integration (REST & GraphQL as Platform Integrations)
+
+**Goal:** Let admins register REST and GraphQL APIs as first-class platform integrations alongside MCP servers. The harness can auto-discover endpoints from an OpenAPI/Swagger spec or GraphQL introspection, or the admin can manually describe specific endpoints. Discovered operations are exposed as typed tools through the same `MCPTool` proxy layer — trust rules, session tool picker, and `FilteredToolRegistry` all apply identically to API tools and MCP tools.
+
+### Why
+
+MCP covers well-known developer tools but most enterprise and SaaS systems expose REST or GraphQL APIs with no MCP server. Phase 95 opened the Platform Integrations gallery; Phase 117 extends it to cover any HTTP API that has a spec or can be described, turning Sovrant into a zero-code integration layer for arbitrary services without requiring a custom MCP server.
+
+### What Phase 117 ships
+
+**Spec-driven discovery**
+- Admin pastes an OpenAPI/Swagger spec URL or uploads a JSON/YAML file; Sovrant parses paths, methods, parameters, and response schemas; each operation becomes a callable tool with typed inputs
+- Admin provides a GraphQL endpoint URL; Sovrant runs `__schema` introspection to discover queries, mutations, and input types; each query/mutation becomes a tool
+- Rediscovery on demand — admin can re-import at any time to pick up spec changes; a diff is shown before applying so no silent tool renames
+
+**Manual endpoint entry**
+- Fallback for APIs with no spec; admin defines name, URL template, HTTP method, parameter names and types, and expected response shape
+- Parameters map to tool input fields; Sovrant builds and executes the HTTP call
+
+**Auth**
+- Bearer token, API key (header or query param), Basic auth
+- Credentials stored in the existing encrypted keystore (same path as MCP server secrets)
+- OAuth support deferred to a follow-on phase
+
+**Tool proxy integration**
+- API operations register in `FilteredToolRegistry` under a namespace matching the integration name
+- Trust rules (allow / require-confirmation / block) configurable per API integration in the Platform Integrations admin UI
+- Per-session tool picker checkboxes work the same as MCP server toggles
+- Attribution tracking: turns that call API tools write `kind='api', slug=<integration-name>/<operation-id>` to `knowledge_attributions`
+
+**Web + Desktop parity**
+- API integrations appear in the Platform Integrations gallery under a new **APIs** category tier
+- Connected tab shows API integrations alongside MCP servers with tool count and endpoint count
+- Detail panel shows base URL, spec source, operation list, auth type (masked), and trust rules
+
+### Acceptance criteria
+
+- An admin imports the Stripe OpenAPI spec; agents can call `stripe/create_payment_intent` without any code changes
+- An admin registers a GraphQL endpoint; introspection discovers 12 queries; all 12 appear in the session tool picker
+- A manually-described endpoint with two URL params generates a correctly-formed HTTP call with values the agent provides
+- Trust rules applied to `stripe/*_delete` pattern require confirmation before execution; agent receives a structured refusal if confirmation is not granted
+- Re-importing an updated spec that renames an operation shows a diff before applying; old tool name is removed and new one added atomically
+- API tool credentials are stored encrypted at rest and masked in all UI surfaces
+- All existing MCP and knowledge tests continue to pass
