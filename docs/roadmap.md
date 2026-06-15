@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-05-23 (Phase 50 OpenClaw federation ✅ — `SwarmFederationMode` enum, `OpenClawBusClient`, `RouteResolver`, V029 migration adds `parent_swarm_id`, `/v1/swarm/manager` + `/v1/swarm/openclaw/routes` + `/v1/swarm/{id}/children` endpoints, swarm-manager agent template; session-level MCP opt-in ✅ — single `ActiveMcpServers` selector in context bar (Desktop: WorkspacePanelView; Web: TopContextBar), preference-persisted, replaces per-chat MCP selector; Phase 73 code scaffolding ✅ — 21 templates, `CodeCreateMultiTool` for multi-component generation, `ScaffoldManifestValidator` for dependency manifest validation, 235 new golden-path + manifest tests)
+**Last updated:** 2026-06-10 (Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -22,8 +22,9 @@ What we are actively working on and shipping next, in priority order.
 | **v1.1 — done** | Phase 50 | OpenClaw federation — `SwarmFederationMode`, bus client, manager-led + siloed routing, V029 migration ✅ |
 | **v1.1 — done** | Phase 73 | Code scaffolding — 21 templates, multi-component generation, manifest validation, 235 tests ✅ |
 | **v1.1 — done** | Phase 40C | Supabase backend (optional, admin-configured) — PostgreSQL stores for sessions + credentials; admin System Integrations UI; idempotent schema init; SQLite → Postgres migrator; boot-time DI switch; Web + Desktop parity ✅ |
-| **v1.2 — done** | Phase 98 | User Dashboard — cross-workspace activity view for all users; own private + own public + others' public in shared workspaces; others' private excluded entirely; V030 adds `is_private` to missions/agent_runs/sessions; Web + Desktop rail nav ✅ |
-| **v1.2** | Phase 99 | Private sessions and agent runs — per-record privacy toggle; masked in Command Center, excluded from User Dashboard |
+| **v1.2 — done** | Phase 98 | User Dashboard — cross-workspace activity view; own public (Shared) + own private + teammates' public; V030 `is_private`; Web + Desktop rail nav; pagination, timestamps, 30s poll, guide panels, page-preserve on refresh ✅ |
+| **v1.2 — done** | Phase 99 | Private sessions and agent runs — per-record privacy toggle on sessions, agent runs, and missions; masked in Command Center, excluded from User Dashboard; server-side enforcement via V030 `is_private` ✅ |
+| **v1.2 — done** | Phase 96 | MCP runtime variables — inline env var editor on Web + Desktop; KEY=VALUE textarea in stdio add form; JSON paste auto-populates env vars; master key moved into DB (V039 `keystore` table); AES-256-GCM encrypted at rest ✅ |
 
 > Items below v1.0 are planned but not yet scheduled. See [Still pending](#still-pending) for the full gap list.
 
@@ -34,16 +35,16 @@ What we are actively working on and shipping next, in priority order.
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
 - **58 tools** across 18 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, missions, artifacts, documents, quality, swarm, coordination, LSP, code scaffolding)
-- **1,924 tests** across 10 projects, 0 failures
-- **115 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth)
+- **2,222 tests** across 10 projects, 0 failures
+- **141 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth, knowledge, trust-rules, attributions)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
-- SQLite persistence layer with 30 versioned migrations (V001–V030) — V030 adds `is_private` to missions/agent_runs/sessions for User Dashboard visibility scoping (Phase 98) — adds `parent_swarm_id` for federation child tracking — adds hooks, workspace settings, MCP/LSP servers, user preferences, provider profiles, workspace identity unification, auth credentials, agent run prompt on top of the Phase 32/42.5/51/52/57/78 foundation
+- SQLite persistence layer with 39 versioned migrations (V001–V039) — V038 `mcp_servers`→credential store migration (Phase 95), V039 `keystore` table — master AES key in DB (Phase 96), V030 `is_private` (Phase 98), V031 `agent_name` (Phase 106), V032–V033 `knowledge_pages` + `knowledge_attributions` (Phase 108/116F), V034–V037 `role`/`recommended_level` + `fields_json`/`filename_template` + skill/agent/doc-template seeds (Phase 112A–D) on top of the Phase 32/42.5/51/52/57/78 foundation
 - Single `.env` file configuration — `sovrant.config` removed; all bootstrap knobs are env vars; routing and swarm config fully DB-backed
 - **Integrations Gallery** on Web and Desktop — catalog-first MCP onramp with Automation (Composio, n8n, Zapier, Make), Platform (GitHub, Slack, Notion, Linear, Stripe, PostgreSQL, Supabase, Filesystem), and Search (Brave, Exa, Tavily) tiers; credentials stored in encrypted keystore (Phase 95 ✅)
 - **Model switcher with provider discovery** — configured providers selectable inline; unconfigured known providers shown with click-to-configure deep-link to Settings → Providers on both Web and Desktop
 - **Agent run prompt titles** — one-shot agent runs store the user's prompt (V028); Recent Runs list uses prompt as title with agent name badge on both Web and Desktop
-- **Command Center cockpit** at `/command` on Web and Desktop — read-only live grid aggregating active missions, team runs, agent runs, and sessions; Owner column resolves userId → username/email; click-through to existing detail pages (Phase 89/90 ✅)
+- **Command Center cockpit** at `/command` on Web and Desktop — read-only live grid aggregating active missions, team runs, agent runs, and sessions; Owner column resolves userId → username/email; click-through to existing detail pages; paginated grid with header timestamp, 30s auto-refresh, and page-preserve on navigation (Phase 89/90/98 polish ✅)
 - Mission engine with durable goals, re-planning, acceptance gates, and event journal (Phase 51 ✅)
 - Unified agent orchestration: SQLite-backed teams + swarm + agent run ledger (Phase 52 ✅)
 - Scoped artifact storage with workspace-first layout (Phase 53 ✅)
@@ -54,7 +55,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 - Remote server mode for web frontend — SignalR streaming, bearer auth, `AddSovrantClient()` DI abstraction (Phase 61 ✅)
 - Workspace/project/user hierarchy with membership, invites, config inheritance (Phases 35–37 ✅)
 - Per-user token auth with API token issuance/revocation (Phase 38 ✅)
-- Multi-provider support: OpenAI, Gemini, Ollama, native messages API, OpenAI Responses API
+- Multi-provider support: OpenAI, Gemini, Ollama, native messages API, OpenAI Responses API — OpenAI is the default provider in setup and admin (changed from OpenRouter)
 - Multi-tenant per-request credentials (`X-LLM-Api-Key` / `X-LLM-Base-Url` headers)
 - Per-session config overlay, rate limiting, token usage tracking
 - Session TTL eviction + LRU cap + per-session turn serialization
@@ -149,7 +150,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 
 ### Still pending
 
-> **Last audited:** 2026-05-23. Shipped since prior audit: Phase 79 Agents page ✅, Phase 94 Orchestration Studio ✅, Phase 95 Integrations Gallery ✅ (encrypted credentials, catalog with 14 integrations across 3 tiers, Web + Desktop parity). Phase 50 OpenClaw federation ✅ (SwarmFederationMode, bus client, manager-led routing, V029, 3 new API endpoints). Phase 73 code scaffolding ✅ (21 templates, CodeCreateMultiTool, ScaffoldManifestValidator, 235 tests). Session-level MCP opt-in lifted to context bar (Desktop WorkspacePanelView + Web TopContextBar). Phase 91 Knowledge Authoring deferred.
+> **Last audited:** 2026-05-26. Shipped since prior audit: Phase 79 Agents page ✅, Phase 94 Orchestration Studio ✅, Phase 95 Integrations Gallery ✅ (encrypted credentials, catalog with 14 integrations across 3 tiers, Web + Desktop parity). Phase 50 OpenClaw federation ✅ (SwarmFederationMode, bus client, manager-led routing, V029, 3 new API endpoints). Phase 73 code scaffolding ✅ (21 templates, CodeCreateMultiTool, ScaffoldManifestValidator, 235 tests). Session-level MCP opt-in lifted to context bar (Desktop WorkspacePanelView + Web TopContextBar). Phase 98 User Dashboard ✅ (Shared stat = own public items, pagination + timestamps + 30s poll + page-preserve on both surfaces, guide panels). Phase 99 privacy toggles ✅ (per-record is_private on sessions/agent_runs/missions, Command Center masking, User Dashboard exclusion). Phase 85.5 local/remote mode selection ✅ (Sovrant.Api.Client, sovrant connect/disconnect, two-phase Desktop boot, setup wizard mode picker). Phase 91 Knowledge Authoring deferred.
 >
 > Quality / polish / audit phases (62, 68, 69, 70, 71, 72, 75) and partial-completion phases (56) are tracked in their own sections below; this table is gap-only.
 
@@ -178,7 +179,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | OpenTelemetry observability — emit traces/metrics/logs for runs, turns, tool calls, router decisions, and provider HTTP via OTLP so operators can ship to any OTel-compatible backend (Honeycomb, Tempo, Jaeger, Datadog, etc.) | Phase 82.5 | Deferred |
 | Pluggable memory backends — abstract `IMemoryStore` so the SQLite implementation can be swapped for distributed/remote stores (mem0, Pinecone-style vector DBs, Redis, Postgres+pgvector); enables shared/team memory across nodes | Phase 83 | Medium |
 | Prompt library: reusable, parameterised prompt templates across CLI / Web / Desktop | Phase 84 | Medium |
-| Local / remote mode selection — CLI + Desktop can run embedded (local DB) or connect to a shared `Sovrant.Server`; setup wizard mode picker; `sovrant connect <url>` | Phase 85.5 | High |
+| Local / remote mode selection — CLI + Desktop can run embedded (local DB) or connect to a shared `Sovrant.Server`; setup wizard mode picker; `sovrant connect <url>` | Phase 85.5 | ✅ Done |
 | Background session continuation across navigation & session switches | Phase 86 | ✅ Done |
 | Artifacts-by-default for code & documents (with workspace identity unification) | Phase 87 | ✅ Done |
 | Knowledge Authoring Revisit — Web + Desktop UX rework: single Edit action on any item, silent copy-on-write for built-ins, no "Duplicate to user" intermediate; fix AvaloniaEdit defects on Desktop | Phase 91 | Deferred |
@@ -186,17 +187,24 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Agents page — in-app create/edit, Launch chat, Run one-shot, prompt titles in ledger | Phase 79 | ✅ Done |
 | Orchestration Studio — compose and run teams from the UI; Run button with task prompt | Phase 94 | ✅ Done |
 | Integrations Gallery — 14 integrations across Automation/Platform/Search tiers, encrypted credential keystore, Web + Desktop parity | Phase 95 | ✅ Done (Hermes pending details) |
-| MCP runtime variables — per-server variable store (name, value, secret flag) injected as env vars when the MCP server process is launched; variable editor in the Integrations UI lets users add/edit/remove variables at any time without reconfiguring the connection; covers servers like Sitecore MCP that require 10–20 env vars passed at runtime; encrypted at rest via existing keystore; Web + Desktop parity | Phase 96 | High |
-| User Dashboard — personal cross-workspace activity view: own public + own private + teammates' public records in shared workspaces; other users' private records excluded entirely (no masked rows); Command Center remains unchanged as the admin-only view; V030 migration adds `is_private` to missions/agent_runs/sessions; new `UserDashboardAggregator`, `/v1/user-dashboard/state` endpoint; Web `/dashboard` + Desktop view both reached via 👤 rail nav for all signed-in users; server-side workspace gating via `IWorkspaceService.ListForUserAsync`; 8 aggregator unit tests covering own/public/private/non-member/team-run visibility | Phase 98 | ✅ Done |
-| Private sessions and agent runs — users can mark any session or agent run as private via a toggle in the chat header and Agents UI; private records appear in the Command Center as masked rows (title and content hidden, existence acknowledged for accountability) but are completely excluded from the User Dashboard; only the owning user can see the full title, prompt, content, and run history of their private records; server-side enforcement ensures private content is never returned in any query for any other user regardless of role; audit log records the privacy toggle event | Phase 99 | High |
+| MCP runtime variables — per-server variable store (name, value, secret flag) injected as env vars when the MCP server process is launched; variable editor in the Integrations UI lets users add/edit/remove variables at any time without reconfiguring the connection; covers servers like Sitecore MCP that require 10–20 env vars passed at runtime; encrypted at rest via existing keystore; Web + Desktop parity | Phase 96 | ✅ Done |
+| User Dashboard — personal cross-workspace activity view: own public + own private + teammates' public records in shared workspaces; other users' private records excluded entirely (no masked rows); Command Center remains unchanged as the admin-only view; V030 migration adds `is_private` to missions/agent_runs/sessions; new `UserDashboardAggregator`, `/v1/user-dashboard/state` endpoint; Web `/dashboard` + Desktop view both reached via 👤 rail nav for all signed-in users; server-side workspace gating via `IWorkspaceService.ListForUserAsync`; 8 aggregator unit tests covering own/public/private/non-member/team-run visibility; "Shared" stat redefined as own public items (not others' activity); both Command Center and Dashboard: paginated grid, header timestamp, 30s auto-refresh, page-preserve on refresh/navigation, guide panels | Phase 98 | ✅ Done |
+| Private sessions and agent runs — users can mark any session or agent run as private via a toggle in the chat header and Agents UI; private records appear in the Command Center as masked rows (title and content hidden, existence acknowledged for accountability) but are completely excluded from the User Dashboard; only the owning user can see the full title, prompt, content, and run history of their private records; server-side enforcement ensures private content is never returned in any query for any other user regardless of role; audit log records the privacy toggle event | Phase 99 | ✅ Done |
 | Accurate cost reporting — replace the current placeholder cost display in the Command Center with real per-session cost calculated from token counts × model pricing; pull and cache OpenRouter's public `/api/v1/models` pricing data (prompt $/1k + completion $/1k per model) on a daily schedule; apply the correct rate for the model used in each turn; surface per-session cost, per-run cost, and a workspace total in the Command Center and activity detail views; cost shown as $0.00 for free-tier and local models; cached pricing refreshed automatically so rates stay current without manual updates | Phase 100 | Medium |
-| OAuth 2.1 + PKCE for MCP connections — replace API-key-only auth with a full OAuth 2.1 + PKCE flow for MCP servers that require it (Sitecore Marketer, Adobe AEM, and others); desktop uses authorization code + PKCE with loopback redirect `http://127.0.0.1:{port}/callback` via an ephemeral in-process HTTP listener; web uses ASP.NET Core OIDC middleware with an absolute redirect URI; RFC 8707 Resource Indicators bind each token to its specific MCP server so credentials cannot be replayed cross-server; tokens stored in the existing encrypted keystore (Windows Credential Manager on Desktop, encrypted DB on Web); automatic silent refresh with rotation before expiry; user-triggered revocation per server in the Integrations UI; no API keys exposed or pasted by the user — auth is entirely browser-driven on first connect | Phase 101 | High |
-| MCP quality and trust gates — add a policy layer between agents and connected MCP tools so destructive or high-impact actions require explicit approval before execution; company- or workspace-level rules define which tool call patterns are permitted, require confirmation, or are blocked outright (e.g. delete operations on more than N items, writes to production systems, bulk mutations); agents that violate a rule get a structured refusal with the policy reason so they can surface it to the user; quality gates optionally route tool call results through a validation step (schema check, output size cap, content policy) before returning to the agent; admins configure rules in the Integrations UI per MCP server; rule enforcement is server-side so no client-side bypass is possible; audit log records every gate decision (permitted, confirmed, blocked) per session | Phase 103 | High |
-| Agent identity in chat — audit and align the "talking to an agent" experience across Web and Desktop; Web and Desktop currently differ in how (and whether) they surface which agent the user is speaking with; both surfaces should clearly show the active agent name and avatar/icon in the chat header and in the context bar, keep it in sync when the agent changes mid-session, and show the agent description on hover or in a side panel; ensure the agents library page and the chat experience share the same agent resolution path so a user launching from the Agents page lands in a session that is visibly bound to that agent | Phase 106 | High |
-| Integration connection audit — systematically review and validate every gallery integration end-to-end; for each catalog entry confirm the npx package or HTTP endpoint is current and resolves correctly, verify the required credential fields match what the MCP server actually expects, test a live connection from both Web and Desktop, document any known setup steps or gotchas, and flag entries that require OAuth (Phase 101) so users are not left with a broken connect form; produce a connection matrix (integration × status × notes) that becomes the acceptance gate for the gallery going forward | Phase 107 | High |
-| Code template language management — surface the supported language and framework templates from Phase 73 scaffolding as editable knowledge pages; each language (TypeScript, Python, C#, Go, etc.) gets a template guideline page in the Knowledge section that defines coding conventions, preferred patterns, dependency standards, and generation hints used by the scaffolding engine; workspace admins can update guidelines to match company standards (e.g. internal package registries, required linting rules, banned dependencies); built-in guidelines are read-only with silent copy-on-write to user tier following the standard knowledge editing model; the scaffolding engine reads active guidelines at generation time so updates take effect immediately without rebuilding; Web + Desktop parity | Phase 108 | High |
+| OAuth 2.1 + PKCE for MCP connections — replace API-key-only auth with a full OAuth 2.1 + PKCE flow for MCP servers that require it (Sitecore Marketer, Adobe AEM, and others); desktop uses authorization code + PKCE with loopback redirect `http://127.0.0.1:{port}/callback` via an ephemeral in-process HTTP listener; web uses ASP.NET Core OIDC middleware with an absolute redirect URI; RFC 8707 Resource Indicators bind each token to its specific MCP server so credentials cannot be replayed cross-server; tokens stored in the existing encrypted keystore (Windows Credential Manager on Desktop, encrypted DB on Web); automatic silent refresh with rotation before expiry; user-triggered revocation per server in the Integrations UI; no API keys exposed or pasted by the user — auth is entirely browser-driven on first connect | Phase 101 | ✅ Done |
+| MCP quality and trust gates — add a policy layer between agents and connected MCP tools so destructive or high-impact actions require explicit approval before execution; company- or workspace-level rules define which tool call patterns are permitted, require confirmation, or are blocked outright (e.g. delete operations on more than N items, writes to production systems, bulk mutations); agents that violate a rule get a structured refusal with the policy reason so they can surface it to the user; quality gates optionally route tool call results through a validation step (schema check, output size cap, content policy) before returning to the agent; admins configure rules in the Integrations UI per MCP server; rule enforcement is server-side so no client-side bypass is possible; audit log records every gate decision (permitted, confirmed, blocked) per session | Phase 103 | ✅ Done |
+| Agent identity in chat — agent name persisted to `sessions.agent_name` (V031 migration); restored on session resume; agent badge shown in chat hero state and top context bar on both Web and Desktop; `ActiveContextService` (Web) and `ActiveContextViewModel` (Desktop) carry `ActiveAgentName` so all surfaces stay in sync; context cleared on new session, restored on resume | Phase 106 | ✅ Done |
+| Integration connection audit — 19 entries audited; Composio header fixed, Zapier URL replaced, GitHub env var corrected, Linear switched to remote HTTP endpoint (npm package did not exist), Snowflake package name fixed + 6-var requirement documented, Optimizely removed (no npm package); OAuth badge added to connect forms for 5 OAuth-gated entries; connection matrix at `docs/integration-connection-matrix.md` | Phase 107 | ✅ Done |
+| Code template language management — surface the supported language and framework templates from Phase 73 scaffolding as editable knowledge pages; each language (TypeScript, Python, C#, Go, etc.) gets a template guideline page in the Knowledge section that defines coding conventions, preferred patterns, dependency standards, and generation hints used by the scaffolding engine; workspace admins can update guidelines to match company standards (e.g. internal package registries, required linting rules, banned dependencies); built-in guidelines are read-only with silent copy-on-write to user tier following the standard knowledge editing model; the scaffolding engine reads active guidelines at generation time so updates take effect immediately without rebuilding; Web + Desktop parity | Phase 108 | ✅ Done |
+| Multi-agent session scoping — allow a user to scope more than one agent onto a single chat session; each scoped agent contributes its system prompt and tool set for the duration of the session; the chat header and top context bar show all active agents (expanding the single-agent badge from Phase 106); agents can be added or removed mid-session without clearing history; `sessions.agent_name` (V031 scalar) replaced or extended to support a list of agent IDs stored as a relation or JSON column (new migration required); `ActiveContextService` and `ActiveContextViewModel` updated to carry a collection; Web + Desktop parity | Phase 109 | Medium |
+| CLI first-run experience — improve the experience for users launching `sovrant` for the first time; guided setup that detects missing configuration (no provider, no API key) and walks the user through provider selection and key entry interactively; `sovrant init` command as a standalone setup entrypoint; `sovrant doctor` command that checks health of all configuration and connectivity (provider reachable, model list accessible, DB migrations current, tool count); friendly error messages when the runtime fails to start rather than raw stack traces; color-coded status output; `--help` improvements with grouped command categories and examples; Web + Desktop parity not required — CLI-only surface | Phase 110 | High |
+| Navigation overhaul — replace the current top-bar and rail navigation with a collapsible left-side panel following the modern sidebar pattern (VS Code, Linear, Notion, Slack); primary sections (Chat, Sessions, Agents, Teams, Missions, Knowledge, Artifacts, Settings, Command Center, Dashboard) listed in the sidebar with icons and labels; sidebar collapses to icon-only mode with tooltip labels; user-resizable panel width; active section highlighted; nested expansion for sections with sub-pages (e.g. Settings → Providers / Users / Workspace / System; Knowledge → Skills / Documents / Tools); keyboard shortcut to toggle sidebar; Web and Desktop parity; Desktop uses a single `SidebarView` Avalonia control replacing the current `RailNav`; Web replaces the current `<NavMenu>` component with a new `<Sidebar>` component; breadcrumb header remains on all pages; mobile breakpoint collapses sidebar to overlay drawer | Phase 111 | Medium |
+| Migrate built-in markdown knowledge into the DB — move all on-disk built-in markdown (32 skills, 25 agents) plus the 44 code-defined document templates out of the filesystem/C# and into the `knowledge_pages` table so users manage every template (base + their own) in the DB without code changes; copy-on-write overlay model (immutable base rows, user edits become `global`/project overlays that win, revert = delete overlay); built-ins seeded via SQL migration; registries flipped to read DB; document rendering becomes data-driven via a sandboxed templating engine; `.md` files and disk scans deleted once verified; SQLite-only (knowledge store is local even on Postgres backend) | Phase 112 | Done ✅ |
+| Caching: DB read cache + Phase 31 invalidation fix — `CachedKnowledgeStore` decorator wraps `IKnowledgeStore` with TTL-based in-process caching for rarely-changing content (skills, agents, document templates, tool/doc guides) and fires a `KnowledgePageChanged` event on every write; repairs Phase 31's `CacheInvalidator` whose file-watcher triggers were deleted by Phase 112, restoring HTTP-cache invalidation for `skills:list`, `templates:list`, and `knowledge:*` keys; opt-out via `SOVRANT_KNOWLEDGE_CACHE_TTL=0` | Phase 113 | ✅ Done |
+| Intelligent Knowledge Harness — on-demand per-turn knowledge loading via `IKnowledgeRouter` (keyword/trigger/intent scoring, no LLM call); dynamic per-turn addendum preserves stable system-prompt cache; full-round-trip PII sanitization for knowledge bodies and tool results; `knowledge_attributions` table; MCP tool relevance filtering per turn; provenance Sources section in Web + Desktop chat | Phase 116 | ✅ Done |
+| Enrich built-in skill definitions — review and improve all 32 built-in skill descriptions (2-3 sentences), workflow bodies (≥5 concrete steps), agents/tools lists, and trigger phrases; ship as a `V038__enrich_builtin_skills.sql` additive migration that UPDATEs only the BuiltIn base rows; user overlays are unaffected | Phase 114 | Planned |
 
-### v1.0 release polish (in progress)
+### v1.0 release polish ✅
 
 A focused subset of Phase 69 / Phase 70 acceptance work that must land
 before the public release. Tracked here rather than reopening the parent
@@ -2026,12 +2034,14 @@ The Phase 30 registry endpoints (`/v1/tools`, `/v1/skills`, `/v1/agents/template
 | Resource | Cache key | TTL | Invalidation trigger |
 |---|---|---|---|
 | Tool registry listing | `tools:list` | 1 hour | Server restart (tools are static) |
-| Skill registry listing | `skills:list` | 5 min | `SkillCreate` tool execution, file watcher on `.sovrant/skills/` |
-| Agent template listing | `templates:list` | 5 min | File watcher on `.sovrant/agents/` |
-| Single tool/skill/template detail | `{type}:{name}` | Same as listing | Same as listing |
+| Skill registry listing | `skills:list` | 5 min | ~~`SkillCreate` tool execution, file watcher on `.sovrant/skills/`~~ **⚠ stale — see Phase 113** |
+| Agent template listing | `templates:list` | 5 min | ~~File watcher on `.sovrant/agents/`~~ **⚠ stale — see Phase 113** |
+| Single tool/skill/template detail | `{type}:{name}` | Same as listing | **⚠ stale — see Phase 113** |
 | Session metadata (message count, token totals) | `session:{id}:meta` | 30 sec | Any turn completion on that session |
 | Provider health/status | `providers:health` | 10 sec | Health ping cycle |
 | `/v1/config` response | `config:current` | Until mutation | `PUT /v1/config`, `PUT /v1/sessions/{id}/config` |
+
+> **Post-Phase-112 gap:** Skills, agents, and document templates are now DB-backed (no filesystem). The file-watcher and `SkillCreate` invalidation triggers no longer fire. Phase 113 replaces them with `KnowledgePageChanged` events and adds a `CachedKnowledgeStore` decorator for DB-level read caching.
 
 #### HTTP Cache Headers
 
@@ -10562,6 +10572,197 @@ A server must be allowed at both the workspace level and the project level to ap
 
 ---
 
+## Phase 112 — Migrate all built-in markdown knowledge into the DB
+
+### Goal
+
+Make `knowledge_pages` (V033, Phase 108) the single source of truth for all
+markdown knowledge. Move the built-in **skills** (32) and **agents** (25) off the
+filesystem, and the 44 code-defined **document** templates out of C#, so users can
+manage every template — our base ones and the ones they create — entirely in the
+DB and change them without code changes. Once each registry reads from the DB, the
+loose `.md` files and disk-scan code paths are deleted.
+
+**Guiding principle:** smart code (loaders, parsers, renderers) stays compiled; all
+editable content (skill/agent/template bodies + field schemas) lives only in the DB.
+
+### Design
+
+- **Copy-on-write overlay model.** Base rows are immutable (`tier='BuiltIn'`,
+  `workspace_id=''`), seeded by migration. A user edit creates a separate overlay
+  row (`tier='User'`) at `workspace_id='global'` (installation-wide) or a project
+  scope; resolution is project → global → base. Editing a base item never mutates
+  it; "revert" deletes the overlay. Matches the existing inline-knowledge-editor UX.
+- **Seed via SQL migration.** Built-in content is baked into a `Vxxx` INSERT
+  migration generated from the former `.md`; future content updates ship as new
+  additive migrations that `UPDATE` the base row (never editing an applied migration).
+- **DB-only writes.** Built-in and user content both live in the DB; the
+  `~/.sovrant` / `.sovrant` filesystem tiers and the dual-write are removed.
+- **Documents become data-driven.** The 44 `IDocumentTemplate.Render()` classes are
+  replaced by DB-stored token templates + field schema (JSON), interpreted at render
+  time by a sandboxed templating engine; the existing `IDocumentGenerator` format
+  pipeline (Markdown/PDF/Word/Excel/PowerPoint) is unchanged.
+- **SQLite-only.** The knowledge store is always local SQLite even when the Postgres
+  backend is active (Postgres backs only sessions/credentials), so no Postgres store
+  is needed.
+
+### Delivery (A → B → C → D, each independently shippable)
+
+- **A — Schema + store foundation.** ✅ Done. `V034` adds `role` +
+  `recommended_level` columns; `KnowledgePage` and `IKnowledgeStore` extended with
+  `GetEffectiveAsync` / `GetAllEffectiveAsync` (overlay resolution); `KnowledgeScope`
+  constants; SqliteKnowledgeStore updated; 7 unit tests cover layered resolution and
+  base-preservation.
+- **B — Skills + Agents into the DB; delete the `.md`.** ✅ Done. `V035` seed
+  migration generated from all 57 built-in files (generator at
+  `tools/gen-seed-knowledge.ps1`); `SkillRegistry`, `AgentTemplateRegistry` (via
+  new `DbAgentTemplateLoader`), `SkillCreateTool`, and `AgentDefinitionWriter` all
+  read/write DB-only; `KnowledgeAuthoringRoutes` updated (agents kind added, filesystem
+  reads/writes removed); 32 skill + 25 agent `.md` files deleted with csproj copy
+  directives removed. 1,005 runtime tests + 405 tools tests green.
+- **C — Tools + user-document markdown into the DB.** ✅ Done. `UserToolTemplateRegistry`
+  and `UserDocumentTemplateRegistry` rewritten to read from `GetAllEffectiveAsync`
+  and write via `UpsertAsync`/`DeleteAsync` at `KnowledgeScope.Global`; no filesystem
+  reads or writes remain. `KnowledgeAuthoringRoutes` updated — all five kinds
+  (skills/agents/documents/tools/guidelines) now fully DB-only; `ReconstructDocMarkdown`
+  / `ReconstructToolMarkdown` helpers added. 89 doc tests + 405 tools tests + 1,005
+  runtime tests green.
+- **D — Document templating engine.** ✅ Done. Added Scriban dependency; V036
+  migration adds `fields_json` + `filename_template` columns; V037 seeds 42 built-in
+  Scriban templates (`kind='document-templates'`, `tier='BuiltIn'`) for all industries
+  (business/construction/education/finance/healthcare/legal/real-estate); 42 C# template
+  classes deleted; `DbDocumentTemplate` + `ScribanRenderer` + `TemplateFieldSerializer`
+  wired into `TemplateRegistry`; 2 Excel-format templates (ExpenseReport,
+  LoanAmortization) remain as C# (they emit structured JSON, not Markdown). Schema
+  version 37. 1,464 total tests green.
+
+### Acceptance Criteria
+
+- Fresh install: `knowledge_pages` holds 32 skills + 25 agents + 44 documents as
+  `BuiltIn` rows; no knowledge `.md` files in source or build output.
+- Skills, agents, tools, and documents all list, run, and render reading only from
+  the DB.
+- Editing any base item creates a `User` overlay (base preserved); revert restores base.
+- Document output is byte-compatible with the pre-migration C# templates (golden-file).
+- Editing a document template body in the UI changes generated output with no rebuild.
+
+---
+
+## Phase 113 — Caching: DB Read Cache + Phase 31 Invalidation Fix
+
+### Goal
+
+Complete the caching story in one phase: add a `CachedKnowledgeStore` decorator that caches
+rarely-changing DB reads (skills, agents, document templates, tool/doc guides), and repair
+Phase 31's `CacheInvalidator` whose file-system triggers were removed by Phase 112.
+
+### Context
+
+Phase 31 shipped a solid cache infrastructure (`ICacheProvider`, in-memory/Redis adapters,
+ETag middleware, TTL-based HTTP response caching). It wired invalidation to file-system watchers
+on `.sovrant/skills/` and `.sovrant/agents/`. Phase 112 deleted those files and moved all
+knowledge into SQLite — the watchers no longer exist, so Phase 31's HTTP response cache for
+`skills:list`, `templates:list`, and `knowledge:*` keys never gets cleared after a user edit.
+
+Additionally, the per-request authoring routes (`GET /v1/knowledge/{kind}/{slug}/source`) hit
+SQLite on every call with no caching, even though templates and skills change at human cadence.
+
+Both problems have the same fix: a single invalidation event that fires whenever any knowledge
+page is written, and a DB-level read cache that sits below the existing registries.
+
+### What Phase 113 ships
+
+**1 — `CachedKnowledgeStore` decorator**
+- Wraps `SqliteKnowledgeStore` transparently; registered as `IKnowledgeStore` in DI.
+- Caches `GetAllEffectiveAsync` and `GetEffectiveAsync` results keyed on `(kind, projectId)` /
+  `(kind, slug, projectId)`.
+- On any `UpsertAsync` or `DeleteAsync`, immediately evicts the affected keys and raises a
+  `KnowledgePageChanged(kind, slug)` event.
+- Default TTLs (all configurable via `SOVRANT_KNOWLEDGE_CACHE_TTL`):
+
+| Kind | Default TTL | Rationale |
+|---|---|---|
+| `skills` | 5 min | Changed by SkillCreate tool or admin edit |
+| `agents` | 5 min | Changed by admin edit only |
+| `document-templates` | 10 min | Changed by admin edit only |
+| `tools`, `documents` | 5 min | User-authored guides |
+| `guidelines` | 30 sec | May be edited during an active session |
+
+- `SOVRANT_KNOWLEDGE_CACHE_TTL=0` disables the decorator entirely (passthrough to SQLite).
+
+**2 — Phase 31 `CacheInvalidator` repair**
+Replace the stale file-watcher subscriptions with subscriptions to the new `KnowledgePageChanged`
+event:
+
+| Old trigger (removed) | New trigger |
+|---|---|
+| File watcher on `.sovrant/skills/` | `KnowledgePageChanged`, kind = `skills` |
+| File watcher on `.sovrant/agents/` | `KnowledgePageChanged`, kind = `agents` |
+| `SkillCreate` tool event | Covered by `KnowledgePageChanged` (fires on every `UpsertAsync`) |
+
+HTTP response cache keys cleared: `skills:list`, `templates:list`, `knowledge:{kind}:*`.
+
+**3 — Authoring route caching**
+`GET /v1/knowledge/{kind}/{slug}/source` now benefits from the decorator automatically — the
+second request for the same page hits the in-process cache, not SQLite.
+
+### What does NOT change
+
+- `SqliteKnowledgeStore` itself — unchanged; the decorator is purely additive.
+- The singleton registry in-process dictionaries (`SkillRegistry._byName`, etc.) — they already
+  act as a startup cache. `Reload()` calls benefit from the warm decorator cache after the
+  first post-write refresh.
+- Overlay resolution logic — unchanged.
+- User-visible behaviour: a write invalidates the cache synchronously before returning, so the
+  authoring user always reads their own writes.
+
+### Acceptance Criteria
+
+- Second `GET /v1/knowledge/skills/tdd-workflow/source` does not hit SQLite (DB call count = 1).
+- After `POST /v1/knowledge/skills/tdd-workflow`, next GET returns the new content.
+- Phase 31's `skills:list` HTTP response cache is evicted after any knowledge-page write with `kind=skills`.
+- `SOVRANT_KNOWLEDGE_CACHE_TTL=0` makes every call hit SQLite directly (verified by test).
+- All 1,464 existing tests continue to pass.
+
+---
+
+## Phase 114 — Enrich Built-in Skill Definitions
+
+### Goal
+
+The 32 built-in skills seeded by V035 each have a short name, trigger, and workflow body,
+but the descriptions are often sparse (one line) and the body steps are thin. Users seeing
+the Skills page in the desktop app get little signal about *when* to invoke a skill or what
+outcome to expect. Richer definitions improve agent routing, the `SkillTool` "list" view,
+and the `DocumentListTemplatesTool` equivalent for skills.
+
+### What to improve per skill
+
+Each built-in skill (`kind='skills'`, `tier='BuiltIn'`) should have:
+
+- **Description** (2-3 sentences): what the skill does, when to reach for it, what output to expect.
+- **Body** (workflow steps): concrete numbered steps, including what the model should *check* before
+  proceeding, how to handle edge cases, and what a successful result looks like.
+- **Trigger** phrase: verify each trigger is intuitive and doesn't collide.
+- **Agents / Tools lists**: populated for skills that have natural delegations (e.g. `tdd-workflow`
+  uses the `coder` + `code-reviewer` agents and the `Bash` + `Read` + `Write` tools).
+
+### Delivery
+
+1. Review all 32 skills in the DB (query `knowledge_pages WHERE kind='skills' AND tier='BuiltIn'`).
+2. Decide which need enrichment (description too short, body has fewer than 5 steps, agents/tools empty).
+3. Write a `V038__enrich_builtin_skills.sql` migration with `UPDATE knowledge_pages SET ... WHERE slug='...'`
+   for each improved skill — additive, never editing prior migrations.
+4. Smoke-test in the desktop Skills page: descriptions readable, workflow steps actionable.
+
+### Note
+
+User-created or overridden skills (User overlay rows) are unaffected — the migration only updates
+the `BuiltIn` base rows (`workspace_id=''`), so any user customisations continue to win via the
+copy-on-write overlay.
+
+---
+
 ## Bug — Selected Model Not Persisted Across Desktop/Web Reload
 
 **Status:** Confirmed (2026-05-08), fix queued as pre-beta item 2
@@ -10569,3 +10770,263 @@ A server must be allowed at both the workspace level and the project level to ap
 **Expected:** Per-user selected model is stored in the DB user-settings row (Phase 88 pattern) and re-applied when the session pool initialises on the next launch.
 **Likely location:** `ChatViewModel` (Desktop) / `Chat.razor` (Web) — the model picker writes to an in-memory `SessionConfig` but may not persist the selection to the `IUserSettings` DB store. On reload the pool creates a fresh `SessionConfig` from the stored defaults, losing the in-session override.
 **Fix scope:** Small — wire the model-picker selection through to `IUserSettings.SetModelAsync(...)` (or equivalent) so it survives restarts. Same fix applies to both surfaces.
+
+---
+
+## Phase 115 — Conversation Compaction and Clear (Surface Parity)
+
+### Goal
+
+Make conversation compaction and clearing consistent, visible, and user-controlled
+across all three surfaces (Desktop, Web, CLI). Today auto-compaction fires silently
+(no UI feedback), `/compact` does a dumb reset instead of an LLM-backed summarize-then-
+reinject, and neither surface exposes a manual compact or clear button in the chat UI.
+
+### Current state
+
+| Feature | CLI (`/compact`) | Desktop | Web |
+|---|---|---|---|
+| Auto-compaction (threshold-triggered) | ✅ `ConversationRuntime.MaybeCompactHistoryAsync` — LLM summary re-injected | ✅ same | ✅ same |
+| Manual compact (slash command) | `/compact` → `_runtime.Reset()` — **no summary, just clears** | `/compact` same | `/compact` same |
+| Manual compact button | ✗ | ✗ | ✗ |
+| Clear conversation button | ✗ | ✗ (only Ctrl+L / slash) | Ctrl+L only |
+| User-visible indicator when auto-compact fires | ✗ silent log only | ✗ | ✗ |
+
+`ConversationRuntime.MaybeCompactHistoryAsync` (Phase 31 / Phase 51) already does the
+right thing for auto-compaction: it calls `LlmContextCompactor`, re-injects a summary
+message into `_history`, and writes a `compaction` session entry. `CompactCommand`
+(`/compact`) bypasses all of this and just calls `_runtime.Reset()` — the comment in
+that file already flags this as a known gap ("A future version will first ask the model
+to produce a summary that is re-injected.").
+
+### What Phase 115 ships
+
+**1 — Fix `/compact` to be LLM-backed**
+- `CompactCommand.ExecuteAsync` calls a new `IConversationRuntime.CompactAsync(ct)`
+  method (or invokes `MaybeCompactHistoryAsync` directly with `force: true`) instead of
+  `Reset()`. Same summarize-then-reinject path as auto-compaction; the compacted summary
+  message is re-injected so the model retains context.
+- `ShouldClearHistory: true` is still returned so the UI flushes its visible bubble list
+  (matching the existing contract); the runtime's `_history` is already updated internally.
+- `/compact` on an empty or short conversation (below threshold) does nothing and returns
+  a "Nothing to compact" message.
+
+**2 — Compaction indicator in chat UI (all surfaces)**
+- When auto-compaction fires, `ConversationRuntime` already appends a
+  `[Conversation history summary — auto-compacted at N tokens]` user message to
+  `_history`. Surface this as a distinct styled event bubble (not a regular user message)
+  so users know compaction happened.
+- Desktop: `ChatViewModel` detects the `[Conversation history summary…]` prefix on
+  incoming messages and renders them as a `CompactionEventViewModel` (grey pill, "Context
+  compacted — N messages summarized"). Alternatively, expose a `Compacted` event from
+  `IConversationRuntime` that the ViewModel subscribes to.
+- Web: same approach — `Chat.razor` renders a distinct styled `<div class="compact-event">` bubble.
+- The manual `/compact` flow uses the same indicator (the re-injected summary message IS the indicator).
+
+**3 — "New Conversation" / "Clear" buttons in chat header**
+- Desktop: add a `Clear` (or `New Conversation`) button to the `ChatView` header toolbar.
+  Wires to the existing `ClearChat()` private method (make it a command). Confirm dialog
+  if there are more than 5 messages (prevents accidental clear; skip confirm when the
+  conversation is empty).
+- Web: add the same button to `Chat.razor`'s header row (already has a `New Session`
+  event path via `ActiveContext.OnNewSession` — expose a button that triggers it).
+- CLI: `/clear` command (alias of `/compact` or a separate command) explicitly documented
+  as "wipes history without summarising" vs. `/compact` = "summarise then compact".
+
+**4 — Surface parity checklist**
+
+| Feature | Desktop | Web | CLI |
+|---|---|---|---|
+| Auto-compact indicator | ✅ Phase 115 | ✅ Phase 115 | `/compact` returns summary text already |
+| Manual compact (LLM-backed) | `/compact` | `/compact` | ✅ Phase 115 fixes this |
+| Compact button in UI | ✅ Phase 115 | ✅ Phase 115 | n/a (slash only) |
+| Clear (no summary) button | ✅ Phase 115 | ✅ Phase 115 | `/clear` alias |
+| Threshold configurable | `SOVRANT_COMPACT_THRESHOLD` / workspace settings | same | same |
+
+### What does NOT change
+
+- `ConversationRuntime.MaybeCompactHistoryAsync` — the auto-compaction path is correct; no changes.
+- `CompactionSettings` / `SOVRANT_COMPACT_THRESHOLD` — threshold resolution unchanged.
+- `LlmContextCompactor` / `NaiveContextCompactor` — unchanged; `/compact` will just call through the
+  same path that auto-compaction uses.
+- Session persistence (`session_entries` rows) — compaction events already appended there; unchanged.
+
+### Acceptance Criteria
+
+- `/compact` on a conversation with > 10 messages produces a visible summary bubble and the runtime
+  `_history` shrinks to the summary + recent tail (not empty).
+- `/compact` on an empty session returns "Nothing to compact" without mutating state.
+- Auto-compaction (threshold-triggered) shows the same styled indicator bubble on Desktop and Web.
+- Desktop chat header has a "Clear" button; clicking it after > 5 messages shows a confirm dialog.
+- Web chat header has a "Clear" / "New Chat" button wired to `OnNewSession`.
+- All existing tests pass; add unit tests for `CompactCommand` covering the LLM-backed and empty-session cases.
+
+---
+
+## Phase 116 — Intelligent Knowledge Harness
+
+> **Status:** ✅ Done (2026-06-03/04). All eight sub-steps (A–H) shipped: tool guides wired into `ICapabilityCatalog`, PII sanitization for knowledge bodies and tool results, `IKnowledgeRouter` + per-turn addendum, `knowledge_attributions` table + `KnowledgeUsed` events, MCP tool relevance filtering, provenance Sources UI in Web + Desktop chat.
+
+### Tenets driving this phase
+
+Two of Sovrant's three core tenets are load-bearing here:
+
+- **Drive AI spend toward zero** — pre-loading the full knowledge catalog on every turn wastes tokens, degrades prompt-cache hit rates, and adds latency. Hundreds of concurrent sessions cannot afford a 2,000-token knowledge dump per request.
+- **Be ethical with AI** — PII flowing from file reads, web fetches, and authored knowledge content (agent system prompts, skill bodies) into LLM context unchecked is a trust-boundary failure. Sanitization must cover the full round-trip, not just user input.
+
+### Problem statement
+
+Today the knowledge pipeline has two failure modes:
+
+**Over-injection (performance and cost):**
+- All 32+ skills and 25+ agent names are injected into every session's system prompt at init, regardless of whether the user will ever need a skill or delegate to an agent.
+- The static system prompt grows with each new skill or agent added to the DB, silently increasing token cost for every existing session.
+- Tool guides (`kind='tools'`) and document templates are never injected at all — the LLM cannot discover them unless it already knows to call a specific tool.
+- MCP server tool lists for connected integrations are available but not relevance-filtered — a session with 8 integrations connected gets all 80+ tools in every turn regardless of intent.
+
+**Under-sanitization (ethics and trust):**
+- `PromptSanitizer` runs only on user input. Agent system prompts, skill bodies, and tool results (file content, web responses, bash output) travel to the LLM raw.
+- A `ReadFile` call on a `.env` or credentials file sends its full plaintext into the conversation history. A skill body authored with a real person's name or an internal IP address embeds PII into every session that loads it.
+
+### Architecture: stable base + dynamic per-turn addendum
+
+The key design principle is **not to replace the static system prompt** — it must remain stable across turns so that LLM provider-side prompt caching works. Instead, a small **dynamic knowledge addendum** is prepended to each turn's user message (as an additional context block, not a system prompt mutation):
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  STABLE SYSTEM PROMPT  (built once at session init)          │
+│  · Runtime identity, shell hints, permission mode            │
+│  · Artifact discipline, orchestration strategy               │
+│  · Memory section (summaries, patterns, instincts)           │
+│  · Git context                                               │
+│  ← This never changes between turns; provider caches it →   │
+└─────────────────────────────────────────────────────────────┘
+                            +
+┌─────────────────────────────────────────────────────────────┐
+│  DYNAMIC PER-TURN ADDENDUM  (assembled fresh each turn)      │
+│  · Top-k relevant skills for this input (3–5 max)            │
+│  · Relevant agent summaries if delegation likely             │
+│  · Relevant document template hints if creation intent       │
+│  · Tool guides for tools likely to be called                 │
+│  · Active MCP integration tool list (session-scoped)         │
+│  ← Small, targeted, changes per turn; not cached →          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+This preserves prompt-caching economics on the stable portion (the large block) while making the small dynamic portion turn-aware.
+
+### Knowledge Router
+
+A new `IKnowledgeRouter` service sits between the incoming turn message and the context assembler:
+
+```
+Turn input
+  → PII sanitizer (user message)          [already exists, unchanged]
+  → Intent classifier                      [reuse SemanticIntentGate or keyword scorer]
+  → Knowledge selector                     [NEW — queries CachedKnowledgeStore]
+      · GetAllEffectiveAsync("skills")     already cached in-process (5 min TTL)
+      · GetAllEffectiveAsync("agents")     already cached in-process (5 min TTL)
+      · GetAllEffectiveAsync("document-templates") already cached (10 min TTL)
+      · GetAllEffectiveAsync("tools")      already cached (5 min TTL)
+      → score each item against intent signal
+      → return top-k per kind (configurable, default 5/3/3/3)
+  → PII sanitizer (selected knowledge content)  [NEW — SanitizeKnowledgeContentAsync]
+  → Addendum assembler                     [NEW — formats selected items as context block]
+  → LLM (stable system prompt + addendum + user message)
+  → Tool results → PII sanitizer           [NEW — SanitizeToolResultAsync]
+  → Attribution tracker                    [NEW — records which knowledge was used]
+  → Response + provenance metadata
+```
+
+### Relevance scoring (lightweight, no LLM call)
+
+The selector scores each knowledge item against the turn input using a fast heuristic — no embedding model, no extra LLM call:
+
+1. **Keyword overlap** — tokenise the user message and the item's `name + description + trigger`; score = intersection / union (Jaccard).
+2. **Trigger match** — if a skill's trigger phrase appears verbatim in the input (e.g. `/tdd`), it scores 1.0.
+3. **Intent-to-kind affinity** — if the intent gate classifies the input as `CodeGeneration`, skills and tool guides score higher; if `DocumentCreation`, document templates score higher; if `AgentDelegation`, agent templates score higher.
+4. **Session history signal** — skills or agents used in the last 3 turns of this session score a recency bonus.
+
+Scores are computed entirely in-process against the already-cached in-memory dictionaries from `CachedKnowledgeStore`. No DB round-trip per turn.
+
+### PII sanitization — full round-trip
+
+Extend `PromptSanitizer` (Phase 58) with two new paths:
+
+**`SanitizeKnowledgeContentAsync(string body)`**
+- Called on each selected knowledge item's body before it enters the addendum.
+- Same detector set as the user-input path (email, phone, SSN, credit card, IP addresses).
+- Items that fail sanitization are excluded from the addendum and logged; the session continues without them.
+
+**`SanitizeToolResultAsync(string toolResult, string toolName)`**
+- Called on every `ToolResult` event before it is appended to `_history`.
+- Configurable per tool class: file-reading tools (`ReadFile`, `Glob`, `Grep`) run full PII scanning; bash/shell output runs a lighter pass (strip only credential-shaped patterns — `sk-`, `ghp_`, `xoxb-`, etc.).
+- If a result is partially sanitized, the redacted version is stored in history; the original is never written to `session_entries`.
+
+Both paths are governed by the existing `TrustBoundaryConfig.EnablePiiDetection` flag — when disabled (air-gapped or development installs), both paths are bypassed.
+
+### MCP integration scoping
+
+MCP server tool lists are already session-scoped via `SessionConfig.AllowedMcpServers`. Phase 116 extends this:
+
+- When the knowledge selector runs, it also evaluates which connected MCP tools are relevant to the current intent.
+- Only the relevant MCP tools are included in the turn's tool list, rather than passing all connected tools every turn.
+- The existing `FilteredToolRegistry` pattern (Phase 58) is extended to accept a per-turn `IReadOnlyList<string>? allowedTools` override that the selector populates.
+- Tools not in the filtered list are still registered (so the LLM can call them if it reasons its way there), but they are not mentioned in the system prompt or addendum, reducing token pressure.
+
+### Attribution tracking
+
+A new `knowledge_attributions` table records which knowledge resources influenced each turn:
+
+```sql
+CREATE TABLE knowledge_attributions (
+    id          INTEGER PRIMARY KEY,
+    session_id  TEXT NOT NULL,
+    turn_index  INTEGER NOT NULL,
+    kind        TEXT NOT NULL,   -- 'skills', 'agents', 'document-templates', 'tools'
+    slug        TEXT NOT NULL,
+    used_at     TEXT NOT NULL    -- ISO 8601
+);
+```
+
+Events:
+- `SkillTool.ExecuteAsync` → writes `kind='skills', slug=<name>`
+- `AgentDelegateTool` / `TeamDelegateTool` → writes `kind='agents', slug=<name>`
+- `DocumentFromTemplatesTool` → writes `kind='document-templates', slug=<id>`
+- Any tool guided by a `kind='tools'` entry → writes `kind='tools', slug=<slug>`
+
+The attribution table is lightweight (no body storage) and append-only. It feeds the provenance surface in the UI.
+
+### Delivery (A → G, each independently shippable)
+
+| Step | What | Effort | Value |
+|---|---|---|---|
+| **A** | Wire tool guides into `ICapabilityCatalog` + inject in system prompt (static, no routing yet) | Small | Tool guides immediately visible to LLM |
+| **B** | `SanitizeKnowledgeContentAsync` — PII sanitization for selected knowledge bodies | Small | Ethical gap closed for knowledge content |
+| **C** | `SanitizeToolResultAsync` — PII sanitization for tool results before history write | Small | Ethical gap closed for file/web/shell output |
+| **D** | `IKnowledgeRouter` + relevance scorer — lightweight keyword/trigger/intent scoring, no LLM call | Medium | Per-turn knowledge selection; token cost drops |
+| **E** | Dynamic per-turn addendum — assemble and inject only selected knowledge as context block, remove full catalog from static system prompt | Medium | Prompt cache preserved; addendum is small and targeted |
+| **F** | `knowledge_attributions` table + `KnowledgeUsed` events from `SkillTool`, `AgentDelegateTool`, `DocumentFromTemplatesTool` | Medium | Attribution data available |
+| **G** | MCP tool relevance filtering — extend `FilteredToolRegistry` with per-turn intent-scoped allow list | Medium | Reduces MCP token pressure in multi-integration sessions |
+| **H** | Provenance UI — "Sources" section in Web + Desktop chat showing which skills/agents/templates were used | Medium | User transparency; supports the ethics tenet |
+
+Steps A–C are pure improvements with no architectural risk — they can ship any time. D–E are the core routing change and should ship together. F–H are independent of each other.
+
+### What does NOT change
+
+- `ConversationRuntime.BuildSystemPrompt()` structure — the stable base prompt is unchanged; we only add an addendum mechanism.
+- `CachedKnowledgeStore` TTLs — the per-kind cache is already correct; the router reads from the same in-memory cache.
+- `SkillRegistry`, `AgentTemplateRegistry`, `TemplateRegistry` — all read from `IKnowledgeStore` as today; no changes to registry internals.
+- `PromptSanitizer` user-input path — unchanged; we add two new methods alongside it.
+- `TrustBoundaryConfig.EnablePiiDetection` — governs all three sanitization paths uniformly.
+
+### Acceptance Criteria
+
+- A coding-focused input ("write unit tests for this function") injects tdd-workflow and coder agent, not business-process skills or financial document templates.
+- A document-creation input ("I need a construction contract") proactively surfaces the construction-contract template summary without the user calling `DocumentListTemplatesTool`.
+- A session with 8 MCP integrations connected does not include all 80+ tools in the prompt for a simple "explain this code" turn.
+- `ReadFile` on a file containing `email@example.com` stores the redacted version in `session_entries`; the original never appears in `_history`.
+- A skill body containing a mock SSN is sanitized before being included in the addendum.
+- After a turn that uses the tdd-workflow skill, `knowledge_attributions` has a row with `kind='skills', slug='tdd-workflow'`.
+- Stable system prompt hash does not change between turns (verifiable: provider-side cache hit rate does not drop vs. pre-Phase-116 baseline).
+- All existing tests pass; new unit tests cover the relevance scorer (trigger match, keyword overlap, intent affinity) and both PII sanitization paths.

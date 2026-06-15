@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Runtime.Auth;
 using Sovrant.Tools.Skills;
 
 namespace Sovrant.Desktop.ViewModels;
@@ -10,6 +11,7 @@ namespace Sovrant.Desktop.ViewModels;
 public partial class SkillsViewModel : ViewModelBase
 {
     private readonly SkillRegistry _registry;
+    private readonly IPrincipalAccessor _principal;
     private readonly List<SkillItemViewModel> _allSkills = [];
 
     [ObservableProperty]
@@ -33,11 +35,20 @@ public partial class SkillsViewModel : ViewModelBase
     [ObservableProperty]
     private string? _editingSlug;
 
+    [ObservableProperty]
+    private bool _canEdit;
+
+    [ObservableProperty]
+    private string _errorMessage = string.Empty;
+
+    public bool IsAdmin => _principal.IsAdmin;
+
     public ObservableCollection<SkillItemViewModel> FilteredSkills { get; } = [];
 
-    public SkillsViewModel(SkillRegistry registry)
+    public SkillsViewModel(SkillRegistry registry, IPrincipalAccessor principal)
     {
         _registry = registry;
+        _principal = principal;
         LoadSkills();
     }
 
@@ -60,33 +71,58 @@ public partial class SkillsViewModel : ViewModelBase
     {
         if (IsEditing) CancelEdit();
         SelectedSkill = skill;
+        CanEdit = skill.IsUserAuthored || _principal.IsAdmin;
     }
 
     [RelayCommand]
+    private void RevertSkill()
+    {
+        if (SelectedSkill is null || !SelectedSkill.IsUserAuthored) return;
+        _registry.DeleteGlobal(SelectedSkill.Name);
+        SelectedSkill = null;
+        CanEdit = false;
+        LoadSkills();
+    }
+
+    [RelayCommand(CanExecute = nameof(IsAdmin))]
     private void NewSkill() => BeginEdit(slug: string.Empty, source: NewSkillTemplate, title: "New skill");
 
     [RelayCommand]
-    private async Task EditSkill()
+    private Task EditSkill()
     {
-        if (SelectedSkill is null) return;
-        var src = _registry.TryGetSource(SelectedSkill.Name);
-        var content = src is not null && File.Exists(src.Path)
-            ? await File.ReadAllTextAsync(src.Path).ConfigureAwait(true)
-            : SelectedSkill.Body;
-        var slug = src is not null ? Path.GetFileNameWithoutExtension(src.Path) : string.Empty;
-        BeginEdit(slug, content, SelectedSkill.Name);
+        if (SelectedSkill is null) return Task.CompletedTask;
+        // Reconstruct full markdown from DB-backed fields (no filesystem path).
+        var content = ReconstructMarkdown(SelectedSkill);
+        BeginEdit(SelectedSkill.Name, content, SelectedSkill.Name);
+        return Task.CompletedTask;
     }
 
     [RelayCommand]
     private void DeleteSkill()
     {
-        if (SelectedSkill is null) return;
-        var src = _registry.TryGetSource(SelectedSkill.Name);
-        if (src is null || src.Tier == SkillTier.BuiltIn) return;
-        var slug = Path.GetFileNameWithoutExtension(src.Path);
-        _registry.DeleteGlobal(slug);
+        if (SelectedSkill is null || !SelectedSkill.IsUserAuthored) return;
+        _registry.DeleteGlobal(SelectedSkill.Name);
         SelectedSkill = null;
         LoadSkills();
+    }
+
+    private static string ReconstructMarkdown(SkillItemViewModel skill)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("---");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"name: {skill.Name}");
+        if (!string.IsNullOrWhiteSpace(skill.Description))
+            sb.AppendLine(CultureInfo.InvariantCulture, $"description: {skill.Description}");
+        if (skill.Trigger != "(none)" && !string.IsNullOrWhiteSpace(skill.Trigger))
+            sb.AppendLine(CultureInfo.InvariantCulture, $"trigger: {skill.Trigger}");
+        if (skill.Agents.Count > 0)
+            sb.AppendLine(CultureInfo.InvariantCulture, $"agents: [{string.Join(", ", skill.Agents)}]");
+        if (skill.Tools.Count > 0)
+            sb.AppendLine(CultureInfo.InvariantCulture, $"tools: [{string.Join(", ", skill.Tools)}]");
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.Append(skill.Body);
+        return sb.ToString();
     }
 
     private void BeginEdit(string slug, string source, string title)
@@ -105,15 +141,23 @@ public partial class SkillsViewModel : ViewModelBase
     {
         var resolvedSlug = ExtractSlug(source) ?? EditingSlug ?? string.Empty;
         if (string.IsNullOrWhiteSpace(resolvedSlug)) return;
-        _registry.SaveGlobal(resolvedSlug, source);
+
+        ErrorMessage = string.Empty;
+        try
+        {
+            _registry.SaveGlobal(resolvedSlug, source);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            return;
+        }
+
         var savedName = ExtractName(source);
         EndEdit();
         LoadSkills();
-        if (!string.IsNullOrEmpty(savedName))
-        {
-            SelectedSkill = _allSkills.FirstOrDefault(s =>
-                string.Equals(s.Name, savedName, StringComparison.OrdinalIgnoreCase));
-        }
+        SelectedSkill = _allSkills.FirstOrDefault(s =>
+            string.Equals(s.Name, savedName ?? resolvedSlug, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string? ExtractName(string markdown)
@@ -185,7 +229,7 @@ public partial class SkillsViewModel : ViewModelBase
         _allSkills.Clear();
         foreach (var s in _registry.All.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase))
         {
-            var src = _registry.TryGetSource(s.Name);
+            var tier = s.Tier == "User" ? SkillTier.Global : SkillTier.BuiltIn;
             var item = new SkillItemViewModel
             {
                 Name = s.Name,
@@ -196,7 +240,7 @@ public partial class SkillsViewModel : ViewModelBase
                 Agents = s.Agents,
                 Tools = s.Tools,
                 Body = s.Body,
-                Tier = src?.Tier ?? SkillTier.BuiltIn,
+                Tier = tier,
             };
             item.Markdown = BuildSkillMarkdown(item);
             _allSkills.Add(item);

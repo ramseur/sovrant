@@ -97,4 +97,16 @@ public interface ISessionStore
     /// as "use the default", currently private).
     /// </summary>
     Task<bool?> GetIsPrivateAsync(string sessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Phase 106 — records the agent name bound to this session (set on first
+    /// message; owner-scoped so a mismatch is a silent no-op).
+    /// </summary>
+    Task SetAgentNameAsync(string sessionId, string agentName, string? ownerUserId = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Phase 106 — returns the agent name stored for this session, or <c>null</c>
+    /// if the session was started without an agent scope.
+    /// </summary>
+    Task<string?> GetAgentNameAsync(string sessionId, CancellationToken ct = default);
 }

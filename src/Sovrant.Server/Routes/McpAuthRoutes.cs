@@ -65,6 +65,13 @@ internal static class McpAuthRoutes
           <h1>&#10003; Authorization successful</h1>
           <p>Access to <strong>{{HtmlEncode(serverName)}}</strong> has been granted.</p>
           <p>You may close this tab and return to Sovrant.</p>
+          <script>
+            try {
+              localStorage.setItem('sovrant-mcp-oauth-done',
+                JSON.stringify({ server: {{System.Text.Json.JsonSerializer.Serialize(serverName)}}, t: Date.now() }));
+            } catch (_) {}
+            setTimeout(() => window.close(), 1500);
+          </script>
         </body>
         </html>
         """;

@@ -242,6 +242,7 @@ public partial class MainViewModel : ViewModelBase
 
             "Tools" => _services.GetRequiredService<ToolsViewModel>(),
             "Skills" => _services.GetRequiredService<SkillsViewModel>(),
+            "Guidelines" => _services.GetRequiredService<GuidelinesViewModel>(),
             "Memory" => _services.GetRequiredService<MemoryViewModel>(),
             "Governance" => _services.GetRequiredService<GovernanceViewModel>(),
             "TrustBoundary" => _services.GetRequiredService<TrustBoundaryViewModel>(),

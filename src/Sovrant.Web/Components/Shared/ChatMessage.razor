@@ -1,4 +1,5 @@
 @using Markdig
+@inject IJSRuntime JS
 
 <div class="message">
     @if (Message.IsUser)
@@ -26,6 +27,10 @@
                 @if (Message.IsComplete && !string.IsNullOrEmpty(Message.ActionSummary))
                 {
                     <span class="action-summary">@Message.ActionSummary</span>
+                }
+                @if (Message.IsComplete)
+                {
+                    <button class="btn-copy-message" @onclick="CopyMessageAsync">@_copyLabel</button>
                 }
             </div>
 
@@ -129,6 +134,19 @@
                 </div>
             }
 
+            @if (Message.HasSources)
+            {
+                <details class="msg-sources msg-indent">
+                    <summary class="sources-summary">Sources <span class="sources-count">(@Message.Sources.Count)</span></summary>
+                    <div class="sources-list">
+                        @foreach (var source in Message.Sources)
+                        {
+                            <span class="source-chip source-kind-@source.Kind.Replace("-", "")">@SourceLabel(source.Kind) @source.Slug</span>
+                        }
+                    </div>
+                </details>
+            }
+
             @if (Message.HasError)
             {
                 <div class="message-error msg-indent">
@@ -149,6 +167,31 @@
     [Parameter] public EventCallback<ToolUseModel> OnApprove { get; set; }
     [Parameter] public EventCallback<ToolUseModel> OnApproveForTurn { get; set; }
     [Parameter] public EventCallback<ToolUseModel> OnDeny { get; set; }
+
+    private string _copyLabel = "Copy";
+
+    private async Task CopyMessageAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", Message.Text);
+            _copyLabel = "Copied!";
+            StateHasChanged();
+            await Task.Delay(1500);
+            _copyLabel = "Copy";
+            StateHasChanged();
+        }
+        catch { }
+    }
+
+    private static string SourceLabel(string kind) => kind switch
+    {
+        "skills" => "Skill:",
+        "agents" => "Agent:",
+        "document-templates" => "Template:",
+        "tools" => "Guide:",
+        _ => kind + ":",
+    };
 
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions()

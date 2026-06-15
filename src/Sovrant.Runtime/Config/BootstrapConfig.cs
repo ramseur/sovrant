@@ -27,11 +27,13 @@ public sealed record BootstrapConfig
     public string? ArtifactsRoot { get; init; }
 
     /// <summary>
-    /// Path to the AES-GCM master keystore file. Default:
-    /// <c>~/.sovrant/credentials/.keystore</c>. The directory is also used
-    /// to store per-credential <c>{sha256}.enc</c> blobs.
+    /// Legacy path to the on-disk <c>.keystore</c> file. When set and the file
+    /// exists, <see cref="Storage.SqliteCredentialStore"/> performs a one-time
+    /// migration of the master key into the <c>keystore</c> DB table (V039) and
+    /// deletes the file. Sourced from <c>SOVRANT_KEYSTORE_PATH</c> env var;
+    /// omit on new installs — the DB table is used directly.
     /// </summary>
-    public string? KeystorePath { get; init; }
+    public string? LegacyKeystorePath { get; init; }
 
     // ── TLS ──────────────────────────────────────────────────────────────────
 

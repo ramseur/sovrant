@@ -48,7 +48,7 @@ public sealed class BootstrapConfigLoaderTests : IDisposable
         Assert.Null(cfg.DbPath);
         Assert.Null(cfg.LogFile);
         Assert.Null(cfg.ArtifactsRoot);
-        Assert.Null(cfg.KeystorePath);
+        Assert.Null(cfg.LegacyKeystorePath);
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public sealed class BootstrapConfigLoaderTests : IDisposable
         Assert.Equal("/env/db", cfg.DbPath);
         Assert.Equal("/env/log", cfg.LogFile);
         Assert.Equal("/env/artifacts", cfg.ArtifactsRoot);
-        Assert.Equal("/env/keystore", cfg.KeystorePath);
+        Assert.Equal("/env/keystore", cfg.LegacyKeystorePath);
     }
 
     // The `--config <path>` flag is not supported by BootstrapConfigLoader.

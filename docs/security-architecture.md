@@ -133,6 +133,20 @@ Per-workspace configuration (session TTL, max sessions, etc.) is stored in a `wo
 
 ---
 
+## Record-Level Privacy (Phase 98)
+
+Individual missions, agent runs, and sessions carry an `is_private` boolean (V030 migration, default FALSE). Privacy is enforced server-side — no client-side bypass is possible.
+
+| Surface | Private record behaviour |
+|---|---|
+| **Command Center** (`/v1/command-center/state`) | Row is returned but `title` and `preview` are set to `null` (masked). Existence is acknowledged for admin accountability. |
+| **User Dashboard** (`/v1/user-dashboard/state`) | Other users' private records are **excluded entirely** — not returned, not counted. Own private records are returned normally. |
+| **Direct record endpoints** (`GET /v1/sessions/{id}`, etc.) | Private records are accessible only to the owning user. Other users receive 403. |
+
+The `UserDashboardAggregator` enforces visibility at query time via workspace membership checks (`IWorkspaceService.ListForUserAsync`) combined with the `is_private` flag. Private records never leak across user boundaries regardless of admin role.
+
+---
+
 ## Session Management
 
 A background `SessionEvictionService` sweeps every 5 minutes and evicts sessions using a hybrid LRU + TTL strategy:
@@ -194,6 +208,107 @@ Token-level scopes are stored in the database but are not yet enforced at the to
 Each regex runs with a 1-second timeout to prevent ReDoS. A timeout causes that pattern to be skipped silently — keep custom patterns simple.
 
 An in-memory `EthicalAuditLog` (capped at 10,000 entries, thread-safe) records governance decisions (category, reason, severity, timestamp) for compliance review.
+
+---
+
+## Trust Boundary & LLM Data Pipeline
+
+Sovrant treats every path that touches the LLM as a trust boundary: user messages going out, knowledge content baked into prompts, tool results returning from external systems, and model responses coming back in. The trust pipeline has two phases.
+
+### Phase 58 — PromptSanitizer (user input path)
+
+`TrustBoundaryProvider` wraps every `ILlmProvider` and intercepts each `MessagesRequest` before it leaves the process:
+
+1. `PromptSanitizer.Sanitize(request)` runs all registered `IPatternDetector` instances over every text field in the request (system prompt, user/assistant messages, tool-use inputs, tool-result content).
+2. Detected PII is replaced with deterministic placeholders: `[EMAIL_1]`, `[PHONE_1]`, `[SSN_1]`, etc.
+3. A `RedactionMap` records the original ↔ placeholder mapping for this request.
+4. After the model responds, `Restore(response, map)` rewrites placeholders back to originals before the text is surfaced to the user.
+
+Three detector classes run in this pipeline:
+
+| Detector | Patterns |
+|---|---|
+| `PiiDetector` | Email, phone, SSN, credit card, IPv4/IPv6, dates (when adjacent to other PII) |
+| `CorporateDataDetector` | Corporate email domains, internal hostnames, configured allow-list |
+| `CustomPatternRegistry` | User-defined regex patterns from `TrustBoundaryConfig.CustomPatterns` |
+
+Configuration is hot-reloadable: when the Settings UI saves a trust-boundary change, `PromptSanitizer` swaps its detector list atomically without dropping in-flight requests. The sanitizer is governed by `TrustBoundaryConfig.Sanitizer.Enabled`; when `false` (development or air-gapped installs), the pipeline is a no-op.
+
+### Phase 116 — Intelligent Knowledge Harness
+
+Phase 116 extends the trust boundary to cover two previously unprotected paths: **knowledge content injected into prompts** and **tool results written to session history**.
+
+#### SanitizeRawText — one-way sanitization
+
+`IPromptSanitizer.SanitizeRawText(string)` is a one-way variant: PII is replaced using the same detector set, but no `RedactionMap` is retained and originals are never restored. It is used where content must not contain PII before it reaches the LLM or lands in storage.
+
+**Knowledge content (Step B):** Skill descriptions, tool guide descriptions, and tool guide bodies are sanitized with `SanitizeRawText` before they are injected into either the static system prompt (fallback path) or the per-turn knowledge addendum (router path). PII authored accidentally in a skill or tool guide is stripped before it reaches any model.
+
+**Tool results (Step C):** `execResult.Output` is sanitized once immediately after tool execution. The sanitized string (`toolOutput`) is then used everywhere downstream: the `ToolResult` UI event, the `PermissionDenied` event, the PostToolUse hook context, `toolResultPairs` (→ `_history`), and `AppendSessionEntryAsync` (→ `session_entries`). A file read of a `.env` file or credentials file never stores or transmits plaintext secrets.
+
+#### IKnowledgeRouter — per-turn knowledge selection (Step D)
+
+A new `IKnowledgeRouter` service selects the top-k most relevant knowledge items for each turn before the `MessagesRequest` is built. Selection uses four heuristic signals — no LLM call:
+
+| Signal | Weight | Description |
+|---|---|---|
+| Trigger match | 1.5 (always wins) | Trigger phrase appears verbatim in the input (e.g. `/tdd`) |
+| Jaccard overlap | ×0.6 | Intersection/union of lowercased word sets: input vs. name+description+trigger |
+| Intent-to-kind affinity | 0–0.4 | Code intents boost skills; document intents boost templates; research/planning boosts agents |
+| Recency bonus | +0.3 | Item was used in a recent turn of this session |
+
+Defaults: top-5 skills, top-3 agents, top-3 document templates, top-3 tool guides. Items scoring below 0.05 are excluded. Items that trigger exact trigger-phrase matching bypass scoring and are always included.
+
+`KnowledgeRouter` reads from `IKnowledgeStore`, which is wrapped by `CachedKnowledgeStore` (5-minute TTL per kind). After the first warm-up call, all four parallel `GetAllEffectiveAsync` calls are served from the in-process `ConcurrentDictionary` — no SQLite round-trip per turn.
+
+#### Dynamic per-turn addendum (Step E)
+
+Rather than injecting the full knowledge catalog into the static system prompt (which would grow unboundedly and break provider-side prompt caching), Phase 116 uses a stable base + dynamic addendum architecture:
+
+```
+STABLE SYSTEM PROMPT          Capability hint only: "You have access to skills, agents, templates."
+       +
+DYNAMIC ADDENDUM              Top-k selected items, sanitized, freshly assembled each turn.
+  (prepended to user msg)     Never stored in _history or session_entries.
+```
+
+The addendum is injected as an extra `TextBlock` prepended to the current turn's user message content in `MessagesRequest`. `_history` is never mutated — the addendum is ephemeral and invisible to session replay or history compaction.
+
+When no items score above threshold (empty selection), no addendum is produced and no tokens are spent. A routing failure is logged and the turn continues without an addendum rather than failing.
+
+#### MCP tool relevance filtering (Step G)
+
+MCP integrations can expose dozens of tools per server. Sending all of them on every turn wastes tokens and degrades prompt-cache efficiency. Phase 116 adds a per-turn filter that narrows the MCP tool list to tools relevant to the current request.
+
+On round 0 of each turn, `ConversationRuntime` collects the MCP tool definitions from `allTools` (identified via `McpClientRegistry.ToolToServer`), calls `IKnowledgeRouter.SelectMcpTools(userMessage, mcpDefs)`, and stores the resulting `IReadOnlySet<string>? mcpToolFilter`. This filter is reused for all subsequent tool rounds within the same turn.
+
+`SelectMcpTools` scores each MCP tool's `Name + Description` against the user message using the same Jaccard tokenizer as knowledge routing — no LLM call. Two safety guards prevent over-filtering:
+
+- **Minimum threshold**: if fewer than 3 tools score above 0.05, all tools are returned unchanged. A query that matches nothing known must not silently hide useful integrations.
+- **Maximum cap**: at most 20 MCP tools are sent per turn even when many score above threshold.
+
+`FilterToolsForModel` applies filters in order: (1) session-level `AllowedMcpServers` opt-in, (2) per-turn `mcpToolFilter`. Non-MCP tools are unaffected by either filter.
+
+#### Attribution tracking (Step F)
+
+A `knowledge_attributions` table records which knowledge items influenced each turn. One row is written per tool invocation on the success path:
+
+| Tool | `kind` | `slug` |
+|---|---|---|
+| `SkillTool` | `skills` | skill name |
+| `AgentTool` (template path) | `agents` | template name |
+| `TeamDelegateTool` | `agents` | `member.Template ?? member.Name` |
+| `DocumentFromTemplateTool` | `document-templates` | `template.Id` |
+
+`AttributionScope` (an `AsyncLocal<AttributionContext?>`) propagates session + turn identity into tool executions without requiring a store reference on every tool. `ConversationRuntime` calls `AttributionScope.Begin(sessionId, turnIndex, store)` at the start of each turn; `Dispose()` restores the previous context so nested sub-agent scopes attribute to their own session.
+
+#### Provenance UI (Step H)
+
+After each turn completes, the Web (`Chat.razor`) and Desktop (`ChatViewModel`) surfaces query `IKnowledgeAttributionStore.GetBySessionAsync` and filter to the current turn index. Results are displayed as a collapsible **Sources** section beneath the assistant's response — skill chips, agent chips, template chips, and tool-guide chips each with distinct colour coding. Attribution load failures are silently swallowed so they never block turn completion.
+
+#### Configuration
+
+All three sanitization paths (`Sanitize`, `SanitizeRawText` for knowledge content, `SanitizeRawText` for tool results) are governed by the single `TrustBoundaryConfig.Sanitizer.Enabled` flag. Set `SOVRANT_KNOWLEDGE_CACHE_TTL=0` to bypass `CachedKnowledgeStore` for testing; this causes `KnowledgeRouter` to hit SQLite on every turn.
 
 ---
 

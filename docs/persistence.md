@@ -82,6 +82,10 @@ Migrations are embedded SQL resources named `V{NNN}__{description}.sql` inside t
 | V024 | `V024__session_mcp_connections.sql` | Per-session MCP connection gating. Adds `mcp_servers` (TEXT JSON array) to `sessions`. NULL = no gating; `[]` = all MCP tools disabled; `["a","b"]` = only tools from named servers exposed. Applied per-turn by the runtime. |
 | V025 | `V025__swarm_events_user_id.sql` | Phase L security — adds `user_id` column to `swarm_events` for ownership verification on `GET /v1/swarm/{id}` and `GET /v1/swarm/{id}/events`. Existing rows get NULL; new rows stamped from `SwarmExecutionContext.UserId`. Adds `ix_swarm_events_user` index. |
 | V026 | `V026__auth_credentials.sql` | Phase 85 Identity & Login Parity — adds `password_hash` to `users`, `last_used_at` to `api_tokens` for sliding-window TTL, and creates `server_settings` (key/value store bootstrapped by `IIdentityService`) and `password_reset_tokens` (admin-generated one-time tokens, 24-hour TTL) tables. |
+| V027 | `V027__workspace_provider_profiles.sql` | Phase 88 Settings Consolidation — workspace-scoped provider profiles; enables admins to configure provider keys visible to all workspace members. |
+| V028 | `V028__agent_run_prompt.sql` | Phase 79 Agents page — adds `prompt` column to `agent_runs` so one-shot runs store the triggering user prompt. Recent Runs list renders this as the run title with an agent name badge. |
+| V029 | `V029__swarm_federation.sql` | Phase 50 OpenClaw federation — adds `parent_swarm_id` column to `swarm_events` for child-swarm tracking in manager-led and siloed federation modes. |
+| V030 | `V030__activity_is_private.sql` | Phase 98 User Dashboard privacy — adds nullable `is_private` BOOLEAN (default FALSE) to `missions`, `agent_runs`, and `sessions`. Used by `UserDashboardAggregator` and `CommandCenterAggregator` to enforce per-record privacy: Command Center shows private records as masked rows; User Dashboard excludes other users' private records entirely. Indexes added for privacy-scoped queries. |
 
 All V006/V007 statements are **additive** (`CREATE TABLE`, `CREATE INDEX IF NOT EXISTS`), so a database created at V005 or earlier upgrades cleanly on next boot — no manual intervention. V008 then backfills any orphan rows from those upgraded databases, and V009 backfills any empty-string `user_id` rows left over from the pre-Phase-38 seeding flow.
 
@@ -485,6 +489,82 @@ CreateConnection → SetPragmas → MigrationRunner.RunPendingMigrations
 ```
 
 Both seeders are idempotent — they're safe to run on every boot, and they backfill missing rows (e.g., a pre-Phase-35 user row that has no personal workspace will get one auto-created on the first boot of Phase-35-aware code).
+
+---
+
+## Supabase / PostgreSQL Backend (Phase 40C)
+
+An optional PostgreSQL storage backend ships in `Sovrant.Storage.Postgres`. When enabled, it **overrides** the SQLite registrations for `ISessionStore` and `ICredentialStore` only — the remaining 19 stores continue to use SQLite.
+
+### What stores are ported
+
+| Store | SQLite default | Postgres override |
+|---|---|---|
+| `ISessionStore` | `SqliteSessionStore` | `PostgresSessionStore` ✅ |
+| `ICredentialStore` | `SqliteCredentialStore` | `PostgresCredentialStore` ✅ |
+| All other stores (memory, audit, usage, workspaces, users, teams, missions, swarm, etc.) | SQLite | SQLite (deferred) |
+
+### Configuration
+
+Supabase credentials are stored in the encrypted `ICredentialStore` (never on disk as plaintext). The admin UI at `/admin/system-integrations` (Web) or the equivalent Desktop view sets these:
+
+| Credential key | Value |
+|---|---|
+| `system.supabase.project_url` | e.g. `https://xyz.supabase.co` |
+| `system.supabase.service_role_key` | Supabase service role secret key |
+| `system.database_backend` | `"supabase"` to activate; `"sqlite"` to revert |
+
+A restart is required after switching backends. The admin UI provides **Test Connection**, **Initialize Schema**, **Migrate Data from SQLite**, **Switch to Supabase**, and **Revert to SQLite** actions.
+
+### Boot-time DI switch
+
+Sovrant uses a two-phase bootstrap to avoid a chicken-and-egg problem (Supabase credentials must be read before the Postgres provider can be registered):
+
+```
+Phase 1 — mini SQLite container
+  AddSovrantStorage(bootstrapConfig) → read ICredentialStore
+  → retrieve system.database_backend, system.supabase.project_url, system.supabase.service_role_key
+
+Phase 2 — main container
+  if backend == "supabase" && url && key are present:
+    AddSovrantPostgresStorage(connectionString, keystorePath)
+    → registers PostgresSessionStore  (overrides SqliteSessionStore)
+    → registers PostgresCredentialStore (overrides SqliteCredentialStore)
+  else:
+    SQLite stores remain active (default)
+```
+
+`AddSovrantPostgresStorage` is called after `AddSovrantRuntime`, so its registrations win. Both `Sovrant.Web/Program.cs` and `Sovrant.Desktop/App.axaml.cs` follow this pattern.
+
+### Schema
+
+The embedded schema lives at `src/Sovrant.Runtime/Storage/PostgresSchema.sql` and is loaded by `PostgresSchemaInitializer`. It mirrors the SQLite migration history (currently at schema version 30) with these PostgreSQL-specific adaptations:
+
+- Timestamps stored as `TEXT (ISO 8601)` for wire compatibility with SQLite
+- Full-text search via `tsvector` + `plainto_tsquery` (replaces SQLite FTS5)
+- `BYTEA` columns for encrypted credential blobs
+- Idempotent `CREATE TABLE IF NOT EXISTS` / `INSERT ... ON CONFLICT DO NOTHING`
+
+Schema initialization is **manual** — the admin must click "Initialize Schema" in the UI. Sovrant will not auto-initialize Postgres on first boot.
+
+### SQLite → Postgres migration
+
+`SqliteToPostgresMigrator.MigrateAsync()` copies the sessions, session entries, and credentials tables from the local SQLite database into Postgres. It is:
+
+- **Idempotent** — uses `ON CONFLICT DO NOTHING`; safe to run multiple times
+- **Scoped** — only sessions, session\_entries, and credentials are migrated; memory, audit, and orchestration state stay in SQLite
+- **Non-destructive** — the source SQLite file is opened read-only; the original is never modified
+
+### Connection details
+
+`PostgresConnectionFactory` derives the host from the Supabase project URL (`https://xyz.supabase.co` → `db.xyz.supabase.co:5432`) and connects via Npgsql with SSL required, username `postgres`, and the service role key as the password. No connection pooling is used — each store operation opens a fresh connection.
+
+### Known limitations
+
+- **Only sessions + credentials use Postgres.** Memory, audit, workspace, user, team, mission, and swarm data remain in local SQLite. Horizontal scaling is not supported with this configuration.
+- **No Supabase Auth / SSO.** OAuth/OIDC and SAML integration (Supabase Auth) are deferred.
+- **No row-level security.** Schema has `workspace_id`/`project_id` columns but Postgres RLS policies are not applied — access control is enforced at the application layer.
+- **Keystore stays local.** The AES-256-GCM master key file (`~/.sovrant/credentials/.keystore`) is still on the local filesystem.
 
 ---
 

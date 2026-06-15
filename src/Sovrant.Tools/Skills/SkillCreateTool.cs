@@ -1,27 +1,31 @@
-using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using Sovrant.Api.Types;
+using Sovrant.Runtime.Knowledge;
 
 namespace Sovrant.Tools.Skills;
 
 /// <summary>
-/// Creates a new skill definition file at <c>.sovrant/skills/{name}.md</c> in the
-/// current project. Also registers it in the active <see cref="SkillRegistry"/>.
+/// Creates a new skill in the <see cref="IKnowledgeStore"/> at project scope (Phase 112).
+/// The skill is immediately available via the refreshed <see cref="SkillRegistry"/>.
 /// </summary>
 public sealed class SkillCreateTool : ITool
 {
     private readonly SkillRegistry _registry;
+    private readonly IKnowledgeStore _store;
 
     private static readonly ToolDefinition s_definition = new("SkillCreate", CreateSchema())
     {
         Description =
-            "Creates a new skill definition file in .sovrant/skills/{name}.md. " +
+            "Creates a new skill in the knowledge store. " +
             "Provide the skill name, description, trigger, and workflow body. " +
             "The skill is immediately available for use.",
     };
 
-    public SkillCreateTool(SkillRegistry registry) => _registry = registry;
+    public SkillCreateTool(SkillRegistry registry, IKnowledgeStore store)
+    {
+        _registry = registry;
+        _store = store;
+    }
 
     public ToolDefinition Definition => s_definition;
 
@@ -31,7 +35,6 @@ public sealed class SkillCreateTool : ITool
         if (string.IsNullOrWhiteSpace(name))
             return "Error: name is required.";
 
-        // Sanitise: no path traversal
         if (name.Contains('/', StringComparison.Ordinal) ||
             name.Contains('\\', StringComparison.Ordinal) ||
             name.Contains("..", StringComparison.Ordinal) ||
@@ -47,41 +50,27 @@ public sealed class SkillCreateTool : ITool
         if (string.IsNullOrWhiteSpace(body))
             return "Error: body is required (workflow steps and instructions).";
 
-        // Build frontmatter
-        var sb = new StringBuilder();
-        sb.AppendLine("---");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"name: {name}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"description: {description}");
-        if (!string.IsNullOrWhiteSpace(trigger))
-            sb.AppendLine(CultureInfo.InvariantCulture, $"trigger: {trigger}");
-        if (agents.Length > 0)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"agents: [{string.Join(", ", agents)}]");
-        if (tools.Length > 0)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"tools: [{string.Join(", ", tools)}]");
-        sb.AppendLine("---");
-        sb.AppendLine();
-        sb.Append(body);
+        var projectId = KnowledgeScope.ProjectIdFor(Directory.GetCurrentDirectory());
+        var now = DateTimeOffset.UtcNow;
+        var page = new KnowledgePage(
+            KnowledgeId:   $"skill_{projectId}_{name}",
+            Kind:          "skills",
+            Slug:          name,
+            Name:          name,
+            Description:   description,
+            Tier:          "User",
+            Body:          body,
+            WorkspaceId:   projectId,
+            CreatedAt:     now,
+            UpdatedAt:     now,
+            Trigger:       string.IsNullOrWhiteSpace(trigger) ? null : trigger,
+            Agents:        agents.Length > 0 ? JsonSerializer.Serialize(agents) : null,
+            Tools:         tools.Length > 0 ? JsonSerializer.Serialize(tools) : null);
 
-        var content = sb.ToString();
+        await _store.UpsertAsync(page, ct).ConfigureAwait(false);
+        _registry.Reload();
 
-        // Write to project-local skills directory
-        var skillsDir = Path.Combine(Directory.GetCurrentDirectory(), ".sovrant", "skills");
-        Directory.CreateDirectory(skillsDir);
-        var filePath = Path.Combine(skillsDir, string.Create(CultureInfo.InvariantCulture, $"{name}.md"));
-
-        // Defense-in-depth: verify resolved path stays within skills directory
-        var pathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        if (!Path.GetFullPath(filePath).StartsWith(Path.GetFullPath(skillsDir), pathComparison))
-            return "Error: name resolves outside the skills directory.";
-
-        await File.WriteAllTextAsync(filePath, content, ct).ConfigureAwait(false);
-
-        // Register in active registry
-        var skill = SkillParser.Parse(content);
-        if (skill is not null)
-            _registry.Register(skill);
-
-        return $"Skill '{name}' created at {filePath}";
+        return $"Skill '{name}' created in knowledge store (project scope).";
     }
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""

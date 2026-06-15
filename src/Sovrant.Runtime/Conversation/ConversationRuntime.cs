@@ -41,6 +41,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly Permissions.IPerTurnApprovalCache? _approvalCache;
     private readonly McpClientRegistry? _mcpClients;
     private readonly IArtifactStore? _artifactStore;
+    private readonly TrustBoundary.IPromptSanitizer? _sanitizer;
+    private readonly Prompt.IKnowledgeRouter? _knowledgeRouter;
+    private readonly Knowledge.IKnowledgeAttributionStore? _attributionStore;
     private readonly List<InputMessage> _history = [];
     private string _systemPrompt;
     /// <summary>Once true, all subsequent turns expose tools (session used tools at least once).</summary>
@@ -62,6 +65,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to build MCP hint; continuing without it")]
     private static partial void LogMcpHintFailed(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Knowledge routing failed; continuing without addendum")]
+    private static partial void LogKnowledgeRoutingFailed(ILogger logger, Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Tool call loop detected: '{ToolName}' called {Count} times consecutively for session '{SessionId}' — breaking loop")]
     private static partial void LogToolCallLoop(ILogger logger, string toolName, int count, string sessionId);
@@ -120,7 +126,10 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         Permissions.IPerTurnApprovalCache? approvalCache = null,
         McpClientRegistry? mcpClients = null,
         Prompt.ICapabilityCatalog? capabilityCatalog = null,
-        IArtifactStore? artifactStore = null)
+        IArtifactStore? artifactStore = null,
+        TrustBoundary.IPromptSanitizer? sanitizer = null,
+        Prompt.IKnowledgeRouter? knowledgeRouter = null,
+        Knowledge.IKnowledgeAttributionStore? attributionStore = null)
     {
         _router = router;
         _toolExecutor = toolExecutor;
@@ -141,6 +150,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         _approvalCache = approvalCache;
         _mcpClients = mcpClients;
         _artifactStore = artifactStore;
+        _sanitizer = sanitizer;
+        _knowledgeRouter = knowledgeRouter;
+        _attributionStore = attributionStore;
         _systemPrompt = systemPromptOverride ?? BuildSystemPrompt(capabilityCatalog);
     }
 
@@ -216,6 +228,13 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         _history.Add(InputMessage.UserText(userMessage));
         await AppendSessionEntryAsync("user", userMessage, ct).ConfigureAwait(false);
 
+        // Phase 116 F — set ambient attribution scope for this turn so tools can record
+        // provenance without needing a store reference. Turn index = completed turn pairs.
+        var turnIndex = (_history.Count - 1) / 2;
+        using var attributionScopeDisposable = _attributionStore is not null
+            ? Knowledge.AttributionScope.Begin(_sessionId, turnIndex, _attributionStore)
+            : null;
+
         var turnTimeoutSeconds = int.TryParse(
             Environment.GetEnvironmentVariable("SOVRANT_TURN_TIMEOUT_SECONDS"), out var tts) && tts > 0 ? tts : 300;
         var originalCt = ct;
@@ -225,6 +244,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
         var round = 0;
         var timedOut = false;
+        IReadOnlySet<string>? mcpToolFilter = null; // Phase 116 G: set on round 0, reused per turn
         var consecutiveToolCalls = new Dictionary<string, int>(StringComparer.Ordinal);
         // Tracks (toolName|inputHash) → count for error results. If the same tool
         // is invoked with identical inputs and errors twice, we abort — it's a
@@ -247,6 +267,26 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 LogToolRound(_logger, round, MaxToolRounds, SessionId);
 
             var allTools = _toolRegistry.GetDefinitions();
+
+            // Phase 116 G — on the first round, score MCP tools for this turn's intent
+            // and build a per-turn allow-set. Subsequent tool rounds reuse the same filter.
+            if (round == 0 && _knowledgeRouter is not null && _mcpClients is not null
+                && _mcpClients.ToolToServer.Count > 0)
+            {
+                var mcpDefs = allTools
+                    .Where(t => _mcpClients.ToolToServer.ContainsKey(t.Name))
+                    .ToList();
+                if (mcpDefs.Count > 0)
+                {
+                    var selected = _knowledgeRouter.SelectMcpTools(userMessage, mcpDefs);
+                    // Only apply the filter if it actually reduces the MCP tool set.
+                    if (selected.Count < mcpDefs.Count)
+                        mcpToolFilter = selected
+                            .Select(t => t.Name)
+                            .ToHashSet(StringComparer.Ordinal);
+                }
+            }
+
             // Phase 59a — On the first round, use the semantic intent gate (if
             // available) to decide whether tools should be exposed. Falls back
             // to the legacy keyword matcher when no gate is registered.
@@ -259,7 +299,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             {
                 // Tool-use rounds, sessions that already used tools, and sessions
                 // with MCP servers enabled always get the full tool list.
-                tools = FilterToolsForModel(allTools);
+                tools = FilterToolsForModel(allTools, mcpToolFilter);
             }
             else if (round == 0)
             {
@@ -276,20 +316,20 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                         yield return new RuntimeEvent.IntentNarrated(gateResult.Narration);
 
                     tools = gateResult.RequiresTools
-                        ? FilterToolsForModel(allTools)
+                        ? FilterToolsForModel(allTools, mcpToolFilter)
                         : [];
                 }
                 else
                 {
                     // Legacy fallback — will be removed once IIntentGate is fully validated.
                     tools = LooksLikeToolRequest(userMessage)
-                        ? FilterToolsForModel(allTools)
+                        ? FilterToolsForModel(allTools, mcpToolFilter)
                         : [];
                 }
             }
             else
             {
-                tools = FilterToolsForModel(allTools);
+                tools = FilterToolsForModel(allTools, mcpToolFilter);
             }
             // Inject the MCP hint into _systemPrompt exactly once per session the
             // first time MCP servers are active. Baking it in (rather than
@@ -306,10 +346,47 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     _systemPrompt += hint;
             }
 
+            // Phase 116 D+E — per-turn knowledge addendum.
+            // Routed items are injected as an extra text block prepended to the
+            // current user message. _history is NOT mutated; the addendum only
+            // travels to the LLM for this turn and is never stored in session_entries.
+            IReadOnlyList<InputMessage> messagesForRequest = _history;
+            if (round == 0 && _knowledgeRouter is not null)
+            {
+                Prompt.KnowledgeSelection? selection = null;
+#pragma warning disable CA1031
+                try
+                {
+                    selection = await _knowledgeRouter.SelectAsync(userMessage, ct: ct)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    LogKnowledgeRoutingFailed(_logger, ex);
+                }
+#pragma warning restore CA1031
+                if (selection is { IsEmpty: false })
+                {
+                    var addendum = BuildKnowledgeAddendum(selection);
+                    if (addendum.Length > 0)
+                    {
+                        var withAddendum = new List<InputMessage>(_history);
+                        var lastMsg = withAddendum[^1];
+                        var blocks = new List<InputContentBlock>(lastMsg.Content.Count + 1)
+                        {
+                            new InputContentBlock.TextBlock(addendum),
+                        };
+                        blocks.AddRange(lastMsg.Content);
+                        withAddendum[^1] = new InputMessage(lastMsg.Role, blocks);
+                        messagesForRequest = withAddendum;
+                    }
+                }
+            }
+
             var request = new MessagesRequest(
                 _config.Model,
                 CapMaxTokens(_config.Model, _config.MaxTokens),
-                _history)
+                messagesForRequest)
             {
                 System = _systemPrompt,
                 Tools = tools.Count > 0 ? tools : null,
@@ -533,24 +610,30 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 toolSw.Stop();
                 LogToolResult(_logger, tu.Name, toolSw.ElapsedMilliseconds, execResult.IsError);
 
-                yield return new RuntimeEvent.ToolResult(tu.Id, tu.Name, execResult.Output, execResult.IsError);
+                // Step C: sanitize the tool output once before it reaches the UI, history,
+                // session_entries, or hooks. PII in file content, web responses, and shell
+                // output is replaced with deterministic placeholders here so it never
+                // appears in storage or in subsequent LLM context.
+                var toolOutput = _sanitizer?.SanitizeRawText(execResult.Output) ?? execResult.Output;
 
-                if (!execResult.Success && execResult.Output.Contains("denied", StringComparison.OrdinalIgnoreCase))
-                    yield return new RuntimeEvent.PermissionDenied(tu.Name, execResult.Output);
+                yield return new RuntimeEvent.ToolResult(tu.Id, tu.Name, toolOutput, execResult.IsError);
+
+                if (!execResult.Success && toolOutput.Contains("denied", StringComparison.OrdinalIgnoreCase))
+                    yield return new RuntimeEvent.PermissionDenied(tu.Name, toolOutput);
 
                 // PostToolUse / PostToolUseFailure: fire-and-forget.
                 var postEvent = execResult.IsError ? HookEvent.PostToolUseFailure : HookEvent.PostToolUse;
                 var postCtx = new HookContext(postEvent, SessionId,
                     ToolName: tu.Name,
-                    ToolOutput: execResult.Output,
+                    ToolOutput: toolOutput,
                     FilePath: TryExtractFilePath(tu.Input),
                     IsError: execResult.IsError);
                 _ = _hookRunner.RunAsync(postEvent, postCtx, CancellationToken.None)
                     .ContinueWith(static t => { if (t.IsFaulted) _ = t.Exception; }, TaskScheduler.Default);
 
-                toolResultPairs.Add((new ToolResultContentBlock.TextBlock(execResult.Output), execResult.IsError));
+                toolResultPairs.Add((new ToolResultContentBlock.TextBlock(toolOutput), execResult.IsError));
 
-                await AppendSessionEntryAsync("tool_result", execResult.Output, ct,
+                await AppendSessionEntryAsync("tool_result", toolOutput, ct,
                     toolName: tu.Name, toolUseId: tu.Id, isError: execResult.IsError)
                     .ConfigureAwait(false);
 
@@ -569,7 +652,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                         LogInternalErrorRepeat(_logger, tu.Name, SessionId);
                         deterministicFailureDetected = true;
                         deterministicFailureTool = tu.Name;
-                        deterministicFailureMessage = execResult.Output;
+                        deterministicFailureMessage = toolOutput;
                     }
                 }
             }
@@ -1210,28 +1293,119 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         // Git context: branch, status, recent commits
         AppendGitContext(sb, Directory.GetCurrentDirectory());
 
-        // Skills and agent templates — list names once at construction so the
-        // model knows what's available without spending a tool-call round on discovery.
         if (catalog is not null)
         {
-            if (catalog.Skills.Count > 0)
+            var hasItems = catalog.Skills.Count > 0 || catalog.AgentTemplateNames.Count > 0
+                || catalog.ToolGuides.Count > 0;
+
+            if (_knowledgeRouter is not null)
             {
-                sb.Append("\n\nAvailable skills (invoke via the Skill tool, e.g. Skill name=\"review\"):");
-                foreach (var (name, description, trigger) in catalog.Skills)
+                // Phase 116 E — dynamic routing is active. Inject only a capability hint;
+                // relevant items are delivered per-turn via the knowledge addendum so the
+                // stable base prompt stays cacheable.
+                if (hasItems)
+                    sb.Append("\n\nYou have access to custom skills (use the Skill tool, e.g. Skill name=\"review\"), ")
+                      .Append("agent templates (use the Agent tool with template=), and document templates ")
+                      .Append("(use DocumentFromTemplate). Relevant items are provided as context with each request.");
+            }
+            else
+            {
+                // Static fallback — inject full catalog when no router is registered.
+                if (catalog.Skills.Count > 0)
                 {
-                    sb.Append("\n- ").Append(name);
-                    if (!string.IsNullOrWhiteSpace(trigger))
-                        sb.Append(" (").Append(trigger).Append(')');
-                    if (!string.IsNullOrWhiteSpace(description))
-                        sb.Append(": ").Append(description);
+                    sb.Append("\n\nAvailable skills (invoke via the Skill tool, e.g. Skill name=\"review\"):");
+                    foreach (var (name, description, trigger) in catalog.Skills)
+                    {
+                        sb.Append("\n- ").Append(name);
+                        if (!string.IsNullOrWhiteSpace(trigger))
+                            sb.Append(" (").Append(trigger).Append(')');
+                        if (!string.IsNullOrWhiteSpace(description))
+                        {
+                            var safeDesc = _sanitizer?.SanitizeRawText(description) ?? description;
+                            sb.Append(": ").Append(safeDesc);
+                        }
+                    }
+                }
+
+                if (catalog.AgentTemplateNames.Count > 0)
+                {
+                    var names = string.Join(", ", catalog.AgentTemplateNames);
+                    sb.Append("\n\nAvailable agent templates (pass as 'template' to the Agent tool): ")
+                      .Append(names).Append('.');
+                }
+
+                if (catalog.ToolGuides.Count > 0)
+                {
+                    sb.Append("\n\nTool usage guides (authored knowledge for specific tools):");
+                    string? currentCategory = null;
+                    foreach (var (slug, name, description, category, body) in catalog.ToolGuides)
+                    {
+                        if (!string.Equals(category, currentCategory, StringComparison.OrdinalIgnoreCase))
+                        {
+                            currentCategory = category;
+                            sb.Append("\n\n[").Append(category).Append(']');
+                        }
+                        sb.Append("\n\n### ").Append(name);
+                        if (!string.IsNullOrWhiteSpace(description))
+                            sb.Append('\n').Append(_sanitizer?.SanitizeRawText(description) ?? description);
+                        sb.Append('\n').Append(_sanitizer?.SanitizeRawText(body) ?? body);
+                    }
                 }
             }
+        }
 
-            if (catalog.AgentTemplateNames.Count > 0)
+        return sb.ToString();
+    }
+
+    private string BuildKnowledgeAddendum(Prompt.KnowledgeSelection selection)
+    {
+        var sb = new StringBuilder("[Relevant knowledge context for this request]");
+
+        if (selection.Skills.Count > 0)
+        {
+            sb.Append("\n\n**Skills** (invoke via the Skill tool, e.g. Skill name=\"review\"):");
+            foreach (var s in selection.Skills)
             {
-                var names = string.Join(", ", catalog.AgentTemplateNames);
-                sb.Append("\n\nAvailable agent templates (pass as 'template' to the Agent tool): ")
-                  .Append(names).Append('.');
+                sb.Append("\n- ").Append(s.Name);
+                if (!string.IsNullOrWhiteSpace(s.Trigger))
+                    sb.Append(" (trigger: ").Append(s.Trigger).Append(')');
+                if (!string.IsNullOrWhiteSpace(s.Description))
+                    sb.Append(": ").Append(_sanitizer?.SanitizeRawText(s.Description) ?? s.Description);
+            }
+        }
+
+        if (selection.Agents.Count > 0)
+        {
+            sb.Append("\n\n**Agent templates** (invoke via the Agent tool with template=):");
+            foreach (var a in selection.Agents)
+            {
+                sb.Append("\n- ").Append(a.Name);
+                if (!string.IsNullOrWhiteSpace(a.Description))
+                    sb.Append(": ").Append(_sanitizer?.SanitizeRawText(a.Description) ?? a.Description);
+            }
+        }
+
+        if (selection.DocumentTemplates.Count > 0)
+        {
+            sb.Append("\n\n**Document templates** (invoke via the DocumentFromTemplate tool):");
+            foreach (var d in selection.DocumentTemplates)
+            {
+                sb.Append("\n- ").Append(d.Name);
+                if (!string.IsNullOrWhiteSpace(d.Description))
+                    sb.Append(": ").Append(_sanitizer?.SanitizeRawText(d.Description) ?? d.Description);
+            }
+        }
+
+        if (selection.ToolGuides.Count > 0)
+        {
+            sb.Append("\n\n**Tool guides** (usage instructions for relevant tools):");
+            foreach (var t in selection.ToolGuides)
+            {
+                sb.Append("\n\n### ").Append(t.Name);
+                if (!string.IsNullOrWhiteSpace(t.Description))
+                    sb.Append('\n').Append(_sanitizer?.SanitizeRawText(t.Description) ?? t.Description);
+                if (!string.IsNullOrWhiteSpace(t.Body))
+                    sb.Append('\n').Append(_sanitizer?.SanitizeRawText(t.Body) ?? t.Body);
             }
         }
 
@@ -1478,7 +1652,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     /// returns empty. If <see cref="SessionConfig.AllowedMcpServers"/> is set,
     /// MCP-sourced tools whose server isn't on the list are dropped.
     /// </summary>
-    private IReadOnlyList<ToolDefinition> FilterToolsForModel(IReadOnlyList<ToolDefinition> tools)
+    private IReadOnlyList<ToolDefinition> FilterToolsForModel(
+        IReadOnlyList<ToolDefinition> tools,
+        IReadOnlySet<string>? mcpToolFilter = null)
     {
         if (tools.Count == 0)
             return tools;
@@ -1492,6 +1668,17 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             tools = tools
                 .Where(t => !_mcpClients.ToolToServer.TryGetValue(t.Name, out var server)
                             || allowSet.Contains(server))
+                .ToList();
+        }
+
+        // Phase 116 G — per-turn MCP tool relevance filter. When the knowledge router
+        // scored MCP tools and produced a non-null filter, drop MCP tools not in the set.
+        // Non-MCP tools (not in ToolToServer) are always passed through unchanged.
+        if (mcpToolFilter is not null && _mcpClients is not null)
+        {
+            tools = tools
+                .Where(t => !_mcpClients.ToolToServer.ContainsKey(t.Name)
+                            || mcpToolFilter.Contains(t.Name))
                 .ToList();
         }
 

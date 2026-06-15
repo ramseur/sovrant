@@ -6,6 +6,7 @@ using Sovrant.Agents.Shared;
 using Sovrant.Agents.Templates;
 using Sovrant.Api.Types;
 using Sovrant.Runtime.Conversation;
+using Sovrant.Runtime.Knowledge;
 
 namespace Sovrant.Tools.Agent;
 
@@ -60,7 +61,15 @@ public sealed class AgentTool : ITool
                 var agent = factory.Create(template, modelOverride: modelOverride);
                 var taskId = Guid.NewGuid().ToString("N");
                 var result = await agent.HandleAsync(new AgentTask(taskId, prompt), ct).ConfigureAwait(false);
-                return result.Success ? result.Output : $"Sub-agent error: {result.Error}";
+                if (result.Success)
+                {
+                    // Phase 116 F — attribute the template used.
+                    var scope = AttributionScope.Current;
+                    if (scope is not null)
+                        await scope.RecordAsync("agents", templateName, ct).ConfigureAwait(false);
+                    return result.Output;
+                }
+                return $"Sub-agent error: {result.Error}";
             }
 
             // Default path: fresh transient runtime with no template.

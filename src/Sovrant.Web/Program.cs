@@ -138,7 +138,7 @@ public static class Program
                 && !string.IsNullOrEmpty(supabaseUrl) && !string.IsNullOrEmpty(supabaseKey))
             {
                 var connStr = Sovrant.Storage.Postgres.ServiceCollectionExtensions.BuildSupabaseConnectionString(supabaseUrl, supabaseKey);
-                builder.Services.AddSovrantPostgresStorage(connStr, bootstrapConfig.KeystorePath);
+                builder.Services.AddSovrantPostgresStorage(connStr, bootstrapConfig.LegacyKeystorePath);
             }
 
             // Web-specific overrides

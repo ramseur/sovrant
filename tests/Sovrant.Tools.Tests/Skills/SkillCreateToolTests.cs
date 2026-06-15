@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
+using Sovrant.Runtime.Knowledge;
 using Sovrant.Tools.Skills;
 
 namespace Sovrant.Tools.Tests.Skills;
@@ -19,37 +20,32 @@ public sealed class SkillCreateToolTests : IDisposable
     public void Dispose()
     {
         Directory.SetCurrentDirectory(_originalDir);
-        try
-        {
-            if (Directory.Exists(_tempDir))
-                Directory.Delete(_tempDir, recursive: true);
-        }
-        catch (IOException)
-        {
-            // Best-effort cleanup — file may still be locked by registry
-        }
+        if (Directory.Exists(_tempDir))
+            try { Directory.Delete(_tempDir, recursive: true); } catch (IOException) { }
     }
 
     private static JsonElement MakeInput(object obj) =>
         JsonDocument.Parse(JsonSerializer.Serialize(obj)).RootElement;
 
-    private static SkillCreateTool CreateTool(SkillRegistry? registry = null)
+    private static (SkillCreateTool tool, SkillRegistry registry, FakeSkillStore store) CreateTool()
     {
-        registry ??= new SkillRegistry(NullLogger<SkillRegistry>.Instance);
-        return new SkillCreateTool(registry);
+        var store = new FakeSkillStore();
+        var registry = new SkillRegistry(store, NullLogger<SkillRegistry>.Instance);
+        var tool = new SkillCreateTool(registry, store);
+        return (tool, registry, store);
     }
 
     [Fact]
     public void Definition_HasCorrectName()
     {
-        var tool = CreateTool();
+        var (tool, _, _) = CreateTool();
         Assert.Equal("SkillCreate", tool.Definition.Name);
     }
 
     [Fact]
-    public async Task Execute_CreatesFile()
+    public async Task Execute_CreatesDbRow()
     {
-        var tool = CreateTool();
+        var (tool, registry, _) = CreateTool();
         var result = await tool.ExecuteAsync(MakeInput(new
         {
             name = "my-skill",
@@ -59,21 +55,16 @@ public sealed class SkillCreateToolTests : IDisposable
         }));
 
         Assert.Contains("my-skill", result);
-
-        var filePath = Path.Combine(_tempDir, ".sovrant", "skills", "my-skill.md");
-        Assert.True(File.Exists(filePath));
-
-        var content = File.ReadAllText(filePath);
-        Assert.Contains("name: my-skill", content);
-        Assert.Contains("trigger: /mine", content);
-        Assert.Contains("## Steps", content);
+        var skill = registry.TryGetByName("my-skill");
+        Assert.NotNull(skill);
+        Assert.Equal("/mine", skill.Trigger);
+        Assert.Contains("Do stuff", skill.Body);
     }
 
     [Fact]
     public async Task Execute_RegistersInRegistry()
     {
-        var registry = new SkillRegistry(NullLogger<SkillRegistry>.Instance);
-        var tool = new SkillCreateTool(registry);
+        var (tool, registry, _) = CreateTool();
 
         await tool.ExecuteAsync(MakeInput(new
         {
@@ -87,7 +78,7 @@ public sealed class SkillCreateToolTests : IDisposable
     [Fact]
     public async Task Execute_MissingName_ReturnsError()
     {
-        var tool = CreateTool();
+        var (tool, _, _) = CreateTool();
         var result = await tool.ExecuteAsync(MakeInput(new { body = "stuff" }));
         Assert.StartsWith("Error", result);
     }
@@ -95,7 +86,7 @@ public sealed class SkillCreateToolTests : IDisposable
     [Fact]
     public async Task Execute_MissingBody_ReturnsError()
     {
-        var tool = CreateTool();
+        var (tool, _, _) = CreateTool();
         var result = await tool.ExecuteAsync(MakeInput(new { name = "no-body" }));
         Assert.StartsWith("Error", result);
     }
@@ -103,15 +94,16 @@ public sealed class SkillCreateToolTests : IDisposable
     [Fact]
     public async Task Execute_PathTraversal_ReturnsError()
     {
-        var tool = CreateTool();
+        var (tool, _, _) = CreateTool();
         var result = await tool.ExecuteAsync(MakeInput(new { name = "../evil", body = "stuff" }));
         Assert.StartsWith("Error", result);
     }
 
     [Fact]
-    public async Task Execute_WithAgentsAndTools_IncludesInFrontmatter()
+    public async Task Execute_WithAgentsAndTools_StoredInRegistry()
     {
-        var tool = CreateTool();
+        var (tool, registry, _) = CreateTool();
+
         await tool.ExecuteAsync(MakeInput(new
         {
             name = "full-skill",
@@ -122,9 +114,9 @@ public sealed class SkillCreateToolTests : IDisposable
             body = "Body",
         }));
 
-        var filePath = Path.Combine(_tempDir, ".sovrant", "skills", "full-skill.md");
-        var content = File.ReadAllText(filePath);
-        Assert.Contains("agents: [coder, reviewer]", content);
-        Assert.Contains("tools: [Read, Write]", content);
+        var skill = registry.TryGetByName("full-skill");
+        Assert.NotNull(skill);
+        Assert.Contains("coder", skill.Agents);
+        Assert.Contains("Read", skill.Tools);
     }
 }

@@ -272,6 +272,11 @@ public sealed class FakeSessionStore : ISessionStore
         if (_privacy.TryGetValue(sessionId, out var v)) return Task.FromResult<bool?>(v);
         return Task.FromResult<bool?>(null);
     }
+
+    public Task SetAgentNameAsync(string sessionId, string agentName, string? ownerUserId = null, CancellationToken ct = default)
+        => Task.CompletedTask;
+    public Task<string?> GetAgentNameAsync(string sessionId, CancellationToken ct = default)
+        => Task.FromResult<string?>(null);
 }
 
 /// <summary>Fake smart router that returns a canned provider list.</summary>
@@ -334,6 +339,9 @@ public sealed class FakeAuditStore : IAuditStore
         PrivacyLog.Add((userId, entityKind, entityId, newIsPrivate));
         return Task.CompletedTask;
     }
+
+    public Task LogMcpTrustEventAsync(string toolName, string serverName, string action, string? matchedPattern, string? reason, string? sessionId, CancellationToken ct = default)
+        => Task.CompletedTask;
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

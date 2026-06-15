@@ -30,4 +30,10 @@ public sealed record SkillDefinition(
     /// The full markdown body (after frontmatter) containing workflow steps,
     /// output format, and any inline script blocks.
     /// </summary>
-    string Body);
+    string Body,
+
+    /// <summary>
+    /// Tier of the skill: <c>"BuiltIn"</c> for seeded base rows, <c>"User"</c> for
+    /// global or project overlays. Matches <c>KnowledgePage.Tier</c>.
+    /// </summary>
+    string Tier = "BuiltIn");

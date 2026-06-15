@@ -1,23 +1,66 @@
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
+using Sovrant.Runtime.Knowledge;
+
 namespace Sovrant.Runtime.Documents.Templates;
 
 /// <summary>
-/// Default <see cref="ITemplateRegistry"/> backed by DI-injected templates.
-/// Duplicate IDs throw at construction so two templates can't silently
-/// shadow each other.
+/// <see cref="ITemplateRegistry"/> backed by DI-injected C# templates and DB-backed
+/// <see cref="DbDocumentTemplate"/> rows from <c>knowledge_pages</c> kind=<c>document-templates</c>
+/// (Phase 112D). DB templates shadow same-Id C# templates so user overlays work.
 /// </summary>
-public sealed class TemplateRegistry : ITemplateRegistry
+public sealed partial class TemplateRegistry : ITemplateRegistry
 {
-    private readonly Dictionary<string, IDocumentTemplate> _byId;
+    private readonly IDocumentTemplate[] _csharpTemplates;
+    private readonly IKnowledgeStore _knowledgeStore;
+    private readonly ILogger<TemplateRegistry> _logger;
+    private Dictionary<string, IDocumentTemplate> _byId;
 
-    public TemplateRegistry(IEnumerable<IDocumentTemplate> templates)
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to load document templates from DB: {Error}")]
+    private static partial void LogLoadError(ILogger logger, string error);
+
+    public TemplateRegistry(
+        IEnumerable<IDocumentTemplate> csharpTemplates,
+        IKnowledgeStore knowledgeStore,
+        ILogger<TemplateRegistry> logger)
     {
-        ArgumentNullException.ThrowIfNull(templates);
-        _byId = new Dictionary<string, IDocumentTemplate>(StringComparer.OrdinalIgnoreCase);
-        foreach (var template in templates)
+        ArgumentNullException.ThrowIfNull(csharpTemplates);
+        ArgumentNullException.ThrowIfNull(knowledgeStore);
+
+        _csharpTemplates = [.. csharpTemplates];
+        _knowledgeStore = knowledgeStore;
+        _logger = logger;
+        _byId = Load();
+    }
+
+    public void Reload() => _byId = Load();
+
+    private Dictionary<string, IDocumentTemplate> Load()
+    {
+        var byId = new Dictionary<string, IDocumentTemplate>(StringComparer.OrdinalIgnoreCase);
+
+        // C# templates first (lowest priority)
+        foreach (var t in _csharpTemplates)
+            byId[t.Id] = t;
+
+        // DB templates override (supports user overlays + base seeded templates)
+        try
         {
-            if (!_byId.TryAdd(template.Id, template))
-                throw new InvalidOperationException($"Duplicate template ID registered: '{template.Id}'");
+            var pages = _knowledgeStore.GetAllEffectiveAsync("document-templates")
+                                       .GetAwaiter().GetResult();
+            foreach (var page in pages)
+            {
+                var dbt = new DbDocumentTemplate(page);
+                byId[dbt.Id] = dbt;
+            }
         }
+        catch (SqliteException ex)
+        {
+            // DB not yet migrated — fall back to C# templates only
+            LogLoadError(_logger, ex.Message);
+        }
+
+        return byId;
     }
 
     public IDocumentTemplate Resolve(string id)

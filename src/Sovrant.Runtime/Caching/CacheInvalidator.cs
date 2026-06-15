@@ -26,6 +26,22 @@ public sealed class CacheInvalidator(ICacheProvider cache)
     public Task InvalidateStatusAsync(CancellationToken ct = default) =>
         cache.RemoveAsync("status:current", ct);
 
+    /// <summary>
+    /// Invalidates all knowledge-store cache entries for <paramref name="kind"/> and any
+    /// corresponding HTTP response cache keys (e.g. <c>skills:list</c>, <c>templates:list</c>).
+    /// Called by <c>CachedKnowledgeStore</c> on every write so both the DB read cache and
+    /// the route-level HTTP cache are evicted atomically.
+    /// </summary>
+    public Task InvalidateKnowledgeAsync(string kind, CancellationToken ct = default)
+    {
+        var tasks = new List<Task> { cache.RemoveByPrefixAsync($"knowledge:{kind}:", ct) };
+        if (kind is "skills")
+            tasks.Add(cache.RemoveByPrefixAsync("skills:", ct));
+        else if (kind is "agents")
+            tasks.Add(cache.RemoveByPrefixAsync("templates:", ct));
+        return Task.WhenAll(tasks);
+    }
+
     /// <summary>Invalidates all cache entries (nuclear option for testing or restarts).</summary>
     public Task InvalidateAllAsync(CancellationToken ct = default) =>
         cache.RemoveByPrefixAsync("", ct);

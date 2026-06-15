@@ -1015,7 +1015,47 @@ Aggregates everything currently in flight for the Command Center cockpit (Web `/
 }
 ```
 
-The cockpit polls this endpoint every 2 seconds (SignalR push deferred — see Phase 89-Phase-2). `rows` are sorted by `last_activity` descending. Each row points at an existing detail surface via `detail_route` so the Command Center never duplicates UIs.
+The cockpit polls this endpoint every 30 seconds. `rows` are sorted by `last_activity` descending, paginated. Each row points at an existing detail surface via `detail_route` so the Command Center never duplicates UIs. Private records appear with `"title": null` and `"preview": null` (masked) — their existence is acknowledged for accountability but content is hidden from non-owners.
+
+---
+
+## User Dashboard — `GET /v1/user-dashboard/state` (Phase 98)
+
+Aggregates the signed-in user's cross-workspace activity. Differs from Command Center: shows completed and historical records (not just in-flight), scoped to what the requesting user owns or can see. Read-only.
+
+**Visibility rules (enforced server-side):**
+
+| Record type | Visible to requesting user |
+|---|---|
+| Own records (any privacy) | Always visible |
+| Teammates' public records (same workspace) | Visible |
+| Teammates' private records | Never returned — excluded entirely |
+
+**Response**
+
+```json
+{
+  "active_missions": 1,
+  "active_team_runs": 0,
+  "active_agent_runs": 2,
+  "active_sessions": 3,
+  "rows": [
+    {
+      "kind": "session",
+      "title": "my session",
+      "status": "idle",
+      "preview": "last message preview...",
+      "last_activity": "2026-05-26T10:00:00Z",
+      "is_private": false,
+      "owner_username": "alice",
+      "detail_route": "/activity?session=sess-abc"
+    }
+  ],
+  "generated_at": "2026-05-26T10:00:01Z"
+}
+```
+
+`rows` include `is_private` so the frontend can render a privacy indicator. The dashboard polls every 30 seconds and preserves the current page across refreshes. Reached via the 👤 rail nav icon on both Web (`/dashboard`) and Desktop.
 
 ---
 

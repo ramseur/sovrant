@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Sovrant.Runtime.Knowledge;
 using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Storage;
@@ -9,14 +10,15 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Registers the Postgres/Supabase storage backend.
-    /// Replaces the SQLite <see cref="ISessionStore"/> and <see cref="ICredentialStore"/>
+    /// Replaces the SQLite session, credential, knowledge, and MCP trust stores
     /// with Npgsql-backed implementations.
     /// </summary>
     /// <param name="services">The service collection to register into.</param>
     /// <param name="connectionString">Npgsql connection string to the Supabase/PostgreSQL database.</param>
     /// <param name="keystorePath">
-    /// Path to the AES-256-GCM master key file. Defaults to
-    /// <c>~/.sovrant/credentials/.keystore</c> (same location as SQLite mode).
+    /// Legacy path to an on-disk AES-256-GCM master key file used for one-time migration.
+    /// Defaults to <c>~/.sovrant/credentials/.keystore</c>. The key is stored in the DB
+    /// keystore table after first use and the file is no longer required.
     /// </param>
     public static IServiceCollection AddSovrantPostgresStorage(
         this IServiceCollection services,
@@ -34,6 +36,12 @@ public static class ServiceCollectionExtensions
             new PostgresCredentialStore(
                 sp.GetRequiredService<IPostgresConnectionFactory>(),
                 keystorePath));
+
+        services.AddSingleton<IMcpTrustRuleStore, PostgresMcpTrustRuleStore>();
+
+        services.AddSingleton<IKnowledgeStore, PostgresKnowledgeStore>();
+
+        services.AddSingleton<IKnowledgeAttributionStore, PostgresKnowledgeAttributionStore>();
 
         return services;
     }

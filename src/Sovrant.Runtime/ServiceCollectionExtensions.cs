@@ -20,6 +20,7 @@ using Sovrant.Runtime.Tools;
 using Sovrant.Runtime.Projects;
 using Sovrant.Runtime.Projects.Templates;
 using Sovrant.Runtime.Users;
+using Sovrant.Runtime.Knowledge;
 using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime;
@@ -98,6 +99,19 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAuditStore>(sp =>
             new SqliteAuditStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
+        // Knowledge pages — DB-backed store for skills/documents/tools (Phase 108 foundation).
+        // Phase 113: wrapped in CachedKnowledgeStore unless SOVRANT_KNOWLEDGE_CACHE_TTL=0.
+        services.AddSingleton<IKnowledgeStore>(sp =>
+        {
+            IKnowledgeStore inner = new SqliteKnowledgeStore(sp.GetRequiredService<ISqliteConnectionFactory>());
+            if (Environment.GetEnvironmentVariable("SOVRANT_KNOWLEDGE_CACHE_TTL") is "0")
+                return inner;
+            return new CachedKnowledgeStore(
+                inner,
+                sp.GetRequiredService<ICacheProvider>(),
+                sp.GetRequiredService<CacheInvalidator>());
+        });
+
         // Governance monitor — loads from env > workspace_settings DB > defaults.
         // Wrapped in ILiveSettings so the Settings UI can hot-reload secret
         // patterns / blocked commands / protected files without a restart.
@@ -123,6 +137,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Governance.IntentInjector>();
         services.AddSingleton<Governance.PlanProgressTracker>();
         services.AddSingleton<Governance.IOrchestrationRouter, Governance.HeuristicOrchestrationRouter>();
+
+        // Phase 116 D — knowledge router: per-turn lightweight relevance scorer.
+        services.AddSingleton<Prompt.IKnowledgeRouter>(sp =>
+            new Prompt.KnowledgeRouter(sp.GetRequiredService<Knowledge.IKnowledgeStore>()));
+
+        // Phase 116 F — knowledge attribution store: append-only provenance log.
+        services.AddSingleton<Knowledge.IKnowledgeAttributionStore>(sp =>
+            new Storage.SqliteKnowledgeAttributionStore(sp.GetRequiredService<Storage.ISqliteConnectionFactory>()));
 
         // Phase 58 — Trust Boundary: sanitization, ethical harness, intent verification.
         // Hot-reloadable since Bucket-B step 4: the live wrapper subscribes the
@@ -159,7 +181,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IToolConfirmationHandler, DenyAllConfirmationHandler>();
         // Phase 87 Track E — per-turn approval cache for "always allow this turn".
         services.AddSingleton<IPerTurnApprovalCache, PerTurnApprovalCache>();
-        services.AddSingleton<IToolExecutor, DefaultToolExecutor>();
+        services.AddSingleton<IToolExecutor>(sp => new Tools.DefaultToolExecutor(
+            sp.GetRequiredService<IToolRegistry>(),
+            sp.GetRequiredService<Permissions.IPermissionPolicy>(),
+            sp.GetRequiredService<Governance.IGovernanceMonitor>(),
+            sp.GetRequiredService<Permissions.IToolConfirmationHandler>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Tools.DefaultToolExecutor>>(),
+            sp.GetService<Permissions.IPerTurnApprovalCache>(),
+            sp.GetService<Mcp.IMcpTrustGate>(),
+            sp.GetService<Mcp.McpClientRegistry>(),
+            sp.GetService<Governance.IAuditStore>()));
 
         // Session store — SQLite primary, optional JSONL dual-write.
         services.AddSingleton<ISessionStore>(sp =>
@@ -376,7 +407,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<McpClientRegistry>();
         services.AddSingleton<McpToolRegistrar>();
         services.AddSingleton<ICredentialStore>(sp =>
-            new SqliteCredentialStore(sp.GetRequiredService<ISqliteConnectionFactory>(), bootstrap.KeystorePath));
+            new SqliteCredentialStore(sp.GetRequiredService<ISqliteConnectionFactory>(), bootstrap.LegacyKeystorePath));
         // MCP server store — full config (headers, env, args) encrypted in ICredentialStore.
         // SqliteMcpServerStore is kept for the one-shot migration only; McpServerStoreMigrator
         // copies its rows into the credential store on first boot then the SQLite table is ignored.
@@ -390,6 +421,11 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromSeconds(30);
         });
         services.AddSingleton<McpOAuthService>();
+
+        // MCP trust gates (Phase 103)
+        services.AddSingleton<IMcpTrustRuleStore>(sp =>
+            new Storage.SqliteMcpTrustRuleStore(sp.GetRequiredService<Storage.ISqliteConnectionFactory>()));
+        services.AddSingleton<IMcpTrustGate, McpTrustGate>();
 
         // Cost tracking (Phase 55)
         var costProvider = Environment.GetEnvironmentVariable("SOVRANT_COST_PROVIDER") ?? "openrouter";
@@ -655,7 +691,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IStorageProvider>(sp => sp.GetRequiredService<Storage.SqliteStorageProvider>());
         services.AddSingleton<Storage.ISqliteConnectionFactory>(sp => sp.GetRequiredService<Storage.SqliteStorageProvider>());
         services.AddSingleton<Mcp.ICredentialStore>(sp =>
-            new Storage.SqliteCredentialStore(sp.GetRequiredService<Storage.ISqliteConnectionFactory>(), bootstrap.KeystorePath));
+            new Storage.SqliteCredentialStore(sp.GetRequiredService<Storage.ISqliteConnectionFactory>(), bootstrap.LegacyKeystorePath));
 
         return services;
     }
@@ -676,6 +712,6 @@ public static class ServiceCollectionExtensions
             Microsoft.Extensions.Logging.Abstractions.NullLogger<Storage.SqliteStorageProvider>.Instance,
             bootstrap.DbPath);
 #pragma warning restore CA2000
-        return new Storage.SqliteCredentialStore(provider, bootstrap.KeystorePath);
+        return new Storage.SqliteCredentialStore(provider, bootstrap.LegacyKeystorePath);
     }
 }

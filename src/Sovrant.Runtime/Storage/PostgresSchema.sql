@@ -1,7 +1,8 @@
 -- Sovrant PostgreSQL schema (Supabase-compatible).
--- Mirrors V001–V029 SQLite migrations. Safe to run multiple times (idempotent).
+-- Mirrors V001–V039 SQLite migrations. Safe to run multiple times (idempotent).
 -- Timestamps are stored as TEXT (ISO 8601) for wire-compatibility with SQLite stores.
 -- BYTEA used for encrypted blobs (credentials table).
+-- V035/V037 (built-in knowledge seed data) are handled by the app at startup, not here.
 
 -- ── Helper: UTC timestamp default ────────────────────────────────────────────
 -- All timestamp columns that had SQLite strftime defaults use this expression.
@@ -623,6 +624,106 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 CREATE INDEX IF NOT EXISTS ix_prt_user ON password_reset_tokens(user_id);
 CREATE INDEX IF NOT EXISTS ix_prt_hash ON password_reset_tokens(token_hash);
 
+-- ── V030 Activity is Private ──────────────────────────────────────────────────
+
+ALTER TABLE missions   ADD COLUMN IF NOT EXISTS is_private INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS is_private INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sessions   ADD COLUMN IF NOT EXISTS is_private INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS ix_missions_is_private   ON missions(is_private);
+CREATE INDEX IF NOT EXISTS ix_agent_runs_is_private ON agent_runs(is_private);
+CREATE INDEX IF NOT EXISTS ix_sessions_is_private   ON sessions(is_private);
+
+-- ── V031 Session Agent Name ───────────────────────────────────────────────────
+
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS agent_name TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_sessions_agent_name ON sessions(agent_name) WHERE agent_name IS NOT NULL;
+
+-- ── V032 MCP Trust Rules ──────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS mcp_trust_rules (
+    rule_id      TEXT NOT NULL PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    server_name  TEXT NOT NULL,   -- exact server name or '*' (all servers)
+    tool_pattern TEXT NOT NULL,   -- glob: 'delete_*', 'bulk_*', '*'
+    action       TEXT NOT NULL,   -- Allow | RequireConfirmation | Block
+    reason       TEXT,
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_mcp_trust_rules_workspace ON mcp_trust_rules(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_mcp_trust_rules_server    ON mcp_trust_rules(server_name);
+
+-- ── V033/V034/V036 Knowledge Pages ───────────────────────────────────────────
+-- Combines V033 foundation, V034 agent columns, and V036 document-template
+-- columns into one table definition (all columns present on fresh installs).
+-- V035 and V037 are seed-data-only migrations handled by the app at startup.
+
+CREATE TABLE IF NOT EXISTS knowledge_pages (
+    knowledge_id      TEXT NOT NULL PRIMARY KEY,
+    kind              TEXT NOT NULL,              -- 'skills' | 'agents' | 'documents' | 'tools' | 'document-templates'
+    slug              TEXT NOT NULL,
+    name              TEXT NOT NULL,
+    description       TEXT NOT NULL DEFAULT '',
+    tier              TEXT NOT NULL DEFAULT 'User',
+    -- skills-specific
+    trigger           TEXT,
+    agents            TEXT,                       -- JSON array
+    tools             TEXT,                       -- JSON array
+    -- documents-specific
+    industry          TEXT,
+    default_format    TEXT,
+    -- tool-templates-specific
+    category          TEXT,
+    -- agent-specific (V034)
+    role              TEXT,
+    recommended_level TEXT,
+    -- document-template-specific (V036)
+    fields_json       TEXT,
+    filename_template TEXT,
+    -- content
+    body              TEXT NOT NULL DEFAULT '',
+    -- ownership / scope
+    workspace_id      TEXT NOT NULL DEFAULT '',
+    -- audit
+    created_at        TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
+    updated_at        TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
+    UNIQUE (kind, slug, workspace_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_pages_kind      ON knowledge_pages(kind);
+CREATE INDEX IF NOT EXISTS idx_knowledge_pages_workspace ON knowledge_pages(workspace_id);
+
+-- Additive guards for databases that were initialised before this combined
+-- definition — safe no-ops on fresh installs.
+ALTER TABLE knowledge_pages ADD COLUMN IF NOT EXISTS role              TEXT;
+ALTER TABLE knowledge_pages ADD COLUMN IF NOT EXISTS recommended_level TEXT;
+ALTER TABLE knowledge_pages ADD COLUMN IF NOT EXISTS fields_json       TEXT;
+ALTER TABLE knowledge_pages ADD COLUMN IF NOT EXISTS filename_template TEXT;
+
+-- ── V038 Knowledge Attributions ───────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS knowledge_attributions (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    session_id  TEXT    NOT NULL,
+    turn_index  INTEGER NOT NULL,
+    kind        TEXT    NOT NULL,   -- 'skills', 'agents', 'document-templates', 'tools'
+    slug        TEXT    NOT NULL,
+    used_at     TEXT    NOT NULL    -- ISO 8601
+);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_attributions_session ON knowledge_attributions(session_id);
+
+-- ── V039 Keystore ─────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS keystore (
+    scope      TEXT NOT NULL PRIMARY KEY,  -- 'default' (reserved for future per-workspace keys)
+    key_hex    TEXT NOT NULL,              -- 64-char lowercase hex (256-bit AES master key)
+    created_at TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+);
+
 -- ── Schema version tracking ───────────────────────────────────────────────────
 -- Records the last successfully applied schema version so the admin UI
 -- can show "Up to date" vs "Needs initialization".
@@ -635,5 +736,5 @@ CREATE TABLE IF NOT EXISTS sovrant_schema_version (
 );
 
 INSERT INTO sovrant_schema_version (id, version)
-VALUES (1, 29)
+VALUES (1, 39)
 ON CONFLICT (id) DO UPDATE SET version = EXCLUDED.version, applied_at = EXCLUDED.applied_at;

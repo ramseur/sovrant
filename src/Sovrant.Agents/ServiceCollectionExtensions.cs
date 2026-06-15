@@ -66,9 +66,19 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IOrchestrationSystem>(sp =>
             AgentSystemFactory.Create(sp.GetRequiredService<AgentSystemConfig>(), sp));
 
+        // Phase 112: DB-backed template loader — reads BuiltIn/Global/Project rows from
+        // knowledge_pages; registered as ITemplateLoader so AgentTemplateRegistry picks it up.
+        services.AddSingleton<ITemplateLoader, DbAgentTemplateLoader>();
+
         // Template registry, definition writer, and agent factory
-        services.AddSingleton<AgentTemplateRegistry>();
-        services.AddSingleton<AgentDefinitionWriter>();
+        services.AddSingleton<AgentTemplateRegistry>(sp =>
+            new AgentTemplateRegistry(
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<AgentTemplateRegistry>>(),
+                sp.GetServices<ITemplateLoader>()));
+        services.AddSingleton<AgentDefinitionWriter>(sp =>
+            new AgentDefinitionWriter(
+                sp.GetRequiredService<AgentTemplateRegistry>(),
+                sp.GetRequiredService<Sovrant.Runtime.Knowledge.IKnowledgeStore>()));
         services.AddSingleton<ITeamRegistry>(sp =>
             new SqliteTeamRegistry(sp.GetRequiredService<Sovrant.Runtime.Storage.ISqliteConnectionFactory>()));
         services.AddSingleton<SovrantAgentFactory>();

@@ -266,34 +266,85 @@
                                                    FontSize="12" Foreground="White" />
                                     </Border>
 
-                                    <!-- API key -->
-                                    <StackPanel Spacing="4"
-                                                IsVisible="{Binding SelectedCatalogEntry.NeedsApiKey}">
-                                        <TextBlock Text="{Binding SelectedCatalogEntry.ApiKeyLabel}"
-                                                   FontSize="12" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextSecondary}" />
-                                        <TextBox Text="{Binding GalleryApiKey}"
-                                                 PasswordChar="•"
-                                                 Watermark="Paste your key here"
-                                                 CornerRadius="6" Padding="10,7" />
+                                    <!-- ── OAuth connect path ────────────────────────── -->
+                                    <StackPanel IsVisible="{Binding SelectedCatalogEntry.RequiresOAuth}" Spacing="12">
+
+                                        <!-- Waiting state -->
+                                        <Border IsVisible="{Binding IsOAuthWaiting}"
+                                                Padding="12,10" CornerRadius="8"
+                                                Background="{DynamicResource SurfaceBackground}"
+                                                BorderBrush="{DynamicResource BrandPrimary}"
+                                                BorderThickness="1">
+                                            <TextBlock FontSize="12" Foreground="{DynamicResource BrandPrimary}"
+                                                       TextWrapping="Wrap"
+                                                       Text="🔄 Browser opened. Waiting for authorization... (times out after 2 min)" />
+                                        </Border>
+
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="OAuth Client ID"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextSecondary}" />
+                                            <TextBox Text="{Binding GalleryClientId}"
+                                                     Watermark="Your OAuth app client ID"
+                                                     CornerRadius="6" Padding="10,7" />
+                                        </StackPanel>
+
+                                        <!-- Endpoint override (for entries without a fixed template) -->
+                                        <StackPanel Spacing="4"
+                                                    IsVisible="{Binding SelectedCatalogEntry.NeedsEndpoint}">
+                                            <TextBlock Text="{Binding SelectedCatalogEntry.EndpointLabel}"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextSecondary}" />
+                                            <TextBox Text="{Binding GalleryUrl}"
+                                                     CornerRadius="6" Padding="10,7" />
+                                        </StackPanel>
+
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Button Content="Connect with OAuth"
+                                                    Command="{Binding ConnectWithOAuthCommand}"
+                                                    IsEnabled="{Binding !IsGalleryConnecting}"
+                                                    Padding="18,8" CornerRadius="6"
+                                                    Background="{DynamicResource BrandPrimary}"
+                                                    Foreground="White" />
+                                        </StackPanel>
+
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}"
+                                                   TextWrapping="Wrap"
+                                                   Text="Register an OAuth app with the provider to get a Client ID. Sovrant will open your browser for authorization and handle the rest." />
                                     </StackPanel>
 
-                                    <!-- Endpoint / path -->
-                                    <StackPanel Spacing="4"
-                                                IsVisible="{Binding SelectedCatalogEntry.NeedsEndpoint}">
-                                        <TextBlock Text="{Binding SelectedCatalogEntry.EndpointLabel}"
-                                                   FontSize="12" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextSecondary}" />
-                                        <TextBox Text="{Binding GalleryUrl}"
-                                                 CornerRadius="6" Padding="10,7" />
-                                    </StackPanel>
+                                    <!-- ── Non-OAuth connect path ────────────────────── -->
+                                    <StackPanel IsVisible="{Binding !SelectedCatalogEntry.RequiresOAuth}" Spacing="12">
 
-                                    <Button Content="Connect"
-                                            Command="{Binding ConnectFromGalleryCommand}"
-                                            IsEnabled="{Binding !IsGalleryConnecting}"
-                                            Padding="18,8" CornerRadius="6"
-                                            Background="{DynamicResource BrandPrimary}"
-                                            Foreground="White" />
+                                        <!-- API key -->
+                                        <StackPanel Spacing="4"
+                                                    IsVisible="{Binding SelectedCatalogEntry.NeedsApiKey}">
+                                            <TextBlock Text="{Binding SelectedCatalogEntry.ApiKeyLabel}"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextSecondary}" />
+                                            <TextBox Text="{Binding GalleryApiKey}"
+                                                     PasswordChar="•"
+                                                     Watermark="Paste your key here"
+                                                     CornerRadius="6" Padding="10,7" />
+                                        </StackPanel>
+
+                                        <!-- Endpoint / path -->
+                                        <StackPanel Spacing="4"
+                                                    IsVisible="{Binding SelectedCatalogEntry.NeedsEndpoint}">
+                                            <TextBlock Text="{Binding SelectedCatalogEntry.EndpointLabel}"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextSecondary}" />
+                                            <TextBox Text="{Binding GalleryUrl}"
+                                                     CornerRadius="6" Padding="10,7" />
+                                        </StackPanel>
+
+                                        <Button Content="Connect"
+                                                Command="{Binding ConnectFromGalleryCommand}"
+                                                IsEnabled="{Binding !IsGalleryConnecting}"
+                                                Padding="18,8" CornerRadius="6"
+                                                Background="{DynamicResource BrandPrimary}"
+                                                Foreground="White" />
+                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
@@ -378,6 +429,15 @@
                                                  FontFamily="Consolas,Menlo,monospace"
                                                  CornerRadius="6" Padding="10,7" />
                                     </StackPanel>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Environment Variables (optional — one KEY=VALUE per line)" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextSecondary}" />
+                                        <TextBox Text="{Binding NewServerEnvVars}"
+                                                 AcceptsReturn="True" MinHeight="72"
+                                                 Watermark="GITHUB_PERSONAL_ACCESS_TOKEN=ghp_..."
+                                                 FontFamily="Consolas,Menlo,monospace"
+                                                 FontSize="11" Padding="8,6" CornerRadius="6" />
+                                    </StackPanel>
                                 </StackPanel>
 
                                 <!-- HTTP -->
@@ -431,29 +491,228 @@
                             BorderBrush="{DynamicResource SurfaceBorder}"
                             BorderThickness="1" Padding="20,16"
                             IsVisible="{Binding !!SelectedServer}">
-                        <DockPanel>
-                            <!-- Status + Remove row -->
-                            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
-                                <Button DockPanel.Dock="Right"
-                                        Content="Remove"
-                                        Command="{Binding RemoveServerCommand}"
-                                        CommandParameter="{Binding SelectedServer}"
-                                        Padding="12,6" CornerRadius="6"
-                                        Background="#44F44336" Foreground="{DynamicResource StatusFail}"
-                                        FontSize="12" />
-                                <TextBlock Text="{Binding StatusMessage}"
-                                           IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                           FontSize="12" Foreground="{DynamicResource TextSecondary}"
-                                           VerticalAlignment="Center" TextWrapping="Wrap" />
-                            </DockPanel>
-                            <ContentControl Content="{Binding SelectedServer}">
-                                <ContentControl.ContentTemplate>
-                                    <DataTemplate DataType="vm:McpServerItem">
-                                        <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
-                                    </DataTemplate>
-                                </ContentControl.ContentTemplate>
-                            </ContentControl>
-                        </DockPanel>
+                        <ScrollViewer>
+                            <StackPanel Spacing="12">
+                                <!-- Status + Remove row -->
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right"
+                                            Content="Remove"
+                                            Command="{Binding RemoveServerCommand}"
+                                            CommandParameter="{Binding SelectedServer}"
+                                            Padding="12,6" CornerRadius="6"
+                                            Background="#44F44336" Foreground="{DynamicResource StatusFail}"
+                                            FontSize="12" />
+                                    <TextBlock Text="{Binding StatusMessage}"
+                                               IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                               FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                               VerticalAlignment="Center" TextWrapping="Wrap" />
+                                </DockPanel>
+
+                                <!-- Server markdown -->
+                                <ctrl:SafeMarkdownPresenter Markdown="{Binding SelectedServer.Markdown}" />
+
+                                <!-- Environment Variables section -->
+                                <StackPanel Spacing="8"
+                                            IsVisible="{Binding !!SelectedServer}">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right"
+                                                Content="Edit"
+                                                Command="{Binding StartEditEnvCommand}"
+                                                IsVisible="{Binding !SelectedServer.EnvEditing}"
+                                                Padding="10,4" CornerRadius="6" FontSize="11"
+                                                Background="{DynamicResource SurfaceBackground}"
+                                                Foreground="{DynamicResource TextSecondary}" />
+                                        <TextBlock Text="Environment Variables"
+                                                   FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+
+                                    <!-- View mode: show existing vars -->
+                                    <StackPanel IsVisible="{Binding !SelectedServer.EnvEditing}" Spacing="4">
+                                        <TextBlock Text="No environment variables configured."
+                                                   FontSize="11" Foreground="{DynamicResource TextMuted}"
+                                                   IsVisible="{Binding SelectedServer.EnvVars.Count, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=0}" />
+                                        <ItemsControl ItemsSource="{Binding SelectedServer.EnvVars}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="{DynamicResource SurfaceBackground}"
+                                                            BorderBrush="{DynamicResource SurfaceBorder}"
+                                                            BorderThickness="1" CornerRadius="4"
+                                                            Padding="8,5" Margin="0,0,0,3">
+                                                        <TextBlock FontFamily="Consolas,Menlo,monospace"
+                                                                   FontSize="11"
+                                                                   Foreground="{DynamicResource TextPrimary}"
+                                                                   Text="{Binding Key}" />
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+
+                                    <!-- Edit mode -->
+                                    <StackPanel IsVisible="{Binding SelectedServer.EnvEditing}" Spacing="6">
+                                        <ItemsControl ItemsSource="{Binding SelectedServer.EnvEditRows}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="vm:EnvVarRowViewModel">
+                                                    <Grid ColumnDefinitions="Auto,8,*,12,2*" Margin="0,0,0,4">
+                                                        <Button Grid.Column="0"
+                                                                Content="✕"
+                                                                Command="{Binding $parent[ItemsControl].((vm:IntegrationsViewModel)DataContext).RemoveEnvRowCommand}"
+                                                                CommandParameter="{Binding}"
+                                                                Padding="6,4" CornerRadius="4"
+                                                                Background="#33F44336"
+                                                                Foreground="{DynamicResource StatusFail}"
+                                                                FontSize="10" />
+                                                        <TextBox Grid.Column="2"
+                                                                 Text="{Binding Key}"
+                                                                 Watermark="KEY"
+                                                                 FontFamily="Consolas,Menlo,monospace"
+                                                                 FontSize="11" CornerRadius="5" Padding="8,5" />
+                                                        <TextBlock Grid.Column="3" Text="=" VerticalAlignment="Center"
+                                                                   HorizontalAlignment="Center"
+                                                                   Foreground="{DynamicResource TextMuted}" FontSize="12" />
+                                                        <TextBox Grid.Column="4"
+                                                                 Text="{Binding Value}"
+                                                                 Watermark="value"
+                                                                 FontFamily="Consolas,Menlo,monospace"
+                                                                 FontSize="11" CornerRadius="5" Padding="8,5" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <Button Content="+ Add Variable"
+                                                Command="{Binding AddEnvRowCommand}"
+                                                Padding="10,5" CornerRadius="6" FontSize="11"
+                                                Background="Transparent"
+                                                Foreground="{DynamicResource BrandPrimary}" />
+
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button Content="Save"
+                                                    Command="{Binding SaveEnvCommand}"
+                                                    Padding="16,7" CornerRadius="6" FontSize="12"
+                                                    Background="{DynamicResource BrandPrimary}"
+                                                    Foreground="White" />
+                                            <Button Content="Cancel"
+                                                    Command="{Binding CancelEditEnvCommand}"
+                                                    Padding="12,7" CornerRadius="6" FontSize="12"
+                                                    Background="{DynamicResource SurfaceBackground}"
+                                                    Foreground="{DynamicResource TextSecondary}" />
+                                        </StackPanel>
+
+                                        <TextBlock Text="{Binding SelectedServer.EnvStatus}"
+                                                   IsVisible="{Binding SelectedServer.EnvStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                   FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Trust Rules section -->
+                                <StackPanel Spacing="8"
+                                            IsVisible="{Binding !!SelectedServer}">
+                                    <TextBlock Text="Trust Rules"
+                                               FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimary}" />
+                                    <TextBlock TextWrapping="Wrap" FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}"
+                                               Text="Rules run before tool execution. Built-in defaults require confirmation for delete_*, remove_*, bulk_* and similar patterns." />
+
+                                    <!-- Rules list -->
+                                    <ItemsControl ItemsSource="{Binding SelectedServer.TrustRules}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="vm:TrustRuleViewModel">
+                                                <Border Background="{DynamicResource SurfaceBackground}"
+                                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                                        BorderThickness="1" CornerRadius="6"
+                                                        Padding="10,6" Margin="0,0,0,4">
+                                                    <DockPanel>
+                                                        <Button DockPanel.Dock="Right"
+                                                                Content="✕"
+                                                                Command="{Binding RemoveCommand}"
+                                                                Padding="6,3" CornerRadius="4"
+                                                                Background="#33F44336" Foreground="{DynamicResource StatusFail}"
+                                                                FontSize="10" />
+                                                        <Border DockPanel.Dock="Right"
+                                                                Background="{Binding ActionBadgeColor}"
+                                                                CornerRadius="8" Padding="7,2"
+                                                                Margin="0,0,8,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Action}"
+                                                                       FontSize="10" FontWeight="SemiBold"
+                                                                       Foreground="White" />
+                                                        </Border>
+                                                        <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding ToolPattern}"
+                                                                       FontFamily="Consolas,Menlo,monospace"
+                                                                       FontSize="12"
+                                                                       Foreground="{DynamicResource TextPrimary}" />
+                                                            <TextBlock Text="{Binding Reason}"
+                                                                       FontSize="11"
+                                                                       Foreground="{DynamicResource TextMuted}"
+                                                                       IsVisible="{Binding Reason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                        </StackPanel>
+                                                    </DockPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <!-- No custom rules notice -->
+                                    <TextBlock Text="No custom rules — built-in defaults apply."
+                                               FontSize="11" Foreground="{DynamicResource TextMuted}"
+                                               IsVisible="{Binding SelectedServer.TrustRules.Count, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=0}" />
+
+                                    <!-- Add rule form -->
+                                    <Border Background="{DynamicResource SurfaceBackground}"
+                                            BorderBrush="{DynamicResource SurfaceBorder}"
+                                            BorderThickness="1" CornerRadius="8"
+                                            Padding="12,10">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Text="Add Rule" FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextSecondary}" />
+                                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" >
+                                                <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4" Margin="0,0,8,0">
+                                                    <TextBlock Text="Tool Pattern (glob)" FontSize="11" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextSecondary}" />
+                                                    <TextBox Text="{Binding NewRulePattern}"
+                                                             Watermark="e.g. delete_* or *_remove"
+                                                             FontFamily="Consolas,Menlo,monospace"
+                                                             FontSize="12" CornerRadius="6" Padding="8,6" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4" Margin="0,0,8,0">
+                                                    <TextBlock Text="Reason (optional)" FontSize="11" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextSecondary}" />
+                                                    <TextBox Text="{Binding NewRuleReason}"
+                                                             Watermark="e.g. Bulk deletes require manager approval"
+                                                             FontSize="12" CornerRadius="6" Padding="8,6" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Row="2" Grid.Column="0" Spacing="4" Margin="0,0,8,0">
+                                                    <TextBlock Text="Action" FontSize="11" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextSecondary}" />
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <RadioButton Content="Allow"
+                                                                     IsChecked="{Binding NewRuleAction, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=Allow}"
+                                                                     FontSize="12" />
+                                                        <RadioButton Content="Require Confirmation"
+                                                                     IsChecked="{Binding NewRuleAction, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=RequireConfirmation}"
+                                                                     FontSize="12" />
+                                                        <RadioButton Content="Block"
+                                                                     IsChecked="{Binding NewRuleAction, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=Block}"
+                                                                     FontSize="12" />
+                                                    </StackPanel>
+                                                </StackPanel>
+                                                <Button Grid.Row="0" Grid.RowSpan="3" Grid.Column="1"
+                                                        Content="Add"
+                                                        Command="{Binding AddTrustRuleCommand}"
+                                                        VerticalAlignment="Center"
+                                                        Padding="16,8" CornerRadius="6"
+                                                        Background="{DynamicResource BrandPrimary}"
+                                                        Foreground="White" FontSize="12" />
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
                     </Border>
                 </Panel>
 

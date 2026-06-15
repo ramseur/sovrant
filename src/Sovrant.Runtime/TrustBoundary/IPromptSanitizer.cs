@@ -15,4 +15,13 @@ public interface IPromptSanitizer
 
     /// <summary>Restores placeholders in a response string using the redaction map.</summary>
     string Restore(string response, RedactionMap map);
+
+    /// <summary>
+    /// Sanitizes a raw string one-way — no <see cref="RedactionMap"/> is kept and
+    /// redactions cannot be restored. Use for knowledge content injected into the
+    /// system prompt (Step B) and for tool results stored in history and
+    /// <c>session_entries</c> (Step C), where PII must never appear in storage or
+    /// reach the LLM. Returns the input unchanged when sanitization is disabled.
+    /// </summary>
+    string SanitizeRawText(string text);
 }

@@ -104,18 +104,26 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITool, EnterWorktreeTool>();
         services.AddSingleton<ITool, ExitWorktreeTool>();
 
-        // Skill system — registry, runner, tools
-        services.AddSingleton<SkillRegistry>();
+        // Skill system — registry reads/writes IKnowledgeStore (Phase 112)
+        services.AddSingleton<SkillRegistry>(sp => new SkillRegistry(
+            sp.GetRequiredService<Sovrant.Runtime.Knowledge.IKnowledgeStore>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SkillRegistry>>()));
         services.AddSingleton<SkillRunner>();
-        services.AddSingleton<ICapabilityCatalog, CapabilityCatalog>();
+        services.AddSingleton<ICapabilityCatalog>(sp => new CapabilityCatalog(
+            sp.GetRequiredService<SkillRegistry>(),
+            sp.GetRequiredService<Sovrant.Agents.Templates.AgentTemplateRegistry>(),
+            sp.GetRequiredService<Sovrant.Tools.Templates.UserToolTemplateRegistry>()));
         services.AddSingleton<ITool, SkillTool>();
-        services.AddSingleton<ITool, SkillCreateTool>();
+        services.AddSingleton<ITool>(sp => new SkillCreateTool(
+            sp.GetRequiredService<SkillRegistry>(),
+            sp.GetRequiredService<Sovrant.Runtime.Knowledge.IKnowledgeStore>()));
         services.AddSingleton<ITool, ToolSearchTool>();
 
-        // User-authored markdown tool templates (3-tier filesystem). Distinct from
-        // ITool — these are instructional guides shown in the Knowledge UI; they
-        // do not register handlers in IToolRegistry.
-        services.AddSingleton<Sovrant.Tools.Templates.UserToolTemplateRegistry>();
+        // User-authored tool templates — DB-backed (Phase 112C).
+        services.AddSingleton<Sovrant.Tools.Templates.UserToolTemplateRegistry>(sp =>
+            new Sovrant.Tools.Templates.UserToolTemplateRegistry(
+                sp.GetRequiredService<Sovrant.Runtime.Knowledge.IKnowledgeStore>(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Sovrant.Tools.Templates.UserToolTemplateRegistry>>()));
 
         // MCP resource tools, dynamic proxy, and OAuth
         services.AddSingleton<ITool, ListMcpResourcesTool>();
@@ -188,8 +196,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IProjectTemplate, ZigCliScaffold>();
         services.AddSingleton<IProjectTemplate, CppCmakeScaffold>();
 
-        // Phase 73 — code creation tools
-        services.AddSingleton<ITool, CodeCreateTool>();
+        // Phase 73 — code creation tools (Phase 108: inject IKnowledgeStore for language guidelines)
+        services.AddSingleton<ITool>(sp => new CodeCreateTool(
+            sp.GetRequiredService<ProjectTemplateRegistry>(),
+            sp.GetRequiredService<Sovrant.Runtime.Artifacts.IArtifactStore>(),
+            sp.GetService<Sovrant.Runtime.Knowledge.IKnowledgeStore>()));
         services.AddSingleton<ITool, CodeCreateMultiTool>();
         services.AddSingleton<ITool, CodeListTemplatesTool>();
 

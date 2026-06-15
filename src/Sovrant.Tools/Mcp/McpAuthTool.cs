@@ -38,7 +38,7 @@ public sealed class McpAuthTool : ITool
 
         try
         {
-            var url = await _oauthService.GenerateAuthorizationUrlAsync(serverName, ct)
+            var url = await _oauthService.GenerateAuthorizationUrlAsync(serverName, ct: ct)
                 .ConfigureAwait(false);
 
             return $"""

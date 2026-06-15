@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Markdig;
+using Markdig.Extensions.Tables;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 
@@ -159,6 +160,9 @@ public class SafeMarkdownPresenter : ContentControl
                     Child = quotePanel,
                     Margin = new Thickness(0, 4),
                 };
+
+            case Table table:
+                return RenderTable(table);
 
             default:
                 return null;
@@ -418,6 +422,87 @@ public class SafeMarkdownPresenter : ContentControl
         while (sb.Length > 0 && sb[sb.Length - 1] is '\r' or '\n')
             sb.Length--;
         return sb.ToString();
+    }
+
+    private Control RenderTable(Table table)
+    {
+        var rows = table.OfType<TableRow>().ToList();
+        if (rows.Count == 0) return new TextBlock { Text = string.Empty };
+
+        var colCount = rows.Max(r => r.Count);
+        if (colCount == 0) return new TextBlock { Text = string.Empty };
+
+        var grid = new Grid { Margin = new Thickness(0, 4) };
+        for (var c = 0; c < colCount; c++)
+            grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+
+        for (var r = 0; r < rows.Count; r++)
+        {
+            grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            var row = rows[r];
+            for (var c = 0; c < row.Count; c++)
+            {
+                var cell = (TableCell)row[c];
+                var cellText = GetCellText(cell);
+                var isHeader = row.IsHeader;
+
+                var cellBorder = new Border
+                {
+                    BorderBrush = ThemeBrush("SurfaceBorder", "#3A3A3A"),
+                    BorderThickness = new Thickness(0, 0, 1, 1),
+                    Padding = new Thickness(8, 5),
+                    Background = isHeader
+                        ? ThemeBrush("SurfaceHover", "#2A2A2A")
+                        : Brushes.Transparent,
+                    Child = new SelectableTextBlock
+                    {
+                        Text = cellText,
+                        FontSize = 13,
+                        FontWeight = isHeader ? FontWeight.SemiBold : FontWeight.Normal,
+                        TextWrapping = TextWrapping.Wrap,
+                        Foreground = ThemeBrush("TextPrimary", "#E0E0E0"),
+                    },
+                };
+
+                Grid.SetRow(cellBorder, r);
+                Grid.SetColumn(cellBorder, c);
+                grid.Children.Add(cellBorder);
+            }
+        }
+
+        return new Border
+        {
+            BorderBrush = ThemeBrush("SurfaceBorder", "#3A3A3A"),
+            BorderThickness = new Thickness(1, 1, 0, 0),
+            Margin = new Thickness(0, 4),
+            Child = grid,
+        };
+    }
+
+    private static string GetCellText(TableCell cell)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var block in cell)
+        {
+            if (block is not ParagraphBlock para || para.Inline is null) continue;
+            foreach (var inline in para.Inline)
+            {
+                switch (inline)
+                {
+                    case LiteralInline lit:
+                        sb.Append(lit.Content.ToString());
+                        break;
+                    case EmphasisInline emp:
+                        foreach (var child in emp)
+                            if (child is LiteralInline l) sb.Append(l.Content.ToString());
+                        break;
+                    case CodeInline code:
+                        sb.Append(code.Content);
+                        break;
+                }
+            }
+        }
+        return sb.ToString().Trim();
     }
 
     private SelectableTextBlock CreateFallback(string text) => new()

@@ -11,6 +11,11 @@
         <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="12">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+                    <Button Content="+ New"
+                            Command="{Binding NewSkillCommand}"
+                            Padding="12,6" CornerRadius="6"
+                            Background="{DynamicResource BrandPrimary}"
+                            Foreground="White" />
                     <Button Content="Refresh"
                             Command="{Binding RefreshCommand}"
                             Padding="12,6"
@@ -93,33 +98,123 @@
 
             <!-- Detail pane -->
             <Grid Grid.Column="2">
+
+                <!-- Empty state -->
                 <Border CornerRadius="10"
                         Background="{DynamicResource SurfaceCard}"
                         BorderBrush="{DynamicResource SurfaceBorder}"
-                        BorderThickness="1"
-                        Padding="20,16"
+                        BorderThickness="1" Padding="20,16"
                         IsVisible="{Binding !SelectedSkill}">
                     <TextBlock Text="Select a skill to view its details"
-                               FontSize="14"
-                               Foreground="{DynamicResource TextMuted}"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
+                               FontSize="14" Foreground="{DynamicResource TextMuted}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
+
+                <!-- Detail / Edit pane -->
                 <Border CornerRadius="10"
                         Background="{DynamicResource SurfaceCard}"
                         BorderBrush="{DynamicResource SurfaceBorder}"
-                        BorderThickness="1"
-                        Padding="20,16"
+                        BorderThickness="1" Padding="20,16"
                         IsVisible="{Binding !!SelectedSkill}">
-                    <ScrollViewer>
-                        <ContentControl Content="{Binding SelectedSkill}">
-                            <ContentControl.ContentTemplate>
-                                <DataTemplate DataType="vm:SkillItemViewModel">
-                                    <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
-                                </DataTemplate>
-                            </ContentControl.ContentTemplate>
-                        </ContentControl>
-                    </ScrollViewer>
+                    <Panel>
+
+                        <!-- Read view -->
+                        <DockPanel IsVisible="{Binding !IsEditing}">
+                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal"
+                                        HorizontalAlignment="Right" Spacing="6" Margin="0,0,0,12">
+                                <Button Content="Revert"
+                                        Command="{Binding RevertSkillCommand}"
+                                        IsVisible="{Binding SelectedSkill.IsUserAuthored}"
+                                        Padding="10,5" CornerRadius="6" FontSize="12"
+                                        Background="Transparent"
+                                        Foreground="{DynamicResource TextSecondary}" />
+                                <Button Content="Delete"
+                                        Command="{Binding DeleteSkillCommand}"
+                                        IsVisible="{Binding SelectedSkill.IsUserAuthored}"
+                                        Padding="10,5" CornerRadius="6" FontSize="12"
+                                        Background="Transparent"
+                                        Foreground="{DynamicResource StatusFail}" />
+                                <Button Content="Edit"
+                                        Command="{Binding EditSkillCommand}"
+                                        IsVisible="{Binding CanEdit}"
+                                        Padding="10,5" CornerRadius="6" FontSize="12"
+                                        Background="{DynamicResource BrandPrimary}"
+                                        Foreground="White" />
+                            </StackPanel>
+                            <ScrollViewer>
+                                <ContentControl Content="{Binding SelectedSkill}">
+                                    <ContentControl.ContentTemplate>
+                                        <DataTemplate DataType="vm:SkillItemViewModel">
+                                            <ctrl:SafeMarkdownPresenter Markdown="{Binding Markdown}" />
+                                        </DataTemplate>
+                                    </ContentControl.ContentTemplate>
+                                </ContentControl>
+                            </ScrollViewer>
+                        </DockPanel>
+
+                        <!-- Edit view -->
+                        <ScrollViewer IsVisible="{Binding IsEditing}">
+                            <StackPanel Spacing="14" MaxWidth="680">
+                                <StackPanel Spacing="4">
+                                    <TextBlock FontSize="18" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               Text="New Skill"
+                                               IsVisible="{Binding EditingSlug, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+                                    <TextBlock FontSize="18" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               Text="Edit Skill"
+                                               IsVisible="{Binding EditingSlug, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                    <TextBlock FontSize="12" Foreground="{DynamicResource TextMuted}"
+                                               Text="Saves as your override — original unchanged. Use Revert to restore."
+                                               IsVisible="{Binding EditingSlug, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                </StackPanel>
+
+                                <Border IsVisible="{Binding ActiveEditor.ValidationError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                        Background="#332d1b1b" BorderBrush="#c94a4a"
+                                        BorderThickness="1" CornerRadius="6" Padding="12,8">
+                                    <TextBlock Text="{Binding ActiveEditor.ValidationError}"
+                                               FontSize="12" Foreground="#ff8080" TextWrapping="Wrap" />
+                                </Border>
+
+                                <StackPanel Spacing="4">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" FontSize="11"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   Text="{Binding ActiveEditor.WordCount, StringFormat='{}{0} words'}" />
+                                        <TextBlock Text="Source (YAML frontmatter + Markdown body)"
+                                                   FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextSecondary}" />
+                                    </DockPanel>
+                                    <TextBox Text="{Binding ActiveEditor.Source, Mode=TwoWay}"
+                                             AcceptsReturn="True" MinHeight="380"
+                                             CornerRadius="6" Padding="10,8"
+                                             FontFamily="Consolas,Menlo,monospace" FontSize="12" />
+                                </StackPanel>
+
+                                <Border IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                        Background="#332d1b1b" BorderBrush="#c94a4a"
+                                        BorderThickness="1" CornerRadius="6" Padding="12,8">
+                                    <TextBlock Text="{Binding ErrorMessage}"
+                                               FontSize="12" Foreground="#ff8080" TextWrapping="Wrap" />
+                                </Border>
+
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Content="Save"
+                                            Command="{Binding ActiveEditor.SaveCommand}"
+                                            IsEnabled="{Binding ActiveEditor.ValidationError, Converter={x:Static ObjectConverters.IsNull}}"
+                                            Padding="16,8" CornerRadius="6"
+                                            Background="{DynamicResource BrandPrimary}"
+                                            Foreground="White" />
+                                    <Button Content="Cancel"
+                                            Command="{Binding ActiveEditor.CancelCommand}"
+                                            Padding="16,8" CornerRadius="6"
+                                            Background="Transparent"
+                                            Foreground="{DynamicResource TextSecondary}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                    </Panel>
                 </Border>
             </Grid>
         </Grid>

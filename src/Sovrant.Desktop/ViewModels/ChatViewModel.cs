@@ -8,6 +8,7 @@ using Sovrant.Desktop.Adapters;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Governance;
+using Sovrant.Runtime.Knowledge;
 using Sovrant.Runtime.Session;
 
 namespace Sovrant.Desktop.ViewModels;
@@ -17,6 +18,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private readonly IRuntimeSessionPool _sessionPool;
     private readonly ISessionStore _sessionStore;
     private readonly IAuditStore _auditStore;
+    private readonly IKnowledgeAttributionStore? _attributionStore;
     private readonly SlashCommandDispatcher _commandDispatcher;
     private readonly DesktopConfirmationHandler? _confirmationHandler;
     private readonly ActiveContextViewModel _activeContext;
@@ -26,8 +28,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     // True while a turn for this session is owned by _activeSessions.
     private bool _isBackgroundSession;
 
-    private string? _agentName;
     private string? _agentSystemPrompt;
+
+    [ObservableProperty]
+    private string? _agentName;
 
     [ObservableProperty]
     private string _sessionId;
@@ -68,11 +72,13 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         SlashCommandDispatcher commandDispatcher, ActiveContextViewModel activeContext,
         ActiveSessionsViewModel activeSessions,
         SovrantConfig config,
-        DesktopConfirmationHandler? confirmationHandler = null)
+        DesktopConfirmationHandler? confirmationHandler = null,
+        IKnowledgeAttributionStore? attributionStore = null)
     {
         _sessionPool = sessionPool;
         _sessionStore = sessionStore;
         _auditStore = auditStore;
+        _attributionStore = attributionStore;
         _commandDispatcher = commandDispatcher;
         _confirmationHandler = confirmationHandler;
         _activeContext = activeContext;
@@ -83,6 +89,17 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         if (_confirmationHandler is not null)
             _confirmationHandler.ConfirmationRequested += OnConfirmationRequested;
 
+        _activeContext.PropertyChanged += OnActiveContextPropertyChanged;
+    }
+
+    private void OnActiveContextPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ActiveContextViewModel.ActiveAgentName)
+            && _activeContext.ActiveAgentName is null)
+        {
+            AgentName = null;
+            _agentSystemPrompt = null;
+        }
     }
 
     private void OnConfirmationRequested(ConfirmationRequest request)
@@ -97,8 +114,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     public void SetAgentScope(string agentName, string? systemPrompt)
     {
-        _agentName = agentName;
+        AgentName = agentName;
         _agentSystemPrompt = systemPrompt;
+        _activeContext.ActiveAgentName = agentName;
     }
 
     public void SeedInput(string text)
@@ -113,6 +131,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
         var storedPrivacy = await _sessionStore.GetIsPrivateAsync(sessionId, ct).ConfigureAwait(false);
         IsSessionPrivate = storedPrivacy ?? true;
+
+        var storedAgent = await _sessionStore.GetAgentNameAsync(sessionId, ct).ConfigureAwait(false);
+        AgentName = storedAgent;
+        _activeContext.ActiveAgentName = storedAgent;
 
         var entries = await _sessionStore.LoadAsync(sessionId, ownerUserId: App.SovrantUserId, ct: ct);
         foreach (var entry in entries)
@@ -229,8 +251,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var assistantMsg = new MessageViewModel { Role = "assistant", ModelName = _config.Model };
         var isFirstMessage = Messages.All(m => m.Role != "user");
+        // Phase 116 H — turn index = number of assistant messages already in the list.
+        var turnIndex = Messages.Count(m => !m.IsUser);
+        var assistantMsg = new MessageViewModel { Role = "assistant", ModelName = _config.Model, TurnIndex = turnIndex };
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
@@ -248,6 +272,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             title = text.Length > 60 ? text[..60] + "..." : text;
             await _sessionStore.SetTitleAsync(SessionId, title, ownerUserId: App.SovrantUserId, ct: CancellationToken.None)
                 .ConfigureAwait(false);
+            if (AgentName is not null)
+                await _sessionStore.SetAgentNameAsync(SessionId, AgentName, ownerUserId: App.SovrantUserId, ct: CancellationToken.None)
+                    .ConfigureAwait(false);
             await Dispatcher.UIThread.InvokeAsync(() => TurnCompleted?.Invoke());
         }
 
@@ -271,7 +298,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
             var pooled = await _sessionPool.GetOrCreateAsync(SessionId,
                 agentSystemPrompt: _agentSystemPrompt,
-                agentName: _agentName,
+                agentName: AgentName,
                 ct: token).ConfigureAwait(false);
 
             // Sync privacy — session row may have just been created with default
@@ -308,10 +335,30 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         finally
         {
             _sessionPool.EndTurn(SessionId, App.SovrantUserId);
+
+            // Phase 116 H — load attributions off the UI thread before the UI update.
+            List<KnowledgeAttribution>? sources = null;
+#pragma warning disable CA1031
+            try
+            {
+                if (_attributionStore is not null)
+                {
+                    var all = await _attributionStore.GetBySessionAsync(SessionId, CancellationToken.None);
+                    sources = all.Where(a => a.TurnIndex == assistantMsg.TurnIndex).ToList();
+                }
+            }
+            catch { /* best-effort */ }
+#pragma warning restore CA1031
+
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 IsSending = false;
                 assistantMsg.CompleteStreaming();
+                if (sources is not null)
+                {
+                    foreach (var a in sources) assistantMsg.Sources.Add(a);
+                    if (sources.Count > 0) assistantMsg.HasSources = true;
+                }
                 TurnCompleted?.Invoke();
             });
         }
@@ -365,6 +412,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
             if (_confirmationHandler is not null)
                 _confirmationHandler.ConfirmationRequested -= OnConfirmationRequested;
+
+            _activeContext.PropertyChanged -= OnActiveContextPropertyChanged;
         }
     }
 

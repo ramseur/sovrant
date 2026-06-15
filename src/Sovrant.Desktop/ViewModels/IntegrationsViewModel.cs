@@ -1,10 +1,13 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Runtime.Auth;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Mcp;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Desktop.ViewModels;
 
@@ -13,7 +16,12 @@ public partial class IntegrationsViewModel : ViewModelBase
     private readonly IMcpServerStore _serverStore;
     private readonly McpClientRegistry _clientRegistry;
     private readonly McpToolRegistrar _registrar;
+    private readonly McpOAuthService _oauthService;
+    private readonly IMcpTrustRuleStore _trustRuleStore;
+    private readonly IWorkspaceService _workspaceSvc;
+    private readonly IPrincipalAccessor _principal;
     private readonly ActiveContextViewModel? _activeContext;
+    private string? _workspaceId;
 
     // ── Tab ──────────────────────────────────────────────────────────────────
     /// <summary>"gallery" | "connected"</summary>
@@ -51,6 +59,9 @@ public partial class IntegrationsViewModel : ViewModelBase
     [ObservableProperty]
     private string _newServerJson = string.Empty;
 
+    [ObservableProperty]
+    private string _newServerEnvVars = string.Empty;
+
     /// <summary>"json" | "stdio" | "http"</summary>
     [ObservableProperty]
     private string _addMode = "json";
@@ -74,6 +85,22 @@ public partial class IntegrationsViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isGalleryConnecting;
 
+    [ObservableProperty]
+    private bool _isOAuthWaiting;
+
+    [ObservableProperty]
+    private string _galleryClientId = string.Empty;
+
+    // Trust rules form state
+    [ObservableProperty]
+    private string _newRulePattern = string.Empty;
+
+    [ObservableProperty]
+    private string _newRuleAction = "RequireConfirmation";
+
+    [ObservableProperty]
+    private string _newRuleReason = string.Empty;
+
     // All catalog entries (for lookup)
     public ObservableCollection<CatalogEntryViewModel> CatalogEntries { get; } = [];
 
@@ -94,11 +121,23 @@ public partial class IntegrationsViewModel : ViewModelBase
     public bool IsGroupTab1Active => SelectedGroupTabIndex == 1;
     public string ActiveGroupTab => SelectedGroupTabIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-    public IntegrationsViewModel(IMcpServerStore serverStore, McpClientRegistry clientRegistry, McpToolRegistrar registrar, ActiveContextViewModel? activeContext = null)
+    public IntegrationsViewModel(
+        IMcpServerStore serverStore,
+        McpClientRegistry clientRegistry,
+        McpToolRegistrar registrar,
+        McpOAuthService oauthService,
+        IMcpTrustRuleStore trustRuleStore,
+        IWorkspaceService workspaceSvc,
+        IPrincipalAccessor principal,
+        ActiveContextViewModel? activeContext = null)
     {
         _serverStore = serverStore;
         _clientRegistry = clientRegistry;
         _registrar = registrar;
+        _oauthService = oauthService;
+        _trustRuleStore = trustRuleStore;
+        _workspaceSvc = workspaceSvc;
+        _principal = principal;
         _activeContext = activeContext;
 
         var seenGroups = new HashSet<string>(StringComparer.Ordinal);
@@ -111,7 +150,18 @@ public partial class IntegrationsViewModel : ViewModelBase
                 GalleryDisplayEntries.Add(vm);
         }
 
-        _ = LoadServersAsync();
+        _ = InitAsync();
+    }
+
+    private async Task InitAsync()
+    {
+        var uid = _principal.UserId;
+        if (uid is not null)
+        {
+            var ws = await _workspaceSvc.GetPersonalAsync(uid).ConfigureAwait(true);
+            _workspaceId = ws?.WorkspaceId;
+        }
+        await LoadServersAsync().ConfigureAwait(true);
     }
 
     // ── Tab commands ─────────────────────────────────────────────────────────
@@ -161,6 +211,7 @@ public partial class IntegrationsViewModel : ViewModelBase
         }
         GalleryApiKey = string.Empty;
         GalleryUrl = string.Empty;
+        GalleryClientId = string.Empty;
         StatusMessage = string.Empty;
     }
 
@@ -172,6 +223,7 @@ public partial class IntegrationsViewModel : ViewModelBase
         SelectedCatalogEntry = SelectedGroupVariants[idx];
         GalleryApiKey = string.Empty;
         GalleryUrl = string.Empty;
+        GalleryClientId = string.Empty;
     }
 
     [RelayCommand]
@@ -211,6 +263,78 @@ public partial class IntegrationsViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
+    private async Task ConnectWithOAuthAsync()
+    {
+        var entry = SelectedCatalogEntry;
+        if (entry is null || entry.Kind == IntegrationKind.LlmProvider) return;
+
+        if (string.IsNullOrWhiteSpace(GalleryClientId))
+        {
+            StatusMessage = "OAuth Client ID is required.";
+            return;
+        }
+
+        IsGalleryConnecting = true;
+        IsOAuthWaiting = false;
+        StatusMessage = string.Empty;
+
+        try
+        {
+            var config = BuildOAuthConfig(entry, GalleryClientId.Trim(), GalleryUrl.Trim());
+            await _serverStore.UpsertAsync(entry.Id, config).ConfigureAwait(true);
+
+            await using var callbackListener = McpOAuthCallbackListener.Start();
+
+            var authUrl = await _oauthService.GenerateAuthorizationUrlAsync(
+                entry.Id, callbackListener.RedirectUri).ConfigureAwait(true);
+
+            Process.Start(new ProcessStartInfo(authUrl) { UseShellExecute = true });
+
+            IsOAuthWaiting = true;
+            StatusMessage = "Browser opened. Waiting for authorization...";
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+            var (code, state) = await callbackListener.WaitForCallbackAsync(cts.Token).ConfigureAwait(true);
+
+            await _oauthService.ExchangeCodeAsync(state, code).ConfigureAwait(true);
+
+            ActiveTab = "connected";
+            await LoadServersAsync().ConfigureAwait(true);
+            SelectedServer = FilteredServers.FirstOrDefault(s => s.Name == entry.Id);
+            StatusMessage = $"Connected to '{entry.Name}' via OAuth.";
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "Authorization timed out. Please try again.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"OAuth failed: {ex.Message}";
+        }
+        finally
+        {
+            IsGalleryConnecting = false;
+            IsOAuthWaiting = false;
+        }
+    }
+
+    private static McpServerConfig BuildOAuthConfig(CatalogEntryViewModel entry, string clientId, string endpointOverride)
+    {
+        var urlStr = !string.IsNullOrEmpty(entry.EndpointTemplate) ? entry.EndpointTemplate : endpointOverride;
+        Uri.TryCreate(urlStr, UriKind.Absolute, out var url);
+
+        var oauthConfig = new McpOAuthConfig
+        {
+            ClientId = clientId,
+            AuthorizationUrl = entry.OAuthAuthorizationUrl,
+            TokenUrl = entry.OAuthTokenUrl,
+            Scopes = (IReadOnlyList<string>?)entry.OAuthScopes ?? [],
+        };
+
+        return new McpServerConfig { Url = url, OAuthConfig = oauthConfig };
+    }
+
     private static McpServerConfig BuildConfig(CatalogEntryViewModel entry, string apiKey, string endpoint)
     {
         if (entry.Kind == IntegrationKind.McpStdio)
@@ -225,7 +349,7 @@ public partial class IntegrationsViewModel : ViewModelBase
                     .Replace("{API_KEY}", apiKey, StringComparison.Ordinal))
                 .ToArray();
 
-            return new McpServerConfig { Command = entry.DefaultCommand!, Args = args, Env = env };
+            return new McpServerConfig { Command = entry.DefaultCommand ?? string.Empty, Args = args, Env = env };
         }
         else
         {
@@ -297,7 +421,8 @@ public partial class IntegrationsViewModel : ViewModelBase
             var args = string.IsNullOrWhiteSpace(NewServerArgs)
                 ? []
                 : NewServerArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var config = new McpServerConfig { Command = command, Args = args, Env = new Dictionary<string, string>(StringComparer.Ordinal) };
+            var env = ParseEnvVarLines(NewServerEnvVars);
+            var config = new McpServerConfig { Command = command, Args = args, Env = env };
             await _serverStore.UpsertAsync(name, config).ConfigureAwait(true);
             ResetAddForm();
             await ConnectAndRefreshAsync(name, config).ConfigureAwait(true);
@@ -353,16 +478,21 @@ public partial class IntegrationsViewModel : ViewModelBase
             if (entries.Count == 0) { StatusMessage = "No valid mcpServers entries found."; return; }
             foreach (var (name, config) in entries)
                 await _serverStore.UpsertAsync(name, config).ConfigureAwait(true);
+            var names = string.Join(", ", entries.Keys.Select(n => $"'{n}'"));
+            var envCount = entries.Values.Sum(c => c.Env.Count);
             ResetAddForm();
             foreach (var (name, config) in entries)
                 await ConnectAndRefreshAsync(name, config).ConfigureAwait(true);
+            StatusMessage = envCount > 0
+                ? $"Imported: {names} ({envCount} env var{(envCount == 1 ? "" : "s")})."
+                : $"Imported: {names}.";
         }
         catch (Exception ex) { StatusMessage = $"Failed to add server: {ex.Message}"; }
     }
 
     private void ResetAddForm()
     {
-        NewServerName = NewServerCommand = NewServerArgs = NewServerUrl = NewServerBearer = NewServerHeadersJson = NewServerJson = string.Empty;
+        NewServerName = NewServerCommand = NewServerArgs = NewServerUrl = NewServerBearer = NewServerHeadersJson = NewServerJson = NewServerEnvVars = string.Empty;
     }
 
     [RelayCommand]
@@ -448,6 +578,137 @@ public partial class IntegrationsViewModel : ViewModelBase
         }
     }
 
+    partial void OnSelectedServerChanged(McpServerItem? value)
+    {
+        if (value is not null)
+            _ = LoadTrustRulesAsync(value);
+    }
+
+    // ── Env var editing commands ──────────────────────────────────────────────
+    [RelayCommand]
+    private void StartEditEnv()
+    {
+        var server = SelectedServer;
+        if (server is null) return;
+        server.EnvEditRows.Clear();
+        foreach (var (k, v) in server.EnvVars)
+            server.EnvEditRows.Add(new EnvVarRowViewModel { Key = k, Value = v });
+        server.EnvStatus = string.Empty;
+        server.EnvEditing = true;
+    }
+
+    [RelayCommand]
+    private void AddEnvRow()
+    {
+        SelectedServer?.EnvEditRows.Add(new EnvVarRowViewModel());
+    }
+
+    [RelayCommand]
+    private void RemoveEnvRow(EnvVarRowViewModel row)
+    {
+        SelectedServer?.EnvEditRows.Remove(row);
+    }
+
+    [RelayCommand]
+    private void CancelEditEnv()
+    {
+        var server = SelectedServer;
+        if (server is null) return;
+        server.EnvEditing = false;
+        server.EnvEditRows.Clear();
+        server.EnvStatus = string.Empty;
+    }
+
+    [RelayCommand]
+    private async Task SaveEnvAsync()
+    {
+        var server = SelectedServer;
+        if (server is null) return;
+        try
+        {
+            var current = await _serverStore.GetAsync(server.Name).ConfigureAwait(true);
+            if (current is null) { server.EnvStatus = "Server not found."; return; }
+            var newEnv = server.EnvEditRows
+                .Where(r => !string.IsNullOrWhiteSpace(r.Key))
+                .ToDictionary(r => r.Key.Trim(), r => r.Value, StringComparer.Ordinal);
+            var updated = new McpServerConfig
+            {
+                Command = current.Command,
+                Args = current.Args,
+                Url = current.Url,
+                Headers = current.Headers,
+                OAuthConfig = current.OAuthConfig,
+                Env = newEnv,
+            };
+            await _serverStore.UpsertAsync(server.Name, updated).ConfigureAwait(true);
+            var savedCount = newEnv.Count;
+            var serverName = server.Name;
+            await LoadServersAsync().ConfigureAwait(true);
+            SelectedServer = FilteredServers.FirstOrDefault(s => s.Name == serverName);
+            if (SelectedServer is not null)
+                SelectedServer.EnvStatus = $"Saved {savedCount} variable{(savedCount == 1 ? "" : "s")}.";
+        }
+        catch (Exception ex) { server.EnvStatus = $"Failed: {ex.Message}"; }
+    }
+
+    private async Task LoadTrustRulesAsync(McpServerItem server)
+    {
+        if (_workspaceId is null) return;
+        var rules = await _trustRuleStore.GetRulesAsync(_workspaceId, server.Name).ConfigureAwait(true);
+        server.TrustRules.Clear();
+        foreach (var r in rules)
+        {
+            var ruleId = r.RuleId;
+            server.TrustRules.Add(new TrustRuleViewModel
+            {
+                RuleId = ruleId,
+                ToolPattern = r.ToolPattern,
+                Action = r.Action.ToString(),
+                Reason = r.Reason,
+                RemoveCommand = new RelayCommand(() => _ = RemoveTrustRuleByIdAsync(ruleId, server)),
+            });
+        }
+    }
+
+    private async Task RemoveTrustRuleByIdAsync(string ruleId, McpServerItem server)
+    {
+        if (_workspaceId is null) return;
+        await _trustRuleStore.DeleteAsync(ruleId, _workspaceId).ConfigureAwait(true);
+        StatusMessage = "Rule removed.";
+        await LoadTrustRulesAsync(server).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task AddTrustRule()
+    {
+        var server = SelectedServer;
+        if (server is null || string.IsNullOrWhiteSpace(NewRulePattern) || _workspaceId is null)
+        {
+            StatusMessage = "Tool pattern is required.";
+            return;
+        }
+        if (!Enum.TryParse<McpTrustAction>(NewRuleAction, out var action))
+        {
+            StatusMessage = "Invalid action.";
+            return;
+        }
+        var now = DateTimeOffset.UtcNow;
+        var rule = new McpTrustRule(
+            RuleId: Guid.NewGuid().ToString("N"),
+            WorkspaceId: _workspaceId,
+            ServerName: server.Name,
+            ToolPattern: NewRulePattern.Trim(),
+            Action: action,
+            Reason: string.IsNullOrWhiteSpace(NewRuleReason) ? null : NewRuleReason.Trim(),
+            CreatedAt: now,
+            UpdatedAt: now);
+        await _trustRuleStore.UpsertAsync(rule).ConfigureAwait(true);
+        NewRulePattern = string.Empty;
+        NewRuleReason = string.Empty;
+        StatusMessage = "Rule added.";
+        await LoadTrustRulesAsync(server).ConfigureAwait(true);
+    }
+
     private static string BuildServerMarkdown(McpServerItem server)
     {
         var sb = new StringBuilder();
@@ -505,6 +766,22 @@ public partial class IntegrationsViewModel : ViewModelBase
         return sb.ToString();
     }
 
+    private static Dictionary<string, string> ParseEnvVarLines(string text)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(text)) return result;
+        foreach (var line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var eq = line.IndexOf('=', StringComparison.Ordinal);
+            if (eq <= 0) continue;
+            var key = line[..eq].Trim();
+            var value = line[(eq + 1)..].Trim();
+            if (!string.IsNullOrEmpty(key))
+                result[key] = value;
+        }
+        return result;
+    }
+
     private static bool IsSensitiveKey(string key) =>
         key.Contains("KEY", StringComparison.OrdinalIgnoreCase)
         || key.Contains("SECRET", StringComparison.OrdinalIgnoreCase)
@@ -533,6 +810,7 @@ public partial class CatalogEntryViewModel : ViewModelBase
     public IntegrationTier Tier => _entry.Tier;
     public bool NeedsApiKey => _entry.NeedsApiKey;
     public bool NeedsEndpoint => _entry.NeedsEndpoint;
+    public bool RequiresOAuth => _entry.RequiresOAuth;
     public string? ApiKeyLabel => _entry.ApiKeyLabel;
     public string? ApiKeyEnvVar => _entry.ApiKeyEnvVar;
     public string? ApiKeyHeader => _entry.ApiKeyHeader;
@@ -544,6 +822,10 @@ public partial class CatalogEntryViewModel : ViewModelBase
     public string? GroupName => _entry.GroupName;
     public string? TabLabel => _entry.TabLabel;
     public bool IsLlmProvider => _entry.Kind == IntegrationKind.LlmProvider;
+    public Uri? OAuthAuthorizationUrl => _entry.OAuthAuthorizationUrl;
+    public Uri? OAuthTokenUrl => _entry.OAuthTokenUrl;
+    public IReadOnlyList<string>? OAuthScopes => _entry.OAuthScopes;
+    public bool HasOAuthMetadata => _entry.HasOAuthMetadata;
 }
 
 public partial class McpServerItem : ViewModelBase
@@ -556,9 +838,35 @@ public partial class McpServerItem : ViewModelBase
     [ObservableProperty] private bool _hasOAuth;
     [ObservableProperty] private bool _isConnected;
     [ObservableProperty] private int _toolCount;
+    [ObservableProperty] private bool _envEditing;
+    [ObservableProperty] private string _envStatus = string.Empty;
 
     public ObservableCollection<string> ToolNames { get; } = [];
+    public ObservableCollection<TrustRuleViewModel> TrustRules { get; } = [];
+    public ObservableCollection<EnvVarRowViewModel> EnvEditRows { get; } = [];
     public Dictionary<string, string> EnvVars { get; init; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> Headers { get; init; } = new(StringComparer.Ordinal);
     public string Markdown { get; set; } = string.Empty;
+}
+
+public partial class TrustRuleViewModel : ViewModelBase
+{
+    public string RuleId { get; init; } = string.Empty;
+    public string ToolPattern { get; init; } = string.Empty;
+    public string Action { get; init; } = string.Empty;
+    public string? Reason { get; init; }
+    public IRelayCommand? RemoveCommand { get; init; }
+
+    public string ActionBadgeColor => Action switch
+    {
+        "Block" => "#cc3333",
+        "Allow" => "#16a34a",
+        _ => "#d97706",
+    };
+}
+
+public partial class EnvVarRowViewModel : ViewModelBase
+{
+    [ObservableProperty] private string _key = string.Empty;
+    [ObservableProperty] private string _value = string.Empty;
 }

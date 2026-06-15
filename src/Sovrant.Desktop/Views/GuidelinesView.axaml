@@ -1,0 +1,173 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             x:Class="Sovrant.Desktop.Views.GuidelinesView"
+             x:DataType="vm:GuidelinesViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel>
+        <!-- Header -->
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="12">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+                    <Button Content="Refresh"
+                            Command="{Binding RefreshCommand}"
+                            Padding="12,6" CornerRadius="6"
+                            Background="Transparent"
+                            Foreground="{DynamicResource TextPrimary}" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="Code Templates" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock Text="Language coding conventions used by the scaffolding engine. Edit to customise for your workspace."
+                               FontSize="12" Foreground="{DynamicResource TextSecondary}" />
+                </StackPanel>
+            </DockPanel>
+            <TextBox Text="{Binding SearchText}"
+                     Watermark="Search guidelines..."
+                     CornerRadius="8" Padding="12,8"
+                     IsVisible="{Binding !IsEditing}" />
+        </StackPanel>
+
+        <!-- Master-detail -->
+        <Grid Margin="32,12,32,24" ColumnDefinitions="300,12,*">
+            <!-- List -->
+            <ScrollViewer Grid.Column="0" IsVisible="{Binding !IsEditing}">
+                <ItemsControl ItemsSource="{Binding FilteredGuidelines}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:GuidelineItemViewModel">
+                            <Button Command="{Binding $parent[ItemsControl].((vm:GuidelinesViewModel)DataContext).SelectGuidelineCommand}"
+                                    CommandParameter="{Binding}"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Padding="0" Margin="0,2"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Cursor="Hand">
+                                <Border Padding="12,8" CornerRadius="8"
+                                        Background="{DynamicResource SurfaceCard}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                        BorderThickness="1">
+                                    <StackPanel Spacing="4">
+                                        <DockPanel>
+                                            <Border DockPanel.Dock="Right"
+                                                    Padding="5,2" CornerRadius="4"
+                                                    Background="{DynamicResource BrandPrimary}"
+                                                    IsVisible="{Binding HasUserOverride}">
+                                                <TextBlock Text="user" FontSize="10" Foreground="White" FontWeight="SemiBold" />
+                                            </Border>
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontSize="13" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource BrandPrimary}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding Description}"
+                                                   FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxLines="2"
+                                                   Foreground="{DynamicResource TextSecondary}" />
+                                    </StackPanel>
+                                </Border>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Detail / Edit pane -->
+            <Grid Grid.Column="2">
+                <!-- Empty state -->
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1" Padding="20,16"
+                        IsVisible="{Binding !SelectedGuideline}">
+                    <TextBlock Text="Select a language to view its coding guidelines"
+                               FontSize="14" Foreground="{DynamicResource TextMuted}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+
+                <!-- Detail view (not editing) -->
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1" Padding="20,16"
+                        IsVisible="{Binding !!SelectedGuideline}">
+                    <DockPanel IsVisible="{Binding !IsEditing}">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal"
+                                    HorizontalAlignment="Right" Spacing="6" Margin="0,0,0,12">
+                            <Button Content="Revert to built-in"
+                                    Command="{Binding RevertGuidelineCommand}"
+                                    IsVisible="{Binding SelectedGuideline.HasUserOverride}"
+                                    Padding="10,5" CornerRadius="6" FontSize="12"
+                                    Background="Transparent"
+                                    Foreground="{DynamicResource TextSecondary}" />
+                            <Button Content="Edit"
+                                    Command="{Binding BeginEditGuidelineCommand}"
+                                    Padding="10,5" CornerRadius="6" FontSize="12"
+                                    Background="{DynamicResource BrandPrimary}"
+                                    Foreground="White" />
+                        </StackPanel>
+                        <ScrollViewer>
+                            <ctrl:SafeMarkdownPresenter Markdown="{Binding DetailMarkdown}" />
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+
+                <!-- Edit form (editing) -->
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1" Padding="20,16"
+                        IsVisible="{Binding IsEditing}">
+                    <ScrollViewer>
+                        <StackPanel Spacing="14" MaxWidth="680">
+                            <TextBlock Text="Edit Guidelines" FontSize="18" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock FontSize="12" Foreground="{DynamicResource TextMuted}"
+                                       Text="Saves as your override — built-in unchanged. Use 'Revert' to restore the original." />
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Name" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextSecondary}" />
+                                <TextBox Text="{Binding EditName, Mode=TwoWay}"
+                                         CornerRadius="6" Padding="8,6" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Description" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextSecondary}" />
+                                <TextBox Text="{Binding EditDescription, Mode=TwoWay}"
+                                         CornerRadius="6" Padding="8,6" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Guidelines (Markdown)" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextSecondary}" />
+                                <TextBox Text="{Binding EditBody, Mode=TwoWay}"
+                                         AcceptsReturn="True" MinHeight="340"
+                                         CornerRadius="6" Padding="8,6"
+                                         FontFamily="Consolas,Menlo,monospace"
+                                         FontSize="12" />
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Save"
+                                        Command="{Binding SaveGuidelineCommand}"
+                                        Padding="16,8" CornerRadius="6"
+                                        Background="{DynamicResource BrandPrimary}"
+                                        Foreground="White" />
+                                <Button Content="Cancel"
+                                        Command="{Binding CancelEditGuidelineCommand}"
+                                        Padding="16,8" CornerRadius="6"
+                                        Background="Transparent"
+                                        Foreground="{DynamicResource TextSecondary}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</UserControl>

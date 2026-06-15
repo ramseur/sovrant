@@ -22,7 +22,7 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 
 **Runtime:** .NET 10 / C# 14
 **License:** Business Source License 1.1 — source-available, converts to Apache 2.0 on 2029-05-15. See [LICENSE](LICENSE).
-**Status:** 56 tools. 25 agent templates. 32 built-in skills. 141 server endpoints + SignalR hub. Command Center cockpit (Web + Desktop). Multi-user with login, registration, per-user API tokens, workspaces, projects, and ownership scoping. Team orchestration with per-team run profiles. Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 1,689 tests passing across 10 projects.
+**Status:** 58 tools. 25 agent templates. 32 built-in skills. 141 server endpoints + SignalR hub. Command Center cockpit + User Dashboard (Web + Desktop). Per-record privacy toggles. Optional Supabase/PostgreSQL backend. Multi-user with login, registration, per-user API tokens, workspaces, projects, and ownership scoping. Team orchestration with per-team run profiles. Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 2,222 tests passing across 10 projects.
 
 | Web | Desktop |
 |---|---|
@@ -35,6 +35,7 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 - [Quick Start](#quick-start)
   - [Vibe Coding (Cursor, Claude Code)](#vibe-coding-cursor-claude-code-or-any-ai-coding-tool)
 - [Command Center](#command-center)
+- [User Dashboard](#user-dashboard)
 - [Key Features](#key-features)
 - [Architecture](#architecture)
 - [Tools](#tools)
@@ -232,7 +233,7 @@ The Command Center (`/command`) is the homepage for Web and Desktop — a single
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ Command Center                                            ⟳ live · 2s │
+│ Command Center                                           ⟳ live · 30s │
 ├──────────────────────────────────────────────────────────────────────┤
 │ KIND       TITLE                       STATUS    STARTED   COST       │
 │ 🎯 mission Refactor the auth module    Running   12m ago   $0.42      │
@@ -242,12 +243,38 @@ The Command Center (`/command`) is the homepage for Web and Desktop — a single
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Live** — polled every 2 seconds; new activity appears within ~2s of a tool call, message, or run start.
-- **Read-only by design (v1).** Click a row to drill into the detail page that already exists for it. Pause/resume/cancel and in-cockpit run-spawning are explicitly deferred to a later phase to keep the cockpit honest about what it can do today.
+- **Live** — polled every 30 seconds; paginated grid with header timestamp and page-preserve on navigation.
+- **Read-only by design (v1).** Click a row to drill into the detail page that already exists for it.
+- **Privacy masking.** Private records appear as masked rows — title and content are hidden, existence is acknowledged for admin accountability.
 - **Backed by one endpoint:** `GET /v1/command-center/state` aggregates from `agent_runs`, the mission engine, `team_runs`, and the session pool.
 - **First-run lands here.** A clean install completes the setup wizard and lands the user on Command Center, not on a blank chat — the empty state explains how to start activity.
 
 See [`docs/server.md`](docs/server.md) for the endpoint contract and [`docs/frontend-integration.md`](docs/frontend-integration.md) for the SDK call.
+
+---
+
+## User Dashboard
+
+The User Dashboard (`/dashboard`) is a personal cross-workspace activity view, distinct from the Command Center. Reached via the 👤 rail nav icon on both Web and Desktop.
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ My Activity                                              ⟳ live · 30s │
+├──────────────────────────────────────────────────────────────────────┤
+│ Shared (12)  Private (3)  Active (2)                                  │
+├──────────────────────────────────────────────────────────────────────┤
+│ KIND       TITLE                       PRIVACY   STARTED   WORKSPACE  │
+│ 💬 session API research                 Public   2h ago    my-project │
+│ 💬 session Internal notes              🔒 Private  1h ago  personal  │
+│ 🤖 agent   doc-writer run              Public   3h ago    team-ws    │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+- **What you see:** own public ("Shared") records + own private records + teammates' public records in shared workspaces. Other users' private records are never returned — not masked, not counted.
+- **Privacy toggles.** Any session or agent run can be marked private. Private records are visible only to the owner. On the Command Center they appear as masked rows (title/content hidden); on the User Dashboard they're excluded entirely from other users' views. Server-side enforcement — no client-side bypass.
+- **Backed by `GET /v1/user-dashboard/state`.** Powered by `UserDashboardAggregator` with workspace membership gating.
+
+See [`docs/server.md`](docs/server.md) for the endpoint contract.
 
 ---
 
@@ -282,7 +309,7 @@ sovrant router models
 sovrant router status
 ```
 
-### 56 Built-in Tools
+### 58 Built-in Tools
 
 Agents autonomously use tools for file operations, shell execution, web access, task management, plan/worktree mode, notebook editing, MCP resource access, LSP code intelligence, code verification, skill execution, agent delegation, team orchestration, swarm orchestration, mission management, artifact retrieval, and document generation. Up to 20 tool rounds per turn with automatic retries.
 
@@ -321,6 +348,7 @@ Sovrant ships as a proper multi-user system, not a single-admin tool.
 - **Personal workspace per user.** Every user gets an auto-created `ws-personal-{user_id}` workspace on signup, idempotent and undeletable. Team workspaces are created via the API with 7-day invite tokens and owner/editor/viewer roles. Accept invites via `POST /v1/workspaces/invites/accept`.
 - **Projects nest inside workspaces** with their own member lists and 3-tier config inheritance (project → workspace → global).
 - **Workspace-scoped provider profiles.** Admins add a provider key once at workspace level and every member sees it in the provider dropdown (marked with a "Workspace" badge) without ever seeing the plaintext key. Per-user profiles work the same way at personal-workspace scope. All API keys flow through the encrypted keystore — `provider_profiles.credential_id` references the encrypted store, never the raw value.
+- **Per-record privacy toggles.** Any session or agent run can be marked private from the chat header or Agents UI. Private records are visible only to the owner — on the Command Center they appear as masked rows (title/content hidden); on the User Dashboard they are excluded from all other users' views entirely. Server-side enforcement via `is_private` column (V030 migration).
 
 ### Webhook Integrations
 
@@ -373,11 +401,11 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
     │  └── MCP client (tool registration)                        │
     │                                                            │
     │  IRuntimeSessionPool  (one runtime per session_id)         │
-    │  IStorageProvider  (SQLite, 26 migrations, 45+ tables)     │
+    │  IStorageProvider  (SQLite, 30 migrations, 45+ tables)     │
     └───────────┬──────────────────┬─────────────────────────────┘
                 │                  │
     ┌───────────▼────────┐  ┌──────▼──────────────────────────┐
-    │  Sovrant.Api       │  │  Sovrant.Tools (56 tools)        │
+    │  Sovrant.Api       │  │  Sovrant.Tools (58 tools)        │
     │                    │  │                                  │
     │  SmartRouter       │  │  File:  Read Write Edit          │
     │  ├── OpenAI        │  │         Glob Grep LS             │
@@ -433,9 +461,10 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 | `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus management APIs. 141 endpoints + SignalR hub. |
 | `Sovrant.Desktop` | Avalonia desktop app — full GUI with streaming chat, tool use, settings, and management pages. |
 | `Sovrant.Web` | Blazor Server web app — browser-based UI with embedded or remote runtime. Port 5100. Dual-mode: `SOVRANT_RUNTIME_MODE=embedded` (default) or `remote` (connects to Sovrant.Server via SignalR). |
-| `Sovrant.Runtime` | Core agentic loop, mission engine, planner/executor, SQLite persistence (26 migrations V001–V026), permission system, tool executor, MCP client, cost tracking. |
+| `Sovrant.Runtime` | Core agentic loop, mission engine, planner/executor, SQLite persistence (30 migrations V001–V030), permission system, tool executor, MCP client, cost tracking. |
 | `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, native messages API. SmartRouter with health/latency/cost scoring. Intent-aware model routing. |
-| `Sovrant.Tools` | All 56 tool implementations. 32 built-in skill `.md` files. |
+| `Sovrant.Tools` | All 58 tool implementations. 32 built-in skill `.md` files. |
+| `Sovrant.Storage.Postgres` | Optional PostgreSQL/Supabase backend — overrides `ISessionStore` and `ICredentialStore` with Npgsql implementations. Schema mirrors SQLite (V001–V030). Activated at boot when `system.database_backend = "supabase"` is set via the Admin → System Integrations UI. |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/clear`, `/session`, `/memory`, etc.). |
 | `Sovrant.Agents` | Orchestration: team registry (SQLite-backed), agent factory, dual backends (isolated + shared), 25 agent templates, swarm orchestrator, unified run ledger, inter-agent coordination (PM agents + mailbox). |
 | `Sovrant.Mcp` | Shared MCP protocol handlers (tools/list, tools/call, resources, prompts, completions). Consumed by both the CLI's `mcp-server` stdio subcommand and `Sovrant.Server`'s HTTP/SSE MCP transport. |
@@ -458,7 +487,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 
 ## Tools
 
-56 tools available. All run inside the agentic loop with automatic retries up to 20 tool rounds per turn.
+58 tools available. All run inside the agentic loop with automatic retries up to 20 tool rounds per turn.
 
 ### File
 `Read` · `Write` · `Edit` · `Glob` · `Grep` · `LS`
@@ -711,8 +740,6 @@ GET  /v1/evals/{name}/history
 
 > Gemma models via Google AI Studio do not support function calling over the OpenAI-compat endpoint. Use Gemini 2.5 Flash or a newer Gemini model.
 
-> Gemma models via Google AI Studio do not support function calling over the OpenAI-compat endpoint. Use Gemini 2.5 Flash or a newer Gemini model.
-
 The `SmartRouter` pings all configured providers on startup, scores them by latency, cost, and error rate, and routes each request to the optimal one. Use `ROUTER_MODE=Fixed` to always route to the first configured provider, or `ROUTER_STRATEGY=Latency` / `Cost` to change the scoring weight.
 
 ---
@@ -724,7 +751,8 @@ The server exposes an OpenAI-compatible chat completions endpoint plus comprehen
 | Group | Endpoints | Description |
 |---|---|---|
 | **Chat** | `POST /v1/chat/completions` | OpenAI-compatible chat with streaming (SSE) support |
-| **Command Center** | `GET /v1/command-center/state` | Live aggregated cockpit state (active missions, team runs, agent runs, sessions) |
+| **Command Center** | `GET /v1/command-center/state` | Live aggregated cockpit state (active missions, team runs, agent runs, sessions); private records masked |
+| **User Dashboard** | `GET /v1/user-dashboard/state` | Personal cross-workspace activity view; own + teammates' public; own private; others' private excluded |
 | **Sessions** | 7 endpoints | CRUD, config, export, message history |
 | **Workspaces** | 17 endpoints | Workspace CRUD, members, invites, config, memory, usage |
 | **Projects** | 15 endpoints | Project CRUD within workspaces, members, config, archive |
@@ -755,7 +783,7 @@ The Avalonia-based desktop app provides a full GUI for interacting with the Sovr
 - Dark and light theme toggle
 - Sidebar navigation with workspace/project context selectors
 - Settings with provider profiles (add, activate, delete), live model switching
-- Management pages: Command Center, Chat, Settings, Diagnostics, Artifacts, Documents, Tools, Skills, Agents, Memory, Projects, Workspaces, Orchestration, Integrations, Activity, Governance, Trust Boundary, Setup
+- Management pages: Command Center, User Dashboard, Chat, Settings, Diagnostics, Artifacts, Documents, Tools, Skills, Agents, Memory, Projects, Workspaces, Orchestration, Integrations, Activity, Governance, Trust Boundary, Setup
 - First-run setup wizard lands on Command Center on completion
 - Session history with search
 
@@ -772,7 +800,7 @@ The Blazor Server web app provides a browser-based UI with the full runtime embe
 - Streaming chat with real-time token rendering
 - Tool use blocks with inline Allow/Deny confirmation
 - Dark/light theme with CSS custom properties
-- 18 pages matching the desktop feature set, including the live Command Center cockpit as the homepage
+- 19 pages matching the desktop feature set, including the live Command Center cockpit as the homepage and the User Dashboard (`/dashboard`) as a personal activity view accessible from the 👤 rail nav
 - Workspace and project management with context switching
 - Provider profile management with live model switching
 
@@ -789,7 +817,7 @@ dotnet run --project src/Sovrant.Web
 
 The TypeScript/JavaScript SDK (`sdk/js`) provides a typed client for building custom frontends against the Sovrant server.
 
-- **`SovrantClient`** — covers the 141-endpoint server: chat, **auth (login, register, password reset, registration / approval toggles)**, command center, sessions, users (incl. admin `issueResetToken` / `approveUser`), workspaces, projects, teams (incl. `updateTeamProfile`), missions, swarm, engine, evals, artifacts, and registries
+- **`SovrantClient`** — covers the 141-endpoint server: chat, **auth (login, register, password reset, registration / approval toggles)**, command center (`getCommandCenterState`), user dashboard (`getUserDashboardState`), sessions, users (incl. admin `issueResetToken` / `approveUser`), workspaces, projects, teams (incl. `updateTeamProfile`), missions, swarm, engine, evals, artifacts, and registries
 - **SSE streaming** — real-time token-by-token responses with `streamChat()`
 - **React `useChat()` hook** — drop-in conversational UI component
 - **85+ TypeScript interfaces** — full type coverage for all request/response shapes
@@ -891,7 +919,20 @@ Any language server that speaks LSP over stdio can be plugged in.
 
 All durable state is stored in a single SQLite database at `~/.sovrant/data/sovrant.db`. The database is created automatically on first run — no installer or manual setup required.
 
-**26 migrations (V001–V026).** Covers sessions (with FTS5 full-text search and titles), agent memory, audit logs, credentials (AES-256-GCM encrypted), token usage, workspaces, projects, users (with password hashes + reset tokens), per-user API tokens (with sliding-TTL `last_used_at`), swarm events (with user ownership), runtime traces, missions, teams (with per-team run profiles), agent runs, inter-agent coordination, hooks, workspace settings, MCP/LSP server registry (incl. MCP HTTP transport), user preferences, provider profiles (encrypted API keys via the keystore), per-session MCP gating, and unified workspace identity.
+**30 migrations (V001–V030).** Covers sessions (with FTS5 full-text search and titles), agent memory, audit logs, credentials (AES-256-GCM encrypted), token usage, workspaces, projects, users (with password hashes + reset tokens), per-user API tokens (with sliding-TTL `last_used_at`), swarm events (with user ownership), runtime traces, missions, teams (with per-team run profiles), agent runs, inter-agent coordination, hooks, workspace settings, MCP/LSP server registry (incl. MCP HTTP transport), user preferences, provider profiles (encrypted API keys via the keystore), per-session MCP gating, unified workspace identity, workspace provider profiles, agent run prompts, swarm federation (`parent_swarm_id`), and per-record privacy (`is_private` on missions/agent_runs/sessions — V030).
+
+### Optional Supabase / PostgreSQL Backend
+
+`Sovrant.Storage.Postgres` provides an optional PostgreSQL backend for session and credential storage. When enabled, `ISessionStore` and `ICredentialStore` run on Postgres; all other stores (memory, audit, teams, missions, swarm, etc.) stay on SQLite.
+
+Configure from **Admin → System Integrations** (Web or Desktop):
+
+1. Enter your Supabase Project URL and Service Role Key
+2. Click **Initialize Schema** to create the PostgreSQL tables
+3. Optionally click **Migrate Data from SQLite** to copy existing sessions and credentials
+4. Click **Switch to Supabase** and restart
+
+Credentials are stored in the encrypted keystore — never plaintext on disk. To revert, click **Revert to SQLite** and restart. See [`docs/persistence.md`](docs/persistence.md) for full details.
 
 ### Session Persistence
 
@@ -1090,10 +1131,10 @@ Replace `-r linux-x64` with `-r win-x64` for Windows deployments.
 ## Tests
 
 ```bash
-dotnet test Sovrant.slnx   # 1,689 tests across 10 projects
+dotnet test Sovrant.slnx   # 2,222 tests across 10 projects
 ```
 
-Test projects (10): `Sovrant.Runtime.Tests`, `Sovrant.Agents.Tests`, `Sovrant.Tools.Tests`, `Sovrant.Server.Tests`, `Sovrant.Api.Tests`, `Sovrant.Runtime.Documents.Tests`, `Sovrant.Commands.Tests`, `Sovrant.Mcp.Tests`, `Sovrant.Lsp.Tests`, `Sovrant.Integration.Tests`.
+Test projects (10): `Sovrant.Runtime.Tests` (998) · `Sovrant.Agents.Tests` (240) · `Sovrant.Tools.Tests` (404) · `Sovrant.Server.Tests` (161) · `Sovrant.Api.Tests` (215) · `Sovrant.Runtime.Documents.Tests` (87) · `Sovrant.Commands.Tests` (56) · `Sovrant.Mcp.Tests` (34) · `Sovrant.Lsp.Tests` (26) · `Sovrant.Integration.Tests` (1).
 
 All tests use isolated in-memory SQLite databases. No external services or API keys required.
 
@@ -1105,7 +1146,7 @@ All tests use isolated in-memory SQLite databases. No external services or API k
 |---|---|
 | [`docs/server.md`](docs/server.md) | Full server API reference — all 141 endpoints + SignalR hub, Command Center, auth, CORS, streaming format, cost tracking, remote mode |
 | [`docs/frontend-integration.md`](docs/frontend-integration.md) | SDK reference, proxy setup, browser SSE, multi-tenant LLM keys, React hook, remote mode (dual-mode web frontend) |
-| [`docs/persistence.md`](docs/persistence.md) | SQLite schema reference — 26 migrations (V001–V026), domain stores, security model, keystore integration |
+| [`docs/persistence.md`](docs/persistence.md) | SQLite schema reference — 30 migrations (V001–V030), domain stores, Supabase/PostgreSQL backend, security model, keystore integration |
 | [`docs/agent-systems.md`](docs/agent-systems.md) | Team vs Swarm deep dive — architecture, value analysis, unified orchestration, inter-agent coordination |
 | [`docs/mcp-server.md`](docs/mcp-server.md) | MCP server mode — IDE config, available tools/resources, OAuth, env vars |
 | [`docs/webhooks.md`](docs/webhooks.md) | Webhook endpoint, Slack bot setup, Teams/Discord integration guides |

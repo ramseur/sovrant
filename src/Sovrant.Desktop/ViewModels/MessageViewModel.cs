@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Desktop.Adapters;
+using Sovrant.Runtime.Knowledge;
 
 namespace Sovrant.Desktop.ViewModels;
 
@@ -157,6 +158,18 @@ public partial class MessageViewModel : ViewModelBase
     /// <summary>Artifacts auto-saved from large text blocks (not tied to a specific tool use row).</summary>
     public ObservableCollection<DocumentArtifactViewModel> StandaloneArtifacts { get; } = [];
     public bool HasStandaloneArtifacts => StandaloneArtifacts.Count > 0;
+
+    // ── Phase 116 H — provenance ────────────────────────────────────────
+
+    /// <summary>Turn index this message corresponds to (0-based). Used to load attributions.</summary>
+    [ObservableProperty]
+    private int _turnIndex;
+
+    /// <summary>Knowledge items invoked during this turn — populated after CompleteStreaming.</summary>
+    public ObservableCollection<KnowledgeAttribution> Sources { get; } = [];
+
+    [ObservableProperty]
+    private bool _hasSources;
 
     public void AddStandaloneArtifact(DocumentArtifactViewModel vm)
     {

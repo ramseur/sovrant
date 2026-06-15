@@ -1,122 +1,37 @@
+using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using Sovrant.Runtime.Knowledge;
 
 namespace Sovrant.Tools.Skills;
 
 /// <summary>
-/// Discovers and indexes skills from three tiers (lowest → highest priority):
-/// <list type="number">
-///   <item>Built-in skills from assembly install dir <c>skills/</c></item>
-///   <item>Global user skills from <c>~/.sovrant/skills/</c></item>
-///   <item>Project-local skills from <c>.sovrant/skills/</c></item>
-/// </list>
-/// Higher-priority skills override lower-priority ones by name.
+/// In-memory index of all skills, backed by <see cref="IKnowledgeStore"/> (Phase 112).
+/// Built-in rows live at <c>workspace_id=''</c>; user global edits at <c>workspace_id='global'</c>;
+/// project-local skills at <c>workspace_id=KnowledgeScope.ProjectIdFor(cwd)</c>.
+/// Higher-priority overlays shadow lower-priority rows by slug.
 /// </summary>
 public sealed partial class SkillRegistry
 {
-    private readonly Dictionary<string, SkillDefinition> _byName;
-    private readonly Dictionary<string, SkillDefinition> _byTrigger;
-    private readonly Dictionary<string, SkillSource> _sources;
+    private readonly IKnowledgeStore _store;
+    private readonly string _projectId;
     private readonly ILogger<SkillRegistry> _logger;
 
-    private static readonly string GlobalSkillsDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".sovrant", "skills");
+    private Dictionary<string, SkillDefinition> _byName;
+    private Dictionary<string, SkillDefinition> _byTrigger;
 
-    private static string ProjectSkillsDir =>
-        Path.Combine(Directory.GetCurrentDirectory(), ".sovrant", "skills");
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to load skills from DB: {Error}")]
+    private static partial void LogLoadError(ILogger logger, string error);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to load skill from '{Path}': {Error}")]
-    private static partial void LogLoadError(ILogger logger, string path, string error);
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Loaded {Count} skills from DB")]
+    private static partial void LogLoaded(ILogger logger, int count);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Loaded skill '{Name}' from '{Path}'")]
-    private static partial void LogLoaded(ILogger logger, string name, string path);
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Skill '{Name}' overridden by higher-priority source")]
-    private static partial void LogOverride(ILogger logger, string name);
-
-    public SkillRegistry(ILogger<SkillRegistry> logger)
+    public SkillRegistry(IKnowledgeStore store, ILogger<SkillRegistry> logger)
     {
+        _store = store;
         _logger = logger;
-        _byName = new Dictionary<string, SkillDefinition>(StringComparer.OrdinalIgnoreCase);
-        _byTrigger = new Dictionary<string, SkillDefinition>(StringComparer.OrdinalIgnoreCase);
-        _sources = new Dictionary<string, SkillSource>(StringComparer.OrdinalIgnoreCase);
-
-        // Tier 1 (lowest): built-in skills from assembly install dir
-        var assemblyDir = Path.GetDirectoryName(typeof(SkillRegistry).Assembly.Location) ?? ".";
-        LoadSkillsFrom(Path.Combine(assemblyDir, "skills"), SkillTier.BuiltIn);
-
-        // Tier 2: global user skills
-        LoadSkillsFrom(GlobalSkillsDir, SkillTier.Global);
-
-        // Tier 3 (highest): project-local skills
-        LoadSkillsFrom(ProjectSkillsDir, SkillTier.Project);
-    }
-
-    /// <summary>Source path + tier for a registered skill, or null if unknown / runtime-registered without a path.</summary>
-    public SkillSource? TryGetSource(string name)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        return _sources.GetValueOrDefault(name);
-    }
-
-    /// <summary>Path where a global-tier save lands for the given slug.</summary>
-    public static string GlobalPathFor(string slug) =>
-        Path.Combine(GlobalSkillsDir, $"{slug}.md");
-
-    /// <summary>Saves markdown to <c>~/.sovrant/skills/{slug}.md</c>, reparses, and indexes the result.</summary>
-    public void SaveGlobal(string slug, string markdown)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(slug);
-        ArgumentNullException.ThrowIfNull(markdown);
-        Directory.CreateDirectory(GlobalSkillsDir);
-        var path = GlobalPathFor(slug);
-        File.WriteAllText(path, markdown);
-
-        var skill = SkillParser.ParseFile(path);
-        if (skill is not null)
-        {
-            _byName[skill.Name] = skill;
-            if (!string.IsNullOrWhiteSpace(skill.Trigger))
-                _byTrigger[skill.Trigger] = skill;
-            _sources[skill.Name] = new SkillSource(path, SkillTier.Global);
-        }
-    }
-
-    /// <summary>Deletes the global-tier file for a slug. Falls back to the built-in tier if one exists.</summary>
-    public bool DeleteGlobal(string slug)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(slug);
-        var path = GlobalPathFor(slug);
-        if (!File.Exists(path)) return false;
-        File.Delete(path);
-
-        // Removing the global tier means the built-in (if any) becomes the active definition.
-        var assemblyDir = Path.GetDirectoryName(typeof(SkillRegistry).Assembly.Location) ?? ".";
-        var builtInPath = Path.Combine(assemblyDir, "skills", $"{slug}.md");
-
-        // Find the entry by slug (file basename) and clear it; built-in fallback handled below.
-        var existing = _byName.Values.FirstOrDefault(s =>
-            _sources.TryGetValue(s.Name, out var src) && src.Path == path);
-        if (existing is not null)
-        {
-            _byName.Remove(existing.Name);
-            if (!string.IsNullOrWhiteSpace(existing.Trigger))
-                _byTrigger.Remove(existing.Trigger);
-            _sources.Remove(existing.Name);
-        }
-
-        if (File.Exists(builtInPath))
-        {
-            var fallback = SkillParser.ParseFile(builtInPath);
-            if (fallback is not null)
-            {
-                _byName[fallback.Name] = fallback;
-                if (!string.IsNullOrWhiteSpace(fallback.Trigger))
-                    _byTrigger[fallback.Trigger] = fallback;
-                _sources[fallback.Name] = new SkillSource(builtInPath, SkillTier.BuiltIn);
-            }
-        }
-        return true;
+        _projectId = KnowledgeScope.ProjectIdFor(Directory.GetCurrentDirectory());
+        (_byName, _byTrigger) = LoadFromStore();
     }
 
     /// <summary>All skills currently registered.</summary>
@@ -136,6 +51,53 @@ public sealed partial class SkillRegistry
         return _byTrigger.GetValueOrDefault(trigger);
     }
 
+    /// <summary>
+    /// Saves a skill to the global user tier in the DB and refreshes the in-memory index.
+    /// </summary>
+    public void SaveGlobal(string slug, string markdown)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(slug);
+        ArgumentNullException.ThrowIfNull(markdown);
+
+        var skill = SkillParser.Parse(markdown);
+        if (skill is null)
+            throw new InvalidOperationException("Skill markdown could not be parsed — check that the frontmatter starts with ---, contains a non-empty 'name' field, and has a closing --- followed by a newline.");
+
+        var now = DateTimeOffset.UtcNow;
+        var page = new KnowledgePage(
+            KnowledgeId:   $"skill_global_{slug}",
+            Kind:          "skills",
+            Slug:          slug,
+            Name:          skill.Name,
+            Description:   skill.Description,
+            Tier:          "User",
+            Body:          skill.Body,
+            WorkspaceId:   KnowledgeScope.Global,
+            CreatedAt:     now,
+            UpdatedAt:     now,
+            Trigger:       string.IsNullOrEmpty(skill.Trigger) ? null : skill.Trigger,
+            Agents:        skill.Agents.Count > 0 ? JsonSerializer.Serialize(skill.Agents) : null,
+            Tools:         skill.Tools.Count > 0 ? JsonSerializer.Serialize(skill.Tools) : null);
+
+        _store.UpsertAsync(page).GetAwaiter().GetResult();
+        Reload();
+    }
+
+    /// <summary>Deletes the global user-tier override for a slug and refreshes the index.</summary>
+    public bool DeleteGlobal(string slug)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(slug);
+        _store.DeleteAsync("skills", slug, KnowledgeScope.Global).GetAwaiter().GetResult();
+        Reload();
+        return true;
+    }
+
+    /// <summary>
+    /// Path used by callers that still need a filesystem location for display purposes.
+    /// Returns null for DB-backed skills (Phase 112+).
+    /// </summary>
+    public static SkillSource? TryGetSource(string name) => null;
+
     /// <summary>Registers a skill definition (used by SkillCreateTool for runtime creation).</summary>
     public void Register(SkillDefinition skill)
     {
@@ -145,37 +107,60 @@ public sealed partial class SkillRegistry
             _byTrigger[skill.Trigger] = skill;
     }
 
-    internal void LoadSkillsFrom(string directory, SkillTier tier = SkillTier.BuiltIn)
+    /// <summary>Reloads the in-memory index from the DB.</summary>
+    public void Reload() => (_byName, _byTrigger) = LoadFromStore();
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private (Dictionary<string, SkillDefinition> byName, Dictionary<string, SkillDefinition> byTrigger) LoadFromStore()
     {
-        if (!Directory.Exists(directory)) return;
+        var byName = new Dictionary<string, SkillDefinition>(StringComparer.OrdinalIgnoreCase);
+        var byTrigger = new Dictionary<string, SkillDefinition>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var file in Directory.EnumerateFiles(directory, "*.md"))
+        IReadOnlyList<KnowledgePage> pages;
+        try
         {
-            try
-            {
-                var skill = SkillParser.ParseFile(file);
-                if (skill is null) continue;
-
-                if (_byName.ContainsKey(skill.Name))
-                    LogOverride(_logger, skill.Name);
-
-                _byName[skill.Name] = skill;
-                if (!string.IsNullOrWhiteSpace(skill.Trigger))
-                    _byTrigger[skill.Trigger] = skill;
-                _sources[skill.Name] = new SkillSource(file, tier);
-
-                LogLoaded(_logger, skill.Name, file);
-            }
-            catch (Exception ex) when (ex is IOException or InvalidDataException)
-            {
-                LogLoadError(_logger, file, ex.Message);
-            }
+            pages = _store.GetAllEffectiveAsync("skills", _projectId).GetAwaiter().GetResult();
         }
+        catch (SqliteException ex)
+        {
+            // knowledge_pages table not yet created — DB hasn't been migrated yet.
+            LogLoadError(_logger, ex.Message);
+            return (byName, byTrigger);
+        }
+
+        foreach (var page in pages)
+        {
+            var agents = DeserializeList(page.Agents);
+            var tools = DeserializeList(page.Tools);
+            var skill = new SkillDefinition(
+                page.Name,
+                page.Description,
+                page.Trigger ?? string.Empty,
+                agents,
+                tools,
+                string.IsNullOrWhiteSpace(page.Body) ? $"Execute the {page.Name} skill." : page.Body,
+                page.Tier);
+
+            byName[skill.Name] = skill;
+            if (!string.IsNullOrWhiteSpace(skill.Trigger))
+                byTrigger[skill.Trigger] = skill;
+        }
+
+        LogLoaded(_logger, byName.Count);
+        return (byName, byTrigger);
+    }
+
+    private static List<string> DeserializeList(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try { return JsonSerializer.Deserialize<List<string>>(json) ?? []; }
+        catch (JsonException) { return []; }
     }
 }
 
-/// <summary>Origin of a registered skill — drives editor edit/duplicate/delete affordances.</summary>
+/// <summary>Origin of a registered skill (retained for API compatibility; always null for DB-backed skills).</summary>
 public enum SkillTier { BuiltIn, Global, Project }
 
-/// <summary>Where a registered skill came from on disk.</summary>
+/// <summary>Where a registered skill came from. Phase 112: always null for DB-backed skills.</summary>
 public sealed record SkillSource(string Path, SkillTier Tier);

@@ -1,7 +1,11 @@
 @page "/integrations"
 @using System.Text.Json
+@using Sovrant.Runtime.Auth
 @using Sovrant.Runtime.Config
 @using Sovrant.Runtime.Mcp
+@using Sovrant.Runtime.Workspaces
+@inject IJSRuntime JS
+@inject NavigationManager Nav
 
 <div class="master-detail">
     <div class="master-panel">
@@ -132,28 +136,67 @@
                 }
                 else
                 {
-                    @if (_catalogEntry.NeedsApiKey)
-                    {
-                        <div class="form-field">
-                            <label>@_catalogEntry.ApiKeyLabel</label>
-                            <input type="password" autocomplete="new-password" @bind="_galleryApiKey"
-                                   placeholder="Paste your key here" />
-                        </div>
-                    }
-                    @if (_catalogEntry.NeedsEndpoint)
-                    {
-                        <div class="form-field">
-                            <label>@_catalogEntry.EndpointLabel</label>
-                            <input type="text" autocomplete="off" @bind="_galleryUrl" placeholder="" />
-                        </div>
-                    }
-
-                    <button class="btn-primary" style="max-width:200px;"
-                            @onclick="ConnectFromGalleryAsync">Connect</button>
-
                     @if (_isConnected(_catalogEntry.Id))
                     {
-                        <span class="outcome-badge success" style="margin-left:12px;">Already connected</span>
+                        <div class="callout-card" style="border-color:var(--status-ok);background:var(--surface-card);">
+                            <strong>&#10003; Already connected</strong> — Re-connect to update credentials.
+                        </div>
+                    }
+
+                    @if (_catalogEntry.RequiresOAuth)
+                    {
+                        <!-- OAuth connect path -->
+                        @if (_isOAuthWaiting)
+                        {
+                            <div class="callout-card" style="border-color:var(--brand);background:var(--surface-card);">
+                                <strong>&#x1F504; Waiting for authorization...</strong>
+                                Browser opened — complete the login and return here. Times out after 2 min.
+                            </div>
+                        }
+
+                        <div class="form-field">
+                            <label>OAuth Client ID</label>
+                            <input type="text" autocomplete="off" @bind="_galleryClientId"
+                                   placeholder="Your OAuth app client ID" />
+                        </div>
+
+                        @if (_catalogEntry.NeedsEndpoint)
+                        {
+                            <div class="form-field">
+                                <label>@_catalogEntry.EndpointLabel</label>
+                                <input type="text" autocomplete="off" @bind="_galleryUrl" placeholder="" />
+                            </div>
+                        }
+
+                        <button class="btn-primary" style="max-width:220px;" disabled="@_isOAuthConnecting"
+                                @onclick="ConnectWithOAuthAsync">Connect with OAuth</button>
+
+                        <p style="font-size:11px;color:var(--text-muted);margin-top:8px;">
+                            Register an OAuth app with the provider to get a Client ID.
+                            Sovrant will open your browser for authorization and handle the rest.
+                        </p>
+                    }
+                    else
+                    {
+                        <!-- Standard API key / endpoint connect path -->
+                        @if (_catalogEntry.NeedsApiKey)
+                        {
+                            <div class="form-field">
+                                <label>@_catalogEntry.ApiKeyLabel</label>
+                                <input type="password" autocomplete="new-password" @bind="_galleryApiKey"
+                                       placeholder="Paste your key here" />
+                            </div>
+                        }
+                        @if (_catalogEntry.NeedsEndpoint)
+                        {
+                            <div class="form-field">
+                                <label>@_catalogEntry.EndpointLabel</label>
+                                <input type="text" autocomplete="off" @bind="_galleryUrl" placeholder="" />
+                            </div>
+                        }
+
+                        <button class="btn-primary" style="max-width:200px;"
+                                @onclick="ConnectFromGalleryAsync">Connect</button>
                     }
                 }
             </div>
@@ -224,21 +267,61 @@
                     </div>
                 }
 
-                @if (_selected.EnvVars.Count > 0)
-                {
-                    <div class="orch-detail-section">
-                        <h3>Environment</h3>
+                <div class="orch-detail-section">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <h3 style="margin:0;">Environment Variables</h3>
+                        @if (!_editingEnv)
+                        {
+                            <button class="btn-sm btn-outline" @onclick="StartEditEnv">
+                                @(_selected.EnvVars.Count > 0 ? "Edit" : "+ Add")
+                            </button>
+                        }
+                    </div>
+                    @if (_editingEnv)
+                    {
+                        @for (int i = 0; i < _envEdits.Count; i++)
+                        {
+                            var idx = i;
+                            <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:6px;margin-bottom:6px;align-items:center;">
+                                <input type="text" autocomplete="off"
+                                       @bind="_envEdits[idx].Key"
+                                       placeholder="VARIABLE_NAME"
+                                       style="font-family:Consolas,monospace;font-size:12px;" />
+                                <input type="text" autocomplete="new-password"
+                                       @bind="_envEdits[idx].Value"
+                                       placeholder="value"
+                                       style="font-family:Consolas,monospace;font-size:12px;" />
+                                <button class="btn-sm btn-danger" style="padding:4px 8px;"
+                                        @onclick="() => _envEdits.RemoveAt(idx)">✕</button>
+                            </div>
+                        }
+                        <div style="display:flex;gap:8px;margin-top:4px;">
+                            <button class="btn-sm btn-outline" @onclick="AddEnvRow">+ Add variable</button>
+                            <button class="btn-primary btn-sm" @onclick="SaveEnvAsync">Save</button>
+                            <button class="btn-sm btn-outline" @onclick="CancelEditEnv">Cancel</button>
+                        </div>
+                    }
+                    else if (_selected.EnvVars.Count > 0)
+                    {
                         <div class="gov-card">
                             @foreach (var kv in _selected.EnvVars)
                             {
                                 <div class="gov-field-row">
-                                    <span>@kv.Key</span>
+                                    <span style="font-family:Consolas,monospace;font-size:12px;">@kv.Key</span>
                                     <span class="text-sm" style="font-family:Consolas,monospace;">@MaskSecret(kv.Key, kv.Value)</span>
                                 </div>
                             }
                         </div>
-                    </div>
-                }
+                    }
+                    else
+                    {
+                        <p class="text-muted text-sm">No environment variables configured.</p>
+                    }
+                    @if (!string.IsNullOrEmpty(_envStatus))
+                    {
+                        <p class="text-sm" style="margin-top:6px;color:var(--text-secondary);">@_envStatus</p>
+                    }
+                </div>
 
                 <div class="orch-detail-section">
                     <h3>Tools (@_selected.ToolCount)</h3>
@@ -261,6 +344,76 @@
                                 </div>
                             }
                         </div>
+                    }
+                </div>
+
+                <!-- Trust Rules -->
+                <div class="orch-detail-section">
+                    <h3>Trust Rules</h3>
+                    <p class="text-muted text-sm" style="margin-bottom:10px;">
+                        Rules control how tool calls are handled before execution.
+                        Built-in defaults require confirmation for <code>delete_*</code>, <code>remove_*</code>, <code>bulk_*</code> and similar patterns.
+                    </p>
+
+                    @if (_trustRules.Count > 0)
+                    {
+                        <div class="gov-card" style="margin-bottom:12px;">
+                            @foreach (var rule in _trustRules)
+                            {
+                                <div class="gov-field-row" style="align-items:center;">
+                                    <span>
+                                        <span style="font-family:Consolas,monospace;font-size:12px;">@rule.ToolPattern</span>
+                                        @if (!string.IsNullOrEmpty(rule.Reason))
+                                        {
+                                            <span class="text-muted" style="font-size:11px;margin-left:6px;">— @rule.Reason</span>
+                                        }
+                                    </span>
+                                    <span style="display:flex;align-items:center;gap:8px;">
+                                        <span class="badge @(rule.Action == McpTrustAction.Block ? "badge-danger" : rule.Action == McpTrustAction.Allow ? "badge-success" : "badge-warning")"
+                                              style="font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600;">
+                                            @rule.Action
+                                        </span>
+                                        @if (_canManageRules)
+                                        {
+                                            <button class="btn-sm btn-danger" style="padding:2px 8px;font-size:11px;"
+                                                    @onclick="() => RemoveTrustRuleAsync(rule.RuleId)">✕</button>
+                                        }
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted text-sm" style="margin-bottom:10px;">No custom rules — built-in defaults apply.</p>
+                    }
+
+                    @if (_canManageRules)
+                    {
+                        <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:end;">
+                            <div class="form-field" style="margin:0;">
+                                <label style="font-size:11px;">Tool Pattern (glob)</label>
+                                <input type="text" @bind="_newRulePattern" placeholder="delete_* or *_remove" style="font-family:Consolas,monospace;font-size:12px;" />
+                            </div>
+                            <div class="form-field" style="margin:0;">
+                                <label style="font-size:11px;">Action</label>
+                                <select @bind="_newRuleAction" style="padding:6px 8px;border-radius:6px;border:1px solid var(--surface-border);background:var(--surface-card);color:var(--text-primary);font-size:12px;">
+                                    <option value="Allow">Allow</option>
+                                    <option value="RequireConfirmation">Require Confirmation</option>
+                                    <option value="Block">Block</option>
+                                </select>
+                            </div>
+                            <button class="btn-primary btn-sm" @onclick="AddTrustRuleAsync" style="margin-bottom:1px;">Add Rule</button>
+                        </div>
+                        <div class="form-field" style="margin-top:6px;">
+                            <label style="font-size:11px;">Reason (optional — shown to agent on block/confirmation)</label>
+                            <input type="text" @bind="_newRuleReason" placeholder="e.g. Bulk deletes require manager approval" />
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(_trustStatus))
+                    {
+                        <p class="text-sm" style="margin-top:6px;color:var(--text-secondary);">@_trustStatus</p>
                     }
                 </div>
             </div>
@@ -305,6 +458,12 @@
                         <label>Arguments (space-separated)</label>
                         <input type="text" @bind="_newArgs" placeholder="-y @@modelcontextprotocol/server-filesystem /tmp" />
                     </div>
+                    <div class="form-field">
+                        <label>Environment Variables (optional — one KEY=VALUE per line)</label>
+                        <textarea rows="4" @bind="_newEnvVars"
+                                  placeholder="GITHUB_PERSONAL_ACCESS_TOKEN=ghp_...&#10;DEBUG=false"
+                                  style="font-family:Consolas,monospace;font-size:12px;width:100%;resize:vertical;"></textarea>
+                    </div>
                     <button class="btn-primary" @onclick="AddStdioServerAsync">Add</button>
                 }
                 else
@@ -337,21 +496,38 @@
     [Inject] private IMcpServerStore ServerStore { get; set; } = default!;
     [Inject] private McpClientRegistry McpRegistry { get; set; } = default!;
     [Inject] private McpToolRegistrar McpRegistrar { get; set; } = default!;
+    [Inject] private McpOAuthService OAuthService { get; set; } = default!;
+    [Inject] private IMcpTrustRuleStore TrustStore { get; set; } = default!;
+    [Inject] private IPrincipalAccessor Principal { get; set; } = default!;
+    [Inject] private IWorkspaceService WorkspaceSvc { get; set; } = default!;
 
     private string _activeTab = "gallery";
     private string _addMode = "json";
     private string _newName = string.Empty;
     private string _newCommand = string.Empty;
     private string _newArgs = string.Empty;
+    private string _newEnvVars = string.Empty;
     private string _newUrl = string.Empty;
     private string _newBearer = string.Empty;
     private string _newHeadersJson = string.Empty;
     private string _jsonInput = string.Empty;
     private string _status = string.Empty;
+    private bool _editingEnv;
+    private List<EnvEditRow> _envEdits = [];
+    private string _envStatus = string.Empty;
     private string _search = string.Empty;
     private List<ServerView> _servers = [];
     private List<ServerView> _filtered = [];
     private ServerView? _selected;
+
+    // Trust rules state
+    private List<McpTrustRule> _trustRules = [];
+    private string? _workspaceId;
+    private bool _canManageRules;
+    private string _newRulePattern = string.Empty;
+    private string _newRuleAction = "RequireConfirmation";
+    private string _newRuleReason = string.Empty;
+    private string _trustStatus = string.Empty;
 
     // Gallery state
     private CatalogEntry? _catalogEntry;
@@ -359,22 +535,44 @@
     private int _selectedGroupTab;
     private string _galleryApiKey = string.Empty;
     private string _galleryUrl = string.Empty;
+    private string _galleryClientId = string.Empty;
+    private bool _isOAuthWaiting;
+    private bool _isOAuthConnecting;
 
     private const string _jsonPlaceholder = """
 {
   "mcpServers": {
-    "pixellab": {
-      "url": "https://api.pixellab.ai/mcp",
-      "transport": "http",
-      "headers": {
-        "Authorization": "Bearer YOUR_TOKEN"
+    "sitecore": {
+      "command": "npx",
+      "args": ["-y", "@antonytm/mcp-sitecore-server@latest"],
+      "env": {
+        "TRANSPORT": "stdio",
+        "GRAPHQL_ENDPOINT": "https://your-sitecore-cm.dev",
+        "GRAPHQL_API_KEY": "your-api-key",
+        "ITEM_SERVICE_SERVER_URL": "https://your-sitecore-cm.dev",
+        "ITEM_SERVICE_USERNAME": "admin",
+        "ITEM_SERVICE_PASSWORD": "your-password"
       }
     }
   }
 }
 """;
 
-    protected override async Task OnInitializedAsync() => await LoadServersAsync().ConfigureAwait(false);
+    protected override async Task OnInitializedAsync()
+    {
+        var uid = Principal.UserId;
+        if (uid is not null)
+        {
+            var ws = await WorkspaceSvc.GetPersonalAsync(uid).ConfigureAwait(false);
+            _workspaceId = ws?.WorkspaceId ?? Principal.WorkspaceId;
+        }
+        else
+        {
+            _workspaceId = Principal.WorkspaceId;
+        }
+        _canManageRules = true; // personal workspace — user is always owner
+        await LoadServersAsync().ConfigureAwait(false);
+    }
 
     private void SwitchTab(string tab)
     {
@@ -409,6 +607,8 @@
         _catalogEntry = _selectedGroup[0];
         _galleryApiKey = string.Empty;
         _galleryUrl = string.Empty;
+        _galleryClientId = string.Empty;
+        _isOAuthWaiting = false;
         _status = string.Empty;
     }
 
@@ -419,6 +619,7 @@
         _catalogEntry = _selectedGroup[idx];
         _galleryApiKey = string.Empty;
         _galleryUrl = string.Empty;
+        _galleryClientId = string.Empty;
     }
 
     private bool _isConnected(string entryId) =>
@@ -454,6 +655,93 @@
         }
     }
 
+    private async Task ConnectWithOAuthAsync()
+    {
+        if (_catalogEntry is null || _catalogEntry.Kind == IntegrationKind.LlmProvider) return;
+
+        var entry = _catalogEntry;
+        if (string.IsNullOrWhiteSpace(_galleryClientId))
+        {
+            _status = "OAuth Client ID is required.";
+            return;
+        }
+        if (entry.NeedsEndpoint && string.IsNullOrWhiteSpace(_galleryUrl))
+        {
+            _status = $"{entry.EndpointLabel} is required.";
+            return;
+        }
+
+        _isOAuthConnecting = true;
+        _status = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var urlStr = !string.IsNullOrEmpty(entry.EndpointTemplate) ? entry.EndpointTemplate : _galleryUrl.Trim();
+            Uri.TryCreate(urlStr, UriKind.Absolute, out var url);
+
+            var oauthConfig = new McpOAuthConfig
+            {
+                ClientId = _galleryClientId.Trim(),
+                AuthorizationUrl = entry.OAuthAuthorizationUrl,
+                TokenUrl = entry.OAuthTokenUrl,
+                Scopes = (IReadOnlyList<string>?)entry.OAuthScopes ?? [],
+            };
+
+            var config = new McpServerConfig { Url = url, OAuthConfig = oauthConfig };
+            await ServerStore.UpsertAsync(entry.Id, config).ConfigureAwait(false);
+
+            var redirectUri = Nav.BaseUri.TrimEnd('/') + "/v1/mcp/auth/callback";
+            var authUrl = await OAuthService.GenerateAuthorizationUrlAsync(
+                entry.Id, new Uri(redirectUri)).ConfigureAwait(false);
+
+            await JS.InvokeVoidAsync("open", authUrl, "_blank").ConfigureAwait(false);
+
+            _isOAuthWaiting = true;
+            StateHasChanged();
+
+            // Poll until the server appears as connected (token written by callback).
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            while (!cts.IsCancellationRequested)
+            {
+                await Task.Delay(2000, cts.Token).ConfigureAwait(false);
+                var stored = await ServerStore.GetAsync(entry.Id).ConfigureAwait(false);
+                if (stored?.Headers.ContainsKey("Authorization") == true)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        _isOAuthWaiting = false;
+                        _isOAuthConnecting = false;
+                        _activeTab = "connected";
+                        await LoadServersAsync().ConfigureAwait(false);
+                        _selected = _servers.FirstOrDefault(s => s.Name == entry.Id);
+                        _status = $"Connected to '{entry.Name}' via OAuth.";
+                        StateHasChanged();
+                    }).ConfigureAwait(false);
+                    return;
+                }
+            }
+
+            _isOAuthWaiting = false;
+            _status = "Authorization timed out. Please try again.";
+        }
+        catch (OperationCanceledException)
+        {
+            _isOAuthWaiting = false;
+            _status = "Authorization timed out. Please try again.";
+        }
+        catch (Exception ex)
+        {
+            _isOAuthWaiting = false;
+            _status = $"OAuth failed: {ex.Message}";
+        }
+        finally
+        {
+            _isOAuthConnecting = false;
+            StateHasChanged();
+        }
+    }
+
     private static McpServerConfig BuildConfig(CatalogEntry entry, string apiKey, string endpoint)
     {
         if (entry.Kind == IntegrationKind.McpStdio)
@@ -468,7 +756,7 @@
                     .Replace("{API_KEY}", apiKey, StringComparison.Ordinal))
                 .ToArray();
 
-            return new McpServerConfig { Command = entry.DefaultCommand!, Args = args, Env = env };
+            return new McpServerConfig { Command = entry.DefaultCommand ?? string.Empty, Args = args, Env = env };
         }
         else
         {
@@ -537,6 +825,56 @@
     private void Select(ServerView item)
     {
         _selected = item;
+        _trustRules = [];
+        _trustStatus = string.Empty;
+        _editingEnv = false;
+        _envEdits = [];
+        _envStatus = string.Empty;
+        _ = LoadTrustRulesAsync(item.Name);
+    }
+
+    private async Task LoadTrustRulesAsync(string serverName)
+    {
+        if (_workspaceId is null) return;
+        _trustRules = (await TrustStore.GetRulesAsync(_workspaceId, serverName).ConfigureAwait(false)).ToList();
+        await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+    }
+
+    private async Task AddTrustRuleAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newRulePattern) || _selected is null || _workspaceId is null)
+        {
+            _trustStatus = "Tool pattern is required.";
+            return;
+        }
+        if (!Enum.TryParse<McpTrustAction>(_newRuleAction, out _))
+        {
+            _trustStatus = "Invalid action.";
+            return;
+        }
+        var now = DateTimeOffset.UtcNow;
+        var rule = new McpTrustRule(
+            RuleId: Guid.NewGuid().ToString("N"),
+            WorkspaceId: _workspaceId,
+            ServerName: _selected.Name,
+            ToolPattern: _newRulePattern.Trim(),
+            Action: Enum.Parse<McpTrustAction>(_newRuleAction),
+            Reason: string.IsNullOrWhiteSpace(_newRuleReason) ? null : _newRuleReason.Trim(),
+            CreatedAt: now,
+            UpdatedAt: now);
+        await TrustStore.UpsertAsync(rule).ConfigureAwait(false);
+        _newRulePattern = string.Empty;
+        _newRuleReason = string.Empty;
+        _trustStatus = "Rule added.";
+        await LoadTrustRulesAsync(_selected.Name).ConfigureAwait(false);
+    }
+
+    private async Task RemoveTrustRuleAsync(string ruleId)
+    {
+        if (_workspaceId is null || _selected is null) return;
+        await TrustStore.DeleteAsync(ruleId, _workspaceId).ConfigureAwait(false);
+        _trustStatus = "Rule removed.";
+        await LoadTrustRulesAsync(_selected.Name).ConfigureAwait(false);
     }
 
     private async Task ConnectAndRefreshAsync(string name, McpServerConfig config)
@@ -574,7 +912,7 @@
             {
                 Command = _newCommand.Trim(),
                 Args = args,
-                Env = new Dictionary<string, string>(StringComparer.Ordinal),
+                Env = ParseEnvVarLines(_newEnvVars),
             };
             await ServerStore.UpsertAsync(name, config).ConfigureAwait(false);
             ResetForm();
@@ -631,6 +969,11 @@
             foreach (var (name, config) in entries)
                 await ServerStore.UpsertAsync(name, config).ConfigureAwait(false);
 
+            var envCount = entries.Values.Sum(c => c.Env.Count);
+            var names = string.Join(", ", entries.Keys);
+            _status = envCount > 0
+                ? $"Imported: {names} ({envCount} env var{(envCount == 1 ? "" : "s")})."
+                : $"Imported: {names}.";
             _jsonInput = string.Empty;
             foreach (var (name, config) in entries)
                 await ConnectAndRefreshAsync(name, config).ConfigureAwait(false);
@@ -640,7 +983,78 @@
 
     private void ResetForm()
     {
-        _newName = _newCommand = _newArgs = _newUrl = _newBearer = _newHeadersJson = string.Empty;
+        _newName = _newCommand = _newArgs = _newEnvVars = _newUrl = _newBearer = _newHeadersJson = string.Empty;
+    }
+
+    // ── Env var editor ────────────────────────────────────────────────────────
+
+    private void StartEditEnv()
+    {
+        _envEdits = (_selected?.EnvVars ?? [])
+            .Select(kv => new EnvEditRow { Key = kv.Key, Value = kv.Value })
+            .ToList();
+        _envStatus = string.Empty;
+        _editingEnv = true;
+    }
+
+    private void AddEnvRow() => _envEdits.Add(new EnvEditRow());
+
+    private void CancelEditEnv()
+    {
+        _editingEnv = false;
+        _envEdits = [];
+        _envStatus = string.Empty;
+    }
+
+    private async Task SaveEnvAsync()
+    {
+        if (_selected is null) return;
+        try
+        {
+            var current = await ServerStore.GetAsync(_selected.Name).ConfigureAwait(false);
+            if (current is null) { _envStatus = "Server not found."; return; }
+
+            var newEnv = _envEdits
+                .Where(r => !string.IsNullOrWhiteSpace(r.Key))
+                .ToDictionary(r => r.Key.Trim(), r => r.Value, StringComparer.Ordinal);
+
+            var updated = new McpServerConfig
+            {
+                Command = current.Command,
+                Args = current.Args,
+                Env = newEnv,
+                OAuthConfig = current.OAuthConfig,
+                Url = current.Url,
+                Headers = current.Headers,
+            };
+            await ServerStore.UpsertAsync(_selected.Name, updated).ConfigureAwait(false);
+            _editingEnv = false;
+            _envEdits = [];
+            _envStatus = $"{newEnv.Count} variable{(newEnv.Count == 1 ? "" : "s")} saved.";
+            await LoadServersAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex) { _envStatus = $"Failed: {ex.Message}"; }
+    }
+
+    private static Dictionary<string, string> ParseEnvVarLines(string text)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(text)) return result;
+        foreach (var line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Length == 0 || trimmed.StartsWith('#')) continue;
+            var eq = trimmed.IndexOf('=', StringComparison.Ordinal);
+            if (eq <= 0) continue;
+            result[trimmed[..eq].Trim()] = trimmed[(eq + 1)..];
+        }
+        return result;
+    }
+
+    private sealed class EnvEditRow
+    {
+        public string Key { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
     }
 
     private async Task RemoveServerAsync(string name)

@@ -1,8 +1,10 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:conv="using:Sovrant.Desktop.Converters"
              xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
              xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             xmlns:knowledge="using:Sovrant.Runtime.Knowledge"
              x:Class="Sovrant.Desktop.Views.ChatView"
              x:DataType="vm:ChatViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -47,9 +49,8 @@
                     <TextBox x:Name="InputBox"
                              Text="{Binding InputText}"
                              Watermark="Type a message or / for commands..."
-                             AcceptsReturn="False"
+                             AcceptsReturn="True"
                              TextWrapping="Wrap"
-                             KeyDown="OnInputKeyDown"
                              MinHeight="60"
                              MaxHeight="300"
                              Padding="12,10"
@@ -162,6 +163,25 @@
                     <TextBlock Text="⚡" FontSize="24"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center" />
+                </Border>
+
+                <!-- Agent scope badge — visible when session is bound to an agent -->
+                <Border CornerRadius="12" Padding="10,4"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1"
+                        HorizontalAlignment="Center"
+                        IsVisible="{Binding AgentName,
+                                            Converter={x:Static conv:StringNotNullOrEmptyConverter.Instance}}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="🤖" FontSize="12" VerticalAlignment="Center" />
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                   VerticalAlignment="Center">
+                            <Run Text="Chatting with " />
+                            <Run Text="{Binding AgentName}" FontWeight="SemiBold"
+                                 Foreground="{DynamicResource TextPrimary}" />
+                        </TextBlock>
+                    </StackPanel>
                 </Border>
 
                 <TextBlock Text="What are you working on?"
@@ -311,6 +331,18 @@
                                                            Foreground="{DynamicResource TextMuted}"
                                                            VerticalAlignment="Center" Margin="4,0,0,0"
                                                            IsVisible="{Binding ActionSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                <Button Content="Copy"
+                                                        FontSize="10"
+                                                        Padding="8,2"
+                                                        CornerRadius="4"
+                                                        Background="Transparent"
+                                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                                        BorderThickness="1"
+                                                        Foreground="{DynamicResource TextMuted}"
+                                                        VerticalAlignment="Center"
+                                                        Margin="8,0,0,0"
+                                                        Click="OnCopyMessageButtonClick"
+                                                        IsVisible="{Binding IsComplete}" />
                                             </StackPanel>
 
                                             <!-- Intent narration — what the system thinks the user wants -->
@@ -481,6 +513,46 @@
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
+
+                                            <!-- Phase 116 H — Sources / provenance -->
+                                            <StackPanel Margin="42,6,0,2"
+                                                        IsVisible="{Binding HasSources}"
+                                                        Spacing="4">
+                                                <TextBlock Text="SOURCES"
+                                                           FontSize="10"
+                                                           Foreground="{DynamicResource TextMuted}"
+                                                           FontWeight="SemiBold" />
+                                                <ItemsControl ItemsSource="{Binding Sources}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <WrapPanel Orientation="Horizontal" />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate DataType="{x:Type knowledge:KnowledgeAttribution}">
+                                                            <Border Margin="0,0,5,4"
+                                                                    Padding="5,2"
+                                                                    CornerRadius="8"
+                                                                    Background="{DynamicResource SurfaceCard}"
+                                                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                                                    BorderThickness="1">
+                                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                                    <TextBlock Text="{Binding Kind}"
+                                                                               FontSize="9"
+                                                                               Foreground="{DynamicResource TextMuted}"
+                                                                               FontFamily="{DynamicResource MonoFont}"
+                                                                               VerticalAlignment="Center" />
+                                                                    <TextBlock Text="{Binding Slug}"
+                                                                               FontSize="10"
+                                                                               Foreground="{DynamicResource TextSecondary}"
+                                                                               FontFamily="{DynamicResource MonoFont}"
+                                                                               VerticalAlignment="Center" />
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
 
                                             <!-- Error banner with retry -->
                                             <Border Margin="42,6,0,0"

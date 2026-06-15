@@ -19,4 +19,10 @@ public interface ITemplateRegistry
     /// Both parameters are optional.
     /// </summary>
     IEnumerable<IDocumentTemplate> Find(string? industry = null, string? search = null);
+
+    /// <summary>
+    /// Re-reads DB-backed templates from the knowledge store, picking up user overlay
+    /// edits/reverts made at runtime (Phase 112D). C# templates are unaffected.
+    /// </summary>
+    void Reload();
 }

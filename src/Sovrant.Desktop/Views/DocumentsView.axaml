@@ -95,10 +95,27 @@
                         BorderThickness="1"
                         Padding="20,16"
                         IsVisible="{Binding !!SelectedTemplate}">
-                    <ScrollViewer>
+                    <Panel>
+                    <ScrollViewer IsVisible="{Binding !IsEditing}">
                         <StackPanel Spacing="12">
                             <!-- Header -->
-                            <StackPanel Spacing="4">
+                            <DockPanel>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                                            VerticalAlignment="Top" Spacing="6">
+                                    <Button Content="Revert"
+                                            Command="{Binding RevertTemplateCommand}"
+                                            IsVisible="{Binding SelectedTemplate.HasUserOverride}"
+                                            Padding="10,5" CornerRadius="6" FontSize="12"
+                                            Background="Transparent"
+                                            Foreground="{DynamicResource TextSecondary}" />
+                                    <Button Content="Edit"
+                                            Command="{Binding EditTemplateCommand}"
+                                            IsVisible="{Binding CanEdit}"
+                                            Padding="10,5" CornerRadius="6" FontSize="12"
+                                            Background="{DynamicResource BrandPrimary}"
+                                            Foreground="White" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
                                 <TextBlock Text="{Binding SelectedTemplate.Name}"
                                            FontSize="18" FontWeight="Bold"
                                            Foreground="{DynamicResource TextPrimary}" />
@@ -119,7 +136,8 @@
                                            FontSize="12"
                                            TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextSecondary}" />
-                            </StackPanel>
+                                </StackPanel>
+                            </DockPanel>
 
                             <!-- Primary: chat-to-create -->
                             <Button Content="💬 Chat to create this document"
@@ -255,6 +273,56 @@
                             </Border>
                         </StackPanel>
                     </ScrollViewer>
+
+                    <!-- Edit view -->
+                    <ScrollViewer IsVisible="{Binding IsEditing}">
+                        <StackPanel Spacing="14" MaxWidth="680">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Edit Template" FontSize="18" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}" />
+                                <TextBlock FontSize="12" Foreground="{DynamicResource TextMuted}"
+                                           TextWrapping="Wrap"
+                                           Text="Saves as a global override — the built-in template is preserved. Use Revert to restore. The field schema is carried forward unchanged; edit the Scriban body and frontmatter metadata here." />
+                            </StackPanel>
+
+                            <Border IsVisible="{Binding ActiveEditor.ValidationError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                    Background="#332d1b1b" BorderBrush="#c94a4a"
+                                    BorderThickness="1" CornerRadius="6" Padding="12,8">
+                                <TextBlock Text="{Binding ActiveEditor.ValidationError}"
+                                           FontSize="12" Foreground="#ff8080" TextWrapping="Wrap" />
+                            </Border>
+
+                            <StackPanel Spacing="4">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Right" FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}"
+                                               Text="{Binding ActiveEditor.WordCount, StringFormat='{}{0} words'}" />
+                                    <TextBlock Text="Source (YAML frontmatter + Scriban body)"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                </DockPanel>
+                                <TextBox Text="{Binding ActiveEditor.Source, Mode=TwoWay}"
+                                         AcceptsReturn="True" MinHeight="380"
+                                         CornerRadius="6" Padding="10,8"
+                                         FontFamily="Consolas,Menlo,monospace" FontSize="12" />
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Save"
+                                        Command="{Binding ActiveEditor.SaveCommand}"
+                                        IsEnabled="{Binding ActiveEditor.ValidationError, Converter={x:Static ObjectConverters.IsNull}}"
+                                        Padding="16,8" CornerRadius="6"
+                                        Background="{DynamicResource BrandPrimary}"
+                                        Foreground="White" />
+                                <Button Content="Cancel"
+                                        Command="{Binding ActiveEditor.CancelCommand}"
+                                        Padding="16,8" CornerRadius="6"
+                                        Background="Transparent"
+                                        Foreground="{DynamicResource TextSecondary}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                    </Panel>
                 </Border>
             </Grid>
         </Grid>

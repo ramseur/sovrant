@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using Sovrant.Runtime.Knowledge;
 using Sovrant.Web.Adapters;
 
 namespace Sovrant.Web.Components.Shared;
@@ -30,6 +31,16 @@ public sealed class ChatMessageModel
 
     /// <summary>Artifacts auto-saved from large text blocks (not tied to a specific tool use row).</summary>
     public List<AutoArtifactModel> StandaloneArtifacts { get; } = [];
+
+    // ── Phase 116 H — provenance ────────────────────────────────────────
+
+    /// <summary>Turn index this message corresponds to (0-based). Used to load attributions.</summary>
+    public int TurnIndex { get; set; }
+
+    /// <summary>Knowledge items that were invoked during this turn (populated after completion).</summary>
+    public List<KnowledgeAttribution> Sources { get; } = [];
+
+    public bool HasSources => Sources.Count > 0;
 
     /// <summary>The model that generated this response.</summary>
     public string? ModelName { get; set; }

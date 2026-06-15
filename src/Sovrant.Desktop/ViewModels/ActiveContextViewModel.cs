@@ -64,6 +64,10 @@ public partial class ActiveContextViewModel : ViewModelBase
     public IReadOnlyList<string> ActiveMcpServers =>
         AvailableMcpServers.Where(m => m.IsActive).Select(m => m.Name).ToList();
 
+    /// <summary>Phase 106 — agent name bound to the current chat session, or null for base assistant.</summary>
+    [ObservableProperty]
+    private string? _activeAgentName;
+
     /// <summary>Display name for the current user (local part of email). Never a raw ID.</summary>
     public string UserDisplayName { get; private set; } = string.Empty;
 

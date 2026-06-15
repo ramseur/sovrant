@@ -9,6 +9,9 @@ namespace Sovrant.Runtime.Mcp;
 /// Picks the transport from <see cref="McpServerConfig"/>: when <c>Url</c> is set,
 /// connects via <see cref="HttpClientTransport"/> with any configured headers (e.g.
 /// <c>Authorization: Bearer …</c>); otherwise falls back to stdio with command/args/env.
+/// When <see cref="McpServerConfig.OAuthConfig"/> is present and the config already
+/// contains an <c>Authorization</c> header (written by <see cref="McpOAuthService"/>
+/// after a successful token exchange), that header is passed through automatically.
 /// </remarks>
 public sealed class SovrantMcpClientFactory : IMcpClientFactory
 {

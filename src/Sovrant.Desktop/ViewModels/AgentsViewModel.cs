@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using Sovrant.Agents.Models;
 using Sovrant.Agents.Shared;
 using Sovrant.Agents.Templates;
+using Sovrant.Runtime.Auth;
 using Sovrant.Runtime.Governance;
 using Sovrant.Runtime.Storage;
 
@@ -20,6 +21,7 @@ public partial class AgentsViewModel : ViewModelBase
     private readonly IAgentRunStore _runStore;
     private readonly IAuditStore _auditStore;
     private readonly ActiveContextViewModel _activeContext;
+    private readonly IPrincipalAccessor _principal;
     private readonly Action<string, string?>? _launchChat;
     private readonly List<AgentTemplateItemViewModel> _allTemplates = [];
 
@@ -56,6 +58,7 @@ public partial class AgentsViewModel : ViewModelBase
         IAgentRunStore runStore,
         IAuditStore auditStore,
         ActiveContextViewModel activeContext,
+        IPrincipalAccessor principal,
         Action<string, string?>? launchChat = null)
     {
         _registry = registry;
@@ -64,10 +67,17 @@ public partial class AgentsViewModel : ViewModelBase
         _runStore = runStore;
         _auditStore = auditStore;
         _activeContext = activeContext;
+        _principal = principal;
         _launchChat = launchChat;
         LoadTemplates();
         _ = LoadRecentRunsAsync();
     }
+
+    /// <summary>
+    /// Agents are written to the installation-wide (global) tier, so they are system-wide
+    /// knowledge. Per policy, only admins may create, edit, clone, or delete them.
+    /// </summary>
+    public bool IsAdmin => _principal.IsAdmin;
 
     // ── Commands ──────────────────────────────────────────────────────────
 
@@ -85,7 +95,7 @@ public partial class AgentsViewModel : ViewModelBase
         IsEditing = false;
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(IsAdmin))]
     private void NewAgent()
     {
         SelectedTemplate = null;
@@ -100,10 +110,10 @@ public partial class AgentsViewModel : ViewModelBase
         EditError = string.Empty;
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(IsAdmin))]
     private void EditAgent()
     {
-        if (SelectedTemplate is null) return;
+        if (SelectedTemplate is null || !_principal.IsAdmin) return;
         IsNew = false;
         IsEditing = true;
         EditName = SelectedTemplate.IsBuiltIn ? $"{SelectedTemplate.Name}-custom" : SelectedTemplate.Name;
@@ -115,10 +125,10 @@ public partial class AgentsViewModel : ViewModelBase
         EditError = string.Empty;
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(IsAdmin))]
     private void CloneAgent()
     {
-        if (SelectedTemplate is null) return;
+        if (SelectedTemplate is null || !_principal.IsAdmin) return;
         IsNew = true;
         IsEditing = true;
         EditName = $"{SelectedTemplate.Name}-copy";
@@ -142,6 +152,7 @@ public partial class AgentsViewModel : ViewModelBase
     private async Task SaveAgentAsync()
     {
         EditError = string.Empty;
+        if (!_principal.IsAdmin) { EditError = "Admin role required to modify agents."; return; }
         var name = AgentDefinitionWriter.ToKebabCase(EditName);
         if (string.IsNullOrWhiteSpace(name)) { EditError = "Name is required."; return; }
         if (string.IsNullOrWhiteSpace(EditPrompt)) { EditError = "System prompt is required."; return; }
@@ -169,9 +180,10 @@ public partial class AgentsViewModel : ViewModelBase
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 LoadTemplates();
+                SelectedTemplate = FilteredTemplates.FirstOrDefault(t => t.Name == name);
+                // Dismiss editor only after list is confirmed updated.
                 IsEditing = false;
                 IsNew = false;
-                SelectedTemplate = FilteredTemplates.FirstOrDefault(t => t.Name == name);
             });
         }
         catch (Exception ex)
@@ -187,13 +199,13 @@ public partial class AgentsViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanDeleteAgent))]
     private void DeleteAgent()
     {
-        if (SelectedTemplate is null || SelectedTemplate.IsBuiltIn) return;
+        if (SelectedTemplate is null || SelectedTemplate.IsBuiltIn || !_principal.IsAdmin) return;
         _writer.Delete(SelectedTemplate.Name);
         SelectedTemplate = null;
         LoadTemplates();
     }
 
-    private bool CanDeleteAgent() => SelectedTemplate is { IsBuiltIn: false };
+    private bool CanDeleteAgent() => SelectedTemplate is { IsBuiltIn: false } && _principal.IsAdmin;
 
     [RelayCommand(CanExecute = nameof(CanLaunchChat))]
     private void LaunchChat()

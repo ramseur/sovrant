@@ -15,6 +15,9 @@ public partial class ChatView : UserControl
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
         AttachedToVisualTree += OnAttachedToVisualTree;
+        // Tunnel phase fires before the TextBox's own AcceptsReturn processing,
+        // ensuring Enter sends and Shift+Enter inserts a newline.
+        InputBox.AddHandler(KeyDownEvent, OnInputKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
     }
 
     private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -146,6 +149,15 @@ public partial class ChatView : UserControl
     private async void OnCopyMessageClick(object? sender, RoutedEventArgs e)
     {
         if (sender is MenuItem { DataContext: MessageViewModel msg } &&
+            TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(msg.Text);
+        }
+    }
+
+    private async void OnCopyMessageButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: MessageViewModel msg } &&
             TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
         {
             await clipboard.SetTextAsync(msg.Text);
