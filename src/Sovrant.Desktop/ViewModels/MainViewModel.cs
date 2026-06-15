@@ -165,8 +165,8 @@ public partial class MainViewModel : ViewModelBase
                 OnNavigationRequested(this, "Settings");
                 break;
             case "admin" when _principal.IsAdmin:
-                Sidebar.SelectedNavItem = "Admin";
-                CurrentPage = ResolveAdmin("users");
+                Sidebar.SelectedNavItem = "CommandCenter";
+                CurrentPage = ResetCockpitToGrid();
                 break;
         }
     }
