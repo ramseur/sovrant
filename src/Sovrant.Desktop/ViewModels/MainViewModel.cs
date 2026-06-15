@@ -252,6 +252,7 @@ public partial class MainViewModel : ViewModelBase
             "AdminWorkspaces" => ResolveAdmin("workspaces"),
             "AdminPlatformIntegrations" => _services.GetRequiredService<IntegrationsViewModel>(),
             "AdminSystemIntegrations" => _services.GetRequiredService<SystemIntegrationsViewModel>(),
+            "AdminProviders" => ResolveSettings("Settings:Providers"),
             _ => CurrentPage,
         };
     }

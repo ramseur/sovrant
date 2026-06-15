@@ -10,10 +10,15 @@
         <StackPanel MaxWidth="640" Spacing="20">
             <!-- Header -->
             <TextBlock Text="Settings" FontSize="24" FontWeight="Bold"
-                       Foreground="{DynamicResource TextPrimary}" />
+                       Foreground="{DynamicResource TextPrimary}"
+                       IsVisible="{Binding !IsProvidersTab}" />
+            <TextBlock Text="Providers" FontSize="24" FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimary}"
+                       IsVisible="{Binding IsProvidersTab}" />
 
             <!-- Tab bar -->
-            <StackPanel Orientation="Horizontal" Spacing="4">
+            <StackPanel Orientation="Horizontal" Spacing="4"
+                        IsVisible="{Binding !IsProvidersTab}">
                 <Button Content="General"
                         Command="{Binding SelectTabCommand}" CommandParameter="0"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
@@ -26,19 +31,6 @@
                         Background="{DynamicResource SurfaceCard}"
                         Foreground="{DynamicResource TextSecondary}"
                         IsVisible="{Binding !IsGeneralTab}" />
-
-                <Button Content="Providers"
-                        Command="{Binding SelectTabCommand}" CommandParameter="1"
-                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
-                        Background="{DynamicResource BrandPrimary}"
-                        Foreground="White"
-                        IsVisible="{Binding IsProvidersTab}" />
-                <Button Content="Providers"
-                        Command="{Binding SelectTabCommand}" CommandParameter="1"
-                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
-                        Background="{DynamicResource SurfaceCard}"
-                        Foreground="{DynamicResource TextSecondary}"
-                        IsVisible="{Binding !IsProvidersTab}" />
 
                 <Button Content="Connection"
                         Command="{Binding SelectTabCommand}" CommandParameter="2"
