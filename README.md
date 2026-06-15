@@ -70,7 +70,9 @@ Clone https://github.com/ramseur/sovrant.git, then:
 1. Read README.md for an overview of the project
 2. Read every file in the docs/ folder to understand the architecture
 3. Run: dotnet restore && dotnet build
-4. Start the Desktop app: dotnet run --project src/Sovrant.Desktop
+4. Start the Desktop app (Windows — no console window):
+   Start-Process dotnet -ArgumentList "run --project src/Sovrant.Desktop" -WindowStyle Hidden
+   macOS/Linux: dotnet run --project src/Sovrant.Desktop &
 5. Start the Web app: dotnet run --project src/Sovrant.Web
    (opens on http://localhost:5100)
 Report what you find and confirm both surfaces are running.
@@ -96,9 +98,17 @@ dotnet build
 
 The fastest way to get started. Full GUI with provider setup wizard, chat, and management pages.
 
-```bash
-dotnet run --project src/Sovrant.Desktop
+**Windows (PowerShell — no console window alongside the app):**
+```powershell
+Start-Process dotnet -ArgumentList "run --project src/Sovrant.Desktop" -WindowStyle Hidden
 ```
+
+**macOS / Linux:**
+```bash
+dotnet run --project src/Sovrant.Desktop &
+```
+
+> `dotnet run` uses `WinExe` output type so the app itself never shows a console window. The `Start-Process -WindowStyle Hidden` / `&` hides the dotnet host process. Alternatively, build first (`dotnet build -c Release src/Sovrant.Desktop`) and run the compiled executable directly — it launches with no console window on all platforms.
 
 On first launch, the setup wizard guides you through provider configuration (API key, model selection). Supports OpenAI, OpenRouter, DeepSeek, Groq, Mistral, Together AI, Google, Azure OpenAI, Ollama, and LM Studio.
 
@@ -787,8 +797,14 @@ The Avalonia-based desktop app provides a full GUI for interacting with the Sovr
 - First-run setup wizard lands on Command Center on completion
 - Session history with search
 
+**Windows (PowerShell — no console window):**
+```powershell
+Start-Process dotnet -ArgumentList "run --project src/Sovrant.Desktop" -WindowStyle Hidden
+```
+
+**macOS / Linux:**
 ```bash
-dotnet run --project src/Sovrant.Desktop
+dotnet run --project src/Sovrant.Desktop &
 ```
 
 ---
