@@ -960,7 +960,15 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     align-items: center;
     gap: 8px;
     min-width: 0;
+    background: transparent;
+    border: none;
+    padding: 4px 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
 }
+
+.rail-footer-user:hover { background: var(--surface-hover); }
 
 .rail-footer-avatar {
     width: 30px;

@@ -17,8 +17,6 @@
             title="Agents" @onclick='() => OnSelect.InvokeAsync("agents")'>&#x1F916;</button>
     <button class="rail-icon @(Selected == "workspace" ? "active" : "")"
             title="Projects" @onclick='() => OnSelect.InvokeAsync("workspace")'>&#x1F5C2;&#xFE0F;</button>
-    <button class="rail-icon @(Selected == "settings" ? "active" : "")"
-            title="Settings" @onclick='() => OnSelect.InvokeAsync("settings")'>&#9881;</button>
     @if (Session.IsAdmin)
     {
         <button class="rail-icon @(Selected == "admin" ? "active" : "")"

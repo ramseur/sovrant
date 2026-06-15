@@ -27,13 +27,12 @@
                 case "admin":
                     <AdminPanel OnNavigate="Navigate" />
                     break;
-                case "settings":
-                    break;
             }
         </div>
 
         <div class="rail-footer">
-            <div class="rail-footer-user">
+            <button class="rail-footer-user" title="Settings"
+                    @onclick='() => Nav.NavigateTo("/settings")'>
                 <div class="rail-footer-avatar">@_userInitial</div>
                 <div class="rail-footer-info">
                     <div class="rail-footer-name">@_userName</div>
@@ -42,7 +41,7 @@
                         <div class="rail-footer-sub">@ActiveContext.WorkspaceRole</div>
                     }
                 </div>
-            </div>
+            </button>
             <button class="rail-footer-settings" title="Log out"
                     @onclick="LogoutAsync">&#x21AA;</button>
         </div>
@@ -97,7 +96,6 @@
             "workspace" => "/projects",
             "dashboard" => "/dashboard",
             "admin" => "/command",
-            "settings" => "/settings",
             _ => null,
         };
         if (group == "chat") ActiveContext.StartNewSession();
