@@ -58,6 +58,7 @@
             <!-- ── GALLERY: left list ──────────────────────────────────────── -->
             <ScrollViewer Grid.Column="0"
                           IsVisible="{Binding ActiveTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=gallery}">
+                <StackPanel>
                 <ItemsControl ItemsSource="{Binding GalleryDisplayEntries}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:CatalogEntryViewModel">
@@ -103,6 +104,39 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+
+                <!-- Roadmap -->
+
+                <TextBlock Text="ROADMAP" FontSize="10" FontWeight="Bold"
+                           Foreground="{DynamicResource TextMuted}"
+                           Margin="0,16,0,6" />
+                <Border Padding="12,10" CornerRadius="8" Opacity="0.6"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Right"
+                                Padding="5,2" CornerRadius="4"
+                                VerticalAlignment="Top"
+                                Background="{DynamicResource SurfaceBorder}">
+                            <TextBlock Text="COMING SOON" FontSize="9"
+                                       Foreground="{DynamicResource TextMuted}" />
+                        </Border>
+                        <StackPanel Spacing="2">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="&#x1F310;" FontSize="15" VerticalAlignment="Center" />
+                                <TextBlock Text="API Endpoints"
+                                           FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock FontSize="10" Foreground="{DynamicResource TextMuted}"
+                                       TextWrapping="Wrap"
+                                       Text="Connect REST or GraphQL APIs — harness auto-discovers endpoints or can be provided an OpenAPI spec." />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+                </StackPanel>
             </ScrollViewer>
 
             <!-- ── CONNECTED: left list ────────────────────────────────────── -->
