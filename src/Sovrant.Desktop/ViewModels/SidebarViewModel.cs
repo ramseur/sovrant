@@ -214,6 +214,9 @@ public partial class SidebarViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void ClearAgent() => ActiveContext.ActiveAgentName = null;
+
+    [RelayCommand]
     private void ToggleMcpDropdown() => IsMcpDropdownOpen = !IsMcpDropdownOpen;
 
     [RelayCommand]

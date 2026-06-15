@@ -286,11 +286,8 @@
             var storedPrivacy = await SessionStore.GetIsPrivateAsync(sessionId);
             _isPrivate = storedPrivacy ?? true;
             var storedAgent = await SessionStore.GetAgentNameAsync(sessionId);
-            if (storedAgent is not null)
-            {
-                _agentName = storedAgent;
-                ActiveContext.SetActiveAgent(storedAgent);
-            }
+            _agentName = storedAgent ?? string.Empty;
+            ActiveContext.SetActiveAgent(storedAgent);
             await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
@@ -783,7 +780,17 @@
         catch { /* element may not be rendered yet */ }
     }
 
-    private void OnContextChanged() => InvokeAsync(StateHasChanged);
+    private void OnContextChanged() => InvokeAsync(() =>
+    {
+        // Mirror agent clear from the header X button back into local state.
+        if (ActiveContext.ActiveAgentName is null && _agentName is not null)
+        {
+            _agentName = null;
+            _agentSystemPrompt = null;
+        }
+        StateHasChanged();
+        return Task.CompletedTask;
+    });
 
     private void OnNewSession() => InvokeAsync(() => { ClearChat(); return Task.CompletedTask; });
 

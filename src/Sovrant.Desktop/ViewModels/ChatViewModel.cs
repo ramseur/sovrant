@@ -89,6 +89,17 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         if (_confirmationHandler is not null)
             _confirmationHandler.ConfirmationRequested += OnConfirmationRequested;
 
+        _activeContext.PropertyChanged += OnActiveContextPropertyChanged;
+    }
+
+    private void OnActiveContextPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ActiveContextViewModel.ActiveAgentName)
+            && _activeContext.ActiveAgentName is null)
+        {
+            AgentName = null;
+            _agentSystemPrompt = null;
+        }
     }
 
     private void OnConfirmationRequested(ConfirmationRequest request)
@@ -401,6 +412,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
             if (_confirmationHandler is not null)
                 _confirmationHandler.ConfirmationRequested -= OnConfirmationRequested;
+
+            _activeContext.PropertyChanged -= OnActiveContextPropertyChanged;
         }
     }
 

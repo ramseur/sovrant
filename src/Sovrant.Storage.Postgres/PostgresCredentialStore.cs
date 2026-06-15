@@ -7,16 +7,21 @@ namespace Sovrant.Storage.Postgres;
 
 /// <summary>
 /// Postgres-backed credential store using the same AES-256-GCM encryption
-/// as the SQLite implementation. The master key file still lives on disk.
+/// as the SQLite implementation. The master key is stored in the DB keystore
+/// table (V039); the legacy file path is used only for one-time migration.
 /// </summary>
 internal sealed class PostgresCredentialStore : ICredentialStore, IDisposable
 {
     private const int KeySize   = 32;
     private const int NonceSize = 12;
     private const int TagSize   = 16;
+    private const string MasterKeyScope = "master";
+
+    private const string UtcNow =
+        "to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"')";
 
     private readonly IPostgresConnectionFactory _factory;
-    private readonly string _keystorePath;
+    private readonly string? _keystorePath;
     private byte[]? _masterKey;
     private readonly SemaphoreSlim _keyInit = new(1, 1);
 
@@ -48,8 +53,7 @@ internal sealed class PostgresCredentialStore : ICredentialStore, IDisposable
         using var cmd  = conn.CreateCommand();
         cmd.CommandText = $"""
             INSERT INTO credentials (key_hash, user_id, nonce, tag, ciphertext, updated_at)
-            VALUES ($1, $2, $3, $4, $5,
-                    to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+            VALUES ($1, $2, $3, $4, $5, {UtcNow})
             ON CONFLICT (key_hash) DO UPDATE
                 SET nonce = EXCLUDED.nonce, tag = EXCLUDED.tag,
                     ciphertext = EXCLUDED.ciphertext, updated_at = EXCLUDED.updated_at
@@ -120,20 +124,56 @@ internal sealed class PostgresCredentialStore : ICredentialStore, IDisposable
 
     private async Task<byte[]> LoadOrCreateKeyAsync(CancellationToken ct)
     {
-        var dir = Path.GetDirectoryName(_keystorePath);
-        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        // Try the DB keystore first (V039+).
+        var dbKey = await TryLoadKeyFromDbAsync(ct).ConfigureAwait(false);
+        if (dbKey is not null) return dbKey;
 
-        if (File.Exists(_keystorePath))
+        // One-time migration from legacy file if it exists.
+        if (_keystorePath is not null && File.Exists(_keystorePath))
         {
             var hex = (await File.ReadAllTextAsync(_keystorePath, ct).ConfigureAwait(false)).Trim();
             if (hex.Length == KeySize * 2)
-                return Convert.FromHexString(hex);
+            {
+                var fileKey = Convert.FromHexString(hex);
+                await SaveKeyToDbAsync(fileKey, ct).ConfigureAwait(false);
+                return fileKey;
+            }
         }
 
-        var key = new byte[KeySize];
-        RandomNumberGenerator.Fill(key);
-        await File.WriteAllTextAsync(_keystorePath, Convert.ToHexString(key), ct).ConfigureAwait(false);
-        return key;
+        var newKey = new byte[KeySize];
+        RandomNumberGenerator.Fill(newKey);
+        await SaveKeyToDbAsync(newKey, ct).ConfigureAwait(false);
+        return newKey;
+    }
+
+    private async Task<byte[]?> TryLoadKeyFromDbAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var conn = _factory.CreateConnection();
+            using var cmd  = conn.CreateCommand();
+            cmd.CommandText = "SELECT key_hex FROM keystore WHERE scope = $1";
+            cmd.Parameters.AddWithValue(MasterKeyScope);
+            var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+            if (result is string hex && hex.Length == KeySize * 2)
+                return Convert.FromHexString(hex);
+            return null;
+        }
+        catch (NpgsqlException) { return null; }
+    }
+
+    private async Task SaveKeyToDbAsync(byte[] key, CancellationToken ct)
+    {
+        using var conn = _factory.CreateConnection();
+        using var cmd  = conn.CreateCommand();
+        cmd.CommandText = $"""
+            INSERT INTO keystore (scope, key_hex, created_at)
+            VALUES ($1, $2, {UtcNow})
+            ON CONFLICT (scope) DO UPDATE SET key_hex = EXCLUDED.key_hex
+            """;
+        cmd.Parameters.AddWithValue(MasterKeyScope);
+        cmd.Parameters.AddWithValue(Convert.ToHexString(key));
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
     private static string ComputeKeyHash(string key)

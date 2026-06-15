@@ -167,6 +167,7 @@
         <div class="tcb-agent-badge" title="This session is scoped to @ActiveContext.ActiveAgentName">
             <span class="tcb-icon">&#x1F916;</span>
             <span class="tcb-agent-name">@ActiveContext.ActiveAgentName</span>
+            <button class="tcb-agent-clear" title="Clear agent" @onclick="ClearAgent" @onclick:stopPropagation="true">&#x2715;</button>
         </div>
     }
 </div>
@@ -817,4 +818,6 @@
         var proj = _projects.FirstOrDefault(p => p.Id == _selectedProjectId);
         ActiveContext.SetProject(_selectedProjectId, proj?.Name ?? string.Empty);
     }
+
+    private void ClearAgent() => ActiveContext.SetActiveAgent(null);
 }

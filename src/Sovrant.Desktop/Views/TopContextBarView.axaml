@@ -330,6 +330,16 @@
                                TextTrimming="CharacterEllipsis"
                                MaxWidth="120"
                                VerticalAlignment="Center" />
+                    <Button Command="{Binding ClearAgentCommand}"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="2,0"
+                            VerticalAlignment="Center"
+                            ToolTip.Tip="Clear agent">
+                        <TextBlock Text="✕"
+                                   FontSize="9"
+                                   Foreground="{DynamicResource TextMuted}" />
+                    </Button>
                 </StackPanel>
             </Border>
 
