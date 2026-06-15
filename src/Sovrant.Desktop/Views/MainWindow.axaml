@@ -94,7 +94,7 @@
                             BorderBrush="{DynamicResource SurfaceBorder}"
                             BorderThickness="0,0,0,1"
                             Padding="2,8">
-                        <StackPanel Orientation="Horizontal" Spacing="1">
+                        <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
                             <Button Content="📊" ToolTip.Tip="User Dashboard"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="dashboard"
                                     Width="27" Height="30" CornerRadius="6" FontSize="13" Padding="0"
