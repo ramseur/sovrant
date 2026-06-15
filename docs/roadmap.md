@@ -204,6 +204,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Intelligent Knowledge Harness — on-demand per-turn knowledge loading via `IKnowledgeRouter` (keyword/trigger/intent scoring, no LLM call); dynamic per-turn addendum preserves stable system-prompt cache; full-round-trip PII sanitization for knowledge bodies and tool results; `knowledge_attributions` table; MCP tool relevance filtering per turn; provenance Sources section in Web + Desktop chat | Phase 116 | ✅ Done |
 | Enrich built-in skill definitions — review and improve all 32 built-in skill descriptions (2-3 sentences), workflow bodies (≥5 concrete steps), agents/tools lists, and trigger phrases; ship as a `V038__enrich_builtin_skills.sql` additive migration that UPDATEs only the BuiltIn base rows; user overlays are unaffected | Phase 114 | Planned |
 | API endpoint integration — connect REST and GraphQL APIs as first-class platform integrations alongside MCP servers; harness auto-discovers endpoints via OpenAPI/Swagger spec import or GraphQL introspection, or admin can manually describe specific endpoints; discovered endpoints exposed as typed tools through the same `MCPTool` proxy layer (trust rules, session picker, `FilteredToolRegistry`); admin configures per workspace; credentials stored in encrypted keystore; Web + Desktop parity | Phase 117 | Planned |
+| Bootstrap configuration — declarative YAML file (`sovrant.bootstrap.yaml`) that pre-configures a Sovrant installation before or at first run; covers providers, MCP servers, knowledge/skills, agent templates, workspace setup, admin users, permission defaults, and branding; Sovrant installs and starts normally then applies the bootstrap idempotently; enables sales-assisted and partner-delivered custom installs without code changes | Phase 118 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -11076,3 +11077,95 @@ MCP covers well-known developer tools but most enterprise and SaaS systems expos
 - Re-importing an updated spec that renames an operation shows a diff before applying; old tool name is removed and new one added atomically
 - API tool credentials are stored encrypted at rest and masked in all UI surfaces
 - All existing MCP and knowledge tests continue to pass
+
+---
+
+## Phase 118 — Bootstrap Configuration
+
+**Status:** Planned
+
+### Why
+
+Enterprise customers and sales-assisted deployments need Sovrant to arrive pre-configured for their environment. Today an admin must manually set up providers, MCP servers, knowledge bases, agent templates, and workspace policies after install. A declarative bootstrap file removes that friction: the partner or sales engineer authors a YAML config once, ships it alongside the installer, and Sovrant applies it automatically on first run — no code changes, no bespoke scripts, no post-install click-through.
+
+This unlocks white-label and branded installs, partner-delivered verticals (e.g. a legal firm gets Sovrant pre-loaded with compliance knowledge and approved providers), and automated CI-provisioned demo environments.
+
+### What ships
+
+**`sovrant.bootstrap.yaml`** — a single declarative file placed alongside `sovrant.config` (or in a path configured by `sovrant.config`). Sections:
+
+```yaml
+sovrant_bootstrap: "1.0"
+
+workspace:
+  name: "Acme Legal"
+  default_permission_mode: "supervised"
+
+providers:
+  - provider: openrouter
+    profile_name: "Acme OpenRouter"
+    api_key_env: "SOVRANT_OPENROUTER_KEY"   # resolved from environment at apply time
+    default: true
+
+mcp_servers:
+  - name: "Acme Docs"
+    url: "https://mcp.acme.internal/docs"
+    trust_level: "trusted"
+  - name: "Filesystem"
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"]
+
+knowledge:
+  - title: "Company Policy"
+    kind: "document"
+    tier: "global"
+    source_file: "knowledge/company-policy.md"   # relative to bootstrap file
+  - title: "Approved Tools"
+    kind: "skills"
+    tier: "global"
+    source_file: "knowledge/approved-tools.md"
+
+agents:
+  - name: "Acme Assistant"
+    description: "Default assistant for Acme Legal"
+    system_prompt_file: "agents/acme-assistant.md"
+    provider_profile: "Acme OpenRouter"
+    default_model: "openai/gpt-4o"
+
+admin_users:
+  - email: "it-admin@acme.com"
+
+branding:
+  product_name: "Acme AI"
+  primary_color: "#1A3C8F"
+```
+
+**Apply behavior:**
+- Applied **once on first boot** if a bootstrap file is present and the instance has never been bootstrapped (flag stored in DB)
+- `--bootstrap-apply` CLI flag forces a re-apply (idempotent: skips items that already exist, updates changed items, never deletes)
+- `--bootstrap-check` CLI flag validates the file and reports what would change without touching the DB
+- Credentials sourced from environment variables (the file never stores secrets directly)
+- Source files (knowledge, agent prompts) bundled alongside the bootstrap YAML; relative paths resolved from the bootstrap file's directory
+
+**Configurable items:**
+- Providers (with profile names and credential env-var references)
+- MCP servers (HTTP and stdio)
+- Knowledge items (any kind, any tier the caller is authorized for)
+- Agent templates
+- Workspace display name and default permission mode
+- Admin user list (by email; users are created or promoted as needed)
+- Branding overrides (`product_name`, `primary_color`)
+
+**Drift detection:** re-running `--bootstrap-check` after manual changes reports which items have drifted from the bootstrap spec, so ops teams can detect unexpected configuration drift.
+
+**Web + Desktop parity:** the apply engine is in the core library (`Sovrant.Core`); both runtimes call it. The Web admin UI shows a "Bootstrap" status card (applied / not applied / drifted) in the Admin panel.
+
+### Acceptance criteria
+
+- A fresh Sovrant instance with a `sovrant.bootstrap.yaml` boots and auto-applies the config; admin sees all items present without any manual setup
+- Running `--bootstrap-apply` a second time is idempotent: no duplicates are created, no existing manual config is deleted
+- `api_key_env` resolves from the process environment; if the env var is absent, apply fails with a clear error naming the missing variable
+- `--bootstrap-check` on a drifted instance reports the specific items that differ from the spec
+- A bootstrap file with a structural error (wrong YAML, unknown section, invalid provider name) is rejected at startup with a human-readable message; Sovrant continues to run without applying anything
+- Web admin panel shows the bootstrap status card (applied date, applied-by, item count)
+- All existing provider, MCP, and knowledge tests continue to pass
