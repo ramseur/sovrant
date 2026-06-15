@@ -93,7 +93,7 @@
                     <Border DockPanel.Dock="Top"
                             BorderBrush="{DynamicResource SurfaceBorder}"
                             BorderThickness="0,0,0,1"
-                            Padding="6,8">
+                            Padding="2,8">
                         <StackPanel Orientation="Horizontal" Spacing="1">
                             <Button Content="📊" ToolTip.Tip="User Dashboard"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="dashboard"
