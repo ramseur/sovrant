@@ -295,18 +295,21 @@
     {
         try
         {
-            var configs = await McpServerStore.GetAllAsync();
-            _availableMcpServers = configs.Keys.OrderBy(n => n, StringComparer.Ordinal).ToList();
+            var wsId = ActiveContext.WorkspaceId;
+            var visible = await McpServerStore.GetEnabledEntriesAsync(WsSettings, wsId);
+            _availableMcpServers = visible.Select(e => e.Name).OrderBy(n => n, StringComparer.Ordinal).ToList();
 
-            // Load persisted selection — opt-in means nothing active by default.
+            // Load persisted selection — filter saved names against what's now visible.
             var userId = Session.UserId;
             if (!string.IsNullOrEmpty(userId))
             {
                 var saved = await Prefs.GetAsync(userId, UserPreferenceKeys.ActiveMcpServers);
                 if (!string.IsNullOrWhiteSpace(saved))
                 {
+                    var visibleSet = new HashSet<string>(_availableMcpServers, StringComparer.Ordinal);
                     _activeMcpServers = new HashSet<string>(
-                        saved.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                        saved.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                             .Where(n => visibleSet.Contains(n)),
                         StringComparer.Ordinal);
                 }
             }
@@ -327,6 +330,7 @@
             await UnbindMcpDismissAsync();
             return;
         }
+        await LoadMcpServersAsync();
         try
         {
             _selfRef ??= DotNetObjectReference.Create(this);

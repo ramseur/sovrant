@@ -551,6 +551,7 @@ CREATE INDEX IF NOT EXISTS workspace_settings_key_idx ON workspace_settings(key)
 -- ── V019 MCP/LSP Servers ──────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS mcp_servers (
+    id                TEXT NOT NULL DEFAULT '',
     name              TEXT PRIMARY KEY,
     command           TEXT NOT NULL DEFAULT '',
     args_json         TEXT NOT NULL DEFAULT '[]',
@@ -561,6 +562,8 @@ CREATE TABLE IF NOT EXISTS mcp_servers (
     created_at        TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
     updated_at        TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mcp_servers_id ON mcp_servers(id) WHERE id <> '';
 
 CREATE TABLE IF NOT EXISTS lsp_servers (
     language   TEXT PRIMARY KEY,
@@ -736,5 +739,5 @@ CREATE TABLE IF NOT EXISTS sovrant_schema_version (
 );
 
 INSERT INTO sovrant_schema_version (id, version)
-VALUES (1, 39)
+VALUES (1, 40)
 ON CONFLICT (id) DO UPDATE SET version = EXCLUDED.version, applied_at = EXCLUDED.applied_at;

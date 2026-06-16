@@ -5,10 +5,12 @@ using Sovrant.Api.Routing;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Hooks;
+using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Tools;
 using Sovrant.Runtime.Workspaces;
 using Sovrant.Server.Auth;
+using Sovrant.Server.Middleware;
 using Sovrant.Server.OpenAi;
 using Sovrant.Server.Permissions;
 using Sovrant.Server.ServerConfig;
@@ -41,6 +43,7 @@ internal static class ChatRoutes
         IHookRunner hookRunner,
         ILoggerFactory loggerFactory,
         IWorkspaceSettingsStore? workspaceSettings,
+        IMcpServerStore? mcpServerStore,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
@@ -142,17 +145,33 @@ internal static class ChatRoutes
         if (req.Model is not null && sessionConfig is not null)
             sessionConfig.Model = req.Model;
 
+        // Filter requested MCP connections to only those enabled for the workspace.
+        // Strict opt-in: an MCP that hasn't been enabled for this workspace is silently
+        // dropped, so clients with a stale list can't activate removed servers.
+        // Null setting (never configured) is treated the same as empty — all blocked.
+        var mcpConnections = req.McpConnections;
+        if (mcpConnections is not null && mcpConnections.Count > 0 && workspaceSettings is not null && mcpServerStore is not null)
+        {
+            var workspaceId = ctx.GetWorkspaceId();
+            if (!string.IsNullOrEmpty(workspaceId))
+            {
+                var enabledEntries = await mcpServerStore.GetEnabledEntriesAsync(workspaceSettings, workspaceId, ct).ConfigureAwait(false);
+                var enabledNames = new HashSet<string>(enabledEntries.Select(e => e.Name), StringComparer.Ordinal);
+                mcpConnections = mcpConnections.Where(name => enabledNames.Contains(name)).ToList();
+            }
+        }
+
         // Apply the per-request MCP connection allow-list to the session, both
         // in-memory (so the runtime gates this turn) and in storage (so the gate
         // survives session reload). null = leave existing gate alone.
-        if (req.McpConnections is not null)
+        if (mcpConnections is not null)
         {
             if (sessionConfig is not null)
-                sessionConfig.AllowedMcpServers = req.McpConnections;
+                sessionConfig.AllowedMcpServers = mcpConnections;
             if (req.SessionId is not null)
             {
                 await sessionStore
-                    .SetMcpConnectionsAsync(req.SessionId, req.McpConnections, ownerUserId, ct)
+                    .SetMcpConnectionsAsync(req.SessionId, mcpConnections, ownerUserId, ct)
                     .ConfigureAwait(false);
             }
         }

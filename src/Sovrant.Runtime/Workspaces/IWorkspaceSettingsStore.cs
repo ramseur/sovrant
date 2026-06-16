@@ -129,6 +129,12 @@ public static class WorkspaceSettingsKeys
     /// </summary>
     public const string EnabledProviderProfileIds = "provider.enabled_profile_ids";
 
+    /// <summary>
+    /// Comma-separated list of MCP server IDs (McpServerEntry.Id) enabled for this workspace.
+    /// When empty or absent, no MCP servers are available to workspace members — admin must explicitly opt in.
+    /// </summary>
+    public const string EnabledMcpServerIds = "mcp.enabled_server_ids";
+
     // ── General / LLM behaviour ──────────────────────────────────────────────
 
     /// <summary>Max tokens per LLM response, workspace-wide override (int). Overrides user preference.</summary>
