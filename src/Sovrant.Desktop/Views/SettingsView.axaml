@@ -128,6 +128,36 @@
                                FontSize="10" Foreground="{DynamicResource TextMuted}" />
                 </StackPanel>
 
+                <!-- Workspace picker -->
+                <StackPanel Spacing="6"
+                            IsVisible="{Binding !!WorkspaceItems.Count}">
+                    <TextBlock Text="Enable for workspaces" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <Border CornerRadius="8" MaxHeight="144"
+                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                            Background="{DynamicResource SurfaceBackground}"
+                            ClipToBounds="True">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding WorkspaceItems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vm:WorkspaceSelectItem">
+                                        <Border Padding="10,6" Background="Transparent">
+                                            <DockPanel>
+                                                <CheckBox DockPanel.Dock="Right"
+                                                          IsChecked="{Binding IsSelected}"
+                                                          VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding Name}" FontSize="12"
+                                                           Foreground="{DynamicResource TextPrimary}"
+                                                           VerticalAlignment="Center" />
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+                </StackPanel>
+
                 <!-- Profile name + Add button -->
                 <Border Padding="12" CornerRadius="8"
                         Background="{DynamicResource SurfaceCard}"

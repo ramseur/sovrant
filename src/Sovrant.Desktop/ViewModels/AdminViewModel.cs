@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.Auth;
-using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Providers;
 using Sovrant.Runtime.Users;
 using Sovrant.Runtime.Workspaces;
@@ -18,7 +17,6 @@ public partial class AdminViewModel : ViewModelBase
     private readonly ActiveContextViewModel _activeContext;
     private readonly IWorkspaceSettingsStore _wsSettings;
     private readonly IProviderProfileStore _profileStore;
-    private readonly ICredentialStore _credentials;
 
     /// <summary>Set by the View to show a simple confirmation before disabling a user.</summary>
     public Func<string, string, Task<bool>>? ConfirmDisableAsync { get; set; }
@@ -91,14 +89,8 @@ public partial class AdminViewModel : ViewModelBase
     [ObservableProperty] private string _newMemberEmail = string.Empty;
     [ObservableProperty] private string _newMemberRole = "Member"; // "Admin" or "Member"
 
-    // Provider profile management
-    [ObservableProperty] private string _wsNewProviderName = string.Empty;
-    [ObservableProperty] private string _wsNewProviderKind = "OpenAI";
-    [ObservableProperty] private string _wsNewProviderApiKey = string.Empty;
-    [ObservableProperty] private string _wsNewProviderBaseUrl = string.Empty;
-
     public ObservableCollection<ConfigWorkspaceMemberRow> ConfigWorkspaceMembers { get; } = [];
-    public ObservableCollection<WorkspaceProviderProfile> ConfigWorkspaceProfiles { get; } = [];
+    public ObservableCollection<WorkspaceProviderToggleViewModel> ProviderToggles { get; } = [];
 
     public bool IsConfigPanelVisible => ConfigWorkspace is not null;
 
@@ -106,16 +98,10 @@ public partial class AdminViewModel : ViewModelBase
 
     public IReadOnlyList<string> WebSearchBackends { get; } = ["Auto", "Brave", "Firecrawl", "Native", "Off"];
     public IReadOnlyList<string> MemberRoles { get; } = ["Member", "Admin"];
-    public IReadOnlyList<string> Providers { get; } =
-    [
-        "OpenAI", "DeepSeek", "Groq", "Mistral", "Together AI",
-        "Azure OpenAI", "Google", "OpenRouter", "Ollama", "LM Studio", "Custom"
-    ];
 
     public AdminViewModel(IIdentityService identity, IUserService users, IPrincipalAccessor principal,
         IWorkspaceService workspaces, ActiveContextViewModel activeContext,
-        IWorkspaceSettingsStore wsSettings, IProviderProfileStore profileStore,
-        ICredentialStore credentials)
+        IWorkspaceSettingsStore wsSettings, IProviderProfileStore profileStore)
     {
         _identity = identity;
         _users = users;
@@ -124,7 +110,6 @@ public partial class AdminViewModel : ViewModelBase
         _activeContext = activeContext;
         _wsSettings = wsSettings;
         _profileStore = profileStore;
-        _credentials = credentials;
     }
 
     [RelayCommand]
@@ -297,8 +282,8 @@ public partial class AdminViewModel : ViewModelBase
         // Load members
         await LoadConfigMembersAsync(ws.WorkspaceId);
 
-        // Load workspace provider profiles
-        await LoadConfigProfilesAsync(ws.WorkspaceId);
+        // Load provider toggles
+        await LoadProviderTogglesAsync(ws.WorkspaceId);
     }
 
     [RelayCommand]
@@ -344,53 +329,12 @@ public partial class AdminViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task AddWorkspaceProviderAsync()
+    private async Task SaveWorkspaceProvidersAsync()
     {
-        if (ConfigWorkspace is null || string.IsNullOrWhiteSpace(WsNewProviderApiKey)) return;
-        var name = string.IsNullOrWhiteSpace(WsNewProviderName) ? WsNewProviderKind : WsNewProviderName.Trim();
-#pragma warning disable CA1308
-        var profileId = $"ws-{ConfigWorkspace.WorkspaceId}-{WsNewProviderKind.ToLowerInvariant()}-{name.ToLowerInvariant().Replace(' ', '-')}";
-#pragma warning restore CA1308
-        var credId = $"provider.{profileId}.api_key";
-        await _credentials.StoreAsync(credId, WsNewProviderApiKey.Trim());
-        var now = DateTimeOffset.UtcNow;
-        var profile = new Sovrant.Runtime.Providers.ProviderProfile(
-            ProfileId: profileId,
-            UserId: _principal.UserId!,
-            Name: name,
-            ProviderKind: WsNewProviderKind,
-            BaseUrl: string.IsNullOrWhiteSpace(WsNewProviderBaseUrl) ? GetDefaultBaseUrl(WsNewProviderKind) : WsNewProviderBaseUrl.Trim(),
-            DefaultModel: null,
-            MaxTokens: null,
-            CredentialId: credId,
-            CreatedAt: now,
-            UpdatedAt: now,
-            WorkspaceId: ConfigWorkspace.WorkspaceId);
-        var existing = await _profileStore.GetAsync(profileId);
-        if (existing is null) await _profileStore.CreateAsync(profile);
-        else await _profileStore.UpdateAsync(profile with { CreatedAt = existing.CreatedAt });
-        WsNewProviderApiKey = string.Empty;
-        WsNewProviderName = string.Empty;
-        await LoadConfigProfilesAsync(ConfigWorkspace.WorkspaceId);
-        Status = $"Provider '{name}' added to workspace.";
-    }
-
-    private static string GetDefaultBaseUrl(string kind) => kind switch
-    {
-        "OpenRouter" => "https://openrouter.ai/api/v1/",
-        "Ollama" => "http://localhost:11434/v1/",
-        "Anthropic" => "https://api.anthropic.com/v1/",
-        _ => "https://api.openai.com/v1/",
-    };
-
-    [RelayCommand]
-    private async Task RemoveWorkspaceProviderAsync(WorkspaceProviderProfile profile)
-    {
-        await _profileStore.DeleteAsync(profile.ProfileId);
-        await _credentials.DeleteAsync(profile.CredentialId);
-        if (ConfigWorkspace is not null)
-            await LoadConfigProfilesAsync(ConfigWorkspace.WorkspaceId);
-        Status = $"Provider '{profile.Name}' removed.";
+        if (ConfigWorkspace is null) return;
+        var enabled = string.Join(',', ProviderToggles.Where(t => t.IsEnabled).Select(t => t.ProfileId));
+        await _wsSettings.SetAsync(ConfigWorkspace.WorkspaceId, WorkspaceSettingsKeys.EnabledProviderProfileIds, enabled);
+        Status = "Provider availability saved.";
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -410,12 +354,22 @@ public partial class AdminViewModel : ViewModelBase
         }
     }
 
-    private async Task LoadConfigProfilesAsync(string workspaceId)
+    private async Task LoadProviderTogglesAsync(string workspaceId)
     {
-        var profiles = await _profileStore.ListByWorkspaceAsync(workspaceId);
-        ConfigWorkspaceProfiles.Clear();
-        foreach (var p in profiles)
-            ConfigWorkspaceProfiles.Add(new WorkspaceProviderProfile(p.ProfileId, p.Name, p.ProviderKind, p.BaseUrl, p.CredentialId));
+        var allProfiles = await _profileStore.ListAsync(_principal.UserId!);
+        var enabledRaw = await _wsSettings.GetAsync(workspaceId, WorkspaceSettingsKeys.EnabledProviderProfileIds);
+        var enabledIds = string.IsNullOrEmpty(enabledRaw)
+            ? []
+            : new HashSet<string>(enabledRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        ProviderToggles.Clear();
+        foreach (var p in allProfiles)
+            ProviderToggles.Add(new WorkspaceProviderToggleViewModel
+            {
+                ProfileId = p.ProfileId,
+                Name = p.Name,
+                ProviderKind = p.ProviderKind,
+                IsEnabled = enabledIds.Contains(p.ProfileId),
+            });
     }
 }
 

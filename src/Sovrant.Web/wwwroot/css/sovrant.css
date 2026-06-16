@@ -3396,6 +3396,10 @@ details[open] .doc-advanced-toggle::before { content: "▼ "; }
 .inline-form input, .inline-form select { flex: 1; min-width: 120px; }
 .provider-add-form { display: flex; flex-direction: column; gap: 8px; }
 .provider-add-form input, .provider-add-form select { width: 100%; }
+.multi-select-box { border: 1px solid var(--surface-border); border-radius: 8px; max-height: 144px; overflow-y: auto; background: var(--surface-background); }
+.multi-select-box label { display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; font-size: 12px; color: var(--text-primary); }
+.multi-select-box label:hover { background: var(--surface-hover); }
+.multi-select-box label input[type=checkbox] { flex-shrink: 0; }
 .form-group { display: flex; flex-direction: column; gap: 4px; }
 .form-group label { font-size: 12px; color: var(--text-secondary); }
 .form-group input, .form-group select { background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 6px; padding: 7px 10px; font-size: 13px; color: var(--text-primary); outline: none; }

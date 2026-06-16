@@ -12,6 +12,7 @@ using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Preferences;
 using Sovrant.Runtime.Providers;
 using Sovrant.Runtime.Session;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Desktop.ViewModels;
 
@@ -24,6 +25,7 @@ public partial class SidebarViewModel : ViewModelBase
     private readonly IUserPreferenceStore _prefs;
     private readonly IProviderProfileStore _profileStore;
     private readonly ICredentialStore _credentials;
+    private readonly IWorkspaceSettingsStore? _wsSettings;
     private readonly IModelCapabilityRegistry? _capabilityRegistry;
     private bool _suppressProfileSwitch;
 
@@ -133,7 +135,8 @@ public partial class SidebarViewModel : ViewModelBase
         ActiveSessionsViewModel? activeSessions = null,
         MutableAuthProvider? authProvider = null,
         IHttpClientFactory? httpFactory = null,
-        IModelCapabilityRegistry? capabilityRegistry = null)
+        IModelCapabilityRegistry? capabilityRegistry = null,
+        IWorkspaceSettingsStore? wsSettings = null)
     {
         _sessionStore = sessionStore;
         _config = config;
@@ -143,6 +146,7 @@ public partial class SidebarViewModel : ViewModelBase
         _profileStore = profileStore;
         _credentials = credentials;
         _capabilityRegistry = capabilityRegistry;
+        _wsSettings = wsSettings;
         ActiveContext = activeContext;
         ActiveContext.AvailableMcpServers.CollectionChanged += (_, e) =>
         {
@@ -169,6 +173,7 @@ public partial class SidebarViewModel : ViewModelBase
             OnPropertyChanged(nameof(UnconfiguredSectionLabel));
         };
         UnconfiguredProviders.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasUnconfiguredProviders));
+        ActiveContext.ContextChanged += OnWorkspaceContextChanged;
         LoadFromConfig(config);
         _ = LoadProviderProfilesAsync().ContinueWith(
             t => System.Diagnostics.Debug.WriteLine($"[SidebarViewModel] LoadProviderProfilesAsync failed: {t.Exception}"),
@@ -180,6 +185,11 @@ public partial class SidebarViewModel : ViewModelBase
             System.Threading.CancellationToken.None,
             System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted,
             TaskScheduler.Default);
+    }
+
+    private void OnWorkspaceContextChanged()
+    {
+        _ = Dispatcher.UIThread.InvokeAsync(LoadProviderProfilesAsync);
     }
 
     partial void OnSelectedTreeGroupChanged(ProviderTreeGroup? value)
@@ -227,10 +237,13 @@ public partial class SidebarViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void ToggleDropdown()
+    private async Task ToggleDropdown()
     {
         IsDropdownOpen = !IsDropdownOpen;
-        if (!IsDropdownOpen) SelectedTreeGroup = null;
+        if (!IsDropdownOpen)
+            SelectedTreeGroup = null;
+        else
+            await LoadProviderProfilesAsync();
     }
 
     [RelayCommand]
@@ -431,7 +444,7 @@ public partial class SidebarViewModel : ViewModelBase
         // Credentials are NOT loaded here — retrieved on demand at activate-time
         // so plaintext keys don't sit in view-model state for the process lifetime.
         var rows = await _profileStore.ListUserAndWorkspaceAsync(
-            App.SovrantUserId, ActiveContext.ActiveWorkspaceId);
+            App.SovrantUserId, ActiveContext.ActiveWorkspaceId, _wsSettings);
         var entries = new List<ProviderProfileEntry>(rows.Count);
         foreach (var row in rows)
         {

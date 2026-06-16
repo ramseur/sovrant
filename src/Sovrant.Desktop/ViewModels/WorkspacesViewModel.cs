@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.Auth;
+using Sovrant.Runtime.Providers;
 using Sovrant.Runtime.Users;
 using Sovrant.Runtime.Workspaces;
 
@@ -16,6 +17,8 @@ public partial class WorkspacesViewModel : ViewModelBase
     private readonly IUserService _userService;
     private readonly ActiveContextViewModel _activeContext;
     private readonly IPrincipalAccessor _principal;
+    private readonly IProviderProfileStore _profileStore;
+    private readonly IWorkspaceSettingsStore _wsSettings;
 
     [ObservableProperty] private string _statusMessage = string.Empty;
     [ObservableProperty] private string _newWorkspaceName = string.Empty;
@@ -28,22 +31,31 @@ public partial class WorkspacesViewModel : ViewModelBase
     [ObservableProperty] private string _addMemberUserId = string.Empty;
     [ObservableProperty] private WorkspaceRole _addMemberRole = WorkspaceRole.Member;
 
+    // Provider panel
+    [ObservableProperty] private bool _providersLoading;
+
     public ObservableCollection<WorkspaceItemViewModel> Workspaces { get; } = [];
+    public ObservableCollection<WorkspaceProviderToggleViewModel> ProviderToggles { get; } = [];
 
     /// <summary>Set by the View to show a confirmation dialog before destructive actions.</summary>
     public Func<string, string, Task<bool>>? ConfirmDeleteAsync { get; set; }
     public ObservableCollection<WorkspaceMemberViewModel> Members { get; } = [];
     public IReadOnlyList<WorkspaceRole> RoleOptions { get; } = [WorkspaceRole.Member, WorkspaceRole.Admin, WorkspaceRole.Viewer];
 
+    public bool IsAdmin => _principal.Role == "admin";
+
     private static string DesktopUserId => App.SovrantUserId;
 
     public WorkspacesViewModel(IWorkspaceService workspaceService, IUserService userService,
-        ActiveContextViewModel activeContext, IPrincipalAccessor principal)
+        ActiveContextViewModel activeContext, IPrincipalAccessor principal,
+        IProviderProfileStore profileStore, IWorkspaceSettingsStore wsSettings)
     {
         _workspaceService = workspaceService;
         _userService = userService;
         _activeContext = activeContext;
         _principal = principal;
+        _profileStore = profileStore;
+        _wsSettings = wsSettings;
         _ = LoadAsync();
     }
 
@@ -55,6 +67,7 @@ public partial class WorkspacesViewModel : ViewModelBase
     {
         SelectedWorkspace = workspace;
         await LoadMembersAsync(workspace);
+        if (IsAdmin) await LoadProvidersAsync(workspace);
     }
 
     [RelayCommand]
@@ -140,9 +153,47 @@ public partial class WorkspacesViewModel : ViewModelBase
         catch (Exception ex) { StatusMessage = $"Failed to remove member: {ex.Message}"; }
     }
 
+    [RelayCommand]
+    private async Task SaveProviderSettingsAsync()
+    {
+        if (SelectedWorkspace is null) return;
+        var enabled = ProviderToggles.Where(t => t.IsEnabled).Select(t => t.ProfileId);
+        await _wsSettings.SetAsync(SelectedWorkspace.Id, WorkspaceSettingsKeys.EnabledProviderProfileIds,
+            string.Join(',', enabled));
+        StatusMessage = "Provider availability saved.";
+    }
+
+    private async Task LoadProvidersAsync(WorkspaceItemViewModel workspace)
+    {
+        ProvidersLoading = true;
+        try
+        {
+            var allProfiles = await _profileStore.ListAsync(DesktopUserId);
+            var enabledRaw = await _wsSettings.GetAsync(workspace.Id, WorkspaceSettingsKeys.EnabledProviderProfileIds);
+            var enabledIds = string.IsNullOrEmpty(enabledRaw)
+                ? []
+                : new HashSet<string>(enabledRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                ProviderToggles.Clear();
+                foreach (var p in allProfiles)
+                    ProviderToggles.Add(new WorkspaceProviderToggleViewModel
+                    {
+                        ProfileId = p.ProfileId,
+                        Name = p.Name,
+                        ProviderKind = p.ProviderKind,
+                        IsEnabled = enabledIds.Contains(p.ProfileId),
+                    });
+            });
+        }
+        catch (Exception ex) { StatusMessage = $"Could not load providers: {ex.Message}"; }
+        finally { ProvidersLoading = false; }
+    }
+
     partial void OnSelectedWorkspaceChanged(WorkspaceItemViewModel? value)
     {
-        if (value is null) { Members.Clear(); return; }
+        if (value is null) { Members.Clear(); ProviderToggles.Clear(); return; }
         DetailMarkdown = BuildWorkspaceMarkdown(value);
     }
 
@@ -220,8 +271,6 @@ public partial class WorkspacesViewModel : ViewModelBase
         finally { MembersLoading = false; }
     }
 
-    private bool IsAdmin => _principal.Role == "admin";
-
     public bool CanManage(WorkspaceItemViewModel workspace) =>
         IsAdmin || workspace.MyRole is WorkspaceRole.Owner or WorkspaceRole.Admin;
 
@@ -265,4 +314,12 @@ public partial class WorkspaceMemberViewModel : ViewModelBase
     [ObservableProperty] private string _displayName = string.Empty;
     [ObservableProperty] private WorkspaceRole _role;
     [ObservableProperty] private DateTimeOffset _joinedAt;
+}
+
+public partial class WorkspaceProviderToggleViewModel : ViewModelBase
+{
+    [ObservableProperty] private string _profileId = string.Empty;
+    [ObservableProperty] private string _name = string.Empty;
+    [ObservableProperty] private string _providerKind = string.Empty;
+    [ObservableProperty] private bool _isEnabled;
 }

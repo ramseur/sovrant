@@ -403,23 +403,28 @@
                                     Foreground="White" FontWeight="SemiBold" FontSize="12" />
                         </Grid>
 
-                        <!-- ─── Provider Profiles ─── -->
-                        <TextBlock Text="Provider Profiles" FontSize="13" FontWeight="SemiBold"
+                        <!-- ─── Providers ─── -->
+                        <TextBlock Text="Providers" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextSecondary}" Margin="0,8,0,0" />
+                        <TextBlock Text="Select which configured providers are available in this workspace."
+                                   FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
 
-                        <ItemsControl ItemsSource="{Binding ConfigWorkspaceProfiles}">
+                        <TextBlock Text="No providers configured yet. Add providers in the Providers admin page."
+                                   FontSize="12" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap"
+                                   IsVisible="{Binding !ProviderToggles.Count}" />
+
+                        <ItemsControl ItemsSource="{Binding ProviderToggles}"
+                                      IsVisible="{Binding !!ProviderToggles.Count}">
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="vm:WorkspaceProviderProfile">
+                                <DataTemplate DataType="vm:WorkspaceProviderToggleViewModel">
                                     <Border Padding="10,7" CornerRadius="8" Margin="0,0,0,3"
                                             Background="{DynamicResource SurfaceMuted}"
                                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
                                         <DockPanel>
-                                            <Button DockPanel.Dock="Right" Content="Remove"
-                                                    Command="{Binding $parent[ItemsControl].((vm:AdminViewModel)DataContext).RemoveWorkspaceProviderCommand}"
-                                                    CommandParameter="{Binding}"
-                                                    Padding="8,4" CornerRadius="6" FontSize="11"
-                                                    Background="#EF4444" Foreground="White" />
-                                            <StackPanel Spacing="2">
+                                            <CheckBox DockPanel.Dock="Right"
+                                                      IsChecked="{Binding IsEnabled}"
+                                                      VerticalAlignment="Center" />
+                                            <StackPanel Spacing="2" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"
                                                            Foreground="{DynamicResource TextPrimary}" />
                                                 <TextBlock Text="{Binding ProviderKind}" FontSize="11"
@@ -431,31 +436,12 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <!-- Add provider form -->
-                        <StackPanel Spacing="8">
-                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" HorizontalAlignment="Stretch">
-                                <TextBox Grid.Row="0" Grid.Column="0" Text="{Binding WsNewProviderName}"
-                                         Watermark="Name (optional)" CornerRadius="8" Padding="10,6" FontSize="12"
-                                         Margin="0,0,6,6" />
-                                <ComboBox Grid.Row="0" Grid.Column="1"
-                                          ItemsSource="{Binding Providers}"
-                                          SelectedItem="{Binding WsNewProviderKind}"
-                                          CornerRadius="8" Padding="10,6" FontSize="12" HorizontalAlignment="Stretch"
-                                          Margin="0,0,0,6" />
-                                <TextBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
-                                         Text="{Binding WsNewProviderApiKey}"
-                                         PasswordChar="*" Watermark="API Key"
-                                         CornerRadius="8" Padding="10,6" FontSize="12" />
-                            </Grid>
-                            <TextBox Text="{Binding WsNewProviderBaseUrl}"
-                                     Watermark="Base URL (leave blank for default)"
-                                     CornerRadius="8" Padding="10,6" FontSize="12" />
-                            <Button Content="Add Provider to Workspace"
-                                    Command="{Binding AddWorkspaceProviderCommand}"
-                                    HorizontalAlignment="Left" Padding="14,7" CornerRadius="8"
-                                    Background="{DynamicResource BrandPrimary}" Foreground="White"
-                                    FontWeight="SemiBold" FontSize="12" />
-                        </StackPanel>
+                        <Button Content="Save Providers"
+                                Command="{Binding SaveWorkspaceProvidersCommand}"
+                                HorizontalAlignment="Left" Padding="14,7" CornerRadius="8"
+                                Background="{DynamicResource BrandPrimary}" Foreground="White"
+                                FontWeight="SemiBold" FontSize="12"
+                                IsVisible="{Binding !!ProviderToggles.Count}" />
 
                     </StackPanel>
                 </Border>

@@ -185,6 +185,7 @@
     [Inject] private IUserPreferenceStore Prefs { get; set; } = default!;
     [Inject] private IProviderProfileStore ProfileStore { get; set; } = default!;
     [Inject] private ICredentialStore Credentials { get; set; } = default!;
+    [Inject] private IWorkspaceSettingsStore WsSettings { get; set; } = default!;
     [Inject] private IModelCapabilityRegistry CapabilityRegistry { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private WebSessionService Session { get; set; } = default!;
@@ -428,7 +429,7 @@
         try
         {
             var rows = await ProfileStore.ListUserAndWorkspaceAsync(
-                Session.UserId!, ActiveContext.WorkspaceId);
+                Session.UserId!, ActiveContext.WorkspaceId, WsSettings);
             var list = new List<ProviderProfileItem>(rows.Count);
             foreach (var row in rows)
             {
@@ -500,6 +501,7 @@
             await UnbindLightDismissAsync();
             return;
         }
+        await LoadProviderProfilesAsync();
         try
         {
             var rect = await JS.InvokeAsync<DropdownRect?>("sovrantInterop.getElementRect", _triggerRef);

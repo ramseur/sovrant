@@ -123,6 +123,12 @@ public static class WorkspaceSettingsKeys
     /// </summary>
     public const string ActiveProviderProfileId = "provider.active_profile_id";
 
+    /// <summary>
+    /// Comma-separated list of global provider profile IDs enabled for this workspace.
+    /// When empty or absent, no providers are available — admin must explicitly opt in.
+    /// </summary>
+    public const string EnabledProviderProfileIds = "provider.enabled_profile_ids";
+
     // ── General / LLM behaviour ──────────────────────────────────────────────
 
     /// <summary>Max tokens per LLM response, workspace-wide override (int). Overrides user preference.</summary>
