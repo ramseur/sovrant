@@ -21,6 +21,7 @@ public partial class IntegrationsViewModel : ViewModelBase
     private readonly IWorkspaceService _workspaceSvc;
     private readonly IPrincipalAccessor _principal;
     private readonly ActiveContextViewModel? _activeContext;
+    private readonly IWorkspaceSettingsStore? _wsSettings;
     private string? _workspaceId;
 
     // ── Tab ──────────────────────────────────────────────────────────────────
@@ -101,6 +102,9 @@ public partial class IntegrationsViewModel : ViewModelBase
     [ObservableProperty]
     private string _newRuleReason = string.Empty;
 
+    // Workspace enablement picker for the Add form
+    public ObservableCollection<WorkspaceToggleItem> AddWorkspaceToggles { get; } = [];
+
     // All catalog entries (for lookup)
     public ObservableCollection<CatalogEntryViewModel> CatalogEntries { get; } = [];
 
@@ -129,7 +133,8 @@ public partial class IntegrationsViewModel : ViewModelBase
         IMcpTrustRuleStore trustRuleStore,
         IWorkspaceService workspaceSvc,
         IPrincipalAccessor principal,
-        ActiveContextViewModel? activeContext = null)
+        ActiveContextViewModel? activeContext = null,
+        IWorkspaceSettingsStore? wsSettings = null)
     {
         _serverStore = serverStore;
         _clientRegistry = clientRegistry;
@@ -139,6 +144,7 @@ public partial class IntegrationsViewModel : ViewModelBase
         _workspaceSvc = workspaceSvc;
         _principal = principal;
         _activeContext = activeContext;
+        _wsSettings = wsSettings;
 
         var seenGroups = new HashSet<string>(StringComparer.Ordinal);
         foreach (var entry in IntegrationCatalog.All)
@@ -161,6 +167,12 @@ public partial class IntegrationsViewModel : ViewModelBase
             var ws = await _workspaceSvc.GetPersonalAsync(uid).ConfigureAwait(true);
             _workspaceId = ws?.WorkspaceId;
         }
+
+        var allWs = await _workspaceSvc.ListAllAsync().ConfigureAwait(true);
+        AddWorkspaceToggles.Clear();
+        foreach (var ws in allWs.OrderBy(w => w.Name, StringComparer.Ordinal))
+            AddWorkspaceToggles.Add(new WorkspaceToggleItem { WorkspaceId = ws.WorkspaceId, Name = ws.Name });
+
         await LoadServersAsync().ConfigureAwait(true);
     }
 
@@ -424,6 +436,7 @@ public partial class IntegrationsViewModel : ViewModelBase
             var env = ParseEnvVarLines(NewServerEnvVars);
             var config = new McpServerConfig { Command = command, Args = args, Env = env };
             await _serverStore.UpsertAsync(name, config).ConfigureAwait(true);
+            await PropagateToSelectedWorkspacesAsync([name]).ConfigureAwait(true);
             ResetAddForm();
             await ConnectAndRefreshAsync(name, config).ConfigureAwait(true);
         }
@@ -463,6 +476,7 @@ public partial class IntegrationsViewModel : ViewModelBase
 
             var config = new McpServerConfig { Url = url, Headers = headers };
             await _serverStore.UpsertAsync(name, config).ConfigureAwait(true);
+            await PropagateToSelectedWorkspacesAsync([name]).ConfigureAwait(true);
             ResetAddForm();
             await ConnectAndRefreshAsync(name, config).ConfigureAwait(true);
         }
@@ -478,6 +492,7 @@ public partial class IntegrationsViewModel : ViewModelBase
             if (entries.Count == 0) { StatusMessage = "No valid mcpServers entries found."; return; }
             foreach (var (name, config) in entries)
                 await _serverStore.UpsertAsync(name, config).ConfigureAwait(true);
+            await PropagateToSelectedWorkspacesAsync(entries.Keys).ConfigureAwait(true);
             var names = string.Join(", ", entries.Keys.Select(n => $"'{n}'"));
             var envCount = entries.Values.Sum(c => c.Env.Count);
             ResetAddForm();
@@ -488,6 +503,29 @@ public partial class IntegrationsViewModel : ViewModelBase
                 : $"Imported: {names}.";
         }
         catch (Exception ex) { StatusMessage = $"Failed to add server: {ex.Message}"; }
+    }
+
+    private async Task PropagateToSelectedWorkspacesAsync(IEnumerable<string> serverNames)
+    {
+        if (_wsSettings is null) return;
+        var selected = AddWorkspaceToggles.Where(t => t.IsSelected).Select(t => t.WorkspaceId).ToList();
+        if (selected.Count == 0) return;
+        foreach (var name in serverNames)
+        {
+            var entry = await _serverStore.GetEntryAsync(name).ConfigureAwait(true);
+            if (entry is null) continue;
+            foreach (var wsId in selected)
+            {
+                var raw = await _wsSettings.GetAsync(wsId, WorkspaceSettingsKeys.EnabledMcpServerIds).ConfigureAwait(true);
+                var ids = new HashSet<string>(
+                    (raw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                    StringComparer.Ordinal);
+                ids.Add(entry.Id);
+                await _wsSettings.SetAsync(wsId, WorkspaceSettingsKeys.EnabledMcpServerIds, string.Join(',', ids)).ConfigureAwait(true);
+            }
+        }
+        foreach (var t in AddWorkspaceToggles)
+            t.IsSelected = false;
     }
 
     private void ResetAddForm()

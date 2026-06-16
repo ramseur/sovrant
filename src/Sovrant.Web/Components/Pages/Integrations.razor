@@ -436,6 +436,25 @@
                             @onclick='() => _addMode = "http"'>HTTP</button>
                 </div>
 
+                @if (_allWorkspaces.Count > 1)
+                {
+                    <div class="form-field" style="margin-bottom:16px;">
+                        <label>Enable for workspaces (optional)</label>
+                        <p class="text-sm text-muted" style="margin-bottom:6px;">Check workspaces that should have access to this server.</p>
+                        @foreach (var ws in _allWorkspaces)
+                        {
+                            <div class="form-group toggle-row">
+                                <div><div class="toggle-title">@ws.Name</div></div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" checked="@_addWorkspaceIds.Contains(ws.WorkspaceId)"
+                                           @onchange="e => ToggleAddWorkspace(ws.WorkspaceId, (bool)(e.Value ?? false))" />
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        }
+                    </div>
+                }
+
                 @if (_addMode == "json")
                 {
                     <div class="form-field">
@@ -501,6 +520,7 @@
     [Inject] private IMcpTrustRuleStore TrustStore { get; set; } = default!;
     [Inject] private IPrincipalAccessor Principal { get; set; } = default!;
     [Inject] private IWorkspaceService WorkspaceSvc { get; set; } = default!;
+    [Inject] private IWorkspaceSettingsStore WsSettings { get; set; } = default!;
 
     private string _activeTab = "connected";
     private string _addMode = "json";
@@ -529,6 +549,10 @@
     private string _newRuleAction = "RequireConfirmation";
     private string _newRuleReason = string.Empty;
     private string _trustStatus = string.Empty;
+
+    // Workspace enablement picker for the Add form
+    private List<Workspace> _allWorkspaces = [];
+    private HashSet<string> _addWorkspaceIds = [];
 
     // Gallery state
     private CatalogEntry? _catalogEntry;
@@ -578,6 +602,7 @@
             _workspaceId = Principal.WorkspaceId;
         }
         _canManageRules = true; // personal workspace — user is always owner
+        _allWorkspaces = (await WorkspaceSvc.ListAllAsync().ConfigureAwait(false)).ToList();
         await LoadServersAsync().ConfigureAwait(false);
     }
 
@@ -922,6 +947,7 @@
                 Env = ParseEnvVarLines(_newEnvVars),
             };
             await ServerStore.UpsertAsync(name, config).ConfigureAwait(false);
+            await PropagateToWorkspacesAsync([name]).ConfigureAwait(false);
             ResetForm();
             await ConnectAndRefreshAsync(name, config).ConfigureAwait(false);
         }
@@ -954,6 +980,7 @@
             var name = _newName.Trim();
             var config = new McpServerConfig { Url = url, Headers = headers };
             await ServerStore.UpsertAsync(name, config).ConfigureAwait(false);
+            await PropagateToWorkspacesAsync([name]).ConfigureAwait(false);
             ResetForm();
             await ConnectAndRefreshAsync(name, config).ConfigureAwait(false);
         }
@@ -975,6 +1002,7 @@
             }
             foreach (var (name, config) in entries)
                 await ServerStore.UpsertAsync(name, config).ConfigureAwait(false);
+            await PropagateToWorkspacesAsync(entries.Keys).ConfigureAwait(false);
 
             var envCount = entries.Values.Sum(c => c.Env.Count);
             var names = string.Join(", ", entries.Keys);
@@ -991,6 +1019,32 @@
     private void ResetForm()
     {
         _newName = _newCommand = _newArgs = _newEnvVars = _newUrl = _newBearer = _newHeadersJson = string.Empty;
+    }
+
+    private void ToggleAddWorkspace(string wsId, bool enabled)
+    {
+        if (enabled) _addWorkspaceIds.Add(wsId);
+        else _addWorkspaceIds.Remove(wsId);
+    }
+
+    private async Task PropagateToWorkspacesAsync(IEnumerable<string> serverNames)
+    {
+        if (_addWorkspaceIds.Count == 0) return;
+        foreach (var name in serverNames)
+        {
+            var entry = await ServerStore.GetEntryAsync(name).ConfigureAwait(false);
+            if (entry is null) continue;
+            foreach (var wsId in _addWorkspaceIds)
+            {
+                var raw = await WsSettings.GetAsync(wsId, WorkspaceSettingsKeys.EnabledMcpServerIds).ConfigureAwait(false);
+                var ids = new HashSet<string>(
+                    (raw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                    StringComparer.Ordinal);
+                ids.Add(entry.Id);
+                await WsSettings.SetAsync(wsId, WorkspaceSettingsKeys.EnabledMcpServerIds, string.Join(',', ids)).ConfigureAwait(false);
+            }
+        }
+        _addWorkspaceIds.Clear();
     }
 
     // ── Env var editor ────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 @page "/admin/workspaces"
 @using Sovrant.Runtime.Auth
+@using Sovrant.Runtime.Mcp
 @using Sovrant.Runtime.Providers
 @using Sovrant.Runtime.Users
 @using Sovrant.Runtime.Workspaces
@@ -9,6 +10,7 @@
 @inject IWorkspaceService WorkspaceService
 @inject IWorkspaceSettingsStore WsSettings
 @inject IProviderProfileStore ProfileStore
+@inject IMcpServerStore McpServerStore
 @inject WebSessionService Session
 @inject NavigationManager Nav
 
@@ -167,6 +169,30 @@
                     }
                     <button class="btn-primary btn-sm" style="margin-top:8px" @onclick="SaveWorkspaceProvidersAsync">Save Providers</button>
                 }
+
+                <h5>MCP Servers</h5>
+                <p class="text-sm text-muted" style="margin-bottom:8px">Select which MCP servers are available in this workspace. <a href="/admin/integrations">Manage servers →</a></p>
+                @if (_allMcpEntries.Count == 0)
+                {
+                    <p class="text-secondary">No MCP servers configured yet.</p>
+                }
+                else
+                {
+                    @foreach (var entry in _allMcpEntries)
+                    {
+                        <div class="form-group toggle-row">
+                            <div>
+                                <div class="toggle-title">@entry.Name</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked="@_enabledMcpIds.Contains(entry.Id)"
+                                       @onchange="e => ToggleMcp(entry.Id, (bool)(e.Value ?? false))" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    }
+                    <button class="btn-primary btn-sm" style="margin-top:8px" @onclick="SaveWorkspaceMcpsAsync">Save MCP Servers</button>
+                }
             </div>
         }
     </div>
@@ -195,6 +221,8 @@
     private sealed record MemberRow(string UserId, string DisplayName, WorkspaceRole Role);
     private List<ProviderProfile> _allProfiles = [];
     private HashSet<string> _enabledProfileIds = [];
+    private List<McpServerEntry> _allMcpEntries = [];
+    private HashSet<string> _enabledMcpIds = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -263,6 +291,13 @@
         _enabledProfileIds = string.IsNullOrEmpty(enabledRaw)
             ? []
             : [..enabledRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
+        var allEntries = await McpServerStore.GetAllEntriesAsync();
+        _allMcpEntries = allEntries.OrderBy(e => e.Name, StringComparer.Ordinal).ToList();
+        var mcpRaw = await WsSettings.GetAsync(ws.WorkspaceId, WorkspaceSettingsKeys.EnabledMcpServerIds);
+        _enabledMcpIds = string.IsNullOrEmpty(mcpRaw)
+            ? []
+            : [..mcpRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
     }
 
     private async Task SaveWorkspaceGeneralAsync()
@@ -327,5 +362,19 @@
         var value = string.Join(',', _enabledProfileIds);
         await WsSettings.SetAsync(_configWorkspace.WorkspaceId, WorkspaceSettingsKeys.EnabledProviderProfileIds, value);
         _status = "Provider availability saved.";
+    }
+
+    private void ToggleMcp(string id, bool enabled)
+    {
+        if (enabled) _enabledMcpIds.Add(id);
+        else _enabledMcpIds.Remove(id);
+    }
+
+    private async Task SaveWorkspaceMcpsAsync()
+    {
+        if (_configWorkspace is null) return;
+        var value = string.Join(',', _enabledMcpIds);
+        await WsSettings.SetAsync(_configWorkspace.WorkspaceId, WorkspaceSettingsKeys.EnabledMcpServerIds, value);
+        _status = "MCP server availability saved.";
     }
 }

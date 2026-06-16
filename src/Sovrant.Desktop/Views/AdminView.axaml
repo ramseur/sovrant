@@ -443,6 +443,43 @@
                                 FontWeight="SemiBold" FontSize="12"
                                 IsVisible="{Binding !!ProviderToggles.Count}" />
 
+                        <!-- ─── MCP Servers ─── -->
+                        <TextBlock Text="MCP Servers" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondary}" Margin="0,8,0,0" />
+                        <TextBlock Text="Select which MCP servers are available in this workspace."
+                                   FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+
+                        <TextBlock Text="No MCP servers configured yet. Add servers in Platform Integrations."
+                                   FontSize="12" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap"
+                                   IsVisible="{Binding !McpToggles.Count}" />
+
+                        <ItemsControl ItemsSource="{Binding McpToggles}"
+                                      IsVisible="{Binding !!McpToggles.Count}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:WorkspaceMcpToggleViewModel">
+                                    <Border Padding="10,7" CornerRadius="8" Margin="0,0,0,3"
+                                            Background="{DynamicResource SurfaceMuted}"
+                                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                        <DockPanel>
+                                            <CheckBox DockPanel.Dock="Right"
+                                                      IsChecked="{Binding IsEnabled}"
+                                                      VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"
+                                                       Foreground="{DynamicResource TextPrimary}"
+                                                       VerticalAlignment="Center" />
+                                        </DockPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Button Content="Save MCP Servers"
+                                Command="{Binding SaveWorkspaceMcpsCommand}"
+                                HorizontalAlignment="Left" Padding="14,7" CornerRadius="8"
+                                Background="{DynamicResource BrandPrimary}" Foreground="White"
+                                FontWeight="SemiBold" FontSize="12"
+                                IsVisible="{Binding !!McpToggles.Count}" />
+
                     </StackPanel>
                 </Border>
 

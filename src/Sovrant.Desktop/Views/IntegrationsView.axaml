@@ -476,6 +476,22 @@
                                     </StackPanel>
                                 </StackPanel>
 
+                                <!-- Workspace enablement picker -->
+                                <StackPanel Spacing="4"
+                                            IsVisible="{Binding !!AddWorkspaceToggles.Count}">
+                                    <TextBlock Text="Enable for workspaces (optional)" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                    <ItemsControl ItemsSource="{Binding AddWorkspaceToggles}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="vm:WorkspaceToggleItem">
+                                                <CheckBox IsChecked="{Binding IsSelected}" Margin="0,2,0,0">
+                                                    <TextBlock Text="{Binding Name}" FontSize="12" />
+                                                </CheckBox>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+
                                 <Button Content="Add Server"
                                         Command="{Binding AddServerCommand}"
                                         Padding="18,8" CornerRadius="6"

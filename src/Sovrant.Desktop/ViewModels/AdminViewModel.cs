@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.Auth;
+using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Providers;
 using Sovrant.Runtime.Users;
 using Sovrant.Runtime.Workspaces;
@@ -17,6 +18,7 @@ public partial class AdminViewModel : ViewModelBase
     private readonly ActiveContextViewModel _activeContext;
     private readonly IWorkspaceSettingsStore _wsSettings;
     private readonly IProviderProfileStore _profileStore;
+    private readonly IMcpServerStore _mcpServerStore;
 
     /// <summary>Set by the View to show a simple confirmation before disabling a user.</summary>
     public Func<string, string, Task<bool>>? ConfirmDisableAsync { get; set; }
@@ -91,6 +93,7 @@ public partial class AdminViewModel : ViewModelBase
 
     public ObservableCollection<ConfigWorkspaceMemberRow> ConfigWorkspaceMembers { get; } = [];
     public ObservableCollection<WorkspaceProviderToggleViewModel> ProviderToggles { get; } = [];
+    public ObservableCollection<WorkspaceMcpToggleViewModel> McpToggles { get; } = [];
 
     public bool IsConfigPanelVisible => ConfigWorkspace is not null;
 
@@ -101,7 +104,8 @@ public partial class AdminViewModel : ViewModelBase
 
     public AdminViewModel(IIdentityService identity, IUserService users, IPrincipalAccessor principal,
         IWorkspaceService workspaces, ActiveContextViewModel activeContext,
-        IWorkspaceSettingsStore wsSettings, IProviderProfileStore profileStore)
+        IWorkspaceSettingsStore wsSettings, IProviderProfileStore profileStore,
+        IMcpServerStore mcpServerStore)
     {
         _identity = identity;
         _users = users;
@@ -110,6 +114,7 @@ public partial class AdminViewModel : ViewModelBase
         _activeContext = activeContext;
         _wsSettings = wsSettings;
         _profileStore = profileStore;
+        _mcpServerStore = mcpServerStore;
     }
 
     [RelayCommand]
@@ -284,6 +289,9 @@ public partial class AdminViewModel : ViewModelBase
 
         // Load provider toggles
         await LoadProviderTogglesAsync(ws.WorkspaceId);
+
+        // Load MCP toggles
+        await LoadMcpTogglesAsync(ws.WorkspaceId);
     }
 
     [RelayCommand]
@@ -370,6 +378,27 @@ public partial class AdminViewModel : ViewModelBase
                 ProviderKind = p.ProviderKind,
                 IsEnabled = enabledIds.Contains(p.ProfileId),
             });
+    }
+
+    private async Task LoadMcpTogglesAsync(string workspaceId)
+    {
+        var allEntries = await _mcpServerStore.GetAllEntriesAsync();
+        var enabledRaw = await _wsSettings.GetAsync(workspaceId, WorkspaceSettingsKeys.EnabledMcpServerIds);
+        var enabledIds = string.IsNullOrEmpty(enabledRaw)
+            ? []
+            : new HashSet<string>(enabledRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        McpToggles.Clear();
+        foreach (var e in allEntries.OrderBy(x => x.Name, StringComparer.Ordinal))
+            McpToggles.Add(new WorkspaceMcpToggleViewModel { ServerId = e.Id, Name = e.Name, IsEnabled = enabledIds.Contains(e.Id) });
+    }
+
+    [RelayCommand]
+    private async Task SaveWorkspaceMcpsAsync()
+    {
+        if (ConfigWorkspace is null) return;
+        var enabled = string.Join(',', McpToggles.Where(t => t.IsEnabled).Select(t => t.ServerId));
+        await _wsSettings.SetAsync(ConfigWorkspace.WorkspaceId, WorkspaceSettingsKeys.EnabledMcpServerIds, enabled);
+        Status = "MCP server availability saved.";
     }
 }
 

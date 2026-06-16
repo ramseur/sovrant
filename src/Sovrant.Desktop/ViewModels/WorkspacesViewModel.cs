@@ -323,3 +323,17 @@ public partial class WorkspaceProviderToggleViewModel : ViewModelBase
     [ObservableProperty] private string _providerKind = string.Empty;
     [ObservableProperty] private bool _isEnabled;
 }
+
+public partial class WorkspaceMcpToggleViewModel : ViewModelBase
+{
+    [ObservableProperty] private string _serverId = string.Empty;
+    [ObservableProperty] private string _name = string.Empty;
+    [ObservableProperty] private bool _isEnabled;
+}
+
+public partial class WorkspaceToggleItem : ViewModelBase
+{
+    [ObservableProperty] private string _workspaceId = string.Empty;
+    [ObservableProperty] private string _name = string.Empty;
+    [ObservableProperty] private bool _isSelected;
+}
