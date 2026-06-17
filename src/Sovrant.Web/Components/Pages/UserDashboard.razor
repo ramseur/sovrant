@@ -102,9 +102,10 @@
     }
     else
     {
-        <div class="cc-grid">
+        <div class="cc-grid cc-grid-dashboard">
             <div class="cc-grid-header">
                 <div class="cc-col-kind">Kind</div>
+                <div class="cc-col-privacy"></div>
                 <div class="cc-col-title">Title</div>
                 <div class="cc-col-status">Status</div>
                 <div class="cc-col-owner">Owner</div>
@@ -117,24 +118,24 @@
                     <div class="cc-col-kind">
                         <span class="cc-kind-pill cc-kind-@(row.Kind)">@KindIcon(row.Kind) @row.Kind</span>
                     </div>
+                    <div class="cc-col-privacy">
+                        @if (row.IsOwn)
+                        {
+                            <button class="privacy-toggle-mini @(row.IsPrivate ? "private" : "public")"
+                                    title="@(row.IsPrivate ? "Private — only you can see this. Click to make public." : "Public — visible to workspace admins. Click to make private.")"
+                                    @onclick="@(() => TogglePrivacyAsync(row))"
+                                    @onclick:stopPropagation="true"
+                                    @onclick:preventDefault="true">
+                                @(row.IsPrivate ? "🔒" : "🔓")
+                            </button>
+                        }
+                        else if (row.IsPrivate)
+                        {
+                            <span class="cc-badge-private" title="Private — only visible to you">&#x1F512;</span>
+                        }
+                    </div>
                     <div class="cc-col-title">
-                        <div class="cc-title">
-                            @if (row.IsOwn)
-                            {
-                                <button class="privacy-toggle-mini @(row.IsPrivate ? "private" : "public")"
-                                        title="@(row.IsPrivate ? "Private — only you can see this. Click to make public." : "Public — visible to workspace admins. Click to make private.")"
-                                        @onclick="@(() => TogglePrivacyAsync(row))"
-                                        @onclick:stopPropagation="true"
-                                        @onclick:preventDefault="true">
-                                    @(row.IsPrivate ? "🔒" : "🔓")
-                                </button>
-                            }
-                            else if (row.IsPrivate)
-                            {
-                                <span class="cc-badge-private" title="Private — only visible to you">&#x1F512;</span>
-                            }
-                            <span class="cc-title-text">@row.Title</span>
-                        </div>
+                        <span class="cc-title-text">@row.Title</span>
                         @if (!string.IsNullOrEmpty(row.Preview))
                         {
                             <div class="cc-preview text-muted text-sm">@row.Preview</div>

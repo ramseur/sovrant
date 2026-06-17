@@ -176,18 +176,19 @@
                     Background="{DynamicResource SurfaceCard}"
                     BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                     CornerRadius="8,8,0,0" Padding="14,8" Margin="0,0,0,-1">
-                <Grid ColumnDefinitions="120,*,90,150,110,80">
+                <Grid ColumnDefinitions="120,28,*,90,150,110,80">
                     <TextBlock Grid.Column="0" Text="KIND" FontSize="11" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextSecondary}" />
-                    <TextBlock Grid.Column="1" Text="TITLE" FontSize="11" FontWeight="SemiBold"
+                    <!-- Column 1: blank — aligns with the per-row lock icon -->
+                    <TextBlock Grid.Column="2" Text="TITLE" FontSize="11" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextSecondary}" />
-                    <TextBlock Grid.Column="2" Text="STATUS" FontSize="11" FontWeight="SemiBold"
+                    <TextBlock Grid.Column="3" Text="STATUS" FontSize="11" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextSecondary}" />
-                    <TextBlock Grid.Column="3" Text="OWNER" FontSize="11" FontWeight="SemiBold"
+                    <TextBlock Grid.Column="4" Text="OWNER" FontSize="11" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextSecondary}" />
-                    <TextBlock Grid.Column="4" Text="LAST ACTIVITY" FontSize="11" FontWeight="SemiBold"
+                    <TextBlock Grid.Column="5" Text="LAST ACTIVITY" FontSize="11" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextSecondary}" />
-                    <TextBlock Grid.Column="5" Text="COST" FontSize="11" FontWeight="SemiBold"
+                    <TextBlock Grid.Column="6" Text="COST" FontSize="11" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextSecondary}" />
                 </Grid>
             </Border>
@@ -220,7 +221,7 @@
                                     BorderThickness="1,0,1,1"
                                     CornerRadius="0"
                                     Cursor="Hand">
-                                <Grid ColumnDefinitions="120,*,90,150,110,80">
+                                <Grid ColumnDefinitions="120,28,*,90,150,110,80">
                                     <Border Grid.Column="0"
                                             Background="{DynamicResource SurfaceBackground}"
                                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
@@ -234,44 +235,43 @@
                                                        VerticalAlignment="Center" />
                                         </StackPanel>
                                     </Border>
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
-                                        <DockPanel>
-                                            <Button DockPanel.Dock="Left"
-                                                    IsVisible="{Binding IsOwn}"
-                                                    Command="{Binding $parent[ItemsControl].((vm:UserDashboardViewModel)DataContext).TogglePrivacyCommand}"
-                                                    CommandParameter="{Binding}"
-                                                    Padding="4,1"
-                                                    Background="Transparent"
-                                                    BorderThickness="0"
-                                                    Cursor="Hand"
-                                                    ToolTip.Tip="Click to toggle privacy"
-                                                    VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding IsPrivate, Converter={x:Static vm:BoolToLockIconConverter.Instance}}"
-                                                           FontSize="11" />
-                                            </Button>
-                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource TextPrimary}"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       VerticalAlignment="Center" />
-                                        </DockPanel>
+                                    <!-- Column 1: privacy lock in its own dedicated column -->
+                                    <Button Grid.Column="1"
+                                            IsVisible="{Binding IsOwn}"
+                                            Command="{Binding $parent[ItemsControl].((vm:UserDashboardViewModel)DataContext).TogglePrivacyCommand}"
+                                            CommandParameter="{Binding}"
+                                            Padding="4,1"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Cursor="Hand"
+                                            ToolTip.Tip="Click to toggle privacy"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Center">
+                                        <TextBlock Text="{Binding IsPrivate, Converter={x:Static vm:BoolToLockIconConverter.Instance}}"
+                                                   FontSize="11" />
+                                    </Button>
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   TextTrimming="CharacterEllipsis" />
                                         <TextBlock Text="{Binding Preview}" FontSize="11"
                                                    Foreground="{DynamicResource TextMuted}"
                                                    TextTrimming="CharacterEllipsis"
                                                    IsVisible="{Binding Preview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                                     </StackPanel>
-                                    <TextBlock Grid.Column="2" Text="{Binding Status}" FontSize="11"
+                                    <TextBlock Grid.Column="3" Text="{Binding Status}" FontSize="11"
                                                Foreground="{DynamicResource StatusPass}"
                                                VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Grid.Column="3" Text="{Binding Owner}" FontSize="11"
+                                    <TextBlock Grid.Column="4" Text="{Binding Owner}" FontSize="11"
                                                Foreground="{DynamicResource TextMuted}"
                                                VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Grid.Column="4" Text="{Binding LastActivity}" FontSize="11"
+                                    <TextBlock Grid.Column="5" Text="{Binding LastActivity}" FontSize="11"
                                                Foreground="{DynamicResource TextMuted}"
                                                VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Grid.Column="5" Text="{Binding Cost}" FontSize="11"
+                                    <TextBlock Grid.Column="6" Text="{Binding Cost}" FontSize="11"
                                                Foreground="{DynamicResource TextMuted}"
                                                VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis" />

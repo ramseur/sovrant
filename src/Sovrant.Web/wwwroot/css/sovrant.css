@@ -1783,7 +1783,6 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     color: var(--text-muted);
     cursor: pointer;
     line-height: 1;
-    flex-shrink: 0;
 }
 .privacy-toggle-mini:hover { background: var(--surface-hover, rgba(255,255,255,0.04)); }
 .privacy-toggle-mini.private { color: var(--accent, #d4a017); border-color: var(--accent, #d4a017); }
@@ -3065,6 +3064,17 @@ details[open] .doc-advanced-toggle::before { content: "▼ "; }
 .cc-grid-row:last-child { border-bottom: none; }
 .cc-row-masked { cursor: default; opacity: 0.6; }
 .cc-row-masked:hover { background: transparent; }
+
+/* Dashboard adds a dedicated narrow lock column between Kind and Title */
+.cc-grid-dashboard .cc-grid-header,
+.cc-grid-dashboard .cc-grid-row {
+    grid-template-columns: 110px 28px 2fr 100px 140px 110px 70px;
+}
+.cc-col-privacy {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 
 .cc-kind-pill {
     display: inline-block;
