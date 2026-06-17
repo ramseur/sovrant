@@ -1,16 +1,38 @@
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Agents.Models;
 using Sovrant.Agents.Shared;
 using Sovrant.Agents.Templates;
 using Sovrant.Runtime.Config;
+using Sovrant.Runtime.Storage;
 
 namespace Sovrant.Agents.Tests.Templates;
 
 /// <summary>Tests for <see cref="AgentTemplateRegistry"/>.</summary>
-public sealed class AgentTemplateRegistryTests
+public sealed class AgentTemplateRegistryTests : IAsyncLifetime
 {
-    private static AgentTemplateRegistry CreateRegistry() =>
-        new(NullLogger<AgentTemplateRegistry>.Instance);
+    private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"sovrant_agents_test_{Guid.NewGuid():N}.db");
+    private SqliteStorageProvider? _provider;
+
+    public async Task InitializeAsync()
+    {
+        _provider = new SqliteStorageProvider(NullLogger<SqliteStorageProvider>.Instance, _dbPath);
+        await _provider.InitializeAsync();
+    }
+
+    public async Task DisposeAsync()
+    {
+        if (_provider is not null) await _provider.DisposeAsync();
+        SqliteConnection.ClearAllPools();
+        try { if (File.Exists(_dbPath)) File.Delete(_dbPath); } catch (IOException) { /* best effort on Windows */ }
+    }
+
+    private AgentTemplateRegistry CreateRegistry()
+    {
+        var store = new SqliteKnowledgeStore(_provider!);
+        var loader = new DbAgentTemplateLoader(store, NullLogger<DbAgentTemplateLoader>.Instance);
+        return new AgentTemplateRegistry(NullLogger<AgentTemplateRegistry>.Instance, [loader]);
+    }
 
     // ── Built-in count ───────────────────────────────────────────────────────
 
