@@ -13,6 +13,7 @@
 @inject IMcpServerStore McpServerStore
 @inject WebSessionService Session
 @inject NavigationManager Nav
+@inject ActiveContextService ActiveContext
 
 <div class="settings-page">
     <div class="diag-header">
@@ -376,5 +377,7 @@
         var value = string.Join(',', _enabledMcpIds);
         await WsSettings.SetAsync(_configWorkspace.WorkspaceId, WorkspaceSettingsKeys.EnabledMcpServerIds, value);
         _status = "MCP server availability saved.";
+        if (_configWorkspace.WorkspaceId == ActiveContext.WorkspaceId)
+            ActiveContext.NotifyDataChanged();
     }
 }

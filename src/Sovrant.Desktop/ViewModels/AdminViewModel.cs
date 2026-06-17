@@ -399,6 +399,8 @@ public partial class AdminViewModel : ViewModelBase
         var enabled = string.Join(',', McpToggles.Where(t => t.IsEnabled).Select(t => t.ServerId));
         await _wsSettings.SetAsync(ConfigWorkspace.WorkspaceId, WorkspaceSettingsKeys.EnabledMcpServerIds, enabled);
         Status = "MCP server availability saved.";
+        if (ConfigWorkspace.WorkspaceId == _activeContext.ActiveWorkspaceId)
+            await _activeContext.RefreshMcpServersAsync();
     }
 }
 

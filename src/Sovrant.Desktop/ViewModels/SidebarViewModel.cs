@@ -396,6 +396,14 @@ public partial class SidebarViewModel : ViewModelBase
     {
         try
         {
+            // Guard: profile must still be in the workspace-allowed list held in memory.
+            // If it was removed since the list was loaded, refresh and bail.
+            if (ProviderProfiles.All(p => p.ProfileId != profile.ProfileId))
+            {
+                await LoadProviderProfilesAsync();
+                return;
+            }
+
             // Retrieve the credential on demand — view-model state never carries
             // a plaintext key between user interactions.
             var rawKey = string.IsNullOrWhiteSpace(profile.CredentialId)

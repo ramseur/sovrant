@@ -363,6 +363,15 @@
 
     private async Task ToggleMcpServer(string name, bool active)
     {
+        // Guard: activating a server no longer in the workspace-allowed list is a no-op.
+        // Reloads the list so the UI reflects the current admin state.
+        if (active && !_availableMcpServers.Contains(name, StringComparer.Ordinal))
+        {
+            await LoadMcpServersAsync();
+            StateHasChanged();
+            return;
+        }
+
         if (active) _activeMcpServers.Add(name);
         else _activeMcpServers.Remove(name);
 
@@ -618,6 +627,20 @@
 
     private async Task SelectModel(TreeGroup group, string model)
     {
+        // Guard: profile must still be in the workspace-allowed list loaded into memory.
+        // If it was removed since the dropdown opened, refresh and bail.
+        if (_providerProfiles.All(p => p.ProfileId != group.ProfileId))
+        {
+            await LoadProviderProfilesAsync();
+            await ApplyDisplayStateAsync();
+            _treeOpen = false;
+            _selectedTreeGroup = null;
+            _dropdownStyle = string.Empty;
+            await UnbindLightDismissAsync();
+            StateHasChanged();
+            return;
+        }
+
         var apiKey = await Credentials.RetrieveAsync(group.CredentialId) ?? string.Empty;
 
         Config.ApiKey = apiKey;
@@ -679,6 +702,7 @@
             {
                 await LoadWorkspacesAsync();
                 await LoadProjectsAsync();
+                await LoadMcpServersAsync();
             }
             catch (Exception ex)
             {
