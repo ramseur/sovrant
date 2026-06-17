@@ -1783,6 +1783,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     color: var(--text-muted);
     cursor: pointer;
     line-height: 1;
+    flex-shrink: 0;
 }
 .privacy-toggle-mini:hover { background: var(--surface-hover, rgba(255,255,255,0.04)); }
 .privacy-toggle-mini.private { color: var(--accent, #d4a017); border-color: var(--accent, #d4a017); }
@@ -3084,10 +3085,18 @@ details[open] .doc-advanced-toggle::before { content: "▼ "; }
     white-space: nowrap;
 }
 .cc-title {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow: hidden;
+}
+.cc-title-text {
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    flex: 1;
+    min-width: 0;
 }
 .cc-preview {
     margin-top: 2px;
