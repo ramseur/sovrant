@@ -727,7 +727,19 @@ CREATE TABLE IF NOT EXISTS keystore (
     created_at TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
 );
 
+-- ── V040 MCP Server stable ID ────────────────────────────────────────────────
+-- Fresh installs already have id + index via the V019 table definition above.
+-- These statements are no-ops on fresh installs; they fix upgrade installs that
+-- ran before V040 and have id = '' on all existing mcp_servers rows.
+
+ALTER TABLE mcp_servers ADD COLUMN IF NOT EXISTS id TEXT NOT NULL DEFAULT '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mcp_servers_id ON mcp_servers(id) WHERE id <> '';
+UPDATE mcp_servers SET id = gen_random_uuid()::text WHERE id = '';
+
 -- ── V041 Workspace Memory Privacy ────────────────────────────────────────────
+-- owner_user_id = '' means unowned/legacy: visible to ALL authenticated users
+-- via the load filter (owner_user_id = '' OR owner_user_id = $uid).
+-- Non-empty means scoped to that specific user only.
 
 ALTER TABLE workspace_memory ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE workspace_memory ADD COLUMN IF NOT EXISTS is_private    INTEGER NOT NULL DEFAULT 0;
@@ -737,6 +749,7 @@ CREATE INDEX IF NOT EXISTS ix_workspace_memory_owner ON workspace_memory(owner_u
 -- ── V042 Memory Owner User ID ─────────────────────────────────────────────────
 -- Scopes auto-generated memories (session summaries, patterns, instincts) to
 -- the session owner so they are not mixed across users in a multi-user deployment.
+-- Same owner_user_id = '' convention as V041: empty = legacy/global, non-empty = user-scoped.
 
 ALTER TABLE session_summaries ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE learned_patterns  ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';
@@ -760,3 +773,94 @@ CREATE TABLE IF NOT EXISTS sovrant_schema_version (
 INSERT INTO sovrant_schema_version (id, version)
 VALUES (1, 42)
 ON CONFLICT (id) DO UPDATE SET version = EXCLUDED.version, applied_at = EXCLUDED.applied_at;
+
+-- ════════════════════════════════════════════════════════════════════════════════
+-- SUPABASE AUTH EXTENSION
+-- Run this section ONLY on Supabase-hosted deployments, AFTER the schema above.
+-- Standalone PostgreSQL deployments skip this entire section.
+--
+-- Why: Supabase Auth stores identities in auth.users (UUID PK, managed by GoTrue).
+-- The app uses public.users (TEXT PK) as the FK anchor for all domain tables.
+-- These triggers keep public.users in sync automatically so every FK constraint
+-- continues to work without any application code changes.
+--
+-- user_id = auth.users.id::TEXT — UUID string, compatible with TEXT PK on all
+-- existing FK columns (workspaces, workspace_members, api_tokens, user_roles,
+-- project_members, password_reset_tokens).
+-- ════════════════════════════════════════════════════════════════════════════════
+
+-- ── Mirror trigger: auth.users INSERT → public.users INSERT ──────────────────
+
+CREATE OR REPLACE FUNCTION public.handle_auth_user_created()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+    INSERT INTO public.users (user_id, username, email, role, status, created_at, updated_at)
+    VALUES (
+        NEW.id::TEXT,
+        COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1)),
+        NEW.email,
+        'user',
+        'active',
+        to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+        to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+    )
+    ON CONFLICT (user_id) DO NOTHING;
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_auth_user_created();
+
+-- ── Mirror trigger: auth.users email UPDATE → public.users UPDATE ────────────
+
+CREATE OR REPLACE FUNCTION public.handle_auth_user_updated()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+    UPDATE public.users
+    SET    email      = NEW.email,
+           updated_at = to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+    WHERE  user_id = NEW.id::TEXT;
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE TRIGGER on_auth_user_updated
+    AFTER UPDATE OF email ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_auth_user_updated();
+
+-- ── Notes for Supabase deployments ───────────────────────────────────────────
+-- • public.users.password_hash is always NULL for Supabase-authenticated users.
+--   GoTrue owns password management; the column is inert and kept for schema
+--   parity with SQLite / standalone Postgres deployments.
+-- • password_reset_tokens is also inert — Supabase handles password resets.
+--   The table is retained so the schema remains identical across all modes.
+-- • svt_* api_tokens still work for CLI / headless API access in Supabase mode.
+--   Only interactive UI sessions use JWTs; machine tokens use the token table.
+-- • First admin: create the user in the Supabase dashboard (Auth → Users).
+--   The trigger fires automatically. Then elevate the role:
+--     UPDATE public.users SET role = 'admin' WHERE email = 'you@example.com';
+
+-- ── Row-Level Security (recommended for Supabase deployments) ────────────────
+-- Uncomment to enforce the owner_user_id privacy model at the database layer
+-- rather than relying solely on application-layer query filters. Required if
+-- any Supabase Edge Functions, dashboard queries, or service-role clients need
+-- to respect per-user memory privacy without going through the Sovrant API.
+
+-- ALTER TABLE workspace_memory  ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE session_summaries ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE learned_patterns  ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE instincts         ENABLE ROW LEVEL SECURITY;
+
+-- CREATE POLICY workspace_memory_owner ON workspace_memory
+--     USING (is_private = 0 OR owner_user_id = auth.uid()::text);
+
+-- CREATE POLICY session_summaries_owner ON session_summaries
+--     USING (owner_user_id = '' OR owner_user_id = auth.uid()::text);
+
+-- CREATE POLICY learned_patterns_owner ON learned_patterns
+--     USING (owner_user_id = '' OR owner_user_id = auth.uid()::text);
+
+-- CREATE POLICY instincts_owner ON instincts
+--     USING (owner_user_id = '' OR owner_user_id = auth.uid()::text);
