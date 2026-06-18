@@ -55,6 +55,10 @@ public sealed record SessionSummary
     /// <summary>Number of tool errors encountered.</summary>
     [JsonPropertyName("error_count")]
     public int ErrorCount { get; init; }
+
+    /// <summary>User ID of the session owner. Empty string means unowned (legacy / global).</summary>
+    [JsonPropertyName("owner_user_id")]
+    public string OwnerUserId { get; init; } = string.Empty;
 }
 
 /// <summary>How the session ended.</summary>

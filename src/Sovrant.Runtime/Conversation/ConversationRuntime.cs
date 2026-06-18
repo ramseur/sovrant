@@ -34,6 +34,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly ILogger<ConversationRuntime> _logger;
     private readonly IHookRunner _hookRunner;
     private readonly MemoryInjector? _memoryInjector;
+    private readonly Workspaces.IWorkspaceService? _workspaceService;
     private readonly IModelCapabilityRegistry? _capabilityRegistry;
     private readonly Governance.IIntentGate? _intentGate;
     private readonly Metrics.CostModelLoggerFacade? _costFacade;
@@ -129,8 +130,10 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         IArtifactStore? artifactStore = null,
         TrustBoundary.IPromptSanitizer? sanitizer = null,
         Prompt.IKnowledgeRouter? knowledgeRouter = null,
-        Knowledge.IKnowledgeAttributionStore? attributionStore = null)
+        Knowledge.IKnowledgeAttributionStore? attributionStore = null,
+        Workspaces.IWorkspaceService? workspaceService = null)
     {
+        _workspaceService = workspaceService;
         _router = router;
         _toolExecutor = toolExecutor;
         _toolRegistry = toolRegistry;
@@ -193,10 +196,18 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             try
             {
                 var project = Directory.GetCurrentDirectory();
+                // Env var wins (CLI/agent case). In the web server context the env var is
+                // typically unset, so we resolve the owner's personal workspace instead so
+                // each user gets their own workspace memories rather than a shared global.
                 var workspaceId = Environment.GetEnvironmentVariable("SOVRANT_WORKSPACE_ID");
+                if (string.IsNullOrEmpty(workspaceId) && _workspaceService is not null && !string.IsNullOrEmpty(_ownerUserId))
+                {
+                    var ws = await _workspaceService.GetPersonalAsync(_ownerUserId, ct).ConfigureAwait(false);
+                    workspaceId = ws?.WorkspaceId;
+                }
                 var projectId = Environment.GetEnvironmentVariable("SOVRANT_PROJECT_ID");
                 var memorySection = await _memoryInjector
-                    .BuildMemorySectionAsync(project, workspaceId, projectId, ct)
+                    .BuildMemorySectionAsync(project, workspaceId, projectId, ownerUserId: _ownerUserId, ct)
                     .ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(memorySection))
                     _systemPrompt += memorySection;

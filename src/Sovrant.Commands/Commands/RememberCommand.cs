@@ -25,7 +25,10 @@ public sealed class RememberCommand : ISlashCommand
     public string Description => "Save a learned pattern or instinct to memory.";
     public string Category => "Memory";
 
-    public async Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
+    public Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
+        => ExecuteAsync(args, null, ct);
+
+    public async Task<SlashCommandResult> ExecuteAsync(string args, string? ownerUserId, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(args);
         var arg = args.Trim();
@@ -35,18 +38,16 @@ public sealed class RememberCommand : ISlashCommand
                 "Usage:\n  /remember <text>                          — save a project pattern\n  /remember pattern <text>                  — save a project pattern\n  /remember instinct <trigger> | <action>   — save a behavioral instinct");
 
         if (arg.StartsWith("instinct ", StringComparison.OrdinalIgnoreCase))
-        {
-            return await SaveInstinctAsync(arg["instinct ".Length..].Trim(), ct).ConfigureAwait(false);
-        }
+            return await SaveInstinctAsync(arg["instinct ".Length..].Trim(), ownerUserId, ct).ConfigureAwait(false);
 
         // Strip optional "pattern " prefix
         if (arg.StartsWith("pattern ", StringComparison.OrdinalIgnoreCase))
             arg = arg["pattern ".Length..].Trim();
 
-        return await SavePatternAsync(arg, ct).ConfigureAwait(false);
+        return await SavePatternAsync(arg, ownerUserId, ct).ConfigureAwait(false);
     }
 
-    private async Task<SlashCommandResult> SavePatternAsync(string text, CancellationToken ct)
+    private async Task<SlashCommandResult> SavePatternAsync(string text, string? ownerUserId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(text))
             return new SlashCommandResult("Pattern text cannot be empty.");
@@ -60,13 +61,14 @@ public sealed class RememberCommand : ISlashCommand
             Pattern = text,
             Project = project,
             Confidence = 0.7, // User-provided patterns start at higher confidence
+            OwnerUserId = ownerUserId ?? string.Empty,
         };
 
         await _memoryStore.SavePatternAsync(pattern, ct).ConfigureAwait(false);
         return new SlashCommandResult($"Saved pattern: {text}");
     }
 
-    private async Task<SlashCommandResult> SaveInstinctAsync(string text, CancellationToken ct)
+    private async Task<SlashCommandResult> SaveInstinctAsync(string text, string? ownerUserId, CancellationToken ct)
     {
         var parts = text.Split('|', 2, StringSplitOptions.TrimEntries);
         if (parts.Length < 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
@@ -81,6 +83,7 @@ public sealed class RememberCommand : ISlashCommand
             Action = parts[1],
             Confidence = 0.7, // User-provided instincts start at higher confidence
             Evidence = [$"{DateTimeOffset.UtcNow:yyyy-MM-dd}: Explicitly added by user"],
+            OwnerUserId = ownerUserId ?? string.Empty,
         };
 
         await _memoryStore.SaveInstinctAsync(instinct, ct).ConfigureAwait(false);

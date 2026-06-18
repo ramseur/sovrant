@@ -223,7 +223,7 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
         try
         {
             IsLoading = true;
-            var state = await _aggregator.GetActiveStateAsync();
+            var state = await _aggregator.GetActiveStateAsync(viewerUserId: App.SovrantUserId);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (IsFocused) return;

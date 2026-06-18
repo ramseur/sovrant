@@ -9,6 +9,12 @@
             <TextBlock Text="ADMIN" FontSize="11" FontWeight="Bold"
                        Foreground="{DynamicResource TextMuted}"
                        Margin="6,4,0,10" />
+            <Button Content="&#x1F3AF;  Command Center"
+                    Command="{Binding NavigateCommand}" CommandParameter="CommandCenter"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=CommandCenter}"
+                    Foreground="{DynamicResource TextPrimary}" />
             <Button Content="&#x1F465;  Users"
                     Command="{Binding NavigateCommand}" CommandParameter="Admin"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
@@ -21,11 +27,11 @@
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=AdminWorkspaces}"
                     Foreground="{DynamicResource TextPrimary}" />
-            <Button Content="&#x1F3AF;  Command Center"
-                    Command="{Binding NavigateCommand}" CommandParameter="CommandCenter"
+            <Button Content="&#x1F310;  Providers"
+                    Command="{Binding NavigateCommand}" CommandParameter="AdminProviders"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=CommandCenter}"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=AdminProviders}"
                     Foreground="{DynamicResource TextPrimary}" />
             <Button Content="&#x1F6E1;  Governance"
                     Command="{Binding NavigateCommand}" CommandParameter="Governance"
@@ -45,7 +51,13 @@
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Diagnostics}"
                     Foreground="{DynamicResource TextPrimary}" />
-            <Button Content="&#x1F50C;  System Integrations"
+            <Button Content="&#x1F50C;  Platform Integrations"
+                    Command="{Binding NavigateCommand}" CommandParameter="AdminPlatformIntegrations"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=AdminPlatformIntegrations}"
+                    Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="&#x1F5A5;  System Integrations"
                     Command="{Binding NavigateCommand}" CommandParameter="AdminSystemIntegrations"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"

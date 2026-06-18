@@ -160,7 +160,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Supabase backend ✅ — optional Postgres backend shipped (sessions + credentials, admin UI, schema init, SQLite→Postgres migrator, boot-time DI switch, Web + Desktop parity); SSO (Supabase Auth, OAuth/OIDC, SAML) remains deferred | Phase 40C | ✅ Done — SSO deferred |
 | Granular feature permissions — workspace members can be granted or denied access to specific features (Chat, Agents, Teams, Swarms, Missions, MCP, Knowledge, Artifacts, Settings); current model is all-or-nothing per workspace role; Phase 40D adds a permission matrix admins configure per user or role | Phase 40D | Deferred |
 | DuckDB database provider — `IStorageProvider` implementation backed by DuckDB; columnar analytics for agent runs, session history, token usage, cost aggregations, and audit queries; embedded like SQLite, analytical like a data warehouse; ideal for self-hosted deployments that need fast cross-session reporting without standing up Supabase | Phase 104 | Deferred |
-| MCP server permissions — scope which MCP servers are available at the workspace and project level; admins allowlist/blocklist servers per workspace, project owners further restrict per project; users only see MCP tools their scope permits; replaces today's global MCP server list | Phase 105 | Deferred |
+| MCP server permissions — workspace-level gating ✅ shipped (V040 stable IDs, `GetEnabledEntriesAsync` workspace filter, admin toggle UI on Web + Desktop, memory-gate guards at selection point); project-level restrictions (project owners further restrict per project) remain deferred | Phase 105 | Partial ✅ — project-level deferred |
 | VS Code native extension | Phase 42 | Deferred (MCP server covers MCP-aware IDEs) |
 | Embedded terminal panel inside the desktop app | Phase 45 | Deferred |
 | n8n automation integration (1,000+ third-party connectors via headless n8n) | Phase 46 | Medium |
@@ -203,6 +203,13 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Caching: DB read cache + Phase 31 invalidation fix — `CachedKnowledgeStore` decorator wraps `IKnowledgeStore` with TTL-based in-process caching for rarely-changing content (skills, agents, document templates, tool/doc guides) and fires a `KnowledgePageChanged` event on every write; repairs Phase 31's `CacheInvalidator` whose file-watcher triggers were deleted by Phase 112, restoring HTTP-cache invalidation for `skills:list`, `templates:list`, and `knowledge:*` keys; opt-out via `SOVRANT_KNOWLEDGE_CACHE_TTL=0` | Phase 113 | ✅ Done |
 | Intelligent Knowledge Harness — on-demand per-turn knowledge loading via `IKnowledgeRouter` (keyword/trigger/intent scoring, no LLM call); dynamic per-turn addendum preserves stable system-prompt cache; full-round-trip PII sanitization for knowledge bodies and tool results; `knowledge_attributions` table; MCP tool relevance filtering per turn; provenance Sources section in Web + Desktop chat | Phase 116 | ✅ Done |
 | Enrich built-in skill definitions — review and improve all 32 built-in skill descriptions (2-3 sentences), workflow bodies (≥5 concrete steps), agents/tools lists, and trigger phrases; ship as a `V038__enrich_builtin_skills.sql` additive migration that UPDATEs only the BuiltIn base rows; user overlays are unaffected | Phase 114 | Planned |
+| API endpoint integration — connect REST and GraphQL APIs as first-class platform integrations alongside MCP servers; harness auto-discovers endpoints via OpenAPI/Swagger spec import or GraphQL introspection, or admin can manually describe specific endpoints; discovered endpoints exposed as typed tools through the same `MCPTool` proxy layer (trust rules, session picker, `FilteredToolRegistry`); admin configures per workspace; credentials stored in encrypted keystore; Web + Desktop parity | Phase 117 | Planned |
+| Bootstrap configuration — declarative YAML file (`sovrant.bootstrap.yaml`) that pre-configures a Sovrant installation before or at first run; covers providers, MCP servers, knowledge/skills, agent templates, workspace setup, admin users, permission defaults, and branding; Sovrant installs and starts normally then applies the bootstrap idempotently; enables sales-assisted and partner-delivered custom installs without code changes | Phase 118 | Planned |
+| Orchestration improvements — enhanced mission run-mode for teams and swarms; missions get a named run-mode (autonomous, supervised, step-through) set at launch rather than inherited from global permission; Claws sourced from configured platform integrations can be added as team members if the integration is connected, giving orchestrations access to external agents alongside local ones | Phase 119 | Planned |
+| Multi-user web support — `Sovrant.Web` is currently single-user: `WebSessionService`, `ActiveContextService`, `SovrantConfig`, `MutableAuthProvider`, `IPermissionPolicy`, and `IToolConfirmationHandler` are all `AddSingleton`, meaning all browser circuits share one authenticated identity and one active workspace/model/MCP state; to support concurrent users each of these must become `AddScoped` (one instance per Blazor Server circuit); `WebSessionService` is the root dependency — real per-circuit identity (cookie/JWT per connection) must land first before workspace context and config can be safely isolated; `ActiveSessionsService` and `ChatSeedService` are already scoped, showing the intent; the remote mode (`Sovrant.Server` backend) is the closer path since the server already has multi-user auth — the web frontend just needs per-circuit context; workspace MCP/provider guards added in the meantime are already circuit-local and will remain correct after the scoped refactor | Phase 120 | Deferred |
+| Recent chats time grouping — organize the session list in the sidebar into labeled time buckets rather than a flat chronological list; groups: **Today**, **Previous 7 days**, **Previous 30 days**, then one collapsible group per calendar month (e.g. "May 2026", "April 2026"); group headers are sticky/pinned as the user scrolls; empty groups are hidden; the active session is highlighted within its group; Web (`Sidebar.razor`) and Desktop (`SidebarViewModel` + `SidebarView.axaml`) parity; no new API endpoint needed — `created_at` is already returned in session list queries | Phase 121 | Medium |
+| Image generation and inline display — allow models that support image output (e.g. `dall-e-3`, `gpt-image-1`, `flux`, `stable-diffusion` via OpenRouter, or any provider that returns `image_url` / base64 in the response) to generate images mid-conversation; generated images are stored as chat artifacts (`Artifact` with `Kind = "image"`) and rendered inline in the chat transcript for both Web and Desktop; the message bubble shows the image directly below the assistant text that prompted it, with a "Save" button to download the full-resolution file; clicking the image opens a lightbox (Web) or a full-size viewer window (Desktop); admin configures which providers and models are image-capable; no new conversation format needed — the existing artifact pipeline handles the binary payload | Phase 122 | Medium |
+| Memory system — workspace memory as a first-class user feature with public/private scoping: users can add memory notes directly from the chat "＋ Remember" button (web and desktop) or from a dedicated Workspace tab on the Memory page; notes are injected into every future chat session; private notes are only injected for their owner, public notes are injected for all workspace members; V041 migration adds `owner_user_id` and `is_private` to `workspace_memory`; `ConversationRuntime` auto-resolves the session owner's personal workspace so injection is per-user in multi-user deployments rather than relying on a global env var | Phase 123 | Done |
 
 ### v1.0 release polish ✅
 
@@ -11030,3 +11037,187 @@ Steps A–C are pure improvements with no architectural risk — they can ship a
 - After a turn that uses the tdd-workflow skill, `knowledge_attributions` has a row with `kind='skills', slug='tdd-workflow'`.
 - Stable system prompt hash does not change between turns (verifiable: provider-side cache hit rate does not drop vs. pre-Phase-116 baseline).
 - All existing tests pass; new unit tests cover the relevance scorer (trigger match, keyword overlap, intent affinity) and both PII sanitization paths.
+
+## Phase 117 — API Endpoint Integration (REST & GraphQL as Platform Integrations)
+
+**Goal:** Let admins register REST and GraphQL APIs as first-class platform integrations alongside MCP servers. The harness can auto-discover endpoints from an OpenAPI/Swagger spec or GraphQL introspection, or the admin can manually describe specific endpoints. Discovered operations are exposed as typed tools through the same `MCPTool` proxy layer — trust rules, session tool picker, and `FilteredToolRegistry` all apply identically to API tools and MCP tools.
+
+### Why
+
+MCP covers well-known developer tools but most enterprise and SaaS systems expose REST or GraphQL APIs with no MCP server. Phase 95 opened the Platform Integrations gallery; Phase 117 extends it to cover any HTTP API that has a spec or can be described, turning Sovrant into a zero-code integration layer for arbitrary services without requiring a custom MCP server.
+
+### What Phase 117 ships
+
+**Spec-driven discovery**
+- Admin pastes an OpenAPI/Swagger spec URL or uploads a JSON/YAML file; Sovrant parses paths, methods, parameters, and response schemas; each operation becomes a callable tool with typed inputs
+- Admin provides a GraphQL endpoint URL; Sovrant runs `__schema` introspection to discover queries, mutations, and input types; each query/mutation becomes a tool
+- Rediscovery on demand — admin can re-import at any time to pick up spec changes; a diff is shown before applying so no silent tool renames
+
+**Manual endpoint entry**
+- Fallback for APIs with no spec; admin defines name, URL template, HTTP method, parameter names and types, and expected response shape
+- Parameters map to tool input fields; Sovrant builds and executes the HTTP call
+
+**Auth**
+- Bearer token, API key (header or query param), Basic auth
+- Credentials stored in the existing encrypted keystore (same path as MCP server secrets)
+- OAuth support deferred to a follow-on phase
+
+**Tool proxy integration**
+- API operations register in `FilteredToolRegistry` under a namespace matching the integration name
+- Trust rules (allow / require-confirmation / block) configurable per API integration in the Platform Integrations admin UI
+- Per-session tool picker checkboxes work the same as MCP server toggles
+- Attribution tracking: turns that call API tools write `kind='api', slug=<integration-name>/<operation-id>` to `knowledge_attributions`
+
+**Web + Desktop parity**
+- API integrations appear in the Platform Integrations gallery under a new **APIs** category tier
+- Connected tab shows API integrations alongside MCP servers with tool count and endpoint count
+- Detail panel shows base URL, spec source, operation list, auth type (masked), and trust rules
+
+### Acceptance criteria
+
+- An admin imports the Stripe OpenAPI spec; agents can call `stripe/create_payment_intent` without any code changes
+- An admin registers a GraphQL endpoint; introspection discovers 12 queries; all 12 appear in the session tool picker
+- A manually-described endpoint with two URL params generates a correctly-formed HTTP call with values the agent provides
+- Trust rules applied to `stripe/*_delete` pattern require confirmation before execution; agent receives a structured refusal if confirmation is not granted
+- Re-importing an updated spec that renames an operation shows a diff before applying; old tool name is removed and new one added atomically
+- API tool credentials are stored encrypted at rest and masked in all UI surfaces
+- All existing MCP and knowledge tests continue to pass
+
+---
+
+## Phase 118 — Bootstrap Configuration
+
+**Status:** Planned
+
+### Why
+
+Enterprise customers and sales-assisted deployments need Sovrant to arrive pre-configured for their environment. Today an admin must manually set up providers, MCP servers, knowledge bases, agent templates, and workspace policies after install. A declarative bootstrap file removes that friction: the partner or sales engineer authors a YAML config once, ships it alongside the installer, and Sovrant applies it automatically on first run — no code changes, no bespoke scripts, no post-install click-through.
+
+This unlocks white-label and branded installs, partner-delivered verticals (e.g. a legal firm gets Sovrant pre-loaded with compliance knowledge and approved providers), and automated CI-provisioned demo environments.
+
+### What ships
+
+**`sovrant.bootstrap.yaml`** — a single declarative file placed alongside `sovrant.config` (or in a path configured by `sovrant.config`). Sections:
+
+```yaml
+sovrant_bootstrap: "1.0"
+
+workspace:
+  name: "Acme Legal"
+  default_permission_mode: "supervised"
+
+providers:
+  - provider: openrouter
+    profile_name: "Acme OpenRouter"
+    api_key_env: "SOVRANT_OPENROUTER_KEY"   # resolved from environment at apply time
+    default: true
+
+mcp_servers:
+  - name: "Acme Docs"
+    url: "https://mcp.acme.internal/docs"
+    trust_level: "trusted"
+  - name: "Filesystem"
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"]
+
+knowledge:
+  - title: "Company Policy"
+    kind: "document"
+    tier: "global"
+    source_file: "knowledge/company-policy.md"   # relative to bootstrap file
+  - title: "Approved Tools"
+    kind: "skills"
+    tier: "global"
+    source_file: "knowledge/approved-tools.md"
+
+agents:
+  - name: "Acme Assistant"
+    description: "Default assistant for Acme Legal"
+    system_prompt_file: "agents/acme-assistant.md"
+    provider_profile: "Acme OpenRouter"
+    default_model: "openai/gpt-4o"
+
+admin_users:
+  - email: "it-admin@acme.com"
+
+branding:
+  product_name: "Acme AI"
+  primary_color: "#1A3C8F"
+```
+
+**Apply behavior:**
+- Applied **once on first boot** if a bootstrap file is present and the instance has never been bootstrapped (flag stored in DB)
+- `--bootstrap-apply` CLI flag forces a re-apply (idempotent: skips items that already exist, updates changed items, never deletes)
+- `--bootstrap-check` CLI flag validates the file and reports what would change without touching the DB
+- Credentials sourced from environment variables (the file never stores secrets directly)
+- Source files (knowledge, agent prompts) bundled alongside the bootstrap YAML; relative paths resolved from the bootstrap file's directory
+
+**Configurable items:**
+- Providers (with profile names and credential env-var references)
+- MCP servers (HTTP and stdio)
+- Knowledge items (any kind, any tier the caller is authorized for)
+- Agent templates
+- Workspace display name and default permission mode
+- Admin user list (by email; users are created or promoted as needed)
+- Branding overrides (`product_name`, `primary_color`)
+
+**Drift detection:** re-running `--bootstrap-check` after manual changes reports which items have drifted from the bootstrap spec, so ops teams can detect unexpected configuration drift.
+
+**Web + Desktop parity:** the apply engine is in the core library (`Sovrant.Core`); both runtimes call it. The Web admin UI shows a "Bootstrap" status card (applied / not applied / drifted) in the Admin panel.
+
+### Acceptance criteria
+
+- A fresh Sovrant instance with a `sovrant.bootstrap.yaml` boots and auto-applies the config; admin sees all items present without any manual setup
+- Running `--bootstrap-apply` a second time is idempotent: no duplicates are created, no existing manual config is deleted
+- `api_key_env` resolves from the process environment; if the env var is absent, apply fails with a clear error naming the missing variable
+- `--bootstrap-check` on a drifted instance reports the specific items that differ from the spec
+- A bootstrap file with a structural error (wrong YAML, unknown section, invalid provider name) is rejected at startup with a human-readable message; Sovrant continues to run without applying anything
+- Web admin panel shows the bootstrap status card (applied date, applied-by, item count)
+- All existing provider, MCP, and knowledge tests continue to pass
+
+---
+
+## Phase 119 — Orchestration Improvements
+
+**Status:** Planned
+
+### Why
+
+Orchestration today inherits the global permission mode, which means a supervised workspace forces step-by-step confirmation even on batch missions that are designed to run unattended. Teams and swarms also lack a formal concept of a "mission" — a named, scoped run with a declared run-mode, progress tracking, and a clear lifecycle. Separately, integrations already bring external agents (Claws) into the workspace, but there is no way to assign them as members of a team; they exist as tools only.
+
+This phase closes both gaps: missions become a first-class orchestration primitive with their own run-mode, and integration-sourced Claws become addressable team members.
+
+### What ships
+
+**Mission run-mode**
+
+A mission is a named, bounded orchestration run assigned to a team or swarm. When launching a mission the operator (human or automated trigger) declares one of three run-modes:
+
+| Mode | Behaviour |
+|---|---|
+| `autonomous` | The team executes fully without confirmation gates; tool calls subject to trust rules but no human step-through |
+| `supervised` | Agent actions are confirmed by the session owner turn-by-turn; mirrors the current global supervised behaviour |
+| `step-through` | Each agent step pauses and surfaces a summary to the operator before proceeding |
+
+The declared mode overrides the workspace permission setting for the lifetime of the mission. Mission metadata (name, team, run-mode, status, started-at, completed-at, output summary) is stored in the DB and visible in the Command Center.
+
+**Integration-sourced Claws as team members**
+
+When an admin has a platform integration connected that exposes external agents (e.g. a remote Claw endpoint via MCP or a registered agent API), those agents appear in a new "Available Members" picker when building or editing a team. The picker lists:
+
+- Local Claws (existing behaviour)
+- Integration-sourced Claws — shown only if the backing integration is connected at the time of team composition; labelled with the integration name (e.g. `via GitHub Copilot`)
+
+Integration members participate in orchestration the same way local Claws do — routed via the existing `AgentRouter` — but their tool calls go through the integration's MCP proxy layer so trust rules and session selection still apply. If the integration is disconnected at mission launch, the affected member is skipped and the mission log records a `member_unavailable` event.
+
+**Web + Desktop parity:** mission launch UI on both surfaces; Command Center shows live mission status; team editor picker updated on both.
+
+### Acceptance criteria
+
+- Launching a mission with `autonomous` run-mode in a supervised workspace executes without confirmation prompts; trust rules still fire normally
+- Launching with `step-through` pauses after each agent action and waits for operator acknowledgement before proceeding
+- A connected integration that exposes agent endpoints surfaces those agents in the team member picker with the integration label
+- Removing or disconnecting an integration removes its Claws from the picker; existing team definitions retain the member reference but show a "disconnected" badge
+- A mission started with an unavailable integration member logs `member_unavailable` and continues with the remaining members rather than failing the whole mission
+- Mission history (name, run-mode, status, timing) is visible in the Command Center for completed and in-progress missions
+- All existing orchestration, team, and agent tests continue to pass

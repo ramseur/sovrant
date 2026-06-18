@@ -78,7 +78,8 @@ public interface IWorkspaceService
     // ── Memory ─────────────────────────────────────────────────────────────
 
     /// <summary>Lists workspace-scoped memory entries.</summary>
-    Task<IReadOnlyList<WorkspaceMemoryEntry>> ListMemoryAsync(string workspaceId, string? layer = null, CancellationToken ct = default);
+    /// <param name="viewerUserId">When set, returns public entries plus private entries owned by this user. Pass null to return all (admin).</param>
+    Task<IReadOnlyList<WorkspaceMemoryEntry>> ListMemoryAsync(string workspaceId, string? layer = null, string? viewerUserId = null, CancellationToken ct = default);
 
     /// <summary>Saves a workspace memory entry.</summary>
     Task SaveMemoryAsync(WorkspaceMemoryEntry entry, CancellationToken ct = default);

@@ -1,0 +1,325 @@
+@page "/admin/providers"
+@using Sovrant.Api.Auth
+@using Sovrant.Api.Config
+@using Sovrant.Runtime.Auth
+@using Sovrant.Runtime.Config
+@using Sovrant.Runtime.Mcp
+@using Sovrant.Runtime.Preferences
+@using Sovrant.Runtime.Providers
+@using Sovrant.Runtime.Workspaces
+@using Sovrant.Web.Adapters
+@using Sovrant.Web.Services
+
+@inject IPrincipalAccessor Principal
+@inject MutableAuthProvider AuthProvider
+@inject SovrantConfig Config
+@inject IUserPreferenceStore Prefs
+@inject IProviderProfileStore ProfileStore
+@inject ICredentialStore Credentials
+@inject IWorkspaceService WorkspaceService
+@inject IWorkspaceSettingsStore WsSettings
+@inject WebSessionService Session
+@inject ActiveContextService ActiveContext
+@inject NavigationManager Nav
+
+<div class="settings-page">
+    <h1>Providers</h1>
+
+    <div class="settings-section">
+        <h2>Your Providers</h2>
+        <p class="text-muted text-sm">Configure API keys and endpoints. The model dropdown above uses the active provider's connection.</p>
+
+        @if (_savedProfiles.Count == 0)
+        {
+            <p class="text-secondary">Add a provider below to get started.</p>
+        }
+        @foreach (var profile in _savedProfiles)
+        {
+            <div class="provider-card">
+                <div class="provider-info">
+                    <div class="provider-name">@profile.Provider</div>
+                    <div class="provider-detail">@profile.BaseUrl</div>
+                </div>
+                <div class="provider-actions">
+                    <button class="btn-sm btn-danger" @onclick="() => RequestDeleteProfile(profile)">Delete</button>
+                </div>
+            </div>
+        }
+
+        <h2 class="mt-16">Add Provider</h2>
+
+        <form autocomplete="off" @onsubmit:preventDefault>
+        <div class="form-field">
+            <label>Provider</label>
+            <select @bind="_selectedProvider" @bind:after="OnProviderChanged">
+                @foreach (var p in Providers)
+                {
+                    <option value="@p">@p</option>
+                }
+            </select>
+        </div>
+
+        <div class="form-field">
+            <label>API Key</label>
+            <input type="password" @bind="_apiKey" placeholder="sk-..." autocomplete="off" data-lpignore="true" data-1p-ignore />
+        </div>
+
+        <div class="form-field">
+            <label>Base URL</label>
+            <input type="text" @bind="_baseUrl" placeholder="https://api.openai.com/v1" />
+            <span class="text-muted text-sm">Auto-filled when you select a provider. Edit for custom endpoints.</span>
+        </div>
+
+        <div class="card">
+            <div class="form-field">
+                <input type="text" @bind="_newProfileName" placeholder="Display name (or leave blank for auto)" />
+            </div>
+
+            @if (_allWorkspaces.Count > 0)
+            {
+                <div class="form-field">
+                    <label>Enable for workspaces</label>
+                    <div class="multi-select-box">
+                        @foreach (var ws in _allWorkspaces)
+                        {
+                            <label>
+                                <input type="checkbox"
+                                       checked="@_selectedWorkspaceIds.Contains(ws.WorkspaceId)"
+                                       @onchange="e => ToggleWorkspace(ws.WorkspaceId, (bool)(e.Value ?? false))" />
+                                @ws.Name
+                            </label>
+                        }
+                    </div>
+                </div>
+            }
+
+            <button class="btn-primary" @onclick="AddProvider">Add Provider</button>
+        </div>
+        </form>
+
+        @if (!string.IsNullOrEmpty(_statusMessage))
+        {
+            <div class="status-message">@_statusMessage</div>
+        }
+
+        <p class="text-muted text-sm">API keys are encrypted with AES-256-GCM and stored in the Sovrant database. Switch between providers from the model dropdown at the top.</p>
+    </div>
+</div>
+
+<DeleteConfirmModal @ref="_deleteModal" />
+
+@code {
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private DeleteConfirmModal _deleteModal = default!;
+
+    private string _selectedProvider = "OpenAI";
+    private string _apiKey = string.Empty;
+    private string _baseUrl = string.Empty;
+    private string _newProfileName = string.Empty;
+    private string _statusMessage = string.Empty;
+    private List<ProviderProfileVm> _savedProfiles = [];
+    private List<Workspace> _allWorkspaces = [];
+    private HashSet<string> _selectedWorkspaceIds = [];
+
+    public static readonly Dictionary<string, string> ProviderBaseUrls = new(StringComparer.Ordinal)
+    {
+        ["OpenAI"] = "https://api.openai.com/v1",
+        ["OpenRouter"] = "https://openrouter.ai/api/v1",
+        ["DeepSeek"] = "https://api.deepseek.com/v1",
+        ["Groq"] = "https://api.groq.com/openai/v1",
+        ["Mistral"] = "https://api.mistral.ai/v1",
+        ["Together AI"] = "https://api.together.xyz/v1",
+        ["Ollama"] = "http://localhost:11434/v1",
+        ["LM Studio"] = "http://localhost:1234/v1",
+        ["Google"] = "https://generativelanguage.googleapis.com/v1beta/openai",
+        ["Azure OpenAI"] = "",
+        ["Custom"] = "",
+    };
+
+    private static readonly string[] Providers =
+        ["OpenAI", "DeepSeek", "Groq", "Mistral", "Together AI", "Azure OpenAI", "Google", "OpenRouter", "Ollama", "LM Studio", "Custom"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Principal.IsAdmin)
+        {
+            Nav.NavigateTo("/", forceLoad: false);
+            return;
+        }
+
+        _apiKey = string.Empty;
+        if (ProviderBaseUrls.TryGetValue(_selectedProvider, out var defaultUrl))
+            _baseUrl = defaultUrl;
+
+        await LoadProfilesAsync();
+        _allWorkspaces = (await WorkspaceService.ListAllAsync()).ToList();
+    }
+
+    private void OnProviderChanged()
+    {
+        if (ProviderBaseUrls.TryGetValue(_selectedProvider, out var url))
+            _baseUrl = url;
+        // Changing provider starts a fresh add-profile flow — clear the key field.
+        _apiKey = string.Empty;
+        // Still auto-fill the base URL from a matching saved profile if present.
+        var profile = _savedProfiles.FirstOrDefault(p =>
+            p.Provider.Equals(_selectedProvider, StringComparison.OrdinalIgnoreCase));
+        if (profile is not null)
+            _baseUrl = profile.BaseUrl;
+    }
+
+    private async Task AddProvider()
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey)) { _statusMessage = "Please enter an API key."; return; }
+
+        var displayName = string.IsNullOrWhiteSpace(_newProfileName)
+            ? _selectedProvider : _newProfileName.Trim();
+
+        var trimmedKey = _apiKey.Trim();
+        var trimmedBase = (_baseUrl ?? string.Empty).Trim();
+        var profileId = MakeProfileId(_selectedProvider, displayName);
+        var credentialId = $"provider.{profileId}.api_key";
+        var userId = Session.UserId!;
+
+        try
+        {
+            await Credentials.StoreAsync(credentialId, trimmedKey);
+
+            var now = DateTimeOffset.UtcNow;
+            var existingRow = await ProfileStore.GetAsync(profileId);
+            var profile = new ProviderProfile(
+                ProfileId: profileId,
+                UserId: userId,
+                Name: displayName,
+                ProviderKind: _selectedProvider,
+                BaseUrl: trimmedBase,
+                DefaultModel: null,
+                MaxTokens: Config.MaxTokens,
+                CredentialId: credentialId,
+                CreatedAt: existingRow?.CreatedAt ?? now,
+                UpdatedAt: now);
+            if (existingRow is null)
+                await ProfileStore.CreateAsync(profile);
+            else
+                await ProfileStore.UpdateAsync(profile);
+
+            await Prefs.DeleteAsync(userId, UserPreferenceKeys.Model);
+            await Prefs.DeleteAsync(userId, UserPreferenceKeys.ActiveProviderProfileId);
+            Config.Model = string.Empty;
+            ActiveContext.SetModel(string.Empty, string.Empty);
+
+            // Update enabled_profile_ids for each selected workspace
+            foreach (var wsId in _selectedWorkspaceIds)
+            {
+                var existing = await WsSettings.GetAsync(wsId, WorkspaceSettingsKeys.EnabledProviderProfileIds);
+                var ids = new HashSet<string>(string.IsNullOrEmpty(existing)
+                    ? []
+                    : existing.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                ids.Add(profileId);
+                await WsSettings.SetAsync(wsId, WorkspaceSettingsKeys.EnabledProviderProfileIds, string.Join(',', ids));
+            }
+
+            await LoadProfilesAsync();
+            _apiKey = string.Empty;
+            _newProfileName = string.Empty;
+            _selectedWorkspaceIds.Clear();
+            _statusMessage = $"Provider '{_selectedProvider}' saved. Pick a model from the dropdown at the top.";
+        }
+        catch (Exception ex) { _statusMessage = $"Failed to add provider: {ex.Message}"; }
+    }
+
+    private void ToggleWorkspace(string workspaceId, bool selected)
+    {
+        if (selected) _selectedWorkspaceIds.Add(workspaceId);
+        else _selectedWorkspaceIds.Remove(workspaceId);
+    }
+
+    private void RequestDeleteProfile(ProviderProfileVm profile) =>
+        _deleteModal.Show("Provider", profile.Provider, () => DeleteProfile(profile), requireTypeName: false);
+
+    private async Task DeleteProfile(ProviderProfileVm profile)
+    {
+        try
+        {
+            await ProfileStore.DeleteAsync(profile.ProfileId);
+            if (!string.IsNullOrWhiteSpace(profile.CredentialId))
+                await Credentials.DeleteAsync(profile.CredentialId);
+
+            await LoadProfilesAsync();
+
+            var userId = Session.UserId!;
+            var activeId = await Prefs.GetAsync(userId, UserPreferenceKeys.ActiveProviderProfileId);
+            var wasActive = string.Equals(activeId, profile.ProfileId, StringComparison.Ordinal);
+            var lastProfile = _savedProfiles.Count == 0;
+
+            if (wasActive || lastProfile)
+            {
+                await Prefs.DeleteAsync(userId, UserPreferenceKeys.ActiveProviderProfileId);
+                await Prefs.DeleteAsync(userId, UserPreferenceKeys.Model);
+                Config.Model = string.Empty;
+            }
+
+            if (lastProfile)
+            {
+                await Prefs.DeleteAsync(userId, UserPreferenceKeys.Provider);
+                await Prefs.DeleteAsync(userId, UserPreferenceKeys.BaseUrl);
+                await Credentials.DeleteAsync(CredentialKeys.LlmApiKey);
+                Config.ApiKey = string.Empty;
+                Config.BaseUrl = null;
+                AuthProvider.ApiKey = string.Empty;
+                AuthProvider.BaseUrl = null;
+            }
+
+            if (wasActive || lastProfile)
+                ActiveContext.SetModel(string.Empty, string.Empty);
+
+            _statusMessage = $"Profile '{profile.Name}' deleted.";
+        }
+        catch (Exception ex) { _statusMessage = $"Delete failed: {ex.Message}"; }
+        StateHasChanged();
+    }
+
+    private async Task LoadProfilesAsync()
+    {
+        try
+        {
+            var rows = await ProfileStore.ListAsync(Session.UserId!);
+            var list = new List<ProviderProfileVm>(rows.Count);
+            foreach (var row in rows)
+            {
+                var apiKey = await Credentials.RetrieveAsync(row.CredentialId) ?? string.Empty;
+                list.Add(new ProviderProfileVm
+                {
+                    ProfileId = row.ProfileId,
+                    CredentialId = row.CredentialId,
+                    Name = row.Name,
+                    Provider = row.ProviderKind,
+                    ApiKey = apiKey,
+                    BaseUrl = row.BaseUrl ?? string.Empty,
+                    MaxTokens = row.MaxTokens ?? 32000,
+                });
+            }
+            _savedProfiles = list;
+        }
+        catch { _savedProfiles = []; }
+    }
+
+    private static string MakeProfileId(string provider, string name)
+    {
+        var slug = $"{provider}-{name}".ToLowerInvariant();
+        var sanitized = new string(slug.Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
+        return sanitized.Trim('-');
+    }
+
+    private class ProviderProfileVm
+    {
+        public string ProfileId { get; set; } = string.Empty;
+        public string CredentialId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Provider { get; set; } = string.Empty;
+        public string ApiKey { get; set; } = string.Empty;
+        public string BaseUrl { get; set; } = string.Empty;
+        public int MaxTokens { get; set; } = 32000;
+    }
+}

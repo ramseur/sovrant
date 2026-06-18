@@ -297,6 +297,7 @@
                                 <Border Height="1" Background="{DynamicResource SurfaceBorder}"
                                         Margin="4,6,4,4" />
                                 <Button Command="{Binding GoToIntegrationsCommand}"
+                                        IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsAdmin}"
                                         HorizontalAlignment="Stretch"
                                         HorizontalContentAlignment="Left"
                                         Padding="8,5" CornerRadius="5"

@@ -54,6 +54,21 @@ public partial class MainViewModel : ViewModelBase
 
     public bool IsAdmin => _principal.IsAdmin;
 
+    [ObservableProperty]
+    private bool _isNavCollapsed;
+
+    public bool IsNavExpanded => !IsNavCollapsed;
+    public double NavWidth => IsNavCollapsed ? 44 : 240;
+
+    partial void OnIsNavCollapsedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsNavExpanded));
+        OnPropertyChanged(nameof(NavWidth));
+    }
+
+    [RelayCommand]
+    private void ToggleNav() => IsNavCollapsed = !IsNavCollapsed;
+
     public MainViewModel(SidebarViewModel sidebar, CommandPaletteViewModel commandPalette, IServiceProvider services, IPrincipalAccessor principal, ActiveSessionsViewModel activeSessions)
     {
         ArgumentNullException.ThrowIfNull(sidebar);
@@ -157,10 +172,6 @@ public partial class MainViewModel : ViewModelBase
                 Sidebar.SelectedNavItem = "Projects";
                 OnNavigationRequested(this, "Projects");
                 break;
-            case "connect":
-                Sidebar.SelectedNavItem = "Integrations";
-                OnNavigationRequested(this, "Integrations");
-                break;
             case "dashboard":
                 CurrentPage = _services.GetRequiredService<UserDashboardViewModel>();
                 break;
@@ -169,8 +180,8 @@ public partial class MainViewModel : ViewModelBase
                 OnNavigationRequested(this, "Settings");
                 break;
             case "admin" when _principal.IsAdmin:
-                Sidebar.SelectedNavItem = "Admin";
-                CurrentPage = ResolveAdmin("users");
+                Sidebar.SelectedNavItem = "CommandCenter";
+                CurrentPage = ResetCockpitToGrid();
                 break;
         }
     }
@@ -254,7 +265,9 @@ public partial class MainViewModel : ViewModelBase
             "CommandCenter" => ResetCockpitToGrid(),
             "Admin" => ResolveAdmin("users"),
             "AdminWorkspaces" => ResolveAdmin("workspaces"),
+            "AdminPlatformIntegrations" => _services.GetRequiredService<IntegrationsViewModel>(),
             "AdminSystemIntegrations" => _services.GetRequiredService<SystemIntegrationsViewModel>(),
+            "AdminProviders" => ResolveSettings("Settings:Providers"),
             _ => CurrentPage,
         };
     }

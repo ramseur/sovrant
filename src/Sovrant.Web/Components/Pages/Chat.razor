@@ -69,6 +69,9 @@
             <span class="privacy-icon">@(_isPrivate ? "🔒" : "🔓")</span>
             <span class="privacy-label">@(_isPrivate ? "Private" : "Public")</span>
         </button>
+        <button class="remember-btn" title="Save a note to memory — injected into every future chat session" @onclick="() => _showRemember = !_showRemember">
+            + Remember
+        </button>
         @if (_tokenCount > 0)
         {
             <div class="token-counter">
@@ -80,6 +83,25 @@
             </div>
         }
     </div>
+    @if (_showRemember)
+    {
+        <div class="remember-form">
+            <textarea @bind="_rememberText" @bind:event="oninput" placeholder="What should I remember? (e.g. Always check tests before committing)" rows="2"></textarea>
+            <div class="remember-form-actions">
+                <label class="remember-privacy-label">
+                    <input type="checkbox" @bind="_rememberPrivate" />
+                    🔒 Private
+                </label>
+                @if (!string.IsNullOrEmpty(_rememberStatus))
+                {
+                    <span class="remember-status text-sm">@_rememberStatus</span>
+                }
+                <div style="flex:1"></div>
+                <button class="btn-secondary btn-sm" @onclick="() => { _showRemember = false; _rememberText = string.Empty; _rememberStatus = string.Empty; }">Cancel</button>
+                <button class="btn-primary btn-sm" @onclick="SaveRememberAsync" disabled="@string.IsNullOrWhiteSpace(_rememberText)">Save</button>
+            </div>
+        </div>
+    }
 
     <!-- Input bar -->
     <div class="chat-input-bar">
@@ -117,6 +139,7 @@
     [Inject] private ChatSeedService ChatSeed { get; set; } = default!;
     [Inject] private Sovrant.Runtime.Governance.IAuditStore AuditStore { get; set; } = default!;
     [Inject] private Sovrant.Runtime.Knowledge.IKnowledgeAttributionStore AttributionStore { get; set; } = default!;
+    [Inject] private Sovrant.Runtime.Workspaces.IWorkspaceService WorkspaceService { get; set; } = default!;
 
     private string _userDisplayName => LocalPart(Session.Email) ?? "You";
     private static string? LocalPart(string? email)
@@ -145,6 +168,11 @@
     // says otherwise. Reads true→private to keep the UI honest with what
     // the server-side default does for new rows.
     private bool _isPrivate = true;
+
+    private bool _showRemember;
+    private string _rememberText = string.Empty;
+    private bool _rememberPrivate = true;
+    private string _rememberStatus = string.Empty;
 
     private readonly List<ChatMessageModel> _messages = [];
 
@@ -478,7 +506,7 @@
         try
         {
             await Sovrant.Web.Program.RuntimeReady.Task;
-            var result = await CommandDispatcher.TryDispatchAsync(text);
+            var result = await CommandDispatcher.TryDispatchAsync(text, Session.UserId);
 
             if (result is null)
             {
@@ -778,6 +806,32 @@
     {
         try { await _inputRef.FocusAsync(); }
         catch { /* element may not be rendered yet */ }
+    }
+
+    private async Task SaveRememberAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_rememberText)) return;
+        try
+        {
+            var ws = await WorkspaceService.GetPersonalAsync(Session.UserId ?? string.Empty);
+            if (ws is null) { _rememberStatus = "No workspace found."; return; }
+            var now = DateTimeOffset.UtcNow;
+            await WorkspaceService.SaveMemoryAsync(new Sovrant.Runtime.Workspaces.WorkspaceMemoryEntry
+            {
+                MemoryId = Guid.NewGuid().ToString("N"),
+                WorkspaceId = ws.WorkspaceId,
+                Layer = "note",
+                Content = _rememberText.Trim(),
+                OwnerUserId = Session.UserId ?? string.Empty,
+                IsPrivate = _rememberPrivate,
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            _rememberText = string.Empty;
+            _showRemember = false;
+            _rememberStatus = string.Empty;
+        }
+        catch (Exception ex) { _rememberStatus = $"Failed: {ex.Message}"; }
     }
 
     private void OnContextChanged() => InvokeAsync(() =>

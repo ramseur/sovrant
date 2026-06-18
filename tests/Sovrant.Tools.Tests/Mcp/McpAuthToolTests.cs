@@ -127,8 +127,15 @@ public sealed class McpAuthToolTests
         public Task<IReadOnlyDictionary<string, McpServerConfig>> GetAllAsync(CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyDictionary<string, McpServerConfig>>(Servers);
 
+        public Task<IReadOnlyList<McpServerEntry>> GetAllEntriesAsync(CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<McpServerEntry>>(
+                Servers.Select((kv, i) => new McpServerEntry(i.ToString(), kv.Key, kv.Value)).ToList());
+
         public Task<McpServerConfig?> GetAsync(string name, CancellationToken ct = default) =>
             Task.FromResult(Servers.TryGetValue(name, out var c) ? c : null);
+
+        public Task<McpServerEntry?> GetEntryAsync(string name, CancellationToken ct = default) =>
+            Task.FromResult(Servers.TryGetValue(name, out var c) ? new McpServerEntry(name, name, c) : null);
 
         public Task UpsertAsync(string name, McpServerConfig config, CancellationToken ct = default)
         {

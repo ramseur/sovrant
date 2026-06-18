@@ -35,8 +35,8 @@ public sealed class SqliteStorageProviderTests : IAsyncDisposable
     {
         await _provider.InitializeAsync();
 
-        // Schema head bumped to 38 by V038 (knowledge_attributions table).
-        Assert.Equal(38, _provider.SchemaVersion);
+        // Schema head bumped to 40 by V040 (mcp_servers stable id column).
+        Assert.Equal(40, _provider.SchemaVersion);
     }
 
     [Fact]

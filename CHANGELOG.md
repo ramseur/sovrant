@@ -11,6 +11,14 @@ Versions correspond to tags on the `development` branch.
 
 ### Added
 
+- **Phase 123 — Memory system overhaul:**
+  - **V041 migration** adds `owner_user_id` and `is_private` columns to `workspace_memory` (additive; existing rows default to `owner_user_id = ''`, `is_private = 0` / public).
+  - **Workspace Memory tab** on the Memory page (web `/memory` and desktop Knowledge → Memory) — fourth tab shows workspace memory entries with layer badge and privacy icon (🔒/🔓); inline add form with layer selector and private toggle; delete button per entry.
+  - **"+ Remember" button** in chat (web and desktop) — opens an inline panel to save a free-text note to workspace memory without needing to know the `/remember` slash command; defaults to private.
+  - **Per-user memory injection** — `ConversationRuntime` auto-resolves the session owner's personal workspace via `IWorkspaceService.GetPersonalAsync` when `SOVRANT_WORKSPACE_ID` env var is not set, so each web user's chat session injects their own workspace memories rather than a shared global.
+  - **Privacy-aware `ListMemoryAsync`** — `IWorkspaceService.ListMemoryAsync` now accepts a `viewerUserId` parameter; returns public entries plus the viewer's own private entries; admin path (null `viewerUserId`) returns all.
+  - `MemoryInjector.BuildMemorySectionAsync` receives `ownerUserId` and passes it through to `ListMemoryAsync` for per-user filtering at the DB layer.
+
 - **Phase 96 — MCP runtime variables:** per-server env var editor on Web and Desktop.
   - Inline key/value editor in the server detail pane (Integrations → Connected tab). Edit mode shows existing vars as editable rows; Save fetches the full server config and updates only the `Env` dict; Cancel discards.
   - `+ Add Variable` button adds blank rows; `✕` removes a row.

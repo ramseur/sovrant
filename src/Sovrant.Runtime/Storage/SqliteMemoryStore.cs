@@ -20,9 +20,9 @@ internal sealed class SqliteMemoryStore(ISqliteConnectionFactory connectionFacto
         cmd.CommandText = """
             INSERT OR REPLACE INTO session_summaries
                 (session_id, project, started_at, ended_at, tasks, tools_used, files_modified,
-                 outcome, total_input_tokens, total_output_tokens, turn_count, error_count)
+                 outcome, total_input_tokens, total_output_tokens, turn_count, error_count, owner_user_id)
             VALUES ($sid, $proj, $start, $end, $tasks, $tools, $files,
-                    $outcome, $in, $out, $turns, $errors)
+                    $outcome, $in, $out, $turns, $errors, $uid)
             """;
         cmd.Parameters.AddWithValue("$sid", summary.SessionId);
         cmd.Parameters.AddWithValue("$proj", summary.Project);
@@ -36,23 +36,27 @@ internal sealed class SqliteMemoryStore(ISqliteConnectionFactory connectionFacto
         cmd.Parameters.AddWithValue("$out", summary.TotalOutputTokens);
         cmd.Parameters.AddWithValue("$turns", summary.TurnCount);
         cmd.Parameters.AddWithValue("$errors", summary.ErrorCount);
+        cmd.Parameters.AddWithValue("$uid", summary.OwnerUserId);
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    public async Task<IReadOnlyList<SessionSummary>> LoadSummariesAsync(string project, int maxCount = 5, CancellationToken ct = default)
+    public async Task<IReadOnlyList<SessionSummary>> LoadSummariesAsync(string project, int maxCount = 5, string? ownerUserId = null, CancellationToken ct = default)
     {
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
+        var userFilter = ownerUserId is not null ? "AND (owner_user_id = '' OR owner_user_id = $uid)" : string.Empty;
+        cmd.CommandText = $"""
             SELECT session_id, project, started_at, ended_at, tasks, tools_used, files_modified,
-                   outcome, total_input_tokens, total_output_tokens, turn_count, error_count
+                   outcome, total_input_tokens, total_output_tokens, turn_count, error_count, owner_user_id
             FROM session_summaries
-            WHERE project = $proj
+            WHERE project = $proj {userFilter}
             ORDER BY ended_at DESC
             LIMIT $limit
             """;
         cmd.Parameters.AddWithValue("$proj", project);
         cmd.Parameters.AddWithValue("$limit", maxCount);
+        if (ownerUserId is not null)
+            cmd.Parameters.AddWithValue("$uid", ownerUserId);
 
         using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         var results = new List<SessionSummary>();
@@ -72,46 +76,7 @@ internal sealed class SqliteMemoryStore(ISqliteConnectionFactory connectionFacto
                 TotalOutputTokens = reader.GetInt32(9),
                 TurnCount = reader.GetInt32(10),
                 ErrorCount = reader.GetInt32(11),
-            });
-        }
-
-        return results;
-    }
-
-    public async Task<IReadOnlyList<SessionSummary>> LoadSummariesAsync(string project, string workspaceId, int maxCount = 5, CancellationToken ct = default)
-    {
-        using var connection = connectionFactory.CreateConnection();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT session_id, project, started_at, ended_at, tasks, tools_used, files_modified,
-                   outcome, total_input_tokens, total_output_tokens, turn_count, error_count
-            FROM session_summaries
-            WHERE project = $proj AND workspace_id = $wid
-            ORDER BY ended_at DESC
-            LIMIT $limit
-            """;
-        cmd.Parameters.AddWithValue("$proj", project);
-        cmd.Parameters.AddWithValue("$wid", workspaceId);
-        cmd.Parameters.AddWithValue("$limit", maxCount);
-
-        using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        var results = new List<SessionSummary>();
-        while (await reader.ReadAsync(ct).ConfigureAwait(false))
-        {
-            results.Add(new SessionSummary
-            {
-                SessionId = reader.GetString(0),
-                Project = reader.GetString(1),
-                StartedAt = DateTimeOffset.Parse(reader.GetString(2), CultureInfo.InvariantCulture),
-                EndedAt = DateTimeOffset.Parse(reader.GetString(3), CultureInfo.InvariantCulture),
-                Tasks = JsonSerializer.Deserialize<List<string>>(reader.GetString(4)) ?? [],
-                ToolsUsed = JsonSerializer.Deserialize<List<string>>(reader.GetString(5)) ?? [],
-                FilesModified = JsonSerializer.Deserialize<List<string>>(reader.GetString(6)) ?? [],
-                Outcome = Enum.TryParse<SessionOutcome>(reader.GetString(7), out var o) ? o : SessionOutcome.Unknown,
-                TotalInputTokens = reader.GetInt32(8),
-                TotalOutputTokens = reader.GetInt32(9),
-                TurnCount = reader.GetInt32(10),
-                ErrorCount = reader.GetInt32(11),
+                OwnerUserId = reader.GetString(12),
             });
         }
 
@@ -125,8 +90,8 @@ internal sealed class SqliteMemoryStore(ISqliteConnectionFactory connectionFacto
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            INSERT OR REPLACE INTO learned_patterns (id, pattern, project, source_session, confidence, created_at, last_used)
-            VALUES ($id, $pattern, $proj, $src, $conf, $created, $used)
+            INSERT OR REPLACE INTO learned_patterns (id, pattern, project, source_session, confidence, created_at, last_used, owner_user_id)
+            VALUES ($id, $pattern, $proj, $src, $conf, $created, $used, $uid)
             """;
         cmd.Parameters.AddWithValue("$id", pattern.Id);
         cmd.Parameters.AddWithValue("$pattern", pattern.Pattern);
@@ -135,20 +100,24 @@ internal sealed class SqliteMemoryStore(ISqliteConnectionFactory connectionFacto
         cmd.Parameters.AddWithValue("$conf", pattern.Confidence);
         cmd.Parameters.AddWithValue("$created", pattern.CreatedAt.ToString("o", CultureInfo.InvariantCulture));
         cmd.Parameters.AddWithValue("$used", pattern.LastUsed.ToString("o", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$uid", pattern.OwnerUserId);
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    public async Task<IReadOnlyList<LearnedPattern>> LoadPatternsAsync(string project, CancellationToken ct = default)
+    public async Task<IReadOnlyList<LearnedPattern>> LoadPatternsAsync(string project, string? ownerUserId = null, CancellationToken ct = default)
     {
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT id, pattern, project, source_session, confidence, created_at, last_used
+        var userFilter = ownerUserId is not null ? "AND (owner_user_id = '' OR owner_user_id = $uid)" : string.Empty;
+        cmd.CommandText = $"""
+            SELECT id, pattern, project, source_session, confidence, created_at, last_used, owner_user_id
             FROM learned_patterns
-            WHERE project = $proj
+            WHERE project = $proj {userFilter}
             ORDER BY confidence DESC
             """;
         cmd.Parameters.AddWithValue("$proj", project);
+        if (ownerUserId is not null)
+            cmd.Parameters.AddWithValue("$uid", ownerUserId);
 
         using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         var results = new List<LearnedPattern>();
@@ -163,39 +132,7 @@ internal sealed class SqliteMemoryStore(ISqliteConnectionFactory connectionFacto
                 Confidence = reader.GetDouble(4),
                 CreatedAt = DateTimeOffset.Parse(reader.GetString(5), CultureInfo.InvariantCulture),
                 LastUsed = DateTimeOffset.Parse(reader.GetString(6), CultureInfo.InvariantCulture),
-            });
-        }
-
-        return results;
-    }
-
-    public async Task<IReadOnlyList<LearnedPattern>> LoadPatternsAsync(string project, string workspaceId, CancellationToken ct = default)
-    {
-        using var connection = connectionFactory.CreateConnection();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT lp.id, lp.pattern, lp.project, lp.source_session, lp.confidence, lp.created_at, lp.last_used
-            FROM learned_patterns lp
-            INNER JOIN session_summaries ss ON lp.source_session = ss.session_id
-            WHERE lp.project = $proj AND ss.workspace_id = $wid
-            ORDER BY lp.confidence DESC
-            """;
-        cmd.Parameters.AddWithValue("$proj", project);
-        cmd.Parameters.AddWithValue("$wid", workspaceId);
-
-        using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        var results = new List<LearnedPattern>();
-        while (await reader.ReadAsync(ct).ConfigureAwait(false))
-        {
-            results.Add(new LearnedPattern
-            {
-                Id = reader.GetString(0),
-                Pattern = reader.GetString(1),
-                Project = reader.GetString(2),
-                SourceSession = await reader.IsDBNullAsync(3, ct).ConfigureAwait(false) ? null : reader.GetString(3),
-                Confidence = reader.GetDouble(4),
-                CreatedAt = DateTimeOffset.Parse(reader.GetString(5), CultureInfo.InvariantCulture),
-                LastUsed = DateTimeOffset.Parse(reader.GetString(6), CultureInfo.InvariantCulture),
+                OwnerUserId = reader.GetString(7),
             });
         }
 
@@ -219,8 +156,8 @@ internal sealed class SqliteMemoryStore(ISqliteConnectionFactory connectionFacto
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            INSERT OR REPLACE INTO instincts (id, trigger, action, confidence, evidence, created_at, updated_at)
-            VALUES ($id, $trigger, $action, $conf, $evidence, $created, $updated)
+            INSERT OR REPLACE INTO instincts (id, trigger, action, confidence, evidence, created_at, updated_at, owner_user_id)
+            VALUES ($id, $trigger, $action, $conf, $evidence, $created, $updated, $uid)
             """;
         cmd.Parameters.AddWithValue("$id", instinct.Id);
         cmd.Parameters.AddWithValue("$trigger", instinct.Trigger);
@@ -229,20 +166,24 @@ internal sealed class SqliteMemoryStore(ISqliteConnectionFactory connectionFacto
         cmd.Parameters.AddWithValue("$evidence", JsonSerializer.Serialize(instinct.Evidence, s_json));
         cmd.Parameters.AddWithValue("$created", instinct.CreatedAt.ToString("o", CultureInfo.InvariantCulture));
         cmd.Parameters.AddWithValue("$updated", instinct.UpdatedAt.ToString("o", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$uid", instinct.OwnerUserId);
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    public async Task<IReadOnlyList<Instinct>> LoadInstinctsAsync(double minConfidence = Instinct.PruneThreshold, CancellationToken ct = default)
+    public async Task<IReadOnlyList<Instinct>> LoadInstinctsAsync(double minConfidence = Instinct.PruneThreshold, string? ownerUserId = null, CancellationToken ct = default)
     {
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT id, trigger, action, confidence, evidence, created_at, updated_at
+        var userFilter = ownerUserId is not null ? "AND (owner_user_id = '' OR owner_user_id = $uid)" : string.Empty;
+        cmd.CommandText = $"""
+            SELECT id, trigger, action, confidence, evidence, created_at, updated_at, owner_user_id
             FROM instincts
-            WHERE confidence >= $min
+            WHERE confidence >= $min {userFilter}
             ORDER BY confidence DESC
             """;
         cmd.Parameters.AddWithValue("$min", minConfidence);
+        if (ownerUserId is not null)
+            cmd.Parameters.AddWithValue("$uid", ownerUserId);
 
         using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         var results = new List<Instinct>();
@@ -257,6 +198,7 @@ internal sealed class SqliteMemoryStore(ISqliteConnectionFactory connectionFacto
                 Evidence = JsonSerializer.Deserialize<List<string>>(reader.GetString(4)) ?? [],
                 CreatedAt = DateTimeOffset.Parse(reader.GetString(5), CultureInfo.InvariantCulture),
                 UpdatedAt = DateTimeOffset.Parse(reader.GetString(6), CultureInfo.InvariantCulture),
+                OwnerUserId = reader.GetString(7),
             });
         }
 

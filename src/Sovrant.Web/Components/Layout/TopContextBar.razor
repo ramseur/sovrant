@@ -153,10 +153,13 @@
                     <p class="tcb-mcp-empty">No integrations connected.</p>
                 }
 
-                <div class="tcb-mcp-footer-divider"></div>
-                <a class="tcb-mcp-footer-link" href="/integrations" @onclick="() => _mcpDropdownOpen = false">
-                    Manage Integrations →
-                </a>
+                @if (Session.IsAdmin)
+                {
+                    <div class="tcb-mcp-footer-divider"></div>
+                    <a class="tcb-mcp-footer-link" href="/admin/integrations" @onclick="() => _mcpDropdownOpen = false">
+                        Manage Integrations →
+                    </a>
+                }
             </div>
         }
     </div>
@@ -182,6 +185,7 @@
     [Inject] private IUserPreferenceStore Prefs { get; set; } = default!;
     [Inject] private IProviderProfileStore ProfileStore { get; set; } = default!;
     [Inject] private ICredentialStore Credentials { get; set; } = default!;
+    [Inject] private IWorkspaceSettingsStore WsSettings { get; set; } = default!;
     [Inject] private IModelCapabilityRegistry CapabilityRegistry { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private WebSessionService Session { get; set; } = default!;
@@ -291,18 +295,21 @@
     {
         try
         {
-            var configs = await McpServerStore.GetAllAsync();
-            _availableMcpServers = configs.Keys.OrderBy(n => n, StringComparer.Ordinal).ToList();
+            var wsId = ActiveContext.WorkspaceId;
+            var visible = await McpServerStore.GetEnabledEntriesAsync(WsSettings, wsId);
+            _availableMcpServers = visible.Select(e => e.Name).OrderBy(n => n, StringComparer.Ordinal).ToList();
 
-            // Load persisted selection — opt-in means nothing active by default.
+            // Load persisted selection — filter saved names against what's now visible.
             var userId = Session.UserId;
             if (!string.IsNullOrEmpty(userId))
             {
                 var saved = await Prefs.GetAsync(userId, UserPreferenceKeys.ActiveMcpServers);
                 if (!string.IsNullOrWhiteSpace(saved))
                 {
+                    var visibleSet = new HashSet<string>(_availableMcpServers, StringComparer.Ordinal);
                     _activeMcpServers = new HashSet<string>(
-                        saved.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                        saved.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                             .Where(n => visibleSet.Contains(n)),
                         StringComparer.Ordinal);
                 }
             }
@@ -323,6 +330,7 @@
             await UnbindMcpDismissAsync();
             return;
         }
+        await LoadMcpServersAsync();
         try
         {
             _selfRef ??= DotNetObjectReference.Create(this);
@@ -355,6 +363,15 @@
 
     private async Task ToggleMcpServer(string name, bool active)
     {
+        // Guard: activating a server no longer in the workspace-allowed list is a no-op.
+        // Reloads the list so the UI reflects the current admin state.
+        if (active && !_availableMcpServers.Contains(name, StringComparer.Ordinal))
+        {
+            await LoadMcpServersAsync();
+            StateHasChanged();
+            return;
+        }
+
         if (active) _activeMcpServers.Add(name);
         else _activeMcpServers.Remove(name);
 
@@ -425,7 +442,7 @@
         try
         {
             var rows = await ProfileStore.ListUserAndWorkspaceAsync(
-                Session.UserId!, ActiveContext.WorkspaceId);
+                Session.UserId!, ActiveContext.WorkspaceId, WsSettings);
             var list = new List<ProviderProfileItem>(rows.Count);
             foreach (var row in rows)
             {
@@ -497,6 +514,7 @@
             await UnbindLightDismissAsync();
             return;
         }
+        await LoadProviderProfilesAsync();
         try
         {
             var rect = await JS.InvokeAsync<DropdownRect?>("sovrantInterop.getElementRect", _triggerRef);
@@ -609,6 +627,20 @@
 
     private async Task SelectModel(TreeGroup group, string model)
     {
+        // Guard: profile must still be in the workspace-allowed list loaded into memory.
+        // If it was removed since the dropdown opened, refresh and bail.
+        if (_providerProfiles.All(p => p.ProfileId != group.ProfileId))
+        {
+            await LoadProviderProfilesAsync();
+            await ApplyDisplayStateAsync();
+            _treeOpen = false;
+            _selectedTreeGroup = null;
+            _dropdownStyle = string.Empty;
+            await UnbindLightDismissAsync();
+            StateHasChanged();
+            return;
+        }
+
         var apiKey = await Credentials.RetrieveAsync(group.CredentialId) ?? string.Empty;
 
         Config.ApiKey = apiKey;
@@ -670,6 +702,7 @@
             {
                 await LoadWorkspacesAsync();
                 await LoadProjectsAsync();
+                await LoadMcpServersAsync();
             }
             catch (Exception ex)
             {

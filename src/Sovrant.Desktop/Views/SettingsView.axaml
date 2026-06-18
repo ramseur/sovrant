@@ -10,10 +10,15 @@
         <StackPanel MaxWidth="640" Spacing="20">
             <!-- Header -->
             <TextBlock Text="Settings" FontSize="24" FontWeight="Bold"
-                       Foreground="{DynamicResource TextPrimary}" />
+                       Foreground="{DynamicResource TextPrimary}"
+                       IsVisible="{Binding !IsProvidersTab}" />
+            <TextBlock Text="Providers" FontSize="24" FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimary}"
+                       IsVisible="{Binding IsProvidersTab}" />
 
             <!-- Tab bar -->
-            <StackPanel Orientation="Horizontal" Spacing="4">
+            <StackPanel Orientation="Horizontal" Spacing="4"
+                        IsVisible="{Binding !IsProvidersTab}">
                 <Button Content="General"
                         Command="{Binding SelectTabCommand}" CommandParameter="0"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
@@ -26,19 +31,6 @@
                         Background="{DynamicResource SurfaceCard}"
                         Foreground="{DynamicResource TextSecondary}"
                         IsVisible="{Binding !IsGeneralTab}" />
-
-                <Button Content="Providers"
-                        Command="{Binding SelectTabCommand}" CommandParameter="1"
-                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
-                        Background="{DynamicResource BrandPrimary}"
-                        Foreground="White"
-                        IsVisible="{Binding IsProvidersTab}" />
-                <Button Content="Providers"
-                        Command="{Binding SelectTabCommand}" CommandParameter="1"
-                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
-                        Background="{DynamicResource SurfaceCard}"
-                        Foreground="{DynamicResource TextSecondary}"
-                        IsVisible="{Binding !IsProvidersTab}" />
 
                 <Button Content="Connection"
                         Command="{Binding SelectTabCommand}" CommandParameter="2"
@@ -136,6 +128,36 @@
                                FontSize="10" Foreground="{DynamicResource TextMuted}" />
                 </StackPanel>
 
+                <!-- Workspace picker -->
+                <StackPanel Spacing="6"
+                            IsVisible="{Binding !!WorkspaceItems.Count}">
+                    <TextBlock Text="Enable for workspaces" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondary}" />
+                    <Border CornerRadius="8" MaxHeight="144"
+                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                            Background="{DynamicResource SurfaceBackground}"
+                            ClipToBounds="True">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding WorkspaceItems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vm:WorkspaceSelectItem">
+                                        <Border Padding="10,6" Background="Transparent">
+                                            <DockPanel>
+                                                <CheckBox DockPanel.Dock="Right"
+                                                          IsChecked="{Binding IsSelected}"
+                                                          VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding Name}" FontSize="12"
+                                                           Foreground="{DynamicResource TextPrimary}"
+                                                           VerticalAlignment="Center" />
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+                </StackPanel>
+
                 <!-- Profile name + Add button -->
                 <Border Padding="12" CornerRadius="8"
                         Background="{DynamicResource SurfaceCard}"
@@ -159,7 +181,7 @@
                            FontSize="12"
                            Foreground="{DynamicResource StatusPass}" />
 
-                <TextBlock Text="Provider profiles are stored in the local database; API keys are stored in the OS keystore (Windows Credential Manager / macOS Keychain / libsecret). Switch between providers from the sidebar dropdown above."
+                <TextBlock Text="API keys are encrypted with AES-256-GCM and stored in the Sovrant database. Switch between providers from the sidebar dropdown above."
                            FontSize="11" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextMuted}" />
             </StackPanel>

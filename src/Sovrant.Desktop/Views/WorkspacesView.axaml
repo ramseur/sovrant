@@ -181,6 +181,49 @@
                                                 Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
                                     </StackPanel>
                                 </Border>
+
+                                <!-- Providers section (admin only) -->
+                                <StackPanel Spacing="6" Margin="0,16,0,0"
+                                            IsVisible="{Binding IsAdmin}">
+                                    <TextBlock Text="Providers" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimary}" />
+                                    <TextBlock Text="Select which configured providers are available in this workspace."
+                                               FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+
+                                    <TextBlock Text="Loading providers…" FontSize="12"
+                                               Foreground="{DynamicResource TextMuted}"
+                                               IsVisible="{Binding ProvidersLoading}" />
+
+                                    <ItemsControl ItemsSource="{Binding ProviderToggles}"
+                                                  IsVisible="{Binding !ProvidersLoading}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="vm:WorkspaceProviderToggleViewModel">
+                                                <Border Padding="10,8" Margin="0,2" CornerRadius="6"
+                                                        Background="{DynamicResource SurfaceBackground}"
+                                                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                                    <DockPanel>
+                                                        <CheckBox DockPanel.Dock="Right"
+                                                                  IsChecked="{Binding IsEnabled}"
+                                                                  VerticalAlignment="Center" />
+                                                        <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource TextPrimary}" />
+                                                            <TextBlock Text="{Binding ProviderKind}" FontSize="10"
+                                                                       Foreground="{DynamicResource TextMuted}" />
+                                                        </StackPanel>
+                                                    </DockPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <Button Content="Save Providers"
+                                            Command="{Binding SaveProviderSettingsCommand}"
+                                            HorizontalAlignment="Left"
+                                            Padding="12,6" CornerRadius="6"
+                                            Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12"
+                                            IsVisible="{Binding !ProvidersLoading}" />
+                                </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
                     </DockPanel>

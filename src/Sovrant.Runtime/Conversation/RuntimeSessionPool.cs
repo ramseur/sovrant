@@ -120,7 +120,7 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
             if (_pool.TryRemove(key, out var entry))
             {
                 entry.Lock.Dispose();
-                FireSessionEnd(sessionId);
+                FireSessionEnd(sessionId, ownerUserId);
             }
             return;
         }
@@ -133,7 +133,7 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
                 _pool.TryRemove(kvp.Key, out var entry))
             {
                 entry.Lock.Dispose();
-                FireSessionEnd(sessionId);
+                FireSessionEnd(kvp.Key);
             }
         }
     }
@@ -241,15 +241,27 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
         return null;
     }
 
-    private void FireSessionEnd(string sessionId)
+    private void FireSessionEnd(string pooledKey, string? ownerUserId = null)
     {
         var hookRunner = _services.GetService<IHookRunner>();
         if (hookRunner is null) return;
 
-        // Strip composite key suffix for consistency with SessionStart.
-        var persistenceId = sessionId.Contains("::", StringComparison.Ordinal)
-            ? sessionId[..sessionId.IndexOf("::", StringComparison.Ordinal)]
-            : sessionId;
+        // Extract owner from ##userId suffix when not explicitly provided.
+        var persistenceId = pooledKey;
+        if (ownerUserId is null)
+        {
+            var hashIdx = persistenceId.IndexOf("##", StringComparison.Ordinal);
+            if (hashIdx >= 0)
+            {
+                ownerUserId = persistenceId[(hashIdx + 2)..];
+                persistenceId = persistenceId[..hashIdx];
+            }
+        }
+
+        // Strip ::provider suffix.
+        var colonIdx = persistenceId.IndexOf("::", StringComparison.Ordinal);
+        if (colonIdx >= 0)
+            persistenceId = persistenceId[..colonIdx];
 
         _ = hookRunner.RunAsync(
             HookEvent.SessionEnd,
@@ -260,7 +272,7 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
         // Fire-and-forget session summary extraction (Phase 25 memory system).
         var memoryHandler = _services.GetService<SessionEndMemoryHandler>();
         if (memoryHandler is not null)
-            _ = memoryHandler.HandleSessionEndAsync(persistenceId);
+            _ = memoryHandler.HandleSessionEndAsync(persistenceId, ownerUserId);
     }
 
     private sealed class SessionEntry

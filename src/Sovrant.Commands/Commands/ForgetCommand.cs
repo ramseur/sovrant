@@ -63,8 +63,8 @@ public sealed class ForgetCommand : ISlashCommand
     private async Task<SlashCommandResult> ListAsync(CancellationToken ct)
     {
         var project = Directory.GetCurrentDirectory();
-        var patterns = await _memoryStore.LoadPatternsAsync(project, ct).ConfigureAwait(false);
-        var instincts = await _memoryStore.LoadInstinctsAsync(0.0, ct).ConfigureAwait(false);
+        var patterns = await _memoryStore.LoadPatternsAsync(project, ct: ct).ConfigureAwait(false);
+        var instincts = await _memoryStore.LoadInstinctsAsync(0.0, ct: ct).ConfigureAwait(false);
 
         if (patterns.Count == 0 && instincts.Count == 0)
             return new SlashCommandResult("No patterns or instincts stored.");

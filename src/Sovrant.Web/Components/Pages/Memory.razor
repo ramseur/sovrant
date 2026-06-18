@@ -1,17 +1,33 @@
 @page "/memory"
 @using Sovrant.Runtime.Memory
+@using Sovrant.Runtime.Workspaces
+@using Sovrant.Web.Services
+@inject WebSessionService Session
+@inject NavigationManager Nav
 
 <div class="settings-page">
-    <h1>Memory</h1>
+    <div class="diag-header">
+        <div>
+            <h1>Memory</h1>
+            <p class="text-secondary" style="margin:0">
+                Patterns and instincts are learned automatically from sessions.
+                Workspace memories are notes you add manually — they're injected into every chat session.
+            </p>
+        </div>
+        <button class="btn-secondary" @onclick="LoadAllAsync" disabled="@_isLoading">@(_isLoading ? "Refreshing…" : "Refresh")</button>
+    </div>
 
     <div class="tab-bar">
         <button class="tab-btn @(_tab == 0 ? "active" : "")" @onclick="() => _tab = 0">
-            Patterns <span class="tab-badge">@_patterns.Count</span>
+            Notes <span class="tab-badge">@_workspaceMemories.Count</span>
         </button>
         <button class="tab-btn @(_tab == 1 ? "active" : "")" @onclick="() => _tab = 1">
-            Instincts <span class="tab-badge">@_instincts.Count</span>
+            Patterns <span class="tab-badge">@_patterns.Count</span>
         </button>
         <button class="tab-btn @(_tab == 2 ? "active" : "")" @onclick="() => _tab = 2">
+            Instincts <span class="tab-badge">@_instincts.Count</span>
+        </button>
+        <button class="tab-btn @(_tab == 3 ? "active" : "")" @onclick="() => _tab = 3">
             Summaries <span class="tab-badge">@_summaries.Count</span>
         </button>
     </div>
@@ -36,6 +52,53 @@
     }
     else if (_tab == 0)
     {
+        <!-- Notes tab: user-added workspace memories -->
+        @if (!string.IsNullOrEmpty(_workspaceId))
+        {
+            <div class="card" style="margin-bottom:12px">
+                <div class="form-field">
+                    <label>Add a note</label>
+                    <textarea @bind="_newMemoryText" placeholder="e.g. Always check the README before suggesting changes" rows="2"
+                              style="width:100%;resize:vertical;padding:8px;border-radius:6px;border:1px solid var(--surface-border);background:var(--surface-input);color:var(--text-primary);font-size:13px"></textarea>
+                </div>
+                <div class="input-group" style="align-items:center;gap:8px;flex-wrap:wrap">
+                    <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+                        <input type="checkbox" @bind="_newMemoryIsPrivate" />
+                        🔒 Private (only injected for you)
+                    </label>
+                    <button class="btn-primary btn-sm" @onclick="AddWorkspaceMemoryAsync" disabled="@string.IsNullOrWhiteSpace(_newMemoryText)">Save</button>
+                </div>
+            </div>
+        }
+        <div class="memory-list">
+            @if (_workspaceMemories.Count == 0)
+            {
+                <p class="text-secondary">No notes yet. Add one above — notes are injected into every chat session.</p>
+            }
+            @foreach (var m in _workspaceMemories)
+            {
+                <div class="memory-card">
+                    <div class="memory-content">
+                        <div class="memory-text">@m.Content</div>
+                        <div class="memory-meta">
+                            @if (m.IsPrivate)
+                            {
+                                <span title="Only injected for you" style="font-size:13px">🔒</span>
+                            }
+                            else
+                            {
+                                <span title="Injected for all workspace members" style="font-size:13px">🔓</span>
+                            }
+                            <span class="text-muted text-sm">@m.CreatedAt.LocalDateTime.ToString("d")</span>
+                        </div>
+                    </div>
+                    <button class="btn-sm btn-danger" @onclick="() => DeleteWorkspaceMemory(m)">X</button>
+                </div>
+            }
+        </div>
+    }
+    else if (_tab == 1)
+    {
         <div class="memory-list">
             @if (_patterns.Count == 0)
             {
@@ -57,7 +120,7 @@
             }
         </div>
     }
-    else if (_tab == 1)
+    else if (_tab == 2)
     {
         <div class="memory-list">
             @if (_instincts.Count == 0)
@@ -113,6 +176,7 @@
 
 @code {
     [Inject] private IMemoryStore MemoryStore { get; set; } = default!;
+    [Inject] private IWorkspaceService WorkspaceService { get; set; } = default!;
 
     private int _tab;
     private string _status = string.Empty;
@@ -121,10 +185,26 @@
     private List<LearnedPattern> _patterns = [];
     private List<Instinct> _instincts = [];
     private List<SessionSummary> _summaries = [];
+    private List<WorkspaceMemoryEntry> _workspaceMemories = [];
+
+    private string? _workspaceId;
+    private string _newMemoryText = string.Empty;
+    private bool _newMemoryIsPrivate = true;
 
     private static readonly string Project = Directory.GetCurrentDirectory();
 
-    protected override async Task OnInitializedAsync() => await LoadAllAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login", forceLoad: false);
+            return;
+        }
+        // Resolve the user's personal workspace so workspace memory is user-scoped.
+        var ws = await WorkspaceService.GetPersonalAsync(Session.UserId ?? string.Empty);
+        _workspaceId = ws?.WorkspaceId;
+        await LoadAllAsync();
+    }
 
     private async Task LoadAllAsync()
     {
@@ -132,9 +212,11 @@
         _loadError = string.Empty;
         try
         {
-            _patterns = (await MemoryStore.LoadPatternsAsync(Project)).ToList();
-            _instincts = (await MemoryStore.LoadInstinctsAsync()).ToList();
-            _summaries = (await MemoryStore.LoadSummariesAsync(Project, maxCount: 20)).ToList();
+            _patterns = (await MemoryStore.LoadPatternsAsync(Project, ownerUserId: Session.UserId)).ToList();
+            _instincts = (await MemoryStore.LoadInstinctsAsync(ownerUserId: Session.UserId)).ToList();
+            _summaries = (await MemoryStore.LoadSummariesAsync(Project, maxCount: 20, ownerUserId: Session.UserId)).ToList();
+            if (!string.IsNullOrEmpty(_workspaceId))
+                _workspaceMemories = (await WorkspaceService.ListMemoryAsync(_workspaceId!, viewerUserId: Session.UserId)).ToList();
         }
         catch (Exception ex)
         {
@@ -144,6 +226,30 @@
         {
             _isLoading = false;
         }
+    }
+
+    private async Task AddWorkspaceMemoryAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newMemoryText) || string.IsNullOrEmpty(_workspaceId)) return;
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            await WorkspaceService.SaveMemoryAsync(new WorkspaceMemoryEntry
+            {
+                MemoryId = Guid.NewGuid().ToString("N"),
+                WorkspaceId = _workspaceId!,
+                Layer = "note",
+                Content = _newMemoryText.Trim(),
+                OwnerUserId = Session.UserId ?? string.Empty,
+                IsPrivate = _newMemoryIsPrivate,
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            _newMemoryText = string.Empty;
+            _status = "Memory saved.";
+            _workspaceMemories = (await WorkspaceService.ListMemoryAsync(_workspaceId!, viewerUserId: Session.UserId)).ToList();
+        }
+        catch (Exception ex) { _status = $"Failed to save: {ex.Message}"; }
     }
 
     private async Task DeletePattern(LearnedPattern pattern)
@@ -164,6 +270,17 @@
             await MemoryStore.RemoveInstinctAsync(instinct.Id);
             _instincts.Remove(instinct);
             _status = "Instinct deleted.";
+        }
+        catch (Exception ex) { _status = $"Delete failed: {ex.Message}"; }
+    }
+
+    private async Task DeleteWorkspaceMemory(WorkspaceMemoryEntry entry)
+    {
+        try
+        {
+            await WorkspaceService.DeleteMemoryAsync(entry.MemoryId);
+            _workspaceMemories.Remove(entry);
+            _status = "Memory deleted.";
         }
         catch (Exception ex) { _status = $"Delete failed: {ex.Message}"; }
     }

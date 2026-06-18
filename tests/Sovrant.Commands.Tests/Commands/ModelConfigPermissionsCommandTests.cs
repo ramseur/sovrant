@@ -21,8 +21,14 @@ public sealed class ModelConfigPermissionsCommandTests
             Task.FromResult<IReadOnlyDictionary<string, McpServerConfig>>(
                 new Dictionary<string, McpServerConfig>(StringComparer.Ordinal));
 
+        public Task<IReadOnlyList<McpServerEntry>> GetAllEntriesAsync(CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<McpServerEntry>>([]);
+
         public Task<McpServerConfig?> GetAsync(string name, CancellationToken ct = default) =>
             Task.FromResult<McpServerConfig?>(null);
+
+        public Task<McpServerEntry?> GetEntryAsync(string name, CancellationToken ct = default) =>
+            Task.FromResult<McpServerEntry?>(null);
 
         public Task UpsertAsync(string name, McpServerConfig config, CancellationToken ct = default) =>
             Task.CompletedTask;

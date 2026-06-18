@@ -81,11 +81,12 @@ public sealed class UserDashboardAggregator
         {
             if (!IsVisible(m.OwnerUserId, m.WorkspaceId, m.IsPrivate, userId, workspaceIds))
                 continue;
-            if (m.UpdatedAt < now.AddDays(-7)
-                && m.Status is not (MissionStatus.Planning or MissionStatus.Running or MissionStatus.AwaitingHuman))
-                continue;
 
             var isOwn = string.Equals(m.OwnerUserId, userId, StringComparison.Ordinal);
+            // Own missions: show full history. Others' public: 30-day window (skip inactive old items).
+            if (!isOwn && m.UpdatedAt < now.AddDays(-30)
+                && m.Status is not (MissionStatus.Planning or MissionStatus.Running or MissionStatus.AwaitingHuman))
+                continue;
             if (isOwn) ownMissions++; else othersPublic++;
 
             var stepCount = TryCountPlanSteps(m.PlanJson);
@@ -128,11 +129,12 @@ public sealed class UserDashboardAggregator
         {
             if (!IsVisible(r.UserId, r.WorkspaceId, r.IsPrivate, userId, workspaceIds))
                 continue;
-            if ((r.EndedAt ?? r.StartedAt) < now.AddDays(-7)
-                && !string.Equals(r.Status, "running", StringComparison.OrdinalIgnoreCase))
-                continue;
 
             var isOwn = string.Equals(r.UserId, userId, StringComparison.Ordinal);
+            // Own runs: show full history. Others' public: 30-day window.
+            if (!isOwn && (r.EndedAt ?? r.StartedAt) < now.AddDays(-30)
+                && !string.Equals(r.Status, "running", StringComparison.OrdinalIgnoreCase))
+                continue;
             var isTeamRun = !string.IsNullOrEmpty(r.TeamId) && string.IsNullOrEmpty(r.ParentRunId);
             if (isOwn)
             {
@@ -308,49 +310,33 @@ public sealed class UserDashboardAggregator
     {
         try
         {
-            // Pull unfiltered list so we can apply the cross-user visibility
-            // rule ourselves. The store-level filter only supports "mine only".
             var summaries = await _sessions.ListWithTitlesAsync(ownerUserId: null, ct).ConfigureAwait(false);
             var now = DateTimeOffset.UtcNow;
-            var rows = new List<UserDashboardRow>(Math.Min(summaries.Count, 100));
+            var rows = new List<UserDashboardRow>(Math.Min(summaries.Count, 150));
 
-            foreach (var summary in summaries.Take(200))
+            foreach (var summary in summaries)
             {
                 if (!IsVisible(summary.OwnerUserId, summary.WorkspaceId, summary.IsPrivate, userId, workspaceIds))
                     continue;
-                if (summary.UpdatedAt < now.AddDays(-7)) continue;
 
                 var isOwn = string.Equals(summary.OwnerUserId, userId, StringComparison.Ordinal);
+                // Own sessions: show full history. Others' public: 30-day window.
+                if (!isOwn && summary.UpdatedAt < now.AddDays(-30)) continue;
 
-                IReadOnlyList<SessionEntry> entries;
-                try
-                {
-                    // Pass userId for own sessions (enforces store-level owner check),
-                    // null for other users' public sessions (caller has already authorised
-                    // visibility via workspace membership).
-                    entries = await _sessions.LoadAsync(summary.SessionId, isOwn ? userId : null, ct).ConfigureAwait(false);
-                }
-                catch (Exception) { continue; }
-                if (entries.Count == 0) continue;
-
-                var first = entries[0];
-                var last = entries[^1];
-
-                var firstUser = entries.FirstOrDefault(e => e.Role == "user");
                 var title = !string.IsNullOrEmpty(summary.Title)
                     ? summary.Title
-                    : Truncate(firstUser?.Content ?? summary.SessionId, 80);
-                var status = (now - last.Timestamp) < TimeSpan.FromMinutes(2) ? "Active" : "Recent";
+                    : Truncate(summary.SessionId, 16);
+                var status = (now - summary.UpdatedAt) < TimeSpan.FromMinutes(2) ? "Active" : "Recent";
 
                 rows.Add(new UserDashboardRow(
                     Kind: "session",
                     Id: summary.SessionId,
                     Title: title,
                     Status: status,
-                    StartedAt: first.Timestamp,
-                    LastActivity: last.Timestamp,
+                    StartedAt: summary.UpdatedAt,
+                    LastActivity: summary.UpdatedAt,
                     OwnerLabel: summary.OwnerUserId,
-                    Preview: Truncate(last.Content, 160),
+                    Preview: null,
                     CostUsd: null,
                     DetailRoute: $"/?session={Uri.EscapeDataString(summary.SessionId)}",
                     WorkspaceId: summary.WorkspaceId,
@@ -358,7 +344,7 @@ public sealed class UserDashboardAggregator
                     IsOwn: isOwn,
                     IsPrivate: summary.IsPrivate));
 
-                if (rows.Count >= 100) break;
+                if (rows.Count >= 150) break;
             }
             return rows;
         }

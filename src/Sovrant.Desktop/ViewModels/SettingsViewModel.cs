@@ -16,6 +16,7 @@ using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Preferences;
 using Sovrant.Runtime.Providers;
+using Sovrant.Runtime.Workspaces;
 using RuntimeProfile = Sovrant.Runtime.Providers.ProviderProfile;
 
 namespace Sovrant.Desktop.ViewModels;
@@ -33,6 +34,8 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly IProviderProfileStore _profileStore;
     private readonly ICredentialStore _credentials;
     private readonly ISmartRouter? _router;
+    private readonly IWorkspaceService? _workspaceService;
+    private readonly IWorkspaceSettingsStore? _wsSettings;
     private CancellationTokenSource? _autoSaveCts;
     private bool _initialized;
     private bool _suppressAutoSave;
@@ -101,6 +104,7 @@ public partial class SettingsViewModel : ViewModelBase
 
     public ObservableCollection<string> AvailableModels { get; } = [];
     public ObservableCollection<ProviderProfile> SavedProfiles { get; } = [];
+    public ObservableCollection<WorkspaceSelectItem> WorkspaceItems { get; } = [];
 
     public SettingsViewModel(SovrantConfig config, IPermissionModeAccessor permissionModeAccessor,
         SidebarViewModel sidebar, MutableAuthProvider authProvider, IHttpClientFactory httpFactory,
@@ -109,7 +113,9 @@ public partial class SettingsViewModel : ViewModelBase
         ICredentialStore credentials,
         ISmartRouter? router = null,
         WebSearchOptions? webSearchOptions = null,
-        IModelCapabilityRegistry? capabilities = null)
+        IModelCapabilityRegistry? capabilities = null,
+        IWorkspaceService? workspaceService = null,
+        IWorkspaceSettingsStore? wsSettings = null)
     {
         _config = config;
         _permissionModeAccessor = permissionModeAccessor;
@@ -120,6 +126,8 @@ public partial class SettingsViewModel : ViewModelBase
         _profileStore = profileStore;
         _credentials = credentials;
         _router = router;
+        _workspaceService = workspaceService;
+        _wsSettings = wsSettings;
 
         // Load current values from runtime config (already populated by
         // ApplyUserPreferencesAsync at boot).
@@ -177,6 +185,21 @@ public partial class SettingsViewModel : ViewModelBase
         }
 
         await Dispatcher.UIThread.InvokeAsync(() => _ = LoadModelsForProviderAsync(SelectedProvider));
+
+        if (_workspaceService is not null)
+        {
+            try
+            {
+                var workspaces = await _workspaceService.ListAllAsync();
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    WorkspaceItems.Clear();
+                    foreach (var ws in workspaces)
+                        WorkspaceItems.Add(new WorkspaceSelectItem { WorkspaceId = ws.WorkspaceId, Name = ws.Name });
+                });
+            }
+            catch { /* workspaces unavailable — omit the picker */ }
+        }
     }
 
     // ── Connection tab ─────────────────────────────────────────────────────────
@@ -478,6 +501,21 @@ public partial class SettingsViewModel : ViewModelBase
         }
         finally { _suppressAutoSave = false; }
 
+        // Update enabled_profile_ids for each selected workspace
+        if (_wsSettings is not null)
+        {
+            foreach (var item in WorkspaceItems.Where(w => w.IsSelected))
+            {
+                var existingRaw = await _wsSettings.GetAsync(item.WorkspaceId, WorkspaceSettingsKeys.EnabledProviderProfileIds);
+                var ids = new HashSet<string>(string.IsNullOrEmpty(existingRaw)
+                    ? []
+                    : existingRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                ids.Add(profileId);
+                await _wsSettings.SetAsync(item.WorkspaceId, WorkspaceSettingsKeys.EnabledProviderProfileIds, string.Join(',', ids));
+            }
+            foreach (var item in WorkspaceItems) item.IsSelected = false;
+        }
+
         StatusMessage = $"Provider '{SelectedProvider}' added.";
     }
 
@@ -778,4 +816,11 @@ public partial class ProviderProfile : ViewModelBase
     [ObservableProperty] private string _apiKey = string.Empty;
     [ObservableProperty] private string _baseUrl = string.Empty;
     [ObservableProperty] private int _maxTokens = 32000;
+}
+
+public partial class WorkspaceSelectItem : ViewModelBase
+{
+    public string WorkspaceId { get; set; } = string.Empty;
+    [ObservableProperty] private string _name = string.Empty;
+    [ObservableProperty] private bool _isSelected;
 }

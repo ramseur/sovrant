@@ -10,9 +10,10 @@
 @inject IWorkspaceService WorkspaceService
 @inject IWorkspaceSettingsStore WsSettings
 @inject IProviderProfileStore ProfileStore
-@inject ICredentialStore CredentialStore
+@inject IMcpServerStore McpServerStore
 @inject WebSessionService Session
 @inject NavigationManager Nav
+@inject ActiveContextService ActiveContext
 
 <div class="settings-page">
     <div class="diag-header">
@@ -145,33 +146,54 @@
                     <button class="btn-primary btn-sm btn-inline-add" @onclick="AddMemberAsync">Add</button>
                 </div>
 
-                <h5>Provider Profiles</h5>
-                @if (_configProfiles.Count == 0)
+                <h5>Providers</h5>
+                <p class="text-sm text-muted" style="margin-bottom:8px">Select which configured providers are available in this workspace. <a href="/admin/providers">Manage providers →</a></p>
+                @if (_allProfiles.Count == 0)
                 {
-                    <p class="text-secondary">No workspace providers.</p>
+                    <p class="text-secondary">No providers configured yet.</p>
                 }
                 else
                 {
-                    @foreach (var p in _configProfiles)
+                    @foreach (var p in _allProfiles)
                     {
-                        <div class="workspace-row">
-                            <span>@p.Name (@p.ProviderKind)</span>
-                            <button class="btn btn-sm btn-danger" @onclick="() => RemoveWorkspaceProviderAsync(p)">Remove</button>
+                        <div class="form-group toggle-row">
+                            <div>
+                                <div class="toggle-title">@p.Name</div>
+                                <div class="text-sm text-muted">@p.ProviderKind</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked="@_enabledProfileIds.Contains(p.ProfileId)"
+                                       @onchange="e => ToggleProvider(p.ProfileId, (bool)(e.Value ?? false))" />
+                                <span class="slider"></span>
+                            </label>
                         </div>
                     }
+                    <button class="btn-primary btn-sm" style="margin-top:8px" @onclick="SaveWorkspaceProvidersAsync">Save Providers</button>
                 }
-                <div class="provider-add-form">
-                    <input type="text" @bind="_wsNewProviderName" placeholder="Name (optional)" />
-                    <select @bind="_wsNewProviderKind">
-                        <option>OpenAI</option>
-                        <option>OpenRouter</option>
-                        <option>Anthropic</option>
-                        <option>Ollama</option>
-                    </select>
-                    <input type="password" @bind="_wsNewProviderApiKey" placeholder="API Key" />
-                    <input type="text" @bind="_wsNewProviderBaseUrl" placeholder="Base URL (optional)" />
-                    <button class="btn-primary btn-sm btn-inline-add" @onclick="AddWorkspaceProviderAsync">Add Provider</button>
-                </div>
+
+                <h5>MCP Servers</h5>
+                <p class="text-sm text-muted" style="margin-bottom:8px">Select which MCP servers are available in this workspace. <a href="/admin/integrations">Manage servers →</a></p>
+                @if (_allMcpEntries.Count == 0)
+                {
+                    <p class="text-secondary">No MCP servers configured yet.</p>
+                }
+                else
+                {
+                    @foreach (var entry in _allMcpEntries)
+                    {
+                        <div class="form-group toggle-row">
+                            <div>
+                                <div class="toggle-title">@entry.Name</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked="@_enabledMcpIds.Contains(entry.Id)"
+                                       @onchange="e => ToggleMcp(entry.Id, (bool)(e.Value ?? false))" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    }
+                    <button class="btn-primary btn-sm" style="margin-top:8px" @onclick="SaveWorkspaceMcpsAsync">Save MCP Servers</button>
+                }
             </div>
         }
     </div>
@@ -198,11 +220,10 @@
     private List<MemberRow> _configMembers = [];
 
     private sealed record MemberRow(string UserId, string DisplayName, WorkspaceRole Role);
-    private string _wsNewProviderName = string.Empty;
-    private string _wsNewProviderKind = "OpenAI";
-    private string _wsNewProviderApiKey = string.Empty;
-    private string _wsNewProviderBaseUrl = string.Empty;
-    private List<WorkspaceProviderProfile> _configProfiles = [];
+    private List<ProviderProfile> _allProfiles = [];
+    private HashSet<string> _enabledProfileIds = [];
+    private List<McpServerEntry> _allMcpEntries = [];
+    private HashSet<string> _enabledMcpIds = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -266,8 +287,18 @@
         var wsRaw = await WsSettings.GetAsync(ws.WorkspaceId, WorkspaceSettingsKeys.GeneralWebSearchBackend);
         _wsWebSearchBackend = string.IsNullOrEmpty(wsRaw) ? "Auto" : wsRaw;
         _configMembers = await LoadMemberRowsAsync(ws.WorkspaceId);
-        var profiles = await ProfileStore.ListByWorkspaceAsync(ws.WorkspaceId);
-        _configProfiles = profiles.Select(p => new WorkspaceProviderProfile(p.ProfileId, p.Name, p.ProviderKind, p.BaseUrl, p.CredentialId)).ToList();
+        _allProfiles = (await ProfileStore.ListAsync(Session.UserId!)).ToList();
+        var enabledRaw = await WsSettings.GetAsync(ws.WorkspaceId, WorkspaceSettingsKeys.EnabledProviderProfileIds);
+        _enabledProfileIds = string.IsNullOrEmpty(enabledRaw)
+            ? []
+            : [..enabledRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
+        var allEntries = await McpServerStore.GetAllEntriesAsync();
+        _allMcpEntries = allEntries.OrderBy(e => e.Name, StringComparer.Ordinal).ToList();
+        var mcpRaw = await WsSettings.GetAsync(ws.WorkspaceId, WorkspaceSettingsKeys.EnabledMcpServerIds);
+        _enabledMcpIds = string.IsNullOrEmpty(mcpRaw)
+            ? []
+            : [..mcpRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
     }
 
     private async Task SaveWorkspaceGeneralAsync()
@@ -320,41 +351,33 @@
         return rows;
     }
 
-    private async Task AddWorkspaceProviderAsync()
+    private void ToggleProvider(string profileId, bool enabled)
     {
-        if (_configWorkspace is null || string.IsNullOrWhiteSpace(_wsNewProviderApiKey)) return;
-        var name = string.IsNullOrWhiteSpace(_wsNewProviderName) ? _wsNewProviderKind : _wsNewProviderName.Trim();
-        var profileId = $"ws-{_configWorkspace.WorkspaceId}-{_wsNewProviderKind.ToLowerInvariant()}-{name.ToLowerInvariant().Replace(' ', '-')}";
-        var credId = $"provider.{profileId}.api_key";
-        await CredentialStore.StoreAsync(credId, _wsNewProviderApiKey.Trim());
-        var now = DateTimeOffset.UtcNow;
-        var baseUrl = string.IsNullOrWhiteSpace(_wsNewProviderBaseUrl)
-            ? (_wsNewProviderKind == "OpenRouter" ? "https://openrouter.ai/api/v1/" :
-               _wsNewProviderKind == "Ollama" ? "http://localhost:11434/v1/" :
-               _wsNewProviderKind == "Anthropic" ? "https://api.anthropic.com/v1/" : "https://api.openai.com/v1/")
-            : _wsNewProviderBaseUrl.Trim();
-        var profile = new ProviderProfile(profileId, Session.UserId!, name, _wsNewProviderKind,
-            baseUrl, null, null, credId, now, now, _configWorkspace.WorkspaceId);
-        var existing = await ProfileStore.GetAsync(profileId);
-        if (existing is null) await ProfileStore.CreateAsync(profile);
-        else await ProfileStore.UpdateAsync(profile with { CreatedAt = existing.CreatedAt });
-        _wsNewProviderApiKey = string.Empty;
-        _wsNewProviderName = string.Empty;
-        var profiles = await ProfileStore.ListByWorkspaceAsync(_configWorkspace.WorkspaceId);
-        _configProfiles = profiles.Select(p => new WorkspaceProviderProfile(p.ProfileId, p.Name, p.ProviderKind, p.BaseUrl, p.CredentialId)).ToList();
-        _status = $"Provider '{name}' added.";
+        if (enabled) _enabledProfileIds.Add(profileId);
+        else _enabledProfileIds.Remove(profileId);
     }
 
-    private async Task RemoveWorkspaceProviderAsync(WorkspaceProviderProfile profile)
+    private async Task SaveWorkspaceProvidersAsync()
     {
-        await ProfileStore.DeleteAsync(profile.ProfileId);
-        await CredentialStore.DeleteAsync(profile.CredentialId);
-        if (_configWorkspace is not null)
-        {
-            var profiles = await ProfileStore.ListByWorkspaceAsync(_configWorkspace.WorkspaceId);
-            _configProfiles = profiles.Select(p => new WorkspaceProviderProfile(p.ProfileId, p.Name, p.ProviderKind, p.BaseUrl, p.CredentialId)).ToList();
-        }
+        if (_configWorkspace is null) return;
+        var value = string.Join(',', _enabledProfileIds);
+        await WsSettings.SetAsync(_configWorkspace.WorkspaceId, WorkspaceSettingsKeys.EnabledProviderProfileIds, value);
+        _status = "Provider availability saved.";
     }
 
-    private sealed record WorkspaceProviderProfile(string ProfileId, string Name, string ProviderKind, string BaseUrl, string CredentialId);
+    private void ToggleMcp(string id, bool enabled)
+    {
+        if (enabled) _enabledMcpIds.Add(id);
+        else _enabledMcpIds.Remove(id);
+    }
+
+    private async Task SaveWorkspaceMcpsAsync()
+    {
+        if (_configWorkspace is null) return;
+        var value = string.Join(',', _enabledMcpIds);
+        await WsSettings.SetAsync(_configWorkspace.WorkspaceId, WorkspaceSettingsKeys.EnabledMcpServerIds, value);
+        _status = "MCP server availability saved.";
+        if (_configWorkspace.WorkspaceId == ActiveContext.WorkspaceId)
+            ActiveContext.NotifyDataChanged();
+    }
 }

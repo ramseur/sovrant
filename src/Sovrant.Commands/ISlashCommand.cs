@@ -20,6 +20,13 @@ public interface ISlashCommand
     /// Returns <see cref="SlashCommandResult"/> describing what the REPL should do next.
     /// </summary>
     Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default);
+
+    /// <summary>
+    /// Overload that carries caller identity. Defaults to ignoring <paramref name="ownerUserId"/>;
+    /// commands that persist user-owned data (e.g. <c>/remember</c>) override this.
+    /// </summary>
+    Task<SlashCommandResult> ExecuteAsync(string args, string? ownerUserId, CancellationToken ct)
+        => ExecuteAsync(args, ct);
 }
 
 /// <summary>The result of executing a slash command.</summary>

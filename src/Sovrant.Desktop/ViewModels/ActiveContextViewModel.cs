@@ -24,6 +24,7 @@ public partial class ActiveContextViewModel : ViewModelBase
     private readonly IPrincipalAccessor _principal;
     private readonly IMcpServerStore? _mcpServerStore;
     private readonly IUserPreferenceStore? _prefs;
+    private readonly IWorkspaceSettingsStore? _wsSettings;
 
     private string UserId => _principal.UserId
         ?? Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
@@ -90,13 +91,15 @@ public partial class ActiveContextViewModel : ViewModelBase
         IProjectService projectService,
         IPrincipalAccessor principal,
         IMcpServerStore? mcpServerStore = null,
-        IUserPreferenceStore? prefs = null)
+        IUserPreferenceStore? prefs = null,
+        IWorkspaceSettingsStore? wsSettings = null)
     {
         _workspaceService = workspaceService;
         _projectService = projectService;
         _principal = principal;
         _mcpServerStore = mcpServerStore;
         _prefs = prefs;
+        _wsSettings = wsSettings;
         _ = InitializeAsync();
     }
 
@@ -107,9 +110,9 @@ public partial class ActiveContextViewModel : ViewModelBase
             // Wait for runtime (DB migrations) before querying workspaces.
             await App.RuntimeReady.Task.ConfigureAwait(false);
             await LoadWorkspacesAsync();
-            await LoadMcpServersAsync();
 
-            // Default to personal workspace.
+            // Default to personal workspace — OnSelectedWorkspaceChanged fires LoadMcpServersAsync
+            // with the resolved workspace ID, avoiding an unfiltered load before context is known.
             var personal = Workspaces.FirstOrDefault(w => w.Type.Equals("personal", StringComparison.OrdinalIgnoreCase));
             if (personal is not null)
             {
@@ -136,6 +139,7 @@ public partial class ActiveContextViewModel : ViewModelBase
         OnPropertyChanged(nameof(ContextDisplay));
         _ = LoadProjectsAsync();
         _ = RefreshWorkspaceRoleAsync(value.Id);
+        _ = LoadMcpServersAsync();
         ContextChanged?.Invoke();
     }
 
@@ -332,8 +336,9 @@ public partial class ActiveContextViewModel : ViewModelBase
         if (_mcpServerStore is null) return;
         try
         {
-            var configs = await _mcpServerStore.GetAllAsync().ConfigureAwait(false);
-            var names = configs.Keys.OrderBy(n => n, StringComparer.Ordinal).ToList();
+            var visible = await _mcpServerStore.GetEnabledEntriesAsync(_wsSettings, ActiveWorkspaceId)
+                .ConfigureAwait(false);
+            var names = visible.Select(e => e.Name).OrderBy(n => n, StringComparer.Ordinal).ToList();
 
             HashSet<string> saved = new(StringComparer.Ordinal);
             if (_prefs is not null)

@@ -18,6 +18,7 @@ internal sealed class CredentialStoreMcpServerStore : IMcpServerStore, IDisposab
     private const string IndexKey = "mcp.__index__";
     private readonly ICredentialStore _store;
     private readonly SemaphoreSlim _indexLock = new(1, 1);
+    private readonly SemaphoreSlim _idLock = new(1, 1);
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -27,7 +28,7 @@ internal sealed class CredentialStoreMcpServerStore : IMcpServerStore, IDisposab
 
     public CredentialStoreMcpServerStore(ICredentialStore store) => _store = store;
 
-    public void Dispose() => _indexLock.Dispose();
+    public void Dispose() { _indexLock.Dispose(); _idLock.Dispose(); }
 
     public async Task<IReadOnlyDictionary<string, McpServerConfig>> GetAllAsync(CancellationToken ct = default)
     {
@@ -38,6 +39,19 @@ internal sealed class CredentialStoreMcpServerStore : IMcpServerStore, IDisposab
             var config = await GetAsync(name, ct).ConfigureAwait(false);
             if (config is not null)
                 result[name] = config;
+        }
+        return result;
+    }
+
+    public async Task<IReadOnlyList<McpServerEntry>> GetAllEntriesAsync(CancellationToken ct = default)
+    {
+        var names = await GetIndexAsync(ct).ConfigureAwait(false);
+        var result = new List<McpServerEntry>(names.Count);
+        foreach (var name in names)
+        {
+            var entry = await GetEntryAsync(name, ct).ConfigureAwait(false);
+            if (entry is not null)
+                result.Add(entry);
         }
         return result;
     }
@@ -53,6 +67,18 @@ internal sealed class CredentialStoreMcpServerStore : IMcpServerStore, IDisposab
         return JsonSerializer.Deserialize<McpServerConfig>(json, JsonOpts);
     }
 
+    public async Task<McpServerEntry?> GetEntryAsync(string name, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        var config = await GetAsync(name, ct).ConfigureAwait(false);
+        if (config is null)
+            return null;
+
+        var id = await GetOrCreateIdAsync(name, ct).ConfigureAwait(false);
+        return new McpServerEntry(id, name, config);
+    }
+
     public async Task UpsertAsync(string name, McpServerConfig config, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -60,6 +86,8 @@ internal sealed class CredentialStoreMcpServerStore : IMcpServerStore, IDisposab
 
         var json = JsonSerializer.Serialize(config, JsonOpts);
         await _store.StoreAsync(ConfigKey(name), json, ct).ConfigureAwait(false);
+        // Ensure the ID exists (generated once, preserved on updates).
+        await GetOrCreateIdAsync(name, ct).ConfigureAwait(false);
         await UpdateIndexAsync(name, add: true, ct).ConfigureAwait(false);
     }
 
@@ -68,7 +96,26 @@ internal sealed class CredentialStoreMcpServerStore : IMcpServerStore, IDisposab
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         await _store.DeleteAsync(ConfigKey(name), ct).ConfigureAwait(false);
+        await _store.DeleteAsync(IdKey(name), ct).ConfigureAwait(false);
         await UpdateIndexAsync(name, add: false, ct).ConfigureAwait(false);
+    }
+
+    private async Task<string> GetOrCreateIdAsync(string name, CancellationToken ct)
+    {
+        await _idLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var existing = await _store.RetrieveAsync(IdKey(name), ct).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(existing))
+                return existing;
+            var newId = Guid.NewGuid().ToString("N");
+            await _store.StoreAsync(IdKey(name), newId, ct).ConfigureAwait(false);
+            return newId;
+        }
+        finally
+        {
+            _idLock.Release();
+        }
     }
 
     private async Task<List<string>> GetIndexAsync(CancellationToken ct)
@@ -104,4 +151,5 @@ internal sealed class CredentialStoreMcpServerStore : IMcpServerStore, IDisposab
     }
 
     private static string ConfigKey(string name) => $"mcp.{name}.config";
+    private static string IdKey(string name) => $"mcp.{name}.id";
 }

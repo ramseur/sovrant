@@ -70,7 +70,9 @@ Clone https://github.com/ramseur/sovrant.git, then:
 1. Read README.md for an overview of the project
 2. Read every file in the docs/ folder to understand the architecture
 3. Run: dotnet restore && dotnet build
-4. Start the Desktop app: dotnet run --project src/Sovrant.Desktop
+4. Start the Desktop app (Windows — no console window):
+   Start-Process dotnet -ArgumentList "run --project src/Sovrant.Desktop" -WindowStyle Hidden
+   macOS/Linux: dotnet run --project src/Sovrant.Desktop &
 5. Start the Web app: dotnet run --project src/Sovrant.Web
    (opens on http://localhost:5100)
 Report what you find and confirm both surfaces are running.
@@ -96,9 +98,17 @@ dotnet build
 
 The fastest way to get started. Full GUI with provider setup wizard, chat, and management pages.
 
-```bash
-dotnet run --project src/Sovrant.Desktop
+**Windows (PowerShell — no console window alongside the app):**
+```powershell
+Start-Process dotnet -ArgumentList "run --project src/Sovrant.Desktop" -WindowStyle Hidden
 ```
+
+**macOS / Linux:**
+```bash
+dotnet run --project src/Sovrant.Desktop &
+```
+
+> `dotnet run` uses `WinExe` output type so the app itself never shows a console window. The `Start-Process -WindowStyle Hidden` / `&` hides the dotnet host process. Alternatively, build first (`dotnet build -c Release src/Sovrant.Desktop`) and run the compiled executable directly — it launches with no console window on all platforms.
 
 On first launch, the setup wizard guides you through provider configuration (API key, model selection). Supports OpenAI, OpenRouter, DeepSeek, Groq, Mistral, Together AI, Google, Azure OpenAI, Ollama, and LM Studio.
 
@@ -348,6 +358,7 @@ Sovrant ships as a proper multi-user system, not a single-admin tool.
 - **Personal workspace per user.** Every user gets an auto-created `ws-personal-{user_id}` workspace on signup, idempotent and undeletable. Team workspaces are created via the API with 7-day invite tokens and owner/editor/viewer roles. Accept invites via `POST /v1/workspaces/invites/accept`.
 - **Projects nest inside workspaces** with their own member lists and 3-tier config inheritance (project → workspace → global).
 - **Workspace-scoped provider profiles.** Admins add a provider key once at workspace level and every member sees it in the provider dropdown (marked with a "Workspace" badge) without ever seeing the plaintext key. Per-user profiles work the same way at personal-workspace scope. All API keys flow through the encrypted keystore — `provider_profiles.credential_id` references the encrypted store, never the raw value.
+- **Per-workspace provider gating (opt-in).** Globally configured providers are hidden from all workspaces by default. Admins explicitly enable each provider per workspace from the Workspaces admin page — members only see providers their workspace has been granted access to. When adding a provider on the Providers page, a workspace picker lets the admin opt in one or more workspaces immediately. The model picker refreshes on every open, so access changes take effect for connected clients without requiring re-login.
 - **Per-record privacy toggles.** Any session or agent run can be marked private from the chat header or Agents UI. Private records are visible only to the owner — on the Command Center they appear as masked rows (title/content hidden); on the User Dashboard they are excluded from all other users' views entirely. Server-side enforcement via `is_private` column (V030 migration).
 
 ### Webhook Integrations
@@ -787,8 +798,14 @@ The Avalonia-based desktop app provides a full GUI for interacting with the Sovr
 - First-run setup wizard lands on Command Center on completion
 - Session history with search
 
+**Windows (PowerShell — no console window):**
+```powershell
+Start-Process dotnet -ArgumentList "run --project src/Sovrant.Desktop" -WindowStyle Hidden
+```
+
+**macOS / Linux:**
 ```bash
-dotnet run --project src/Sovrant.Desktop
+dotnet run --project src/Sovrant.Desktop &
 ```
 
 ---

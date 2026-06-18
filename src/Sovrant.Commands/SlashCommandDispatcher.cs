@@ -24,7 +24,7 @@ public sealed class SlashCommandDispatcher
     /// Tries to parse and dispatch <paramref name="input"/> as a slash command.
     /// Returns <c>null</c> if the input does not start with <c>/</c> or the command is unknown.
     /// </summary>
-    public async Task<SlashCommandResult?> TryDispatchAsync(string input, CancellationToken ct = default)
+    public async Task<SlashCommandResult?> TryDispatchAsync(string input, string? ownerUserId = null, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(input) || !input.StartsWith('/'))
             return null;
@@ -62,7 +62,7 @@ public sealed class SlashCommandDispatcher
             return new SlashCommandResult($"Unknown command: /{name}. Type /help for a list of commands.");
         }
 
-        return await cmd.ExecuteAsync(args, ct).ConfigureAwait(false);
+        return await cmd.ExecuteAsync(args, ownerUserId, ct).ConfigureAwait(false);
     }
 
     /// <summary>Returns all registered commands (deduplicated — one entry per primary name).</summary>

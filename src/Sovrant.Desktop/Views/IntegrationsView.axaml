@@ -32,11 +32,6 @@
 
             <!-- Tab bar -->
             <StackPanel Orientation="Horizontal" Spacing="4">
-                <Button Content="Gallery"
-                        Command="{Binding SwitchTabCommand}" CommandParameter="gallery"
-                        Padding="14,6" CornerRadius="6" FontSize="12"
-                        Background="{Binding ActiveTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=gallery, FallbackValue=Transparent}"
-                        Foreground="{DynamicResource TextPrimary}" />
                 <Button Padding="14,6" CornerRadius="6" FontSize="12"
                         Command="{Binding SwitchTabCommand}" CommandParameter="connected"
                         Background="{Binding ActiveTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=connected, FallbackValue=Transparent}"
@@ -49,6 +44,11 @@
                         </Border>
                     </StackPanel>
                 </Button>
+                <Button Content="Gallery"
+                        Command="{Binding SwitchTabCommand}" CommandParameter="gallery"
+                        Padding="14,6" CornerRadius="6" FontSize="12"
+                        Background="{Binding ActiveTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=gallery, FallbackValue=Transparent}"
+                        Foreground="{DynamicResource TextPrimary}" />
             </StackPanel>
         </StackPanel>
 
@@ -474,6 +474,22 @@
                                                  FontFamily="Consolas,Menlo,monospace"
                                                  FontSize="11" Padding="8,6" CornerRadius="6" />
                                     </StackPanel>
+                                </StackPanel>
+
+                                <!-- Workspace enablement picker -->
+                                <StackPanel Spacing="4"
+                                            IsVisible="{Binding !!AddWorkspaceToggles.Count}">
+                                    <TextBlock Text="Enable for workspaces (optional)" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                    <ItemsControl ItemsSource="{Binding AddWorkspaceToggles}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="vm:WorkspaceToggleItem">
+                                                <CheckBox IsChecked="{Binding IsSelected}" Margin="0,2,0,0">
+                                                    <TextBlock Text="{Binding Name}" FontSize="12" />
+                                                </CheckBox>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                 </StackPanel>
 
                                 <Button Content="Add Server"
