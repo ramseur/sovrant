@@ -51,9 +51,9 @@ public sealed partial class MemoryInjector
     /// <param name="ct">Cancellation token.</param>
     public async Task<string> BuildMemorySectionAsync(string project, string? workspaceId = null, string? projectId = null, string? ownerUserId = null, CancellationToken ct = default)
     {
-        var summariesTask = _store.LoadSummariesAsync(project, MaxSummaries, ct);
-        var patternsTask = _store.LoadPatternsAsync(project, ct);
-        var instinctsTask = _store.LoadInstinctsAsync(MinInstinctConfidence, ct);
+        var summariesTask = _store.LoadSummariesAsync(project, MaxSummaries, ownerUserId: ownerUserId, ct: ct);
+        var patternsTask = _store.LoadPatternsAsync(project, ownerUserId: ownerUserId, ct: ct);
+        var instinctsTask = _store.LoadInstinctsAsync(MinInstinctConfidence, ownerUserId: ownerUserId, ct: ct);
         var workspaceTask = (_workspaceService is not null && !string.IsNullOrEmpty(workspaceId))
             ? _workspaceService.ListMemoryAsync(workspaceId, layer: null, viewerUserId: ownerUserId, ct)
             : Task.FromResult<IReadOnlyList<WorkspaceMemoryEntry>>(Array.Empty<WorkspaceMemoryEntry>());

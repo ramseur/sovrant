@@ -168,9 +168,9 @@ public partial class MemoryViewModel : ViewModelBase
             _workspaceId = ws?.WorkspaceId;
         }
 
-        var patterns = await _memoryStore.LoadPatternsAsync(project);
-        var instincts = await _memoryStore.LoadInstinctsAsync();
-        var summaries = await _memoryStore.LoadSummariesAsync(project, maxCount: 20);
+        var patterns = await _memoryStore.LoadPatternsAsync(project, ownerUserId: App.SovrantUserId);
+        var instincts = await _memoryStore.LoadInstinctsAsync(ownerUserId: App.SovrantUserId);
+        var summaries = await _memoryStore.LoadSummariesAsync(project, maxCount: 20, ownerUserId: App.SovrantUserId);
 
         IReadOnlyList<WorkspaceMemoryEntry> workspaceEntries = [];
         if (!string.IsNullOrEmpty(_workspaceId))

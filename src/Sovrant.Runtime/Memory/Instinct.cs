@@ -37,6 +37,10 @@ public sealed record Instinct
     [JsonPropertyName("updated_at")]
     public DateTimeOffset UpdatedAt { get; init; } = DateTimeOffset.UtcNow;
 
+    /// <summary>User ID of the session that created this instinct. Empty string means unowned (legacy / global).</summary>
+    [JsonPropertyName("owner_user_id")]
+    public string OwnerUserId { get; init; } = string.Empty;
+
     /// <summary>Default confidence threshold below which instincts are pruned.</summary>
     public const double PruneThreshold = 0.3;
 

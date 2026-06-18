@@ -212,9 +212,9 @@
         _loadError = string.Empty;
         try
         {
-            _patterns = (await MemoryStore.LoadPatternsAsync(Project)).ToList();
-            _instincts = (await MemoryStore.LoadInstinctsAsync()).ToList();
-            _summaries = (await MemoryStore.LoadSummariesAsync(Project, maxCount: 20)).ToList();
+            _patterns = (await MemoryStore.LoadPatternsAsync(Project, ownerUserId: Session.UserId)).ToList();
+            _instincts = (await MemoryStore.LoadInstinctsAsync(ownerUserId: Session.UserId)).ToList();
+            _summaries = (await MemoryStore.LoadSummariesAsync(Project, maxCount: 20, ownerUserId: Session.UserId)).ToList();
             if (!string.IsNullOrEmpty(_workspaceId))
                 _workspaceMemories = (await WorkspaceService.ListMemoryAsync(_workspaceId!, viewerUserId: Session.UserId)).ToList();
         }

@@ -1,5 +1,5 @@
 -- Sovrant PostgreSQL schema (Supabase-compatible).
--- Mirrors V001–V039 SQLite migrations. Safe to run multiple times (idempotent).
+-- Mirrors V001–V042 SQLite migrations. Safe to run multiple times (idempotent).
 -- Timestamps are stored as TEXT (ISO 8601) for wire-compatibility with SQLite stores.
 -- BYTEA used for encrypted blobs (credentials table).
 -- V035/V037 (built-in knowledge seed data) are handled by the app at startup, not here.
@@ -727,6 +727,25 @@ CREATE TABLE IF NOT EXISTS keystore (
     created_at TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
 );
 
+-- ── V041 Workspace Memory Privacy ────────────────────────────────────────────
+
+ALTER TABLE workspace_memory ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE workspace_memory ADD COLUMN IF NOT EXISTS is_private    INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS ix_workspace_memory_owner ON workspace_memory(owner_user_id);
+
+-- ── V042 Memory Owner User ID ─────────────────────────────────────────────────
+-- Scopes auto-generated memories (session summaries, patterns, instincts) to
+-- the session owner so they are not mixed across users in a multi-user deployment.
+
+ALTER TABLE session_summaries ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE learned_patterns  ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE instincts          ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';
+
+CREATE INDEX IF NOT EXISTS ix_session_summaries_owner ON session_summaries(owner_user_id);
+CREATE INDEX IF NOT EXISTS ix_learned_patterns_owner  ON learned_patterns(owner_user_id);
+CREATE INDEX IF NOT EXISTS ix_instincts_owner         ON instincts(owner_user_id);
+
 -- ── Schema version tracking ───────────────────────────────────────────────────
 -- Records the last successfully applied schema version so the admin UI
 -- can show "Up to date" vs "Needs initialization".
@@ -739,5 +758,5 @@ CREATE TABLE IF NOT EXISTS sovrant_schema_version (
 );
 
 INSERT INTO sovrant_schema_version (id, version)
-VALUES (1, 40)
+VALUES (1, 42)
 ON CONFLICT (id) DO UPDATE SET version = EXCLUDED.version, applied_at = EXCLUDED.applied_at;

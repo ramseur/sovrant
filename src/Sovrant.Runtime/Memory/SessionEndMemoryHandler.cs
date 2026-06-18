@@ -39,11 +39,11 @@ public sealed partial class SessionEndMemoryHandler
     /// Extracts and saves a session summary. Intended to be called fire-and-forget
     /// when a session is evicted from the pool.
     /// </summary>
-    public async Task HandleSessionEndAsync(string sessionId, CancellationToken ct = default)
+    public async Task HandleSessionEndAsync(string sessionId, string? ownerUserId = null, CancellationToken ct = default)
     {
         try
         {
-            var entries = await _sessionStore.LoadAsync(sessionId, ownerUserId: null, ct).ConfigureAwait(false);
+            var entries = await _sessionStore.LoadAsync(sessionId, ownerUserId, ct).ConfigureAwait(false);
             if (entries.Count < MinEntriesForSummary)
             {
                 LogSkippedTooFew(_logger, sessionId, entries.Count);
@@ -51,7 +51,7 @@ public sealed partial class SessionEndMemoryHandler
             }
 
             var project = Directory.GetCurrentDirectory();
-            var summary = SessionSummaryExtractor.Extract(sessionId, project, entries);
+            var summary = SessionSummaryExtractor.Extract(sessionId, project, entries, ownerUserId);
 
             await _memoryStore.SaveSummaryAsync(summary, ct).ConfigureAwait(false);
             LogSummaryExtracted(_logger, sessionId, summary.TurnCount, summary.ToolsUsed.Count, summary.Outcome);

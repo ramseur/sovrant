@@ -35,4 +35,8 @@ public sealed record LearnedPattern
     /// <summary>When the pattern was last matched/used.</summary>
     [JsonPropertyName("last_used")]
     public DateTimeOffset LastUsed { get; init; } = DateTimeOffset.UtcNow;
+
+    /// <summary>User ID of the session that produced this pattern. Empty string means unowned (legacy / global).</summary>
+    [JsonPropertyName("owner_user_id")]
+    public string OwnerUserId { get; init; } = string.Empty;
 }

@@ -15,7 +15,7 @@ public static class SessionSummaryExtractor
     /// <param name="sessionId">The session identifier.</param>
     /// <param name="project">The project directory the session was associated with.</param>
     /// <param name="entries">The JSONL entries for the session.</param>
-    public static SessionSummary Extract(string sessionId, string project, IReadOnlyList<SessionEntry> entries)
+    public static SessionSummary Extract(string sessionId, string project, IReadOnlyList<SessionEntry> entries, string? ownerUserId = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
 
@@ -28,6 +28,7 @@ public static class SessionSummaryExtractor
                 StartedAt = DateTimeOffset.UtcNow,
                 EndedAt = DateTimeOffset.UtcNow,
                 Outcome = SessionOutcome.Unknown,
+                OwnerUserId = ownerUserId ?? string.Empty,
             };
         }
 
@@ -96,6 +97,7 @@ public static class SessionSummaryExtractor
             TotalOutputTokens = totalOutputTokens,
             TurnCount = turnCount,
             ErrorCount = errorCount,
+            OwnerUserId = ownerUserId ?? string.Empty,
         };
     }
 
