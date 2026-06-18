@@ -133,7 +133,7 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
                 _pool.TryRemove(kvp.Key, out var entry))
             {
                 entry.Lock.Dispose();
-                FireSessionEnd(sessionId);
+                FireSessionEnd(kvp.Key);
             }
         }
     }
