@@ -286,62 +286,34 @@ public sealed class CommandCenterAggregator
         {
             var summaries = await _sessions.ListWithTitlesAsync(ownerUserId, ct).ConfigureAwait(false);
             var now = DateTimeOffset.UtcNow;
-            var rows = new List<CommandCenterRow>(Math.Min(summaries.Count, 100));
+            var rows = new List<CommandCenterRow>(Math.Min(summaries.Count, 150));
 
-            foreach (var summary in summaries.Take(100))
+            foreach (var summary in summaries)
             {
                 if (summary.UpdatedAt < now.AddDays(-7)) continue;
 
                 var masked = ShouldMask(summary.IsPrivate, summary.OwnerUserId, viewerUserId);
 
-                // For masked rows, skip entry loading entirely — we won't show
-                // the content anyway, so don't waste a round-trip and don't
-                // need an entry-level ownership check to succeed.
-                IReadOnlyList<SessionEntry> entries;
-                if (masked)
-                {
-                    entries = [];
-                }
-                else
-                {
-                    try { entries = await _sessions.LoadAsync(summary.SessionId, ownerUserId, ct).ConfigureAwait(false); }
-                    catch (Exception) { continue; }
-                    if (entries.Count == 0) continue;
-                }
-
-                DateTimeOffset startedAt = masked ? summary.UpdatedAt : entries[0].Timestamp;
-                DateTimeOffset lastActivity = masked ? summary.UpdatedAt : entries[^1].Timestamp;
-
-                string rawTitle;
-                string? rawPreview;
-                if (masked)
-                {
-                    rawTitle = "(private)";
-                    rawPreview = null;
-                }
-                else
-                {
-                    var firstUser = entries.FirstOrDefault(e => e.Role == "user");
-                    rawTitle = !string.IsNullOrEmpty(summary.Title)
-                        ? summary.Title
-                        : Truncate(firstUser?.Content ?? summary.SessionId, 80);
-                    rawPreview = Truncate(entries[^1].Content, 160);
-                }
-                var status = (now - lastActivity) < TimeSpan.FromMinutes(2) ? "Active" : "Recent";
+                var title = masked
+                    ? "(private)"
+                    : (!string.IsNullOrEmpty(summary.Title) ? summary.Title : Truncate(summary.SessionId, 16));
+                var status = (now - summary.UpdatedAt) < TimeSpan.FromMinutes(2) ? "Active" : "Recent";
 
                 rows.Add(new CommandCenterRow(
                     Kind: "session",
                     Id: summary.SessionId,
-                    Title: rawTitle,
+                    Title: title,
                     Status: status,
-                    StartedAt: startedAt,
-                    LastActivity: lastActivity,
+                    StartedAt: summary.UpdatedAt,
+                    LastActivity: summary.UpdatedAt,
                     OwnerLabel: summary.OwnerUserId ?? ownerUserId,
-                    Preview: rawPreview,
+                    Preview: null,
                     CostUsd: null,
                     DetailRoute: masked ? null : $"/?session={Uri.EscapeDataString(summary.SessionId)}",
                     IsPrivate: summary.IsPrivate,
                     IsMasked: masked));
+
+                if (rows.Count >= 150) break;
             }
             return rows;
         }
