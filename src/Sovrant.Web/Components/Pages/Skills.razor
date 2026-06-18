@@ -1,7 +1,9 @@
 @page "/skills"
 @using Sovrant.Tools.Skills
 @using Sovrant.Web.Components.Shared
+@using Sovrant.Web.Services
 @using Markdig
+@inject WebSessionService Session
 
 @if (_editing is not null)
 {
@@ -24,6 +26,12 @@ else
                         OnRefresh="Reload"
                         OnItemSelected="@(s => { _selected = s; return Task.CompletedTask; })"
                         OnSearch="Search">
+        <HeaderActions>
+            @if (Session.IsAdmin)
+            {
+                <button class="btn-outline btn-sm" @onclick="StartNew">+ New</button>
+            }
+        </HeaderActions>
         <ItemTemplate>
             <div class="item-title">
                 @context.Name
@@ -45,12 +53,21 @@ else
                 @context.AgentCount agents &middot; @context.ToolCount tools
             </div>
         </ItemTemplate>
-        @* Authoring buttons hidden — see Phase 91 roadmap entry. Re-enable after the
-           "edit anything, no Duplicate-to-user step" UX rework lands. *@
         <DetailTemplate>
             <div class="detail-content">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
                     <h2 style="margin:0;">@context.Name</h2>
+                    @if (Session.IsAdmin)
+                    {
+                        <div style="display:flex;gap:8px;">
+                            <button class="btn-outline btn-sm" @onclick="@(() => StartEdit(context, false))">Edit</button>
+                            <button class="btn-outline btn-sm" @onclick="@(() => StartDuplicate(context))">Duplicate</button>
+                            @if (context.SourcePath is not null)
+                            {
+                                <button class="btn-outline btn-sm" style="color:var(--color-danger,#ef4444);" @onclick="@(() => DeleteAsync(context))">Delete</button>
+                            }
+                        </div>
+                    }
                 </div>
                 <p class="text-secondary">@context.Description</p>
                 <div class="detail-meta">
@@ -131,8 +148,11 @@ else
             ).ToList();
     }
 
-    private void StartNew() =>
+    private void StartNew()
+    {
+        if (!Session.IsAdmin) return;
         _editing = new EditorState { Slug = string.Empty, Source = NewSkillTemplate, IsNew = true, ReadOnly = false };
+    }
 
     private void StartEdit(SkillItem item, bool readOnly)
     {
@@ -164,7 +184,7 @@ else
 
     private Task HandleSave(string markdown)
     {
-        if (_editing is null) return Task.CompletedTask;
+        if (_editing is null || !Session.IsAdmin) return Task.CompletedTask;
         var slug = ExtractSlug(markdown) ?? _editing.Slug;
         if (string.IsNullOrWhiteSpace(slug)) return Task.CompletedTask;
 
@@ -176,7 +196,7 @@ else
 
     private Task DeleteAsync(SkillItem item)
     {
-        if (item.SourcePath is null) return Task.CompletedTask;
+        if (item.SourcePath is null || !Session.IsAdmin) return Task.CompletedTask;
         var slug = Path.GetFileNameWithoutExtension(item.SourcePath);
         SkillRegistry.DeleteGlobal(slug);
         if (_selected == item) _selected = null;
