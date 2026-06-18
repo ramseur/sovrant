@@ -9,30 +9,84 @@ Versions correspond to tags on the `development` branch.
 
 ## [Unreleased]
 
+---
+
+## [1.2.0] — 2026-06-18
+
 ### Added
 
-- **Phase 123 — Memory system overhaul:**
+- **Phase 124 — Auto-generated memory privacy (V042):**
+  - `owner_user_id` column added to `session_summaries`, `learned_patterns`, and `instincts` (V042 migration, additive). Auto-generated memories are now stamped with the session owner at write time.
+  - Load methods accept `ownerUserId` — query returns `owner_user_id = '' OR owner_user_id = $uid` so legacy unowned rows remain visible to everyone while new rows are scoped to their creator.
+  - `SessionEndMemoryHandler` stamps the session owner on summaries at eviction time without filtering the source session load (prevents silent summary drops for sessions created under different ownership).
+
+- **Phase 123 — Workspace memory with public/private scoping (V041):**
   - **V041 migration** adds `owner_user_id` and `is_private` columns to `workspace_memory` (additive; existing rows default to `owner_user_id = ''`, `is_private = 0` / public).
-  - **Workspace Memory tab** on the Memory page (web `/memory` and desktop Knowledge → Memory) — fourth tab shows workspace memory entries with layer badge and privacy icon (🔒/🔓); inline add form with layer selector and private toggle; delete button per entry.
-  - **"+ Remember" button** in chat (web and desktop) — opens an inline panel to save a free-text note to workspace memory without needing to know the `/remember` slash command; defaults to private.
-  - **Per-user memory injection** — `ConversationRuntime` auto-resolves the session owner's personal workspace via `IWorkspaceService.GetPersonalAsync` when `SOVRANT_WORKSPACE_ID` env var is not set, so each web user's chat session injects their own workspace memories rather than a shared global.
-  - **Privacy-aware `ListMemoryAsync`** — `IWorkspaceService.ListMemoryAsync` now accepts a `viewerUserId` parameter; returns public entries plus the viewer's own private entries; admin path (null `viewerUserId`) returns all.
+  - **Workspace Memory tab** on the Memory page (web `/memory` and desktop Knowledge → Memory) — shows workspace memory entries with layer badge and privacy icon (🔒/🔓); inline add form with layer selector and private toggle; delete button per entry.
+  - **"+ Remember" button** in chat (web and desktop) — opens an inline panel to save a free-text note to workspace memory without needing to know the `/remember` slash command; defaults to private; panel closes automatically after save.
+  - **Per-user memory injection** — `ConversationRuntime` auto-resolves the session owner's personal workspace via `IWorkspaceService.GetPersonalAsync` when `SOVRANT_WORKSPACE_ID` env var is not set, so each user's chat session injects their own workspace memories rather than a shared global.
+  - **Privacy-aware `ListMemoryAsync`** — accepts `viewerUserId`; returns public entries plus the viewer's own private entries; admin path (null `viewerUserId`) returns all.
   - `MemoryInjector.BuildMemorySectionAsync` receives `ownerUserId` and passes it through to `ListMemoryAsync` for per-user filtering at the DB layer.
 
+- **Phase 120 — Workspace access controls:**
+  - **MCP server workspace gating** — each MCP server can be restricted to specific workspaces; sessions in ungated workspaces cannot call that server's tools. Enforcement is at the server layer (connection time), not just the UI.
+  - **V040 migration** adds a stable `id` column (UUID surrogate) to `mcp_servers` so gating rules survive server renames; `name` remains the routing key.
+  - **Provider profile workspace gating** — provider profiles can be scoped to a workspace; members inherit the profile, non-members cannot use it.
+  - Admin UI for MCP workspace gating on web and desktop.
+
+- **Admin navigation redesign (Phases 117–120):**
+  - **Platform Integrations** (renamed from Integrations) moved under the Admin section — admin-only on web and desktop.
+  - **Providers** moved from Settings to Admin (admin-only).
+  - **Command Center** promoted to first item in Admin nav; becomes the default Admin landing page.
+  - **Settings** moved from the nav rail to the footer avatar click — declutters the sidebar.
+  - **Collapsible sidebar** — rail collapses to icon-only mode on web and desktop.
+  - Roadmap entries added for Phase 117 (API endpoint integration) and Phase 118 (bootstrap configuration).
+
+- **PostgreSQL / Supabase foundation:**
+  - `PostgresSchema.sql` fully updated to V042 parity — `ADD COLUMN IF NOT EXISTS` guards for all new columns, V040 `mcp_servers.id` backfill (`gen_random_uuid()`), V041/V042 `owner_user_id` semantic comments.
+  - **Supabase Auth mirror triggers** (`on_auth_user_created`, `on_auth_user_updated`) — new SUPABASE AUTH EXTENSION section in `PostgresSchema.sql` (Supabase-only, skip on standalone Postgres).
+  - Role assignment from `app_metadata` — trigger reads `raw_app_meta_data->>'sovrant_role'` (service-role only; users cannot self-elevate); whitelist enforces `'admin'` only; `on_auth_user_updated` fires on `raw_app_meta_data` changes and syncs role automatically.
+  - Commented-out RLS policy skeletons for `workspace_memory`, `session_summaries`, `learned_patterns`, `instincts`.
+
 - **Phase 96 — MCP runtime variables:** per-server env var editor on Web and Desktop.
-  - Inline key/value editor in the server detail pane (Integrations → Connected tab). Edit mode shows existing vars as editable rows; Save fetches the full server config and updates only the `Env` dict; Cancel discards.
+  - Inline key/value editor in the server detail pane (Integrations → Connected tab). Edit mode shows existing vars as editable rows; Save updates only the `Env` dict; Cancel discards.
   - `+ Add Variable` button adds blank rows; `✕` removes a row.
-  - STATUS message shows how many variables were saved.
   - `KEY=VALUE` textarea in the stdio add form — env vars set at creation time.
-  - JSON paste (`mcpServers` block) already populated `Env` from the `env` field; feedback message now reports env var count: `Imported: 'sitecore' (12 env vars).`
-  - `EnvVarRowViewModel` observable class for Desktop MVVM two-way binding.
-  - `ParseEnvVarLines()` helper shared across stdio-add and is symmetrical to the Web implementation.
+  - JSON paste (`mcpServers` block) reports env var count on import: `Imported: 'server' (12 env vars).`
 
 - **Phase 96 — Keystore in DB (V039):** master AES-256-GCM key moved from `.keystore` disk file into a `keystore` SQLite table.
   - V039 migration adds `keystore (scope TEXT PK, key_hex TEXT, created_at TEXT)`.
-  - `SqliteCredentialStore.LoadOrCreateKeyAsync` reads key from DB first; one-time migration reads legacy `.keystore` file, writes to DB, then best-effort deletes the file.
-  - `BootstrapConfig.KeystorePath` renamed to `LegacyKeystorePath`; `SOVRANT_KEYSTORE_PATH` env var still honoured for the migration path.
-  - All credentials (MCP server configs, env vars, API keys) are encrypted at rest in a single DB file with no external key file.
+  - One-time migration reads legacy `.keystore` file, writes to DB, then deletes the file — new installs never create the file.
+  - All credentials are encrypted at rest in a single DB file with no external key file dependency.
+
+### Fixed
+
+- **Memory privacy — four security fixes:**
+  - `GET /workspaces/{id}/memory` was returning private entries to all workspace members — `viewerUserId` now passed to `ListMemoryAsync`.
+  - Admin session evict loop was stripping the `##userId` pool-key suffix before calling `FireSessionEnd`, causing session-end memory to be written without an owner.
+  - `SessionEndMemoryHandler` was passing `ownerUserId` to `LoadAsync`, causing silent summary drops for sessions created under different ownership.
+  - `/remember` was saving patterns and instincts with `owner_user_id = ''`, making them globally visible — `ownerUserId` now threaded through `SlashCommandDispatcher` → `RememberCommand` via a default interface method overload (zero changes to the 28 other command implementations).
+- Dashboard was showing only the last 7 days of own activity.
+- Command Center was showing only one row due to a 7-day history window — extended to 30 days across sessions, missions, and agent runs.
+- Privacy lock column missing from dashboard grid (web + desktop).
+- Remember panel not closing automatically after save.
+- Remember Save button remained disabled until the privacy checkbox was toggled — fixed by using `@bind:event="oninput"` on the textarea.
+- Settings icon bar padding incorrect after Connect button removal.
+
+### Changed
+
+- `persistence.md` overhauled from V030/2026-05-09 to V042/2026-06-18: three-mode architecture description (SQLite / standalone Postgres / Supabase), step-by-step setup guides for both Postgres modes, corrected file layout, new environment variable tables (`SOVRANT_POSTGRES_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`), updated known concerns.
+- README updated with workspace provider gating documentation.
+- Admin bootstrap procedure on Supabase changed from direct `UPDATE public.users` to `jsonb_set` on `auth.users.raw_app_meta_data` — trigger syncs role automatically; direct role writes on `public.users` are now explicitly discouraged.
+
+### Schema
+
+| Migration | Change |
+|-----------|--------|
+| V039 | `keystore` — AES-256-GCM master key in DB (migrated from `.keystore` file) |
+| V040 | `mcp_servers.id` — stable UUID surrogate key |
+| V041 | `workspace_memory.owner_user_id` + `is_private` — per-user note privacy |
+| V042 | `session_summaries`, `learned_patterns`, `instincts` — `owner_user_id` for memory ownership scoping |
 
 ---
 
