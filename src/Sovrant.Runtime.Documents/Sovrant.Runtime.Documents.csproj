@@ -1,10 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- NU190x: Scriban audit warnings suppressed. Templates are author-controlled
-         (admin-only writes via IsAdmin gate in KnowledgeAuthoringRoutes); execution
-         is server-side with sandboxed options. Transitive vulnerable packages are
-         superseded by newer versions elsewhere in the dependency graph. -->
+    <!-- Scriban upgraded to 7.2.4 (was 5.12.0) — clears all 12 advisories including
+         the Critical GHSA-5wr9-m6jw-xx44. Templates remain admin-only authored. -->
     <NoWarn>CA1034;CA1710;CA1000;CA2225;CA1716;CA1031;CA1849;CA1724;CA1720;NU1902;NU1903;NU1904</NoWarn>
   </PropertyGroup>
 
@@ -20,7 +18,7 @@
     <PackageReference Include="Markdig" Version="0.40.0" />
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
     <PackageReference Include="ClosedXML" Version="0.105.0" />
-    <PackageReference Include="Scriban" Version="5.12.0" />
+    <PackageReference Include="Scriban" Version="7.2.4" />
   </ItemGroup>
 
 </Project>
