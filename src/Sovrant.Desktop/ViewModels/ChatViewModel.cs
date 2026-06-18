@@ -194,7 +194,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         {
             await App.RuntimeReady.Task.WaitAsync(ct).ConfigureAwait(false);
 
-            var result = await _commandDispatcher.TryDispatchAsync(text, ct).ConfigureAwait(false);
+            var result = await _commandDispatcher.TryDispatchAsync(text, App.SovrantUserId, ct).ConfigureAwait(false);
 
             if (result is null)
             {

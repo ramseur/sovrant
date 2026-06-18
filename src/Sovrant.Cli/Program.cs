@@ -1302,7 +1302,8 @@ root.SetAction(async (ParseResult pr, CancellationToken ct) =>
     if (sessionId is not null)
         await runtime.InitializeSessionAsync(sessionId, ownerUserId: null, ct).ConfigureAwait(false);
     var dispatcher = sp.GetRequiredService<SlashCommandDispatcher>();
-    await RunReplAsync(runtime, dispatcher, ct).ConfigureAwait(false);
+    var cliUserId = ResolveCliUserId(sp);
+    await RunReplAsync(runtime, dispatcher, cliUserId, ct).ConfigureAwait(false);
 });
 
 var parseResult = root.Parse(args);
@@ -1480,7 +1481,7 @@ async Task InitAsync(ServiceProvider sp, ParseResult pr, CancellationToken ct)
     await sp.InitializeRuntimeAsync(ct).ConfigureAwait(false);
 }
 
-async Task RunReplAsync(IConversationRuntime runtime, SlashCommandDispatcher dispatcher, CancellationToken ct)
+async Task RunReplAsync(IConversationRuntime runtime, SlashCommandDispatcher dispatcher, string? ownerUserId, CancellationToken ct)
 {
     StartupBanner.Render(runtime.SessionId);
     AnsiConsole.MarkupLine("  Type [grey]/help[/] for commands, [grey]/exit[/] to quit.");
@@ -1514,7 +1515,7 @@ async Task RunReplAsync(IConversationRuntime runtime, SlashCommandDispatcher dis
         try
         {
             // Try to dispatch as a slash command first.
-            var cmdResult = await dispatcher.TryDispatchAsync(line, ct).ConfigureAwait(false);
+            var cmdResult = await dispatcher.TryDispatchAsync(line, ownerUserId, ct).ConfigureAwait(false);
             if (cmdResult is not null)
             {
                 if (cmdResult.ShouldExit)

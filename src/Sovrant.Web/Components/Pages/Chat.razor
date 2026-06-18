@@ -506,7 +506,7 @@
         try
         {
             await Sovrant.Web.Program.RuntimeReady.Task;
-            var result = await CommandDispatcher.TryDispatchAsync(text);
+            var result = await CommandDispatcher.TryDispatchAsync(text, Session.UserId);
 
             if (result is null)
             {
