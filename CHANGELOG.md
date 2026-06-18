@@ -48,17 +48,6 @@ Versions correspond to tags on the `development` branch.
   - Role assignment from `app_metadata` — trigger reads `raw_app_meta_data->>'sovrant_role'` (service-role only; users cannot self-elevate); whitelist enforces `'admin'` only; `on_auth_user_updated` fires on `raw_app_meta_data` changes and syncs role automatically.
   - Commented-out RLS policy skeletons for `workspace_memory`, `session_summaries`, `learned_patterns`, `instincts`.
 
-- **Phase 96 — MCP runtime variables:** per-server env var editor on Web and Desktop.
-  - Inline key/value editor in the server detail pane (Integrations → Connected tab). Edit mode shows existing vars as editable rows; Save updates only the `Env` dict; Cancel discards.
-  - `+ Add Variable` button adds blank rows; `✕` removes a row.
-  - `KEY=VALUE` textarea in the stdio add form — env vars set at creation time.
-  - JSON paste (`mcpServers` block) reports env var count on import: `Imported: 'server' (12 env vars).`
-
-- **Phase 96 — Keystore in DB (V039):** master AES-256-GCM key moved from `.keystore` disk file into a `keystore` SQLite table.
-  - V039 migration adds `keystore (scope TEXT PK, key_hex TEXT, created_at TEXT)`.
-  - One-time migration reads legacy `.keystore` file, writes to DB, then deletes the file — new installs never create the file.
-  - All credentials are encrypted at rest in a single DB file with no external key file dependency.
-
 ### Fixed
 
 - **Memory privacy — four security fixes:**
@@ -83,10 +72,42 @@ Versions correspond to tags on the `development` branch.
 
 | Migration | Change |
 |-----------|--------|
-| V039 | `keystore` — AES-256-GCM master key in DB (migrated from `.keystore` file) |
 | V040 | `mcp_servers.id` — stable UUID surrogate key |
 | V041 | `workspace_memory.owner_user_id` + `is_private` — per-user note privacy |
 | V042 | `session_summaries`, `learned_patterns`, `instincts` — `owner_user_id` for memory ownership scoping |
+
+---
+
+## [1.1.0] — 2026-06-15
+
+### Added
+
+- **Phase 96 — Keystore in DB (V039):** master AES-256-GCM key moved from `.keystore` disk file into a `keystore` SQLite table.
+  - V039 migration adds `keystore (scope TEXT PK, key_hex TEXT, created_at TEXT)`.
+  - `SqliteCredentialStore.LoadOrCreateKeyAsync` reads key from DB first; one-time migration reads legacy `.keystore` file, writes to DB, then best-effort deletes the file.
+  - `BootstrapConfig.KeystorePath` renamed to `LegacyKeystorePath`; `SOVRANT_KEYSTORE_PATH` env var still honoured for the migration path.
+  - All credentials (MCP server configs, env vars, API keys) are encrypted at rest in a single DB file with no external key file dependency.
+
+- **Phase 96 — MCP runtime variables:** per-server env var editor on Web and Desktop.
+  - Inline key/value editor in the server detail pane (Integrations → Connected tab). Edit mode shows existing vars as editable rows; Save fetches the full server config and updates only the `Env` dict; Cancel discards.
+  - `+ Add Variable` button adds blank rows; `✕` removes a row.
+  - `KEY=VALUE` textarea in the stdio add form — env vars set at creation time.
+  - JSON paste (`mcpServers` block) already populated `Env` from the `env` field; feedback message now reports env var count: `Imported: 'server' (12 env vars).`
+  - `EnvVarRowViewModel` observable class for Desktop MVVM two-way binding.
+
+- **Postgres store parity (V030–V039):** `PostgresSchema.sql` updated to match all SQLite migrations through V039 — all new tables, columns, and indexes present so Postgres deployments can run alongside SQLite without schema divergence.
+
+### Fixed
+
+- Agent badge in chat header was not scoped to the current session — opening a second session could show the wrong agent name in the badge.
+- MCP env vars list on Desktop not refreshing after save.
+- MCP env var delete button mispositioned causing horizontal scroll on Desktop.
+
+### Schema
+
+| Migration | Change |
+|-----------|--------|
+| V039 | `keystore` — AES-256-GCM master key in DB (migrated from `.keystore` file on first boot; new installs never create the file) |
 
 ---
 
