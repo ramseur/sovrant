@@ -1,12 +1,31 @@
 @page "/documents"
+@using System.Globalization
+@using System.Text
 @using System.Text.Json
 @using Sovrant.Runtime.Artifacts
 @using Sovrant.Runtime.Documents
 @using Sovrant.Runtime.Documents.Templates
+@using Sovrant.Runtime.Knowledge
 @using Sovrant.Runtime.Workspaces
 @using Sovrant.Web.Services
 @using SovrantDocumentFormat = Sovrant.Runtime.Documents.DocumentFormat
 
+@if (_editing is not null)
+{
+    <div class="detail-content" style="padding:0; height:100%;">
+        <MarkdownEditor Value="@_editing.Source"
+                        Title="@_editing.Slug"
+                        ReadOnly="false"
+                        OnSave="HandleSaveAsync"
+                        OnCancel="@(() => { CancelEdit(); return Task.CompletedTask; })" />
+        @if (!string.IsNullOrEmpty(_editError))
+        {
+            <div class="text-danger" style="padding:8px 16px; white-space:pre-wrap;">@_editError</div>
+        }
+    </div>
+}
+else
+{
 <MasterDetailLayout TItem="TemplateItem"
                     Title="Documents"
                     ItemCount="@_filtered.Count"
@@ -25,7 +44,19 @@
     </ItemTemplate>
     <DetailTemplate>
         <div class="detail-content">
-            <h2>@context.Name</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:4px;">
+                <h2 style="margin:0;">@context.Name</h2>
+                @if (Session.IsAdmin)
+                {
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn-outline btn-sm" @onclick="@(() => StartEditAsync(context))">Edit</button>
+                        @if (context.HasUserOverride)
+                        {
+                            <button class="btn-outline btn-sm" style="color:var(--color-danger,#ef4444);" @onclick="@(() => RevertAsync(context))">Revert</button>
+                        }
+                    </div>
+                }
+            </div>
             <div class="detail-meta">
                 <span><code>@context.Id</code></span>
                 <span>@context.Industry</span>
@@ -45,7 +76,7 @@
                 The AI will ask for the information it needs and generate the document for you.
             </p>
 
-            <!-- Advanced: manual JSON fill -->
+            <!-- Advanced: fill manually with JSON -->
             <details class="doc-advanced">
                 <summary class="doc-advanced-toggle">Advanced: fill manually with JSON</summary>
                 <div style="margin-top:12px;">
@@ -126,13 +157,16 @@
         </div>
     </DetailTemplate>
 </MasterDetailLayout>
+}
 
 @code {
     [Inject] private ITemplateRegistry Registry { get; set; } = default!;
     [Inject] private IDocumentGeneratorRegistry Generators { get; set; } = default!;
+    [Inject] private IKnowledgeStore Store { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private ChatSeedService ChatSeed { get; set; } = default!;
+    [Inject] private WebSessionService Session { get; set; } = default!;
 
     private List<TemplateItem> _all = [];
     private List<TemplateItem> _filtered = [];
@@ -145,10 +179,26 @@
     private string _error = string.Empty;
     private bool _busy;
 
+    private EditorState? _editing;
+    private string _editError = string.Empty;
+    private string? _carriedFieldsJson;
+
     protected override void OnInitialized() => Load();
 
     private void Load()
     {
+        HashSet<string> overrideSlugs;
+        try
+        {
+            var overlays = Store.GetAllAsync("document-templates", KnowledgeScope.Global)
+                                .GetAwaiter().GetResult();
+            overrideSlugs = new HashSet<string>(overlays.Select(o => o.Slug), StringComparer.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            overrideSlugs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
         _all = Registry.All
             .OrderBy(t => t.Industry, StringComparer.OrdinalIgnoreCase)
             .ThenBy(t => t.Id, StringComparer.OrdinalIgnoreCase)
@@ -160,9 +210,69 @@
                 Description = t.Description,
                 DefaultFormat = t.DefaultFormat,
                 Fields = t.Fields,
+                HasUserOverride = overrideSlugs.Contains(t.Id),
             })
             .ToList();
         ApplyFilter();
+    }
+
+    private async Task StartEditAsync(TemplateItem item)
+    {
+        if (!Session.IsAdmin) return;
+        var page = await Store.GetEffectiveAsync("document-templates", item.Id);
+        if (page is null) return;
+        _carriedFieldsJson = page.FieldsJson;
+        _editError = string.Empty;
+        _editing = new EditorState { Slug = item.Id, Source = ReconstructTemplateMarkdown(page) };
+    }
+
+    private async Task HandleSaveAsync(string markdown)
+    {
+        if (_editing is null || !Session.IsAdmin) return;
+        var slug = _editing.Slug;
+        var (name, description, industry, defaultFormat, filenameTemplate, body) = ParseTemplateMarkdown(markdown);
+        var now = DateTimeOffset.UtcNow;
+        try
+        {
+            await Store.UpsertAsync(new KnowledgePage(
+                KnowledgeId:      $"doctpl_global_{slug}",
+                Kind:             "document-templates",
+                Slug:             slug,
+                Name:             string.IsNullOrWhiteSpace(name) ? slug : name,
+                Description:      description,
+                Tier:             "User",
+                Body:             body,
+                WorkspaceId:      KnowledgeScope.Global,
+                CreatedAt:        now,
+                UpdatedAt:        now,
+                Industry:         industry,
+                DefaultFormat:    defaultFormat,
+                FieldsJson:       _carriedFieldsJson,
+                FilenameTemplate: string.IsNullOrWhiteSpace(filenameTemplate) ? null : filenameTemplate));
+
+            Registry.Reload();
+            CancelEdit();
+            Load();
+        }
+        catch (Exception ex)
+        {
+            _editError = $"Failed to save: {ex.Message}";
+        }
+    }
+
+    private async Task RevertAsync(TemplateItem item)
+    {
+        if (!Session.IsAdmin) return;
+        await Store.DeleteAsync("document-templates", item.Id, KnowledgeScope.Global);
+        Registry.Reload();
+        Load();
+    }
+
+    private void CancelEdit()
+    {
+        _editing = null;
+        _editError = string.Empty;
+        _carriedFieldsJson = null;
     }
 
     private void ChatToCreate(TemplateItem template)
@@ -273,6 +383,62 @@
         }
     }
 
+    private static string ReconstructTemplateMarkdown(KnowledgePage p)
+    {
+        var ic = CultureInfo.InvariantCulture;
+        var sb = new StringBuilder();
+        sb.AppendLine("---");
+        sb.AppendLine(string.Create(ic, $"name: {p.Name}"));
+        if (!string.IsNullOrWhiteSpace(p.Description))
+            sb.AppendLine(string.Create(ic, $"description: {p.Description}"));
+        if (!string.IsNullOrWhiteSpace(p.Industry))
+            sb.AppendLine(string.Create(ic, $"industry: {p.Industry}"));
+        if (!string.IsNullOrWhiteSpace(p.DefaultFormat))
+            sb.AppendLine(string.Create(ic, $"default_format: {p.DefaultFormat}"));
+        if (!string.IsNullOrWhiteSpace(p.FilenameTemplate))
+            sb.AppendLine(string.Create(ic, $"filename_template: {p.FilenameTemplate}"));
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.Append(p.Body);
+        return sb.ToString();
+    }
+
+    private static (string Name, string Description, string Industry, string DefaultFormat, string FilenameTemplate, string Body)
+        ParseTemplateMarkdown(string markdown)
+    {
+        var meta = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var body = markdown;
+
+        if (markdown.StartsWith("---", StringComparison.Ordinal))
+        {
+            var end = markdown.IndexOf("\n---", 3, StringComparison.Ordinal);
+            if (end >= 0)
+            {
+                var fm = markdown.Substring(3, end - 3);
+                body = markdown[(end + 4)..].TrimStart('\r', '\n');
+                foreach (var line in fm.Split('\n'))
+                {
+                    var colon = line.IndexOf(':', StringComparison.Ordinal);
+                    if (colon < 0) continue;
+                    meta[line[..colon].Trim()] = line[(colon + 1)..].Trim();
+                }
+            }
+        }
+
+        meta.TryGetValue("name", out var name);
+        meta.TryGetValue("description", out var description);
+        meta.TryGetValue("industry", out var industry);
+        meta.TryGetValue("default_format", out var defaultFormat);
+        meta.TryGetValue("filename_template", out var filenameTemplate);
+
+        return (name?.Trim() ?? string.Empty,
+                description?.Trim() ?? string.Empty,
+                string.IsNullOrWhiteSpace(industry) ? "general" : industry.Trim(),
+                string.IsNullOrWhiteSpace(defaultFormat) ? "markdown" : defaultFormat.Trim(),
+                filenameTemplate?.Trim() ?? string.Empty,
+                body);
+    }
+
     private static string FormatName(SovrantDocumentFormat format) => format switch
     {
         SovrantDocumentFormat.Markdown => "Markdown",
@@ -333,5 +499,12 @@
         public string? Description { get; init; }
         public SovrantDocumentFormat DefaultFormat { get; init; }
         public IReadOnlyList<TemplateField> Fields { get; init; } = Array.Empty<TemplateField>();
+        public bool HasUserOverride { get; init; }
+    }
+
+    private sealed class EditorState
+    {
+        public string Slug { get; init; } = string.Empty;
+        public string Source { get; init; } = string.Empty;
     }
 }
