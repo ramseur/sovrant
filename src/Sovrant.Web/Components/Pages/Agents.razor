@@ -12,6 +12,7 @@
 @inject Sovrant.Runtime.Governance.IAuditStore AuditStore
 @inject ActiveContextService ActiveContext
 @inject NavigationManager Nav
+@inject WebSessionService Session
 
 <MasterDetailLayout TItem="AgentItem"
                     Title="Agents"
@@ -22,7 +23,10 @@
                     OnItemSelected="OnSelected"
                     OnSearch="Search">
     <HeaderActions>
-        <button class="btn-outline btn-sm" @onclick="NewAgent">+ New</button>
+        @if (Session.IsAdmin)
+        {
+            <button class="btn-outline btn-sm" @onclick="NewAgent">+ New</button>
+        }
     </HeaderActions>
     <ItemTemplate>
         <div class="item-title">
@@ -36,7 +40,7 @@
     </ItemTemplate>
     <DetailTemplate>
         <div class="detail-content">
-            @if (_isEditing)
+            @if (_isEditing && Session.IsAdmin)
             {
                 <!-- ── Editor ─────────────────────────────────────────── -->
                 <div class="agent-editor">
@@ -110,11 +114,14 @@
                         <button class="btn-primary btn-sm" @onclick="@(() => LaunchChat(context))" title="Open a chat session scoped to this agent">
                             &#x1F4AC; Launch chat
                         </button>
-                        <button class="btn-outline btn-sm" @onclick="@(() => EditAgent(context))">Edit</button>
-                        <button class="btn-outline btn-sm" @onclick="@(() => CloneAgent(context))">Clone</button>
-                        @if (!context.IsBuiltIn)
+                        @if (Session.IsAdmin)
                         {
-                            <button class="btn-danger btn-sm" @onclick="@(() => ConfirmDelete(context))">Delete</button>
+                            <button class="btn-outline btn-sm" @onclick="@(() => EditAgent(context))">Edit</button>
+                            <button class="btn-outline btn-sm" @onclick="@(() => CloneAgent(context))">Clone</button>
+                            @if (!context.IsBuiltIn)
+                            {
+                                <button class="btn-danger btn-sm" @onclick="@(() => ConfirmDelete(context))">Delete</button>
+                            }
                         }
                     </div>
                 </div>
@@ -330,6 +337,7 @@
 
     private void NewAgent()
     {
+        if (!Session.IsAdmin) return;
         _isNew = true;
         _isEditing = true;
         _editItem = null;
@@ -345,6 +353,7 @@
 
     private void EditAgent(AgentItem item)
     {
+        if (!Session.IsAdmin) return;
         _isNew = false;
         _isEditing = true;
         _editItem = item;
@@ -359,6 +368,7 @@
 
     private void CloneAgent(AgentItem item)
     {
+        if (!Session.IsAdmin) return;
         _isNew = true;
         _isEditing = true;
         _editItem = item;
@@ -381,6 +391,7 @@
     private async Task SaveAgentAsync()
     {
         _editError = string.Empty;
+        if (!Session.IsAdmin) { _editError = "Admin role required to modify agents."; return; }
         var name = AgentDefinitionWriter.ToKebabCase(_editName);
         if (string.IsNullOrWhiteSpace(name))
         {
