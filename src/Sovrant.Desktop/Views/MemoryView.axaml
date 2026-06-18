@@ -34,6 +34,32 @@
                 <Button Command="{Binding SelectTabCommand}" CommandParameter="0"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
                         Background="{DynamicResource BrandPrimary}" Foreground="White"
+                        IsVisible="{Binding IsNotesTab}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="Notes" />
+                        <Border Padding="5,1" CornerRadius="8" Background="White">
+                            <TextBlock Text="{Binding WorkspaceMemoryCount}" FontSize="10"
+                                       Foreground="{DynamicResource BrandPrimary}" />
+                        </Border>
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding SelectTabCommand}" CommandParameter="0"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
+                        IsVisible="{Binding !IsNotesTab}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="Notes" />
+                        <Border Padding="5,1" CornerRadius="8"
+                                Background="{DynamicResource SurfaceBorder}">
+                            <TextBlock Text="{Binding WorkspaceMemoryCount}" FontSize="10"
+                                       Foreground="{DynamicResource TextSecondary}" />
+                        </Border>
+                    </StackPanel>
+                </Button>
+
+                <Button Command="{Binding SelectTabCommand}" CommandParameter="1"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource BrandPrimary}" Foreground="White"
                         IsVisible="{Binding IsPatternsTab}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <TextBlock Text="Patterns" />
@@ -43,7 +69,7 @@
                         </Border>
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding SelectTabCommand}" CommandParameter="0"
+                <Button Command="{Binding SelectTabCommand}" CommandParameter="1"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
                         Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
                         IsVisible="{Binding !IsPatternsTab}">
@@ -57,7 +83,7 @@
                     </StackPanel>
                 </Button>
 
-                <Button Command="{Binding SelectTabCommand}" CommandParameter="1"
+                <Button Command="{Binding SelectTabCommand}" CommandParameter="2"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
                         Background="{DynamicResource BrandPrimary}" Foreground="White"
                         IsVisible="{Binding IsInstinctsTab}">
@@ -69,7 +95,7 @@
                         </Border>
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding SelectTabCommand}" CommandParameter="1"
+                <Button Command="{Binding SelectTabCommand}" CommandParameter="2"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
                         Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
                         IsVisible="{Binding !IsInstinctsTab}">
@@ -83,7 +109,7 @@
                     </StackPanel>
                 </Button>
 
-                <Button Command="{Binding SelectTabCommand}" CommandParameter="2"
+                <Button Command="{Binding SelectTabCommand}" CommandParameter="3"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
                         Background="{DynamicResource BrandPrimary}" Foreground="White"
                         IsVisible="{Binding IsSummariesTab}">
@@ -95,7 +121,7 @@
                         </Border>
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding SelectTabCommand}" CommandParameter="2"
+                <Button Command="{Binding SelectTabCommand}" CommandParameter="3"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
                         Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
                         IsVisible="{Binding !IsSummariesTab}">
@@ -109,36 +135,10 @@
                     </StackPanel>
                 </Button>
 
-                <Button Command="{Binding SelectTabCommand}" CommandParameter="3"
-                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
-                        Background="{DynamicResource BrandPrimary}" Foreground="White"
-                        IsVisible="{Binding IsWorkspaceTab}">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="Workspace" />
-                        <Border Padding="5,1" CornerRadius="8" Background="White">
-                            <TextBlock Text="{Binding WorkspaceMemoryCount}" FontSize="10"
-                                       Foreground="{DynamicResource BrandPrimary}" />
-                        </Border>
-                    </StackPanel>
-                </Button>
-                <Button Command="{Binding SelectTabCommand}" CommandParameter="3"
-                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
-                        Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
-                        IsVisible="{Binding !IsWorkspaceTab}">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="Workspace" />
-                        <Border Padding="5,1" CornerRadius="8"
-                                Background="{DynamicResource SurfaceBorder}">
-                            <TextBlock Text="{Binding WorkspaceMemoryCount}" FontSize="10"
-                                       Foreground="{DynamicResource TextSecondary}" />
-                        </Border>
-                    </StackPanel>
-                </Button>
-
             </StackPanel>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- TAB 0: Learned Patterns                         -->
+            <!-- TAB 1: Learned Patterns                         -->
             <!-- ═══════════════════════════════════════════════ -->
             <StackPanel Spacing="4" IsVisible="{Binding IsPatternsTab}">
                 <ItemsControl ItemsSource="{Binding Patterns}">
@@ -186,7 +186,7 @@
             </StackPanel>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- TAB 1: Instincts                                -->
+            <!-- TAB 2: Instincts                                -->
             <!-- ═══════════════════════════════════════════════ -->
             <StackPanel Spacing="4" IsVisible="{Binding IsInstinctsTab}">
                 <ItemsControl ItemsSource="{Binding Instincts}">
@@ -239,7 +239,7 @@
             </StackPanel>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- TAB 2: Session Summaries                        -->
+            <!-- TAB 3: Session Summaries                        -->
             <!-- ═══════════════════════════════════════════════ -->
             <StackPanel Spacing="4" IsVisible="{Binding IsSummariesTab}">
                 <ItemsControl ItemsSource="{Binding Summaries}">
@@ -287,9 +287,9 @@
             </StackPanel>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- TAB 3: Workspace Memory                          -->
+            <!-- TAB 0: Notes (user-added workspace memory)       -->
             <!-- ═══════════════════════════════════════════════ -->
-            <StackPanel Spacing="12" IsVisible="{Binding IsWorkspaceTab}">
+            <StackPanel Spacing="12" IsVisible="{Binding IsNotesTab}">
 
                 <!-- Add form -->
                 <Border Padding="16,12" CornerRadius="8"
@@ -304,11 +304,6 @@
                                  AcceptsReturn="True" MinHeight="56" TextWrapping="Wrap"
                                  FontSize="13" />
                         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                            <ComboBox SelectedItem="{Binding NewMemoryLayer}" FontSize="12" MinWidth="90">
-                                <ComboBoxItem Content="note" />
-                                <ComboBoxItem Content="pattern" />
-                                <ComboBoxItem Content="instinct" />
-                            </ComboBox>
                             <CheckBox IsChecked="{Binding NewMemoryIsPrivate}" FontSize="12"
                                       Foreground="{DynamicResource TextSecondary}"
                                       Content="🔒 Private (only injected for me)" />

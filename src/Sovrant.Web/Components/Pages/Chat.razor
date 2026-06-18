@@ -827,8 +827,9 @@
                 CreatedAt = now,
                 UpdatedAt = now,
             });
-            _rememberStatus = "Saved!";
             _rememberText = string.Empty;
+            _showRemember = false;
+            _rememberStatus = string.Empty;
         }
         catch (Exception ex) { _rememberStatus = $"Failed: {ex.Message}"; }
     }

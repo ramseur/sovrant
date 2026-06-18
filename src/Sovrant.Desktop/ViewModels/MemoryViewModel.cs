@@ -16,17 +16,17 @@ public partial class MemoryViewModel : ViewModelBase
     [ObservableProperty]
     private int _selectedTab;
 
-    public bool IsPatternsTab => SelectedTab == 0;
-    public bool IsInstinctsTab => SelectedTab == 1;
-    public bool IsSummariesTab => SelectedTab == 2;
-    public bool IsWorkspaceTab => SelectedTab == 3;
+    public bool IsNotesTab => SelectedTab == 0;
+    public bool IsPatternsTab => SelectedTab == 1;
+    public bool IsInstinctsTab => SelectedTab == 2;
+    public bool IsSummariesTab => SelectedTab == 3;
 
     partial void OnSelectedTabChanged(int value)
     {
+        OnPropertyChanged(nameof(IsNotesTab));
         OnPropertyChanged(nameof(IsPatternsTab));
         OnPropertyChanged(nameof(IsInstinctsTab));
         OnPropertyChanged(nameof(IsSummariesTab));
-        OnPropertyChanged(nameof(IsWorkspaceTab));
     }
 
     [RelayCommand]
@@ -41,7 +41,6 @@ public partial class MemoryViewModel : ViewModelBase
 
     // Add-form state for workspace memory
     [ObservableProperty] private string _newMemoryText = string.Empty;
-    [ObservableProperty] private string _newMemoryLayer = "note";
     [ObservableProperty] private bool _newMemoryIsPrivate = true;
 
     public ObservableCollection<PatternItemViewModel> Patterns { get; } = [];
@@ -102,7 +101,7 @@ public partial class MemoryViewModel : ViewModelBase
             {
                 MemoryId = Guid.NewGuid().ToString("N"),
                 WorkspaceId = _workspaceId,
-                Layer = NewMemoryLayer,
+                Layer = "note",
                 Content = NewMemoryText.Trim(),
                 OwnerUserId = App.SovrantUserId ?? string.Empty,
                 IsPrivate = NewMemoryIsPrivate,

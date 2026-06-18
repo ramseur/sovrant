@@ -522,8 +522,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 CreatedAt = now,
                 UpdatedAt = now,
             }).ConfigureAwait(false);
-            RememberStatus = "Saved!";
             RememberText = string.Empty;
+            IsRememberOpen = false;
+            RememberStatus = string.Empty;
         }
         catch (Exception ex)
         {
