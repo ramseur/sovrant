@@ -2,7 +2,13 @@
 
 **Phases 32–42.5, 51, 52, 55, 57, 78, 85, 87, 88, 90, 93, 98, 108–116, 123, 124** | **Last updated:** 2026-06-18 | **Current schema:** V042
 
-This document describes how Sovrant stores durable operational data. All persistent state (sessions, memory, audit, credentials, token usage, workspaces, projects, users, knowledge, hooks, MCP/LSP config) is managed by a SQLite database. Flat-file stores (JSONL, JSON) remain available as a dual-write legacy option but SQLite is the sole source of truth for all new features.
+This document describes how Sovrant stores durable operational data. All persistent state (sessions, memory, audit, credentials, token usage, workspaces, projects, users, knowledge, hooks, MCP/LSP config) is managed by a relational database. Three deployment modes are supported:
+
+- **SQLite** (default) — single-file, zero infrastructure, runs anywhere.
+- **Standalone PostgreSQL** — same auth model as SQLite, drop-in for production or team deployments that want a real DB server.
+- **Supabase** — PostgreSQL hosted by Supabase, adds GoTrue (SSO-capable auth), JWT-based sessions, and optional Row Level Security.
+
+The SQLite schema described in this document is the master reference; PostgreSQL (both standalone and Supabase) mirrors the same logical schema. Flat-file stores (JSONL, JSON) remain available as a dual-write legacy option but the database is the sole source of truth for all new features.
 
 ---
 
@@ -443,69 +449,82 @@ Sovrant supports three storage deployment modes. The SQLite schema described abo
 | Token resolution | `SqliteTokenService` | `PostgresTokenService` *(planned)* | JWT JWKS validation + `svt_*` fallback |
 | `password_reset_tokens` | used | used | inert (Supabase handles resets) |
 | FK tables | reference `public.users` | same | same — mirror trigger ensures row exists first |
-| Schema bootstrap | V-series migration runner | `PostgresSchema.sql` (manual) | `PostgresSchema.sql` + `SupabaseAuth.sql` |
-| Row-level security | n/a | optional | `SupabaseAuth.sql` |
+| Schema bootstrap | V-series migration runner | `PostgresSchema.sql` (base section, manual) | `PostgresSchema.sql` (full file inc. Supabase Auth Extension section) |
+| Row-level security | n/a | optional | Commented-out policies in `PostgresSchema.sql` Supabase Auth Extension section |
 
 ### How Supabase Auth fits
 
 Supabase Auth stores identities in `auth.users` (UUID PK, managed by GoTrue). The canonical user identity throughout the app is a `user_id TEXT` column. In Supabase mode this TEXT value is `auth.users.id::TEXT` (a UUID string) — fully compatible with existing FK columns and `owner_user_id` memory columns without any type changes.
 
-A mirror trigger propagates sign-ups from `auth.users` to `public.users`:
+Two mirror triggers (in the **SUPABASE AUTH EXTENSION** section at the bottom of `PostgresSchema.sql`) propagate changes from `auth.users` to `public.users`:
 
 ```sql
--- In SupabaseAuth.sql — not part of PostgresSchema.sql
-CREATE OR REPLACE FUNCTION public.handle_auth_user_created()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+-- on_auth_user_created: fires on new sign-up
+-- Role is read from app_metadata.sovrant_role (service-role only — users cannot self-set).
+-- Whitelist: 'admin' is elevated; anything else → 'user'.
+CREATE OR REPLACE FUNCTION public.handle_auth_user_created() ... AS $$
+DECLARE _role TEXT;
 BEGIN
-  INSERT INTO public.users (user_id, username, email, role, status, created_at, updated_at)
-  VALUES (
-    NEW.id::TEXT,
-    COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1)),
-    NEW.email, 'user', 'active',
-    to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
-    to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-  ) ON CONFLICT (user_id) DO NOTHING;
-  RETURN NEW;
+    _role := CASE
+        WHEN NEW.raw_app_meta_data->>'sovrant_role' = 'admin' THEN 'admin'
+        ELSE 'user'
+    END;
+    INSERT INTO public.users (user_id, username, email, role, ...)
+    VALUES (NEW.id::TEXT, ..., _role, ...)
+    ON CONFLICT (user_id) DO NOTHING;
 END; $$;
 
-CREATE OR REPLACE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_auth_user_created();
+-- on_auth_user_updated: fires on email OR raw_app_meta_data changes.
+-- When app_metadata changes, re-derives role from sovrant_role whitelist and syncs.
+CREATE OR REPLACE FUNCTION public.handle_auth_user_updated() ... AS $$
+DECLARE _role TEXT;
+BEGIN
+    IF NEW.raw_app_meta_data IS DISTINCT FROM OLD.raw_app_meta_data THEN
+        _role := CASE WHEN NEW.raw_app_meta_data->>'sovrant_role' = 'admin' THEN 'admin' ELSE 'user' END;
+        UPDATE public.users SET email = NEW.email, role = _role, ... WHERE user_id = NEW.id::TEXT;
+    ELSE
+        UPDATE public.users SET email = NEW.email, ... WHERE user_id = NEW.id::TEXT;
+    END IF;
+END; $$;
 ```
 
 This means every FK reference to `users(user_id)` continues to work without schema changes. The app's `GetUserId()` reads from `HttpContext.Items` regardless of how the identity was resolved.
 
-### File split
+`raw_app_meta_data` is the source of truth for role in Supabase mode — it is writable only by service-role callers (GoTrue enforces this), and the role is embedded in the signed JWT so it can be read without a DB round-trip. Never update `public.users.role` directly in Supabase mode.
 
-`PostgresSchema.sql` — base schema for any Postgres deployment, no Supabase-specific syntax:
-- Full `public.users` schema including `password_hash` (NULL for Supabase users)
-- All FK tables, memory tables, knowledge tables, etc.
-- All V041/V042 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` guards
+### File layout
 
-`SupabaseAuth.sql` *(planned)* — run on top of `PostgresSchema.sql` for Supabase deployments only:
-- Mirror trigger (`auth.users` → `public.users`) + email update trigger
-- RLS policies (privacy enforced at DB layer, not just app layer)
-- Notes that `password_hash` and `password_reset_tokens` are inert
+`src/Sovrant.Runtime/Storage/PostgresSchema.sql` — **single file for all Postgres deployments**. Divided into two sections:
+
+1. **Base schema** (always run) — full `public.users` with `password_hash`, all FK/memory/knowledge tables, V041/V042 `ADD COLUMN IF NOT EXISTS` guards, V040 `mcp_servers.id` backfill.
+
+2. **SUPABASE AUTH EXTENSION** (Supabase only, clearly marked at the bottom) — the two mirror triggers (`on_auth_user_created`, `on_auth_user_updated`), commented-out RLS policies, and deployment notes. **Standalone Postgres deployments skip this section.**
+
+There is no separate `SupabaseAuth.sql` file — the Supabase-specific SQL lives inline in `PostgresSchema.sql` behind the section header. When running in the Supabase SQL editor, run the entire file; Supabase-only objects only apply inside a Supabase project where `auth.users` exists.
 
 ### What changes in auth middleware
 
 `BearerTokenMiddleware` currently handles only `svt_*` tokens. For Supabase mode (activated when `SUPABASE_URL` env var is set), a second path validates Supabase JWTs:
 
 ```
-token starts with "svt_"  →  ITokenService.ResolveAsync()       (all three modes)
-token is a JWT             →  validate against Supabase JWKS     (Supabase mode only)
-                               sub claim = user_id (UUID string)
-                               role from public.user_roles
+token starts with "svt_"  →  ITokenService.ResolveAsync()        (all three modes)
+token is a JWT             →  validate against Supabase JWKS      (Supabase mode only)
+                               sub claim    = user_id (UUID string)
+                               role         = app_metadata.sovrant_role claim in JWT
+                                              (no DB query needed — role is in the signed token)
 ```
 
 `HttpContextAuthExtensions.GetUserId()` and all route handlers are unchanged — they read from `HttpContext.Items` regardless of how the identity was resolved.
+
+Because the role is embedded in the JWT by Supabase (from `raw_app_meta_data`), changing a user's role by updating `app_metadata` takes effect on the next JWT refresh (Supabase access tokens expire every hour by default). For immediate effect after a role change, revoke the user's active session in the Supabase dashboard.
 
 ### Pending implementation for Postgres / Supabase
 
 | Item | Status |
 |---|---|
-| `PostgresSchema.sql` base schema (V001–V042 parity) | Done — updated with V041/V042 |
-| `SupabaseAuth.sql` mirror trigger + RLS skeleton | **Planned** |
+| `PostgresSchema.sql` base schema (V001–V042 parity + V040 backfill) | **Done** |
+| Supabase mirror triggers (`on_auth_user_created`, `on_auth_user_updated`) with Option A role from `app_metadata` | **Done** (SUPABASE AUTH EXTENSION section in `PostgresSchema.sql`) |
+| RLS policies for memory privacy at DB layer | Skeleton commented out in `PostgresSchema.sql` — **Planned** to enable |
 | `PostgresTokenService` (mirrors `SqliteTokenService` for standalone Postgres) | **Planned** |
 | Postgres V-series migration runner (equivalent to SQLite `MigrationRunner`) | **Planned** |
 | JWT validation in `BearerTokenMiddleware` | **Planned** |
@@ -513,17 +532,93 @@ token is a JWT             →  validate against Supabase JWKS     (Supabase mod
 
 ### Admin bootstrap on Supabase
 
-First user: created via the Supabase dashboard (Auth → Users). The mirror trigger fires automatically, creating the `public.users` row. Elevate to admin via the Supabase SQL editor:
+First user: created via the Supabase dashboard (Auth → Users). The mirror trigger fires automatically, creating the `public.users` row with `role = 'user'`.
+
+**Elevate to admin** by writing `sovrant_role` to the user's `app_metadata` (writable only via service role — users cannot self-elevate). In the Supabase SQL editor:
 
 ```sql
-UPDATE public.users SET role = 'admin' WHERE email = 'you@example.com';
+UPDATE auth.users
+SET    raw_app_meta_data = jsonb_set(
+           COALESCE(raw_app_meta_data, '{}'), '{sovrant_role}', '"admin"')
+WHERE  email = 'you@example.com';
 ```
+
+The `on_auth_user_updated` mirror trigger fires on the `raw_app_meta_data` change and syncs `role = 'admin'` to `public.users` automatically. Never write directly to `public.users.role` — `app_metadata` is the source of truth for role in Supabase mode.
+
+**Why `app_metadata` and not `public.users`:** `raw_app_meta_data` is service-role-only (GoTrue enforces this), the role is embedded in the signed JWT so it can be read without a DB query, and Supabase logs all `auth.users` modifications for audit trail. Direct `UPDATE public.users` bypasses all of these.
 
 No Sovrant-specific setup endpoint needed.
 
 ---
 
-## Environment Variables
+## Setup Guides
+
+### Standalone PostgreSQL
+
+Prerequisites: PostgreSQL 14+ installed and a database created for Sovrant.
+
+**1. Create the database:**
+```sql
+CREATE DATABASE sovrant;
+CREATE USER sovrant_app WITH PASSWORD 'yourpassword';
+GRANT ALL PRIVILEGES ON DATABASE sovrant TO sovrant_app;
+```
+
+**2. Set the connection string:**
+```bash
+export SOVRANT_POSTGRES_URL="postgres://sovrant_app:yourpassword@localhost:5432/sovrant"
+```
+
+**3. Bootstrap the schema (one-time, run from the repo):**
+```bash
+psql $SOVRANT_POSTGRES_URL -f src/Sovrant.Runtime/Storage/PostgresSchema.sql
+```
+
+> **Stop before the SUPABASE AUTH EXTENSION section.** Standalone Postgres skips everything after the `══ SUPABASE AUTH EXTENSION ══` divider at the bottom of the file. You can verify this by checking that `auth.users` does not exist in your database — the section's `CREATE TRIGGER ... ON auth.users` will error if run on a plain Postgres instance.
+
+**4. Start Sovrant.** It detects Postgres via `SOVRANT_POSTGRES_URL`. On first boot, `SeedDefaultUser` and `SeedPersonalWorkspace` run automatically (same as SQLite).
+
+**5. Create additional users** via `/auth/register` or the admin API — same as SQLite mode. `password_hash` is populated; `password_reset_tokens` is active.
+
+**Upgrade procedure:** Re-run `PostgresSchema.sql` when Sovrant updates. All table-creation statements use `CREATE TABLE IF NOT EXISTS`; all column additions use `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`. The file is idempotent for column additions but a full Postgres V-series migration runner (parity with the SQLite `MigrationRunner`) is planned — until then, each release's upgrade SQL notes will accompany the release.
+
+---
+
+### Supabase
+
+Prerequisites: Supabase project (cloud at [supabase.com](https://supabase.com) or self-hosted via `supabase start`).
+
+**1. Run `PostgresSchema.sql` in the Supabase SQL editor.**
+
+Open your project → SQL Editor → New query → paste the full contents of `src/Sovrant.Runtime/Storage/PostgresSchema.sql` → Run. This includes the SUPABASE AUTH EXTENSION section at the bottom which creates the mirror triggers. `auth.users` exists in every Supabase project so there are no errors.
+
+**2. (Optional) Enable Row Level Security** — uncomment and run the RLS block at the very end of the file. This enforces `owner_user_id` privacy at the database layer (not just application layer), which is the recommended posture for multi-user Supabase deployments. The commented policies are:
+- `workspace_memory`: `USING (is_private = 0 OR owner_user_id = auth.uid()::text)`
+- `session_summaries`, `learned_patterns`, `instincts`: `USING (owner_user_id = '' OR owner_user_id = auth.uid()::text)`
+
+**3. Set environment variables:**
+```bash
+export SUPABASE_URL="https://your-project.supabase.co"
+export SUPABASE_ANON_KEY="your-anon-key"              # public, safe in client env
+export SUPABASE_SERVICE_ROLE_KEY="your-service-key"   # secret — server-side only
+```
+
+**4. Start Sovrant.** It detects Supabase mode via `SUPABASE_URL`. User creation and login go through GoTrue, not the Sovrant `/auth/*` routes.
+
+**5. Create users** in the Supabase dashboard → Authentication → Users → "Invite user" or "Create new user". The `on_auth_user_created` mirror trigger fires automatically and creates the `public.users` row with `role = 'user'`. SSO providers (Google, GitHub, etc.) configured in the Supabase dashboard work automatically once the trigger is in place.
+
+**6. Elevate the first admin** (see [Admin bootstrap on Supabase](#admin-bootstrap-on-supabase) above).
+
+**What Supabase mode changes:**
+- `password_hash` is always `NULL` — GoTrue owns passwords
+- `password_reset_tokens` is inert — Supabase sends reset emails
+- `/auth/register` and `/auth/login` routes are bypassed
+- Bearer tokens for UI sessions are Supabase JWTs (role embedded as `app_metadata.sovrant_role`)
+- CLI and API machine access still uses `svt_*` tokens via `api_tokens`
+
+---
+
+**SQLite (default)**
 
 | Variable | Default | Description |
 |---|---|---|
@@ -533,7 +628,20 @@ No Sovrant-specific setup endpoint needed.
 | `SOVRANT_AUDIT_JSONL` | `false` | Also write audit events to JSONL (legacy dual-write) |
 | `SOVRANT_DB_REQUIRE` | `false` | When `true`, `InitializeAsync` throws on any init failure instead of continuing with no persistence. Recommended in production. |
 | `SOVRANT_DB_BACKUP_ON_UPGRADE` | `false` | When `true`, checkpoints WAL and copies `sovrant.db` to `sovrant.db.bak-{version}` before any pending migrations run. |
-| `SUPABASE_URL` | *(unset)* | When set, activates Supabase/Postgres backend and JWT validation path in auth middleware. |
+
+**Standalone PostgreSQL** *(planned — activates when set)*
+
+| Variable | Default | Description |
+|---|---|---|
+| `SOVRANT_POSTGRES_URL` | *(unset)* | PostgreSQL connection string (e.g. `postgres://user:pass@host:5432/sovrant`). When set, Sovrant uses Postgres instead of SQLite. |
+
+**Supabase** *(activates when `SUPABASE_URL` is set)*
+
+| Variable | Default | Description |
+|---|---|---|
+| `SUPABASE_URL` | *(unset)* | Supabase project URL (e.g. `https://xxx.supabase.co`). Activates Supabase mode: GoTrue auth, JWT validation in `BearerTokenMiddleware`, Postgres backend. |
+| `SUPABASE_ANON_KEY` | *(unset)* | Supabase anon/public key. Used by the web and desktop clients for unauthenticated GoTrue calls (sign-in form). |
+| `SUPABASE_SERVICE_ROLE_KEY` | *(unset)* | Supabase service role key. Server-side only — never expose to clients. Required for admin operations and mirror trigger validation. |
 
 ---
 
@@ -554,7 +662,8 @@ No Sovrant-specific setup endpoint needed.
 | Credential at rest | AES-256-GCM encryption; master key in `keystore` table (DB) since V039 |
 | Concurrent access | WAL mode + `busy_timeout=5000` allows CLI and server to share the same DB file |
 | Server auth | All HTTP endpoints require `Authorization: Bearer`; SQLite DB never directly exposed |
-| Memory privacy | `owner_user_id` scoping enforced at app layer (query filter); no DB-level RLS on SQLite |
+| Memory privacy | `owner_user_id` scoping enforced at app layer (query filter); no DB-level RLS on SQLite. Supabase deployments can enable RLS policies (commented out in `PostgresSchema.sql`) to enforce privacy at the DB layer. |
+| Role elevation (Supabase) | `raw_app_meta_data.sovrant_role` is writable only by service-role callers (GoTrue enforces); users cannot self-elevate. Role is embedded in the signed JWT — tamper-proof in transit. |
 
 ---
 
@@ -600,12 +709,12 @@ No Sovrant-specific setup endpoint needed.
 | 6 | **Migration checksum drift not enforced.** | **✓ Resolved (Phase 42.5).** `MigrationDriftException` thrown on any mismatch. |
 | 8 | **Empty `user_id` defaults.** Sessions written with `user_id = ''`. | **✓ Resolved (Phase 38 + V009 backfill).** |
 | 13 | **`PostgresSchema.sql` has no migration runner.** One-shot manual script; Supabase instances bootstrapped before V041/V042 silently lack the privacy columns. Existing Postgres instances not re-run against the updated script will have no `owner_user_id` on memory tables → INSERT failures at runtime. | **Planned** — Postgres V-series migration runner needed; or publish discrete upgrade scripts per release (e.g. `V041_upgrade.sql`). |
-| 14 | **Memory privacy enforced at app layer only.** `owner_user_id` filter is in application query logic, not DB RLS. Direct Supabase dashboard, service-role queries, or edge functions bypass it entirely. | **Planned** — `SupabaseAuth.sql` will add RLS policies: `USING (is_private = 0 OR owner_user_id = auth.uid()::text)`. |
-| 15 | **Six tables with `REFERENCES users(user_id)` block Supabase Auth adoption.** `workspaces`, `workspace_members`, `project_members`, `api_tokens`, `user_roles`, `password_reset_tokens`. Without the mirror trigger these FK inserts fail because `public.users` has no row. | **Planned** — mirror trigger in `SupabaseAuth.sql` resolves this. |
+| 14 | **Memory privacy enforced at app layer only.** `owner_user_id` filter is in application query logic, not DB RLS. Direct Supabase dashboard, service-role queries, or edge functions bypass it entirely. | **Partially done** — RLS policy skeletons are in the `PostgresSchema.sql` Supabase Auth Extension section (commented out). Uncomment and run to enforce. Full enforcement requires all Supabase Edge Functions to also use `auth.uid()`. |
+| 15 | **Six tables with `REFERENCES users(user_id)` block Supabase Auth adoption.** `workspaces`, `workspace_members`, `project_members`, `api_tokens`, `user_roles`, `password_reset_tokens`. Without the mirror trigger these FK inserts fail because `public.users` has no row. | **✓ Resolved (2026-06-18).** `on_auth_user_created` mirror trigger in `PostgresSchema.sql` SUPABASE AUTH EXTENSION section ensures `public.users` row is created before any FK-dependent inserts. |
 | 16 | **`/remember` command writes patterns/instincts with `owner_user_id = ''`** making them visible to all users. | **✓ Resolved (2026-06-18).** `ownerUserId` now threaded through `SlashCommandDispatcher.TryDispatchAsync` → `RememberCommand`. |
 | 17 | **`GET /workspaces/{id}/memory` returned private entries to any member.** `viewerUserId` was not passed to `ListMemoryAsync`. | **✓ Resolved (2026-06-18).** Route now passes `viewerUserId: ctx.GetUserId()`. |
 | 18 | **SQL query fragments built via string interpolation** in `SqliteMemoryStore` and `SqliteWorkspaceStore` for optional owner filters. Currently safe (hardcoded literal strings) but establishes a risky pattern. | Deferred — replace with static tautology queries: `AND ($uid IS NULL OR owner_user_id = '' OR owner_user_id = $uid)`. |
-| 19 | **`PostgresSchema.sql` V040 backfill gap.** V040 backfills `mcp_servers.id` with `randomblob(16)` in SQLite. No equivalent UPDATE in `PostgresSchema.sql` for upgrade installs — existing Postgres rows keep `id=''`. | Planned — add `UPDATE mcp_servers SET id = gen_random_uuid()::text WHERE id = '';` to the V040 section of `PostgresSchema.sql`. |
+| 19 | **`PostgresSchema.sql` V040 backfill gap.** V040 backfills `mcp_servers.id` with `randomblob(16)` in SQLite. No equivalent UPDATE in `PostgresSchema.sql` for upgrade installs — existing Postgres rows keep `id=''`. | **✓ Resolved (2026-06-18).** `UPDATE mcp_servers SET id = gen_random_uuid()::text WHERE id = '';` added to the V040 section of `PostgresSchema.sql`. |
 | 9 | **No shared bootstrap helper.** Test fixtures re-implement parts of the boot flow. | Deferred. |
 | 10 | **Connection-per-call with no pool.** | Deferred — benchmark before adding pooling. |
 | 11 | **No `sovrant init` first-boot UX.** | Partially addressed — `sovrant db status` covers it. |

@@ -793,13 +793,22 @@ ON CONFLICT (id) DO UPDATE SET version = EXCLUDED.version, applied_at = EXCLUDED
 
 CREATE OR REPLACE FUNCTION public.handle_auth_user_created()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+    _role TEXT;
 BEGIN
+    -- Read sovrant_role from app_metadata (service-role only, user cannot self-set).
+    -- Whitelist: only 'admin' is elevated; anything else (missing, null, unknown) → 'user'.
+    _role := CASE
+        WHEN NEW.raw_app_meta_data->>'sovrant_role' = 'admin' THEN 'admin'
+        ELSE 'user'
+    END;
+
     INSERT INTO public.users (user_id, username, email, role, status, created_at, updated_at)
     VALUES (
         NEW.id::TEXT,
         COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1)),
         NEW.email,
-        'user',
+        _role,
         'active',
         to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
         to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
@@ -813,21 +822,37 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_auth_user_created();
 
--- ── Mirror trigger: auth.users email UPDATE → public.users UPDATE ────────────
+-- ── Mirror trigger: auth.users email/role UPDATE → public.users UPDATE ───────
+-- Fires on email changes AND raw_app_meta_data changes so that setting
+-- sovrant_role in app_metadata immediately syncs to public.users.role.
 
 CREATE OR REPLACE FUNCTION public.handle_auth_user_updated()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+    _role TEXT;
 BEGIN
-    UPDATE public.users
-    SET    email      = NEW.email,
-           updated_at = to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-    WHERE  user_id = NEW.id::TEXT;
+    IF NEW.raw_app_meta_data IS DISTINCT FROM OLD.raw_app_meta_data THEN
+        _role := CASE
+            WHEN NEW.raw_app_meta_data->>'sovrant_role' = 'admin' THEN 'admin'
+            ELSE 'user'
+        END;
+        UPDATE public.users
+        SET    email      = NEW.email,
+               role       = _role,
+               updated_at = to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+        WHERE  user_id = NEW.id::TEXT;
+    ELSE
+        UPDATE public.users
+        SET    email      = NEW.email,
+               updated_at = to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+        WHERE  user_id = NEW.id::TEXT;
+    END IF;
     RETURN NEW;
 END;
 $$;
 
 CREATE OR REPLACE TRIGGER on_auth_user_updated
-    AFTER UPDATE OF email ON auth.users
+    AFTER UPDATE OF email, raw_app_meta_data ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_auth_user_updated();
 
 -- ── Notes for Supabase deployments ───────────────────────────────────────────
@@ -839,8 +864,14 @@ CREATE OR REPLACE TRIGGER on_auth_user_updated
 -- • svt_* api_tokens still work for CLI / headless API access in Supabase mode.
 --   Only interactive UI sessions use JWTs; machine tokens use the token table.
 -- • First admin: create the user in the Supabase dashboard (Auth → Users).
---   The trigger fires automatically. Then elevate the role:
---     UPDATE public.users SET role = 'admin' WHERE email = 'you@example.com';
+--   The mirror trigger fires automatically (role defaults to 'user'). Elevate to
+--   admin by setting sovrant_role in app_metadata (service-role only):
+--     UPDATE auth.users
+--     SET    raw_app_meta_data = jsonb_set(
+--                COALESCE(raw_app_meta_data, '{}'), '{sovrant_role}', '"admin"')
+--     WHERE  email = 'you@example.com';
+--   The on_auth_user_updated trigger fires and syncs role = 'admin' to
+--   public.users automatically. Never UPDATE public.users.role directly.
 
 -- ── Row-Level Security (recommended for Supabase deployments) ────────────────
 -- Uncomment to enforce the owner_user_id privacy model at the database layer
