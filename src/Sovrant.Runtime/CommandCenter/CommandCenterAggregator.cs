@@ -81,7 +81,7 @@ public sealed class CommandCenterAggregator
                                     or MissionStatus.Running
                                     or MissionStatus.AwaitingHuman;
             if (isActive) activeMissions++;
-            else if (m.UpdatedAt < now.AddDays(-7)) continue;
+            else if (m.UpdatedAt < now.AddDays(-30)) continue;
 
             var stepCount = TryCountPlanSteps(m.PlanJson);
             var rawTitle = stepCount > 0
@@ -118,7 +118,7 @@ public sealed class CommandCenterAggregator
                 if (!string.IsNullOrEmpty(r.TeamId)) activeTeamRuns++;
                 else activeAgentRuns++;
             }
-            else if ((r.EndedAt ?? r.StartedAt) < now.AddDays(-7)) continue;
+            else if ((r.EndedAt ?? r.StartedAt) < now.AddDays(-30)) continue;
 
             var isTeamRun = !string.IsNullOrEmpty(r.TeamId) && string.IsNullOrEmpty(r.ParentRunId);
             var kind = !string.IsNullOrEmpty(r.TeamId) ? "team-run" : "agent-run";
@@ -290,7 +290,7 @@ public sealed class CommandCenterAggregator
 
             foreach (var summary in summaries)
             {
-                if (summary.UpdatedAt < now.AddDays(-7)) continue;
+                if (summary.UpdatedAt < now.AddDays(-30)) continue;
 
                 var masked = ShouldMask(summary.IsPrivate, summary.OwnerUserId, viewerUserId);
 

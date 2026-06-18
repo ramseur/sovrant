@@ -86,7 +86,7 @@
     @if (_showRemember)
     {
         <div class="remember-form">
-            <textarea @bind="_rememberText" placeholder="What should I remember? (e.g. Always check tests before committing)" rows="2"></textarea>
+            <textarea @bind="_rememberText" @bind:event="oninput" placeholder="What should I remember? (e.g. Always check tests before committing)" rows="2"></textarea>
             <div class="remember-form-actions">
                 <label class="remember-privacy-label">
                     <input type="checkbox" @bind="_rememberPrivate" />
