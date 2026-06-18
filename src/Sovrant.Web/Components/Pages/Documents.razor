@@ -65,9 +65,10 @@
                             @(_busy ? "Generating..." : "Generate")
                         </button>
                     </div>
-                    <textarea @bind="_jsonInput" @bind:event="oninput" rows="10"
-                              placeholder='Enter JSON satisfying the field schema. Example: {"project_name": "..."}'
-                              style="width:100%; font-family: Consolas, monospace; font-size:13px;"></textarea>
+                    <MarkdownEditor @bind-Value="_jsonInput"
+                                    Language="json"
+                                    RequireFrontmatter="false"
+                                    MinHeight="220px" />
 
                     @if (!string.IsNullOrEmpty(_error))
                     {

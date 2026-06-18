@@ -82,7 +82,10 @@
                     </div>
                     <div class="field-group">
                         <label>System Prompt</label>
-                        <textarea class="field-textarea" rows="12" @bind="_editPrompt"></textarea>
+                        <MarkdownEditor @bind-Value="_editPrompt"
+                                        Language="markdown"
+                                        RequireFrontmatter="false"
+                                        MinHeight="360px" />
                     </div>
 
                     @if (!string.IsNullOrEmpty(_editError))
