@@ -1774,6 +1774,54 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .privacy-toggle.public { color: var(--text-muted); }
 .privacy-icon { font-size: 12px; }
 
+.remember-btn {
+    background: transparent;
+    border: 1px solid var(--border-subtle, #2a2a2a);
+    border-radius: 999px;
+    color: var(--text-muted);
+    font-size: 11px;
+    padding: 3px 10px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+.remember-btn:hover { color: var(--text-primary); border-color: var(--text-muted); }
+
+.remember-form {
+    padding: 8px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: var(--surface-card, #1a1a1a);
+    border-top: 1px solid var(--surface-border);
+}
+.remember-form textarea {
+    width: 100%;
+    resize: vertical;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--surface-border);
+    background: var(--surface-input);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+.remember-form-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.remember-privacy-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.remember-status { color: var(--accent-green, #4caf50); }
+
 .privacy-toggle-mini {
     background: transparent;
     border: 1px solid var(--border-subtle, #2a2a2a);

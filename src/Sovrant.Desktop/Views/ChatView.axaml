@@ -104,6 +104,48 @@
             </DockPanel>
         </Border>
 
+        <!-- Remember panel — slides in above bottom bar when IsRememberOpen -->
+        <Border DockPanel.Dock="Bottom"
+                Padding="48,8"
+                Background="{DynamicResource SurfaceCard}"
+                BorderBrush="{DynamicResource SurfaceBorder}"
+                BorderThickness="0,1,0,0"
+                IsVisible="{Binding IsRememberOpen}">
+            <StackPanel Spacing="6">
+                <TextBox Text="{Binding RememberText}"
+                         Watermark="What should I remember? (e.g. Always check tests before committing)"
+                         AcceptsReturn="True" MinHeight="48" TextWrapping="Wrap"
+                         FontSize="12" />
+                <DockPanel>
+                    <CheckBox DockPanel.Dock="Left"
+                              IsChecked="{Binding RememberIsPrivate}"
+                              Content="🔒 Private"
+                              FontSize="11"
+                              Foreground="{DynamicResource TextMuted}"
+                              VerticalAlignment="Center" />
+                    <TextBlock DockPanel.Dock="Left"
+                               Margin="10,0,0,0"
+                               Text="{Binding RememberStatus}"
+                               FontSize="11"
+                               Foreground="{DynamicResource StatusSuccess}"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding RememberStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
+                        <Button Content="Cancel"
+                                Command="{Binding ToggleRememberCommand}"
+                                Padding="12,4" CornerRadius="6" FontSize="11"
+                                Background="Transparent"
+                                Foreground="{DynamicResource TextMuted}" />
+                        <Button Content="Save"
+                                Command="{Binding SaveRememberCommand}"
+                                IsEnabled="{Binding RememberText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                Padding="12,4" CornerRadius="6" FontSize="11"
+                                Background="{DynamicResource BrandPrimary}" Foreground="White" />
+                    </StackPanel>
+                </DockPanel>
+            </StackPanel>
+        </Border>
+
         <!-- Session stats (tokens + cost) + privacy toggle — visible once messages exist -->
         <Border DockPanel.Dock="Bottom"
                 Padding="48,4">
@@ -126,6 +168,20 @@
                         <TextBlock Text="{Binding IsSessionPrivate, Converter={x:Static vm:BoolToPrivacyLabelConverter.Instance}}"
                                    Foreground="{DynamicResource TextMuted}" />
                     </StackPanel>
+                </Button>
+                <!-- Remember button -->
+                <Button DockPanel.Dock="Left"
+                        Margin="8,0,0,0"
+                        Command="{Binding ToggleRememberCommand}"
+                        Padding="8,3"
+                        CornerRadius="10"
+                        Background="Transparent"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1"
+                        FontSize="11"
+                        VerticalAlignment="Center"
+                        ToolTip.Tip="Save a note to memory — injected into every future chat session">
+                    <TextBlock Text="+ Remember" Foreground="{DynamicResource TextMuted}" />
                 </Button>
                 <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Right"
                             IsVisible="{Binding HasMessages}">

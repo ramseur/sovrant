@@ -120,6 +120,12 @@ public sealed record WorkspaceMemoryEntry
     [JsonPropertyName("project_id")]
     public string? ProjectId { get; init; }
 
+    [JsonPropertyName("owner_user_id")]
+    public string OwnerUserId { get; init; } = string.Empty;
+
+    [JsonPropertyName("is_private")]
+    public bool IsPrivate { get; init; }
+
     [JsonPropertyName("created_at")]
     public DateTimeOffset CreatedAt { get; init; }
 

@@ -1,8 +1,21 @@
 @page "/memory"
 @using Sovrant.Runtime.Memory
+@using Sovrant.Runtime.Workspaces
+@using Sovrant.Web.Services
+@inject WebSessionService Session
+@inject NavigationManager Nav
 
 <div class="settings-page">
-    <h1>Memory</h1>
+    <div class="diag-header">
+        <div>
+            <h1>Memory</h1>
+            <p class="text-secondary" style="margin:0">
+                Patterns and instincts are learned automatically from sessions.
+                Workspace memories are notes you add manually — they're injected into every chat session.
+            </p>
+        </div>
+        <button class="btn-secondary" @onclick="LoadAllAsync" disabled="@_isLoading">@(_isLoading ? "Refreshing…" : "Refresh")</button>
+    </div>
 
     <div class="tab-bar">
         <button class="tab-btn @(_tab == 0 ? "active" : "")" @onclick="() => _tab = 0">
@@ -13,6 +26,9 @@
         </button>
         <button class="tab-btn @(_tab == 2 ? "active" : "")" @onclick="() => _tab = 2">
             Summaries <span class="tab-badge">@_summaries.Count</span>
+        </button>
+        <button class="tab-btn @(_tab == 3 ? "active" : "")" @onclick="() => _tab = 3">
+            Workspace <span class="tab-badge">@_workspaceMemories.Count</span>
         </button>
     </div>
 
@@ -80,7 +96,7 @@
             }
         </div>
     }
-    else
+    else if (_tab == 2)
     {
         <div class="memory-list">
             @if (_summaries.Count == 0)
@@ -109,10 +125,64 @@
             }
         </div>
     }
+    else
+    {
+        <!-- Workspace memory tab -->
+        @if (!string.IsNullOrEmpty(_workspaceId))
+        {
+            <div class="card" style="margin-bottom:12px">
+                <div class="form-field">
+                    <label>Add a memory note</label>
+                    <textarea @bind="_newMemoryText" placeholder="e.g. Always check the README before suggesting changes" rows="2"
+                              style="width:100%;resize:vertical;padding:8px;border-radius:6px;border:1px solid var(--surface-border);background:var(--surface-input);color:var(--text-primary);font-size:13px"></textarea>
+                </div>
+                <div class="input-group" style="align-items:center;gap:8px;flex-wrap:wrap">
+                    <select @bind="_newMemoryLayer" style="padding:6px 8px;border-radius:6px;border:1px solid var(--surface-border);background:var(--surface-input);color:var(--text-primary);font-size:12px">
+                        <option value="note">Note</option>
+                        <option value="pattern">Pattern</option>
+                        <option value="instinct">Instinct</option>
+                    </select>
+                    <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+                        <input type="checkbox" @bind="_newMemoryIsPrivate" />
+                        🔒 Private (only injected for you)
+                    </label>
+                    <button class="btn-primary btn-sm" @onclick="AddWorkspaceMemoryAsync" disabled="@string.IsNullOrWhiteSpace(_newMemoryText)">Save</button>
+                </div>
+            </div>
+        }
+        <div class="memory-list">
+            @if (_workspaceMemories.Count == 0)
+            {
+                <p class="text-secondary">No workspace memories yet. Add notes above — they're injected into every chat session in this workspace.</p>
+            }
+            @foreach (var m in _workspaceMemories)
+            {
+                <div class="memory-card">
+                    <div class="memory-content">
+                        <div class="memory-text">@m.Content</div>
+                        <div class="memory-meta">
+                            <span class="outcome-badge info">@m.Layer</span>
+                            @if (m.IsPrivate)
+                            {
+                                <span title="Only injected for you" style="font-size:13px">🔒</span>
+                            }
+                            else
+                            {
+                                <span title="Injected for all workspace members" style="font-size:13px">🔓</span>
+                            }
+                            <span class="text-muted text-sm">@m.CreatedAt.LocalDateTime.ToString("d")</span>
+                        </div>
+                    </div>
+                    <button class="btn-sm btn-danger" @onclick="() => DeleteWorkspaceMemory(m)">X</button>
+                </div>
+            }
+        </div>
+    }
 </div>
 
 @code {
     [Inject] private IMemoryStore MemoryStore { get; set; } = default!;
+    [Inject] private IWorkspaceService WorkspaceService { get; set; } = default!;
 
     private int _tab;
     private string _status = string.Empty;
@@ -121,10 +191,27 @@
     private List<LearnedPattern> _patterns = [];
     private List<Instinct> _instincts = [];
     private List<SessionSummary> _summaries = [];
+    private List<WorkspaceMemoryEntry> _workspaceMemories = [];
+
+    private string? _workspaceId;
+    private string _newMemoryText = string.Empty;
+    private string _newMemoryLayer = "note";
+    private bool _newMemoryIsPrivate = true;
 
     private static readonly string Project = Directory.GetCurrentDirectory();
 
-    protected override async Task OnInitializedAsync() => await LoadAllAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login", forceLoad: false);
+            return;
+        }
+        // Resolve the user's personal workspace so workspace memory is user-scoped.
+        var ws = await WorkspaceService.GetPersonalAsync(Session.UserId ?? string.Empty);
+        _workspaceId = ws?.WorkspaceId;
+        await LoadAllAsync();
+    }
 
     private async Task LoadAllAsync()
     {
@@ -135,6 +222,8 @@
             _patterns = (await MemoryStore.LoadPatternsAsync(Project)).ToList();
             _instincts = (await MemoryStore.LoadInstinctsAsync()).ToList();
             _summaries = (await MemoryStore.LoadSummariesAsync(Project, maxCount: 20)).ToList();
+            if (!string.IsNullOrEmpty(_workspaceId))
+                _workspaceMemories = (await WorkspaceService.ListMemoryAsync(_workspaceId!, viewerUserId: Session.UserId)).ToList();
         }
         catch (Exception ex)
         {
@@ -144,6 +233,30 @@
         {
             _isLoading = false;
         }
+    }
+
+    private async Task AddWorkspaceMemoryAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newMemoryText) || string.IsNullOrEmpty(_workspaceId)) return;
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            await WorkspaceService.SaveMemoryAsync(new WorkspaceMemoryEntry
+            {
+                MemoryId = Guid.NewGuid().ToString("N"),
+                WorkspaceId = _workspaceId!,
+                Layer = _newMemoryLayer,
+                Content = _newMemoryText.Trim(),
+                OwnerUserId = Session.UserId ?? string.Empty,
+                IsPrivate = _newMemoryIsPrivate,
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            _newMemoryText = string.Empty;
+            _status = "Memory saved.";
+            _workspaceMemories = (await WorkspaceService.ListMemoryAsync(_workspaceId!, viewerUserId: Session.UserId)).ToList();
+        }
+        catch (Exception ex) { _status = $"Failed to save: {ex.Message}"; }
     }
 
     private async Task DeletePattern(LearnedPattern pattern)
@@ -164,6 +277,17 @@
             await MemoryStore.RemoveInstinctAsync(instinct.Id);
             _instincts.Remove(instinct);
             _status = "Instinct deleted.";
+        }
+        catch (Exception ex) { _status = $"Delete failed: {ex.Message}"; }
+    }
+
+    private async Task DeleteWorkspaceMemory(WorkspaceMemoryEntry entry)
+    {
+        try
+        {
+            await WorkspaceService.DeleteMemoryAsync(entry.MemoryId);
+            _workspaceMemories.Remove(entry);
+            _status = "Memory deleted.";
         }
         catch (Exception ex) { _status = $"Delete failed: {ex.Message}"; }
     }

@@ -490,21 +490,27 @@ internal sealed class SqliteWorkspaceStore(ISqliteConnectionFactory connectionFa
 
     // ── Memory ─────────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<WorkspaceMemoryEntry>> ListMemoryAsync(string workspaceId, string? layer = null, CancellationToken ct = default)
+    public async Task<IReadOnlyList<WorkspaceMemoryEntry>> ListMemoryAsync(string workspaceId, string? layer = null, string? viewerUserId = null, CancellationToken ct = default)
     {
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
         var sql = """
-            SELECT memory_id, workspace_id, layer, content, confidence, project_id, created_at, updated_at
+            SELECT memory_id, workspace_id, layer, content, confidence, project_id, owner_user_id, is_private, created_at, updated_at
             FROM workspace_memory WHERE workspace_id = $wid
             """;
         if (layer is not null)
             sql += " AND layer = $layer";
+        // When a viewer is specified, return public entries + their own private entries.
+        // When viewerUserId is null (admin path), return all entries.
+        if (viewerUserId is not null)
+            sql += " AND (is_private = 0 OR owner_user_id = $uid)";
         sql += " ORDER BY updated_at DESC";
         cmd.CommandText = sql;
         cmd.Parameters.AddWithValue("$wid", workspaceId);
         if (layer is not null)
             cmd.Parameters.AddWithValue("$layer", layer);
+        if (viewerUserId is not null)
+            cmd.Parameters.AddWithValue("$uid", viewerUserId);
 
         using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         var results = new List<WorkspaceMemoryEntry>();
@@ -518,8 +524,10 @@ internal sealed class SqliteWorkspaceStore(ISqliteConnectionFactory connectionFa
                 Content = reader.GetString(3),
                 Confidence = await reader.IsDBNullAsync(4, ct).ConfigureAwait(false) ? null : reader.GetDouble(4),
                 ProjectId = await reader.IsDBNullAsync(5, ct).ConfigureAwait(false) ? null : reader.GetString(5),
-                CreatedAt = ParseTs(reader.GetString(6)),
-                UpdatedAt = ParseTs(reader.GetString(7)),
+                OwnerUserId = reader.GetString(6),
+                IsPrivate = reader.GetInt32(7) != 0,
+                CreatedAt = ParseTs(reader.GetString(8)),
+                UpdatedAt = ParseTs(reader.GetString(9)),
             });
         }
         return results;
@@ -530,10 +538,11 @@ internal sealed class SqliteWorkspaceStore(ISqliteConnectionFactory connectionFa
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO workspace_memory (memory_id, workspace_id, layer, content, confidence, project_id, created_at, updated_at)
-            VALUES ($mid, $wid, $layer, $content, $conf, $proj, $created, $updated)
+            INSERT INTO workspace_memory (memory_id, workspace_id, layer, content, confidence, project_id, owner_user_id, is_private, created_at, updated_at)
+            VALUES ($mid, $wid, $layer, $content, $conf, $proj, $owner, $priv, $created, $updated)
             ON CONFLICT(memory_id) DO UPDATE SET
                 content = $content, confidence = $conf, project_id = $proj,
+                owner_user_id = $owner, is_private = $priv,
                 updated_at = $updated
             """;
         cmd.Parameters.AddWithValue("$mid", entry.MemoryId);
@@ -542,6 +551,8 @@ internal sealed class SqliteWorkspaceStore(ISqliteConnectionFactory connectionFa
         cmd.Parameters.AddWithValue("$content", entry.Content);
         cmd.Parameters.AddWithValue("$conf", entry.Confidence.HasValue ? entry.Confidence.Value : DBNull.Value);
         cmd.Parameters.AddWithValue("$proj", (object?)entry.ProjectId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$owner", entry.OwnerUserId);
+        cmd.Parameters.AddWithValue("$priv", entry.IsPrivate ? 1 : 0);
         cmd.Parameters.AddWithValue("$created", Ts(entry.CreatedAt));
         cmd.Parameters.AddWithValue("$updated", Ts(entry.UpdatedAt));
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);

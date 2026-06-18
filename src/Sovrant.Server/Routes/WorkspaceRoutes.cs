@@ -230,7 +230,7 @@ internal static class WorkspaceRoutes
     {
         var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, id, svc, ct).ConfigureAwait(false);
         if (deny is not null) return deny;
-        var memory = await svc.ListMemoryAsync(id, layer, ct).ConfigureAwait(false);
+        var memory = await svc.ListMemoryAsync(id, layer, ct: ct).ConfigureAwait(false);
         return Results.Ok(new { memory });
     }
 

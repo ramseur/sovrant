@@ -47,14 +47,15 @@ public sealed partial class MemoryInjector
     /// <param name="project">The current project directory.</param>
     /// <param name="workspaceId">Workspace ID for loading user-saved <c>workspace_memory</c> rows. If null, that section is skipped.</param>
     /// <param name="projectId">Project ID for filtering project-scoped workspace memory. Workspace-wide entries (NULL project_id) always included.</param>
+    /// <param name="ownerUserId">The session owner. Used to filter workspace memory so each user only sees public entries plus their own private ones.</param>
     /// <param name="ct">Cancellation token.</param>
-    public async Task<string> BuildMemorySectionAsync(string project, string? workspaceId = null, string? projectId = null, CancellationToken ct = default)
+    public async Task<string> BuildMemorySectionAsync(string project, string? workspaceId = null, string? projectId = null, string? ownerUserId = null, CancellationToken ct = default)
     {
         var summariesTask = _store.LoadSummariesAsync(project, MaxSummaries, ct);
         var patternsTask = _store.LoadPatternsAsync(project, ct);
         var instinctsTask = _store.LoadInstinctsAsync(MinInstinctConfidence, ct);
         var workspaceTask = (_workspaceService is not null && !string.IsNullOrEmpty(workspaceId))
-            ? _workspaceService.ListMemoryAsync(workspaceId, layer: null, ct)
+            ? _workspaceService.ListMemoryAsync(workspaceId, layer: null, viewerUserId: ownerUserId, ct)
             : Task.FromResult<IReadOnlyList<WorkspaceMemoryEntry>>(Array.Empty<WorkspaceMemoryEntry>());
 
         await Task.WhenAll(summariesTask, patternsTask, instinctsTask, workspaceTask).ConfigureAwait(false);

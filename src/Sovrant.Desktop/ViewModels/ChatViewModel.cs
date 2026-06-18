@@ -10,6 +10,7 @@ using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Governance;
 using Sovrant.Runtime.Knowledge;
 using Sovrant.Runtime.Session;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Desktop.ViewModels;
 
@@ -20,6 +21,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private readonly IAuditStore _auditStore;
     private readonly IKnowledgeAttributionStore? _attributionStore;
     private readonly SlashCommandDispatcher _commandDispatcher;
+    private readonly IWorkspaceService? _workspaceService;
     private readonly DesktopConfirmationHandler? _confirmationHandler;
     private readonly ActiveContextViewModel _activeContext;
     private readonly ActiveSessionsViewModel _activeSessions;
@@ -58,6 +60,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private bool _isSessionPrivate = true;
 
+    // Remember panel state
+    [ObservableProperty] private bool _isRememberOpen;
+    [ObservableProperty] private string _rememberText = string.Empty;
+    [ObservableProperty] private bool _rememberIsPrivate = true;
+    [ObservableProperty] private string _rememberStatus = string.Empty;
+
     public ActiveContextViewModel ActiveContext => _activeContext;
     public ObservableCollection<MessageViewModel> Messages { get; } = [];
     public ObservableCollection<CommandSuggestion> CommandSuggestions { get; } = [];
@@ -73,7 +81,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         ActiveSessionsViewModel activeSessions,
         SovrantConfig config,
         DesktopConfirmationHandler? confirmationHandler = null,
-        IKnowledgeAttributionStore? attributionStore = null)
+        IKnowledgeAttributionStore? attributionStore = null,
+        IWorkspaceService? workspaceService = null)
     {
         _sessionPool = sessionPool;
         _sessionStore = sessionStore;
@@ -84,6 +93,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         _activeContext = activeContext;
         _activeSessions = activeSessions;
         _config = config;
+        _workspaceService = workspaceService;
         _sessionId = $"session-{Guid.NewGuid():N}";
 
         if (_confirmationHandler is not null)
@@ -482,6 +492,42 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         {
             IsSessionPrivate = !newValue;
             throw;
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleRemember()
+    {
+        IsRememberOpen = !IsRememberOpen;
+        RememberStatus = string.Empty;
+    }
+
+    [RelayCommand]
+    private async Task SaveRememberAsync()
+    {
+        if (string.IsNullOrWhiteSpace(RememberText) || _workspaceService is null) return;
+        try
+        {
+            var ws = await _workspaceService.GetPersonalAsync(App.SovrantUserId ?? string.Empty).ConfigureAwait(false);
+            if (ws is null) { RememberStatus = "No workspace found."; return; }
+            var now = DateTimeOffset.UtcNow;
+            await _workspaceService.SaveMemoryAsync(new WorkspaceMemoryEntry
+            {
+                MemoryId = Guid.NewGuid().ToString("N"),
+                WorkspaceId = ws.WorkspaceId,
+                Layer = "note",
+                Content = RememberText.Trim(),
+                OwnerUserId = App.SovrantUserId ?? string.Empty,
+                IsPrivate = RememberIsPrivate,
+                CreatedAt = now,
+                UpdatedAt = now,
+            }).ConfigureAwait(false);
+            RememberStatus = "Saved!";
+            RememberText = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            RememberStatus = $"Failed: {ex.Message}";
         }
     }
 

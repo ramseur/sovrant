@@ -20,7 +20,7 @@
                     <TextBlock Text="Memory" FontSize="24" FontWeight="Bold"
                                Foreground="{DynamicResource TextPrimary}" />
                     <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
-                               Text="Learned patterns, instincts, and session summaries" />
+                               Text="Patterns and instincts are learned automatically. Workspace memories are notes you add — injected into every chat session." />
                 </StackPanel>
             </DockPanel>
 
@@ -104,6 +104,32 @@
                         <Border Padding="5,1" CornerRadius="8"
                                 Background="{DynamicResource SurfaceBorder}">
                             <TextBlock Text="{Binding SummaryCount}" FontSize="10"
+                                       Foreground="{DynamicResource TextSecondary}" />
+                        </Border>
+                    </StackPanel>
+                </Button>
+
+                <Button Command="{Binding SelectTabCommand}" CommandParameter="3"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource BrandPrimary}" Foreground="White"
+                        IsVisible="{Binding IsWorkspaceTab}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="Workspace" />
+                        <Border Padding="5,1" CornerRadius="8" Background="White">
+                            <TextBlock Text="{Binding WorkspaceMemoryCount}" FontSize="10"
+                                       Foreground="{DynamicResource BrandPrimary}" />
+                        </Border>
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding SelectTabCommand}" CommandParameter="3"
+                        Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
+                        Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
+                        IsVisible="{Binding !IsWorkspaceTab}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="Workspace" />
+                        <Border Padding="5,1" CornerRadius="8"
+                                Background="{DynamicResource SurfaceBorder}">
+                            <TextBlock Text="{Binding WorkspaceMemoryCount}" FontSize="10"
                                        Foreground="{DynamicResource TextSecondary}" />
                         </Border>
                     </StackPanel>
@@ -258,6 +284,87 @@
                            FontSize="13" Foreground="{DynamicResource TextMuted}"
                            HorizontalAlignment="Center" Margin="0,20"
                            IsVisible="{Binding !SummaryCount}" />
+            </StackPanel>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- TAB 3: Workspace Memory                          -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <StackPanel Spacing="12" IsVisible="{Binding IsWorkspaceTab}">
+
+                <!-- Add form -->
+                <Border Padding="16,12" CornerRadius="8"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Add a memory note" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondary}" />
+                        <TextBox Text="{Binding NewMemoryText}"
+                                 Watermark="e.g. Always check the README before suggesting changes"
+                                 AcceptsReturn="True" MinHeight="56" TextWrapping="Wrap"
+                                 FontSize="13" />
+                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                            <ComboBox SelectedItem="{Binding NewMemoryLayer}" FontSize="12" MinWidth="90">
+                                <ComboBoxItem Content="note" />
+                                <ComboBoxItem Content="pattern" />
+                                <ComboBoxItem Content="instinct" />
+                            </ComboBox>
+                            <CheckBox IsChecked="{Binding NewMemoryIsPrivate}" FontSize="12"
+                                      Foreground="{DynamicResource TextSecondary}"
+                                      Content="🔒 Private (only injected for me)" />
+                            <Button Content="Save"
+                                    Command="{Binding AddWorkspaceMemoryCommand}"
+                                    IsEnabled="{Binding NewMemoryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                    Padding="16,6" CornerRadius="6" FontSize="12"
+                                    Background="{DynamicResource BrandPrimary}" Foreground="White" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- List -->
+                <ItemsControl ItemsSource="{Binding WorkspaceMemories}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:WorkspaceMemoryItemViewModel">
+                            <Border Margin="0,2" Padding="14,10" CornerRadius="8"
+                                    Background="{DynamicResource SurfaceCard}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right"
+                                            Content="Delete"
+                                            Command="{Binding $parent[ItemsControl].((vm:MemoryViewModel)DataContext).DeleteWorkspaceMemoryCommand}"
+                                            CommandParameter="{Binding}"
+                                            Padding="8,4" CornerRadius="4" FontSize="11"
+                                            Background="#44F44336"
+                                            Foreground="{DynamicResource StatusFail}"
+                                            VerticalAlignment="Top" />
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{Binding Content}"
+                                                   FontSize="13" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource TextPrimary}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Border Padding="6,2" CornerRadius="4"
+                                                    Background="{DynamicResource SurfaceBorder}">
+                                                <TextBlock Text="{Binding Layer}" FontSize="10"
+                                                           Foreground="{DynamicResource TextSecondary}" />
+                                            </Border>
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}"
+                                                       Text="🔒" IsVisible="{Binding IsPrivate}" />
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}"
+                                                       Text="🔓" IsVisible="{Binding !IsPrivate}" />
+                                            <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:MMM d, yyyy}'}"
+                                                       FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="No workspace memories yet — add notes above and they'll be injected into every chat session"
+                           FontSize="13" Foreground="{DynamicResource TextMuted}"
+                           TextWrapping="Wrap" HorizontalAlignment="Center" Margin="0,20"
+                           IsVisible="{Binding !WorkspaceMemoryCount}" />
             </StackPanel>
 
         </StackPanel>
