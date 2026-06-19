@@ -1,6 +1,6 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Debug: no apphost exe — avoids Windows kernel image-section lock that
+  <!-- Debug: no apphost exe â€” avoids Windows kernel image-section lock that
        blocks rebuilds when the exe was previously run. Use 'dotnet run' in dev. -->
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
     <UseAppHost>false</UseAppHost>
@@ -35,14 +35,14 @@
     <PackageReference Include="Avalonia.Desktop" Version="11.3.0" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.0" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.0" />
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-    <PackageReference Include="Markdig" Version="0.40.0" />
-    <PackageReference Include="Markdown.Avalonia" Version="11.0.2" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Markdig" Version="1.3.2" />
+    <PackageReference Include="Markdown.Avalonia" Version="11.0.3" />
     <PackageReference Include="Avalonia.AvaloniaEdit" Version="11.3.0" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.5" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.5" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
   </ItemGroup>
 
   <ItemGroup>
