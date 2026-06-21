@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -209,7 +210,7 @@ public class SafeMarkdownPresenter : ContentControl
             var clipboard = TopLevel.GetTopLevel(copyButton)?.Clipboard;
             if (clipboard is not null)
             {
-                await clipboard.SetTextAsync(codeText);
+                await clipboard.SetValueAsync(DataFormat.Text, codeText);
                 ((Button)copyButton).Content = "Copied!";
                 await Task.Delay(1500);
                 ((Button)copyButton).Content = "Copy";

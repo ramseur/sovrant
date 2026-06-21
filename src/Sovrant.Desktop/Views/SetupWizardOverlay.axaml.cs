@@ -22,7 +22,7 @@ public partial class SetupWizardOverlay : UserControl
         }
     }
 
-    private static void OnModelBoxGotFocus(object? sender, GotFocusEventArgs e)
+    private static void OnModelBoxGotFocus(object? sender, FocusChangedEventArgs e)
     {
         if (sender is AutoCompleteBox acb)
         {

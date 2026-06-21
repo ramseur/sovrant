@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Sovrant.Desktop.ViewModels;
 
@@ -84,7 +85,7 @@ public partial class ChatView : UserControl
             var match = Regex.Match(msg.Text, @"```[\w]*\r?\n([\s\S]*?)```", RegexOptions.RightToLeft);
             if (match.Success)
             {
-                await clipboard.SetTextAsync(match.Groups[1].Value.TrimEnd());
+                await clipboard.SetValueAsync(DataFormat.Text,match.Groups[1].Value.TrimEnd());
                 return;
             }
         }
@@ -151,7 +152,7 @@ public partial class ChatView : UserControl
         if (sender is MenuItem { DataContext: MessageViewModel msg } &&
             TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
         {
-            await clipboard.SetTextAsync(msg.Text);
+            await clipboard.SetValueAsync(DataFormat.Text,msg.Text);
         }
     }
 
@@ -160,7 +161,7 @@ public partial class ChatView : UserControl
         if (sender is Button { DataContext: MessageViewModel msg } &&
             TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
         {
-            await clipboard.SetTextAsync(msg.Text);
+            await clipboard.SetValueAsync(DataFormat.Text,msg.Text);
         }
     }
 }

@@ -2,7 +2,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              xmlns:conv="using:Sovrant.Desktop.Converters"
-             xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
              xmlns:ctrl="using:Sovrant.Desktop.Controls"
              xmlns:knowledge="using:Sovrant.Runtime.Knowledge"
              x:Class="Sovrant.Desktop.Views.ChatView"
