@@ -19,7 +19,7 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>Phase 69 — currently selected rail group: chat, knowledge, agents, workspace, connect, governance. Command Center is reached via the Agents panel.</summary>
     [ObservableProperty]
-    private string _selectedGroup = "agents";
+    private string _selectedGroup = "dashboard";
 
     public bool IsChatGroup => SelectedGroup == "chat";
     public bool IsKnowledgeGroup => SelectedGroup == "knowledge";
@@ -78,10 +78,10 @@ public partial class MainViewModel : ViewModelBase
         _principal = principal;
         _activeSessions = activeSessions;
         var cockpit = services.GetRequiredService<CommandCenterViewModel>();
-        _currentPage = cockpit;
         cockpit.RowSelected += OnCockpitRowSelected;
 
         var dashboard = services.GetRequiredService<UserDashboardViewModel>();
+        _currentPage = dashboard;
         dashboard.RowSelected += OnDashboardRowSelected;
 
         sidebar.NavigationRequested += OnNavigationRequested;
