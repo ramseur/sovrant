@@ -11,6 +11,35 @@ Versions correspond to tags on the `development` branch.
 
 ---
 
+## [1.3.0] — 2026-06-22
+
+### Added
+
+- **Admin edit/revert for standard document templates** — admins can edit any DB-backed document template inline on the web `/documents` page and revert to the built-in version; C# Excel-only templates (LoanAmortization, ExpenseReport) are correctly excluded.
+- **Monaco editor** for prompt and JSON fields on the web.
+- **Admin-gated agent create/edit/clone/delete** on web (was previously unrestricted).
+
+### Fixed
+
+- **Command Center privacy** — private records with `owner_user_id = ''` (rows migrated before Phase 123) were bypassing the mask guard and showing full content; `ShouldMask` now treats any private record with an unknown owner as masked.
+- **Command Center audit view** — desktop was unmasking the current user's own private rows; Command Center is an admin audit view so all private rows now show as `(private)` regardless of ownership.
+- **Command Center startup state** — desktop opened with the Agents icon selected but Command Center content on the right; startup now lands on User Dashboard with the correct nav group active.
+- **Admin edit buttons on Skills and User Document Templates** — buttons had been accidentally commented out; restored with `Session.IsAdmin` guard.
+- **Knowledge sub-nav order** — items are now sorted alphabetically (Artifacts, Code Templates, Documents, Memory, Skills, Tools) on both web and desktop.
+- **OpenRouterPricingClient startup warning** — pricing fetch no longer runs at startup when no OpenRouter API key is configured.
+- **ProcessAgent stdin pipe race** — `IOException: pipe is being closed` no longer thrown when a child process exits before reading its stdin.
+- **Migration count assertions** in tests updated (40 → 42) to match V041/V042 migrations.
+- **Project-level `NoWarn` overrides** — all `.csproj` files now append to `$(NoWarn)` instead of replacing it, so global suppressions in `Directory.Build.props` take effect everywhere.
+
+### Changed
+
+- **Avalonia 11.3.0 → 12.0.4** — desktop upgraded to Avalonia 12; `Markdown.Avalonia` removed (was unused since April; `SafeMarkdownPresenter` handles all markdown rendering). Avalonia 12 API fixes: `GotFocusEventArgs` → `FocusChangedEventArgs`, `IClipboard.SetTextAsync` → `SetValueAsync(DataFormat.Text, …)`, `TextBox.Watermark` → `PlaceholderText`.
+- **Scriban 5.12.0 → 7.2.4** — resolves 1 Critical + 8 High + 3 Moderate CVEs (GHSA-5wr9-m6jw-xx44 and 11 others).
+- **Bulk NuGet updates** — `Microsoft.Extensions.*` → 10.0.9, `Microsoft.Data.Sqlite` → 10.0.9, `Markdig` → 1.3.2, `ModelContextProtocol` / `ModelContextProtocol.AspNetCore` → 1.4.0, `CommunityToolkit.Mvvm` → 8.4.2, `Spectre.Console` → 0.57.0, `Markdown.Avalonia` → 11.0.3, xunit / coverlet / `Microsoft.NET.Test.Sdk` updates.
+- **SQLitePCLRaw.lib.e_sqlite3 NU1903 suppressed globally** — no patched release exists yet (GHSA-2m69-gcr7-jv3q); suppression tracked in `Directory.Build.props` for removal once 2.1.12+ ships.
+
+---
+
 ## [1.2.0] — 2026-06-18
 
 ### Added
