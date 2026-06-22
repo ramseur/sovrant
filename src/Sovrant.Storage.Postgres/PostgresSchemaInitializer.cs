@@ -38,6 +38,24 @@ public sealed class PostgresSchemaInitializer(IPostgresConnectionFactory factory
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Initializes only the base schema, excluding the Supabase Auth Extension section.
+    /// Use for standalone PostgreSQL — the Supabase trigger/function block requires the
+    /// Supabase auth schema and will fail on a plain Postgres instance.
+    /// </summary>
+    public async Task InitializeBaseOnlyAsync(CancellationToken ct = default)
+    {
+        const string marker = "-- SUPABASE AUTH EXTENSION";
+        var sql = _schemaSql;
+        var idx = sql.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (idx >= 0) sql = sql[..idx].TrimEnd();
+
+        using var conn = factory.CreateConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
     private static string LoadEmbeddedSql()
     {
         // The SQL is embedded from Sovrant.Runtime, not this assembly.

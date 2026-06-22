@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -7,11 +7,11 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AnalysisMode>All</AnalysisMode>
     <!-- CA2007: ConfigureAwait not required in app-layer; CA1034: nested types OK for commands -->
-    <NoWarn>CA2007;CA1034</NoWarn>
+    <NoWarn>$(NoWarn);CA2007;CA1034</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Spectre.Console" Version="0.55.0" />
+    <PackageReference Include="Spectre.Console" Version="0.57.0" />
   </ItemGroup>
 
   <ItemGroup>

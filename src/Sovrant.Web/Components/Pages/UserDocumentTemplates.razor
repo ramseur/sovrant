@@ -1,7 +1,9 @@
 @page "/documents/templates"
 @using Sovrant.Runtime.Documents.Templates
 @using Sovrant.Web.Components.Shared
+@using Sovrant.Web.Services
 @using Markdig
+@inject WebSessionService Session
 
 @if (_editing is not null)
 {
@@ -24,6 +26,12 @@ else
                         OnRefresh="Reload"
                         OnItemSelected="@(t => { _selected = t; return Task.CompletedTask; })"
                         OnSearch="Search">
+        <HeaderActions>
+            @if (Session.IsAdmin)
+            {
+                <button class="btn-outline btn-sm" @onclick="StartNew">+ New</button>
+            }
+        </HeaderActions>
         <ItemTemplate>
             <div class="item-title">
                 @context.Name
@@ -34,12 +42,21 @@ else
         <FooterTemplate>
             <a class="btn-outline btn-sm" href="/documents">Built-in templates</a>
         </FooterTemplate>
-        @* Authoring buttons hidden — see Phase 91 roadmap entry. Re-enable after the
-           "edit anything, no Duplicate-to-user step" UX rework lands. *@
         <DetailTemplate>
             <div class="detail-content">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
                     <h2 style="margin:0;">@context.Name</h2>
+                    @if (Session.IsAdmin)
+                    {
+                        <div style="display:flex;gap:8px;">
+                            <button class="btn-outline btn-sm" @onclick="@(() => StartEdit(context, false))">Edit</button>
+                            <button class="btn-outline btn-sm" @onclick="@(() => StartDuplicate(context))">Duplicate</button>
+                            @if (!string.IsNullOrEmpty(context.SourcePath))
+                            {
+                                <button class="btn-outline btn-sm" style="color:var(--color-danger,#ef4444);" @onclick="@(() => DeleteAsync(context))">Delete</button>
+                            }
+                        </div>
+                    }
                 </div>
                 <div class="detail-meta">
                     <span><code>@context.Slug</code></span>
@@ -116,8 +133,11 @@ else
             ).ToList();
     }
 
-    private void StartNew() =>
+    private void StartNew()
+    {
+        if (!Session.IsAdmin) return;
         _editing = new EditorState { Slug = string.Empty, Source = NewTemplate, IsNew = true, ReadOnly = false };
+    }
 
     private void StartEdit(TemplateItem item, bool readOnly)
     {
@@ -139,7 +159,7 @@ else
 
     private Task HandleSave(string markdown)
     {
-        if (_editing is null) return Task.CompletedTask;
+        if (_editing is null || !Session.IsAdmin) return Task.CompletedTask;
         var slug = ExtractSlug(markdown) ?? _editing.Slug;
         if (string.IsNullOrWhiteSpace(slug)) return Task.CompletedTask;
 
@@ -151,6 +171,7 @@ else
 
     private Task DeleteAsync(TemplateItem item)
     {
+        if (!Session.IsAdmin) return Task.CompletedTask;
         Registry.DeleteGlobal(item.Slug);
         if (_selected == item) _selected = null;
         Reload();

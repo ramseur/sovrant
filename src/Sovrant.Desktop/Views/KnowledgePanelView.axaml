@@ -15,23 +15,17 @@
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Artifacts}"
                     Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="📐  Code Templates"
+                    Command="{Binding NavigateCommand}" CommandParameter="Guidelines"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Guidelines}"
+                    Foreground="{DynamicResource TextPrimary}" />
             <Button Content="📝  Documents"
                     Command="{Binding NavigateCommand}" CommandParameter="Documents"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Documents}"
-                    Foreground="{DynamicResource TextPrimary}" />
-            <Button Content="🛠  Tools"
-                    Command="{Binding NavigateCommand}" CommandParameter="Tools"
-                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Tools}"
-                    Foreground="{DynamicResource TextPrimary}" />
-            <Button Content="📜  Skills"
-                    Command="{Binding NavigateCommand}" CommandParameter="Skills"
-                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Skills}"
                     Foreground="{DynamicResource TextPrimary}" />
             <Button Content="🧠  Memory"
                     Command="{Binding NavigateCommand}" CommandParameter="Memory"
@@ -39,11 +33,17 @@
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Memory}"
                     Foreground="{DynamicResource TextPrimary}" />
-            <Button Content="📐  Code Templates"
-                    Command="{Binding NavigateCommand}" CommandParameter="Guidelines"
+            <Button Content="📜  Skills"
+                    Command="{Binding NavigateCommand}" CommandParameter="Skills"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Guidelines}"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Skills}"
+                    Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="🛠  Tools"
+                    Command="{Binding NavigateCommand}" CommandParameter="Tools"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Tools}"
                     Foreground="{DynamicResource TextPrimary}" />
         </StackPanel>
     </ScrollViewer>

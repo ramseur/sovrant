@@ -66,8 +66,14 @@ public sealed partial class ProcessAgent : IAgent
                 return AgentResult.Fail(task.Id, "Failed to start agent process.");
 
             // Write task as JSON to stdin and close it to signal EOF.
+            // The process may exit before reading stdin (e.g. a quick command that ignores it),
+            // so swallow the broken-pipe IOException — stdout/stderr still capture the output.
             var taskJson = JsonSerializer.Serialize(new { id = task.Id, prompt = task.Prompt });
-            await process.StandardInput.WriteLineAsync(taskJson.AsMemory(), ct).ConfigureAwait(false);
+            try
+            {
+                await process.StandardInput.WriteLineAsync(taskJson.AsMemory(), ct).ConfigureAwait(false);
+            }
+            catch (IOException) { }
             process.StandardInput.Close();
 
             // Read stdout and stderr concurrently.

@@ -22,7 +22,7 @@ public partial class DeleteConfirmDialog : Window
         {
             BodyText.Text = $"This will permanently delete \"{itemName}\" and all of its data. This action cannot be undone.";
             HintText.Text = $"Type \"{itemName}\" to confirm:";
-            ConfirmInput.Watermark = itemName;
+            ConfirmInput.PlaceholderText = itemName;
         }
         else
         {

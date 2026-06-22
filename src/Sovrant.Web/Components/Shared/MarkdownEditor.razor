@@ -19,10 +19,13 @@
             }
         </div>
         <div class="md-editor-toolbar-right">
-            <span class="md-editor-wordcount">@_wordCount words</span>
-            <button class="btn-outline btn-sm" type="button" @onclick="TogglePreview">
-                @(_showPreview ? "Hide preview" : "Show preview")
-            </button>
+            @if (IsMarkdown)
+            {
+                <span class="md-editor-wordcount">@_wordCount words</span>
+                <button class="btn-outline btn-sm" type="button" @onclick="TogglePreview">
+                    @(_showPreview ? "Hide preview" : "Show preview")
+                </button>
+            }
             @if (OnCancel.HasDelegate)
             {
                 <button class="btn-outline btn-sm" type="button" @onclick="OnCancel">Cancel</button>
@@ -59,13 +62,20 @@
     [Parameter] public bool ReadOnly { get; set; }
     [Parameter] public string MinHeight { get; set; } = "420px";
     [Parameter] public string? Title { get; set; }
+    /// <summary>Monaco language identifier. Defaults to "markdown". Use "json", "plaintext", etc. for other content.</summary>
+    [Parameter] public string Language { get; set; } = "markdown";
+    /// <summary>When true, validates that content starts with YAML frontmatter containing a name field. Defaults to true.</summary>
+    [Parameter] public bool RequireFrontmatter { get; set; } = true;
+
+    private bool IsMarkdown => string.Equals(Language, "markdown", StringComparison.OrdinalIgnoreCase);
 
     private static readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions().Build();
 
     private readonly string _editorId = $"md-editor-{Guid.NewGuid():N}";
     private StandaloneCodeEditor? _editor;
-    private bool _showPreview = true;
+    private bool _showPreview;
+    private bool _previewInitialized;
     private string _previewHtml = string.Empty;
     private int _wordCount;
     private string? _validationError;
@@ -74,10 +84,16 @@
 
     protected override void OnParametersSet()
     {
+        if (!_previewInitialized)
+        {
+            _showPreview = IsMarkdown;
+            _previewInitialized = true;
+        }
+
         if (!string.Equals(_currentValue, Value, StringComparison.Ordinal))
         {
             _currentValue = Value ?? string.Empty;
-            UpdatePreview(_currentValue);
+            if (IsMarkdown) UpdatePreview(_currentValue);
             if (_editor is not null)
             {
                 _ = _editor.SetValue(_currentValue);
@@ -88,7 +104,7 @@
     private StandaloneEditorConstructionOptions GetEditorOptions(StandaloneCodeEditor editor) => new()
     {
         Value = _currentValue,
-        Language = "markdown",
+        Language = Language,
         Theme = "vs-dark",
         AutomaticLayout = true,
         WordWrap = "on",
@@ -108,8 +124,8 @@
         if (ValueChanged.HasDelegate)
             await ValueChanged.InvokeAsync(_currentValue);
 
-        ValidateFrontmatter(_currentValue);
-        await DebouncedPreview(_currentValue);
+        if (RequireFrontmatter) ValidateFrontmatter(_currentValue);
+        if (IsMarkdown) await DebouncedPreview(_currentValue);
     }
 
     private async Task DebouncedPreview(string value)

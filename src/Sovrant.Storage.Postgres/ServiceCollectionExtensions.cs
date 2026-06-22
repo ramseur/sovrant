@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Sovrant.Runtime.Knowledge;
 using Sovrant.Runtime.Mcp;
@@ -64,4 +65,31 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static ISchemaInitializer CreateSchemaInitializer(string connectionString)
         => new PostgresSchemaInitializer(new PostgresConnectionFactory(connectionString));
+
+    /// <summary>
+    /// Tests whether a connection can be opened using the given connection string.
+    /// Returns true on success, false on any failure (does not throw).
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Connection probe must never throw — any failure (auth, network, bad host) maps to false so the UI can surface a friendly error.")]
+    public static async Task<bool> CanConnectAsync(string connectionString, CancellationToken ct = default)
+    {
+        try
+        {
+            using var conn = new Npgsql.NpgsqlConnection(connectionString);
+            await conn.OpenAsync(ct).ConfigureAwait(false);
+            return true;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// Initializes the base Sovrant schema only, excluding the Supabase Auth Extension.
+    /// Use for standalone PostgreSQL deployments.
+    /// </summary>
+    public static async Task InitializeBaseSchemaAsync(string connectionString, CancellationToken ct = default)
+    {
+        var initializer = new PostgresSchemaInitializer(new PostgresConnectionFactory(connectionString));
+        await initializer.InitializeBaseOnlyAsync(ct).ConfigureAwait(false);
+    }
 }

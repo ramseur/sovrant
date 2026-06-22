@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!--
@@ -8,11 +8,11 @@
       CA1848  LoggerMessage delegates excessive for debug/info in client code
       CA1873  Logging arg evaluation OK in non-hot paths
     -->
-    <NoWarn>CA1034;CA1812;CA1031;CA1848;CA1873;CA1054;CA1055;CA1056;CA1819</NoWarn>
+    <NoWarn>$(NoWarn);CA1034;CA1812;CA1031;CA1848;CA1873;CA1054;CA1055;CA1056;CA1819</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
   </ItemGroup>
 
   <ItemGroup>

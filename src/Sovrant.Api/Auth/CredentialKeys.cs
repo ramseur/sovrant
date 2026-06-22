@@ -36,6 +36,11 @@ public static class CredentialKeys
     /// <summary>Bearer token for authenticating with the remote server.</summary>
     public const string RemoteApiToken = "sovrant.remote.api_token";
 
+    // ── System Integrations — PostgreSQL (standalone) ────────────────────────
+
+    /// <summary>Standalone PostgreSQL connection string (Npgsql format, e.g. <c>Host=localhost;Database=sovrant;Username=postgres;Password=…</c>).</summary>
+    public const string PostgresConnectionUrl = "system.postgres.connection_url";
+
     // ── System Integrations — Supabase ────────────────────────────────────────
 
     /// <summary>Supabase project URL (e.g. <c>https://xyz.supabase.co</c>).</summary>
@@ -44,6 +49,6 @@ public static class CredentialKeys
     /// <summary>Supabase service role key (secret — full DB access, admin-only).</summary>
     public const string SupabaseServiceRoleKey = "system.supabase.service_role_key";
 
-    /// <summary>Active database backend: "sqlite" (default) or "supabase".</summary>
+    /// <summary>Active database backend: "sqlite" (default), "postgres" (standalone PostgreSQL), or "supabase".</summary>
     public const string DatabaseBackend = "system.database_backend";
 }
