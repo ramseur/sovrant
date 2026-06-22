@@ -332,9 +332,13 @@ public sealed class CommandCenterAggregator
     private static bool ShouldMask(bool isPrivate, string? ownerUserId, string? viewerUserId)
     {
         if (!isPrivate) return false;
-        if (string.IsNullOrEmpty(ownerUserId)) return false;
-        if (string.IsNullOrEmpty(viewerUserId)) return true;
-        return !string.Equals(ownerUserId, viewerUserId, StringComparison.Ordinal);
+        // Unmask only when the viewer is the confirmed, non-empty owner.
+        // Records with an empty ownerUserId (migrated legacy rows) are masked —
+        // we cannot confirm ownership so we err on the side of privacy.
+        if (!string.IsNullOrEmpty(ownerUserId) &&
+            string.Equals(ownerUserId, viewerUserId, StringComparison.Ordinal))
+            return false;
+        return true;
     }
 
     private static string Truncate(string s, int max)
