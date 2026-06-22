@@ -1551,6 +1551,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     /// </summary>
     private static string FriendlyProviderName(Sovrant.Api.Providers.ILlmProvider provider)
     {
+        // Named providers (e.g. OllamaProvider) may use localhost, so check the provider
+        // name first to avoid misidentifying them as generic "Local".
+        if (string.Equals(provider.Name, "ollama", StringComparison.OrdinalIgnoreCase)) return "Ollama";
         var host = provider.BaseUrl.Host;
         if (host.Contains("openrouter", StringComparison.OrdinalIgnoreCase)) return "OpenRouter";
         if (host.Contains("openai", StringComparison.OrdinalIgnoreCase)) return "OpenAI";
