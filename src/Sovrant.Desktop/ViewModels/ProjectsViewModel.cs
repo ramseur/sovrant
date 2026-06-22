@@ -15,7 +15,11 @@ public partial class ProjectsViewModel : ViewModelBase
     private readonly ActiveContextViewModel _activeContext;
     private readonly List<ProjectItemViewModel> _allProjects = [];
 
-    private static readonly string PersonalWorkspaceId = WorkspaceIdentity.DefaultPersonal();
+    // Resolved at call-time from App.SovrantUserId (which is updated after auth login).
+    // A static readonly field computed at class-load time would capture the pre-auth
+    // OS identity (Environment.UserName) instead of the token-authenticated user ID,
+    // causing a FK violation because the workspace was created under the auth'd ID.
+    private static string PersonalWorkspaceId => WorkspaceIdentity.DefaultPersonalFor(App.SovrantUserId);
 
     [ObservableProperty]
     private string _newProjectName = string.Empty;

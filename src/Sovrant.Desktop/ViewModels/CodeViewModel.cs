@@ -84,7 +84,7 @@ public partial class CodeViewModel : ViewModelBase
             var scope = new ArtifactScope
             {
                 WorkspaceId = string.IsNullOrEmpty(_activeContext.ActiveWorkspaceId)
-                    ? WorkspaceIdentity.DefaultPersonal()
+                    ? WorkspaceIdentity.DefaultPersonalFor(App.SovrantUserId)
                     : _activeContext.ActiveWorkspaceId,
                 ProjectId = string.IsNullOrEmpty(_activeContext.ActiveProjectId)
                     ? ArtifactScope.DefaultProjectId

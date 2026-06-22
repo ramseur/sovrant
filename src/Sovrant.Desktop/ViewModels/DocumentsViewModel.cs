@@ -332,7 +332,7 @@ public partial class DocumentsViewModel : ViewModelBase
                 format = overridden;
 
             var workspaceId = string.IsNullOrWhiteSpace(_activeContext.ActiveWorkspaceId)
-                ? WorkspaceIdentity.DefaultPersonal()
+                ? WorkspaceIdentity.DefaultPersonalFor(App.SovrantUserId)
                 : _activeContext.ActiveWorkspaceId;
             var projectId = string.IsNullOrWhiteSpace(_activeContext.ActiveProjectId)
                 ? ArtifactScope.DefaultProjectId
