@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <!-- Suppress rules that don't apply cleanly to this domain model layer. -->
-    <NoWarn>CA1034;CA1710;CA1000;CA2225;CA1716</NoWarn>
+    <NoWarn>$(NoWarn);CA1034;CA1710;CA1000;CA2225;CA1716</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

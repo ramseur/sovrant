@@ -17,7 +17,7 @@
       CA1848  High-perf logging not required in startup path
       CA1873  Logging arg evaluation fine at startup
     -->
-    <NoWarn>CA2007;CA1034;CA1812;CA1515;CA1720;CA1056;CA1054;CA1308;CA1848;CA1873</NoWarn>
+    <NoWarn>$(NoWarn);CA2007;CA1034;CA1812;CA1515;CA1720;CA1056;CA1054;CA1308;CA1848;CA1873</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

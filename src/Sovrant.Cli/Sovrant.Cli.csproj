@@ -21,7 +21,7 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>sovrant</AssemblyName>
     <!-- Console EXE entry point — suppress ConfigureAwait warning (CA2007) -->
-    <NoWarn>CA2007</NoWarn>
+    <NoWarn>$(NoWarn);CA2007</NoWarn>
   </PropertyGroup>
 
 </Project>

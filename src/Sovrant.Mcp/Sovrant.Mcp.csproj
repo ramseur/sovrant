@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <!-- Console EXE hosts the stdio transport â€” suppress ConfigureAwait warning (CA2007) -->
-    <NoWarn>CA2007</NoWarn>
+    <NoWarn>$(NoWarn);CA2007</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
