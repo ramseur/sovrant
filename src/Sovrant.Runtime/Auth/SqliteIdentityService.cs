@@ -116,18 +116,12 @@ internal sealed partial class SqliteIdentityService : IIdentityService
         if (!isFirst && !await IsRegistrationOpenAsync(ct).ConfigureAwait(false))
             return new RegisterResult(false, null, null, null, "Registration is closed.");
 
-        // Derive a username from the email local part
-        var username = SanitizeUsername(email.Split('@')[0]);
-        // Ensure uniqueness
-        if (await _users.GetByUsernameAsync(username, ct).ConfigureAwait(false) is not null)
-            username = $"{username}_{GenerateShortId()}";
-
         var role = isFirst ? "admin" : "user";
 
         User user;
         try
         {
-            user = await _users.CreateAsync(username, email, role, ct: ct).ConfigureAwait(false);
+            user = await _users.CreateAsync(email, role, ct: ct).ConfigureAwait(false);
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode == 19) // SQLITE_CONSTRAINT (unique)
         {
@@ -378,18 +372,6 @@ internal sealed partial class SqliteIdentityService : IIdentityService
     private static DateTimeOffset ParseTs(string s) =>
         DateTimeOffset.Parse(s, System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal);
-
-    private static string SanitizeUsername(string raw)
-    {
-        var sb = new System.Text.StringBuilder();
-        foreach (var c in raw)
-        {
-            if (char.IsLetterOrDigit(c) || c == '.' || c == '_' || c == '-')
-                sb.Append(c);
-        }
-        var result = sb.ToString().Trim('.', '_', '-');
-        return result.Length == 0 ? "user" : result[..Math.Min(result.Length, 40)];
-    }
 
     private static string GenerateShortId()
     {

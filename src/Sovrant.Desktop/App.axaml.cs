@@ -353,7 +353,7 @@ public partial class App : Application
                     var userService = _serviceProvider.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
                     var user = await userService.GetAsync(SovrantUserId).ConfigureAwait(false);
                     if (user is null)
-                        await userService.CreateAsync(SovrantUserId, userId: SovrantUserId).ConfigureAwait(false);
+                        await userService.CreateAsync(userId: SovrantUserId).ConfigureAwait(false);
 
                     var workspaceService = _serviceProvider.GetRequiredService<Sovrant.Runtime.Workspaces.IWorkspaceService>();
                     var personal = await workspaceService.GetPersonalAsync(SovrantUserId).ConfigureAwait(false);

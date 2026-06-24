@@ -35,17 +35,14 @@ public sealed class AuthTokenTests : IClassFixture<SovrantWebAppFactory>
 
         Assert.NotNull(profile);
         Assert.Equal(user.UserId, profile!.UserId);
-        Assert.Equal("auth-token-alice", profile.Username);
     }
 
     [Fact]
     public async Task RevokedToken_Returns401()
     {
-        var (_, plaintext) = await IssueAsync("auth-token-revoked");
+        var (user, plaintext) = await IssueAsync("auth-token-revoked");
         var tokens = _factory.Services.GetRequiredService<ITokenService>();
-        var users = _factory.Services.GetRequiredService<IUserService>();
-        var u = await users.GetByUsernameAsync("auth-token-revoked");
-        var listed = await tokens.ListAsync(u!.UserId);
+        var listed = await tokens.ListAsync(user.UserId);
         await tokens.RevokeAsync(listed[0].TokenId);
 
         var resp = await SendWithToken(HttpMethod.Get, "/v1/users/me", plaintext);
@@ -77,7 +74,7 @@ public sealed class AuthTokenTests : IClassFixture<SovrantWebAppFactory>
         var users = _factory.Services.GetRequiredService<IUserService>();
         var tokens = _factory.Services.GetRequiredService<ITokenService>();
 
-        var user = await users.GetByUsernameAsync(username) ?? await users.CreateAsync(username, role: role);
+        var user = await users.GetAsync(username) ?? await users.CreateAsync(userId: username, role: role);
         var issued = await tokens.IssueAsync(user.UserId, name: "test");
         return (user, issued.Plaintext);
     }

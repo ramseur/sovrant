@@ -325,7 +325,7 @@
         await WorkspaceService.AddMemberAsync(_configWorkspace.WorkspaceId, user.UserId, role);
         _newMemberEmail = string.Empty;
         _configMembers = await LoadMemberRowsAsync(_configWorkspace.WorkspaceId);
-        _status = $"{user.Email ?? user.Username} added as {role}.";
+        _status = $"{user.Email ?? user.UserId} added as {role}.";
     }
 
     private async Task RemoveMemberAsync(MemberRow member)
@@ -345,7 +345,7 @@
             var user = await UserService.GetAsync(m.UserId);
             rows.Add(new MemberRow(
                 UserId: m.UserId,
-                DisplayName: user?.Email ?? user?.Username ?? m.UserId,
+                DisplayName: user?.Email ?? m.UserId,
                 Role: m.Role));
         }
         return rows;

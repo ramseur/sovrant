@@ -108,7 +108,6 @@ public sealed class MeRoutesTests : IClassFixture<SovrantWebAppFactory>
         var profile = await resp.Content.ReadFromJsonAsync<ProfileDto>();
         Assert.NotNull(profile);
         Assert.Equal(alice.user.UserId, profile!.UserId);
-        Assert.Equal("me-profile-alice", profile.Username);
     }
 
     [Fact]
@@ -126,7 +125,7 @@ public sealed class MeRoutesTests : IClassFixture<SovrantWebAppFactory>
         var users = _factory.Services.GetRequiredService<IUserService>();
         var tokens = _factory.Services.GetRequiredService<ITokenService>();
 
-        var user = await users.GetByUsernameAsync(username) ?? await users.CreateAsync(username);
+        var user = await users.GetAsync(username) ?? await users.CreateAsync(userId: username);
         var issued = await tokens.IssueAsync(user.UserId, name: "bootstrap");
         return (user, issued.Plaintext);
     }

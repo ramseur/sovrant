@@ -63,7 +63,7 @@
                         <div class="memory-card">
                             <div class="memory-content">
                                 <div class="memory-text">
-                                    <strong>@(u.Email ?? u.Username)</strong>
+                                    <strong>@(u.Email ?? u.UserId)</strong>
                                     <span class="outcome-badge @StatusClass(u.Status)">@u.Status</span>
                                     @if (u.Role == "admin")
                                     {
@@ -144,7 +144,7 @@
                     <option value="">— select user —</option>
                     @foreach (var u in _users.Where(u => u.Status == "active"))
                     {
-                        <option value="@u.UserId">@(u.Email ?? u.Username)</option>
+                        <option value="@u.UserId">@(u.Email ?? u.UserId)</option>
                     }
                 </select>
             </div>
@@ -225,11 +225,11 @@
     }
 
     private void RequestDisable(User u) =>
-        _deleteModal.Show("User", u.Email ?? u.Username,
+        _deleteModal.Show("User", u.Email ?? u.UserId,
             () => DisableAsync(u.UserId), requireTypeName: false, verb: "Disable");
 
     private void RequestHardDelete(User u) =>
-        _deleteModal.Show("User", u.Email ?? u.Username,
+        _deleteModal.Show("User", u.Email ?? u.UserId,
             () => HardDeleteAsync(u.UserId), requireTypeName: true, verb: "Delete");
 
     private async Task DisableAsync(string userId)

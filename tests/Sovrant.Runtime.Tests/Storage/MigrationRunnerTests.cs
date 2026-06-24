@@ -25,7 +25,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
     public async Task AllMigrations_RunSuccessfully()
     {
         await _provider.InitializeAsync();
-        Assert.Equal(42, _provider.SchemaVersion);
+        Assert.Equal(43, _provider.SchemaVersion);
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
     {
         await _provider.InitializeAsync();
         await _provider.InitializeAsync();
-        Assert.Equal(42, _provider.SchemaVersion);
+        Assert.Equal(43, _provider.SchemaVersion);
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
 
         // Verify tables exist by checking the DB file was created and schema version is correct.
         Assert.True(File.Exists(_dbPath));
-        Assert.Equal(42, _provider.SchemaVersion);
+        Assert.Equal(43, _provider.SchemaVersion);
     }
 
     [Fact]
@@ -78,8 +78,8 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
         using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = """
-                INSERT INTO users (user_id, username, role, status) VALUES ('alice', 'alice', 'user', 'active');
-                INSERT INTO users (user_id, username, role, status) VALUES ('bob',   'bob',   'user', 'active');
+                INSERT INTO users (user_id, role, status) VALUES ('alice', 'user', 'active');
+                INSERT INTO users (user_id, role, status) VALUES ('bob',   'user', 'active');
                 INSERT INTO workspaces (workspace_id, type, name, slug, owner_id)
                 VALUES ('ws-personal-alice', 'personal', 'alice', 'personal-alice', 'alice');
 
@@ -160,8 +160,8 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
         using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = """
-                INSERT INTO users (user_id, username, role, status, created_at)
-                VALUES ('boot-admin', 'boot-admin', 'admin', 'active', '2020-01-01T00:00:00Z');
+                INSERT INTO users (user_id, role, status, created_at)
+                VALUES ('boot-admin', 'admin', 'active', '2020-01-01T00:00:00Z');
 
                 INSERT INTO sessions (session_id, user_id, status)
                 VALUES ('legacy_1', '', 'ended'),
@@ -246,7 +246,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
     {
         // First boot: apply migrations normally.
         await _provider.InitializeAsync();
-        Assert.Equal(42, _provider.SchemaVersion);
+        Assert.Equal(43, _provider.SchemaVersion);
 
         var factory = (ISqliteConnectionFactory)_provider;
 
@@ -288,7 +288,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
         using var probe = factory.CreateConnection();
         var runner = new MigrationRunner(NullLogger<MigrationRunner>.Instance);
         var version = runner.RunPendingMigrations(probe);
-        Assert.Equal(42, version);
+        Assert.Equal(43, version);
     }
 
     private static string FindMigrationFile(string name)

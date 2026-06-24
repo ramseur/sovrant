@@ -63,13 +63,12 @@ internal static class UserRoutes
     {
         ArgumentNullException.ThrowIfNull(req);
         if (!ctx.IsAdmin()) return Forbidden();
-        if (string.IsNullOrWhiteSpace(req.Username))
-            return Results.BadRequest(new { error = "username is required." });
+        if (string.IsNullOrWhiteSpace(req.Email))
+            return Results.BadRequest(new { error = "email is required." });
 
         try
         {
             var user = await users.CreateAsync(
-                username: req.Username,
                 email: req.Email,
                 role: req.Role ?? "user",
                 team: req.Team,
@@ -96,8 +95,7 @@ internal static class UserRoutes
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
         {
-            // 19 = SQLITE_CONSTRAINT — username or email uniqueness collision.
-            return Results.Conflict(new { error = "A user with that username or email already exists." });
+            return Results.Conflict(new { error = "A user with that email already exists." });
         }
     }
 
@@ -153,7 +151,6 @@ internal static class UserRoutes
         {
             var updated = await users.UpdateAsync(
                 userId: id,
-                username: req.Username,
                 email: req.Email,
                 role: req.Role,
                 team: req.Team,
@@ -170,7 +167,7 @@ internal static class UserRoutes
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
         {
-            return Results.Conflict(new { error = "A user with that username or email already exists." });
+            return Results.Conflict(new { error = "A user with that email already exists." });
         }
     }
 
@@ -277,9 +274,6 @@ internal static class UserRoutes
 
 internal sealed class CreateUserRequest
 {
-    [JsonPropertyName("username")]
-    public string? Username { get; init; }
-
     [JsonPropertyName("email")]
     public string? Email { get; init; }
 
@@ -292,9 +286,6 @@ internal sealed class CreateUserRequest
 
 internal sealed class UpdateUserRequest
 {
-    [JsonPropertyName("username")]
-    public string? Username { get; init; }
-
     [JsonPropertyName("email")]
     public string? Email { get; init; }
 

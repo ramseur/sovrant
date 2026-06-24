@@ -225,7 +225,7 @@ public sealed class CommandCenterAggregator
             {
                 var user = await _users.GetAsync(id, ct).ConfigureAwait(false);
                 if (user is not null)
-                    result[id] = user.Email ?? user.Username;
+                    result[id] = user.Email ?? user.UserId;
             }
             catch (Exception ex) when (LogUserResolveFailed(_logger, id, ex)) { }
         }

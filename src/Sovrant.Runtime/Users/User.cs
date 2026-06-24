@@ -4,18 +4,13 @@ namespace Sovrant.Runtime.Users;
 
 /// <summary>
 /// A user account. Phase 37 — user management API surface over the Phase 32
-/// <c>users</c> table. The <c>user_id</c> is server-generated for users created
-/// through the API; the auto-seeded default user (from <c>SOVRANT_USER_ID</c>
-/// or the OS username) keeps its existing identifier for backwards compatibility.
+/// <c>users</c> table. After V043 the <c>user_id</c> equals the user's email
+/// for auth-registered users; OS-seeded identities keep their existing value.
 /// </summary>
 public sealed record User
 {
     [JsonPropertyName("user_id")]
     public required string UserId { get; init; }
-
-    /// <summary>Slug-like unique identifier (matches <c>^[a-zA-Z0-9._-]{1,64}$</c>).</summary>
-    [JsonPropertyName("username")]
-    public required string Username { get; init; }
 
     [JsonPropertyName("email")]
     public string? Email { get; init; }
@@ -41,9 +36,6 @@ public sealed record UserProfile
 {
     [JsonPropertyName("user_id")]
     public required string UserId { get; init; }
-
-    [JsonPropertyName("username")]
-    public required string Username { get; init; }
 
     [JsonPropertyName("email")]
     public string? Email { get; init; }

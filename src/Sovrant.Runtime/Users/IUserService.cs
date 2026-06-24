@@ -10,17 +10,17 @@ public interface IUserService
     // ── CRUD ───────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Creates a user. The <paramref name="userId"/> is server-generated when omitted
-    /// (preferred). Validates <paramref name="username"/> against the slug pattern
-    /// and the optional <paramref name="email"/> against a basic shape check.
+    /// Creates a user. When <paramref name="email"/> is provided and
+    /// <paramref name="userId"/> is omitted, the email is used as the user_id
+    /// (auth-registered users). Pass an explicit <paramref name="userId"/> for
+    /// OS-seeded dev identities that have no email.
     /// </summary>
     /// <exception cref="ArgumentException">Validation failed.</exception>
     /// <exception cref="Microsoft.Data.Sqlite.SqliteException">
-    /// Unique violation (username or email already exists). Surfaced to the caller
+    /// Unique violation (email already exists). Surfaced to the caller
     /// so the route layer can map to <c>409 Conflict</c>.
     /// </exception>
     Task<User> CreateAsync(
-        string username,
         string? email = null,
         string role = "user",
         string? team = null,
@@ -29,9 +29,6 @@ public interface IUserService
 
     /// <summary>Gets a user by ID. Returns <c>null</c> when not found.</summary>
     Task<User?> GetAsync(string userId, CancellationToken ct = default);
-
-    /// <summary>Gets a user by username. Returns <c>null</c> when not found.</summary>
-    Task<User?> GetByUsernameAsync(string username, CancellationToken ct = default);
 
     /// <summary>Gets a user by email address. Returns <c>null</c> when not found.</summary>
     Task<User?> GetByEmailAsync(string email, CancellationToken ct = default);
@@ -52,7 +49,6 @@ public interface IUserService
     /// <exception cref="ArgumentException">Validation failed.</exception>
     Task<User?> UpdateAsync(
         string userId,
-        string? username = null,
         string? email = null,
         string? role = null,
         string? team = null,

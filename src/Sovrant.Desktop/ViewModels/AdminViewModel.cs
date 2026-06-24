@@ -158,7 +158,7 @@ public partial class AdminViewModel : ViewModelBase
     {
         Status = string.Empty;
         var ok = await _identity.ApproveUserAsync(user.UserId).ConfigureAwait(true);
-        Status = ok ? $"{user.Email ?? user.Username} approved." : "Approval failed — user may no longer be pending.";
+        Status = ok ? $"{user.Email ?? user.UserId} approved." : "Approval failed — user may no longer be pending.";
         await LoadAsync().ConfigureAwait(true);
     }
 
@@ -167,10 +167,10 @@ public partial class AdminViewModel : ViewModelBase
     {
         if (user.UserId == _principal.UserId) return;
         if (ConfirmDisableAsync is not null &&
-            !await ConfirmDisableAsync("User", user.Email ?? user.Username)) return;
+            !await ConfirmDisableAsync("User", user.Email ?? user.UserId)) return;
         Status = string.Empty;
         await _users.DeactivateAsync(user.UserId).ConfigureAwait(true);
-        Status = $"{user.Email ?? user.Username} disabled.";
+        Status = $"{user.Email ?? user.UserId} disabled.";
         await LoadAsync().ConfigureAwait(true);
     }
 
@@ -179,10 +179,10 @@ public partial class AdminViewModel : ViewModelBase
     {
         if (user.UserId == _principal.UserId) return;
         if (ConfirmDeleteAsync is not null &&
-            !await ConfirmDeleteAsync("User", user.Email ?? user.Username)) return;
+            !await ConfirmDeleteAsync("User", user.Email ?? user.UserId)) return;
         Status = string.Empty;
         await _users.HardDeleteAsync(user.UserId).ConfigureAwait(true);
-        Status = $"{user.Email ?? user.Username} permanently deleted.";
+        Status = $"{user.Email ?? user.UserId} permanently deleted.";
         await LoadAsync().ConfigureAwait(true);
     }
 
@@ -191,7 +191,7 @@ public partial class AdminViewModel : ViewModelBase
     {
         Status = string.Empty;
         await _users.ReactivateAsync(user.UserId).ConfigureAwait(true);
-        Status = $"{user.Email ?? user.Username} reactivated.";
+        Status = $"{user.Email ?? user.UserId} reactivated.";
         await LoadAsync().ConfigureAwait(true);
     }
 
@@ -356,7 +356,7 @@ public partial class AdminViewModel : ViewModelBase
             var user = await _users.GetAsync(m.UserId);
             ConfigWorkspaceMembers.Add(new ConfigWorkspaceMemberRow(
                 UserId: m.UserId,
-                DisplayName: user?.Email ?? user?.Username ?? m.UserId,
+                DisplayName: user?.Email ?? m.UserId,
                 Email: user?.Email ?? string.Empty,
                 Role: m.Role));
         }

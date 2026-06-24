@@ -28,8 +28,8 @@ public sealed class MemoryInjectorTests : IAsyncDisposable
         using var conn = ((ISqliteConnectionFactory)_provider).CreateConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            INSERT OR IGNORE INTO users (user_id, username, role, status, created_at, updated_at)
-            VALUES ($id, $id, 'user', 'active',
+            INSERT OR IGNORE INTO users (user_id, role, status, created_at, updated_at)
+            VALUES ($id, 'user', 'active',
                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
             """;

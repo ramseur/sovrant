@@ -331,7 +331,7 @@ public static class Program
         var userService = services.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
         var user = await userService.GetAsync(userId).ConfigureAwait(false);
         if (user is null)
-            await userService.CreateAsync(userId, userId: userId).ConfigureAwait(false);
+            await userService.CreateAsync(userId: userId).ConfigureAwait(false);
 
         var workspaceService = services.GetRequiredService<Sovrant.Runtime.Workspaces.IWorkspaceService>();
         var personal = await workspaceService.GetPersonalAsync(userId).ConfigureAwait(false);

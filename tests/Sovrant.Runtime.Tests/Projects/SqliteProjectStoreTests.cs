@@ -45,8 +45,8 @@ public sealed class SqliteProjectStoreTests : IAsyncDisposable
         using var connection = ((ISqliteConnectionFactory)_provider).CreateConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            INSERT OR IGNORE INTO users (user_id, username, role, status, created_at, updated_at)
-            VALUES ($id, $id, 'user', 'active',
+            INSERT OR IGNORE INTO users (user_id, role, status, created_at, updated_at)
+            VALUES ($id, 'user', 'active',
                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
             """;

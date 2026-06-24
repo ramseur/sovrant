@@ -9,6 +9,23 @@ Versions correspond to tags on the `development` branch.
 
 ## [Unreleased]
 
+### Added
+
+- **V043 migration: email as user_id** — replaces opaque `usr_{hex}` PKs with the user's email address across all FK and soft-reference columns (`workspace_members`, `project_members`, `api_tokens`, `user_roles`, `auth_credentials`, `sessions`, `agent_runs`, `user_preferences`, `provider_profiles`, `swarm_events`, `workspace_memory`, `workspace_settings`, and more). Personal workspace IDs are updated in tandem (`ws-personal-usr_abc` → `ws-personal-john-example.com`). The `username` column is dropped from the `users` table (table recreation required due to SQLite UNIQUE column drop restriction).
+- **MigrationRunner `-- sovrant:no-fk` directive** — migration SQL files that begin with `-- sovrant:no-fk` have `PRAGMA foreign_keys = OFF/ON` applied outside the transaction, enabling PK cascade rewrites that SQLite otherwise prohibits inside transactions.
+
+### Changed
+
+- **`IUserService.CreateAsync` signature** — removed `username` parameter; auth-registered users now use their email as `user_id` directly. OS-seeded dev identities use the explicit `userId` override.
+- **`User` and `UserProfile` records** — `Username` property removed; display patterns now use `email ?? userId`.
+- **`IUserService` — `GetByUsernameAsync` removed**, `UpdateAsync` no longer accepts `username`.
+- **`POST /v1/users` admin route** — `username` field removed from request body; `email` is now required.
+
+### Fixed
+
+- **Provider label showed "Local" instead of "Ollama/OpenRouter"** — `FriendlyProviderName` now checks `provider.Name` before falling back to host-URL matching; `SmartRouter` is pinned to the correct provider on startup, settings save, and wizard completion.
+- **FK error 19 on project creation** — `ProjectsViewModel.PersonalWorkspaceId` was a `static readonly` field evaluated at class-load time using `Environment.UserName` instead of the post-auth `App.SovrantUserId`; changed to a property.
+
 ---
 
 ## [1.3.0] — 2026-06-22
