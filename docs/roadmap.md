@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-06-10 (Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
+**Last updated:** 2026-06-24 (Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -210,6 +210,8 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Recent chats time grouping — organize the session list in the sidebar into labeled time buckets rather than a flat chronological list; groups: **Today**, **Previous 7 days**, **Previous 30 days**, then one collapsible group per calendar month (e.g. "May 2026", "April 2026"); group headers are sticky/pinned as the user scrolls; empty groups are hidden; the active session is highlighted within its group; Web (`Sidebar.razor`) and Desktop (`SidebarViewModel` + `SidebarView.axaml`) parity; no new API endpoint needed — `created_at` is already returned in session list queries | Phase 121 | Medium |
 | Image generation and inline display — allow models that support image output (e.g. `dall-e-3`, `gpt-image-1`, `flux`, `stable-diffusion` via OpenRouter, or any provider that returns `image_url` / base64 in the response) to generate images mid-conversation; generated images are stored as chat artifacts (`Artifact` with `Kind = "image"`) and rendered inline in the chat transcript for both Web and Desktop; the message bubble shows the image directly below the assistant text that prompted it, with a "Save" button to download the full-resolution file; clicking the image opens a lightbox (Web) or a full-size viewer window (Desktop); admin configures which providers and models are image-capable; no new conversation format needed — the existing artifact pipeline handles the binary payload | Phase 122 | Medium |
 | Memory system — workspace memory as a first-class user feature with public/private scoping: users can add memory notes directly from the chat "＋ Remember" button (web and desktop) or from a dedicated Workspace tab on the Memory page; notes are injected into every future chat session; private notes are only injected for their owner, public notes are injected for all workspace members; V041 migration adds `owner_user_id` and `is_private` to `workspace_memory`; `ConversationRuntime` auto-resolves the session owner's personal workspace so injection is per-user in multi-user deployments rather than relying on a global env var | Phase 123 | Done |
+| File system access controls — admin-configurable directory allowlist and blocklist so Sovrant agents can only operate within declared paths; enforced at the tool level before Read/Write/Edit/Glob/Grep/Bash execute; denied accesses logged as `directory_access_denied` governance audit events; Governance page gains a "File System Access" section (Web + Desktop); V044 migration stores rules in `server_settings`; path traversal and symlink escapes are normalised before evaluation | Phase 124 | Planned |
+| Web search via integrations — move web search out of the hard-coded `WebSearchBackend` enum and into the Integration Gallery; add `IntegrationKind.HttpApi` for direct REST adapters (no MCP process); define `IWebSearchProvider` interface; ship DuckDuckGo (built-in free default), Brave, FireCrawl, Exa, Tavily as `HttpApi` catalog entries; add Crawl4AI as a scraper/fetcher integration; admin picks active search provider from Integrations page; remove `WebSearchBackend` enum; existing MCP search entries remain as alternatives; unit test coverage for WebFetchTool, search providers, and dispatch | Phase 125 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -11221,3 +11223,187 @@ Integration members participate in orchestration the same way local Claws do —
 - A mission started with an unavailable integration member logs `member_unavailable` and continues with the remaining members rather than failing the whole mission
 - Mission history (name, run-mode, status, timing) is visible in the Command Center for completed and in-progress missions
 - All existing orchestration, team, and agent tests continue to pass
+
+---
+
+## Phase 124 — File System Access Controls
+
+**Status:** Planned
+
+### Why
+
+Sovrant has full file system access by default — Read, Write, Edit, Glob, Grep, and Bash all operate on arbitrary paths. Users naturally assume this works, and it does, but there is currently no way for an admin to declare which directories Sovrant may or may not touch. The Governance page today only surfaces protected file globs (individual files that cannot be modified), not directory-level access boundaries.
+
+In practice this creates two problems:
+
+1. **Agents working in the wrong places.** An agent scaffolding a Node project can read or write anywhere on disk — including outside the intended workspace root — and there is no guard to stop it.
+2. **No admin visibility or control.** An admin deploying Sovrant in a shared environment has no way to say "agents may only operate under `C:\Projects`" or "agents must never touch `C:\Users\*\AppData`". The current protected-files list is too granular to solve this; you can't enumerate every sensitive path.
+
+### What ships
+
+**Directory access rules (new governance primitive)**
+
+Two complementary controls, configurable per deployment from the Governance page:
+
+| Control | Behaviour |
+|---|---|
+| **Allowed directories** | Explicit allowlist — Sovrant file tools may only operate under these paths. Supports glob patterns (`C:\Projects\**`, `/home/**`). Empty = unrestricted (current behaviour preserved for existing deployments). |
+| **Blocked directories** | Explicit blocklist — Sovrant file tools are always denied for these paths, even if an allowed-directory pattern would otherwise permit them. Useful for carving out sensitive subdirectories. |
+
+Rules are evaluated before any file-accessing tool call (Read, Write, Edit, Glob, Grep, and shell commands containing file paths). A denied access returns a `GovernanceVerdict.Block` — the tool call is rejected, a `governance` audit event is logged with `reason: directory_access_denied`, and the agent sees the denial as a tool error so it can surface it to the user rather than silently failing.
+
+**Governance page — File System Access section**
+
+The Governance admin page (Web + Desktop) gains a new "File System Access" section alongside the existing Protected Files panel:
+
+- **Allowed Directories** — textarea of one path pattern per line; empty means unrestricted
+- **Blocked Directories** — textarea of one path pattern per line
+- Save button persists both lists to DB (new `fs_access_rules` columns on the `audit_governance` settings table or a dedicated key in `server_settings`)
+- Live preview: as the admin types, a read-only panel shows how example paths would resolve (Allowed / Blocked / Unrestricted)
+
+**Path normalisation**
+
+All paths are normalised to absolute before matching so that relative paths (`../secret`) can't escape the declared boundaries. On Windows, drive-letter casing is folded. Symlinks are resolved before the check so a symlink pointing outside an allowed directory is also blocked.
+
+**Migration**
+
+V044 — add `fs_allowed_dirs` and `fs_blocked_dirs` columns (`TEXT`, default `''`) to `server_settings`. Existing deployments get empty strings (unrestricted), preserving current behaviour.
+
+### What stays out of scope
+
+- Per-user or per-workspace directory rules (admin-global only in this phase)
+- Network path restrictions (`\\server\share`) — covered separately by MCP trust rules
+- Audit of paths accessed by MCP tools — those are proxied through the trust layer already
+
+### Acceptance criteria
+
+- Admin sets `fs_allowed_dirs` to `/home/projects/**`; a Read call to `/etc/passwd` is blocked and logged as `directory_access_denied`; a Read call to `/home/projects/myapp/main.go` succeeds
+- Admin sets `fs_blocked_dirs` to `/home/projects/secrets/**`; a Write to `/home/projects/secrets/key.pem` is blocked even though the parent path is in the allowlist
+- Empty allowed-dirs list = unrestricted (no change to current behaviour); no existing tests break
+- Governance page shows the new section on both Web and Desktop; changes persist across restart
+- Denied accesses appear in the governance audit log visible on the Governance page
+- Path traversal attempts (`../../etc`) are normalised and evaluated correctly
+
+---
+
+## Phase 125 — Web Search via Integrations (Integration Gallery HTTP API Support)
+
+**Status:** Planned
+
+### Why
+
+Web search in Sovrant is currently a built-in tool with hard-coded backends selected by an enum (`Auto`, `Brave`, `Firecrawl`, `Native`, `Off`). The Brave and FireCrawl logic lives as inline HTTP calls inside `WebSearchTool.cs` — completely separate from the Integration Gallery. This creates two problems:
+
+**Admin control is missing.** There is no way for an admin to choose how their deployment searches the web. The backend is configured via an environment variable or DB setting pointing at one of a fixed list of options we hard-coded. If an organisation uses a different search API (Exa, Tavily, a self-hosted SearXNG, an internal enterprise search endpoint), there is no path to wire it in without modifying the source.
+
+**Integrations are MCP-only.** The Integration Gallery catalog (`IntegrationKind`) only models `McpHttp`, `McpStdio`, and `LlmProvider`. There is no concept of a direct HTTP API integration — a simple adapter that calls a REST endpoint with an API key, no MCP process involved. Brave and FireCrawl are exactly this shape, but they live outside the integration system entirely because the system can't represent them.
+
+The right model is: **integrations are not MCP-only**. An integration is any external service Sovrant connects to. Web search providers are integrations. The admin configures which one is active for their deployment from the Integrations page, the same place they configure everything else.
+
+### What ships
+
+**1. `IntegrationKind.HttpApi` — direct REST adapter**
+
+Extend the `IntegrationKind` enum with a new value: `HttpApi`. A `HttpApi` integration is a direct REST call — no MCP process spawned, no stdio, no SSE connection. The catalog entry describes the API endpoint pattern, the API key header name, and the credential key used to look up the stored secret. The `McpClientFactory` / `McpClientRegistry` is not involved; the integration calls the API directly via `IHttpClientFactory`.
+
+This is the primitive that Brave, FireCrawl, Exa, Tavily, and any future REST-only integration can use.
+
+**2. `IWebSearchProvider` interface**
+
+Define a thin interface that all search integrations implement:
+
+```csharp
+public interface IWebSearchProvider
+{
+    string IntegrationId { get; }
+    Task<IReadOnlyList<WebSearchResult>> SearchAsync(
+        string query, int maxResults, CancellationToken ct);
+}
+```
+
+First-party implementations:
+- `DuckDuckGoSearchProvider` — `HttpApi`, no API key, always available (built-in default)
+- `BraveSearchProvider` — `HttpApi`, requires `BRAVE_API_KEY`, replaces current inline Brave code
+- `FireCrawlSearchProvider` — `HttpApi`, requires `FIRECRAWL_API_KEY`, replaces current inline FireCrawl code
+- `ExaSearchProvider` — `HttpApi`, requires `EXA_API_KEY`
+- `TavilySearchProvider` — `HttpApi`, requires `TAVILY_API_KEY`
+
+Each is registered as a catalog entry in `IntegrationCatalog` under a new `IntegrationTier.Search` tier. Installing one stores the API key in the keystore; the active provider is a deployment-level setting.
+
+The existing `@modelcontextprotocol/server-brave-search`, `exa-mcp-server`, and `tavily-mcp` MCP catalog entries remain available for users who prefer the MCP path — they are now siblings to the `HttpApi` variants, not the only option.
+
+**3. Refactor `WebSearchTool` to dispatch via the active search integration**
+
+Remove the `WebSearchBackend` enum switch from `WebSearchTool.ExecuteAsync()`. Replace with a call to `IWebSearchProvider.SearchAsync()` on whichever provider is currently active:
+
+```
+Active search integration → IWebSearchProvider.SearchAsync() → WebSearchResult[]
+```
+
+The active provider is resolved from the integration system at request time (same pattern as credential resolution). If no provider is installed and active, the tool returns a clear message pointing the admin to Integrations.
+
+`NativeWebSearchInjector` is **unchanged** — it operates at the provider protocol level (OpenAI `web_search_preview`, Anthropic `web_search_20250305`), suppresses the function tool when active, and does not interact with the integration system. Native LLM search and integration-based search remain two parallel paths, as they are today.
+
+**4. Integrations page — Search tier**
+
+The Integrations page on both Web and Desktop gains a new "Search" section (alongside Automation and Platform). It lists all available search integrations with their status:
+
+| Integration | Kind | API Key | Status |
+|---|---|---|---|
+| DuckDuckGo | Built-in | None required | Active (default) |
+| Brave Search | HttpApi | `BRAVE_API_KEY` | Not installed / Active |
+| FireCrawl | HttpApi | `FIRECRAWL_API_KEY` | Not installed / Active |
+| Exa | HttpApi | `EXA_API_KEY` | Not installed / Active |
+| Tavily | HttpApi | `TAVILY_API_KEY` | Not installed / Active |
+| Brave Search MCP | McpStdio | `BRAVE_API_KEY` | Not installed / Active |
+| Exa MCP | McpStdio | `EXA_API_KEY` | Not installed / Active |
+| Tavily MCP | McpStdio | `TAVILY_API_KEY` | Not installed / Active |
+| Crawl4AI | HttpApi (self-hosted) | Optional token | Not installed / Active |
+
+Admins can mark one search integration as active. The active provider is used by `WebSearch` for all sessions. The `/websearch` slash command in chat lets individual users override the active provider for their session (existing behaviour preserved).
+
+DuckDuckGo is the built-in default — always available, no install, no API key. If a higher-quality provider is installed and set active, it takes over. If none is active, DuckDuckGo is the fallback.
+
+**5. Crawl4AI as a scraper/fetcher integration**
+
+Crawl4AI (https://docs.crawl4ai.com/) is an open-source, LLM-friendly web crawler that handles JavaScript rendering, structured extraction, and markdown conversion — capabilities the built-in `WebFetch` tool intentionally excludes (static HTML only, no JS).
+
+Add a `Crawl4AiProvider` catalog entry under a new `IntegrationTier.Search` with `IntegrationKind.HttpApi` pointing at the Crawl4AI REST API (self-hosted or cloud). When the integration is installed and active, the `WebFetch` tool gains an optional `use_crawl4ai: true` parameter that routes the fetch through Crawl4AI instead of the direct HTTP path. The direct HTTP path remains the default so existing behaviour is unchanged.
+
+Crawl4AI also optionally enhances `WebSearch` result fetching: when following a search result URL, Sovrant can use Crawl4AI to extract clean content from JS-heavy pages (news sites, SPAs, paywalled articles with free-tier access). This is opt-in per search session.
+
+The catalog entry includes:
+- `EndpointTemplate`: `https://{host}/crawl` (user provides their Crawl4AI host)
+- `ApiKeyLabel`: `API Token` (optional — Crawl4AI supports unauthenticated local deployments)
+- A "Self-hosted" badge in the UI since Crawl4AI is typically run locally via Docker
+
+**6. `WebFetchTool` and `WebSearchTool` unit test coverage**
+
+Add test files covering:
+
+- `WebFetchTool`: valid URL fetch (mocked HTTP), SSRF blocking (each RFC-1918 range, loopback, link-local), HTML tag stripping, bounded read and truncation, non-HTML passthrough, connection error wrapping
+- `DuckDuckGoSearchProvider`: successful parse, rate-limit 429 handling, empty results
+- `BraveSearchProvider`: API success, error response, missing key error
+- `WebSearchTool` dispatch: correct provider called, graceful "no active provider" message, `/websearch` session override
+
+**6. Remove the `WebSearchBackend` enum**
+
+Once all backends are integrations, the `WebSearchBackend` enum and `WebSearchOptions.Backend` configuration are removed. The env var `SOVRANT_WEB_SEARCH` is deprecated (warn on startup if set) with a migration note pointing to Integrations. Existing deployments with `BRAVE_API_KEY` or `FIRECRAWL_API_KEY` set get those providers auto-detected and pre-configured on first boot after the upgrade so no manual re-configuration is needed.
+
+### What stays out of scope
+
+- SearXNG self-hosted backend — remains a catalog stub; a community contributor can add a `SearXNGSearchProvider` using the new `HttpApi` kind without any core changes
+- Gemini native web search — blocked on the OpenAI shim; unrelated to this phase
+- JavaScript-rendered page fetching — separate phase; `WebFetch` stays as direct HTTP
+
+### Acceptance criteria
+
+- A fresh Sovrant install with no API keys: `WebSearch` returns DuckDuckGo results without configuration
+- Admin installs Brave Search (HttpApi) from Integrations and sets it active: `WebSearch` uses Brave; DuckDuckGo is no longer called
+- Admin installs Exa (HttpApi): same pattern
+- Admin installs Brave Search MCP: appears as an MCP tool alongside the `WebSearch` function tool; admin can choose which to use
+- `/websearch brave` in chat overrides the active provider for the session; other users' sessions are unaffected
+- `BRAVE_API_KEY` set in environment on upgrade: Brave HttpApi integration is auto-configured and active; no manual setup required
+- `SOVRANT_WEB_SEARCH` env var on upgrade: warning logged; existing behaviour preserved until admin migrates
+- `WebSearch` with no active provider and DuckDuckGo rate-limited: returns clear message pointing to Integrations
+- All unit tests pass; existing tests unbroken
