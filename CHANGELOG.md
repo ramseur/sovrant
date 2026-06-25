@@ -7,7 +7,9 @@ Versions correspond to tags on the `development` branch.
 
 ---
 
-## [Unreleased]
+## [1.4.0] — 2026-06-25
+
+> **Migration note:** V043 rewrites all `usr_{hex}` primary keys to email addresses and drops the `username` column via table recreation. Back up your database before upgrading any instance with existing users. The `POST /v1/users` request body and `GET /v1/users` response shape have changed (see **Changed** below).
 
 ### Added
 
