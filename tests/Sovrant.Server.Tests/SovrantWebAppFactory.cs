@@ -56,12 +56,7 @@ public sealed class SovrantWebAppFactory : WebApplicationFactory<Program>
                 var existing = users.GetAsync(seedUserId).GetAwaiter().GetResult();
                 if (existing is null)
                 {
-                    users.CreateAsync(
-                        username: seedUserId,
-                        email: null,
-                        role: "admin",
-                        team: null,
-                        userId: seedUserId).GetAwaiter().GetResult();
+                    users.CreateAsync(role: "admin", userId: seedUserId).GetAwaiter().GetResult();
                 }
 
                 var tokens = Server.Services.GetRequiredService<ITokenService>();

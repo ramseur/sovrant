@@ -197,7 +197,7 @@ public sealed class SessionOwnershipTests : IClassFixture<SovrantWebAppFactory>
         var users = _factory.Services.GetRequiredService<IUserService>();
         var tokens = _factory.Services.GetRequiredService<ITokenService>();
 
-        var user = await users.GetByUsernameAsync(username) ?? await users.CreateAsync(username, role: role);
+        var user = await users.GetAsync(username) ?? await users.CreateAsync(userId: username, role: role);
         var issued = await tokens.IssueAsync(user.UserId, name: "test");
         return (user, issued.Plaintext);
     }

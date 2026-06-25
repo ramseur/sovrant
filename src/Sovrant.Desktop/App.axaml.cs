@@ -297,6 +297,17 @@ public partial class App : Application
         {
             mutableAuth.ApiKey = config.ApiKey!;
             mutableAuth.BaseUrl = config.BaseUrl;
+
+            // Pin the SmartRouter to the provider matching config.BaseUrl so Ollama
+            // (cost=0) never silently wins over a configured cloud provider.
+            var router = _serviceProvider.GetService<Sovrant.Api.Routing.ISmartRouter>();
+            if (router is not null)
+            {
+                bool isLocal = config.BaseUrl is not null &&
+                               (config.BaseUrl.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                                config.BaseUrl.Host == "127.0.0.1");
+                await router.PinProviderAsync(isLocal ? "ollama" : "openai-compat").ConfigureAwait(true);
+            }
         }
 
         // ── 401 monitoring in remote mode ─────────────────────────────────────
@@ -342,7 +353,7 @@ public partial class App : Application
                     var userService = _serviceProvider.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
                     var user = await userService.GetAsync(SovrantUserId).ConfigureAwait(false);
                     if (user is null)
-                        await userService.CreateAsync(SovrantUserId, userId: SovrantUserId).ConfigureAwait(false);
+                        await userService.CreateAsync(userId: SovrantUserId).ConfigureAwait(false);
 
                     var workspaceService = _serviceProvider.GetRequiredService<Sovrant.Runtime.Workspaces.IWorkspaceService>();
                     var personal = await workspaceService.GetPersonalAsync(SovrantUserId).ConfigureAwait(false);

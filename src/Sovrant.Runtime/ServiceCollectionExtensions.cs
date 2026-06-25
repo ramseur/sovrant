@@ -679,6 +679,19 @@ public static class ServiceCollectionExtensions
 
         if (!string.IsNullOrEmpty(apiKey))
             config.ApiKey = apiKey;
+
+        // Pin the SmartRouter to the provider that matches the active profile's base URL.
+        // Without this, OllamaProvider (cost=0) wins the cost-scoring heuristic over any
+        // cloud provider whenever Ollama happens to be running on localhost — silently
+        // routing the user to their local machine instead of their configured provider.
+        var router = services.GetService<Sovrant.Api.Routing.ISmartRouter>();
+        if (router is not null)
+        {
+            bool isLocalUrl = config.BaseUrl is not null &&
+                              (config.BaseUrl.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                               config.BaseUrl.Host == "127.0.0.1");
+            await router.PinProviderAsync(isLocalUrl ? "ollama" : "openai-compat", ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>

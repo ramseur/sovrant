@@ -123,18 +123,17 @@ public partial class WorkspacesViewModel : ViewModelBase
     {
         if (SelectedWorkspace is null) return;
         var input = AddMemberUserId.Trim();
-        if (string.IsNullOrEmpty(input)) { StatusMessage = "Enter an email or username."; return; }
+        if (string.IsNullOrEmpty(input)) { StatusMessage = "Enter email address."; return; }
 
         try
         {
             var user = await _userService.GetByEmailAsync(input)
-                       ?? await _userService.GetByUsernameAsync(input)
                        ?? await _userService.GetAsync(input);
             if (user is null) { StatusMessage = $"User '{input}' not found."; return; }
 
             await _workspaceService.AddMemberAsync(SelectedWorkspace.Id, user.UserId, AddMemberRole);
             AddMemberUserId = string.Empty;
-            StatusMessage = $"Added {user.Email ?? user.Username} as {AddMemberRole}.";
+            StatusMessage = $"Added {user.Email ?? user.UserId} as {AddMemberRole}.";
             await LoadMembersAsync(SelectedWorkspace);
         }
         catch (Exception ex) { StatusMessage = $"Failed to add member: {ex.Message}"; }
@@ -203,7 +202,7 @@ public partial class WorkspacesViewModel : ViewModelBase
         {
             var user = await _userService.GetAsync(DesktopUserId);
             if (user is null)
-                await _userService.CreateAsync(DesktopUserId, userId: DesktopUserId);
+                await _userService.CreateAsync(userId: DesktopUserId);
 
             var personal = await _workspaceService.GetPersonalAsync(DesktopUserId);
             if (personal is null)
@@ -255,8 +254,7 @@ public partial class WorkspacesViewModel : ViewModelBase
                 {
                     UserId = m.UserId,
                     Email = user?.Email ?? string.Empty,
-                    Username = user?.Username ?? string.Empty,
-                    DisplayName = user?.Email ?? user?.Username ?? m.UserId,
+                    DisplayName = user?.Email ?? m.UserId,
                     Role = m.Role,
                     JoinedAt = m.JoinedAt,
                 });
@@ -310,7 +308,6 @@ public partial class WorkspaceMemberViewModel : ViewModelBase
 {
     [ObservableProperty] private string _userId = string.Empty;
     [ObservableProperty] private string _email = string.Empty;
-    [ObservableProperty] private string _username = string.Empty;
     [ObservableProperty] private string _displayName = string.Empty;
     [ObservableProperty] private WorkspaceRole _role;
     [ObservableProperty] private DateTimeOffset _joinedAt;

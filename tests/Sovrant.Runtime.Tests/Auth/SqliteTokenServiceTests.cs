@@ -46,7 +46,7 @@ public sealed class SqliteTokenServiceTests : IAsyncDisposable
     [Fact]
     public async Task Issue_ReturnsPlaintextOnceAndPersistsHashOnly()
     {
-        var u = await _users.CreateAsync("alice");
+        var u = await _users.CreateAsync(userId: "alice");
 
         var result = await _tokens.IssueAsync(u.UserId, name: "laptop", scopes: "read,write");
 
@@ -75,7 +75,7 @@ public sealed class SqliteTokenServiceTests : IAsyncDisposable
     [Fact]
     public async Task Issue_TwiceProducesDistinctTokensAndIds()
     {
-        var u = await _users.CreateAsync("bob");
+        var u = await _users.CreateAsync(userId: "bob");
 
         var a = await _tokens.IssueAsync(u.UserId);
         var b = await _tokens.IssueAsync(u.UserId);
@@ -101,7 +101,7 @@ public sealed class SqliteTokenServiceTests : IAsyncDisposable
     [Fact]
     public async Task Issue_RejectsExpiresInPast()
     {
-        var u = await _users.CreateAsync("past");
+        var u = await _users.CreateAsync(userId: "past");
         await Assert.ThrowsAsync<ArgumentException>(() =>
             _tokens.IssueAsync(u.UserId, expiresAt: DateTimeOffset.UtcNow.AddSeconds(-5)));
     }
@@ -109,7 +109,7 @@ public sealed class SqliteTokenServiceTests : IAsyncDisposable
     [Fact]
     public async Task Issue_RejectsOversizedNameAndScopes()
     {
-        var u = await _users.CreateAsync("oversize");
+        var u = await _users.CreateAsync(userId: "oversize");
         await Assert.ThrowsAsync<ArgumentException>(() =>
             _tokens.IssueAsync(u.UserId, name: new string('a', 65)));
         await Assert.ThrowsAsync<ArgumentException>(() =>
@@ -121,7 +121,7 @@ public sealed class SqliteTokenServiceTests : IAsyncDisposable
     [Fact]
     public async Task List_ReturnsMaskedTokensExcludingRevoked()
     {
-        var u = await _users.CreateAsync("lister");
+        var u = await _users.CreateAsync(userId: "lister");
         var first = await _tokens.IssueAsync(u.UserId, name: "first");
         var second = await _tokens.IssueAsync(u.UserId, name: "second");
         await _tokens.RevokeAsync(first.Token.TokenId);
@@ -144,8 +144,8 @@ public sealed class SqliteTokenServiceTests : IAsyncDisposable
     [Fact]
     public async Task List_OnlyReturnsTokensForRequestedUser()
     {
-        var alice = await _users.CreateAsync("scoped-a");
-        var bob = await _users.CreateAsync("scoped-b");
+        var alice = await _users.CreateAsync(userId: "scoped-a");
+        var bob = await _users.CreateAsync(userId: "scoped-b");
         await _tokens.IssueAsync(alice.UserId);
         await _tokens.IssueAsync(bob.UserId);
 
@@ -159,7 +159,7 @@ public sealed class SqliteTokenServiceTests : IAsyncDisposable
     [Fact]
     public async Task Revoke_MarksTokenRevoked_PreservesRow()
     {
-        var u = await _users.CreateAsync("rev");
+        var u = await _users.CreateAsync(userId: "rev");
         var issued = await _tokens.IssueAsync(u.UserId);
 
         Assert.True(await _tokens.RevokeAsync(issued.Token.TokenId));
@@ -177,7 +177,7 @@ public sealed class SqliteTokenServiceTests : IAsyncDisposable
     [Fact]
     public async Task Revoke_Idempotent()
     {
-        var u = await _users.CreateAsync("rev-twice");
+        var u = await _users.CreateAsync(userId: "rev-twice");
         var issued = await _tokens.IssueAsync(u.UserId);
 
         Assert.True(await _tokens.RevokeAsync(issued.Token.TokenId));
@@ -195,7 +195,7 @@ public sealed class SqliteTokenServiceTests : IAsyncDisposable
     [Fact]
     public async Task Resolve_ValidPlaintext_ReturnsTokenAndRole()
     {
-        var u = await _users.CreateAsync("resolver");
+        var u = await _users.CreateAsync(userId: "resolver");
         var issued = await _tokens.IssueAsync(u.UserId, name: "cli");
 
         var resolved = await _tokens.ResolveAsync(issued.Plaintext);
@@ -210,7 +210,7 @@ public sealed class SqliteTokenServiceTests : IAsyncDisposable
     [Fact]
     public async Task Resolve_AdminUser_ReturnsAdminRole()
     {
-        var u = await _users.CreateAsync("resolver-admin", role: "admin");
+        var u = await _users.CreateAsync(userId: "resolver-admin", role: "admin");
         var issued = await _tokens.IssueAsync(u.UserId);
 
         var resolved = await _tokens.ResolveAsync(issued.Plaintext);
@@ -222,7 +222,7 @@ public sealed class SqliteTokenServiceTests : IAsyncDisposable
     [Fact]
     public async Task Resolve_RevokedToken_ReturnsNull()
     {
-        var u = await _users.CreateAsync("resolver-rev");
+        var u = await _users.CreateAsync(userId: "resolver-rev");
         var issued = await _tokens.IssueAsync(u.UserId);
         await _tokens.RevokeAsync(issued.Token.TokenId);
 
@@ -233,7 +233,7 @@ public sealed class SqliteTokenServiceTests : IAsyncDisposable
     [Fact]
     public async Task Resolve_ExpiredToken_ReturnsNull()
     {
-        var u = await _users.CreateAsync("resolver-exp");
+        var u = await _users.CreateAsync(userId: "resolver-exp");
         var issued = await _tokens.IssueAsync(
             u.UserId,
             expiresAt: DateTimeOffset.UtcNow.AddHours(1));
@@ -255,7 +255,7 @@ public sealed class SqliteTokenServiceTests : IAsyncDisposable
     [Fact]
     public async Task Resolve_TokenForInactiveUser_ReturnsNull()
     {
-        var u = await _users.CreateAsync("resolver-inactive");
+        var u = await _users.CreateAsync(userId: "resolver-inactive");
         var issued = await _tokens.IssueAsync(u.UserId);
         await _users.DeactivateAsync(u.UserId);
 

@@ -185,7 +185,7 @@
                 if (w.Type == WorkspaceType.Personal && !string.IsNullOrEmpty(w.OwnerId))
                 {
                     var owner = await UserService.GetAsync(w.OwnerId);
-                    ownerDisplay = owner?.Email ?? owner?.Username;
+                    ownerDisplay = owner?.Email ?? owner?.UserId;
                 }
                 workspaceItems.Add(new WorkspaceItem
                 {
@@ -272,18 +272,17 @@
     private async Task AddMemberAsync(WorkspaceItem w)
     {
         var input = _addMemberUserId.Trim();
-        if (string.IsNullOrEmpty(input)) { _status = "Enter an email or username."; return; }
+        if (string.IsNullOrEmpty(input)) { _status = "Enter email address."; return; }
         if (!Enum.TryParse<WorkspaceRole>(_addMemberRole, out var role)) role = WorkspaceRole.Member;
         try
         {
             var user = await UserService.GetByEmailAsync(input)
-                       ?? await UserService.GetByUsernameAsync(input)
                        ?? await UserService.GetAsync(input);
             if (user is null) { _status = $"User '{input}' not found."; return; }
 
             await WorkspaceService.AddMemberAsync(w.Id, user.UserId, role);
             _addMemberUserId = string.Empty;
-            _status = $"Added {user.Email ?? user.Username} as {role}.";
+            _status = $"Added {user.Email ?? user.UserId} as {role}.";
             await ReloadMembersAsync(w);
         }
         catch (Exception ex) { _status = $"Failed to add member: {ex.Message}"; }
@@ -318,7 +317,7 @@
             list.Add(new MemberItem
             {
                 UserId = m.UserId,
-                DisplayName = user?.Email ?? user?.Username ?? m.UserId,
+                DisplayName = user?.Email ?? m.UserId,
                 Role = m.Role.ToString(),
                 JoinedAt = m.JoinedAt,
             });

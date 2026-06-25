@@ -657,6 +657,16 @@ public partial class SettingsViewModel : ViewModelBase
                 _authProvider.BaseUrl = null;
             }
 
+            // Pin the router to the provider matching the configured base URL so that
+            // OllamaProvider (cost=0) doesn't silently win over a cloud provider.
+            if (_router is not null)
+            {
+                bool isLocal = _config.BaseUrl is not null &&
+                               (_config.BaseUrl.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                                _config.BaseUrl.Host == "127.0.0.1");
+                await _router.PinProviderAsync(isLocal ? "ollama" : "openai-compat").ConfigureAwait(false);
+            }
+
             // Update sidebar display immediately.
             _sidebar.CurrentModel = SidebarViewModel.ShortenModelName(ModelName);
             _sidebar.CurrentProvider = SelectedProvider;

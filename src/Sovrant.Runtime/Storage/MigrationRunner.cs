@@ -43,6 +43,18 @@ internal sealed partial class MigrationRunner(ILogger logger)
 
             LogApplying(logger, m.Version, m.Description);
 
+            // Migrations that start with "-- sovrant:no-fk" need FK enforcement
+            // disabled for the duration of the migration (e.g. PK cascade rewrites).
+            // PRAGMA foreign_keys is a no-op inside a transaction in SQLite, so it
+            // must be executed on the connection before BeginTransaction().
+            bool disableFk = m.Sql.TrimStart().StartsWith("-- sovrant:no-fk", StringComparison.Ordinal);
+            if (disableFk)
+            {
+                using var off = connection.CreateCommand();
+                off.CommandText = "PRAGMA foreign_keys = OFF";
+                off.ExecuteNonQuery();
+            }
+
             using var tx = connection.BeginTransaction();
             using var cmd = connection.CreateCommand();
             cmd.Transaction = tx;
@@ -64,6 +76,14 @@ internal sealed partial class MigrationRunner(ILogger logger)
             record.ExecuteNonQuery();
 
             tx.Commit();
+
+            if (disableFk)
+            {
+                using var on = connection.CreateCommand();
+                on.CommandText = "PRAGMA foreign_keys = ON";
+                on.ExecuteNonQuery();
+            }
+
             LogApplied(logger, m.Version);
         }
 

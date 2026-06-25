@@ -9,7 +9,7 @@
     <!-- SQLitePCLRaw.lib.e_sqlite3 2.1.11 (GHSA-2m69-gcr7-jv3q) has no patched release yet;
          suppress NU1903 globally until the upstream fix ships. Remove once 2.1.12+ is available. -->
     <NoWarn>$(NoWarn);NU1903</NoWarn>
-    <Version>1.3.0</Version>
+    <Version>1.4.0</Version>
     <!-- Prevents MSB3492 "could not read cache file" errors when multiple projects
          share output paths during parallel solution builds on Windows. -->
     <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>

@@ -28,10 +28,6 @@ namespace Sovrant.Runtime.Users;
     Justification = "Database stores enum values as lowercase by convention.")]
 internal sealed partial class SqliteUserStore : IUserService
 {
-    // Slug-like — no whitespace, no shell metacharacters, no path separators.
-    [GeneratedRegex(@"^[a-zA-Z0-9._-]{1,64}$")]
-    private static partial Regex UsernameRegex();
-
     // Defensive email shape check — full RFC validation is out of scope.
     [GeneratedRegex(@"^[^@\s]{1,64}@[^@\s]{1,189}\.[^@\s]{1,64}$")]
     private static partial Regex EmailRegex();
@@ -58,8 +54,8 @@ internal sealed partial class SqliteUserStore : IUserService
         _logger = logger;
     }
 
-    [LoggerMessage(EventId = 3700, Level = LogLevel.Information, Message = "User created: {UserId} username={Username}")]
-    private static partial void LogUserCreated(ILogger logger, string userId, string username);
+    [LoggerMessage(EventId = 3700, Level = LogLevel.Information, Message = "User created: {UserId}")]
+    private static partial void LogUserCreated(ILogger logger, string userId);
 
     [LoggerMessage(EventId = 3701, Level = LogLevel.Information, Message = "User updated: {UserId}")]
     private static partial void LogUserUpdated(ILogger logger, string userId);
@@ -73,30 +69,26 @@ internal sealed partial class SqliteUserStore : IUserService
     // ── CRUD ───────────────────────────────────────────────────────────────
 
     public async Task<User> CreateAsync(
-        string username,
         string? email = null,
         string role = "user",
         string? team = null,
         string? userId = null,
         CancellationToken ct = default)
     {
-        ValidateUsername(username);
         ValidateEmail(email);
         ValidateRole(role);
         ValidateTeam(team);
 
-        // Server-generated ID by default. If a caller passes one (e.g. the
-        // SeedDefaultUser path that uses the OS username), validate it as
-        // a slug to prevent injection of arbitrary text into the PK.
+        // For auth-registered users the email IS the user_id (self-documenting FK).
+        // For OS-seeded dev identities pass an explicit userId with no email.
         var resolvedUserId = string.IsNullOrEmpty(userId)
-            ? GenerateUserId()
-            : ValidateAndReturn(userId);
+            ? string.IsNullOrEmpty(email) ? GenerateUserId() : email
+            : userId;
 
         var now = DateTimeOffset.UtcNow;
         var user = new User
         {
             UserId = resolvedUserId,
-            Username = username,
             Email = string.IsNullOrEmpty(email) ? null : email,
             Role = role,
             Team = string.IsNullOrEmpty(team) ? null : team,
@@ -108,11 +100,10 @@ internal sealed partial class SqliteUserStore : IUserService
         using var connection = _connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO users (user_id, username, email, role, team, status, created_at, updated_at)
-            VALUES ($id, $username, $email, $role, $team, $status, $created, $updated)
+            INSERT INTO users (user_id, email, role, team, status, created_at, updated_at)
+            VALUES ($id, $email, $role, $team, $status, $created, $updated)
             """;
         cmd.Parameters.AddWithValue("$id", user.UserId);
-        cmd.Parameters.AddWithValue("$username", user.Username);
         cmd.Parameters.AddWithValue("$email", (object?)user.Email ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$role", user.Role);
         cmd.Parameters.AddWithValue("$team", (object?)user.Team ?? DBNull.Value);
@@ -121,7 +112,7 @@ internal sealed partial class SqliteUserStore : IUserService
         cmd.Parameters.AddWithValue("$updated", Ts(user.UpdatedAt));
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
-        LogUserCreated(_logger, user.UserId, user.Username);
+        LogUserCreated(_logger, user.UserId);
         return user;
     }
 
@@ -132,25 +123,10 @@ internal sealed partial class SqliteUserStore : IUserService
         using var connection = _connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            SELECT user_id, username, email, role, team, status, created_at, updated_at
+            SELECT user_id, email, role, team, status, created_at, updated_at
             FROM users WHERE user_id = $id
             """;
         cmd.Parameters.AddWithValue("$id", userId);
-        using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        return await reader.ReadAsync(ct).ConfigureAwait(false) ? ReadUser(reader) : null;
-    }
-
-    public async Task<User?> GetByUsernameAsync(string username, CancellationToken ct = default)
-    {
-        if (string.IsNullOrEmpty(username)) return null;
-
-        using var connection = _connectionFactory.CreateConnection();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT user_id, username, email, role, team, status, created_at, updated_at
-            FROM users WHERE username = $username
-            """;
-        cmd.Parameters.AddWithValue("$username", username);
         using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         return await reader.ReadAsync(ct).ConfigureAwait(false) ? ReadUser(reader) : null;
     }
@@ -162,7 +138,7 @@ internal sealed partial class SqliteUserStore : IUserService
         using var connection = _connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            SELECT user_id, username, email, role, team, status, created_at, updated_at
+            SELECT user_id, email, role, team, status, created_at, updated_at
             FROM users WHERE email = $email
             """;
         cmd.Parameters.AddWithValue("$email", email);
@@ -193,7 +169,6 @@ internal sealed partial class SqliteUserStore : IUserService
             return new UserProfile
             {
                 UserId = user.UserId,
-                Username = user.Username,
                 Email = user.Email,
                 Role = user.Role,
                 Team = user.Team,
@@ -214,7 +189,6 @@ internal sealed partial class SqliteUserStore : IUserService
         return new UserProfile
         {
             UserId = user.UserId,
-            Username = user.Username,
             Email = user.Email,
             Role = user.Role,
             Team = user.Team,
@@ -237,7 +211,7 @@ internal sealed partial class SqliteUserStore : IUserService
         using var connection = _connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
         var sql = """
-            SELECT user_id, username, email, role, team, status, created_at, updated_at
+            SELECT user_id, email, role, team, status, created_at, updated_at
             FROM users
             WHERE 1=1
             """;
@@ -299,7 +273,6 @@ internal sealed partial class SqliteUserStore : IUserService
 
     public async Task<User?> UpdateAsync(
         string userId,
-        string? username = null,
         string? email = null,
         string? role = null,
         string? team = null,
@@ -309,24 +282,15 @@ internal sealed partial class SqliteUserStore : IUserService
         if (string.IsNullOrEmpty(userId))
             throw new ArgumentException("user_id is required.", nameof(userId));
 
-        // Validate only the fields that are being updated.
-        if (username is not null) ValidateUsername(username);
         if (email is not null) ValidateEmail(email);
         if (role is not null) ValidateRole(role);
         if (team is not null) ValidateTeam(team);
         if (status is not null) ValidateStatus(status);
 
-        // Build the SET clause from the non-null fields. All identifiers are
-        // string literals — never user-supplied — so this is injection-safe.
         var setClauses = new List<string>();
         using var connection = _connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
 
-        if (username is not null)
-        {
-            setClauses.Add("username = $username");
-            cmd.Parameters.AddWithValue("$username", username);
-        }
         if (email is not null)
         {
             setClauses.Add("email = $email");
@@ -615,22 +579,6 @@ internal sealed partial class SqliteUserStore : IUserService
         return $"usr_{Convert.ToHexStringLower(bytes)}";
     }
 
-    private static void ValidateUsername(string username)
-    {
-        if (string.IsNullOrEmpty(username))
-            throw new ArgumentException("username is required.", nameof(username));
-        if (!UsernameRegex().IsMatch(username))
-            throw new ArgumentException(
-                "username must match ^[a-zA-Z0-9._-]{1,64}$",
-                nameof(username));
-    }
-
-    private static string ValidateAndReturn(string userId)
-    {
-        ValidateUsername(userId); // same slug rules apply to user_id
-        return userId;
-    }
-
     private static void ValidateEmail(string? email)
     {
         if (string.IsNullOrEmpty(email)) return;
@@ -684,13 +632,12 @@ internal sealed partial class SqliteUserStore : IUserService
     private static User ReadUser(SqliteDataReader reader) => new()
     {
         UserId = reader.GetString(0),
-        Username = reader.GetString(1),
-        Email = reader.IsDBNull(2) ? null : reader.GetString(2),
-        Role = reader.GetString(3),
-        Team = reader.IsDBNull(4) ? null : reader.GetString(4),
-        Status = reader.GetString(5),
-        CreatedAt = ParseTs(reader.GetString(6)),
-        UpdatedAt = ParseTs(reader.GetString(7)),
+        Email = reader.IsDBNull(1) ? null : reader.GetString(1),
+        Role = reader.GetString(2),
+        Team = reader.IsDBNull(3) ? null : reader.GetString(3),
+        Status = reader.GetString(4),
+        CreatedAt = ParseTs(reader.GetString(5)),
+        UpdatedAt = ParseTs(reader.GetString(6)),
     };
 
     private static string Ts(DateTimeOffset dto) =>
