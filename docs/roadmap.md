@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-06-25 (Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
+**Last updated:** 2026-06-25 (Phase 127 planned — Supabase RLS. Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -213,6 +213,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | File system access controls — admin-configurable directory allowlist and blocklist so Sovrant agents can only operate within declared paths; enforced at the tool level before Read/Write/Edit/Glob/Grep/Bash execute; denied accesses logged as `directory_access_denied` governance audit events; Governance page gains a "File System Access" section (Web + Desktop); V044 migration stores rules in `server_settings`; path traversal and symlink escapes are normalised before evaluation | Phase 124 | Planned |
 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator while agent works; clean visual hierarchy where the agent's answer is prominent and tool work is subordinate; consistent Web + Desktop parity | Phase 126 | Planned |
 | Web search via integrations — move web search out of the hard-coded `WebSearchBackend` enum and into the Integration Gallery; add `IntegrationKind.HttpApi` for direct REST adapters (no MCP process); define `IWebSearchProvider` interface; ship DuckDuckGo (built-in free default), Brave, FireCrawl, Exa, Tavily as `HttpApi` catalog entries; add Crawl4AI as a scraper/fetcher integration; admin picks active search provider from Integrations page; remove `WebSearchBackend` enum; existing MCP search entries remain as alternatives; unit test coverage for WebFetchTool, search providers, and dispatch | Phase 125 | Planned |
+| Supabase Row Level Security — enable RLS on all privacy-sensitive tables in the Supabase migration and write policies for the `owner_user_id` model; service-role key retains full unrestricted access (Supabase bypasses RLS for service role by design); anon/authenticated JWT callers are scoped to their own data at the database layer; complements the existing application-layer query filters | Phase 127 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -11516,3 +11517,60 @@ Both surfaces share the same visual language (strip line format, icon set, statu
 - The answer text is readable without scrolling past tool blocks on a typical 1080p screen
 - Web and Desktop render the strip with the same visual language
 - No regression in tool confirmation flow (Allow once / Allow for turn / Deny buttons still work within the strip)
+
+---
+
+## Phase 127 — Supabase Row Level Security
+
+**Status:** Planned
+
+### Why
+
+Sovrant enforces the `owner_user_id` privacy model at the application layer — query filters in `SqliteWorkspaceStore`, `SqliteMemoryStore`, and similar stores ensure users only see their own private data. In a Supabase deployment this is sufficient for all traffic that goes through the Sovrant API, but it leaves a gap:
+
+- **Supabase dashboard queries** (developers, DBAs) run directly against the database and bypass the application layer entirely
+- **Edge Functions** calling `supabase.from(...)` use the user's JWT and get no automatic scoping unless RLS is enabled
+- **Service-role callers** (the Sovrant server itself, admin scripts) need unrestricted access and must not be blocked
+
+RLS closes the first two gaps without touching the third — Supabase's service role bypasses RLS by design. This means the Sovrant API server, admin tooling, and migration scripts all continue to work with zero changes; only JWT-authenticated direct-DB callers gain a scoping boundary.
+
+The commented-out policy skeletons already exist in `db/supabase/migrations/20260625000000_initial_schema.sql`. This phase activates them properly with a second migration file admins can apply when they are ready.
+
+### What ships
+
+**A new Supabase migration** (`db/supabase/migrations/20260625000001_enable_rls.sql`) that:
+
+1. Enables RLS on the four privacy-sensitive tables:
+   - `workspace_memory`
+   - `session_summaries`
+   - `learned_patterns`
+   - `instincts`
+
+2. Creates read policies scoped to the calling JWT's `auth.uid()`:
+
+| Table | Policy | Rule |
+|---|---|---|
+| `workspace_memory` | `workspace_memory_read` | `is_private = 0 OR owner_user_id = auth.uid()::text` |
+| `session_summaries` | `session_summaries_read` | `owner_user_id = '' OR owner_user_id = auth.uid()::text` |
+| `learned_patterns` | `learned_patterns_read` | `owner_user_id = '' OR owner_user_id = auth.uid()::text` |
+| `instincts` | `instincts_read` | `owner_user_id = '' OR owner_user_id = auth.uid()::text` |
+
+3. Creates permissive write policies that allow authenticated callers to insert/update/delete their own rows and rows with `owner_user_id = ''` (shared/legacy).
+
+**Service-role key is unaffected** — Supabase's service role always bypasses RLS. The Sovrant API server uses the service role key for all database operations, so no application code changes are needed.
+
+**Docs** — `docs/persistence.md` updated to note that the RLS migration is available as an optional `supabase db push` step; the commented-out stubs in the initial migration file are removed now that a proper migration exists.
+
+### What stays out of scope
+
+- RLS on session or audit tables — those are queried by the application with scoped filters already; RLS on high-write tables adds overhead without meaningful security gain for service-role deployments
+- Per-workspace RLS policies — the current `owner_user_id` model is user-scoped; workspace-level isolation is a separate governance layer
+- Standalone PostgreSQL RLS — standalone deployments use application-layer auth exclusively; service-role bypass does not apply in the same way
+
+### Acceptance criteria
+
+- After applying the migration, a direct Supabase client authenticated as user A cannot read user B's private `workspace_memory` rows via the dashboard or an Edge Function
+- User A can read all `workspace_memory` rows where `is_private = 0` regardless of `owner_user_id`
+- The Sovrant API server (service-role key) continues to read and write all rows without restriction
+- `supabase db push` applies the migration cleanly with no errors on a fresh project and on an existing project that already has the initial schema
+- All existing Sovrant API tests pass unchanged — no application code is modified by this phase
