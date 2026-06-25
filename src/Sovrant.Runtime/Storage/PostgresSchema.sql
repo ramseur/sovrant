@@ -1,5 +1,5 @@
 -- Sovrant PostgreSQL schema (Supabase-compatible).
--- Mirrors V001–V042 SQLite migrations. Safe to run multiple times (idempotent).
+-- Mirrors V001–V043 SQLite migrations. Safe to run multiple times (idempotent).
 -- Timestamps are stored as TEXT (ISO 8601) for wire-compatibility with SQLite stores.
 -- BYTEA used for encrypted blobs (credentials table).
 -- V035/V037 (built-in knowledge seed data) are handled by the app at startup, not here.
@@ -11,7 +11,6 @@
 
 CREATE TABLE IF NOT EXISTS users (
     user_id       TEXT PRIMARY KEY,
-    username      TEXT NOT NULL,
     email         TEXT,
     role          TEXT NOT NULL DEFAULT 'user',
     team          TEXT,
@@ -19,8 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT,
     created_at    TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
     updated_at    TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
-    CONSTRAINT users_username_unique UNIQUE (username),
-    CONSTRAINT users_email_unique    UNIQUE (email)
+    CONSTRAINT users_email_unique UNIQUE (email)
 );
 
 CREATE TABLE IF NOT EXISTS workspaces (
@@ -803,10 +801,9 @@ BEGIN
         ELSE 'user'
     END;
 
-    INSERT INTO public.users (user_id, username, email, role, status, created_at, updated_at)
+    INSERT INTO public.users (user_id, email, role, status, created_at, updated_at)
     VALUES (
         NEW.id::TEXT,
-        COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1)),
         NEW.email,
         _role,
         'active',
@@ -886,6 +883,17 @@ CREATE OR REPLACE TRIGGER on_auth_user_updated
 
 -- CREATE POLICY workspace_memory_owner ON workspace_memory
 --     USING (is_private = 0 OR owner_user_id = auth.uid()::text);
+
+-- ── V043 upgrade: drop username column (existing deployments) ─────────────────
+-- Run this block once on any Postgres/Supabase instance that was created from a
+-- pre-V043 version of this schema. New installations created from this file will
+-- never have the column, so the IF EXISTS guard makes this safe to run on both.
+--
+-- Note: for Supabase deployments the user_id remains the GoTrue UUID (not the
+-- email). V043's PK rewrite (usr_{hex} → email) only affects SQLite standalone
+-- deployments. The only Postgres-visible change from V043 is the username drop.
+
+ALTER TABLE public.users DROP COLUMN IF EXISTS username;
 
 -- CREATE POLICY session_summaries_owner ON session_summaries
 --     USING (owner_user_id = '' OR owner_user_id = auth.uid()::text);
