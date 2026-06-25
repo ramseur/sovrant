@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-06-24 (Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
+**Last updated:** 2026-06-25 (Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -211,6 +211,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Image generation and inline display — allow models that support image output (e.g. `dall-e-3`, `gpt-image-1`, `flux`, `stable-diffusion` via OpenRouter, or any provider that returns `image_url` / base64 in the response) to generate images mid-conversation; generated images are stored as chat artifacts (`Artifact` with `Kind = "image"`) and rendered inline in the chat transcript for both Web and Desktop; the message bubble shows the image directly below the assistant text that prompted it, with a "Save" button to download the full-resolution file; clicking the image opens a lightbox (Web) or a full-size viewer window (Desktop); admin configures which providers and models are image-capable; no new conversation format needed — the existing artifact pipeline handles the binary payload | Phase 122 | Medium |
 | Memory system — workspace memory as a first-class user feature with public/private scoping: users can add memory notes directly from the chat "＋ Remember" button (web and desktop) or from a dedicated Workspace tab on the Memory page; notes are injected into every future chat session; private notes are only injected for their owner, public notes are injected for all workspace members; V041 migration adds `owner_user_id` and `is_private` to `workspace_memory`; `ConversationRuntime` auto-resolves the session owner's personal workspace so injection is per-user in multi-user deployments rather than relying on a global env var | Phase 123 | Done |
 | File system access controls — admin-configurable directory allowlist and blocklist so Sovrant agents can only operate within declared paths; enforced at the tool level before Read/Write/Edit/Glob/Grep/Bash execute; denied accesses logged as `directory_access_denied` governance audit events; Governance page gains a "File System Access" section (Web + Desktop); V044 migration stores rules in `server_settings`; path traversal and symlink escapes are normalised before evaluation | Phase 124 | Planned |
+| Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator while agent works; clean visual hierarchy where the agent's answer is prominent and tool work is subordinate; consistent Web + Desktop parity | Phase 126 | Planned |
 | Web search via integrations — move web search out of the hard-coded `WebSearchBackend` enum and into the Integration Gallery; add `IntegrationKind.HttpApi` for direct REST adapters (no MCP process); define `IWebSearchProvider` interface; ship DuckDuckGo (built-in free default), Brave, FireCrawl, Exa, Tavily as `HttpApi` catalog entries; add Crawl4AI as a scraper/fetcher integration; admin picks active search provider from Integrations page; remove `WebSearchBackend` enum; existing MCP search entries remain as alternatives; unit test coverage for WebFetchTool, search providers, and dispatch | Phase 125 | Planned |
 
 ### v1.0 release polish ✅
@@ -11407,3 +11408,111 @@ Once all backends are integrations, the `WebSearchBackend` enum and `WebSearchOp
 - `SOVRANT_WEB_SEARCH` env var on upgrade: warning logged; existing behaviour preserved until admin migrates
 - `WebSearch` with no active provider and DuckDuckGo rate-limited: returns clear message pointing to Integrations
 - All unit tests pass; existing tests unbroken
+
+---
+
+## Phase 126 — Chat Conversation UX: Collapsed Work Strips & Clear Hierarchy
+
+**Status:** Planned
+
+### Why
+
+When an agent works through a multi-step task it may make 10–20 tool calls before producing an answer. Today each tool call renders as its own bordered box stacked vertically under the assistant message. Five file reads, two greps, and a write produces eight separate boxes. The user can collapse individual results, but the boxes themselves are always present — a visual list that grows with every action.
+
+Two problems follow from this:
+
+**Users get lost in the work.** The natural language answer — what the user actually asked for — sits at the bottom of a column of tool blocks. On a long agentic run the answer is scrolled off screen by the time it arrives. There is no clear signal that says "here is the result; all that other stuff is how we got there."
+
+**There is no at-a-glance summary.** The action summary header exists ("Read ×2 · Grep") but it is just text inside the message card. While the agent is running mid-turn, the user sees individual tool blocks appearing one by one with no sense of overall progress — they cannot tell whether the agent is halfway done or has just started.
+
+The fix is a two-level progressive disclosure model: the agent's work is grouped into a single collapsible strip by default, the answer is visually prominent above or beside it, and users expand as much detail as they want.
+
+### What ships
+
+**1. Work strip — collapsed by default**
+
+All tool calls in a single assistant turn are grouped into one collapsible **work strip** instead of N separate boxes. The strip occupies a single line when collapsed:
+
+```
+▶  7 actions  ·  Read ×3  ·  Grep ×2  ·  Write ×1  ·  WebSearch ×1  ·  2.4 s
+```
+
+Clicking the strip expands it to show the individual tool calls. The strip does not appear at all if the turn had zero tool calls (pure conversational reply).
+
+The strip sits *between* the agent's intent narration (if any) and its final answer text, so the visual reading order is:
+
+1. What the agent said it would do (intent narration — already exists)
+2. Collapsed strip — the work, out of the way
+3. The answer — prominent, readable without scrolling past tools
+
+**2. Two-level expand**
+
+| Level | What is shown | Trigger |
+|---|---|---|
+| **Collapsed** (default) | Single strip line: icon counts + elapsed time | — |
+| **Tool list** | One row per tool call: icon + name + status badge + one-line result preview | Click strip header |
+| **Full detail** | Full input parameters + complete output for one tool | Click individual tool row |
+
+This matches the mental model users already have: "I want to see what happened" → expand strip. "I want to see exactly what that file read returned" → expand the specific row.
+
+Only one tool can be in full-detail view at a time (clicking a second tool collapses the first). This prevents the expand-everything wall-of-text failure mode.
+
+**3. Live in-progress indicator**
+
+While the agent is mid-turn and tools are executing, the work strip shows an animated in-progress state instead of a count:
+
+```
+⏳  Reading files...              (animates while running)
+⏳  Searching the web...
+⏳  Writing src/index.ts...
+```
+
+The status text is driven by the current `ToolUseRequested` event — it names the active tool in plain language. When the turn completes the strip collapses to the final summary line. The user always knows what is happening right now and approximately how much has been done.
+
+**4. Answer-first layout**
+
+The agent's final text response (the answer) is rendered before the work strip in the visual hierarchy, or at minimum at the same prominence level. This is a layout change, not a streaming change — text still streams in real time. Once the turn completes the card reflows so the answer is at the top and the work strip is below it.
+
+On very long responses the work strip is pinned just below the intent narration, and the answer flows below the strip — the strip never pushes the answer off screen.
+
+**5. Error and partial-failure states**
+
+If any tool call in a turn returned an error, the work strip shows a warning indicator:
+
+```
+▶  7 actions  ·  1 error  ·  2.4 s     ⚠
+```
+
+Expanding the strip highlights the failed tool row in red. This replaces the current inline error banner which appears at the bottom of the message and is easy to miss.
+
+**6. Web + Desktop parity**
+
+Web (`Chat.razor` / `ChatMessage.razor`):
+- Replace the `foreach` over `.ToolUses` that renders individual `.tool-use-block` divs with a single `<WorkStrip>` Blazor component
+- `<WorkStrip>` handles its own expand/collapse state and the two-level detail view
+- Replace the native `<details><summary>Result</summary>` HTML with a custom implementation so both levels have consistent styling and animation
+
+Desktop (`ChatView.axaml` / `ToolUseViewModel`):
+- Replace the `ItemsControl` of tool use boxes with a `WorkStripControl` Avalonia control
+- `ToolUseViewModel.IsExpanded` is preserved but now scoped within the strip's expand context
+- Strip-level `IsExpanded` and `ActiveDetailToolId` properties on `MessageViewModel`
+
+Both surfaces share the same visual language (strip line format, icon set, status badge colours) so the experience is identical whether the user is on Web or Desktop.
+
+### What stays out of scope
+
+- Replay / history view of tool calls across sessions (separate memory/history phase)
+- Tool call diffs (showing before/after for Write/Edit — useful but a separate feature)
+- Grouping by sub-agent in a team run (team runs have a separate UI surface)
+
+### Acceptance criteria
+
+- A turn with 10 tool calls renders as a single collapsed strip line, not 10 boxes
+- Clicking the strip reveals all 10 tool rows in one-line format
+- Clicking one tool row reveals full input + output; clicking another collapses the first and expands the second
+- While the agent is mid-turn the strip shows the current tool name in animated "doing X" format
+- A turn with one or more tool errors shows the ⚠ indicator on the collapsed strip; error rows are highlighted red when expanded
+- A turn with zero tool calls has no strip — only the answer text
+- The answer text is readable without scrolling past tool blocks on a typical 1080p screen
+- Web and Desktop render the strip with the same visual language
+- No regression in tool confirmation flow (Allow once / Allow for turn / Deny buttons still work within the strip)
