@@ -76,6 +76,8 @@ public partial class SettingsViewModel : ViewModelBase
     private bool _isDarkMode = Application.Current?.RequestedThemeVariant == ThemeVariant.Dark;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ApiKeyLabel))]
+    [NotifyPropertyChangedFor(nameof(ApiKeyWatermark))]
     private string _selectedProvider = "OpenAI";
 
     [ObservableProperty]
@@ -427,10 +429,19 @@ public partial class SettingsViewModel : ViewModelBase
 
     // ─── Provider Profiles ─────────────────────────────
 
+    private static bool IsLocalProvider(string provider) =>
+        provider is "Ollama" or "LM Studio";
+
+    public string ApiKeyLabel =>
+        IsLocalProvider(SelectedProvider) ? "API Key (optional)" : "API Key";
+
+    public string ApiKeyWatermark =>
+        IsLocalProvider(SelectedProvider) ? "Not required for local providers" : "sk-...";
+
     [RelayCommand]
     private async Task AddProviderAsync()
     {
-        if (string.IsNullOrWhiteSpace(ApiKey))
+        if (string.IsNullOrWhiteSpace(ApiKey) && !IsLocalProvider(SelectedProvider))
         {
             StatusMessage = "Please enter an API key.";
             return;
