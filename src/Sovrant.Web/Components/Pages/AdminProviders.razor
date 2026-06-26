@@ -154,6 +154,11 @@
 
         await LoadProfilesAsync();
         _allWorkspaces = (await WorkspaceService.ListAllAsync()).ToList();
+
+        // Pre-select the personal workspace; all others are opt-in.
+        var personal = _allWorkspaces.FirstOrDefault(w => w.Type == Sovrant.Runtime.Workspaces.WorkspaceType.Personal);
+        if (personal is not null)
+            _selectedWorkspaceIds.Add(personal.WorkspaceId);
     }
 
     private void OnProviderChanged()

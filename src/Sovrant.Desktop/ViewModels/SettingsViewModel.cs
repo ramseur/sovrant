@@ -197,7 +197,11 @@ public partial class SettingsViewModel : ViewModelBase
                 {
                     WorkspaceItems.Clear();
                     foreach (var ws in workspaces)
-                        WorkspaceItems.Add(new WorkspaceSelectItem { WorkspaceId = ws.WorkspaceId, Name = ws.Name });
+                    {
+                        // Personal workspace is pre-selected; all others are opt-in.
+                        var isPersonal = ws.Type == Runtime.Workspaces.WorkspaceType.Personal;
+                        WorkspaceItems.Add(new WorkspaceSelectItem { WorkspaceId = ws.WorkspaceId, Name = ws.Name, IsSelected = isPersonal });
+                    }
                 });
             }
             catch { /* workspaces unavailable — omit the picker */ }
