@@ -364,7 +364,9 @@ public partial class SettingsViewModel : ViewModelBase
 
             var modelsUrl = baseUrl.TrimEnd('/') + "/models";
             using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(modelsUrl));
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", new string(apiKey.Where(c => c < 128).ToArray()).Trim());
+            var safeKey = new string(apiKey.Where(c => c < 128).ToArray()).Trim();
+            if (!string.IsNullOrEmpty(safeKey))
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", safeKey);
 
             var response = await http.SendAsync(request, cts.Token);
             response.EnsureSuccessStatusCode();
