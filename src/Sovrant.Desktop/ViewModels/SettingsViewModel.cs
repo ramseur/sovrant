@@ -300,9 +300,18 @@ public partial class SettingsViewModel : ViewModelBase
         {
             List<string> models;
 
+            // The form ApiKey is cleared on provider switch before this fires.
+            // Fall back to the saved credential for any existing profile that
+            // matches the selected provider so the model list still loads.
+            var effectiveKey = !string.IsNullOrWhiteSpace(ApiKey)
+                ? ApiKey
+                : SavedProfiles.FirstOrDefault(p =>
+                    p.Provider.Equals(provider, StringComparison.OrdinalIgnoreCase))?.ApiKey
+                  ?? string.Empty;
+
             if (provider == "OpenRouter")
             {
-                models = await FetchAuthenticatedModelIdsAsync("https://openrouter.ai/api/v1", ApiKey);
+                models = await FetchAuthenticatedModelIdsAsync("https://openrouter.ai/api/v1", effectiveKey);
             }
             else if (provider == "Ollama")
             {
@@ -316,8 +325,8 @@ public partial class SettingsViewModel : ViewModelBase
             {
                 // Try fetching from the provider's /models endpoint (OpenAI, DeepSeek, Groq, etc.)
                 var baseUrl = ProviderBaseUrls.GetValueOrDefault(provider, string.Empty);
-                models = !string.IsNullOrEmpty(baseUrl) && !string.IsNullOrWhiteSpace(ApiKey)
-                    ? await FetchAuthenticatedModelIdsAsync(baseUrl, ApiKey)
+                models = !string.IsNullOrEmpty(baseUrl) && !string.IsNullOrWhiteSpace(effectiveKey)
+                    ? await FetchAuthenticatedModelIdsAsync(baseUrl, effectiveKey)
                     : [];
 
                 // Fall back to static list if API fetch returned nothing.
