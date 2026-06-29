@@ -27,6 +27,9 @@ What we are actively working on and shipping next, in priority order.
 | **v1.2 — done** | Phase 96 | MCP runtime variables — inline env var editor on Web + Desktop; KEY=VALUE textarea in stdio add form; JSON paste auto-populates env vars; master key moved into DB (V039 `keystore` table); AES-256-GCM encrypted at rest ✅ |
 | **v1.3 — done** | Phase 105 | MCP server permissions — workspace-level gating via V040 stable MCP IDs; `GetEnabledEntriesAsync` workspace filter; admin toggle UI on Web + Desktop; memory-gate guards at selection point ✅ (project-level deferred) |
 | **v1.3 — done** | Phase 123 | Memory System — workspace memory with public/private scoping; "+Remember" button in Chat (Web + Desktop); Workspace tab on Memory page; V041/V042 migrations; per-user injection in multi-user deployments ✅ |
+| **v1.3 — done** | Phase 91 *(partial)* | Knowledge Authoring — admin edit/revert on Skills and Document Templates pages; Monaco editor for prompt + JSON editing; Knowledge sub-nav sorted alphabetically (Web + Desktop); Avalonia 11 → 12 desktop migration ✅ (AvaloniaEdit Desktop fixes deferred) |
+| **v1.4 — done** | V043 | Email-as-user-id — V043 migration replaces all `usr_{hex}` PKs with email across every FK and soft-reference column; `username` column dropped; `IUserService` API updated; personal workspace IDs updated in tandem ✅ |
+| **v1.4 — done** | Bug fixes | Ollama provider label/routing fixed (FriendlyProviderName checks provider name before URL); FK error 19 on project creation fixed (PersonalWorkspaceId reads `App.SovrantUserId` at call time) ✅ |
 
 > Items below v1.0 are planned but not yet scheduled. See [Still pending](#still-pending) for the full gap list.
 
@@ -37,7 +40,7 @@ What we are actively working on and shipping next, in priority order.
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
 - **58 tools** across 18 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, missions, artifacts, documents, quality, swarm, coordination, LSP, code scaffolding)
-- **2,222 tests** across 10 projects, 0 failures
+- **2,208 tests** across 10 projects, 0 failures
 - **141 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth, knowledge, trust-rules, attributions)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
