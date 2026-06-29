@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-06-29 (Phase 128 planned — code generation quality gates (post-generation lint/self-correction loop, production-grade scaffold enrichment). v1.5 focus: Phase 114 skill enrichment + Phase 74 markdown document templates + Phase 128. Phase 123 ✅ — Memory System: workspace memory with public/private scoping, "+Remember" button in Chat (Web + Desktop), V041/V042 migrations, per-user injection in multi-user deployments. V040 MCP stable IDs (Phase 105 workspace-level gating). V043 email-as-user-id (replaces `usr_{hex}` PKs). PostgresSchema split to `db/postgres/PostgresSchema.sql` + `db/supabase/migrations/` (Phase 40C documentation update). Phase 127 planned — Supabase RLS. Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
+**Last updated:** 2026-06-29 (Phase 129 planned — Missions → Workflows rename + UX (surface labels only, dedicated Workflows page, positioning callout, `/v1/workflows` alias). Phase 128 planned — code generation quality gates (post-generation lint/self-correction loop, production-grade scaffold enrichment). v1.5 focus: Phase 114 ✅ skill enrichment + Phase 74 markdown document templates + Phase 128 + Phase 126 + Phase 129. Phase 123 ✅ — Memory System: workspace memory with public/private scoping, "+Remember" button in Chat (Web + Desktop), V041/V042 migrations, per-user injection in multi-user deployments. V040 MCP stable IDs (Phase 105 workspace-level gating). V043 email-as-user-id (replaces `usr_{hex}` PKs). PostgresSchema split to `db/postgres/PostgresSchema.sql` + `db/supabase/migrations/` (Phase 40C documentation update). Phase 127 planned — Supabase RLS. Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -34,6 +34,7 @@ What we are actively working on and shipping next, in priority order.
 | **v1.5 — next** | Phase 74 | Markdown-backed document templates — 44 hardcoded C# templates become editable `.md` files (Scriban expressions, YAML frontmatter field schema, code-behind for computed-logic templates); domain experts iterate without rebuilds |
 | **v1.5 — next** | Phase 128 | Code generation quality gates — post-generation lint/type-check inside `CodeCreateTool`; errors fed back to the LLM for up to 2 self-correction rounds; production-grade scaffold enrichment (CI config, conventional commits, .gitignore, security scanning); works with any code-capable LLM |
 | **v1.5 — next** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity |
+| **v1.5 — next** | Phase 129 | Missions → Workflows — surface-label rename (no DB/engine changes); dedicated Workflows page with goal-first launch, active/recent cards, detail view; positioning callout (AI workflows vs n8n/Zapier automation); `/v1/workflows` API alias |
 
 > Items below v1.0 are planned but not yet scheduled. See [Still pending](#still-pending) for the full gap list.
 
@@ -224,6 +225,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Web search via integrations — move web search out of the hard-coded `WebSearchBackend` enum and into the Integration Gallery; add `IntegrationKind.HttpApi` for direct REST adapters (no MCP process); define `IWebSearchProvider` interface; ship DuckDuckGo (built-in free default), Brave, FireCrawl, Exa, Tavily as `HttpApi` catalog entries; add Crawl4AI as a scraper/fetcher integration; admin picks active search provider from Integrations page; remove `WebSearchBackend` enum; existing MCP search entries remain as alternatives; unit test coverage for WebFetchTool, search providers, and dispatch | Phase 125 | Planned |
 | Supabase Row Level Security — enable RLS on all privacy-sensitive tables in the Supabase migration and write policies for the `owner_user_id` model; service-role key retains full unrestricted access (Supabase bypasses RLS for service role by design); anon/authenticated JWT callers are scoped to their own data at the database layer; complements the existing application-layer query filters | Phase 127 | Planned |
 | Code generation quality gates — post-generation lint/type-check inside `CodeCreateTool`; errors fed back to the LLM for up to 2 self-correction rounds; production-grade scaffold enrichment (CI config, conventional commits, .gitignore, security scanning); guideline conformance check against workspace language pages; works with any code-capable LLM | Phase 128 | Planned (v1.5) |
+| Missions → Workflows rename and UX review — surface-label rename only (no DB/runtime changes); dedicated Workflows page (goal-first launch, active/recent cards, detail view with journal + artifacts); positioning callout distinguishing AI-driven workflows from trigger-automation (n8n/Zapier/Make); `/v1/workflows` alias for `/v1/missions`; Phase 119 run-modes surfaced in the launch form | Phase 129 | Planned (v1.5) |
 
 ### v1.0 release polish ✅
 
@@ -11678,5 +11680,117 @@ These additions are pure file content — no new scaffolding logic. The migratio
 
 - Runtime-not-in-PATH bootstrap (auto-installing Node/Python in a sandbox) — too much platform complexity for v1.5; `skipped` validator is acceptable
 - Continuous background linting of the user's working tree — separate Phase 129 concern
-- `supabase db push` applies the migration cleanly with no errors on a fresh project and on an existing project that already has the initial schema
-- All existing Sovrant API tests pass unchanged — no application code is modified by this phase
+
+---
+
+## Phase 129 — Missions → Workflows: Rename, Positioning, and UX Review
+
+**Status:** Planned (v1.5)
+
+### Why
+
+The term "missions" is accurate for the engine internals — a bounded goal delegated to an AI team with a planner, executor, and journal — but it is opaque to users. Almost everyone arriving at Sovrant calls this concept a "workflow." Renaming closes the vocabulary gap without changing what the engine does.
+
+More importantly, the rename is the right moment to resolve a positioning question the codebase sidesteps today: **what kind of workflows does Sovrant own, and what does it deliberately leave to external tools?**
+
+The answer is clear from what's already shipped:
+- **Sovrant owns**: AI-orchestrated, goal-driven workflows where the "steps" are LLM agents making decisions — not predetermined trigger→action chains. The planner decomposes the goal; the executor routes it; the agents adapt. This is the lane n8n and Zapier cannot fill.
+- **n8n, Zapier, Make, Composio own**: trigger-based automation, scheduled jobs, branching deterministic pipelines, and hundreds of SaaS connectors. These are already available in Sovrant via the Integrations Gallery as MCP connections — Sovrant acts as the AI layer on top of them, not a replacement for them.
+
+Without this distinction surfaced in the UI, users either expect Sovrant to be a Zapier clone (and are disappointed) or miss entirely that they can run complex AI-driven goals with a single prompt.
+
+The UX also needs work independent of naming. Today "missions" is discoverable only through the Orchestration Studio → Run button and the Command Center grid. There is no dedicated Workflows page where a user can launch, monitor, and review their AI-driven workflows without knowing what an "orchestration" or "mission" is first.
+
+### What ships
+
+#### 1 — Surface label rename (Web + Desktop)
+
+Replace every user-visible "Mission" / "Missions" label with "Workflow" / "Workflows" across both surfaces. The underlying DB table (`missions`), API path (`/v1/missions`), and C# types (`IMissionStore`, `LlmMissionPlanner`, etc.) are **not renamed** — this is a presentation-layer change only.
+
+| Where | Old label | New label |
+|---|---|---|
+| Nav / rail | Missions | Workflows |
+| Orchestration Studio | Run Mission | Run Workflow |
+| Command Center | Missions column | Workflows column |
+| User Dashboard | missions stat | workflows stat |
+| Page titles | Missions | Workflows |
+| Privacy toggle | Make mission private | Make workflow private |
+| Completion messages | "Mission complete" | "Workflow complete" |
+
+**API compatibility:** Add `/v1/workflows` as an alias that proxies to `/v1/missions` on all CRUD and status endpoints. The `/v1/missions` path is retained and marked `@deprecated` in comments (not removed — no external consumers confirmed yet, but a grace period is the right call).
+
+#### 2 — Dedicated Workflows page
+
+Replace or supplement the current Orchestration Studio with a standalone `/workflows` page (Web) and `WorkflowsView` (Desktop) that is the primary entry point for AI-driven workflows. The Orchestration Studio can remain for team composition; the Workflows page is for goal-level users who don't care about the agent structure underneath.
+
+**Page layout:**
+- **Header**: "Workflows" + "New Workflow" button (prominent)
+- **Active workflows**: card row — name, goal snippet, team name, run-mode badge (Autonomous / Supervised / Step-through), live status indicator (dot + "Running step 3 of ~5"), elapsed time
+- **Recent workflows**: collapsible list of completed/failed — name, team, finish time, outcome badge (✅ Complete / ❌ Failed), link to detail
+- **Empty state**: "No workflows yet. A workflow gives an AI team a goal and lets it figure out the steps." + "New Workflow" CTA
+
+**What it is not**: a node editor, a visual flow diagram, a cron scheduler.
+
+#### 3 — New Workflow launch form
+
+A simple form replacing (or complementing) the current Orchestration Studio run path:
+
+```
+Goal:         [textarea — describe what you want accomplished]
+Team:         [dropdown of configured teams, or "Let Sovrant pick"]
+Run mode:     [Autonomous | Supervised | Step-through]
+Name:         [optional, auto-generated from goal if blank]
+[Run Workflow]
+```
+
+The "Let Sovrant pick" team option uses `AgentOrchestrator` in decomposition mode — the engine selects agents based on the goal. This is the one-click path for users who don't want to configure a team first.
+
+#### 4 — Workflow detail view
+
+Each workflow gets a detail page/view showing:
+- **Goal** — the original prompt
+- **Team** — agents involved, with roles
+- **Journal** — chronological list of events (agent step started, tool called, step complete, replanning triggered) — collapsible by default, expandable for debugging
+- **Artifacts** — files produced, with open/download links
+- **Output summary** — the final LLM-produced summary of what was accomplished
+- **Status timeline** — duration per step if available
+
+This replaces the current "click-through from Command Center" flow, which lands on a sparse detail page.
+
+#### 5 — Positioning callout in the UI
+
+A short inline note on the Workflows page (dismissible, not a modal) that surfaces the positioning:
+
+> **Workflows vs automation tools.** Sovrant workflows are AI-driven — you describe a goal and the AI team plans and executes the steps. For trigger-based automation, scheduled jobs, and SaaS connectors, connect n8n, Zapier, or Make from the [Integrations](link) page and use them as tools inside a workflow.
+
+This single sentence prevents the most common expectation mismatch.
+
+### What we explicitly do not build
+
+| Not building | Why | Alternative |
+|---|---|---|
+| Visual node/flow editor | That is n8n's lane | Connect n8n via MCP Integrations |
+| Cron / scheduled triggers | That is n8n/Zapier's lane | n8n workflows can call Sovrant's API |
+| Webhook-triggered workflows | Same | n8n trigger → Sovrant REST call |
+| 500-connector library | Already covered | Composio / n8n in the Integrations Gallery |
+| Deterministic branching pipelines | LLM planner handles branching better | No alternative needed |
+
+The constraint is intentional and permanent. Sovrant's value is the AI layer. Adding a visual editor or a scheduler would compete with tools that have years of head start and would dilute what makes Sovrant different.
+
+### Relationship to other phases
+
+- **Phase 51** ✅ built the engine (`IMissionStore`, `LlmMissionPlanner`, `ParallelMissionExecutor`) — not touched
+- **Phase 119** (planned) adds per-mission run-modes and integration-sourced Claws — Phase 129 uses those run-modes in the new launch form; Phase 119 should ship first or in parallel
+- **Phase 94** ✅ (Orchestration Studio) remains as the team-composition surface; Phase 129 adds a goal-first surface on top
+
+### Acceptance criteria
+
+- [ ] Every user-visible "Mission" / "Missions" label replaced with "Workflow" / "Workflows" on Web and Desktop; no DB or runtime type names changed
+- [ ] `/v1/workflows` alias proxies to `/v1/missions`; all CRUD and status operations work identically through both paths
+- [ ] Dedicated Workflows page reachable from nav; shows active + recent workflows; "New Workflow" button launches the new goal form
+- [ ] New Workflow form: goal textarea, team picker with "Let Sovrant pick" option, run-mode selector, optional name field
+- [ ] "Let Sovrant pick" path invokes `AgentOrchestrator` in decomposition mode and runs the workflow without requiring a pre-built team
+- [ ] Workflow detail view shows goal, journal (collapsible), artifacts, and output summary
+- [ ] Positioning callout visible on Workflows page; dismissible per user; links to Integrations
+- [ ] All existing mission/orchestration tests pass unchanged (no engine code modified)
+- [ ] Web + Desktop parity on all new UI surfaces
