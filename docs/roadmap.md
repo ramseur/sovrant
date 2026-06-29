@@ -33,6 +33,7 @@ What we are actively working on and shipping next, in priority order.
 | **v1.5 — next** | Phase 114 | Enrich built-in skill definitions — richer descriptions (2–3 sentences), ≥5-step workflow bodies, agents/tools lists; SQL migration only, no code changes; immediate quality lift for every LLM via the IKnowledgeRouter harness |
 | **v1.5 — next** | Phase 74 | Markdown-backed document templates — 44 hardcoded C# templates become editable `.md` files (Scriban expressions, YAML frontmatter field schema, code-behind for computed-logic templates); domain experts iterate without rebuilds |
 | **v1.5 — next** | Phase 128 | Code generation quality gates — post-generation lint/type-check inside `CodeCreateTool`; errors fed back to the LLM for up to 2 self-correction rounds; production-grade scaffold enrichment (CI config, conventional commits, .gitignore, security scanning); works with any code-capable LLM |
+| **v1.5 — next** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity |
 
 > Items below v1.0 are planned but not yet scheduled. See [Still pending](#still-pending) for the full gap list.
 
