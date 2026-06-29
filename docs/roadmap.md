@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-06-29 (Phase 123 ✅ — Memory System: workspace memory with public/private scoping, "+Remember" button in Chat (Web + Desktop), V041/V042 migrations, per-user injection in multi-user deployments. V040 MCP stable IDs (Phase 105 workspace-level gating). V043 email-as-user-id (replaces `usr_{hex}` PKs). PostgresSchema split to `db/postgres/PostgresSchema.sql` + `db/supabase/migrations/` (Phase 40C documentation update). Phase 127 planned — Supabase RLS. Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
+**Last updated:** 2026-06-29 (Phase 128 planned — code generation quality gates (post-generation lint/self-correction loop, production-grade scaffold enrichment). v1.5 focus: Phase 114 skill enrichment + Phase 74 markdown document templates + Phase 128. Phase 123 ✅ — Memory System: workspace memory with public/private scoping, "+Remember" button in Chat (Web + Desktop), V041/V042 migrations, per-user injection in multi-user deployments. V040 MCP stable IDs (Phase 105 workspace-level gating). V043 email-as-user-id (replaces `usr_{hex}` PKs). PostgresSchema split to `db/postgres/PostgresSchema.sql` + `db/supabase/migrations/` (Phase 40C documentation update). Phase 127 planned — Supabase RLS. Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -30,6 +30,9 @@ What we are actively working on and shipping next, in priority order.
 | **v1.3 — done** | Phase 91 *(partial)* | Knowledge Authoring — admin edit/revert on Skills and Document Templates pages; Monaco editor for prompt + JSON editing; Knowledge sub-nav sorted alphabetically (Web + Desktop); Avalonia 11 → 12 desktop migration ✅ (AvaloniaEdit Desktop fixes deferred) |
 | **v1.4 — done** | V043 | Email-as-user-id — V043 migration replaces all `usr_{hex}` PKs with email across every FK and soft-reference column; `username` column dropped; `IUserService` API updated; personal workspace IDs updated in tandem ✅ |
 | **v1.4 — done** | Bug fixes | Ollama provider label/routing fixed (FriendlyProviderName checks provider name before URL); FK error 19 on project creation fixed (PersonalWorkspaceId reads `App.SovrantUserId` at call time) ✅ |
+| **v1.5 — next** | Phase 114 | Enrich built-in skill definitions — richer descriptions (2–3 sentences), ≥5-step workflow bodies, agents/tools lists; SQL migration only, no code changes; immediate quality lift for every LLM via the IKnowledgeRouter harness |
+| **v1.5 — next** | Phase 74 | Markdown-backed document templates — 44 hardcoded C# templates become editable `.md` files (Scriban expressions, YAML frontmatter field schema, code-behind for computed-logic templates); domain experts iterate without rebuilds |
+| **v1.5 — next** | Phase 128 | Code generation quality gates — post-generation lint/type-check inside `CodeCreateTool`; errors fed back to the LLM for up to 2 self-correction rounds; production-grade scaffold enrichment (CI config, conventional commits, .gitignore, security scanning); works with any code-capable LLM |
 
 > Items below v1.0 are planned but not yet scheduled. See [Still pending](#still-pending) for the full gap list.
 
@@ -219,6 +222,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator while agent works; clean visual hierarchy where the agent's answer is prominent and tool work is subordinate; consistent Web + Desktop parity | Phase 126 | Planned |
 | Web search via integrations — move web search out of the hard-coded `WebSearchBackend` enum and into the Integration Gallery; add `IntegrationKind.HttpApi` for direct REST adapters (no MCP process); define `IWebSearchProvider` interface; ship DuckDuckGo (built-in free default), Brave, FireCrawl, Exa, Tavily as `HttpApi` catalog entries; add Crawl4AI as a scraper/fetcher integration; admin picks active search provider from Integrations page; remove `WebSearchBackend` enum; existing MCP search entries remain as alternatives; unit test coverage for WebFetchTool, search providers, and dispatch | Phase 125 | Planned |
 | Supabase Row Level Security — enable RLS on all privacy-sensitive tables in the Supabase migration and write policies for the `owner_user_id` model; service-role key retains full unrestricted access (Supabase bypasses RLS for service role by design); anon/authenticated JWT callers are scoped to their own data at the database layer; complements the existing application-layer query filters | Phase 127 | Planned |
+| Code generation quality gates — post-generation lint/type-check inside `CodeCreateTool`; errors fed back to the LLM for up to 2 self-correction rounds; production-grade scaffold enrichment (CI config, conventional commits, .gitignore, security scanning); guideline conformance check against workspace language pages; works with any code-capable LLM | Phase 128 | Planned (v1.5) |
 
 ### v1.0 release polish ✅
 
@@ -11577,5 +11581,101 @@ The commented-out policy skeletons already exist in `db/supabase/migrations/2026
 - After applying the migration, a direct Supabase client authenticated as user A cannot read user B's private `workspace_memory` rows via the dashboard or an Edge Function
 - User A can read all `workspace_memory` rows where `is_private = 0` regardless of `owner_user_id`
 - The Sovrant API server (service-role key) continues to read and write all rows without restriction
+
+---
+
+## Phase 128 — Code Generation Quality Gates
+
+**Status:** Planned (v1.5)
+
+### Why
+
+Phase 73 shipped the scaffolding *mechanism* — 21 templates, `CodeCreateTool`, `CodeCreateMultiTool`, 235 tests. The generated code builds and passes its first test. That met the "works" bar. The "industry standard" bar is higher: generated code should also pass the project's linter, conform to the workspace's language guidelines (Phase 108), and arrive with the CI/security/commit infrastructure that any production project has from day one.
+
+Two root causes hold quality back today:
+
+1. **No verification loop.** `CodeCreateTool` writes files and stops. If TypeScript complains about `any` types, if Python has an import cycle, if the C# build has a nullable warning — those errors are invisible until the user runs the build themselves. A deterministic post-generation check (compiler, linter, type-checker) closes this loop regardless of which LLM produced the code.
+
+2. **Scaffold templates meet the minimum bar, not the production bar.** The 21 templates produce runnable skeletons but omit the infrastructure every real project needs: CI pipeline, conventional-commit setup, security scanning, `.gitignore` tuned to the language, README with build/test/deploy instructions. These are mechanical additions, not model quality — they belong in the template, not the prompt.
+
+This phase is explicitly designed to work with **any LLM capable of code generation** — the feedback loop is compiler output, not LLM judgment. A weaker model that makes a type error gets the same precise error message a strong model would and can fix it on the second pass.
+
+### Scope
+
+#### 1 — Language check runners
+
+A small `ICodeValidator` abstraction with one implementation per supported language. After `CodeCreateTool` writes files to the artifact directory, it invokes the validator for the detected language and captures structured output (file, line, code, message).
+
+| Language | Check command | Notes |
+|---|---|---|
+| TypeScript / JS | `tsc --noEmit` | Uses the scaffold's `tsconfig.json`; requires Node.js in PATH |
+| Python | `pylint --output-format=json` or `ruff check --output-format=json` | Prefer `ruff` if present (faster) |
+| C# / .NET | `dotnet build -v q` | Exit-code + MSBuild error lines |
+| Rust | `cargo check --message-format=json` | JSON per-diagnostic |
+| Go | `go vet ./...` | Exit code + stderr lines |
+| Java | Compile step via Maven/Gradle (`mvn compile -q` / `gradle compileJava -q`) | Requires JDK in PATH |
+
+If the language runtime is not in PATH the validator reports `skipped` rather than `failed` — generation still completes, and the UI notes which checks ran.
+
+#### 2 — Self-correction loop
+
+When validation finds errors:
+
+1. Format errors as a compact block: `<file>:<line>: <code> <message>`
+2. Inject as a follow-up user turn: `"The code you generated has {N} issue(s). Fix them and emit the corrected files:\n{errors}"`
+3. Re-run the model, apply the new file writes, re-validate
+4. Repeat at most **2 rounds** — if errors remain after round 2, deliver the best output with a warning
+
+Max 2 rounds keeps cost predictable. On weaker models 2 rounds resolves the majority of type/lint errors; pathological cases are surfaced to the user rather than silently looped.
+
+The correction turn is injected into the existing conversation context so the model retains its intent. No new tool is needed — `CodeCreateTool` orchestrates the loop internally.
+
+#### 3 — Guideline conformance check
+
+After the compiler/linter pass, a lightweight structural check reads the active workspace language guideline page (Phase 108) and verifies the scaffold's key files against it. This is not a full LLM re-review — it checks for presence/absence of declared patterns:
+
+- TypeScript: `strict: true` in tsconfig, correct test runner (`vitest` vs `jest`), no bare `any` in generated files
+- Python: uses the declared package manager (`uv`, `poetry`, or `pip`), includes `pyproject.toml`
+- C#: nullable annotations enabled, correct test framework (`xUnit` vs `NUnit` vs `MSTest`)
+
+Failures here are warnings, not blockers — the user's guideline page may intentionally diverge.
+
+#### 4 — Production-grade scaffold enrichment
+
+Update the 21 scaffolding templates (seeded via V035/V037 knowledge_pages rows) with the following additions, delivered as a new additive migration (`V044__enrich_scaffold_templates.sql`):
+
+| Addition | Applies to |
+|---|---|
+| `.github/workflows/ci.yml` — install, lint, test on push/PR | All templates |
+| `.gitignore` tuned to the language/runtime | All templates |
+| `CHANGELOG.md` + `commitlint.config.js` (or equivalent) for conventional commits | Node.js, C# |
+| `README.md` with Build / Test / Deploy sections | All templates |
+| `Dockerfile` (multi-stage, minimal base image) | API/server templates |
+| Security scanning step in CI (`npm audit`, `pip-audit`, `dotnet list package --vulnerable`) | All templates |
+| `.editorconfig` with standard indentation/encoding | All templates |
+
+These additions are pure file content — no new scaffolding logic. The migration updates the `body` (template content) for each affected scaffold row in `knowledge_pages`. User-overridden scaffold templates are unaffected (copy-on-write overlay wins).
+
+### What this is not
+
+- Not a full linting dashboard — the validation runs at generation time only; it does not continuously lint the user's working tree
+- Not a style enforcer — guideline conformance is a warning, not a gate
+- Not a replacement for the user's own CI — the generated CI config is a starting point, not a production-hardened pipeline
+
+### Acceptance Criteria
+
+- [ ] `ICodeValidator` abstraction + implementations for TypeScript, Python, C#, Rust, Go; Java as stretch
+- [ ] `CodeCreateTool` runs the validator after file writes; round-trip self-correction fires on non-empty error list; max 2 rounds enforced
+- [ ] Validator `skipped` (runtime not in PATH) does not block delivery; UI notes which checks ran
+- [ ] After 2 rounds with remaining errors, best output delivered with a `⚠ N issue(s) remain` notice in the artifact detail
+- [ ] Production scaffold additions land in `V044__enrich_scaffold_templates.sql`; all 21 templates produce CI config, .gitignore, README, .editorconfig on generation
+- [ ] Guideline conformance check verifies key structural properties (tsconfig strict, correct test runner, nullable enabled) against the workspace's language guideline page
+- [ ] All existing Phase 73 golden-path tests pass unchanged — this phase adds a post-processing step, not a replacement
+- [ ] Tested with at least one "weak" open-weights model (e.g. Llama 3.1 8B via Ollama) — self-correction round resolves at least 70% of type/lint errors on a representative scaffold
+
+### Deferred
+
+- Runtime-not-in-PATH bootstrap (auto-installing Node/Python in a sandbox) — too much platform complexity for v1.5; `skipped` validator is acceptable
+- Continuous background linting of the user's working tree — separate Phase 129 concern
 - `supabase db push` applies the migration cleanly with no errors on a fresh project and on an existing project that already has the initial schema
 - All existing Sovrant API tests pass unchanged — no application code is modified by this phase
