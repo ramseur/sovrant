@@ -35,8 +35,8 @@ public sealed class SqliteStorageProviderTests : IAsyncDisposable
     {
         await _provider.InitializeAsync();
 
-        // Schema head bumped to 43 by V043 (email as user_id).
-        Assert.Equal(43, _provider.SchemaVersion);
+        // Schema head bumped to 44 by V044 (enrich built-in skill descriptions).
+        Assert.Equal(44, _provider.SchemaVersion);
     }
 
     [Fact]

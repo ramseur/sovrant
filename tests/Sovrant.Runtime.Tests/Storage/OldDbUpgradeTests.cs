@@ -207,9 +207,9 @@ public sealed class OldDbUpgradeTests : IAsyncDisposable
         while (r.Read())
             rows.Add((r.GetInt32(0), r.IsDBNull(1) ? null : r.GetString(1)));
 
-        // V001..V005 applied manually (no checksum), V006..V043 applied
+        // V001..V005 applied manually (no checksum), V006..V044 applied
         // by the real runner (with checksum).
-        Assert.Equal(43, rows.Count);
+        Assert.Equal(44, rows.Count);
         Assert.All(rows.Where(x => x.v <= 5), x => Assert.Null(x.c));
         Assert.All(rows.Where(x => x.v >= 6), x => Assert.False(string.IsNullOrEmpty(x.c)));
 
