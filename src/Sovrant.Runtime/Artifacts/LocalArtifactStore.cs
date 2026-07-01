@@ -63,16 +63,21 @@ public sealed partial class LocalArtifactStore : IArtifactStore
         var runDir = BuildScopePath(scope);
         Directory.CreateDirectory(runDir);
 
-        // Write initial manifest
-        var manifest = new ArtifactManifest
+        // Write manifest only on first creation — subsequent calls (e.g. from download/zip
+        // endpoints that need a handle) must not overwrite an existing manifest.
+        var manifestPath = Path.Combine(runDir, "_manifest.json");
+        if (!File.Exists(manifestPath))
         {
-            RunId = scope.RunId,
-            UserId = scope.UserId,
-            WorkspaceId = scope.WorkspaceId,
-            ProjectId = scope.ProjectId,
-            CreatedAt = DateTimeOffset.UtcNow,
-        };
-        WriteManifest(runDir, manifest);
+            var manifest = new ArtifactManifest
+            {
+                RunId = scope.RunId,
+                UserId = scope.UserId,
+                WorkspaceId = scope.WorkspaceId,
+                ProjectId = scope.ProjectId,
+                CreatedAt = DateTimeOffset.UtcNow,
+            };
+            WriteManifest(runDir, manifest);
+        }
 
         LogScopeCreated(scope.WorkspaceId, scope.ProjectId, scope.RunId);
 
@@ -180,6 +185,39 @@ public sealed partial class LocalArtifactStore : IArtifactStore
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <inheritdoc/>
+    public async Task SetCodeMetadataAsync(ArtifactHandle handle, CodeManifest metadata, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+        ArgumentNullException.ThrowIfNull(metadata);
+
+        var manifestPath = Path.Combine(handle.ResolvedRoot, "_manifest.json");
+        try
+        {
+            ArtifactManifest manifest;
+            if (File.Exists(manifestPath))
+            {
+                var json = await File.ReadAllTextAsync(manifestPath, ct).ConfigureAwait(false);
+                manifest = JsonSerializer.Deserialize<ArtifactManifest>(json) ?? new ArtifactManifest();
+            }
+            else
+            {
+                manifest = new ArtifactManifest { RunId = handle.Scope.RunId };
+            }
+
+            manifest.Code = metadata;
+            WriteManifest(handle.ResolvedRoot, manifest);
+        }
+        catch (IOException ex)
+        {
+            LogManifestUpdateFailed(manifestPath, ex);
+        }
+        catch (JsonException ex)
+        {
+            LogManifestUpdateFailed(manifestPath, ex);
+        }
     }
 
     /// <inheritdoc/>

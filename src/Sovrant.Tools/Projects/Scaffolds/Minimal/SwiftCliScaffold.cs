@@ -61,6 +61,24 @@ public sealed class SwiftCliScaffold : IProjectTemplate
                 }
                 """),
 
+            new(".github/workflows/ci.yml", """
+                name: CI
+
+                on:
+                  push:
+                    branches: [main, master]
+                  pull_request:
+                    branches: [main, master]
+
+                jobs:
+                  build-and-test:
+                    runs-on: macos-latest
+                    steps:
+                      - uses: actions/checkout@v4
+                      - run: swift build
+                      - run: swift test
+                """),
+
             new(".gitignore", """
                 .build/
                 .swiftpm/

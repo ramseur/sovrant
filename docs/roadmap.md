@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-06-29 (Phase 129 planned — Missions → Workflows rename + UX (surface labels only, dedicated Workflows page, positioning callout, `/v1/workflows` alias). Phase 128 planned — code generation quality gates (post-generation lint/self-correction loop, production-grade scaffold enrichment). v1.5 focus: Phase 114 ✅ skill enrichment + Phase 74 markdown document templates + Phase 128 + Phase 126 + Phase 129. Phase 123 ✅ — Memory System: workspace memory with public/private scoping, "+Remember" button in Chat (Web + Desktop), V041/V042 migrations, per-user injection in multi-user deployments. V040 MCP stable IDs (Phase 105 workspace-level gating). V043 email-as-user-id (replaces `usr_{hex}` PKs). PostgresSchema split to `db/postgres/PostgresSchema.sql` + `db/supabase/migrations/` (Phase 40C documentation update). Phase 127 planned — Supabase RLS. Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
+**Last updated:** 2026-06-30 (Phase 128 design finalised — five-part plan: artifact security hardening (content-security headers, RemoteArtifactStore field-name fix, API zip endpoint, Artifacts.razor abstraction fix); code manifest in ArtifactManifest; scaffold enrichment (.sln + Directory.Build.props + .editorconfig + CI for all 21 templates, every .NET scaffold immediately buildable with dotnet build {sln}); LLM instruction enrichment (IProjectTemplate.BuildCommand/RunCommand, CodeCreate next_steps response, tool description update); new CodeValidateTool (structural checks via IArtifactStore.ListAsync — no compiler in PATH required). Phase 129 planned — Missions → Workflows rename + UX (surface labels only, dedicated Workflows page, positioning callout, `/v1/workflows` alias). v1.5 focus: Phase 114 ✅ skill enrichment + Phase 74 markdown document templates + Phase 128 + Phase 126 + Phase 129. Phase 123 ✅ — Memory System: workspace memory with public/private scoping, "+Remember" button in Chat (Web + Desktop), V041/V042 migrations, per-user injection in multi-user deployments. V040 MCP stable IDs (Phase 105 workspace-level gating). V043 email-as-user-id (replaces `usr_{hex}` PKs). PostgresSchema split to `db/postgres/PostgresSchema.sql` + `db/supabase/migrations/` (Phase 40C documentation update). Phase 127 planned — Supabase RLS. Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -31,8 +31,8 @@ What we are actively working on and shipping next, in priority order.
 | **v1.4 — done** | V043 | Email-as-user-id — V043 migration replaces all `usr_{hex}` PKs with email across every FK and soft-reference column; `username` column dropped; `IUserService` API updated; personal workspace IDs updated in tandem ✅ |
 | **v1.4 — done** | Bug fixes | Ollama provider label/routing fixed (FriendlyProviderName checks provider name before URL); FK error 19 on project creation fixed (PersonalWorkspaceId reads `App.SovrantUserId` at call time) ✅ |
 | **v1.5 — done** | Phase 114 | Enrich built-in skill definitions — 2-3 sentence descriptions, agent list wiring, `verification-loop` tools fix; V044 migration; immediate quality lift for every LLM via the IKnowledgeRouter harness ✅ |
-| **v1.5 — next** | Phase 74 | Markdown-backed document templates — 44 hardcoded C# templates become editable `.md` files (Scriban expressions, YAML frontmatter field schema, code-behind for computed-logic templates); domain experts iterate without rebuilds |
-| **v1.5 — next** | Phase 128 | Code generation quality gates — post-generation lint/type-check inside `CodeCreateTool`; errors fed back to the LLM for up to 2 self-correction rounds; production-grade scaffold enrichment (CI config, conventional commits, .gitignore, security scanning); works with any code-capable LLM |
+| **v1.5 — done** | Phase 74 | DB-backed document templates — 42 of 44 built-in templates in `knowledge_pages` via V037; Scriban rendering; admin Edit/Revert on Documents page (Web + Desktop); copy-on-write overlay; `sovrant document lint` CLI; authoring guide ✅ |
+| **v1.5 — next** | Phase 128 | Code generation quality gates — artifact security hardening (content-security headers, API zip endpoint, RemoteArtifactStore fix, Artifacts.razor abstraction); `.sln` + `Directory.Build.props` + CI for all 21 templates (every project immediately runnable); `CodeValidateTool` (structural checks via `IArtifactStore.ListAsync`, no compiler in PATH); `CodeCreate` `next_steps` + `build_command` + LLM instruction update; `ArtifactManifest` code metadata |
 | **v1.5 — next** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity |
 | **v1.5 — next** | Phase 129 | Missions → Workflows — surface-label rename (no DB/engine changes); dedicated Workflows page with goal-first launch, active/recent cards, detail view; positioning callout (AI workflows vs n8n/Zapier automation); `/v1/workflows` API alias |
 
@@ -182,7 +182,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Video generation — fal.ai, Kling AI, and pluggable provider support for text-to-video, image-to-video | Phase 65 | Medium |
 | Autonomous agent modes (swarm autonomy & alternate claws) | Phase 67 | Medium |
 | Code creation: project scaffolding & app generation | Phase 73 | ✅ Done |
-| Markdown-backed document templates | Phase 74 | Medium |
+| DB-backed document templates | Phase 74 | ✅ Done |
 | In-app document viewing | Phase 76 | Medium |
 | Project isolation with full feature parity | Phase 77 | Medium |
 | Composio MCP integration — first-class platform awareness for Composio's MCP catalog (250+ apps), in-app browse/enable, managed OAuth via Composio connections, per-user/workspace credential scoping, still routed through Sovrant's `MCPTool` proxy and permission model | Phase 80 | Medium |
@@ -224,7 +224,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator while agent works; clean visual hierarchy where the agent's answer is prominent and tool work is subordinate; consistent Web + Desktop parity | Phase 126 | Planned |
 | Web search via integrations — move web search out of the hard-coded `WebSearchBackend` enum and into the Integration Gallery; add `IntegrationKind.HttpApi` for direct REST adapters (no MCP process); define `IWebSearchProvider` interface; ship DuckDuckGo (built-in free default), Brave, FireCrawl, Exa, Tavily as `HttpApi` catalog entries; add Crawl4AI as a scraper/fetcher integration; admin picks active search provider from Integrations page; remove `WebSearchBackend` enum; existing MCP search entries remain as alternatives; unit test coverage for WebFetchTool, search providers, and dispatch | Phase 125 | Planned |
 | Supabase Row Level Security — enable RLS on all privacy-sensitive tables in the Supabase migration and write policies for the `owner_user_id` model; service-role key retains full unrestricted access (Supabase bypasses RLS for service role by design); anon/authenticated JWT callers are scoped to their own data at the database layer; complements the existing application-layer query filters | Phase 127 | Planned |
-| Code generation quality gates — post-generation lint/type-check inside `CodeCreateTool`; errors fed back to the LLM for up to 2 self-correction rounds; production-grade scaffold enrichment (CI config, conventional commits, .gitignore, security scanning); guideline conformance check against workspace language pages; works with any code-capable LLM | Phase 128 | Planned (v1.5) |
+| Code generation quality gates — artifact security hardening; `.sln` + `Directory.Build.props` + CI for all 21 templates (every scaffold immediately runnable); `CodeValidateTool` (structural checks, no compiler in PATH); `CodeCreate` `next_steps` + `build_command` + LLM instruction update; `ArtifactManifest` code metadata | Phase 128 | Planned (v1.5) |
 | Missions → Workflows rename and UX review — surface-label rename only (no DB/runtime changes); dedicated Workflows page (goal-first launch, active/recent cards, detail view with journal + artifacts); positioning callout distinguishing AI-driven workflows from trigger-automation (n8n/Zapier/Make); `/v1/workflows` alias for `/v1/missions`; Phase 119 run-modes surfaced in the launch form | Phase 129 | Planned (v1.5) |
 
 ### v1.0 release polish ✅
@@ -7032,120 +7032,71 @@ Boundary for dependency manifest validation.
 
 ---
 
-## Phase 74 — Markdown-Backed Document Templates
+## Phase 74 — DB-Backed Document Templates
 
 ### Why
 
-The document template library (Phase 66 and 66.4, currently 44 templates across
-7 industries) is entirely hardcoded as C# classes. Each template is a sealed
-class implementing `IDocumentTemplate` whose `Render(JsonElement)` builds a
-markdown body with a `StringBuilder`. Adding or tweaking a template requires a
-developer, a rebuild, and a deploy. That mirror-images the pattern we already
-use for **agent templates**, which are markdown files with YAML frontmatter
-loaded at runtime via `FileSystemTemplateLoader` (`src/Sovrant.Agents/Templates/FileSystemTemplateLoader.cs`).
+The original Phase 74 plan called for `.md` files on disk. That approach was
+superseded during Phase 112C/D: all content — skills, agent definitions, and
+now document templates — is stored in the `knowledge_pages` table so it
+benefits from the same copy-on-write overlay model, Knowledge UI editing, and
+`IKnowledgeRouter` routing.
 
-The goal of this phase is to bring document templates to parity: let domain
-experts (legal, clinical, finance, education) author and revise templates as
-`.md` files — with field schema in YAML frontmatter, body in markdown with an
-expression syntax — without touching C#. A small hybrid escape hatch preserves
-the ability to express non-trivial logic (computed totals, conditional
-sections, dynamic tables) for templates that genuinely need it.
+The goal of this phase is to complete the migration: ship the `sovrant document
+lint` CLI command (Scriban syntax validation + fields_json sanity check) and the
+`docs/document-templates.md` authoring guide so domain experts can author,
+review, and iterate on templates without rebuilding the binary.
 
-This also unlocks **user-authored templates**, matching the planned knowledge
-pages subsystem (`project_knowledge_pages.md`): users can drop a template into
-their workspace and have it appear in the registry automatically.
+### What Is Already In Place
 
-### Scope
+**Phase 112D (already done before this phase):**
 
-1. **Template file format**
-   - YAML frontmatter declares `id`, `name`, `industry`, `description`,
-     `format` (Word / StructuredPdf / Excel), and a `fields:` list matching
-     the existing `TemplateField` schema (String, Text, Integer, Decimal,
-     Currency, Date, Boolean, StringArray, ObjectArray with nested
-     `itemFields`).
-   - Body is markdown with an expression syntax for field interpolation,
-     conditionals, and loops. Evaluate candidates: Scriban (fastest, .NET-
-     native, safe), Liquid via DotLiquid (familiar to non-devs), Handlebars.
-     **Lean: Scriban** — it's already .NET-native, has strong sandboxing,
-     supports custom functions for our format helpers, and doesn't require
-     a separate interpreter.
-2. **Runtime loader**
-   - New `MarkdownDocumentTemplate : IDocumentTemplate` that accepts a parsed
-     file. Registered alongside existing C# templates.
-   - `FileSystemDocumentTemplateLoader` scans one or more directories (built-
-     in resources, workspace overrides, user overrides) in override order.
-   - Expose format helpers (`FormatMoney`, `FormatDate`, `FormatPercent`,
-     `EscapePipes`, `Slug`) as Scriban functions so markdown templates use
-     the same rendering conventions as the hardcoded ones.
-3. **Validation and error surfacing**
-   - Field validation still runs through `TemplateData.Validate`; frontmatter
-     deserialization produces the same `TemplateField` list.
-   - Template-file errors (bad YAML, unknown field, unresolved expression)
-     should produce actionable error messages at load time, not at render
-     time. Load-time errors fail the registry cold; render-time errors
-     return a `TemplateValidationException`-shaped result.
-4. **Hybrid escape hatch**
-   - Some templates have logic a pure template engine shouldn't express:
-     computed totals (superbill line-item sums, CMA $/sqft averages, closing
-     disclosure cash-to-close), custom table column counts (optional columns
-     only appearing when any row has data), HIPAA-specific sequencing of
-     required clauses, contingency `[Waived]` markers, etc.
-   - Support a **code-behind** model: a markdown template can reference a
-     class (via frontmatter `codeBehind: Sovrant.Runtime.Documents.Templates.Healthcare.SuperbillCodeBehind`)
-     that exposes computed properties to the template context. Simple
-     templates need no code-behind.
-5. **Migration**
-   - Convert the ~20 templates that are purely "fields + markdown body"
-     (NDA, terms-of-service, lease agreement, syllabus, etc.) to `.md` files.
-     Delete the corresponding C# classes.
-   - Keep the ~14 templates with real logic (superbill, CMA, closing
-     disclosure, HIPAA authorization, progress note, business plan,
-     performance review with competencies table, etc.) as markdown + code-
-     behind. Their C# render method shrinks to a handful of computed
-     properties.
-   - All 51 existing template tests must continue to pass, unchanged —
-     they exercise the `IDocumentTemplate` contract, not the implementation.
-6. **User overrides**
-   - Workspace directory `<workspace>/.sovrant/templates/` is scanned by the
-     loader. Templates there shadow built-in templates with the same `id`.
-   - A future Phase 74.x can expose a UI for editing templates in-app; this
-     phase only needs the filesystem contract.
-7. **Author ergonomics**
-   - Document the file format under `docs/document-templates.md` with one
-     worked example per field type, including nested ObjectArray.
-   - Ship a `sovrant templates lint <file>` CLI command that validates a
-     template file without rendering it — useful for authors before they
-     commit.
+- **V036** — `knowledge_pages` gains `fields_json`, `filename_template`,
+  `default_format`, and `industry` columns for document templates.
+- **V037** — Seeds 42 built-in Scriban templates as `kind = 'document-templates'`
+  `BuiltIn` rows. The two Excel-format templates (`finance/expense-report`,
+  `finance/loan-amortization`) remain as C# because they emit structured JSON
+  bodies (preamble/headers/rows) rather than Markdown.
+- **`DbDocumentTemplate`** — `IDocumentTemplate` backed by a `KnowledgePage`.
+  Uses `ScribanRenderer.Render(_page.Body, data)` and
+  `TemplateFieldSerializer.Deserialize(page.FieldsJson)`.
+- **`ScribanRenderer`** — Scriban rendering with format helpers:
+  `format_date`, `format_money`, `format_money_whole`, `format_number`,
+  `format_percent`, `escape_pipes`, `slug`, `normalize_currency`.
+- **`TemplateRegistry`** — loads C# templates first, then DB-backed
+  `DbDocumentTemplate` rows override by slug. DB wins.
+- **Copy-on-write user overlay** — Global/Project tier rows shadow BuiltIn
+  base rows by slug. Revert = delete the overlay row. UI editing uses the
+  existing Knowledge page inline editor (Phase 91).
+- **All 51 existing template tests pass** — they test the `IDocumentTemplate`
+  contract, which is unchanged.
+
+### Delivered
 
 ### Non-Goals
 
-- **Not** building a visual template editor. That's a follow-on phase.
-- **Not** replacing the `IDocumentTemplate` interface; this phase adds a new
-  implementation backed by markdown files, not a new contract.
-- **Not** migrating the code generation / agent / runtime template systems —
-  they already are, or intentionally aren't, file-based.
+- **Not** building a visual template editor — that's a Phase 91 follow-on.
+- **Not** filesystem-based template loading — all templates are DB-only.
+- **Not** changing the `IDocumentTemplate` interface or `TemplateRegistry`.
 
 ### Acceptance Criteria
 
-- [ ] Template file format spec documented with field-type reference and
-      worked examples
-- [ ] `MarkdownDocumentTemplate` implementation + `FileSystemDocumentTemplateLoader`
-      merged and registered in DI alongside C# templates
-- [ ] Scriban (or chosen engine) integrated with format-helper bindings
-      (`format_money`, `format_date`, `format_percent`, `escape_pipes`, `slug`)
-- [ ] Frontmatter schema covers every `TemplateFieldType`, including nested
-      `ObjectArray` with `itemFields`
-- [ ] At least 15 simple templates ported from C# to `.md`, corresponding
-      C# classes deleted
-- [ ] Code-behind mechanism in place for hybrid templates; at least 3 complex
-      templates (e.g. superbill, CMA, closing disclosure) migrated with
-      code-behind
-- [ ] Workspace override directory loads and shadows built-ins by `id`
-- [ ] `sovrant templates lint` CLI command validates a file without rendering
-- [ ] All existing document-template tests still pass; new tests cover the
-      markdown loader, Scriban rendering, and override precedence
-- [ ] Template authoring guide published under `docs/document-templates.md`
-      so non-developers can author a template end-to-end
+- [x] 42 built-in templates seeded as BuiltIn `knowledge_pages` rows (V037)
+- [x] `DbDocumentTemplate` — `IDocumentTemplate` backed by `KnowledgePage`
+- [x] Scriban renderer with `format_date`, `format_money`, `format_percent`,
+      `escape_pipes`, `slug`, `normalize_currency`, `format_number`,
+      `format_money_whole` helpers
+- [x] `TemplateRegistry` merges C# + DB templates; DB overrides win
+- [x] Copy-on-write user overlay — Global/Project tier rows shadow BuiltIn
+- [x] All 51 existing document-template tests pass
+- [x] Admin Edit/Revert buttons on Documents page (Web + Desktop) — inline
+      editor saves a User-tier overlay; `Registry.Reload()` reflects changes
+      immediately; 2 Excel C# templates intentionally excluded (computed logic)
+- [x] `sovrant document lint [--id <id>] [--json]` CLI command validates
+      Scriban syntax and fields_json for DB-backed templates; exit code 1 on
+      any failure
+- [x] `docs/document-templates.md` authoring guide covers field types,
+      Scriban expression syntax, format helpers, and the add/edit workflow
 
 ## Phase 75 — Documents Surface Re-evaluation
 
@@ -11593,93 +11544,217 @@ The commented-out policy skeletons already exist in `db/supabase/migrations/2026
 
 ### Why
 
-Phase 73 shipped the scaffolding *mechanism* — 21 templates, `CodeCreateTool`, `CodeCreateMultiTool`, 235 tests. The generated code builds and passes its first test. That met the "works" bar. The "industry standard" bar is higher: generated code should also pass the project's linter, conform to the workspace's language guidelines (Phase 108), and arrive with the CI/security/commit infrastructure that any production project has from day one.
+Phase 73 shipped the scaffolding *mechanism* — 21 templates, `CodeCreateTool`, `CodeCreateMultiTool`, 235 tests. Generated code runs and passes its first test. That met the "works" bar. The higher bar is **immediately runnable, production-shaped projects**: a .NET user should be able to unzip the artifact and run `dotnet build MyApi.sln` on the first try; a Node user should run `npm install && npm start`; a Go user `go build ./...`. Nothing should be missing.
 
-Two root causes hold quality back today:
+Three root causes hold this back today:
 
-1. **No verification loop.** `CodeCreateTool` writes files and stops. If TypeScript complains about `any` types, if Python has an import cycle, if the C# build has a nullable warning — those errors are invisible until the user runs the build themselves. A deterministic post-generation check (compiler, linter, type-checker) closes this loop regardless of which LLM produced the code.
+1. **Scaffolds omit project-level files.** The .NET templates produce `.csproj` files but no `.sln` — `dotnet build` won't work from the project root. No template ships a CI pipeline. No template uses `Directory.Build.props` to share properties across projects. These are mechanical, not model-quality issues.
 
-2. **Scaffold templates meet the minimum bar, not the production bar.** The 21 templates produce runnable skeletons but omit the infrastructure every real project needs: CI pipeline, conventional-commit setup, security scanning, `.gitignore` tuned to the language, README with build/test/deploy instructions. These are mechanical additions, not model quality — they belong in the template, not the prompt.
+2. **No structural quality gate.** `CodeCreateTool` writes files and stops. If the LLM writes malformed XML in a `.csproj`, or references a namespace that doesn't exist, or omits `package.json` entirely — those errors are invisible until the user runs the build. A `CodeValidate` tool closes this loop via in-process structural checks (parse JSON/XML/YAML, verify required files exist) without needing any compiler in PATH.
 
-This phase is explicitly designed to work with **any LLM capable of code generation** — the feedback loop is compiler output, not LLM judgment. A weaker model that makes a type error gets the same precise error message a strong model would and can fix it on the second pass.
+3. **The LLM is not instructed on what to do next.** After `CodeCreate` returns, the agent has conventions (via `LanguageGuidelines`) but no `next_steps` — no "add your route handlers here," no "call CodeValidate when done." The tool description reads like documentation, not instruction.
+
+4. **Artifact delivery has security and correctness gaps.** The artifact store serves LLM-generated HTML/SVG/JS without `Content-Disposition: attachment`, opening an XSS vector. The `RemoteArtifactStore.ListAsync` reads wrong JSON field names from the server. The API server has no bulk zip endpoint. The Blazor Artifacts page bypasses `IArtifactStore` and casts to `LocalArtifactStore` directly.
+
+This phase addresses all four. It is designed to work with **any code-capable LLM** — the quality gates are structural checks and explicit instruction, not model judgment.
 
 ### Scope
 
-#### 1 — Language check runners
+#### Part A — Artifact store security and correctness fixes
 
-A small `ICodeValidator` abstraction with one implementation per supported language. After `CodeCreateTool` writes files to the artifact directory, it invokes the validator for the detected language and captures structured output (file, line, code, message).
+**A1. Content-security headers on file downloads** (`Sovrant.Web/Program.cs` + `Sovrant.Server/Routes/ArtifactRoutes.cs`):
+- For `text/html`, `image/svg+xml`, `application/javascript`: force `Content-Disposition: attachment; filename="..."` and add `X-Content-Type-Options: nosniff`
+- For all artifact downloads: add `X-Content-Type-Options: nosniff` and `Cache-Control: private, no-store`
+- LLM-generated files must be treated as untrusted third-party content even within the user's own workspace
 
-| Language | Check command | Notes |
-|---|---|---|
-| TypeScript / JS | `tsc --noEmit` | Uses the scaffold's `tsconfig.json`; requires Node.js in PATH |
-| Python | `pylint --output-format=json` or `ruff check --output-format=json` | Prefer `ruff` if present (faster) |
-| C# / .NET | `dotnet build -v q` | Exit-code + MSBuild error lines |
-| Rust | `cargo check --message-format=json` | JSON per-diagnostic |
-| Go | `go vet ./...` | Exit code + stderr lines |
-| Java | Compile step via Maven/Gradle (`mvn compile -q` / `gradle compileJava -q`) | Requires JDK in PATH |
+**A2. Fix `RemoteArtifactStore.ListAsync`** (`Sovrant.Api.Client/RemoteArtifactStore.cs:43–55`):
+- JSON field `path` → `relative_path`; `size` → `size_bytes` — these must match what `ArtifactRoutes.cs` actually serializes
 
-If the language runtime is not in PATH the validator reports `skipped` rather than `failed` — generation still completes, and the UI notes which checks ran.
+**A3. Add `GET /v1/artifacts/{runId}.zip`** to `Sovrant.Server/Routes/ArtifactRoutes.cs`:
+- Mirrors the web-app zip endpoint; streams a `ZipArchive` via `IArtifactStore.ListAsync` + `ReadAsync` (no `LocalArtifactStore` cast — stays interface-clean for future cloud backends)
+- Respects the workspace auth guard
+- Makes bulk code scaffold download available to all clients: SDK, CLI in server mode, mobile
 
-#### 2 — Self-correction loop
+**A4. Fix `Artifacts.razor` abstraction leak**:
+- Replace the `LocalArtifactStore` cast + `Directory.EnumerateFiles` call with `IArtifactStore.ListAsync`
+- Load `_manifest.json` via `ReadAsync` to surface code-specific metadata (see B2)
 
-When validation finds errors:
+#### Part B — Code-specific artifact manifest
 
-1. Format errors as a compact block: `<file>:<line>: <code> <message>`
-2. Inject as a follow-up user turn: `"The code you generated has {N} issue(s). Fix them and emit the corrected files:\n{errors}"`
-3. Re-run the model, apply the new file writes, re-validate
-4. Repeat at most **2 rounds** — if errors remain after round 2, deliver the best output with a warning
+**B1. `ArtifactManifest` — add optional code metadata fields** (additive, no migration needed):
+```csharp
+[JsonPropertyName("kind")]           public string? Kind { get; set; }          // "code-scaffold"
+[JsonPropertyName("language")]       public string? Language { get; set; }      // "dotnet"
+[JsonPropertyName("template_id")]    public string? TemplateId { get; set; }    // "dotnet/webapi"
+[JsonPropertyName("build_command")]  public string? BuildCommand { get; set; }  // "dotnet build MyApi.sln"
+[JsonPropertyName("run_command")]    public string? RunCommand { get; set; }    // "dotnet run --project MyApi"
+[JsonPropertyName("test_command")]   public string? TestCommand { get; set; }   // "dotnet test MyApi.sln"
+[JsonPropertyName("entry_point")]    public string? EntryPoint { get; set; }    // "MyApi/MyApi.sln"
+```
 
-Max 2 rounds keeps cost predictable. On weaker models 2 rounds resolves the majority of type/lint errors; pathological cases are surfaced to the user rather than silently looped.
+**B2. `CodeCreateTool` writes a code manifest** after scaffolding — stamps `Kind = "code-scaffold"`, `Language`, `TemplateId`, `BuildCommand`, `RunCommand`, `TestCommand` into `_manifest.json`. The Artifacts page can then render a language badge and copy-able run commands in the folder detail view.
 
-The correction turn is injected into the existing conversation context so the model retains its intent. No new tool is needed — `CodeCreateTool` orchestrates the loop internally.
+#### Part C — Scaffold enrichment ("every project is immediately runnable")
 
-#### 3 — Guideline conformance check
+Update all 21 scaffold templates in `src/Sovrant.Tools/Projects/Scaffolds/`. Pure C# changes to the scaffold classes — no DB migration, no knowledge_pages rows involved (scaffolds live in code, not the DB).
 
-After the compiler/linter pass, a lightweight structural check reads the active workspace language guideline page (Phase 108) and verifies the scaffold's key files against it. This is not a full LLM re-review — it checks for presence/absence of declared patterns:
+**All 5 .NET scaffolds** (`dotnet/webapi`, `dotnet/console`, `dotnet/library`, `dotnet/blazor`, `dotnet/worker`):
 
-- TypeScript: `strict: true` in tsconfig, correct test runner (`vitest` vs `jest`), no bare `any` in generated files
-- Python: uses the declared package manager (`uv`, `poetry`, or `pip`), includes `pyproject.toml`
-- C#: nullable annotations enabled, correct test framework (`xUnit` vs `NUnit` vs `MSTest`)
-
-Failures here are warnings, not blockers — the user's guideline page may intentionally diverge.
-
-#### 4 — Production-grade scaffold enrichment
-
-Update the 21 scaffolding templates (seeded via V035/V037 knowledge_pages rows) with the following additions, delivered as a new additive migration (`V044__enrich_scaffold_templates.sql`):
-
-| Addition | Applies to |
+| Addition | Detail |
 |---|---|
-| `.github/workflows/ci.yml` — install, lint, test on push/PR | All templates |
-| `.gitignore` tuned to the language/runtime | All templates |
-| `CHANGELOG.md` + `commitlint.config.js` (or equivalent) for conventional commits | Node.js, C# |
-| `README.md` with Build / Test / Deploy sections | All templates |
-| `Dockerfile` (multi-stage, minimal base image) | API/server templates |
-| Security scanning step in CI (`npm audit`, `pip-audit`, `dotnet list package --vulnerable`) | All templates |
-| `.editorconfig` with standard indentation/encoding | All templates |
+| `{pascal}.sln` | Generated with `Guid.NewGuid()` per project (matches `dotnet new sln` behavior); references main project + tests project with C# project type GUID `{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}`; `Debug\|Release × Any CPU` config matrix |
+| `Directory.Build.props` | Shared `<Nullable>enable</Nullable>`, `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`, `<AnalysisMode>All</AnalysisMode>` — removed from individual `.csproj` files to avoid duplication |
+| `.editorconfig` | Standard C# indentation, charset, trailing whitespace rules |
+| `.github/workflows/ci.yml` | `dotnet restore → dotnet build --no-restore → dotnet test --no-build` on push/PR |
 
-These additions are pure file content — no new scaffolding logic. The migration updates the `body` (template content) for each affected scaffold row in `knowledge_pages`. User-overridden scaffold templates are unaffected (copy-on-write overlay wins).
+**All 16 non-.NET scaffolds** — add `.github/workflows/ci.yml` per language:
+
+| Templates | CI steps |
+|---|---|
+| `node/*` (4 templates) | `npm ci → npm run lint → npm test`; also add `.nvmrc` |
+| `python/*` (2 templates) | `pip install -e ".[dev]" → ruff check → pytest`; `pyproject.toml` with `[project.optional-dependencies] dev = [pytest, ruff]` |
+| `go/api` | `go build ./... → go vet ./... → go test ./...`; add `Makefile` (build/test/lint targets) |
+| `rust/cli` | `cargo build → cargo clippy → cargo test`; add `rust-toolchain.toml` |
+| `java/maven` | `mvn verify` |
+| `kotlin/console` | `./gradlew check` |
+| `ruby/script` | `bundle install → rspec` |
+| `swift/cli` | `swift build → swift test` |
+| `cpp/cmake` | `cmake → make → ctest`; add `CMakePresets.json` |
+| `lua/script` | `Makefile` (test via busted); `.luacheckrc` |
+| `zig/cli` | `zig build → zig test` |
+
+#### Part D — LLM instruction enrichment
+
+**D1. `IProjectTemplate` — add two optional members** (default `string.Empty`):
+```csharp
+string BuildCommand { get; }  // e.g. "dotnet build {pascal}.sln"
+string RunCommand { get; }    // e.g. "dotnet run --project {pascal}"
+```
+Each scaffold overrides as appropriate. These feed both the artifact manifest (B2) and `next_steps` (D2).
+
+**D2. `CodeCreate` and `CodeCreateMulti` response — add fields**:
+```json
+{
+  "next_steps": [
+    "Add your route handlers — e.g. app.MapPost('/items', async (ItemDto dto) => { ... })",
+    "Register services in Program.cs using builder.Services.Add*()",
+    "Place model classes in a Models/ folder, one file per type",
+    "Call CodeValidate when done to verify structural correctness"
+  ],
+  "build_command": "dotnet build MyApi.sln",
+  "test_command":  "dotnet test MyApi.sln",
+  "run_command":   "dotnet run --project MyApi"
+}
+```
+`next_steps` is generated by each template's `NextSteps(ScaffoldContext)` method. This gives the LLM concrete, project-specific guidance rather than generic style rules.
+
+**D3. Tool `Description` update** for `CodeCreate` and `CodeCreateMulti`:
+> *"After scaffolding, add business logic with the Artifact tool following the returned `conventions` and `next_steps`. Then call `CodeValidate` to verify structural correctness. If issues are found, fix them and call `CodeValidate` once more before presenting the project to the user."*
+
+#### Part E — `CodeValidateTool` (new tool)
+
+**File:** `src/Sovrant.Tools/Projects/CodeValidateTool.cs`  
+**Tool name:** `CodeValidate`  
+**Input:** `run_id`, `workspace_id`, `project_id` (same scope as `CodeCreate`); optional `language` (auto-detected from file extensions if omitted)
+
+**Flow:** `IArtifactStore.ListAsync(scope)` → enumerate files → `ReadAsync(handle, path)` for each → run per-language structural checks → return report. No compiler invocation; no language runtime required in PATH.
+
+**Check matrix:**
+
+| Check | Languages | What |
+|---|---|---|
+| `.sln` present at depth ≤ 2 | dotnet | File exists with `.sln` extension |
+| Each `.csproj` parses as valid XML | dotnet | `XDocument.Parse` |
+| `<TargetFramework>` present in each `.csproj` | dotnet | XPath check |
+| `package.json` present + valid JSON + has `name`/`version` | node | `JsonDocument.Parse` |
+| `go.mod` present with `module` directive | go | File exists; first line check |
+| `Cargo.toml` present with `[package]` section | rust | File exists; line scan |
+| `pyproject.toml` or `requirements.txt` present | python | Either file exists |
+| All `.json` files parse | all | `JsonDocument.Parse` |
+| All `.xml`/`.csproj`/`pom.xml` files parse | all | `XDocument.Parse` |
+| All `.yml`/`.yaml` files parse | all | Basic structure heuristic (no external YAML dep) |
+| `.github/workflows/ci.yml` present | all | File path exists in listing |
+
+**Output on success:**
+```json
+{
+  "valid": true,
+  "language": "dotnet",
+  "file_count": 12,
+  "issue_count": 0,
+  "issues": []
+}
+```
+**Output on failure:**
+```json
+{
+  "valid": false,
+  "language": "dotnet",
+  "file_count": 8,
+  "issue_count": 2,
+  "issues": [
+    {
+      "file": "MyApi.sln",
+      "severity": "error",
+      "message": "Solution file missing — dotnet build will not work from the project root",
+      "fix_hint": "Create MyApi.sln referencing MyApi/MyApi.csproj and MyApi.Tests/MyApi.Tests.csproj"
+    },
+    {
+      "file": "MyApi/MyApi.csproj",
+      "severity": "error",
+      "message": "XML parse error: unexpected token at line 5",
+      "fix_hint": "Check for unclosed tags or invalid characters"
+    }
+  ],
+  "self_correction_prompt": "The scaffold has 2 structural errors (listed above). Fix them using the Artifact tool before presenting the project to the user. Then call CodeValidate once more to confirm."
+}
+```
+
+The `self_correction_prompt` field is the re-entry point for the LLM's agentic loop. The tool itself runs once and returns; the loop is driven by the LLM following the instruction in `self_correction_prompt`. The tool description caps this at one retry: "call CodeValidate once more after fixing."
+
+### Implementation order
+
+| Step | What | Files |
+|---|---|---|
+| A1 | Content-security headers (both servers) | `Sovrant.Web/Program.cs`, `ArtifactRoutes.cs` |
+| A2 | Fix `RemoteArtifactStore.ListAsync` field names | `RemoteArtifactStore.cs` |
+| A3 | Add `GET /v1/artifacts/{runId}.zip` to API server | `ArtifactRoutes.cs` |
+| B1 | `ArtifactManifest` code metadata fields | `ArtifactManifest.cs` |
+| C | Scaffold enrichment — `.sln` + CI for all 21 templates | All scaffold `.cs` files |
+| D1 | `IProjectTemplate.BuildCommand` / `RunCommand` | `IProjectTemplate.cs` + all scaffold classes |
+| D2 | `CodeCreate` / `CodeCreateMulti` response `next_steps` | `CodeCreateTool.cs`, `CodeCreateMultiTool.cs` |
+| B2 | `CodeCreateTool` writes code manifest | `CodeCreateTool.cs` |
+| D3 | Tool `Description` updates | Same files |
+| E | `CodeValidateTool` | New file `Projects/CodeValidateTool.cs` |
+| A4 | `Artifacts.razor` abstraction fix + manifest display | `Artifacts.razor` |
+| — | Tests: enriched scaffolds + `CodeValidateTool` | New test files |
 
 ### What this is not
 
-- Not a full linting dashboard — the validation runs at generation time only; it does not continuously lint the user's working tree
-- Not a style enforcer — guideline conformance is a warning, not a gate
-- Not a replacement for the user's own CI — the generated CI config is a starting point, not a production-hardened pipeline
+- Not a compiler-in-the-loop gate — structural validation only; no language runtime required in PATH
+- Not a style enforcer — `LanguageGuidelines` remain advisory; guideline conformance is not a gate
+- Not a replacement for the user's own CI — the generated CI config is a starting point
+- Not a continuous linting service — validation fires at generation time, not on every file write
 
 ### Acceptance Criteria
 
-- [ ] `ICodeValidator` abstraction + implementations for TypeScript, Python, C#, Rust, Go; Java as stretch
-- [ ] `CodeCreateTool` runs the validator after file writes; round-trip self-correction fires on non-empty error list; max 2 rounds enforced
-- [ ] Validator `skipped` (runtime not in PATH) does not block delivery; UI notes which checks ran
-- [ ] After 2 rounds with remaining errors, best output delivered with a `⚠ N issue(s) remain` notice in the artifact detail
-- [ ] Production scaffold additions land in `V044__enrich_scaffold_templates.sql`; all 21 templates produce CI config, .gitignore, README, .editorconfig on generation
-- [ ] Guideline conformance check verifies key structural properties (tsconfig strict, correct test runner, nullable enabled) against the workspace's language guideline page
-- [ ] All existing Phase 73 golden-path tests pass unchanged — this phase adds a post-processing step, not a replacement
-- [ ] Tested with at least one "weak" open-weights model (e.g. Llama 3.1 8B via Ollama) — self-correction round resolves at least 70% of type/lint errors on a representative scaffold
+- [ ] All 5 .NET scaffolds produce a `.sln` file; `dotnet build {pascal}.sln` succeeds on the generated output with no additional steps
+- [ ] All 21 templates produce `.github/workflows/ci.yml` with correct install/build/test steps for the language
+- [ ] `IProjectTemplate.BuildCommand` / `RunCommand` implemented on all scaffold classes; values appear in `CodeCreate` response and `_manifest.json`
+- [ ] `CodeCreate` response includes `next_steps`, `build_command`, `test_command`, `run_command`; tool description instructs the LLM to call `CodeValidate` after writing code
+- [ ] `CodeValidateTool` registered, all check matrix rows implemented; returns `valid: true` for a freshly scaffolded project of every language; returns `valid: false` with actionable `issues` + `self_correction_prompt` when `.sln` or `package.json` is missing
+- [ ] `GET /v1/artifacts/{runId}.zip` added to API server; returns a correct zip of all run artifacts; respects workspace auth
+- [ ] HTML/SVG/JS artifact downloads from both web and API server send `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff`
+- [ ] `RemoteArtifactStore.ListAsync` field names fixed; remote-mode artifact listing returns correct entries
+- [ ] `Artifacts.razor` no longer casts to `LocalArtifactStore`; uses `IArtifactStore.ListAsync`; displays language badge + build/run commands when `_manifest.json` has code metadata
+- [ ] All existing Phase 73 scaffold tests pass unchanged
+- [ ] New unit tests cover: `.sln` present in each .NET scaffold; `ci.yml` present in each template; `CodeValidateTool` pass/fail cases for dotnet, node, python, go
 
 ### Deferred
 
-- Runtime-not-in-PATH bootstrap (auto-installing Node/Python in a sandbox) — too much platform complexity for v1.5; `skipped` validator is acceptable
-- Continuous background linting of the user's working tree — separate Phase 129 concern
+- Compiler/linter-in-the-loop (invoking `dotnet build`, `tsc`, `ruff` as subprocesses) — requires language runtime availability detection, temp directory management, stdout/stderr capture, and process isolation; too much platform complexity for v1.5; structural validation + self-correction via `CodeValidateTool` achieves the main quality lift without it
+- Continuous background linting of the user's working tree — separate concern
+- Cloud artifact backend (S3/Azure/R2) — `IArtifactStore` is ready; backend registration is the remaining work; deferred to post-v1.5 per the workspace provider roadmap
 
 ---
 

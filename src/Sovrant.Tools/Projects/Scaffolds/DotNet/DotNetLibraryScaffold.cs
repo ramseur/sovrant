@@ -22,6 +22,8 @@ public sealed class DotNetLibraryScaffold : IProjectTemplate
         var pascal = ScaffoldHelpers.ToPascalCase(context.ProjectName);
         var author = context.Get("Author", "Your Name");
         var description = context.Get("Description", $"A .NET library: {pascal}");
+        var mainGuid = Guid.NewGuid().ToString("B").ToUpperInvariant();
+        var testGuid = Guid.NewGuid().ToString("B").ToUpperInvariant();
 
         return
         [
@@ -100,6 +102,90 @@ public sealed class DotNetLibraryScaffold : IProjectTemplate
                         Assert.Throws<ArgumentNullException>(() => {{pascal}}Client.Greet(null!));
                     }
                 }
+                """),
+
+            new($"{pascal}.sln", $$"""
+                Microsoft Visual Studio Solution File, Format Version 12.00
+                # Visual Studio Version 17
+                VisualStudioVersion = 17.0.31903.59
+                MinimumVisualStudioVersion = 10.0.40219.1
+                Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "{{pascal}}", "{{pascal}}/{{pascal}}.csproj", "{{mainGuid}}"
+                EndProject
+                Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "{{pascal}}.Tests", "{{pascal}}.Tests/{{pascal}}.Tests.csproj", "{{testGuid}}"
+                EndProject
+                Global
+                	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+                		Debug|Any CPU = Debug|Any CPU
+                		Release|Any CPU = Release|Any CPU
+                	EndGlobalSection
+                	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+                		{{mainGuid}}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+                		{{mainGuid}}.Debug|Any CPU.Build.0 = Debug|Any CPU
+                		{{mainGuid}}.Release|Any CPU.ActiveCfg = Release|Any CPU
+                		{{mainGuid}}.Release|Any CPU.Build.0 = Release|Any CPU
+                		{{testGuid}}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+                		{{testGuid}}.Debug|Any CPU.Build.0 = Debug|Any CPU
+                		{{testGuid}}.Release|Any CPU.ActiveCfg = Release|Any CPU
+                		{{testGuid}}.Release|Any CPU.Build.0 = Release|Any CPU
+                	EndGlobalSection
+                	GlobalSection(SolutionProperties) = preSolution
+                		HideSolutionNode = FALSE
+                	EndGlobalSection
+                EndGlobal
+                """),
+
+            new("Directory.Build.props", """
+                <Project>
+                  <PropertyGroup>
+                    <Nullable>enable</Nullable>
+                    <ImplicitUsings>enable</ImplicitUsings>
+                    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                    <AnalysisMode>All</AnalysisMode>
+                    <LangVersion>latest</LangVersion>
+                  </PropertyGroup>
+                </Project>
+                """),
+
+            new(".editorconfig", """
+                root = true
+
+                [*]
+                indent_style = space
+                end_of_line = lf
+                charset = utf-8
+                trim_trailing_whitespace = true
+                insert_final_newline = true
+
+                [*.{cs,csproj,props,targets}]
+                indent_size = 4
+
+                [*.{json,yaml,yml}]
+                indent_size = 2
+
+                [*.md]
+                trim_trailing_whitespace = false
+                """),
+
+            new(".github/workflows/ci.yml", """
+                name: CI
+
+                on:
+                  push:
+                    branches: [main, master]
+                  pull_request:
+                    branches: [main, master]
+
+                jobs:
+                  build-and-test:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - uses: actions/checkout@v4
+                      - uses: actions/setup-dotnet@v4
+                        with:
+                          dotnet-version: '10.x'
+                      - run: dotnet restore
+                      - run: dotnet build --no-restore
+                      - run: dotnet test --no-build
                 """),
 
             new(".gitignore", """

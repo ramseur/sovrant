@@ -163,6 +163,32 @@ public sealed class NodeMonorepoScaffold : IProjectTemplate
                 console.log(greet(name));
                 """),
 
+            new(".github/workflows/ci.yml", """
+                name: CI
+
+                on:
+                  push:
+                    branches: [main, master]
+                  pull_request:
+                    branches: [main, master]
+
+                jobs:
+                  build-and-test:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - uses: actions/checkout@v4
+                      - uses: pnpm/action-setup@v4
+                        with:
+                          version: 9
+                      - uses: actions/setup-node@v4
+                        with:
+                          node-version: '22'
+                          cache: 'pnpm'
+                      - run: pnpm install
+                      - run: pnpm build
+                      - run: pnpm test
+                """),
+
             new(".gitignore", """
                 node_modules/
                 dist/

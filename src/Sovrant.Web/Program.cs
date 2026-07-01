@@ -347,6 +347,7 @@ public static class Program
         // Single-file endpoint.
         app.MapGet("/artifacts/{workspaceId}/{projectId}/{runId}/{*relPath}",
             (string workspaceId, string projectId, string runId, string relPath,
+             HttpContext ctx,
              Sovrant.Runtime.Artifacts.IArtifactStore store) =>
         {
             if (store is not Sovrant.Runtime.Artifacts.LocalArtifactStore local)
@@ -376,7 +377,17 @@ public static class Program
             if (!File.Exists(fullPath))
                 return Results.NotFound();
 
-            var contentType = Sovrant.Web.Services.ArtifactMime.For(Path.GetExtension(fullPath));
+            var ext = Path.GetExtension(fullPath);
+            var contentType = Sovrant.Web.Services.ArtifactMime.For(ext);
+
+            // Security: non-rendereable LLM-generated content must not execute in-browser.
+            ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            ctx.Response.Headers["Cache-Control"] = "private, no-store";
+
+            // Force download for types the browser would otherwise render or execute.
+            if (IsUnsafeInlineType(ext))
+                return Results.File(fullPath, contentType, fileDownloadName: Path.GetFileName(fullPath));
+
             return Results.File(fullPath, contentType, enableRangeProcessing: true);
         });
 
@@ -384,6 +395,7 @@ public static class Program
         // an entire run as one download from the Artifacts page.
         app.MapGet("/artifacts/{workspaceId}/{projectId}/{runId}.zip",
             async (string workspaceId, string projectId, string runId,
+             HttpContext ctx,
              Sovrant.Runtime.Artifacts.IArtifactStore store) =>
         {
             if (store is not Sovrant.Runtime.Artifacts.LocalArtifactStore local)
@@ -421,6 +433,8 @@ public static class Program
                 }
             }
             ms.Position = 0;
+            ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            ctx.Response.Headers["Cache-Control"] = "private, no-store";
             return Results.File(ms, contentType: "application/zip", fileDownloadName: $"{safeRun}.zip");
         });
     }
@@ -448,6 +462,19 @@ public static class Program
         if (Directory.Exists(exact)) return exact;
         return Directory.EnumerateDirectories(parent, $"{id}__*").FirstOrDefault();
     }
+
+    /// <summary>
+    /// Returns true for file types the browser would render or execute if served inline.
+    /// These must be forced to <c>Content-Disposition: attachment</c> to prevent XSS
+    /// from LLM-generated content served within the user's origin.
+    /// </summary>
+    private static bool IsUnsafeInlineType(string ext) =>
+        ext.Equals(".html", StringComparison.OrdinalIgnoreCase) ||
+        ext.Equals(".htm", StringComparison.OrdinalIgnoreCase) ||
+        ext.Equals(".svg", StringComparison.OrdinalIgnoreCase) ||
+        ext.Equals(".js", StringComparison.OrdinalIgnoreCase) ||
+        ext.Equals(".mjs", StringComparison.OrdinalIgnoreCase) ||
+        ext.Equals(".cjs", StringComparison.OrdinalIgnoreCase);
 
     private static string SanitizeForFilename(string name)
     {

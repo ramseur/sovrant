@@ -16,6 +16,7 @@ public sealed class DotNetWorkerScaffold : IProjectTemplate
     {
         ArgumentNullException.ThrowIfNull(context);
         var pascal = ScaffoldHelpers.ToPascalCase(context.ProjectName);
+        var mainGuid = Guid.NewGuid().ToString("B").ToUpperInvariant();
 
         return
         [
@@ -72,6 +73,84 @@ public sealed class DotNetWorkerScaffold : IProjectTemplate
                     }
                   }
                 }
+                """),
+
+            new($"{pascal}.sln", $$"""
+                Microsoft Visual Studio Solution File, Format Version 12.00
+                # Visual Studio Version 17
+                VisualStudioVersion = 17.0.31903.59
+                MinimumVisualStudioVersion = 10.0.40219.1
+                Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "{{pascal}}", "{{pascal}}.csproj", "{{mainGuid}}"
+                EndProject
+                Global
+                	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+                		Debug|Any CPU = Debug|Any CPU
+                		Release|Any CPU = Release|Any CPU
+                	EndGlobalSection
+                	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+                		{{mainGuid}}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+                		{{mainGuid}}.Debug|Any CPU.Build.0 = Debug|Any CPU
+                		{{mainGuid}}.Release|Any CPU.ActiveCfg = Release|Any CPU
+                		{{mainGuid}}.Release|Any CPU.Build.0 = Release|Any CPU
+                	EndGlobalSection
+                	GlobalSection(SolutionProperties) = preSolution
+                		HideSolutionNode = FALSE
+                	EndGlobalSection
+                EndGlobal
+                """),
+
+            new("Directory.Build.props", """
+                <Project>
+                  <PropertyGroup>
+                    <Nullable>enable</Nullable>
+                    <ImplicitUsings>enable</ImplicitUsings>
+                    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                    <AnalysisMode>All</AnalysisMode>
+                    <LangVersion>latest</LangVersion>
+                  </PropertyGroup>
+                </Project>
+                """),
+
+            new(".editorconfig", """
+                root = true
+
+                [*]
+                indent_style = space
+                end_of_line = lf
+                charset = utf-8
+                trim_trailing_whitespace = true
+                insert_final_newline = true
+
+                [*.{cs,csproj,props,targets}]
+                indent_size = 4
+
+                [*.{json,yaml,yml}]
+                indent_size = 2
+
+                [*.md]
+                trim_trailing_whitespace = false
+                """),
+
+            new(".github/workflows/ci.yml", """
+                name: CI
+
+                on:
+                  push:
+                    branches: [main, master]
+                  pull_request:
+                    branches: [main, master]
+
+                jobs:
+                  build:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - uses: actions/checkout@v4
+                      - uses: actions/setup-dotnet@v4
+                        with:
+                          dotnet-version: '10.x'
+                      - run: dotnet restore
+                      - run: dotnet build --no-restore
+                      - run: dotnet publish -c Release -o publish/
                 """),
 
             new(".gitignore", """

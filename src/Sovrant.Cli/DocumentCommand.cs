@@ -2,9 +2,11 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Scriban;
 using Sovrant.Runtime.Artifacts;
 using Sovrant.Runtime.Documents;
 using Sovrant.Runtime.Documents.Templates;
+using Sovrant.Runtime.Knowledge;
 using Sovrant.Runtime.Workspaces;
 using Spectre.Console;
 using SovrantDocumentFormat = Sovrant.Runtime.Documents.DocumentFormat;
@@ -28,6 +30,7 @@ internal static class DocumentCommand
         root.Add(BuildFields(buildServices));
         root.Add(BuildRender(buildServices));
         root.Add(BuildSuggest(buildServices));
+        root.Add(BuildLint(buildServices));
         return root;
     }
 
@@ -405,6 +408,115 @@ internal static class DocumentCommand
 
         return cmd;
     }
+
+    private static Command BuildLint(Func<ParseResult, ServiceProvider> buildServices)
+    {
+        var idOpt = new Option<string?>("--id")
+        { Description = "Lint a single template by id (e.g. 'legal/nda'). Omit to lint all DB-backed templates." };
+        var jsonOpt = new Option<bool>("--json")
+        { Description = "Emit machine-readable JSON instead of a table." };
+
+        var cmd = new Command("lint", "Validate Scriban syntax and field schema for DB-backed document templates.");
+        cmd.Add(idOpt);
+        cmd.Add(jsonOpt);
+
+        cmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
+        {
+            await using var sp = buildServices(pr);
+            var store = sp.GetRequiredService<IKnowledgeStore>();
+            var idFilter = pr.GetValue(idOpt);
+            var asJson = pr.GetValue(jsonOpt);
+
+            var pages = await store.GetAllEffectiveAsync("document-templates", ct: ct).ConfigureAwait(false);
+
+            if (!string.IsNullOrWhiteSpace(idFilter))
+                pages = pages.Where(p => p.Slug.Equals(idFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (pages.Count == 0)
+            {
+                if (asJson)
+                    Console.WriteLine(JsonSerializer.Serialize(new { status = "no_templates", message = "No DB-backed templates found." }, s_jsonOpts));
+                else
+                    AnsiConsole.MarkupLine("[yellow]No DB-backed templates found.[/]");
+                return;
+            }
+
+            var results = new List<LintResult>();
+            foreach (var page in pages)
+            {
+                var errors = new List<string>();
+
+                // Scriban syntax check
+                try
+                {
+                    var tpl = Template.Parse(page.Body ?? string.Empty);
+                    if (tpl.HasErrors)
+                        errors.AddRange(tpl.Messages.Select(m => $"Scriban: {m.Message}"));
+                }
+                catch (InvalidOperationException ex)
+                {
+                    errors.Add($"Scriban parse exception: {ex.Message}");
+                }
+
+                // fields_json well-formed JSON check
+                if (!string.IsNullOrWhiteSpace(page.FieldsJson))
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(page.FieldsJson);
+                        if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                            errors.Add("fields_json: expected a JSON array");
+                    }
+                    catch (JsonException ex)
+                    {
+                        errors.Add($"fields_json: {ex.Message}");
+                    }
+                }
+
+                results.Add(new LintResult(page.Slug, page.Name, errors));
+            }
+
+            var passCount = results.Count(r => r.Errors.Count == 0);
+            var failCount = results.Count - passCount;
+
+            if (asJson)
+            {
+                Console.WriteLine(JsonSerializer.Serialize(new
+                {
+                    total = results.Count,
+                    passed = passCount,
+                    failed = failCount,
+                    templates = results.Select(r => new
+                    {
+                        id = r.Id,
+                        name = r.Name,
+                        status = r.Errors.Count == 0 ? "pass" : "fail",
+                        errors = r.Errors,
+                    }),
+                }, s_jsonOpts));
+            }
+            else
+            {
+                var table = new Table()
+                    .Title($"[bold]Document template lint — {passCount}/{results.Count} passed[/]")
+                    .AddColumns("Id", "Name", "Status", "Errors");
+                foreach (var r in results)
+                {
+                    var status = r.Errors.Count == 0 ? "[green]pass[/]" : "[red]fail[/]";
+                    var errText = r.Errors.Count == 0 ? string.Empty : Markup.Escape(string.Join("; ", r.Errors));
+                    table.AddRow(Markup.Escape(r.Id), Markup.Escape(r.Name), status, errText);
+                }
+                AnsiConsole.Write(table);
+            }
+
+            if (failCount > 0)
+                Environment.ExitCode = 1;
+        });
+
+        return cmd;
+    }
+
+    private sealed record LintResult(string Id, string Name, List<string> Errors);
 
     private static void Fail(string message, bool asJson)
     {

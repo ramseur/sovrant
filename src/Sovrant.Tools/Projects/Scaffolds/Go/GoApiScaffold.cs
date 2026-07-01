@@ -99,6 +99,28 @@ public sealed class GoApiScaffold : IProjectTemplate
                 }
                 """),
 
+            new(".github/workflows/ci.yml", """
+                name: CI
+
+                on:
+                  push:
+                    branches: [main, master]
+                  pull_request:
+                    branches: [main, master]
+
+                jobs:
+                  build-and-test:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - uses: actions/checkout@v4
+                      - uses: actions/setup-go@v5
+                        with:
+                          go-version: '1.23'
+                      - run: go build ./...
+                      - run: go test ./...
+                      - run: go vet ./...
+                """),
+
             new(".gitignore", """
                 /bin/
                 *.exe
