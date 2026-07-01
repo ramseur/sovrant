@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-06-30 (Phase 128 design finalised — five-part plan: artifact security hardening (content-security headers, RemoteArtifactStore field-name fix, API zip endpoint, Artifacts.razor abstraction fix); code manifest in ArtifactManifest; scaffold enrichment (.sln + Directory.Build.props + .editorconfig + CI for all 21 templates, every .NET scaffold immediately buildable with dotnet build {sln}); LLM instruction enrichment (IProjectTemplate.BuildCommand/RunCommand, CodeCreate next_steps response, tool description update); new CodeValidateTool (structural checks via IArtifactStore.ListAsync — no compiler in PATH required). Phase 129 planned — Missions → Workflows rename + UX (surface labels only, dedicated Workflows page, positioning callout, `/v1/workflows` alias). v1.5 focus: Phase 114 ✅ skill enrichment + Phase 74 markdown document templates + Phase 128 + Phase 126 + Phase 129. Phase 123 ✅ — Memory System: workspace memory with public/private scoping, "+Remember" button in Chat (Web + Desktop), V041/V042 migrations, per-user injection in multi-user deployments. V040 MCP stable IDs (Phase 105 workspace-level gating). V043 email-as-user-id (replaces `usr_{hex}` PKs). PostgresSchema split to `db/postgres/PostgresSchema.sql` + `db/supabase/migrations/` (Phase 40C documentation update). Phase 127 planned — Supabase RLS. Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
+**Last updated:** 2026-07-01 (Phase 128 shipped ✅ — five-part plan complete: artifact security hardening (content-security headers, RemoteArtifactStore field-name fix, API zip endpoint, Artifacts.razor abstraction fix); code manifest in ArtifactManifest; scaffold enrichment (.sln + Directory.Build.props + .editorconfig + CI for all 21 templates, every .NET scaffold immediately buildable with dotnet build {sln}); LLM instruction enrichment (IProjectTemplate.BuildCommand/RunCommand, CodeCreate next_steps response, tool description update); new CodeValidateTool (structural checks via IArtifactStore.ListAsync — no compiler in PATH required, V045/V046 migrations). Phase 129 planned — Missions → Workflows rename + UX (surface labels only, dedicated Workflows page, positioning callout, `/v1/workflows` alias). v1.5 focus: Phase 114 ✅ skill enrichment + Phase 74 markdown document templates + Phase 128 ✅ + Phase 126 + Phase 129. Phase 123 ✅ — Memory System: workspace memory with public/private scoping, "+Remember" button in Chat (Web + Desktop), V041/V042 migrations, per-user injection in multi-user deployments. V040 MCP stable IDs (Phase 105 workspace-level gating). V043 email-as-user-id (replaces `usr_{hex}` PKs). PostgresSchema split to `db/postgres/PostgresSchema.sql` + `db/supabase/migrations/` (Phase 40C documentation update). Phase 127 planned — Supabase RLS. Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -32,9 +32,9 @@ What we are actively working on and shipping next, in priority order.
 | **v1.4 — done** | Bug fixes | Ollama provider label/routing fixed (FriendlyProviderName checks provider name before URL); FK error 19 on project creation fixed (PersonalWorkspaceId reads `App.SovrantUserId` at call time) ✅ |
 | **v1.5 — done** | Phase 114 | Enrich built-in skill definitions — 2-3 sentence descriptions, agent list wiring, `verification-loop` tools fix; V044 migration; immediate quality lift for every LLM via the IKnowledgeRouter harness ✅ |
 | **v1.5 — done** | Phase 74 | DB-backed document templates — 42 of 44 built-in templates in `knowledge_pages` via V037; Scriban rendering; admin Edit/Revert on Documents page (Web + Desktop); copy-on-write overlay; `sovrant document lint` CLI; authoring guide ✅ |
-| **v1.5 — next** | Phase 128 | Code generation quality gates — artifact security hardening (content-security headers, API zip endpoint, RemoteArtifactStore fix, Artifacts.razor abstraction); `.sln` + `Directory.Build.props` + CI for all 21 templates (every project immediately runnable); `CodeValidateTool` (structural checks via `IArtifactStore.ListAsync`, no compiler in PATH); `CodeCreate` `next_steps` + `build_command` + LLM instruction update; `ArtifactManifest` code metadata |
+| **v1.5 — done** | Phase 128 | Code generation quality gates — artifact security hardening (content-security headers, API zip endpoint, RemoteArtifactStore fix, Artifacts.razor abstraction); `.sln` + `Directory.Build.props` + CI for all 21 templates (every project immediately runnable); `CodeValidateTool` (structural checks via `IArtifactStore.ListAsync`, no compiler in PATH); `CodeCreate` `next_steps` + `build_command` + LLM instruction update; `ArtifactManifest` code metadata; V045/V046 migrations ✅ |
 | **v1.5 — next** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity |
-| **v1.5 — next** | Phase 129 | Missions → Workflows — surface-label rename (no DB/engine changes); dedicated Workflows page with goal-first launch, active/recent cards, detail view; positioning callout (AI workflows vs n8n/Zapier automation); `/v1/workflows` API alias |
+| **v1.5 — next** | Phase 129 | Missions → Workflows — surface-label rename (presentation-layer only); dedicated Workflows page with goal-first launch, active/recent cards, detail view; positioning callout (AI workflows vs n8n/Zapier automation); `/v1/workflows` API alias; **plus dual-path execution** — route through Claude Agent SDK dynamic workflow orchestration when a qualifying Claude tier is active, else fall back to Sovrant's own mission engine (base version) — model/tier gate TBD |
 
 > Items below v1.0 are planned but not yet scheduled. See [Still pending](#still-pending) for the full gap list.
 
@@ -49,7 +49,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 - **141 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth, knowledge, trust-rules, attributions)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
-- SQLite persistence layer with 44 versioned migrations (V001–V044) — V044 enrich built-in skill descriptions + agent/tool list fixes (Phase 114), V040 `mcp_servers.id` stable surrogate for workspace-scoped gating (Phase 105), V041 `workspace_memory` owner/privacy columns (Phase 123), V042 `session_summaries`/`learned_patterns`/`instincts` owner scoping (Phase 123), V043 email-as-user-id rewrite (replaces `usr_{hex}` PKs), V038 `knowledge_attributions` table (Phase 116F), V039 `keystore` table — master AES key in DB (Phase 96), V030 `is_private` (Phase 98), V031 `agent_name` (Phase 106), V032–V033 `knowledge_pages` + `knowledge_attributions` schema (Phase 108/116F), V034–V037 `role`/`recommended_level` + `fields_json`/`filename_template` + skill/agent/doc-template seeds (Phase 112A–D) on top of the Phase 32/42.5/51/52/57/78 foundation
+- SQLite persistence layer with 46 versioned migrations (V001–V046) — V045 seed built-in tool guides for CodeCreate/CodeCreateMulti (Phase 128D), V046 seed CodeValidateTool guide (Phase 128E), V044 enrich built-in skill descriptions + agent/tool list fixes (Phase 114), V040 `mcp_servers.id` stable surrogate for workspace-scoped gating (Phase 105), V041 `workspace_memory` owner/privacy columns (Phase 123), V042 `session_summaries`/`learned_patterns`/`instincts` owner scoping (Phase 123), V043 email-as-user-id rewrite (replaces `usr_{hex}` PKs), V038 `knowledge_attributions` table (Phase 116F), V039 `keystore` table — master AES key in DB (Phase 96), V030 `is_private` (Phase 98), V031 `agent_name` (Phase 106), V032–V033 `knowledge_pages` + `knowledge_attributions` schema (Phase 108/116F), V034–V037 `role`/`recommended_level` + `fields_json`/`filename_template` + skill/agent/doc-template seeds (Phase 112A–D) on top of the Phase 32/42.5/51/52/57/78 foundation
 - Single `.env` file configuration — `sovrant.config` removed; all bootstrap knobs are env vars; routing and swarm config fully DB-backed
 - **Integrations Gallery** on Web and Desktop — catalog-first MCP onramp with Automation (Composio, n8n, Zapier, Make), Platform (GitHub, Slack, Notion, Linear, Stripe, PostgreSQL, Supabase, Filesystem), and Search (Brave, Exa, Tavily) tiers; credentials stored in encrypted keystore (Phase 95 ✅)
 - **Model switcher with provider discovery** — configured providers selectable inline; unconfigured known providers shown with click-to-configure deep-link to Settings → Providers on both Web and Desktop
@@ -224,8 +224,8 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator while agent works; clean visual hierarchy where the agent's answer is prominent and tool work is subordinate; consistent Web + Desktop parity | Phase 126 | Planned |
 | Web search via integrations — move web search out of the hard-coded `WebSearchBackend` enum and into the Integration Gallery; add `IntegrationKind.HttpApi` for direct REST adapters (no MCP process); define `IWebSearchProvider` interface; ship DuckDuckGo (built-in free default), Brave, FireCrawl, Exa, Tavily as `HttpApi` catalog entries; add Crawl4AI as a scraper/fetcher integration; admin picks active search provider from Integrations page; remove `WebSearchBackend` enum; existing MCP search entries remain as alternatives; unit test coverage for WebFetchTool, search providers, and dispatch | Phase 125 | Planned |
 | Supabase Row Level Security — enable RLS on all privacy-sensitive tables in the Supabase migration and write policies for the `owner_user_id` model; service-role key retains full unrestricted access (Supabase bypasses RLS for service role by design); anon/authenticated JWT callers are scoped to their own data at the database layer; complements the existing application-layer query filters | Phase 127 | Planned |
-| Code generation quality gates — artifact security hardening; `.sln` + `Directory.Build.props` + CI for all 21 templates (every scaffold immediately runnable); `CodeValidateTool` (structural checks, no compiler in PATH); `CodeCreate` `next_steps` + `build_command` + LLM instruction update; `ArtifactManifest` code metadata | Phase 128 | Planned (v1.5) |
-| Missions → Workflows rename and UX review — surface-label rename only (no DB/runtime changes); dedicated Workflows page (goal-first launch, active/recent cards, detail view with journal + artifacts); positioning callout distinguishing AI-driven workflows from trigger-automation (n8n/Zapier/Make); `/v1/workflows` alias for `/v1/missions`; Phase 119 run-modes surfaced in the launch form | Phase 129 | Planned (v1.5) |
+| Code generation quality gates — artifact security hardening; `.sln` + `Directory.Build.props` + CI for all 21 templates (every scaffold immediately runnable); `CodeValidateTool` (structural checks, no compiler in PATH); `CodeCreate` `next_steps` + `build_command` + LLM instruction update; `ArtifactManifest` code metadata | Phase 128 | ✅ Done |
+| Missions → Workflows rename and UX review — surface-label rename (presentation-layer only); dedicated Workflows page (goal-first launch, active/recent cards, detail view with journal + artifacts); positioning callout distinguishing AI-driven workflows from trigger-automation (n8n/Zapier/Make); `/v1/workflows` alias for `/v1/missions`; Phase 119 run-modes surfaced in the launch form; plus dual-path execution — Claude Agent SDK dynamic workflow orchestration when a qualifying Claude tier is active, otherwise Sovrant's own mission engine as the base version (model/tier gate TBD) | Phase 129 | Planned (v1.5) |
 
 ### v1.0 release polish ✅
 
@@ -11377,7 +11377,7 @@ Once all backends are integrations, the `WebSearchBackend` enum and `WebSearchOp
 
 ## Phase 126 — Chat Conversation UX: Collapsed Work Strips & Clear Hierarchy
 
-**Status:** Planned
+**Status:** Planned (v1.5) — next up after Phase 128 ✅
 
 ### Why
 
@@ -11463,6 +11463,25 @@ Desktop (`ChatView.axaml` / `ToolUseViewModel`):
 
 Both surfaces share the same visual language (strip line format, icon set, status badge colours) so the experience is identical whether the user is on Web or Desktop.
 
+**7. Color & contrast — reuse existing tokens, verify on both themes**
+
+The strip must not invent a fourth color system. Sovrant already has a themed token set for exactly this kind of chrome, and Web/Desktop have kept it token-for-token identical so far — the strip should extend it, not bypass it:
+
+| Purpose | Web token (`sovrant.css`) | Desktop resource (`SovrantDarkColors.axaml` / `SovrantLightColors.axaml`) | Dark value | Light value |
+|---|---|---|---|---|
+| Strip / tool-row background | `--tool-use-bg` | `ToolUseBackground` | `#1E1E2E` | `#F0F0FA` |
+| Strip / tool-row border | `--tool-use-border` | `ToolUseBorder` | `#3A3A4A` | `#D0D0E0` |
+| In-progress / active accent | `--brand-primary` | `BrandPrimary` | `#6D52C6` | `#6D52C6` (only token intentionally identical across both themes) |
+| Completed / pass indicator | `--status-pass` | `StatusPass` | `#4CAF50` | `#4CAF50` |
+| Partial-failure / warn indicator | `--status-warn` | `StatusWarn` | `#FF9800` | `#FF9800` |
+| Error / fail indicator | `--status-fail` | `StatusFail` | `#F44336` | `#F44336` |
+
+Two things to get right before this ships, not after:
+
+- **The status trio isn't actually re-themed today.** `sovrant.css` only sets `--status-pass/warn/fail` in the `:root[data-theme="dark"]` block; the `:root[data-theme="light"]` block never overrides them, so light mode silently inherits the same dark-tuned hex values (same story in the two Desktop `.axaml` dictionaries — they happen to repeat identical hex rather than share one source). That's been fine for small dots/badges, but the work strip's ⚠ error state and the animated in-progress text put color closer to text-label duty, where dark-surface-tuned colors can under-perform on light backgrounds.
+- **Contrast check, not eyeball check, before merge.** `#4CAF50` green as a filled dot/icon (3:1 WCAG graphical-object threshold) is fine on both `#1E1E2E` (dark tool-use bg) and `#F0F0FA` (light tool-use bg). The same `#4CAF50` used as *text* on a light card (`--surface-card: #FFFFFF`) lands around ~2.4:1 — well under the 4.5:1 text threshold. Rule for this phase: pass/warn/fail render as icon + fill only, never as colored text; if a future design wants colored status *text*, that needs its own light-theme-specific values (e.g. `--status-pass-light`) rather than reusing the dark-tuned hex.
+- **No new tokens for the base strip.** Background/border/active-accent reuse existing tokens as-is. If the contrast check above does force new light-specific status values, add them to both `sovrant.css` and `SovrantLightColors.axaml` in the same PR — don't let Web and Desktop drift on hex values the way the two Desktop `.axaml` files currently duplicate rather than share.
+
 ### What stays out of scope
 
 - Replay / history view of tool calls across sessions (separate memory/history phase)
@@ -11480,6 +11499,7 @@ Both surfaces share the same visual language (strip line format, icon set, statu
 - The answer text is readable without scrolling past tool blocks on a typical 1080p screen
 - Web and Desktop render the strip with the same visual language
 - No regression in tool confirmation flow (Allow once / Allow for turn / Deny buttons still work within the strip)
+- Pass/warn/fail indicators are icon+fill only (no colored text labels) on both themes; if colored text ships anyway, it passes a 4.5:1 contrast check against the light theme's `--surface-card` / `--tool-use-bg` backgrounds, not just the dark theme
 
 ---
 
@@ -11540,7 +11560,7 @@ The commented-out policy skeletons already exist in `db/supabase/migrations/2026
 
 ## Phase 128 — Code Generation Quality Gates
 
-**Status:** Planned (v1.5)
+**Status:** ✅ Done (2026-07-01)
 
 ### Why
 
@@ -11840,6 +11860,16 @@ A short inline note on the Workflows page (dismissible, not a modal) that surfac
 
 This single sentence prevents the most common expectation mismatch.
 
+#### 6 — Dual-path execution: Claude Agent SDK dynamic workflows when available
+
+Unlike items 1–5, this is an engine-level addition, not a presentation change. When the workflow's active model is a qualifying Claude tier (exact gate TBD at design time — candidates are the Opus/Sonnet 5 family resolved via `ModelTierResolver`, not simply "any Anthropic key configured"), workflow execution can route through the Claude Agent SDK's dynamic subagent/workflow orchestration instead of Sovrant's own planner/executor. When no qualifying Claude model is configured — no key, or a non-qualifying provider/model — workflows fall back to Sovrant's existing provider-agnostic mission engine (`LlmMissionPlanner` / `ParallelMissionExecutor`), which remains the base version and continues to work with any OpenAI-compatible provider.
+
+Open design questions to resolve before implementation, not before this roadmap entry:
+- Exact model/tier gate — which specific Claude models qualify, and where that check lives (`ModelTierResolver` vs a new capability flag)
+- Whether the two backends emit a compatible event journal, or the Workflows UI needs to tolerate two event vocabularies under one `/v1/workflows` contract
+- Whether a settings override lets a user force one path or the other rather than always auto-selecting by provider capability
+- Whether this ships inside Phase 129 or splits into its own phase, since it changes the "no DB/engine changes" framing that otherwise applies to items 1–5
+
 ### What we explicitly do not build
 
 | Not building | Why | Alternative |
@@ -11854,9 +11884,10 @@ The constraint is intentional and permanent. Sovrant's value is the AI layer. Ad
 
 ### Relationship to other phases
 
-- **Phase 51** ✅ built the engine (`IMissionStore`, `LlmMissionPlanner`, `ParallelMissionExecutor`) — not touched
+- **Phase 51** ✅ built the engine (`IMissionStore`, `LlmMissionPlanner`, `ParallelMissionExecutor`) — remains the base-version execution path (item 6) and is otherwise not touched by items 1–5
 - **Phase 119** (planned) adds per-mission run-modes and integration-sourced Claws — Phase 129 uses those run-modes in the new launch form; Phase 119 should ship first or in parallel
 - **Phase 94** ✅ (Orchestration Studio) remains as the team-composition surface; Phase 129 adds a goal-first surface on top
+- **Claude Agent SDK dependency (item 6, new)** — requires an Anthropic/Claude provider integration capable of driving the Agent SDK's dynamic subagent orchestration; needs its own design pass on the model/tier gate before implementation
 
 ### Acceptance criteria
 
