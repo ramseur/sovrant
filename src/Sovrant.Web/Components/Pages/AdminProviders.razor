@@ -149,6 +149,15 @@
         }
 
         _apiKey = string.Empty;
+
+        // Deep-link from the top provider switcher's "Set up →" unconfigured-provider entry.
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(Nav.Uri).Query);
+        if (query.TryGetValue("provider", out var providerParam)
+            && Providers.Contains(providerParam.ToString(), StringComparer.Ordinal))
+        {
+            _selectedProvider = providerParam.ToString();
+        }
+
         if (ProviderBaseUrls.TryGetValue(_selectedProvider, out var defaultUrl))
             _baseUrl = defaultUrl;
 

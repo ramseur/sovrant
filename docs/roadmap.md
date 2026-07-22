@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-07-01 (Phase 128 shipped ✅ — five-part plan complete: artifact security hardening (content-security headers, RemoteArtifactStore field-name fix, API zip endpoint, Artifacts.razor abstraction fix); code manifest in ArtifactManifest; scaffold enrichment (.sln + Directory.Build.props + .editorconfig + CI for all 21 templates, every .NET scaffold immediately buildable with dotnet build {sln}); LLM instruction enrichment (IProjectTemplate.BuildCommand/RunCommand, CodeCreate next_steps response, tool description update); new CodeValidateTool (structural checks via IArtifactStore.ListAsync — no compiler in PATH required, V045/V046 migrations). Phase 129 planned — Missions → Workflows rename + UX (surface labels only, dedicated Workflows page, positioning callout, `/v1/workflows` alias). v1.5 focus: Phase 114 ✅ skill enrichment + Phase 74 markdown document templates + Phase 128 ✅ + Phase 126 + Phase 129. Phase 123 ✅ — Memory System: workspace memory with public/private scoping, "+Remember" button in Chat (Web + Desktop), V041/V042 migrations, per-user injection in multi-user deployments. V040 MCP stable IDs (Phase 105 workspace-level gating). V043 email-as-user-id (replaces `usr_{hex}` PKs). PostgresSchema split to `db/postgres/PostgresSchema.sql` + `db/supabase/migrations/` (Phase 40C documentation update). Phase 127 planned — Supabase RLS. Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
+**Last updated:** 2026-07-01 (Phase 130 planned — OpenRouter account registration & in-app key issuance via OAuth PKCE against OpenRouter's own `/auth` flow, reusing Phase 101's PKCE + loopback-listener plumbing; "Get an OpenRouter key" button on Providers settings (Web + Desktop) removes the manual copy/paste key step entirely. Phase 128 shipped ✅ — five-part plan complete: artifact security hardening (content-security headers, RemoteArtifactStore field-name fix, API zip endpoint, Artifacts.razor abstraction fix); code manifest in ArtifactManifest; scaffold enrichment (.sln + Directory.Build.props + .editorconfig + CI for all 21 templates, every .NET scaffold immediately buildable with dotnet build {sln}); LLM instruction enrichment (IProjectTemplate.BuildCommand/RunCommand, CodeCreate next_steps response, tool description update); new CodeValidateTool (structural checks via IArtifactStore.ListAsync — no compiler in PATH required, V045/V046 migrations). Phase 129 planned — Missions → Workflows rename + UX (surface labels only, dedicated Workflows page, positioning callout, `/v1/workflows` alias). v1.5 focus: Phase 114 ✅ skill enrichment + Phase 74 markdown document templates + Phase 128 ✅ + Phase 126 + Phase 129. Phase 123 ✅ — Memory System: workspace memory with public/private scoping, "+Remember" button in Chat (Web + Desktop), V041/V042 migrations, per-user injection in multi-user deployments. V040 MCP stable IDs (Phase 105 workspace-level gating). V043 email-as-user-id (replaces `usr_{hex}` PKs). PostgresSchema split to `db/postgres/PostgresSchema.sql` + `db/supabase/migrations/` (Phase 40C documentation update). Phase 127 planned — Supabase RLS. Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -226,6 +226,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Supabase Row Level Security — enable RLS on all privacy-sensitive tables in the Supabase migration and write policies for the `owner_user_id` model; service-role key retains full unrestricted access (Supabase bypasses RLS for service role by design); anon/authenticated JWT callers are scoped to their own data at the database layer; complements the existing application-layer query filters | Phase 127 | Planned |
 | Code generation quality gates — artifact security hardening; `.sln` + `Directory.Build.props` + CI for all 21 templates (every scaffold immediately runnable); `CodeValidateTool` (structural checks, no compiler in PATH); `CodeCreate` `next_steps` + `build_command` + LLM instruction update; `ArtifactManifest` code metadata | Phase 128 | ✅ Done |
 | Missions → Workflows rename and UX review — surface-label rename (presentation-layer only); dedicated Workflows page (goal-first launch, active/recent cards, detail view with journal + artifacts); positioning callout distinguishing AI-driven workflows from trigger-automation (n8n/Zapier/Make); `/v1/workflows` alias for `/v1/missions`; Phase 119 run-modes surfaced in the launch form; plus dual-path execution — Claude Agent SDK dynamic workflow orchestration when a qualifying Claude tier is active, otherwise Sovrant's own mission engine as the base version (model/tier gate TBD) | Phase 129 | Planned (v1.5) |
+| OpenRouter account registration & key issuance in-app — "Get an OpenRouter key" button on the Providers setup flow (Web + Desktop) drives OpenRouter's OAuth PKCE flow (`openrouter.ai/auth`) so a user can register a new OpenRouter account or sign into an existing one and receive a working API key without ever leaving Sovrant or hand-copying a key; reuses the PKCE code-challenge/verifier plumbing and loopback callback listener built for Phase 101's MCP OAuth; issued key is written straight into the encrypted keystore and activated as a provider profile like a manually-entered key | Phase 130 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -11900,3 +11901,67 @@ The constraint is intentional and permanent. Sovrant's value is the AI layer. Ad
 - [ ] Positioning callout visible on Workflows page; dismissible per user; links to Integrations
 - [ ] All existing mission/orchestration tests pass unchanged (no engine code modified)
 - [ ] Web + Desktop parity on all new UI surfaces
+
+---
+
+## Phase 130 — OpenRouter Account Registration & In-App Key Issuance
+
+**Status:** Planned
+
+### Why
+
+Today, adding OpenRouter as a provider means: open a browser, create or log into an OpenRouter account, navigate to Keys, generate one, copy it, switch back to Sovrant, and paste it into the provider form. That's a five-step context switch for what should be the single fastest path to a working model — OpenRouter is the default onramp for free-tier models (`SOVRANT_FREE_MODELS_ONLY`, `:free` model routing) and is already Sovrant's most-referenced provider outside the default OpenAI.
+
+OpenRouter publishes exactly the flow that removes this friction: [OAuth PKCE](https://openrouter.ai/docs/use-cases/oauth-pkce). Unlike a normal OAuth login, the token exchange returns a real, permanent OpenRouter API key — not a session token — meaning the end result is identical to what a user would have pasted in by hand, just without the hand.
+
+### What ships
+
+#### 1 — PKCE flow against OpenRouter's own auth endpoint
+
+Reuse the PKCE primitives already built for Phase 101 (MCP OAuth 2.1 + PKCE): code-verifier generation, S256 code-challenge derivation, and the loopback callback listener (`McpOAuthCallbackListener` pattern) — but point them at OpenRouter's dedicated flow rather than a generic MCP server's `/authorize` endpoint:
+
+1. Sovrant generates `code_verifier` + `code_challenge` (S256) and opens `https://openrouter.ai/auth?callback_url={redirect}&code_challenge={challenge}&code_challenge_method=S256` in the user's browser.
+2. The user registers a new OpenRouter account or logs into an existing one, then approves the connection — entirely on OpenRouter's own site, so Sovrant never sees a password.
+3. OpenRouter redirects back to Sovrant's callback with a `code`.
+4. Sovrant exchanges `code` + `code_verifier` via `POST https://openrouter.ai/api/v1/auth/keys` and receives a live OpenRouter API key.
+5. The key is written directly to the encrypted keystore (same AES-256-GCM store used for manually entered keys) and a `provider_profiles` row is created/activated for OpenRouter — indistinguishable afterward from a hand-entered key.
+
+A new `OpenRouterAuthService` in `Sovrant.Runtime` owns this exchange; it is a sibling to `McpOAuthService`, not a fork of it — the PKCE helper (verifier/challenge generation) is extracted into a shared internal utility both services call, rather than duplicated.
+
+#### 2 — Callback handling per surface
+
+- **Desktop:** ephemeral loopback HTTP listener on `127.0.0.1:{port}/openrouter-callback`, matching the pattern `McpOAuthCallbackListener` already uses for MCP server auth — no new listener architecture.
+- **Web:** ASP.NET Core route (`/auth/openrouter/callback`) using an absolute redirect URI, matching Phase 101's web OIDC-style callback handling.
+
+#### 3 — UI entry point (Web + Desktop, Providers settings)
+
+- Existing "Add Provider" flow gains a second path alongside "Enter API key manually": a **"Get an OpenRouter key"** button, shown only for the OpenRouter provider entry.
+- Clicking it opens the system browser to the OpenRouter auth page and shows a waiting state ("Waiting for OpenRouter authorization…") with a cancel option.
+- On success, the provider profile is created and activated automatically — same end state as the manual-entry path, so downstream code (model picker, `SmartRouter`, cost tracking) needs no changes.
+- On denial/timeout/error, a plain-language error is shown and the manual-entry form remains available as a fallback.
+
+#### 4 — Multi-user / workspace scoping
+
+Same scoping rules as any other provider profile (Phase 95/Phase 8): the issued key is stored per-user or per-workspace depending on where the flow was launched from (personal Settings vs. a workspace's admin Providers page), reusing the existing `provider_profiles` ownership model — no new scoping concept.
+
+### Non-goals
+
+- Managing OpenRouter account settings (billing, usage limits) from within Sovrant — out of scope; Sovrant only obtains a key.
+- Building a generic "OAuth key issuance" framework for other providers — this phase is scoped to OpenRouter's specific PKCE-for-a-key flow. If another provider ships an equivalent flow later, it gets its own phase informed by this one.
+- Revoking or rotating the key from Sovrant — the key is managed like any other stored credential (delete + re-run the flow to rotate), consistent with how manually entered keys are already handled.
+
+### Relationship to other phases
+
+- **Phase 101** ✅ (OAuth 2.1 + PKCE for MCP) supplies the PKCE primitives and loopback-listener pattern this phase reuses — Phase 130 does not reimplement PKCE from scratch.
+- **Phase 95** ✅ (Integrations Gallery) established the encrypted-keystore-backed credential pattern this phase writes into.
+- **Phase 8** ✅ (multi-tenant per-request credentials) and the workspace-scoped provider profile model (README §Multi-User & Workspaces) define where the issued key is scoped.
+
+### Acceptance criteria
+
+- [ ] "Get an OpenRouter key" button visible on the OpenRouter provider entry in Settings (Web + Desktop)
+- [ ] Full PKCE round-trip verified against OpenRouter's real `/auth` and `/api/v1/auth/keys` endpoints (registration path and existing-account login path both tested manually)
+- [ ] Issued key lands in the encrypted keystore and appears as an active provider profile with no additional user action
+- [ ] Desktop loopback listener and Web callback route both tear down cleanly on success, cancel, and timeout
+- [ ] Manual key-entry path remains fully functional and is offered as a fallback on any error
+- [ ] Web + Desktop parity
+- [ ] No changes required in `SmartRouter`, model discovery, or cost tracking — the issued key behaves identically to a manually entered one
