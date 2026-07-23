@@ -24,10 +24,6 @@
                 {
                     <span class="elapsed-text">@Message.ElapsedText</span>
                 }
-                @if (Message.IsComplete && !string.IsNullOrEmpty(Message.ActionSummary))
-                {
-                    <span class="action-summary">@Message.ActionSummary</span>
-                }
                 @if (Message.IsComplete)
                 {
                     <button class="btn-copy-message" @onclick="CopyMessageAsync">@_copyLabel</button>
@@ -48,49 +44,57 @@
                 </div>
             }
 
-            @if (Message.IsExecutingTools)
-            {
-                <div class="execution-status msg-indent">
-                    <span class="thinking-dot"></span>
-                    <span class="execution-status-text">@Message.ExecutionStatusText</span>
-                </div>
+            @{
+                var pendingTools = Message.ToolUses.Where(t => t.IsPendingConfirmation).ToList();
+                var stripTools = Message.ToolUses.Where(t => !t.IsPendingConfirmation).ToList();
+                var hasWork = pendingTools.Count > 0 || stripTools.Count > 0 || Message.IsExecutingTools;
             }
 
-            @if (Message.ToolUses.Count > 0)
+            @* Answer-first (Phase 126 #4): once the turn is complete, the answer renders
+               above the work strip so it's readable without scrolling past tool blocks. *@
+            @if (Message.IsComplete && !string.IsNullOrEmpty(Message.Text))
             {
                 <div class="msg-indent">
-                    @foreach (var tool in Message.ToolUses)
+                    <div class="message-markdown">@((MarkupString)RenderMarkdown(Message.Text))</div>
+                </div>
+                @if (hasWork)
+                {
+                    <div class="work-separator"></div>
+                }
+            }
+
+            @if (pendingTools.Count > 0)
+            {
+                <div class="msg-indent">
+                    @foreach (var tool in pendingTools)
                     {
-                        <div class="tool-use-block @(tool.IsError ? "tool-error" : "")">
+                        <div class="tool-use-block">
                             <div class="tool-header">
                                 <span class="tool-icon">&#x1F527;</span>
                                 <span class="tool-name">@ChatMessageModel.FriendlyToolLabel(tool.ToolName)</span>
-                                <span class="tool-status @(tool.Status == "Done" ? "status-done" : tool.IsError ? "status-error" : "status-running")">@tool.Status</span>
+                                <span class="tool-status status-running">@tool.Status</span>
                             </div>
-                            @if (tool.IsPendingConfirmation)
-                            {
-                                <div class="tool-confirmation">
-                                    <div class="tool-input-preview">@tool.Result</div>
-                                    <div class="tool-actions">
-                                        <button class="btn-approve" @onclick="() => OnApprove.InvokeAsync(tool)">&#x2713; Allow once</button>
-                                        <button class="btn-approve-turn" @onclick="() => OnApproveForTurn.InvokeAsync(tool)" title="Auto-approve this tool for the rest of this turn">&#x2713;&#x2713; Allow for turn</button>
-                                        <button class="btn-deny" @onclick="() => OnDeny.InvokeAsync(tool)">&#x2715; Deny</button>
-                                    </div>
+                            <div class="tool-confirmation">
+                                <div class="tool-input-preview">@tool.Result</div>
+                                <div class="tool-actions">
+                                    <button class="btn-approve" @onclick="() => OnApprove.InvokeAsync(tool)">&#x2713; Allow once</button>
+                                    <button class="btn-approve-turn" @onclick="() => OnApproveForTurn.InvokeAsync(tool)" title="Auto-approve this tool for the rest of this turn">&#x2713;&#x2713; Allow for turn</button>
+                                    <button class="btn-deny" @onclick="() => OnDeny.InvokeAsync(tool)">&#x2715; Deny</button>
                                 </div>
-                            }
-                            else if (!string.IsNullOrEmpty(tool.Result))
-                            {
-                                @if (DocumentArtifactCard.ProducesArtifacts(tool.ToolName))
-                                {
-                                    <DocumentArtifactCard ToolName="@tool.ToolName" ResultJson="@tool.Result" />
-                                }
-                                <details class="tool-result">
-                                    <summary>Result</summary>
-                                    <pre>@tool.Result</pre>
-                                </details>
-                            }
+                            </div>
                         </div>
                     }
+                </div>
+            }
+
+            @if (stripTools.Count > 0 || Message.IsExecutingTools)
+            {
+                <div class="msg-indent">
+                    <WorkStrip ToolUses="stripTools"
+                               IsExecuting="Message.IsExecutingTools"
+                               ExecutionStatusText="@Message.ExecutionStatusText"
+                               ActionSummary="@Message.ActionSummary"
+                               ElapsedText="@Message.ElapsedText" />
                 </div>
             }
 
@@ -120,17 +124,10 @@
                 </div>
             }
 
-            @if (!string.IsNullOrEmpty(Message.Text))
+            @if (!Message.IsComplete && !string.IsNullOrEmpty(Message.Text))
             {
                 <div class="msg-indent">
-                    @if (Message.IsComplete)
-                    {
-                        <div class="message-markdown">@((MarkupString)RenderMarkdown(Message.Text))</div>
-                    }
-                    else
-                    {
-                        <div class="message-text streaming">@Message.Text</div>
-                    }
+                    <div class="message-text streaming">@Message.Text</div>
                 </div>
             }
 
