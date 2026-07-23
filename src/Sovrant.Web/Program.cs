@@ -346,9 +346,11 @@ public static class Program
     {
         // Single-file endpoint.
         app.MapGet("/artifacts/{workspaceId}/{projectId}/{runId}/{*relPath}",
-            (string workspaceId, string projectId, string runId, string relPath,
+            async (string workspaceId, string projectId, string runId, string relPath,
              HttpContext ctx,
-             Sovrant.Runtime.Artifacts.IArtifactStore store) =>
+             Sovrant.Runtime.Artifacts.IArtifactStore store,
+             Sovrant.Runtime.Workspaces.IWorkspaceService wsSvc,
+             WebSessionService session) =>
         {
             if (store is not Sovrant.Runtime.Artifacts.LocalArtifactStore local)
                 return Results.NotFound();
@@ -360,6 +362,15 @@ public static class Program
                 runId.Contains("..", StringComparison.Ordinal))
             {
                 return Results.BadRequest();
+            }
+
+            // Personal workspaces are single-member by construction; team workspace
+            // membership (any role) grants visibility into that workspace's artifacts.
+            // Matches WorkspaceAuthGuards.RequireWorkspaceAccessAsync for /v1/artifacts.
+            if (!session.IsAdmin &&
+                !await wsSvc.IsMemberAsync(Uri.UnescapeDataString(workspaceId), session.UserId ?? string.Empty))
+            {
+                return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
             }
 
             var ws = Uri.UnescapeDataString(workspaceId);
@@ -396,7 +407,9 @@ public static class Program
         app.MapGet("/artifacts/{workspaceId}/{projectId}/{runId}.zip",
             async (string workspaceId, string projectId, string runId,
              HttpContext ctx,
-             Sovrant.Runtime.Artifacts.IArtifactStore store) =>
+             Sovrant.Runtime.Artifacts.IArtifactStore store,
+             Sovrant.Runtime.Workspaces.IWorkspaceService wsSvc,
+             WebSessionService session) =>
         {
             if (store is not Sovrant.Runtime.Artifacts.LocalArtifactStore local)
                 return Results.NotFound();
@@ -406,6 +419,12 @@ public static class Program
                 runId.Contains("..", StringComparison.Ordinal))
             {
                 return Results.BadRequest();
+            }
+
+            if (!session.IsAdmin &&
+                !await wsSvc.IsMemberAsync(Uri.UnescapeDataString(workspaceId), session.UserId ?? string.Empty))
+            {
+                return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
             }
 
             var ws = Uri.UnescapeDataString(workspaceId);
@@ -442,16 +461,19 @@ public static class Program
     /// <summary>
     /// Resolves the run directory, handling the optional <c>{id}__{name}</c> suffix
     /// that <see cref="LocalArtifactStore"/> appends when a workspace or project has
-    /// a display name (e.g. <c>ws-personal-abc__myworkspace/artifacts/run-xyz</c>).
+    /// a display name. Matches the projects-only layout
+    /// <c>{root}/{ws}/projects/{proj}/artifacts/{run}</c> — every artifact belongs to
+    /// a workspace AND a project, there is no workspace-level shortcut.
     /// Returns <see langword="null"/> if the directory cannot be found.
     /// </summary>
     private static string? FindRunDir(string root, string ws, string proj, string run)
     {
         var wsDir = FindSegmentDir(root, ws);
         if (wsDir is null) return null;
-        var projDir = FindSegmentDir(wsDir, proj);
+        var projectsDir = Path.Combine(wsDir, "projects");
+        var projDir = FindSegmentDir(projectsDir, proj);
         if (projDir is null) return null;
-        var runDir = Path.Combine(projDir, run);
+        var runDir = Path.Combine(projDir, "artifacts", run);
         return Directory.Exists(runDir) ? runDir : null;
     }
 

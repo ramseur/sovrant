@@ -54,10 +54,12 @@ public sealed class LegacyArtifactImporterTests : IDisposable
         Assert.Equal(1, count);
 
         // Verify files landed under workspace-scoped layout.
-        // Default project is workspace-level: {root}/{ws}/artifacts/{run}
+        // Projects-only: default project is a real project folder — {root}/{ws}/projects/default-project/artifacts/{run}
         var expectedDir = Path.Combine(
             _artifactsRoot,
             Sovrant.Runtime.Workspaces.WorkspaceIdentity.DefaultPersonal(),
+            "projects",
+            "default-project",
             "artifacts",
             "legacy-my-test-guide");
         Assert.True(Directory.Exists(expectedDir));

@@ -122,6 +122,7 @@
 @code {
     [Inject] private IArtifactStore ArtifactStore { get; set; } = default!;
     [Inject] private IWorkspaceService WorkspaceService { get; set; } = default!;
+    [Inject] private Sovrant.Web.Services.WebSessionService Session { get; set; } = default!;
 
     private List<ArtifactItem> _all = [];
     private List<ArtifactItem> _filtered = [];
@@ -158,14 +159,21 @@
         _selectedEditorKey = string.Empty;
         try
         {
-            var workspaces = await WorkspaceService.ListAllAsync();
+            // Scoped to the viewer's own workspaces — personal workspaces are single-member
+            // by construction, so this naturally keeps personal artifacts private. Team
+            // workspace membership (any role) grants visibility into that workspace's
+            // artifacts; global admins see everything. Matches server-side enforcement
+            // in WorkspaceAuthGuards.RequireWorkspaceAccessAsync for the /v1/artifacts API.
+            var workspaces = Session.IsAdmin
+                ? await WorkspaceService.ListAllAsync()
+                : await WorkspaceService.ListForUserAsync(Session.UserId ?? string.Empty);
             var items = new List<ArtifactItem>();
 
             foreach (var ws in workspaces)
             {
-                // List workspace-level artifacts (DefaultProjectId → workspace scope).
-                // Project-level artifacts require enumerating projects and are deferred
-                // until multi-user web and project-level artifact display are built.
+                // Projects-only: lists the default project's artifacts. Enumerating every
+                // real project's artifacts is deferred until multi-user web and
+                // project-level artifact display are built.
                 var scope = new ArtifactScope
                 {
                     WorkspaceId = ws.WorkspaceId,
@@ -186,13 +194,12 @@
                     var ext = System.IO.Path.GetExtension(artifactPath);
                     var isCode = CodeExtensions.Contains(ext);
 
-                    // URL layout: /artifacts/{ws}/{proj-or-dir}/{run}/{file}
-                    // For workspace-level, the intermediate dir segment is "artifacts"
-                    // (the layout: {root}/{ws}/artifacts/{run}) — FindRunDir in Program.cs
-                    // matches this correctly via its FindSegmentDir helper.
+                    // URL layout: /artifacts/{ws}/{proj}/{run}/{file} — FindRunDir in
+                    // Program.cs resolves this against the real on-disk layout
+                    // {root}/{ws}/projects/{proj}/artifacts/{run}.
                     var escapedTail = string.Join('/', artifactPath.Split('/').Select(Uri.EscapeDataString));
-                    var accessUrl = $"/artifacts/{Uri.EscapeDataString(ws.WorkspaceId)}/artifacts/{Uri.EscapeDataString(runId)}/{escapedTail}";
-                    var zipUrl = $"/artifacts/{Uri.EscapeDataString(ws.WorkspaceId)}/artifacts/{Uri.EscapeDataString(runId)}.zip";
+                    var accessUrl = $"/artifacts/{Uri.EscapeDataString(ws.WorkspaceId)}/{Uri.EscapeDataString(scope.ProjectId)}/{Uri.EscapeDataString(runId)}/{escapedTail}";
+                    var zipUrl = $"/artifacts/{Uri.EscapeDataString(ws.WorkspaceId)}/{Uri.EscapeDataString(scope.ProjectId)}/{Uri.EscapeDataString(runId)}.zip";
 
                     items.Add(new ArtifactItem
                     {
