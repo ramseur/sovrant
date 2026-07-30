@@ -307,7 +307,7 @@
                                     Background="{DynamicResource SurfaceBorder}"
                                     Foreground="{DynamicResource TextSecondary}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <ctrl:SovrantIcon Name="x" Width="12" Height="12" />
+                                    <ctrl:SovrantIcon IconName="x" Width="12" Height="12" />
                                     <TextBlock Text="Close" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Button>

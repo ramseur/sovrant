@@ -16,7 +16,7 @@
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Artifacts}"
                     Foreground="{DynamicResource TextPrimary}">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon Name="artifacts" Width="14" Height="14" />
+                    <ctrl:SovrantIcon IconName="artifacts" Width="14" Height="14" />
                     <TextBlock Text="Artifacts" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>
@@ -26,7 +26,7 @@
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Guidelines}"
                     Foreground="{DynamicResource TextPrimary}">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon Name="code" Width="14" Height="14" />
+                    <ctrl:SovrantIcon IconName="code" Width="14" Height="14" />
                     <TextBlock Text="Code Templates" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>
@@ -36,7 +36,7 @@
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Documents}"
                     Foreground="{DynamicResource TextPrimary}">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon Name="document" Width="14" Height="14" />
+                    <ctrl:SovrantIcon IconName="document" Width="14" Height="14" />
                     <TextBlock Text="Documents" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>
@@ -46,7 +46,7 @@
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Memory}"
                     Foreground="{DynamicResource TextPrimary}">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon Name="memory" Width="14" Height="14" />
+                    <ctrl:SovrantIcon IconName="memory" Width="14" Height="14" />
                     <TextBlock Text="Memory" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>
@@ -56,7 +56,7 @@
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Skills}"
                     Foreground="{DynamicResource TextPrimary}">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon Name="file" Width="14" Height="14" />
+                    <ctrl:SovrantIcon IconName="file" Width="14" Height="14" />
                     <TextBlock Text="Skills" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>
@@ -66,7 +66,7 @@
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Tools}"
                     Foreground="{DynamicResource TextPrimary}">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon Name="tools" Width="14" Height="14" />
+                    <ctrl:SovrantIcon IconName="tools" Width="14" Height="14" />
                     <TextBlock Text="Tools" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>

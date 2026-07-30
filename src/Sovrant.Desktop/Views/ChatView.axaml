@@ -122,7 +122,7 @@
                               Foreground="{DynamicResource TextMuted}"
                               VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal" Spacing="4">
-                            <ctrl:SovrantIcon Name="lock" Width="11" Height="11" />
+                            <ctrl:SovrantIcon IconName="lock" Width="11" Height="11" />
                             <TextBlock Text="Private" VerticalAlignment="Center" />
                         </StackPanel>
                     </CheckBox>
@@ -166,7 +166,7 @@
                         VerticalAlignment="Center"
                         ToolTip.Tip="Toggle private — masked for anyone but you in Command Center">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                        <ctrl:SovrantIcon Name="{Binding IsSessionPrivate, Converter={x:Static vm:BoolToLockIconConverter.Instance}}"
+                        <ctrl:SovrantIcon IconName="{Binding IsSessionPrivate, Converter={x:Static vm:BoolToLockIconConverter.Instance}}"
                                           Width="12" Height="12" />
                         <TextBlock Text="{Binding IsSessionPrivate, Converter={x:Static vm:BoolToPrivacyLabelConverter.Instance}}"
                                    Foreground="{DynamicResource TextMuted}" />
@@ -219,7 +219,7 @@
                 <Border Width="56" Height="56" CornerRadius="14"
                         Background="{DynamicResource BrandPrimary}"
                         HorizontalAlignment="Center">
-                    <ctrl:SovrantIcon Name="zap" Width="24" Height="24"
+                    <ctrl:SovrantIcon IconName="zap" Width="24" Height="24"
                                       HorizontalAlignment="Center"
                                       VerticalAlignment="Center" />
                 </Border>
@@ -233,7 +233,7 @@
                         IsVisible="{Binding AgentName,
                                             Converter={x:Static conv:StringNotNullOrEmptyConverter.Instance}}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                        <ctrl:SovrantIcon Name="agent" Width="12" Height="12" VerticalAlignment="Center" />
+                        <ctrl:SovrantIcon IconName="agent" Width="12" Height="12" VerticalAlignment="Center" />
                         <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
                                    VerticalAlignment="Center">
                             <Run Text="Chatting with " />
@@ -261,7 +261,7 @@
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                             Command="{Binding SuggestionCommand}" CommandParameter="Create a custom agent with tools for web research and summarization">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <ctrl:SovrantIcon Name="agent" Width="14" Height="14" VerticalAlignment="Center" />
+                            <ctrl:SovrantIcon IconName="agent" Width="14" Height="14" VerticalAlignment="Center" />
                             <TextBlock Text="Create a custom agent" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
@@ -272,7 +272,7 @@
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                             Command="{Binding SuggestionCommand}" CommandParameter="Create a team that researches a topic and produces a structured report">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <ctrl:SovrantIcon Name="users" Width="14" Height="14" VerticalAlignment="Center" />
+                            <ctrl:SovrantIcon IconName="users" Width="14" Height="14" VerticalAlignment="Center" />
                             <TextBlock Text="Build a team of agents" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
@@ -283,7 +283,7 @@
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                             Command="{Binding SuggestionCommand}" CommandParameter="Build a best-practice swarm that parallelizes tasks across agents">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <ctrl:SovrantIcon Name="swarm" Width="14" Height="14" VerticalAlignment="Center" />
+                            <ctrl:SovrantIcon IconName="swarm" Width="14" Height="14" VerticalAlignment="Center" />
                             <TextBlock Text="Design an agent swarm" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
@@ -294,7 +294,7 @@
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                             Command="{Binding SuggestionCommand}" CommandParameter="Set up a mission that monitors a project and sends daily updates">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <ctrl:SovrantIcon Name="target" Width="14" Height="14" VerticalAlignment="Center" />
+                            <ctrl:SovrantIcon IconName="target" Width="14" Height="14" VerticalAlignment="Center" />
                             <TextBlock Text="Set up a mission" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
@@ -305,7 +305,7 @@
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                             Command="{Binding SuggestionCommand}" CommandParameter="Orchestrate a multi-agent pipeline for code review and testing">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <ctrl:SovrantIcon Name="orchestration" Width="14" Height="14" VerticalAlignment="Center" />
+                            <ctrl:SovrantIcon IconName="orchestration" Width="14" Height="14" VerticalAlignment="Center" />
                             <TextBlock Text="Orchestrate a pipeline" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
@@ -316,7 +316,7 @@
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                             Command="{Binding SuggestionCommand}" CommandParameter="Connect an MCP server and create an agent that uses its tools">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <ctrl:SovrantIcon Name="link" Width="14" Height="14" VerticalAlignment="Center" />
+                            <ctrl:SovrantIcon IconName="link" Width="14" Height="14" VerticalAlignment="Center" />
                             <TextBlock Text="Connect an MCP server" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
@@ -375,9 +375,9 @@
                                             <StackPanel Orientation="Horizontal" Spacing="10">
                                                 <Border Width="32" Height="32" CornerRadius="8"
                                                         Background="{DynamicResource BrandPrimary}">
-                                                    <TextBlock Text="⚡" FontSize="14"
-                                                               HorizontalAlignment="Center"
-                                                               VerticalAlignment="Center" />
+                                                    <ctrl:SovrantIcon IconName="zap" Width="14" Height="14"
+                                                                       HorizontalAlignment="Center"
+                                                                       VerticalAlignment="Center" />
                                                 </Border>
                                                 <TextBlock Text="{Binding SenderLabel}" FontSize="14" FontWeight="SemiBold"
                                                            Foreground="{DynamicResource TextPrimary}"
@@ -519,7 +519,7 @@
                                                                 BorderThickness="1">
                                                             <DockPanel>
                                                                 <ctrl:SovrantIcon DockPanel.Dock="Left"
-                                                                                  Name="{Binding Icon}"
+                                                                                  IconName="{Binding Icon}"
                                                                                   Width="18" Height="18"
                                                                                   VerticalAlignment="Center"
                                                                                   Margin="0,0,10,0" />
@@ -692,7 +692,7 @@
                                                                                    Foreground="{DynamicResource StatusWarn}" />
                                                                     </Border>
                                                                     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                                                        <ctrl:SovrantIcon Name="tools" Width="12" Height="12" />
+                                                                        <ctrl:SovrantIcon IconName="tools" Width="12" Height="12" />
                                                                         <TextBlock Text="{Binding ToolName}"
                                                                                    FontWeight="SemiBold"
                                                                                    FontSize="12"
@@ -732,7 +732,7 @@
                                                                                     BorderThickness="1">
                                                                                 <DockPanel>
                                                                                     <ctrl:SovrantIcon DockPanel.Dock="Left"
-                                                                                                      Name="{Binding Icon}"
+                                                                                                      IconName="{Binding Icon}"
                                                                                                       Width="20" Height="20"
                                                                                                       VerticalAlignment="Center"
                                                                                                       Margin="0,0,10,0" />
@@ -802,7 +802,7 @@
                                                                             FontSize="11"
                                                                             FontWeight="SemiBold">
                                                                         <StackPanel Orientation="Horizontal" Spacing="4">
-                                                                            <ctrl:SovrantIcon Name="check" Width="11" Height="11" />
+                                                                            <ctrl:SovrantIcon IconName="check" Width="11" Height="11" />
                                                                             <TextBlock Text="Allow once" VerticalAlignment="Center" />
                                                                         </StackPanel>
                                                                     </Button>
@@ -817,7 +817,7 @@
                                                                             FontSize="11"
                                                                             FontWeight="SemiBold">
                                                                         <StackPanel Orientation="Horizontal" Spacing="4">
-                                                                            <ctrl:SovrantIcon Name="check-circle" Width="11" Height="11" />
+                                                                            <ctrl:SovrantIcon IconName="check-circle" Width="11" Height="11" />
                                                                             <TextBlock Text="Allow for turn" VerticalAlignment="Center" />
                                                                         </StackPanel>
                                                                     </Button>
@@ -829,7 +829,7 @@
                                                                             FontSize="11"
                                                                             FontWeight="SemiBold">
                                                                         <StackPanel Orientation="Horizontal" Spacing="4">
-                                                                            <ctrl:SovrantIcon Name="x" Width="11" Height="11" />
+                                                                            <ctrl:SovrantIcon IconName="x" Width="11" Height="11" />
                                                                             <TextBlock Text="Deny" VerticalAlignment="Center" />
                                                                         </StackPanel>
                                                                     </Button>

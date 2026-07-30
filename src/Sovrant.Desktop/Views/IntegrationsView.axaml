@@ -83,7 +83,7 @@
                                         </Border>
                                         <StackPanel Spacing="2">
                                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <ctrl:SovrantIcon Name="{Binding IconKey}" Width="15" Height="15" VerticalAlignment="Center" />
+                                                <ctrl:SovrantIcon IconName="{Binding IconKey}" Width="15" Height="15" VerticalAlignment="Center" />
                                                 <TextBlock Text="{Binding Name}"
                                                            FontSize="13" FontWeight="SemiBold"
                                                            Foreground="{DynamicResource BrandPrimary}"
@@ -208,7 +208,7 @@
 
                                 <!-- Header -->
                                 <StackPanel Spacing="4">
-                                    <ctrl:SovrantIcon Name="{Binding SelectedCatalogEntry.IconKey}" Width="32" Height="32" />
+                                    <ctrl:SovrantIcon IconName="{Binding SelectedCatalogEntry.IconKey}" Width="32" Height="32" />
                                     <TextBlock Text="{Binding SelectedCatalogEntry.Name}"
                                                FontSize="20" FontWeight="SemiBold"
                                                Foreground="{DynamicResource TextPrimary}" />
@@ -276,7 +276,7 @@
                                                 BorderBrush="{DynamicResource BrandPrimary}"
                                                 BorderThickness="1">
                                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <ctrl:SovrantIcon Name="refresh" Width="12" Height="12"
+                                                <ctrl:SovrantIcon IconName="refresh" Width="12" Height="12"
                                                                   Foreground="{DynamicResource BrandPrimary}" />
                                                 <TextBlock FontSize="12" Foreground="{DynamicResource BrandPrimary}"
                                                            TextWrapping="Wrap"
@@ -583,7 +583,7 @@
                                                                 Background="#33F44336"
                                                                 Foreground="{DynamicResource StatusFail}"
                                                                 FontSize="10">
-                                                            <ctrl:SovrantIcon Name="x" Width="10" Height="10" />
+                                                            <ctrl:SovrantIcon IconName="x" Width="10" Height="10" />
                                                         </Button>
                                                         <TextBox Grid.Column="2"
                                                                  Text="{Binding Key}"
@@ -652,7 +652,7 @@
                                                                 Padding="6,3" CornerRadius="4"
                                                                 Background="#33F44336" Foreground="{DynamicResource StatusFail}"
                                                                 FontSize="10">
-                                                            <ctrl:SovrantIcon Name="x" Width="10" Height="10" />
+                                                            <ctrl:SovrantIcon IconName="x" Width="10" Height="10" />
                                                         </Button>
                                                         <Border DockPanel.Dock="Right"
                                                                 Background="{Binding ActionBadgeColor}"

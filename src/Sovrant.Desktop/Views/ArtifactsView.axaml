@@ -56,7 +56,7 @@
                                                        FontSize="10"
                                                        Foreground="{DynamicResource TextMuted}"
                                                        VerticalAlignment="Center" />
-                                            <TextBlock Text="{Binding FolderDisplayName}"
+                                            <TextBlock Text="{Binding FolderName}"
                                                        FontSize="13" FontWeight="SemiBold"
                                                        Foreground="{DynamicResource BrandPrimary}"
                                                        TextTrimming="CharacterEllipsis" />
@@ -156,7 +156,7 @@
                                         BorderBrush="{DynamicResource SurfaceBorder}"
                                         BorderThickness="1" />
                             </StackPanel>
-                            <TextBlock Text="{Binding SelectedArtifact.FolderDisplayName}"
+                            <TextBlock Text="{Binding SelectedArtifact.FolderName}"
                                        FontSize="14" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextPrimary}"
                                        VerticalAlignment="Center"

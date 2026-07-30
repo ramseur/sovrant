@@ -151,7 +151,7 @@
                                     Foreground="White"
                                     FontSize="14">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <ctrl:SovrantIcon Name="message" Width="16" Height="16" />
+                                    <ctrl:SovrantIcon IconName="message" Width="16" Height="16" />
                                     <TextBlock Text="Chat to create this document" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Button>

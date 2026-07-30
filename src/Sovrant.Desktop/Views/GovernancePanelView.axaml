@@ -15,7 +15,7 @@
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="Transparent" Foreground="{DynamicResource TextPrimary}">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon Name="governance" Width="14" Height="14" />
+                    <ctrl:SovrantIcon IconName="governance" Width="14" Height="14" />
                     <TextBlock Text="Governance" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>
@@ -24,7 +24,7 @@
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="Transparent" Foreground="{DynamicResource TextPrimary}">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon Name="lock" Width="14" Height="14" />
+                    <ctrl:SovrantIcon IconName="lock" Width="14" Height="14" />
                     <TextBlock Text="Trust Boundary" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>
@@ -33,7 +33,7 @@
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
                     Background="Transparent" Foreground="{DynamicResource TextPrimary}">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon Name="tools" Width="14" Height="14" />
+                    <ctrl:SovrantIcon IconName="tools" Width="14" Height="14" />
                     <TextBlock Text="Diagnostics" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>

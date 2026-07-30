@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.CommandCenterView"
              x:DataType="vm:CommandCenterViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -55,36 +56,51 @@
                     CornerRadius="8" Padding="16,12" Margin="0,8,0,0">
                 <StackPanel Spacing="10">
                     <Grid ColumnDefinitions="120,*">
-                        <TextBlock Grid.Column="0" Text="🎯 mission" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="5" VerticalAlignment="Top">
+                            <ctrl:SovrantIcon IconName="target" Width="13" Height="13" />
+                            <TextBlock Text="mission" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
                                    Text="A long-running goal Sovrant decomposes into a plan, then runs through teams and agents until done. Survives restarts and waits for human input when needed." />
                     </Grid>
                     <Grid ColumnDefinitions="120,*">
-                        <TextBlock Grid.Column="0" Text="👥 team run" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="5" VerticalAlignment="Top">
+                            <ctrl:SovrantIcon IconName="users" Width="13" Height="13" />
+                            <TextBlock Text="team run" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
                                    Text="One execution of a team — a group of agents running together under a profile (sequential, parallel, or swarm). Each member produces an agent run beneath it." />
                     </Grid>
                     <Grid ColumnDefinitions="120,*">
-                        <TextBlock Grid.Column="0" Text="🤖 agent run" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="5" VerticalAlignment="Top">
+                            <ctrl:SovrantIcon IconName="agent" Width="13" Height="13" />
+                            <TextBlock Text="agent run" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
                                    Text="A single agent executing a task — either standalone (kicked off from the Agents page) or as a member of a team run. Has its own ledger row, turns, and review." />
                     </Grid>
                     <Grid ColumnDefinitions="120,*">
-                        <TextBlock Grid.Column="0" Text="💬 session" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="5" VerticalAlignment="Top">
+                            <ctrl:SovrantIcon IconName="message" Width="13" Height="13" />
+                            <TextBlock Text="session" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
                                    Text="A chat conversation with the assistant. Click to resume; persists across restarts." />
                     </Grid>
                     <Grid ColumnDefinitions="120,*">
-                        <TextBlock Grid.Column="0" Text="🔗 claw" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="5" VerticalAlignment="Top">
+                            <ctrl:SovrantIcon IconName="link" Width="13" Height="13" />
+                            <TextBlock Text="claw" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </StackPanel>
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
                                    Text="An autonomous external system Sovrant connects to over MCP (n8n, Zapier, custom servers). Sovrant monitors and steers them from here. Foundational — full claw runtime lands later." />

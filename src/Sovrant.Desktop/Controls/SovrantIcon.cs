@@ -5,20 +5,20 @@ namespace Sovrant.Desktop.Controls;
 
 public sealed class SovrantIcon : LucideIcon
 {
-    public static readonly StyledProperty<string?> NameProperty =
-        AvaloniaProperty.Register<SovrantIcon, string?>(nameof(Name));
+    public static readonly StyledProperty<string?> IconNameProperty =
+        AvaloniaProperty.Register<SovrantIcon, string?>(nameof(IconName));
 
-    public string? Name
+    public string? IconName
     {
-        get => GetValue(NameProperty);
-        set => SetValue(NameProperty, value);
+        get => GetValue(IconNameProperty);
+        set => SetValue(IconNameProperty, value);
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
 
-        if (change.Property == NameProperty)
+        if (change.Property == IconNameProperty)
             Kind = Resolve(change.GetNewValue<string?>());
     }
 
