@@ -1,15 +1,11 @@
 @using Markdig
 @inject IJSRuntime JS
 
-<div class="message">
+<div class="message @(Message.IsUser ? "msg-user" : "msg-assistant")">
     @if (Message.IsUser)
     {
-        <!-- User message: avatar + name row, then text -->
-        <div class="msg-row">
-            <div class="msg-avatar user-avatar-chat">@(Message.SenderLabel.Length > 0 ? Message.SenderLabel[..1].ToUpperInvariant() : "U")</div>
-            <span class="msg-sender">@Message.SenderLabel</span>
-        </div>
-        <div class="msg-body">
+        <!-- User message: right-aligned bubble -->
+        <div class="user-bubble">
             <div class="message-text">@Message.Text</div>
         </div>
     }

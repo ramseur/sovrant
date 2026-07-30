@@ -5,6 +5,9 @@
 
 <aside class="sidebar">
     <div class="sidebar-scroll">
+        <!-- New Chat button -->
+        <button class="new-chat-btn btn-primary" @onclick="NewChat">+ New Chat</button>
+
         <!-- Search -->
         <div class="sidebar-search">
             <input type="text" placeholder="Search conversations..." @bind="_searchText" @bind:event="oninput" @bind:after="FilterSessions" />
@@ -47,28 +50,34 @@
             }
         }
 
-        <!-- Recent conversations -->
-        <div class="nav-section-header">RECENT</div>
+        <!-- Recent conversations grouped by date -->
         @if (_filteredSessions.Count == 0)
         {
             <div class="no-sessions">No recent conversations</div>
         }
-        @foreach (var session in _filteredSessions)
+        else
         {
-            var isActive = ActiveSessions.HasSession(session.Id);
-            <div class="session-item @(isActive ? "session-item--active-badge" : "")">
-                <button class="session-btn" @onclick="() => ResumeSession(session.Id)">
-                    <div class="session-label">
-                        @if (isActive)
-                        {
-                            <span class="active-badge">ACTIVE</span>
-                        }
-                        @session.Label
+            @foreach (var group in GetGroupedSessions())
+            {
+                <div class="nav-section-header">@group.Label</div>
+                @foreach (var session in group.Sessions)
+                {
+                    var isActive = ActiveSessions.HasSession(session.Id);
+                    <div class="session-item @(isActive ? "session-item--active-badge" : "")">
+                        <button class="session-btn" @onclick="() => ResumeSession(session.Id)">
+                            <div class="session-label">
+                                @if (isActive)
+                                {
+                                    <span class="active-badge">ACTIVE</span>
+                                }
+                                @session.Label
+                            </div>
+                            <div class="session-time">@session.Timestamp.ToString("MMM d, HH:mm")</div>
+                        </button>
+                        <button class="session-delete" @onclick="() => DeleteSession(session.Id)" title="Delete session">&#x2715;</button>
                     </div>
-                    <div class="session-time">@session.Timestamp.ToString("MMM d, HH:mm")</div>
-                </button>
-                <button class="session-delete" @onclick="() => DeleteSession(session.Id)" title="Delete session">&#x2715;</button>
-            </div>
+                }
+            }
         }
     </div>
 </aside>
@@ -204,6 +213,12 @@
         await OnNavigate.InvokeAsync("/");
     }
 
+    private async Task NewChat()
+    {
+        ActiveContext.StartNewSession();
+        await OnNavigate.InvokeAsync("/");
+    }
+
     private async Task DeleteSession(string sessionId)
     {
         await SessionStore.DeleteAsync(sessionId, ownerUserId: Sovrant.Web.Program.SovrantUserId);
@@ -215,4 +230,24 @@
 
     private static string FormatElapsed(TimeSpan t) =>
         t.TotalSeconds < 60 ? $"{(int)t.TotalSeconds}s" : $"{(int)t.TotalMinutes}m {t.Seconds}s";
+
+    private record SessionGroup(string Label, List<SessionItem> Sessions);
+
+    private IEnumerable<SessionGroup> GetGroupedSessions()
+    {
+        var now = DateTimeOffset.Now;
+        var todayStart = now.Date;
+        var yesterdayStart = todayStart.AddDays(-1);
+        var weekStart = todayStart.AddDays(-7);
+
+        var today = _filteredSessions.Where(s => s.Timestamp >= todayStart).ToList();
+        var yesterday = _filteredSessions.Where(s => s.Timestamp >= yesterdayStart && s.Timestamp < todayStart).ToList();
+        var thisWeek = _filteredSessions.Where(s => s.Timestamp >= weekStart && s.Timestamp < yesterdayStart).ToList();
+        var older = _filteredSessions.Where(s => s.Timestamp < weekStart).ToList();
+
+        if (today.Count > 0) yield return new SessionGroup("TODAY", today);
+        if (yesterday.Count > 0) yield return new SessionGroup("YESTERDAY", yesterday);
+        if (thisWeek.Count > 0) yield return new SessionGroup("THIS WEEK", thisWeek);
+        if (older.Count > 0) yield return new SessionGroup("OLDER", older);
+    }
 }
