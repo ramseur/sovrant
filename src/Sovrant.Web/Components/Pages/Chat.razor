@@ -115,11 +115,11 @@
         </div>
         @if (_isSending)
         {
-            <button class="btn-stop send-btn" @onclick="StopAsync">Stop</button>
+            <button class="btn-stop send-btn" @onclick="StopAsync" title="Stop">&#9632;</button>
         }
         else
         {
-            <button class="btn-primary send-btn" @onclick="SendAsync" disabled="@(!CanSend)">Send</button>
+            <button class="btn-primary send-btn" @onclick="SendAsync" disabled="@(!CanSend)" title="Send (Enter)">&#8593;</button>
         }
     </div>
 </div>
