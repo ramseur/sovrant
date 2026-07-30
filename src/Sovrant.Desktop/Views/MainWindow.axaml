@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Sovrant.Desktop.ViewModels"
         xmlns:views="using:Sovrant.Desktop.Views"
+        xmlns:ctrl="using:Sovrant.Desktop.Controls"
         x:Class="Sovrant.Desktop.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="Sovrant"
@@ -135,49 +136,61 @@
                             </Button>
                             <!-- Admin + main icons: hidden when collapsed -->
                             <DockPanel LastChildFill="True" IsVisible="{Binding IsNavExpanded}">
-                                <Button DockPanel.Dock="Right" Content="🔑" ToolTip.Tip="Admin"
+                                <Button DockPanel.Dock="Right" ToolTip.Tip="Admin"
                                         Command="{Binding SelectGroupCommand}" CommandParameter="admin"
                                         Height="30" CornerRadius="6" FontSize="13" Padding="4,0"
                                         IsVisible="{Binding IsAdmin}"
                                         Background="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                         Foreground="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
+                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                    <ctrl:SovrantIcon Name="key" Width="13" Height="13" />
+                                </Button>
                                 <UniformGrid Rows="1">
-                                <Button Content="📊" ToolTip.Tip="User Dashboard"
+                                <Button ToolTip.Tip="User Dashboard"
                                         Command="{Binding SelectGroupCommand}" CommandParameter="dashboard"
                                         Height="30" CornerRadius="6" FontSize="13" Padding="0"
                                         Background="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                         Foreground="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                         HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                                <Button Content="💬" ToolTip.Tip="Chat"
+                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                    <ctrl:SovrantIcon Name="chart" Width="13" Height="13" />
+                                </Button>
+                                <Button ToolTip.Tip="Chat"
                                         Command="{Binding SelectGroupCommand}" CommandParameter="chat"
                                         Height="30" CornerRadius="6" FontSize="13" Padding="0"
                                         Background="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                         Foreground="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                         HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                                <Button Content="📚" ToolTip.Tip="Knowledge"
+                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                    <ctrl:SovrantIcon Name="message" Width="13" Height="13" />
+                                </Button>
+                                <Button ToolTip.Tip="Knowledge"
                                         Command="{Binding SelectGroupCommand}" CommandParameter="knowledge"
                                         Height="30" CornerRadius="6" FontSize="13" Padding="0"
                                         Background="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                         Foreground="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                         HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                                <Button Content="🤖" ToolTip.Tip="Agents"
+                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                    <ctrl:SovrantIcon Name="knowledge" Width="13" Height="13" />
+                                </Button>
+                                <Button ToolTip.Tip="Agents"
                                         Command="{Binding SelectGroupCommand}" CommandParameter="agents"
                                         Height="30" CornerRadius="6" FontSize="13" Padding="0"
                                         Background="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                         Foreground="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                         HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                                <Button Content="🗂" ToolTip.Tip="Projects"
+                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                    <ctrl:SovrantIcon Name="agent" Width="13" Height="13" />
+                                </Button>
+                                <Button ToolTip.Tip="Projects"
                                         Command="{Binding SelectGroupCommand}" CommandParameter="workspace"
                                         Height="30" CornerRadius="6" FontSize="13" Padding="0"
                                         Background="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
                                         Foreground="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
                                         HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
+                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                    <ctrl:SovrantIcon Name="project" Width="13" Height="13" />
+                                </Button>
                                 </UniformGrid>
                             </DockPanel>
                         </DockPanel>
@@ -190,14 +203,16 @@
                             BorderBrush="{DynamicResource SurfaceBorder}">
                         <DockPanel LastChildFill="True">
                             <Button DockPanel.Dock="Right"
-                                    Content="↪" ToolTip.Tip="Log out"
+                                    ToolTip.Tip="Log out"
                                     Command="{Binding LogoutCommand}"
                                     Width="32" Height="32" CornerRadius="8"
                                     FontSize="16" Padding="0" Margin="4,0,0,0"
                                     Background="Transparent"
                                     Foreground="{DynamicResource TextSecondary}"
                                     HorizontalContentAlignment="Center"
-                                    VerticalContentAlignment="Center" />
+                                    VerticalContentAlignment="Center">
+                                <ctrl:SovrantIcon Name="logout" Width="16" Height="16" />
+                            </Button>
                             <Button Command="{Binding SelectGroupCommand}" CommandParameter="settings"
                                     Background="Transparent" BorderThickness="0" Padding="4,2"
                                     CornerRadius="6" ToolTip.Tip="Settings" Cursor="Hand"
@@ -225,43 +240,55 @@
                     <Panel>
                         <!-- Collapsed: vertical icon strip -->
                         <StackPanel IsVisible="{Binding IsNavCollapsed}" Margin="4,8,4,4" Spacing="2">
-                            <Button Content="📊" ToolTip.Tip="User Dashboard"
+                            <Button ToolTip.Tip="User Dashboard"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="dashboard"
                                     Height="36" CornerRadius="6" FontSize="16" Padding="0"
                                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                     Background="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
-                            <Button Content="💬" ToolTip.Tip="Chat"
+                                    Foreground="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}">
+                                <ctrl:SovrantIcon Name="chart" Width="16" Height="16" />
+                            </Button>
+                            <Button ToolTip.Tip="Chat"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="chat"
                                     Height="36" CornerRadius="6" FontSize="16" Padding="0"
                                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                     Background="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
-                            <Button Content="📚" ToolTip.Tip="Knowledge"
+                                    Foreground="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}">
+                                <ctrl:SovrantIcon Name="message" Width="16" Height="16" />
+                            </Button>
+                            <Button ToolTip.Tip="Knowledge"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="knowledge"
                                     Height="36" CornerRadius="6" FontSize="16" Padding="0"
                                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                     Background="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
-                            <Button Content="🤖" ToolTip.Tip="Agents"
+                                    Foreground="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}">
+                                <ctrl:SovrantIcon Name="knowledge" Width="16" Height="16" />
+                            </Button>
+                            <Button ToolTip.Tip="Agents"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="agents"
                                     Height="36" CornerRadius="6" FontSize="16" Padding="0"
                                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                     Background="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
-                            <Button Content="🗂" ToolTip.Tip="Projects"
+                                    Foreground="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}">
+                                <ctrl:SovrantIcon Name="agent" Width="16" Height="16" />
+                            </Button>
+                            <Button ToolTip.Tip="Projects"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="workspace"
                                     Height="36" CornerRadius="6" FontSize="16" Padding="0"
                                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                     Background="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
-                            <Button Content="🔑" ToolTip.Tip="Admin"
+                                    Foreground="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}">
+                                <ctrl:SovrantIcon Name="project" Width="16" Height="16" />
+                            </Button>
+                            <Button ToolTip.Tip="Admin"
                                     Command="{Binding SelectGroupCommand}" CommandParameter="admin"
                                     Height="36" CornerRadius="6" FontSize="16" Padding="0"
                                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                     IsVisible="{Binding IsAdmin}"
                                     Background="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
+                                    Foreground="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}">
+                                <ctrl:SovrantIcon Name="key" Width="16" Height="16" />
+                            </Button>
                         </StackPanel>
 
                         <!-- Expanded: sub-panel content swaps based on SelectedGroup -->

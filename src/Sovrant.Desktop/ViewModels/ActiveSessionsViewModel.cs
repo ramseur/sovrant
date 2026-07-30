@@ -250,9 +250,9 @@ public partial class ActiveSessionInfoViewModel : ObservableObject
     public bool IsRunning => Status == ActiveSessionStatus.Running;
     public string StatusIcon => Status switch
     {
-        ActiveSessionStatus.Running => "⟳",
-        ActiveSessionStatus.Completed => "✓",
-        ActiveSessionStatus.Failed => "✗",
+        ActiveSessionStatus.Running => "rotate-cw",
+        ActiveSessionStatus.Completed => "check",
+        ActiveSessionStatus.Failed => "x",
         _ => "",
     };
     public TimeSpan Elapsed => (EndedAt ?? DateTime.UtcNow) - StartedAt;

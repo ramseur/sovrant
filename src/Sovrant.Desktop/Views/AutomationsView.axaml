@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.AutomationsView"
              x:DataType="vm:AutomationsViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -18,9 +19,9 @@
             <Border Width="64" Height="64" CornerRadius="16"
                     Background="{DynamicResource BrandPrimary}"
                     HorizontalAlignment="Center">
-                <TextBlock Text="⚡" FontSize="28"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center" />
+                <ctrl:SovrantIcon Name="zap" Width="28" Height="28"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center" />
             </Border>
 
             <TextBlock Text="Automations" FontSize="22" FontWeight="Bold"

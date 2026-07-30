@@ -274,12 +274,12 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
 
     private static string KindIcon(string kind) => kind switch
     {
-        "mission" => "\U0001F3AF",
-        "team-run" => "\U0001F465",
-        "agent-run" => "\U0001F916",
-        "session" => "\U0001F4AC",
-        "claw" => "\U0001F517",
-        _ => "•",
+        "mission" => "target",
+        "team-run" => "users",
+        "agent-run" => "agent",
+        "session" => "message",
+        "claw" => "network",
+        _ => "activity",
     };
 
     private static string FormatRelative(DateTimeOffset when)

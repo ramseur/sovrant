@@ -8,7 +8,7 @@ public sealed class BoolToLockIconConverter : IValueConverter
     public static readonly BoolToLockIconConverter Instance = new();
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => value is bool b && b ? "🔒" : "🔓";
+        => value is bool b && b ? "lock" : "unlock";
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();
