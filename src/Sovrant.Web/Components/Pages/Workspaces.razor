@@ -32,7 +32,7 @@
     @if (!string.IsNullOrEmpty(_loadError))
     {
         <div class="page-error-banner" role="alert">
-            <span>&#9888;</span>
+            <span><SovrantIcon Name="alert" /></span>
             <span class="error-message">@_loadError</span>
             <button class="btn-sm" @onclick="LoadAsync">Retry</button>
         </div>

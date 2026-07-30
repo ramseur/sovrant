@@ -8,7 +8,7 @@
 @if (!string.IsNullOrEmpty(_loadError))
 {
     <div class="page-error-banner" role="alert">
-        <span>&#9888;</span>
+        <span><SovrantIcon Name="alert" /></span>
         <span class="error-message">@_loadError</span>
         <button class="btn-sm" @onclick="LoadAsync">Retry</button>
     </div>
@@ -26,7 +26,7 @@
     <ItemTemplate>
         @if (context.IsFolder)
         {
-            <div class="item-title">📁 @context.FolderName</div>
+            <div class="item-title"><SovrantIcon Name="folder" /> @context.FolderName</div>
             <div class="item-subtitle">@context.LastModified.LocalDateTime.ToString("MMM d, yyyy") &middot; @(context.FolderFiles!.Count) files &middot; @context.SizeDisplay</div>
         }
         else
@@ -39,7 +39,7 @@
         <div class="detail-content">
             @if (context.IsFolder)
             {
-                <h2>📁 @context.FolderName</h2>
+                <h2><SovrantIcon Name="folder" /> @context.FolderName</h2>
                 <div class="detail-meta">
                     <span>@context.LastModified.LocalDateTime.ToString("MMM d, yyyy h:mm tt")</span>
                     <span>@(context.FolderFiles!.Count) files</span>

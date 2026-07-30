@@ -112,7 +112,7 @@
                     <h2>@context.Name</h2>
                     <div class="detail-actions">
                         <button class="btn-primary btn-sm" @onclick="@(() => LaunchChat(context))" title="Open a chat session scoped to this agent">
-                            &#x1F4AC; Launch chat
+                            <SovrantIcon Name="message" /> Launch chat
                         </button>
                         @if (Session.IsAdmin)
                         {
@@ -200,7 +200,7 @@
                                     <button class="privacy-toggle-mini @(r.IsPrivate ? "private" : "public")"
                                             title="@(r.IsPrivate ? "Private — only you can see this run" : "Public — visible to admins")"
                                             @onclick="@(() => TogglePrivacyAsync(r))">
-                                        @(r.IsPrivate ? "🔒" : "🔓")
+                                        <SovrantIcon Name="@(r.IsPrivate ? "lock" : "unlock")" />
                                     </button>
                                 </div>
                             </div>
@@ -252,7 +252,7 @@
                                 <button class="privacy-toggle-mini @(r.IsPrivate ? "private" : "public")"
                                         title="@(r.IsPrivate ? "Private — only you can see this run" : "Public — visible to admins")"
                                         @onclick="@(() => TogglePrivacyAsync(r))">
-                                    @(r.IsPrivate ? "🔒" : "🔓")
+                                    <SovrantIcon Name="@(r.IsPrivate ? "lock" : "unlock")" />
                                 </button>
                             }
                         </div>

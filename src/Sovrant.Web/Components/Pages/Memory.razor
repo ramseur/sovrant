@@ -40,7 +40,7 @@
     @if (!string.IsNullOrEmpty(_loadError))
     {
         <div class="page-error-banner" role="alert">
-            <span>&#9888;</span>
+            <span><SovrantIcon Name="alert" /></span>
             <span class="error-message">@_loadError</span>
             <button class="btn-sm" @onclick="LoadAllAsync">Retry</button>
         </div>
@@ -64,7 +64,7 @@
                 <div class="input-group" style="align-items:center;gap:8px;flex-wrap:wrap">
                     <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
                         <input type="checkbox" @bind="_newMemoryIsPrivate" />
-                        🔒 Private (only injected for you)
+                        <SovrantIcon Name="lock" /> Private (only injected for you)
                     </label>
                     <button class="btn-primary btn-sm" @onclick="AddWorkspaceMemoryAsync" disabled="@string.IsNullOrWhiteSpace(_newMemoryText)">Save</button>
                 </div>
@@ -83,11 +83,11 @@
                         <div class="memory-meta">
                             @if (m.IsPrivate)
                             {
-                                <span title="Only injected for you" style="font-size:13px">🔒</span>
+                                <span title="Only injected for you" style="font-size:13px"><SovrantIcon Name="lock" /></span>
                             }
                             else
                             {
-                                <span title="Injected for all workspace members" style="font-size:13px">🔓</span>
+                                <span title="Injected for all workspace members" style="font-size:13px"><SovrantIcon Name="unlock" /></span>
                             }
                             <span class="text-muted text-sm">@m.CreatedAt.LocalDateTime.ToString("d")</span>
                         </div>

@@ -13,7 +13,7 @@
             <div class="master-header-right">
                 <span class="item-count">@_filtered.Count</span>
                 <button class="btn-sm btn-outline" title="Swarm defaults"
-                        @onclick="ToggleSwarmConfig">&#x2699;</button>
+                        @onclick="ToggleSwarmConfig"><SovrantIcon Name="settings" /></button>
                 <button class="btn-sm btn-primary" title="New team"
                         @onclick="StartCreate">+ New</button>
             </div>
@@ -37,7 +37,7 @@
                             @onclick="() => Select(item)">
                         <div class="item-title">
                             <span class="orch-shape-badge shape-@item.RunMode.ToString().ToLowerInvariant()">
-                                @ModeIcon(item.RunMode) @item.RunMode
+                                <SovrantIcon Name="@ModeIcon(item.RunMode)" /> @item.RunMode
                             </span>
                             <span>@item.Name</span>
                         </div>
@@ -95,7 +95,7 @@
             <div class="detail-content">
                 <div class="orch-detail-header">
                     <div>
-                        <span class="orch-shape-badge shape-swarm">&#x1F41D; Defaults</span>
+                        <span class="orch-shape-badge shape-swarm"><SovrantIcon Name="swarm" /> Defaults</span>
                         <h2>Swarm Defaults</h2>
                         <p class="text-secondary" style="margin:4px 0 0;">
                             Default run settings inherited by new teams. Per-team overrides live on each team's detail pane.
@@ -163,7 +163,7 @@
                 <div class="orch-detail-header">
                     <div>
                         <span class="orch-shape-badge shape-@_selected.RunMode.ToString().ToLowerInvariant()">
-                            @ModeIcon(_selected.RunMode) @_selected.RunMode
+                            <SovrantIcon Name="@ModeIcon(_selected.RunMode)" /> @_selected.RunMode
                         </span>
                         <h2>@_selected.Name</h2>
                         @if (!string.IsNullOrEmpty(_selected.Description))
@@ -288,7 +288,7 @@
                                         <span>@m.ToolsSummary</span>
                                     </div>
                                 </div>
-                                <button class="btn-sm btn-danger" @onclick="() => RemoveMember(m.Id)">X</button>
+                                <button class="btn-sm btn-danger" @onclick="() => RemoveMember(m.Id)"><SovrantIcon Name="x" /></button>
                             </div>
                         }
                     }
@@ -665,10 +665,10 @@
 
     private static string ModeIcon(TeamRunMode mode) => mode switch
     {
-        TeamRunMode.Sequential => "\U0001F465",
-        TeamRunMode.Parallel => "\u26A1",
-        TeamRunMode.Swarm => "\U0001F41D",
-        _ => string.Empty,
+        TeamRunMode.Sequential => "users",
+        TeamRunMode.Parallel => "zap",
+        TeamRunMode.Swarm => "swarm",
+        _ => "workflow",
     };
 
     private string EmptyMessage() =>

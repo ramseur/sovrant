@@ -52,7 +52,7 @@
                 <dd>Chat conversations you started. Private sessions are only visible to you; public ones are visible to workspace admins.</dd>
 
                 <dt>Shared</dt>
-                <dd>Your own items you've made public — missions, runs, and sessions with the 🔓 lock open. These are visible to workspace admins and teammates.</dd>
+                <dd>Your own items you've made public — missions, runs, and sessions with the <SovrantIcon Name="unlock" /> lock open. These are visible to workspace admins and teammates.</dd>
 
                 <dt>Claws</dt>
                 <dd>External MCP systems Sovrant is connected to (n8n, Zapier, custom servers). Sovrant monitors and steers them from the Command Center.</dd>
@@ -63,7 +63,7 @@
     @if (!string.IsNullOrEmpty(_error))
     {
         <div class="page-error-banner" role="alert">
-            <span>&#9888;</span><span class="error-message">@_error</span>
+            <span><SovrantIcon Name="alert" /></span><span class="error-message">@_error</span>
         </div>
     }
 
@@ -116,7 +116,7 @@
             {
                 <a class="cc-grid-row" href="@(row.DetailRoute ?? "#")">
                     <div class="cc-col-kind">
-                        <span class="cc-kind-pill cc-kind-@(row.Kind)">@KindIcon(row.Kind) @row.Kind</span>
+                        <span class="cc-kind-pill cc-kind-@(row.Kind)"><SovrantIcon Name="@KindIcon(row.Kind)" /> @row.Kind</span>
                     </div>
                     <div class="cc-col-privacy">
                         @if (row.IsOwn)
@@ -126,12 +126,12 @@
                                     @onclick="@(() => TogglePrivacyAsync(row))"
                                     @onclick:stopPropagation="true"
                                     @onclick:preventDefault="true">
-                                @(row.IsPrivate ? "🔒" : "🔓")
+                                <SovrantIcon Name="@(row.IsPrivate ? "lock" : "unlock")" />
                             </button>
                         }
                         else if (row.IsPrivate)
                         {
-                            <span class="cc-badge-private" title="Private — only visible to you">&#x1F512;</span>
+                            <span class="cc-badge-private" title="Private — only visible to you"><SovrantIcon Name="lock" /></span>
                         }
                     </div>
                     <div class="cc-col-title">
@@ -211,12 +211,12 @@
 
     private static string KindIcon(string kind) => kind switch
     {
-        "mission" => "\U0001F3AF",
-        "team-run" => "\U0001F465",
-        "agent-run" => "\U0001F916",
-        "session" => "\U0001F4AC",
-        "claw" => "\U0001F517",
-        _ => "•",
+        "mission" => "target",
+        "team-run" => "users",
+        "agent-run" => "agent",
+        "session" => "message",
+        "claw" => "network",
+        _ => "activity",
     };
 
     private static string FormatRelative(DateTimeOffset when)
