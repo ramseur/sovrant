@@ -17,8 +17,18 @@ public partial class LoginViewModel : ObservableObject
     [ObservableProperty] private string _email = string.Empty;
     [ObservableProperty] private string _password = string.Empty;
     [ObservableProperty] private string _errorMessage = string.Empty;
+    [ObservableProperty] private string _infoMessage = string.Empty;
     [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private string _busyLabel = string.Empty;
     [ObservableProperty] private bool _isRegistrationOpen;
+    [ObservableProperty] private bool _isFirstRun;
+    [ObservableProperty] private bool _isApprovalRequired;
+
+    /// <summary>Registration section is only offered once an admin exists and registration is open.</summary>
+    public bool ShowRegistrationSection => !IsFirstRun && IsRegistrationOpen;
+
+    partial void OnIsFirstRunChanged(bool value) => OnPropertyChanged(nameof(ShowRegistrationSection));
+    partial void OnIsRegistrationOpenChanged(bool value) => OnPropertyChanged(nameof(ShowRegistrationSection));
 
     public event Action<string, string, string>? LoginSucceeded; // (userId, role, email)
 
@@ -31,20 +41,31 @@ public partial class LoginViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
+        IsFirstRun = await _identity.IsFirstRunAsync().ConfigureAwait(true);
         IsRegistrationOpen = await _identity.IsRegistrationOpenAsync().ConfigureAwait(true);
+        IsApprovalRequired = !IsFirstRun && IsRegistrationOpen
+            && await _identity.IsApprovalRequiredAsync().ConfigureAwait(true);
+    }
+
+    private bool ValidateInput()
+    {
+        ErrorMessage = string.Empty;
+        InfoMessage = string.Empty;
+        if (string.IsNullOrWhiteSpace(Email) || string.IsNullOrWhiteSpace(Password))
+        {
+            ErrorMessage = "Email and password are required.";
+            return false;
+        }
+        return true;
     }
 
     [RelayCommand]
     private async Task LoginAsync()
     {
-        ErrorMessage = string.Empty;
-        if (string.IsNullOrWhiteSpace(Email) || string.IsNullOrWhiteSpace(Password))
-        {
-            ErrorMessage = "Email and password are required.";
-            return;
-        }
+        if (!ValidateInput()) return;
 
         IsBusy = true;
+        BusyLabel = "Signing you in…";
         try
         {
             var result = await _identity.LoginAsync(Email, Password).ConfigureAwait(true);
@@ -66,14 +87,10 @@ public partial class LoginViewModel : ObservableObject
     [RelayCommand]
     private async Task RegisterAsync()
     {
-        ErrorMessage = string.Empty;
-        if (string.IsNullOrWhiteSpace(Email) || string.IsNullOrWhiteSpace(Password))
-        {
-            ErrorMessage = "Email and password are required.";
-            return;
-        }
+        if (!ValidateInput()) return;
 
         IsBusy = true;
+        BusyLabel = IsFirstRun ? "Creating your administrator account…" : "Creating your account…";
         try
         {
             var result = await _identity.RegisterAsync(Email, Password).ConfigureAwait(true);
@@ -85,7 +102,7 @@ public partial class LoginViewModel : ObservableObject
 
             if (result.IsPendingApproval)
             {
-                ErrorMessage = "Account created. An administrator must approve it before you can sign in.";
+                InfoMessage = "Account created. An administrator must approve it before you can sign in.";
                 return;
             }
 
