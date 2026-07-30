@@ -3496,6 +3496,12 @@ details[open] .doc-advanced-toggle::before { content: "▼ "; }
 .login-sub { font-size: 13px; color: var(--text-secondary); text-align: center; }
 .login-progress { height: 3px; background: var(--brand-primary); border-radius: 2px; animation: login-pulse 1s ease-in-out infinite; }
 @keyframes login-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+.login-info { font-size: 13px; line-height: 1.5; color: var(--text-primary); background: color-mix(in srgb, var(--brand-primary) 10%, transparent); border: 1px solid color-mix(in srgb, var(--brand-primary) 35%, transparent); padding: 10px 12px; border-radius: 5px; }
+.login-success { font-size: 13px; line-height: 1.5; color: var(--status-pass); background: color-mix(in srgb, var(--status-pass) 10%, transparent); border: 1px solid color-mix(in srgb, var(--status-pass) 30%, transparent); padding: 8px 10px; border-radius: 5px; }
+.login-note { font-size: 12px; color: var(--text-secondary); text-align: center; }
+.login-status { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+.login-spinner { width: 14px; height: 14px; flex: none; border: 2px solid var(--surface-border); border-top-color: var(--brand-primary); border-radius: 50%; animation: login-spin 0.8s linear infinite; }
+@keyframes login-spin { to { transform: rotate(360deg); } }
 
 /* ===== Admin workspace configure panel ===== */
 .admin-config-panel { margin-top: 16px; padding: 16px; background: var(--surface-card); border: 1px solid var(--brand-primary); border-radius: 10px; display: flex; flex-direction: column; gap: 12px; }
