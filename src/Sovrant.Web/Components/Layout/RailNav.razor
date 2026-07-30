@@ -8,19 +8,19 @@
 
 <div class="rail-icons-row">
     <button class="rail-icon @(Selected == "dashboard" ? "active" : "")"
-            title="User Dashboard" @onclick='() => OnSelect.InvokeAsync("dashboard")'>&#x1F4CA;</button>
+            title="User Dashboard" @onclick='() => OnSelect.InvokeAsync("dashboard")'><SovrantIcon Name="chart" /></button>
     <button class="rail-icon @(Selected == "chat" ? "active" : "")"
-            title="Chat" @onclick='() => OnSelect.InvokeAsync("chat")'>&#x1F4AC;</button>
+            title="Chat" @onclick='() => OnSelect.InvokeAsync("chat")'><SovrantIcon Name="message" /></button>
     <button class="rail-icon @(Selected == "knowledge" ? "active" : "")"
-            title="Knowledge" @onclick='() => OnSelect.InvokeAsync("knowledge")'>&#x1F4DA;</button>
+            title="Knowledge" @onclick='() => OnSelect.InvokeAsync("knowledge")'><SovrantIcon Name="knowledge" /></button>
     <button class="rail-icon @(Selected == "agents" ? "active" : "")"
-            title="Agents" @onclick='() => OnSelect.InvokeAsync("agents")'>&#x1F916;</button>
+            title="Agents" @onclick='() => OnSelect.InvokeAsync("agents")'><SovrantIcon Name="agent" /></button>
     <button class="rail-icon @(Selected == "workspace" ? "active" : "")"
-            title="Projects" @onclick='() => OnSelect.InvokeAsync("workspace")'>&#x1F5C2;&#xFE0F;</button>
+            title="Projects" @onclick='() => OnSelect.InvokeAsync("workspace")'><SovrantIcon Name="project" /></button>
     @if (Session.IsAdmin)
     {
         <button class="rail-icon @(Selected == "admin" ? "active" : "")"
-                title="Admin" @onclick='() => OnSelect.InvokeAsync("admin")'>&#x1F511;</button>
+                title="Admin" @onclick='() => OnSelect.InvokeAsync("admin")'><SovrantIcon Name="key" /></button>
     }
 </div>
 
