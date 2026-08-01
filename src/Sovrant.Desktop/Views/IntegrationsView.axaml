@@ -83,7 +83,7 @@
                                         </Border>
                                         <StackPanel Spacing="2">
                                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <TextBlock Text="{Binding Icon}" FontSize="15" VerticalAlignment="Center" />
+                                                <ctrl:SovrantIcon IconName="{Binding IconKey}" Width="15" Height="15" VerticalAlignment="Center" />
                                                 <TextBlock Text="{Binding Name}"
                                                            FontSize="13" FontWeight="SemiBold"
                                                            Foreground="{DynamicResource BrandPrimary}"
@@ -208,7 +208,7 @@
 
                                 <!-- Header -->
                                 <StackPanel Spacing="4">
-                                    <TextBlock Text="{Binding SelectedCatalogEntry.Icon}" FontSize="32" />
+                                    <ctrl:SovrantIcon IconName="{Binding SelectedCatalogEntry.IconKey}" Width="32" Height="32" />
                                     <TextBlock Text="{Binding SelectedCatalogEntry.Name}"
                                                FontSize="20" FontWeight="SemiBold"
                                                Foreground="{DynamicResource TextPrimary}" />
@@ -275,9 +275,13 @@
                                                 Background="{DynamicResource SurfaceBackground}"
                                                 BorderBrush="{DynamicResource BrandPrimary}"
                                                 BorderThickness="1">
-                                            <TextBlock FontSize="12" Foreground="{DynamicResource BrandPrimary}"
-                                                       TextWrapping="Wrap"
-                                                       Text="🔄 Browser opened. Waiting for authorization... (times out after 2 min)" />
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <ctrl:SovrantIcon IconName="refresh" Width="12" Height="12"
+                                                                  Foreground="{DynamicResource BrandPrimary}" />
+                                                <TextBlock FontSize="12" Foreground="{DynamicResource BrandPrimary}"
+                                                           TextWrapping="Wrap"
+                                                           Text="Browser opened. Waiting for authorization... (times out after 2 min)" />
+                                            </StackPanel>
                                         </Border>
 
                                         <StackPanel Spacing="4">
@@ -573,13 +577,14 @@
                                                 <DataTemplate DataType="vm:EnvVarRowViewModel">
                                                     <Grid ColumnDefinitions="Auto,8,*,12,2*" Margin="0,0,0,4">
                                                         <Button Grid.Column="0"
-                                                                Content="✕"
                                                                 Command="{Binding $parent[ItemsControl].((vm:IntegrationsViewModel)DataContext).RemoveEnvRowCommand}"
                                                                 CommandParameter="{Binding}"
                                                                 Padding="6,4" CornerRadius="4"
                                                                 Background="#33F44336"
                                                                 Foreground="{DynamicResource StatusFail}"
-                                                                FontSize="10" />
+                                                                FontSize="10">
+                                                            <ctrl:SovrantIcon IconName="x" Width="10" Height="10" />
+                                                        </Button>
                                                         <TextBox Grid.Column="2"
                                                                  Text="{Binding Key}"
                                                                  Watermark="KEY"
@@ -643,11 +648,12 @@
                                                         Padding="10,6" Margin="0,0,0,4">
                                                     <DockPanel>
                                                         <Button DockPanel.Dock="Right"
-                                                                Content="✕"
                                                                 Command="{Binding RemoveCommand}"
                                                                 Padding="6,3" CornerRadius="4"
                                                                 Background="#33F44336" Foreground="{DynamicResource StatusFail}"
-                                                                FontSize="10" />
+                                                                FontSize="10">
+                                                            <ctrl:SovrantIcon IconName="x" Width="10" Height="10" />
+                                                        </Button>
                                                         <Border DockPanel.Dock="Right"
                                                                 Background="{Binding ActionBadgeColor}"
                                                                 CornerRadius="8" Padding="7,2"

@@ -14,7 +14,7 @@
         <!-- Assistant message: avatar + name row, then content in card -->
         <div class="msg-card">
             <div class="msg-row">
-                <div class="msg-avatar sovrant-avatar">&#9889;</div>
+                <div class="msg-avatar sovrant-avatar"><SovrantIcon Name="zap" /></div>
                 <span class="msg-sender">@Message.SenderLabel</span>
                 @if (!string.IsNullOrEmpty(Message.ElapsedText))
                 {
@@ -59,7 +59,7 @@
                     {
                         <div class="tool-use-block @(tool.IsError ? "tool-error" : "")">
                             <div class="tool-header">
-                                <span class="tool-icon">&#x1F527;</span>
+                                <span class="tool-icon"><SovrantIcon Name="tools" /></span>
                                 <span class="tool-name">@ChatMessageModel.FriendlyToolLabel(tool.ToolName)</span>
                                 <span class="tool-status @(tool.Status == "Done" ? "status-done" : tool.IsError ? "status-error" : "status-running")">@tool.Status</span>
                             </div>
@@ -68,9 +68,9 @@
                                 <div class="tool-confirmation">
                                     <div class="tool-input-preview">@tool.Result</div>
                                     <div class="tool-actions">
-                                        <button class="btn-approve" @onclick="() => OnApprove.InvokeAsync(tool)">&#x2713; Allow once</button>
-                                        <button class="btn-approve-turn" @onclick="() => OnApproveForTurn.InvokeAsync(tool)" title="Auto-approve this tool for the rest of this turn">&#x2713;&#x2713; Allow for turn</button>
-                                        <button class="btn-deny" @onclick="() => OnDeny.InvokeAsync(tool)">&#x2715; Deny</button>
+                                        <button class="btn-approve" @onclick="() => OnApprove.InvokeAsync(tool)"><SovrantIcon Name="check" /> Allow once</button>
+                                        <button class="btn-approve-turn" @onclick="() => OnApproveForTurn.InvokeAsync(tool)" title="Auto-approve this tool for the rest of this turn"><SovrantIcon Name="check-circle" /> Allow for turn</button>
+                                        <button class="btn-deny" @onclick="() => OnDeny.InvokeAsync(tool)"><SovrantIcon Name="x" /> Deny</button>
                                     </div>
                                 </div>
                             }
@@ -97,7 +97,7 @@
                     {
                         <div class="doc-artifact-card">
                             <div class="doc-artifact-header">
-                                <span class="doc-artifact-icon">&#x1F4CE;</span>
+                                <span class="doc-artifact-icon"><SovrantIcon Name="paperclip" /></span>
                                 <div class="doc-artifact-meta">
                                     <div class="doc-artifact-name">@System.IO.Path.GetFileName(art.Path)</div>
                                     <div class="doc-artifact-sub">

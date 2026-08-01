@@ -5,7 +5,7 @@
     <aside class="rail-secondary @(_collapsed ? "collapsed" : "")">
         <div class="rail-brand-row">
             <button class="rail-brand" @onclick='() => { _selectedGroup = "chat"; Nav.NavigateTo("/"); }' title="Home">
-                <span class="rail-brand-icon">&#9889;</span>
+                <span class="rail-brand-icon"><SovrantIcon Name="zap" /></span>
                 <span class="rail-brand-text">Sovrant</span>
             </button>
             <button class="rail-collapse-btn" @onclick="() => _collapsed = !_collapsed"
@@ -63,7 +63,7 @@
                 </div>
             </button>
             <button class="rail-footer-settings" title="Log out"
-                    @onclick="LogoutAsync">&#x21AA;</button>
+                    @onclick="LogoutAsync"><SovrantIcon Name="logout" /></button>
         </div>
     </aside>
 

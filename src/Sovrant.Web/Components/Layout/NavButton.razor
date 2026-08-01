@@ -7,7 +7,7 @@
 
 <button class="nav-btn @(isActive ? "active" : "")"
         @onclick="() => OnClick.InvokeAsync(Href)">
-    <span class="nav-icon">@((MarkupString)Icon)</span>
+    <span class="nav-icon"><SovrantIcon Name="@Icon" /></span>
     <span class="nav-label">@Label</span>
 </button>
 

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.SetupWizardOverlay"
              x:DataType="vm:SetupWizardViewModel"
              IsVisible="{Binding IsVisible}">
@@ -23,9 +24,9 @@
                     <Border Width="48" Height="48" CornerRadius="12"
                             Background="{DynamicResource BrandPrimary}"
                             HorizontalAlignment="Center">
-                        <TextBlock Text="⚡" FontSize="24"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <ctrl:SovrantIcon IconName="zap" Width="24" Height="24"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
                     </Border>
                     <TextBlock Text="Welcome to Sovrant"
                                FontSize="22" FontWeight="Bold"

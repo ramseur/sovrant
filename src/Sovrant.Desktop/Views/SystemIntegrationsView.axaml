@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.SystemIntegrationsView"
              x:DataType="vm:SystemIntegrationsViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -72,7 +73,7 @@
                         </StackPanel>
                         <StackPanel Spacing="2">
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="🐘" FontSize="20" VerticalAlignment="Center" />
+                                <ctrl:SovrantIcon IconName="database" Width="20" Height="20" VerticalAlignment="Center" />
                                 <TextBlock Text="PostgreSQL" FontSize="17" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
                             </StackPanel>
@@ -211,7 +212,7 @@
                         </StackPanel>
                         <StackPanel Spacing="2">
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="🗄️" FontSize="20" VerticalAlignment="Center" />
+                                <ctrl:SovrantIcon IconName="database-zap" Width="20" Height="20" VerticalAlignment="Center" />
                                 <TextBlock Text="Supabase" FontSize="17" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
                             </StackPanel>

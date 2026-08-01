@@ -425,8 +425,6 @@ public partial class ArtifactItemViewModel : ViewModelBase
     [ObservableProperty]
     private string _folderName = string.Empty;
 
-    public string FolderDisplayName => $"📁 {FolderName}";
-
     public ObservableCollection<ArtifactItemViewModel> FolderFiles { get; } = [];
 
     /// <summary>Full path on disk for preview reading.</summary>

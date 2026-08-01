@@ -1,9 +1,9 @@
 @*  Phase 69 — Governance group secondary panel.  *@
 
 <div class="rail-secondary-header">Governance</div>
-<NavButton Href="/governance" Icon="&#x1F6E1;" Label="Governance" OnClick="OnNavigate" />
-<NavButton Href="/trust-boundary" Icon="&#x1F510;" Label="Trust Boundary" OnClick="OnNavigate" />
-<NavButton Href="/diagnostics" Icon="&#x1F527;" Label="Diagnostics" OnClick="OnNavigate" />
+<NavButton Href="/governance" Icon="governance" Label="Governance" OnClick="OnNavigate" />
+<NavButton Href="/trust-boundary" Icon="lock" Label="Trust Boundary" OnClick="OnNavigate" />
+<NavButton Href="/diagnostics" Icon="tools" Label="Diagnostics" OnClick="OnNavigate" />
 
 @code {
     [Parameter] public EventCallback<string> OnNavigate { get; set; }

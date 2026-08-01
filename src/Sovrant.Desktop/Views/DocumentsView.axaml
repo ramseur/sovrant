@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.DocumentsView"
              x:DataType="vm:DocumentsViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -140,8 +141,7 @@
                             </DockPanel>
 
                             <!-- Primary: chat-to-create -->
-                            <Button Content="💬 Chat to create this document"
-                                    Command="{Binding ChatToCreateCommand}"
+                            <Button Command="{Binding ChatToCreateCommand}"
                                     IsVisible="{Binding CanLaunchChat}"
                                     HorizontalAlignment="Stretch"
                                     HorizontalContentAlignment="Center"
@@ -149,7 +149,12 @@
                                     CornerRadius="8"
                                     Background="{DynamicResource BrandPrimary}"
                                     Foreground="White"
-                                    FontSize="14" />
+                                    FontSize="14">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <ctrl:SovrantIcon IconName="message" Width="16" Height="16" />
+                                    <TextBlock Text="Chat to create this document" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
                             <TextBlock IsVisible="{Binding CanLaunchChat}"
                                        Text="The AI will ask for the information it needs and generate the document for you."
                                        FontSize="11"

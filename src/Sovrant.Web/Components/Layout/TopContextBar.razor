@@ -95,7 +95,7 @@
 
     <!-- Workspace -->
     <div class="tcb-field">
-        <span class="tcb-icon">&#x1F3E2;</span>
+        <span class="tcb-icon"><SovrantIcon Name="building" /></span>
         <select @bind="_selectedWorkspaceId" @bind:after="OnWorkspaceChanged" disabled="@(_workspaces.Count <= 1)">
             @foreach (var w in _workspaces)
             {
@@ -106,7 +106,7 @@
 
     <!-- Project -->
     <div class="tcb-field">
-        <span class="tcb-icon">&#x1F4C1;</span>
+        <span class="tcb-icon"><SovrantIcon Name="project" /></span>
         <select @bind="_selectedProjectId" @bind:after="OnProjectChanged" disabled="@(_projects.Count == 0)">
             <option value="">@(_projects.Count == 0 ? "No projects" : "(No project)")</option>
             @foreach (var p in _projects)
@@ -125,7 +125,7 @@
                 @ref="_mcpTriggerRef"
                 @onclick="ToggleMcpDropdown"
                 @onclick:stopPropagation="true">
-            <span class="tcb-icon">&#128279;</span>
+            <span class="tcb-icon"><SovrantIcon Name="link" /></span>
             <span class="tcb-mcp-summary">@McpSummaryLabel</span>
             <span class="tcb-mcp-chevron @(_mcpDropdownOpen ? "open" : "")">&#x25BE;</span>
         </button>
@@ -168,9 +168,9 @@
     {
         <div class="tcb-divider"></div>
         <div class="tcb-agent-badge" title="This session is scoped to @ActiveContext.ActiveAgentName">
-            <span class="tcb-icon">&#x1F916;</span>
+            <span class="tcb-icon"><SovrantIcon Name="agent" /></span>
             <span class="tcb-agent-name">@ActiveContext.ActiveAgentName</span>
-            <button class="tcb-agent-clear" title="Clear agent" @onclick="ClearAgent" @onclick:stopPropagation="true">&#x2715;</button>
+            <button class="tcb-agent-clear" title="Clear agent" @onclick="ClearAgent" @onclick:stopPropagation="true"><SovrantIcon Name="x" /></button>
         </div>
     }
 </div>
@@ -246,17 +246,17 @@
 
     private static readonly (string Name, string Icon)[] _knownProviders =
     [
-        ("OpenAI",       "🤖"),
-        ("Anthropic",    "🧠"),
-        ("OpenRouter",   "🔀"),
-        ("DeepSeek",     "🔵"),
-        ("Groq",         "🚀"),
-        ("Mistral",      "🌀"),
-        ("Google",       "🔷"),
-        ("Together AI",  "🤝"),
-        ("Ollama",       "🦙"),
-        ("LM Studio",    "💻"),
-        ("Azure OpenAI", "☁️"),
+        ("OpenAI",       "brain"),
+        ("Anthropic",    "brain"),
+        ("OpenRouter",   "route"),
+        ("DeepSeek",     "search"),
+        ("Groq",         "zap"),
+        ("Mistral",      "wind"),
+        ("Google",       "sparkles"),
+        ("Together AI",  "team"),
+        ("Ollama",       "agent"),
+        ("LM Studio",    "monitor"),
+        ("Azure OpenAI", "cloud"),
     ];
 
     private static readonly Dictionary<string, string[]> StaticProviderModels = new(StringComparer.Ordinal)

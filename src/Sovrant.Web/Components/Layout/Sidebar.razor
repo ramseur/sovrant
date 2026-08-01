@@ -28,11 +28,11 @@
                             }
                             else if (session.Status == ActiveSessionStatus.Completed)
                             {
-                                <span class="active-done" title="Completed">&#10003;</span>
+                                <span class="active-done" title="Completed"><SovrantIcon Name="check-circle" /></span>
                             }
                             else
                             {
-                                <span class="active-failed" title="@session.Error">&#9888;</span>
+                                <span class="active-failed" title="@session.Error"><SovrantIcon Name="alert" /></span>
                             }
                             @session.Title
                         </div>
@@ -40,11 +40,11 @@
                     </button>
                     @if (session.Status == ActiveSessionStatus.Running)
                     {
-                        <button class="session-delete" @onclick="() => CancelSession(session.SessionId)" title="Cancel">&#x25FC;</button>
+                        <button class="session-delete" @onclick="() => CancelSession(session.SessionId)" title="Cancel"><SovrantIcon Name="square" /></button>
                     }
                     else
                     {
-                        <button class="session-delete" @onclick="() => DismissSession(session.SessionId)" title="Dismiss">&#x2715;</button>
+                        <button class="session-delete" @onclick="() => DismissSession(session.SessionId)" title="Dismiss"><SovrantIcon Name="x" /></button>
                     }
                 </div>
             }
@@ -74,7 +74,7 @@
                             </div>
                             <div class="session-time">@session.Timestamp.ToString("MMM d, HH:mm")</div>
                         </button>
-                        <button class="session-delete" @onclick="() => DeleteSession(session.Id)" title="Delete session">&#x2715;</button>
+                        <button class="session-delete" @onclick="() => DeleteSession(session.Id)" title="Delete session"><SovrantIcon Name="x" /></button>
                     </div>
                 }
             }

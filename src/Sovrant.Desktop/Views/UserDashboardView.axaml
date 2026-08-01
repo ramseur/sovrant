@@ -81,7 +81,7 @@
                                    Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
-                                   Text="Your own items you've made public — missions, runs, and sessions with the 🔓 lock open. These are visible to workspace admins and teammates." />
+                                   Text="Your own items you've made public — missions, runs, and sessions with the open-lock indicator. These are visible to workspace admins and teammates." />
                     </Grid>
                     <Grid ColumnDefinitions="130,*">
                         <TextBlock Grid.Column="0" Text="Claws" FontWeight="SemiBold"

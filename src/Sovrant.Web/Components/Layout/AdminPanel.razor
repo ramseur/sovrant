@@ -1,15 +1,15 @@
 @*  Admin group secondary panel — admin-only nav items.  *@
 
 <div class="rail-secondary-header">Admin</div>
-<NavButton Href="/command" Icon="&#x1F3AF;" Label="Command Center" OnClick="OnNavigate" />
-<NavButton Href="/admin" Icon="&#x1F465;" Label="Users" OnClick="OnNavigate" />
-<NavButton Href="/admin/workspaces" Icon="&#x1F3E2;" Label="Workspaces" OnClick="OnNavigate" />
-<NavButton Href="/admin/providers" Icon="&#x1F310;" Label="Providers" OnClick="OnNavigate" />
-<NavButton Href="/governance" Icon="&#x1F6E1;" Label="Governance" OnClick="OnNavigate" />
-<NavButton Href="/trust-boundary" Icon="&#x1F510;" Label="Trust Boundary" OnClick="OnNavigate" />
-<NavButton Href="/diagnostics" Icon="&#x1F527;" Label="Diagnostics" OnClick="OnNavigate" />
-<NavButton Href="/admin/integrations" Icon="&#x1F50C;" Label="Platform Integrations" OnClick="OnNavigate" />
-<NavButton Href="/admin/system-integrations" Icon="&#x1F5A5;" Label="System Integrations" OnClick="OnNavigate" />
+<NavButton Href="/command" Icon="target" Label="Command Center" OnClick="OnNavigate" />
+<NavButton Href="/admin" Icon="users" Label="Users" OnClick="OnNavigate" />
+<NavButton Href="/admin/workspaces" Icon="building" Label="Workspaces" OnClick="OnNavigate" />
+<NavButton Href="/admin/providers" Icon="globe" Label="Providers" OnClick="OnNavigate" />
+<NavButton Href="/governance" Icon="governance" Label="Governance" OnClick="OnNavigate" />
+<NavButton Href="/trust-boundary" Icon="lock" Label="Trust Boundary" OnClick="OnNavigate" />
+<NavButton Href="/diagnostics" Icon="tools" Label="Diagnostics" OnClick="OnNavigate" />
+<NavButton Href="/admin/integrations" Icon="integrations" Label="Platform Integrations" OnClick="OnNavigate" />
+<NavButton Href="/admin/system-integrations" Icon="monitor" Label="System Integrations" OnClick="OnNavigate" />
 
 @code {
     [Parameter] public EventCallback<string> OnNavigate { get; set; }

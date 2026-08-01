@@ -16,7 +16,7 @@
     @if (!string.IsNullOrEmpty(_pageError))
     {
         <div class="chat-error-banner" role="alert">
-            <span class="chat-error-banner-icon">&#9888;</span>
+            <span class="chat-error-banner-icon"><SovrantIcon Name="alert" /></span>
             <span class="chat-error-banner-text">@_pageError</span>
             <button class="chat-error-banner-close" @onclick="DismissPageError" aria-label="Dismiss">&times;</button>
         </div>
@@ -29,11 +29,11 @@
             <!-- Hero state -->
             <div class="hero-state">
                 <div class="hero-logo">
-                    <span>&#9889;</span>
+                    <span><SovrantIcon Name="zap" /></span>
                 </div>
                 @if (_agentName is not null)
                 {
-                    <div class="agent-scope-badge">&#x1F916; Chatting with <strong>@_agentName</strong></div>
+                    <div class="agent-scope-badge"><SovrantIcon Name="agent" /> Chatting with <strong>@_agentName</strong></div>
                 }
                 <h1 class="hero-title">@(_agentName is not null ? $"Ask {_agentName} anything" : "What are you working on?")</h1>
                 <p class="hero-subtitle">Create agents, build teams, and orchestrate missions to automate your work.</p>
@@ -41,7 +41,7 @@
                     @foreach (var s in _suggestions)
                     {
                         <button class="suggestion-card" @onclick="() => SendSuggestion(s)">
-                            <span class="suggestion-icon">@s.Icon</span>
+                            <span class="suggestion-icon"><SovrantIcon Name="@s.Icon" /></span>
                             <span>@s.Text</span>
                         </button>
                     }
@@ -66,7 +66,7 @@
         <button class="privacy-toggle @(_isPrivate ? "private" : "public")"
                 title="@(_isPrivate ? "Private — only you can see this session" : "Public — visible to admins")"
                 @onclick="TogglePrivacyAsync">
-            <span class="privacy-icon">@(_isPrivate ? "🔒" : "🔓")</span>
+            <span class="privacy-icon"><SovrantIcon Name="@(_isPrivate ? "lock" : "unlock")" /></span>
             <span class="privacy-label">@(_isPrivate ? "Private" : "Public")</span>
         </button>
         <button class="remember-btn" title="Save a note to memory — injected into every future chat session" @onclick="() => _showRemember = !_showRemember">
@@ -90,7 +90,7 @@
             <div class="remember-form-actions">
                 <label class="remember-privacy-label">
                     <input type="checkbox" @bind="_rememberPrivate" />
-                    🔒 Private
+                    <SovrantIcon Name="lock" /> Private
                 </label>
                 @if (!string.IsNullOrEmpty(_rememberStatus))
                 {
@@ -115,11 +115,11 @@
         </div>
         @if (_isSending)
         {
-            <button class="btn-stop send-btn" @onclick="StopAsync" title="Stop">&#9632;</button>
+            <button class="btn-stop send-btn" @onclick="StopAsync" title="Stop"><SovrantIcon Name="square" /></button>
         }
         else
         {
-            <button class="btn-primary send-btn" @onclick="SendAsync" disabled="@(!CanSend)" title="Send (Enter)">&#8593;</button>
+            <button class="btn-primary send-btn" @onclick="SendAsync" disabled="@(!CanSend)" title="Send (Enter)"><SovrantIcon Name="send" /></button>
         }
     </div>
 </div>
@@ -186,12 +186,12 @@
     private record Suggestion(string Icon, string Text);
     private static readonly Suggestion[] _suggestions =
     [
-        new("🤖", "Create a custom agent with tools for web research and summarization"),
-        new("🤝", "Create a team that researches a topic and produces a structured report"),
-        new("🌀", "Build a best-practice swarm that parallelizes tasks across agents"),
-        new("🎯", "Set up a mission that monitors a project and sends daily updates"),
-        new("🎼", "Orchestrate a multi-agent pipeline for code review and testing"),
-        new("🔗", "Connect an MCP server and create an agent that uses its tools"),
+        new("agent", "Create a custom agent with tools for web research and summarization"),
+        new("team", "Create a team that researches a topic and produces a structured report"),
+        new("swarm", "Build a best-practice swarm that parallelizes tasks across agents"),
+        new("target", "Set up a mission that monitors a project and sends daily updates"),
+        new("orchestration", "Orchestrate a multi-agent pipeline for code review and testing"),
+        new("link", "Connect an MCP server and create an agent that uses its tools"),
     ];
 
     private bool CanSend => !_isSending && !string.IsNullOrWhiteSpace(_inputText);

@@ -100,17 +100,17 @@ public partial class SidebarViewModel : ViewModelBase
 
     private static readonly UnconfiguredProviderItem[] KnownProviders =
     [
-        new("OpenAI",       "🤖"),
-        new("Anthropic",    "🧠"),
-        new("OpenRouter",   "🔀"),
-        new("DeepSeek",     "🔵"),
-        new("Groq",         "🚀"),
-        new("Mistral",      "🌀"),
-        new("Google",       "🔷"),
-        new("Together AI",  "🤝"),
-        new("Ollama",       "🦙"),
-        new("LM Studio",    "💻"),
-        new("Azure OpenAI", "☁️"),
+        new("OpenAI",       "bot"),
+        new("Anthropic",    "brain"),
+        new("OpenRouter",   "route"),
+        new("DeepSeek",     "activity"),
+        new("Groq",         "zap"),
+        new("Mistral",      "wind"),
+        new("Google",       "sparkles"),
+        new("Together AI",  "users"),
+        new("Ollama",       "bot"),
+        new("LM Studio",    "monitor"),
+        new("Azure OpenAI", "cloud"),
     ];
 
     public event EventHandler<string>? NavigationRequested;
@@ -841,4 +841,3 @@ public partial class SessionListItem : ViewModelBase
             : null;
     }
 }
-
