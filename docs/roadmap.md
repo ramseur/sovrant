@@ -227,6 +227,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Code generation quality gates — artifact security hardening; `.sln` + `Directory.Build.props` + CI for all 21 templates (every scaffold immediately runnable); `CodeValidateTool` (structural checks, no compiler in PATH); `CodeCreate` `next_steps` + `build_command` + LLM instruction update; `ArtifactManifest` code metadata | Phase 128 | ✅ Done |
 | Missions → Workflows rename and UX review — surface-label rename (presentation-layer only); dedicated Workflows page (goal-first launch, active/recent cards, detail view with journal + artifacts); positioning callout distinguishing AI-driven workflows from trigger-automation (n8n/Zapier/Make); `/v1/workflows` alias for `/v1/missions`; Phase 119 run-modes surfaced in the launch form; plus dual-path execution — Claude Agent SDK dynamic workflow orchestration when a qualifying Claude tier is active, otherwise Sovrant's own mission engine as the base version (model/tier gate TBD) | Phase 129 | Planned (v1.5) |
 | OpenRouter account registration & key issuance in-app — "Get an OpenRouter key" button on the Providers setup flow (Web + Desktop) drives OpenRouter's OAuth PKCE flow (`openrouter.ai/auth`) so a user can register a new OpenRouter account or sign into an existing one and receive a working API key without ever leaving Sovrant or hand-copying a key; reuses the PKCE code-challenge/verifier plumbing and loopback callback listener built for Phase 101's MCP OAuth; issued key is written straight into the encrypted keystore and activated as a provider profile like a manually-entered key | Phase 130 | Planned |
+| Skill import from git repo / URL — Skills page gains an import action that fetches `.md` skill files from a git repo URL (optional subpath/ref) or a single raw file URL, validates each against the skill frontmatter schema, previews the batch with per-file pass/fail reasons and slug-collision handling, and writes accepted items as `User`-tier `knowledge_pages` overlay rows (never mutating `BuiltIn` rows); records source URL for a later "check for updates" re-import; private repos take an optional token in the encrypted keystore; one-directional ingestion only, no marketplace browsing, no scheduled auto-sync | Phase 131 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -11965,3 +11966,63 @@ Same scoping rules as any other provider profile (Phase 95/Phase 8): the issued 
 - [ ] Manual key-entry path remains fully functional and is offered as a fallback on any error
 - [ ] Web + Desktop parity
 - [ ] No changes required in `SmartRouter`, model discovery, or cost tracking — the issued key behaves identically to a manually entered one
+
+---
+
+## Phase 131 — Skill Import from Git Repository / URL
+
+**Status:** Planned
+
+### Why
+
+Skills currently reach Sovrant one of two ways: the 32 built-in rows seeded by V035, or hand-authored through the in-place Skills editor. Teams that already maintain skill `.md` files elsewhere — a shared git repo, a public gist, a teammate's fork — have no way to bring that content in except copy-pasting file contents by hand, one skill at a time. The content is already in the right shape (YAML frontmatter + markdown body matching Sovrant's own skill schema); Sovrant just needs a path to ingest it instead of forcing a human to retype it.
+
+### What ships
+
+#### 1 — Import source: git repo URL or raw file URL
+
+- Admin enters a git repo URL (e.g. `https://github.com/org/skills-library`) with an optional subdirectory/branch/ref, or a single raw file URL (raw.githubusercontent.com, gist raw link, etc.) on the Skills page.
+- For a repo URL, Sovrant lists candidate `.md` files via the provider's contents API (e.g. GitHub `/repos/{owner}/{repo}/contents/{path}`) rather than a full local clone — no working copy persisted on disk.
+- For a raw URL, the file is fetched directly through the existing SSRF-protected `WebFetchTool` HTTP path rather than a second client.
+- Public repos need no credentials; private repos take an optional access token, stored in the encrypted keystore and scoped to the import action only (not a general-purpose git credential store).
+
+#### 2 — Validation and preview
+
+- Each candidate file is parsed against the skill schema (`name`, `description`, `trigger`, `tools`, optional `agents` in frontmatter + body).
+- Files that fail to parse — missing required frontmatter fields, malformed YAML, non-skill markdown — are excluded from the batch with a per-file reason shown in the preview, never silently dropped.
+- The preview lists every valid skill found (name, description, trigger) with checkboxes so the admin can import a subset, not all-or-nothing. A slug collision with an existing skill (built-in or user tier) is flagged inline with an explicit overwrite / skip / rename choice per item.
+
+#### 3 — Import execution
+
+- Confirmed items are written as `User`-tier `knowledge_pages` rows (`kind='skills'`), following the same copy-on-write semantics as manual editing — import never mutates a `BuiltIn` base row, even on a slug collision with one.
+- The source URL (and resolved commit/ref where available) is recorded against the imported row so a later re-import can diff against origin.
+- Import is server-side and audited: a `skill_imported` governance audit event records who imported what from where, matching the audit pattern used for MCP trust gate decisions (Phase 103).
+
+#### 4 — Re-import / update path
+
+- Rows with a recorded source show an "Imported from {source}" badge on the Skills page; a "Check for updates" action re-fetches the source and re-runs the preview/confirm flow against the stored body rather than silently overwriting it.
+
+### Non-goals
+
+- Two-way sync — Sovrant never pushes local skill edits back to the source repo; ingestion is one-directional only.
+- Importing agents, document templates, or other `knowledge_pages` kinds — scoped to skills for this phase; if it proves out, the same fetch/preview/import pipeline can be reused for other kinds as a follow-up phase.
+- A marketplace/catalog UI for browsing community skill repos — this is "bring your own URL," not a curated directory.
+- Scheduled automatic re-import — update checks are user-triggered only, no background poller.
+
+### Relationship to other phases
+
+- **Phase 112** ✅ (knowledge_pages DB migration) is the storage model this writes into — skills are already DB-only with a copy-on-write overlay, so import populates an overlay row rather than introducing a new storage mechanism.
+- **Phase 103** ✅ (MCP trust gates) established the audit-log pattern this phase's `skill_imported` event follows.
+- System-wide/global-tier skill mutation is admin-gated the same way manual editing of built-in/global skills already is — import does not bypass that gate.
+- Reuses the existing `WebFetchTool` SSRF-protected fetch path for raw-URL retrieval instead of a second HTTP client.
+
+### Acceptance criteria
+
+- [ ] Admin can enter a git repo URL (with optional subpath/ref) or a raw file URL on the Skills page and see a validated preview of importable skills
+- [ ] Malformed/non-skill files are excluded from the batch with a visible per-file reason, not silently dropped
+- [ ] Slug collisions are flagged with an explicit overwrite/skip/rename choice before import executes
+- [ ] Import never mutates a `BuiltIn` base row — always writes a `User`-tier overlay, even on slug collision with a built-in
+- [ ] Private repo import supports an optional token, stored in the encrypted keystore, scoped to the import flow
+- [ ] `skill_imported` governance audit event recorded per imported skill
+- [ ] Imported skills show a source badge and support a manual "check for updates" re-import flow
+- [ ] Web + Desktop parity
