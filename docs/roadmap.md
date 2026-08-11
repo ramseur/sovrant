@@ -228,6 +228,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Missions → Workflows rename and UX review — surface-label rename (presentation-layer only); dedicated Workflows page (goal-first launch, active/recent cards, detail view with journal + artifacts); positioning callout distinguishing AI-driven workflows from trigger-automation (n8n/Zapier/Make); `/v1/workflows` alias for `/v1/missions`; Phase 119 run-modes surfaced in the launch form; plus dual-path execution — Claude Agent SDK dynamic workflow orchestration when a qualifying Claude tier is active, otherwise Sovrant's own mission engine as the base version (model/tier gate TBD) | Phase 129 | Planned (v1.5) |
 | OpenRouter account registration & key issuance in-app — "Get an OpenRouter key" button on the Providers setup flow (Web + Desktop) drives OpenRouter's OAuth PKCE flow (`openrouter.ai/auth`) so a user can register a new OpenRouter account or sign into an existing one and receive a working API key without ever leaving Sovrant or hand-copying a key; reuses the PKCE code-challenge/verifier plumbing and loopback callback listener built for Phase 101's MCP OAuth; issued key is written straight into the encrypted keystore and activated as a provider profile like a manually-entered key | Phase 130 | Planned |
 | Skill import from git repo / URL — Skills page gains an import action that fetches `.md` skill files from a git repo URL (optional subpath/ref) or a single raw file URL, validates each against the skill frontmatter schema, previews the batch with per-file pass/fail reasons and slug-collision handling, and writes accepted items as `User`-tier `knowledge_pages` overlay rows (never mutating `BuiltIn` rows); records source URL for a later "check for updates" re-import; private repos take an optional token in the encrypted keystore; one-directional ingestion only, no marketplace browsing, no scheduled auto-sync | Phase 131 | Planned |
+| Durable streams for agent-to-agent communication — evolve Phase 57's `coordination_events` mailbox from a single-row-per-message, single-target queue into an append-only, sequence-numbered stream per channel with per-consumer offset tracking so a crashed or restarted agent resumes exactly where it left off instead of losing or re-processing messages; adds multi-subscriber fan-out (more than one agent can tail the same channel independently), optional live push over the existing SignalR hub for in-process consumers alongside the current poll-on-turn-start path, bounded retry with dead-lettering after N failed acknowledgements, and configurable retention; extends to claw-to-claw coordination over the Phase 50 federation bus, where network drops make resumable offsets especially valuable | Phase 132 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -12026,3 +12027,71 @@ Skills currently reach Sovrant one of two ways: the 32 built-in rows seeded by V
 - [ ] `skill_imported` governance audit event recorded per imported skill
 - [ ] Imported skills show a source badge and support a manual "check for updates" re-import flow
 - [ ] Web + Desktop parity
+
+---
+
+## Phase 132 — Durable Streams for Agent-to-Agent Communication
+
+**Status:** Planned
+
+### Why
+
+Phase 57's `coordination_events` mailbox (V013) is a flat table: one row per message, one `source_group_id`, one `target_group_id`, a `status` that moves `pending → delivered → acknowledged`. That's enough for "PM agent A tells PM agent B something happened once," but it breaks down under the failure modes long-running orchestration actually hits:
+
+- If the target PM agent's process is mid-restart (isolated backend, Phase 18) or the agent simply hasn't taken a turn yet, there is no cursor — delivery is "is there a pending row for me," not "give me everything since the last one I processed." A crash between reading a row and marking it `delivered` can silently drop it.
+- Only one target group can consume a given event. A mission with three dependent downstream teams watching the same upstream group's progress needs three duplicate `coordination_events` rows today, not one channel with three subscribers.
+- Delivery is polling-only ("child agents poll on turn start" per `docs/agent-systems.md`), so a PM agent that's mid-turn when an urgent blocker arrives doesn't see it until its next turn starts — there's no live-push option for in-process consumers that could otherwise learn about it immediately over the SignalR hub already used for chat streaming.
+- Nothing distinguishes "message failed to process N times and needs human eyes" from "message is still waiting" — a poison message just sits at `pending` forever.
+
+Missions (Phase 51) and federated claw-to-claw coordination (Phase 50) both compound this: they're long-lived, span process restarts, and — for claws — cross an actual network link where drops are routine. The fix is the same primitive event-sourcing systems use for this exact problem: an append-only, sequence-numbered stream per channel with a durable per-consumer offset, instead of a single mutable status flag per message.
+
+### What ships
+
+#### 1 — Stream and offset model (extends V013, does not replace it)
+
+- `coordination_events` gains a monotonic `sequence` column, scoped per channel (`source_group_id` + `target_group_id`, or a new `channel_id` for multi-subscriber channels — see below). Existing `status`/`delivered_at`/`acknowledged_at` columns are left in place for the current single-consumer call sites; new consumers use the offset model instead.
+- A new `coordination_stream_offsets` table (`channel_id`, `consumer_id`, `last_sequence`, `updated_at`) records how far each consumer has read. Resuming after a crash or restart means reading `last_sequence` and replaying forward — no message is skipped or reprocessed twice.
+- Additive migration only, per the existing DB backwards-compatibility rule: new columns are nullable/defaulted, new table is new, no existing row shape changes. `PMCoordinator`'s current single-target read path keeps working unmodified against the old columns.
+
+#### 2 — Multi-subscriber fan-out
+
+- A channel (identified by `channel_id`, defaulting to `{source_group_id}:{target_group_id}` for backward compatibility, or explicitly named for one-to-many cases) can have more than one registered consumer. Each consumer tracks its own offset independently in `coordination_stream_offsets`, so three downstream groups watching one upstream group's stream each replay at their own pace without stepping on each other.
+- `group_pm_assignments` gains an optional `subscribed_channels` list so a PM agent can declare interest in channels beyond its own group's direct mailbox.
+
+#### 3 — Live push alongside polling
+
+- For in-process (shared backend, `AGENT_MODE=shared`) consumers, a new server-side notifier publishes newly appended stream events over the existing SignalR hub (`/hubs/chat`) as a coordination event, so a PM agent's runtime can react between turns rather than only at turn start — the poll-on-turn-start path from Phase 57 remains the fallback for isolated-backend (process-per-agent) and CLI consumers that aren't connected to the hub.
+- This is additive: nothing that currently polls breaks: push is a faster notification that "there's something new," the actual read still goes through the same offset-tracked stream.
+
+#### 4 — Bounded retry and dead-lettering
+
+- A consumer that fails to process a delivered event (exception during `PMCoordinator` routing, or the receiving PM agent's turn erroring out) can nack it; the event is redelivered up to a configurable retry cap (`coordination.max_retries`, default matching Swarm's existing `swarm.max_retries` pattern) before being marked `dead_letter` instead of retried indefinitely.
+- Dead-lettered events surface in the `CoordinationStatusTool` output and in a Governance page section, so a stuck coordination path is visible instead of silently starving a downstream group forever.
+
+#### 5 — Retention
+
+- Configurable retention window (`coordination.stream_retention_days`, default matching existing session/artifact retention patterns) after which fully-acknowledged-by-all-subscribers events are eligible for cleanup, so long-running installations don't grow `coordination_events` unbounded. Unacknowledged or dead-lettered events are never pruned automatically.
+
+### Non-goals
+
+- Replacing the PM-mediated model with direct agent-to-agent messaging — Phase 57's "no direct chat, mediated by PM agents" stance is unchanged; this phase makes the transport underneath that mediation durable and resumable, it doesn't add new participants.
+- A general-purpose message bus for non-coordination use cases (e.g. a pub/sub feature for application data) — scoped strictly to `coordination_events` and the agent coordination use case.
+- Exactly-once delivery guarantees — this ships at-least-once (retry + dead-letter), matching what the retry/idempotency patterns elsewhere in the codebase (provider retry, swarm task retry) already assume consumers can handle.
+- Priority ordering or negotiation between channels — sequence order within a channel is preserved; cross-channel ordering is explicitly out of scope, same as Phase 57's existing non-goal on PM priority negotiation.
+
+### Relationship to other phases
+
+- **Phase 57** (Inter-Agent Communication) — this phase extends `coordination_events`/`GroupMailbox`/`PMCoordinator` rather than replacing them; the mediation model and `CoordinationStatusTool` are unchanged, only the delivery guarantees underneath.
+- **Phase 51** (Mission Engine) — missions are durable and span process restarts by design (`runtime_traces`); a mission step that depends on cross-group coordination needs the same durability from the coordination layer, which today it doesn't have.
+- **Phase 50** (OpenClaw federation) — claw-to-claw coordination crosses a real network link (routed bus); resumable offsets matter most here since network drops are the common case, not the exception.
+- **Phase 61** (Remote server mode / SignalR) — the live-push option reuses the existing `ChatHub` infrastructure rather than introducing a second real-time transport.
+
+### Acceptance criteria
+
+- [ ] A consumer that crashes mid-stream and restarts resumes from its last acknowledged `sequence` with no gaps and no duplicate processing
+- [ ] A single channel supports at least two independent subscribers, each with its own offset, without one subscriber's read affecting the other's
+- [ ] In-process (shared backend) consumers receive a live push notification for new events; isolated-backend and CLI consumers continue to work via polling with no behavior change
+- [ ] An event that fails processing is retried up to the configured cap, then marked `dead_letter` and surfaced in `CoordinationStatusTool` and the Governance page
+- [ ] Existing Phase 57 single-target call sites (`PMCoordinator`'s current routing) continue to work unmodified against the pre-existing `status`/`delivered_at`/`acknowledged_at` columns
+- [ ] Retention cleanup only removes events acknowledged by all subscribers of a channel; dead-lettered and unacknowledged events are never auto-pruned
+- [ ] Migration is additive — verified against an existing DB with pre-Phase-132 `coordination_events` rows
