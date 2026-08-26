@@ -3,27 +3,25 @@ using Sovrant.Runtime.Workspaces;
 namespace Sovrant.Runtime.Artifacts;
 
 /// <summary>
-/// Identifies the workspace-scoped location where artifacts for a given run
-/// are stored. The workspace is the top-level tenant object — all users in
-/// the same workspace share the same artifact tree. The initiating user is
-/// tracked in the <see cref="ArtifactManifest"/> metadata, not in the path.
+/// Identifies the workspace- and project-scoped location where artifacts for a given
+/// run are stored. The workspace is the top-level tenant object — all users in the
+/// same workspace share the same artifact tree. The initiating user is tracked in the
+/// <see cref="ArtifactManifest"/> metadata, not in the path.
 /// </summary>
 /// <remarks>
-/// Layout (workspace-level):  <c>{root}/{workspace}/artifacts/{run}/</c>
-/// Layout (project-level):    <c>{root}/{workspace}/projects/{project}/artifacts/{run}/</c>
-/// The routing rule: if <see cref="ProjectId"/> equals <see cref="DefaultProjectId"/>
-/// the artifact is stored at workspace level; any real project routes under projects/.
+/// Projects-only layout: <c>{root}/{workspace}/projects/{project}/artifacts/{run}/</c>.
+/// Every artifact belongs to a workspace AND a project — there is no workspace-level
+/// (project-less) storage mode. A session with no explicit project uses
+/// <see cref="DefaultProjectId"/>, which is a real project folder like any other.
 /// </remarks>
 public sealed record ArtifactScope
 {
     /// <summary>
-    /// Sentinel used when no project is explicitly selected (startup, workspace-only context).
-    /// Artifacts with this project ID are stored at workspace level, not under a project folder.
+    /// Project ID used when the caller has no explicit project selected. This is a
+    /// real project folder in the artifact tree, not a workspace-level bypass —
+    /// artifacts always nest under <c>projects/{ProjectId}/artifacts/</c>.
     /// </summary>
     public const string DefaultProjectId = "default-project";
-
-    /// <summary>Returns true when this scope targets workspace-level storage (no real project selected).</summary>
-    public bool IsWorkspaceLevel => string.IsNullOrEmpty(ProjectId) || ProjectId == DefaultProjectId;
 
     /// <summary>
     /// The workspace. Defaults to the active user's personal workspace

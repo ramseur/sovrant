@@ -49,18 +49,29 @@ public sealed class RemoteArtifactStore : IArtifactStore
         {
             foreach (var item in arr.EnumerateArray())
             {
-                var path = item.TryGetProperty("path", out var p) ? p.GetString() ?? string.Empty : string.Empty;
-                var size = item.TryGetProperty("size", out var s) ? s.GetInt64() : 0;
+                var path = item.TryGetProperty("relative_path", out var p) ? p.GetString() ?? string.Empty : string.Empty;
+                var size = item.TryGetProperty("size_bytes", out var s) ? s.GetInt64() : 0;
                 var contentType = item.TryGetProperty("content_type", out var c) ? c.GetString() : null;
+                var runId = item.TryGetProperty("run_id", out var r) ? r.GetString() : null;
+                var lastModified = item.TryGetProperty("last_modified", out var lm) && lm.TryGetDateTimeOffset(out var dt)
+                    ? dt : DateTimeOffset.UtcNow;
 
                 yield return new ArtifactEntry
                 {
                     RelativePath = path,
                     SizeBytes = size,
                     ContentType = contentType,
+                    RunId = runId,
+                    LastModified = lastModified,
                 };
             }
         }
+    }
+
+    public Task SetCodeMetadataAsync(ArtifactHandle handle, CodeManifest metadata, CancellationToken ct = default)
+    {
+        // Manifest is managed server-side during agent execution; no client update needed.
+        return Task.CompletedTask;
     }
 
     public async Task DeleteAsync(ArtifactScope scope, CancellationToken ct = default)

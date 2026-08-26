@@ -186,7 +186,7 @@
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         _dbPath = Bootstrap.DbPath ?? Path.Combine(home, ".sovrant", "data", "sovrant.db");
-        _artifactsPath = Path.Combine(home, ".sovrant", "artifacts");
+        _artifactsPath = Bootstrap.ArtifactsRoot ?? Path.Combine(home, ".sovrant", "workspaces");
         _logDir = Path.Combine(home, ".sovrant", "logs");
     }
 

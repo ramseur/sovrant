@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-06-25 (Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
+**Last updated:** 2026-07-01 (Phase 130 planned — OpenRouter account registration & in-app key issuance via OAuth PKCE against OpenRouter's own `/auth` flow, reusing Phase 101's PKCE + loopback-listener plumbing; "Get an OpenRouter key" button on Providers settings (Web + Desktop) removes the manual copy/paste key step entirely. Phase 128 shipped ✅ — five-part plan complete: artifact security hardening (content-security headers, RemoteArtifactStore field-name fix, API zip endpoint, Artifacts.razor abstraction fix); code manifest in ArtifactManifest; scaffold enrichment (.sln + Directory.Build.props + .editorconfig + CI for all 21 templates, every .NET scaffold immediately buildable with dotnet build {sln}); LLM instruction enrichment (IProjectTemplate.BuildCommand/RunCommand, CodeCreate next_steps response, tool description update); new CodeValidateTool (structural checks via IArtifactStore.ListAsync — no compiler in PATH required, V045/V046 migrations). Phase 129 planned — Missions → Workflows rename + UX (surface labels only, dedicated Workflows page, positioning callout, `/v1/workflows` alias). v1.5 focus: Phase 114 ✅ skill enrichment + Phase 74 markdown document templates + Phase 128 ✅ + Phase 126 + Phase 129. Phase 123 ✅ — Memory System: workspace memory with public/private scoping, "+Remember" button in Chat (Web + Desktop), V041/V042 migrations, per-user injection in multi-user deployments. V040 MCP stable IDs (Phase 105 workspace-level gating). V043 email-as-user-id (replaces `usr_{hex}` PKs). PostgresSchema split to `db/postgres/PostgresSchema.sql` + `db/supabase/migrations/` (Phase 40C documentation update). Phase 127 planned — Supabase RLS. Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -25,6 +25,16 @@ What we are actively working on and shipping next, in priority order.
 | **v1.2 — done** | Phase 98 | User Dashboard — cross-workspace activity view; own public (Shared) + own private + teammates' public; V030 `is_private`; Web + Desktop rail nav; pagination, timestamps, 30s poll, guide panels, page-preserve on refresh ✅ |
 | **v1.2 — done** | Phase 99 | Private sessions and agent runs — per-record privacy toggle on sessions, agent runs, and missions; masked in Command Center, excluded from User Dashboard; server-side enforcement via V030 `is_private` ✅ |
 | **v1.2 — done** | Phase 96 | MCP runtime variables — inline env var editor on Web + Desktop; KEY=VALUE textarea in stdio add form; JSON paste auto-populates env vars; master key moved into DB (V039 `keystore` table); AES-256-GCM encrypted at rest ✅ |
+| **v1.3 — done** | Phase 105 | MCP server permissions — workspace-level gating via V040 stable MCP IDs; `GetEnabledEntriesAsync` workspace filter; admin toggle UI on Web + Desktop; memory-gate guards at selection point ✅ (project-level deferred) |
+| **v1.3 — done** | Phase 123 | Memory System — workspace memory with public/private scoping; "+Remember" button in Chat (Web + Desktop); Workspace tab on Memory page; V041/V042 migrations; per-user injection in multi-user deployments ✅ |
+| **v1.3 — done** | Phase 91 *(partial)* | Knowledge Authoring — admin edit/revert on Skills and Document Templates pages; Monaco editor for prompt + JSON editing; Knowledge sub-nav sorted alphabetically (Web + Desktop); Avalonia 11 → 12 desktop migration ✅ (AvaloniaEdit Desktop fixes deferred) |
+| **v1.4 — done** | V043 | Email-as-user-id — V043 migration replaces all `usr_{hex}` PKs with email across every FK and soft-reference column; `username` column dropped; `IUserService` API updated; personal workspace IDs updated in tandem ✅ |
+| **v1.4 — done** | Bug fixes | Ollama provider label/routing fixed (FriendlyProviderName checks provider name before URL); FK error 19 on project creation fixed (PersonalWorkspaceId reads `App.SovrantUserId` at call time) ✅ |
+| **v1.5 — done** | Phase 114 | Enrich built-in skill definitions — 2-3 sentence descriptions, agent list wiring, `verification-loop` tools fix; V044 migration; immediate quality lift for every LLM via the IKnowledgeRouter harness ✅ |
+| **v1.5 — done** | Phase 74 | DB-backed document templates — 42 of 44 built-in templates in `knowledge_pages` via V037; Scriban rendering; admin Edit/Revert on Documents page (Web + Desktop); copy-on-write overlay; `sovrant document lint` CLI; authoring guide ✅ |
+| **v1.5 — done** | Phase 128 | Code generation quality gates — artifact security hardening (content-security headers, API zip endpoint, RemoteArtifactStore fix, Artifacts.razor abstraction); `.sln` + `Directory.Build.props` + CI for all 21 templates (every project immediately runnable); `CodeValidateTool` (structural checks via `IArtifactStore.ListAsync`, no compiler in PATH); `CodeCreate` `next_steps` + `build_command` + LLM instruction update; `ArtifactManifest` code metadata; V045/V046 migrations ✅ |
+| **v1.5 — pending UAT** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity — implemented, awaiting live UAT pass ✅(code) |
+| **v1.5 — next** | Phase 129 | Missions → Workflows — surface-label rename (presentation-layer only); dedicated Workflows page with goal-first launch, active/recent cards, detail view; positioning callout (AI workflows vs n8n/Zapier automation); `/v1/workflows` API alias; **plus dual-path execution** — route through Claude Agent SDK dynamic workflow orchestration when a qualifying Claude tier is active, else fall back to Sovrant's own mission engine (base version) — model/tier gate TBD |
 
 > Items below v1.0 are planned but not yet scheduled. See [Still pending](#still-pending) for the full gap list.
 
@@ -35,11 +45,11 @@ What we are actively working on and shipping next, in priority order.
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
 - **58 tools** across 18 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, missions, artifacts, documents, quality, swarm, coordination, LSP, code scaffolding)
-- **2,222 tests** across 10 projects, 0 failures
+- **2,208 tests** across 10 projects, 0 failures
 - **141 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth, knowledge, trust-rules, attributions)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
-- SQLite persistence layer with 39 versioned migrations (V001–V039) — V038 `mcp_servers`→credential store migration (Phase 95), V039 `keystore` table — master AES key in DB (Phase 96), V030 `is_private` (Phase 98), V031 `agent_name` (Phase 106), V032–V033 `knowledge_pages` + `knowledge_attributions` (Phase 108/116F), V034–V037 `role`/`recommended_level` + `fields_json`/`filename_template` + skill/agent/doc-template seeds (Phase 112A–D) on top of the Phase 32/42.5/51/52/57/78 foundation
+- SQLite persistence layer with 46 versioned migrations (V001–V046) — V045 seed built-in tool guides for CodeCreate/CodeCreateMulti (Phase 128D), V046 seed CodeValidateTool guide (Phase 128E), V044 enrich built-in skill descriptions + agent/tool list fixes (Phase 114), V040 `mcp_servers.id` stable surrogate for workspace-scoped gating (Phase 105), V041 `workspace_memory` owner/privacy columns (Phase 123), V042 `session_summaries`/`learned_patterns`/`instincts` owner scoping (Phase 123), V043 email-as-user-id rewrite (replaces `usr_{hex}` PKs), V038 `knowledge_attributions` table (Phase 116F), V039 `keystore` table — master AES key in DB (Phase 96), V030 `is_private` (Phase 98), V031 `agent_name` (Phase 106), V032–V033 `knowledge_pages` + `knowledge_attributions` schema (Phase 108/116F), V034–V037 `role`/`recommended_level` + `fields_json`/`filename_template` + skill/agent/doc-template seeds (Phase 112A–D) on top of the Phase 32/42.5/51/52/57/78 foundation
 - Single `.env` file configuration — `sovrant.config` removed; all bootstrap knobs are env vars; routing and swarm config fully DB-backed
 - **Integrations Gallery** on Web and Desktop — catalog-first MCP onramp with Automation (Composio, n8n, Zapier, Make), Platform (GitHub, Slack, Notion, Linear, Stripe, PostgreSQL, Supabase, Filesystem), and Search (Brave, Exa, Tavily) tiers; credentials stored in encrypted keystore (Phase 95 ✅)
 - **Model switcher with provider discovery** — configured providers selectable inline; unconfigured known providers shown with click-to-configure deep-link to Settings → Providers on both Web and Desktop
@@ -150,7 +160,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 
 ### Still pending
 
-> **Last audited:** 2026-05-26. Shipped since prior audit: Phase 79 Agents page ✅, Phase 94 Orchestration Studio ✅, Phase 95 Integrations Gallery ✅ (encrypted credentials, catalog with 14 integrations across 3 tiers, Web + Desktop parity). Phase 50 OpenClaw federation ✅ (SwarmFederationMode, bus client, manager-led routing, V029, 3 new API endpoints). Phase 73 code scaffolding ✅ (21 templates, CodeCreateMultiTool, ScaffoldManifestValidator, 235 tests). Session-level MCP opt-in lifted to context bar (Desktop WorkspacePanelView + Web TopContextBar). Phase 98 User Dashboard ✅ (Shared stat = own public items, pagination + timestamps + 30s poll + page-preserve on both surfaces, guide panels). Phase 99 privacy toggles ✅ (per-record is_private on sessions/agent_runs/missions, Command Center masking, User Dashboard exclusion). Phase 85.5 local/remote mode selection ✅ (Sovrant.Api.Client, sovrant connect/disconnect, two-phase Desktop boot, setup wizard mode picker). Phase 91 Knowledge Authoring deferred.
+> **Last audited:** 2026-06-29. Shipped since prior audit: Phase 96 MCP runtime variables ✅ (inline env var editor Web + Desktop, V039 keystore). Phase 105 MCP server permissions ✅ (partial — workspace-level gating via V040 stable MCP IDs, admin toggle UI on Web + Desktop; project-level restrictions remain deferred). Phase 123 Memory System ✅ (workspace memory with public/private scoping, "+Remember" button in Chat on Web + Desktop, dedicated Workspace tab on Memory page, V041/V042 migrations, per-user injection in multi-user deployments). V043 email-as-user-id migration ✅ (replaces opaque `usr_{hex}` PKs across all FK columns). Phase 40C Supabase backend ✅ (PostgreSQL stores, admin UI, SQLite→Postgres migrator, boot-time DI switch; schema split to `db/postgres/PostgresSchema.sql` + `db/supabase/migrations/`). Phase 91 Knowledge Authoring partial ✅ (Guidelines + Documents pages complete with single Edit + silent copy-on-write; Skills page Duplicate button removal + AvaloniaEdit Desktop fixes remain).
 >
 > Quality / polish / audit phases (62, 68, 69, 70, 71, 72, 75) and partial-completion phases (56) are tracked in their own sections below; this table is gap-only.
 
@@ -172,7 +182,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Video generation — fal.ai, Kling AI, and pluggable provider support for text-to-video, image-to-video | Phase 65 | Medium |
 | Autonomous agent modes (swarm autonomy & alternate claws) | Phase 67 | Medium |
 | Code creation: project scaffolding & app generation | Phase 73 | ✅ Done |
-| Markdown-backed document templates | Phase 74 | Medium |
+| DB-backed document templates | Phase 74 | ✅ Done |
 | In-app document viewing | Phase 76 | Medium |
 | Project isolation with full feature parity | Phase 77 | Medium |
 | Composio MCP integration — first-class platform awareness for Composio's MCP catalog (250+ apps), in-app browse/enable, managed OAuth via Composio connections, per-user/workspace credential scoping, still routed through Sovrant's `MCPTool` proxy and permission model | Phase 80 | Medium |
@@ -182,7 +192,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Local / remote mode selection — CLI + Desktop can run embedded (local DB) or connect to a shared `Sovrant.Server`; setup wizard mode picker; `sovrant connect <url>` | Phase 85.5 | ✅ Done |
 | Background session continuation across navigation & session switches | Phase 86 | ✅ Done |
 | Artifacts-by-default for code & documents (with workspace identity unification) | Phase 87 | ✅ Done |
-| Knowledge Authoring Revisit — Web + Desktop UX rework: single Edit action on any item, silent copy-on-write for built-ins, no "Duplicate to user" intermediate; fix AvaloniaEdit defects on Desktop | Phase 91 | Deferred |
+| Knowledge Authoring Revisit — Guidelines and Documents pages complete (single Edit, silent copy-on-write, no "Duplicate" intermediate); Skills page Duplicate button removal + AvaloniaEdit Desktop fixes remain | Phase 91 | Partial ✅ — Skills + Desktop deferred |
 | Active Sessions: up to 5 concurrent live tasks with return-anytime results; Settings UI on Web + Desktop, DB-backed; future admin console fallback | Phase 92 | ✅ Done |
 | Agents page — in-app create/edit, Launch chat, Run one-shot, prompt titles in ledger | Phase 79 | ✅ Done |
 | Orchestration Studio — compose and run teams from the UI; Run button with task prompt | Phase 94 | ✅ Done |
@@ -202,7 +212,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Migrate built-in markdown knowledge into the DB — move all on-disk built-in markdown (32 skills, 25 agents) plus the 44 code-defined document templates out of the filesystem/C# and into the `knowledge_pages` table so users manage every template (base + their own) in the DB without code changes; copy-on-write overlay model (immutable base rows, user edits become `global`/project overlays that win, revert = delete overlay); built-ins seeded via SQL migration; registries flipped to read DB; document rendering becomes data-driven via a sandboxed templating engine; `.md` files and disk scans deleted once verified; SQLite-only (knowledge store is local even on Postgres backend) | Phase 112 | Done ✅ |
 | Caching: DB read cache + Phase 31 invalidation fix — `CachedKnowledgeStore` decorator wraps `IKnowledgeStore` with TTL-based in-process caching for rarely-changing content (skills, agents, document templates, tool/doc guides) and fires a `KnowledgePageChanged` event on every write; repairs Phase 31's `CacheInvalidator` whose file-watcher triggers were deleted by Phase 112, restoring HTTP-cache invalidation for `skills:list`, `templates:list`, and `knowledge:*` keys; opt-out via `SOVRANT_KNOWLEDGE_CACHE_TTL=0` | Phase 113 | ✅ Done |
 | Intelligent Knowledge Harness — on-demand per-turn knowledge loading via `IKnowledgeRouter` (keyword/trigger/intent scoring, no LLM call); dynamic per-turn addendum preserves stable system-prompt cache; full-round-trip PII sanitization for knowledge bodies and tool results; `knowledge_attributions` table; MCP tool relevance filtering per turn; provenance Sources section in Web + Desktop chat | Phase 116 | ✅ Done |
-| Enrich built-in skill definitions — review and improve all 32 built-in skill descriptions (2-3 sentences), workflow bodies (≥5 concrete steps), agents/tools lists, and trigger phrases; ship as a `V038__enrich_builtin_skills.sql` additive migration that UPDATEs only the BuiltIn base rows; user overlays are unaffected | Phase 114 | Planned |
+| Enrich built-in skill definitions — 2-3 sentence descriptions, agent list wiring, `verification-loop` tools fix; V044 additive migration updates all 32 BuiltIn base rows; user overlays unaffected | Phase 114 | ✅ Done |
 | API endpoint integration — connect REST and GraphQL APIs as first-class platform integrations alongside MCP servers; harness auto-discovers endpoints via OpenAPI/Swagger spec import or GraphQL introspection, or admin can manually describe specific endpoints; discovered endpoints exposed as typed tools through the same `MCPTool` proxy layer (trust rules, session picker, `FilteredToolRegistry`); admin configures per workspace; credentials stored in encrypted keystore; Web + Desktop parity | Phase 117 | Planned |
 | Bootstrap configuration — declarative YAML file (`sovrant.bootstrap.yaml`) that pre-configures a Sovrant installation before or at first run; covers providers, MCP servers, knowledge/skills, agent templates, workspace setup, admin users, permission defaults, and branding; Sovrant installs and starts normally then applies the bootstrap idempotently; enables sales-assisted and partner-delivered custom installs without code changes | Phase 118 | Planned |
 | Orchestration improvements — enhanced mission run-mode for teams and swarms; missions get a named run-mode (autonomous, supervised, step-through) set at launch rather than inherited from global permission; Claws sourced from configured platform integrations can be added as team members if the integration is connected, giving orchestrations access to external agents alongside local ones | Phase 119 | Planned |
@@ -211,8 +221,14 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Image generation and inline display — allow models that support image output (e.g. `dall-e-3`, `gpt-image-1`, `flux`, `stable-diffusion` via OpenRouter, or any provider that returns `image_url` / base64 in the response) to generate images mid-conversation; generated images are stored as chat artifacts (`Artifact` with `Kind = "image"`) and rendered inline in the chat transcript for both Web and Desktop; the message bubble shows the image directly below the assistant text that prompted it, with a "Save" button to download the full-resolution file; clicking the image opens a lightbox (Web) or a full-size viewer window (Desktop); admin configures which providers and models are image-capable; no new conversation format needed — the existing artifact pipeline handles the binary payload | Phase 122 | Medium |
 | Memory system — workspace memory as a first-class user feature with public/private scoping: users can add memory notes directly from the chat "＋ Remember" button (web and desktop) or from a dedicated Workspace tab on the Memory page; notes are injected into every future chat session; private notes are only injected for their owner, public notes are injected for all workspace members; V041 migration adds `owner_user_id` and `is_private` to `workspace_memory`; `ConversationRuntime` auto-resolves the session owner's personal workspace so injection is per-user in multi-user deployments rather than relying on a global env var | Phase 123 | Done |
 | File system access controls — admin-configurable directory allowlist and blocklist so Sovrant agents can only operate within declared paths; enforced at the tool level before Read/Write/Edit/Glob/Grep/Bash execute; denied accesses logged as `directory_access_denied` governance audit events; Governance page gains a "File System Access" section (Web + Desktop); V044 migration stores rules in `server_settings`; path traversal and symlink escapes are normalised before evaluation | Phase 124 | Planned |
-| Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator while agent works; clean visual hierarchy where the agent's answer is prominent and tool work is subordinate; consistent Web + Desktop parity | Phase 126 | Planned |
+| Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator while agent works; clean visual hierarchy where the agent's answer is prominent and tool work is subordinate; consistent Web + Desktop parity | Phase 126 | Implemented — pending UAT |
 | Web search via integrations — move web search out of the hard-coded `WebSearchBackend` enum and into the Integration Gallery; add `IntegrationKind.HttpApi` for direct REST adapters (no MCP process); define `IWebSearchProvider` interface; ship DuckDuckGo (built-in free default), Brave, FireCrawl, Exa, Tavily as `HttpApi` catalog entries; add Crawl4AI as a scraper/fetcher integration; admin picks active search provider from Integrations page; remove `WebSearchBackend` enum; existing MCP search entries remain as alternatives; unit test coverage for WebFetchTool, search providers, and dispatch | Phase 125 | Planned |
+| Supabase Row Level Security — enable RLS on all privacy-sensitive tables in the Supabase migration and write policies for the `owner_user_id` model; service-role key retains full unrestricted access (Supabase bypasses RLS for service role by design); anon/authenticated JWT callers are scoped to their own data at the database layer; complements the existing application-layer query filters | Phase 127 | Planned |
+| Code generation quality gates — artifact security hardening; `.sln` + `Directory.Build.props` + CI for all 21 templates (every scaffold immediately runnable); `CodeValidateTool` (structural checks, no compiler in PATH); `CodeCreate` `next_steps` + `build_command` + LLM instruction update; `ArtifactManifest` code metadata | Phase 128 | ✅ Done |
+| Missions → Workflows rename and UX review — surface-label rename (presentation-layer only); dedicated Workflows page (goal-first launch, active/recent cards, detail view with journal + artifacts); positioning callout distinguishing AI-driven workflows from trigger-automation (n8n/Zapier/Make); `/v1/workflows` alias for `/v1/missions`; Phase 119 run-modes surfaced in the launch form; plus dual-path execution — Claude Agent SDK dynamic workflow orchestration when a qualifying Claude tier is active, otherwise Sovrant's own mission engine as the base version (model/tier gate TBD) | Phase 129 | Planned (v1.5) |
+| OpenRouter account registration & key issuance in-app — "Get an OpenRouter key" button on the Providers setup flow (Web + Desktop) drives OpenRouter's OAuth PKCE flow (`openrouter.ai/auth`) so a user can register a new OpenRouter account or sign into an existing one and receive a working API key without ever leaving Sovrant or hand-copying a key; reuses the PKCE code-challenge/verifier plumbing and loopback callback listener built for Phase 101's MCP OAuth; issued key is written straight into the encrypted keystore and activated as a provider profile like a manually-entered key | Phase 130 | Planned |
+| Skill import from git repo / URL — Skills page gains an import action that fetches `.md` skill files from a git repo URL (optional subpath/ref) or a single raw file URL, validates each against the skill frontmatter schema, previews the batch with per-file pass/fail reasons and slug-collision handling, and writes accepted items as `User`-tier `knowledge_pages` overlay rows (never mutating `BuiltIn` rows); records source URL for a later "check for updates" re-import; private repos take an optional token in the encrypted keystore; one-directional ingestion only, no marketplace browsing, no scheduled auto-sync | Phase 131 | Planned |
+| Durable streams for agent-to-agent communication — evolve Phase 57's `coordination_events` mailbox from a single-row-per-message, single-target queue into an append-only, sequence-numbered stream per channel with per-consumer offset tracking so a crashed or restarted agent resumes exactly where it left off instead of losing or re-processing messages; adds multi-subscriber fan-out (more than one agent can tail the same channel independently), optional live push over the existing SignalR hub for in-process consumers alongside the current poll-on-turn-start path, bounded retry with dead-lettering after N failed acknowledgements, and configurable retention; extends to claw-to-claw coordination over the Phase 50 federation bus, where network drops make resumable offsets especially valuable | Phase 132 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -7019,120 +7035,71 @@ Boundary for dependency manifest validation.
 
 ---
 
-## Phase 74 — Markdown-Backed Document Templates
+## Phase 74 — DB-Backed Document Templates
 
 ### Why
 
-The document template library (Phase 66 and 66.4, currently 44 templates across
-7 industries) is entirely hardcoded as C# classes. Each template is a sealed
-class implementing `IDocumentTemplate` whose `Render(JsonElement)` builds a
-markdown body with a `StringBuilder`. Adding or tweaking a template requires a
-developer, a rebuild, and a deploy. That mirror-images the pattern we already
-use for **agent templates**, which are markdown files with YAML frontmatter
-loaded at runtime via `FileSystemTemplateLoader` (`src/Sovrant.Agents/Templates/FileSystemTemplateLoader.cs`).
+The original Phase 74 plan called for `.md` files on disk. That approach was
+superseded during Phase 112C/D: all content — skills, agent definitions, and
+now document templates — is stored in the `knowledge_pages` table so it
+benefits from the same copy-on-write overlay model, Knowledge UI editing, and
+`IKnowledgeRouter` routing.
 
-The goal of this phase is to bring document templates to parity: let domain
-experts (legal, clinical, finance, education) author and revise templates as
-`.md` files — with field schema in YAML frontmatter, body in markdown with an
-expression syntax — without touching C#. A small hybrid escape hatch preserves
-the ability to express non-trivial logic (computed totals, conditional
-sections, dynamic tables) for templates that genuinely need it.
+The goal of this phase is to complete the migration: ship the `sovrant document
+lint` CLI command (Scriban syntax validation + fields_json sanity check) and the
+`docs/document-templates.md` authoring guide so domain experts can author,
+review, and iterate on templates without rebuilding the binary.
 
-This also unlocks **user-authored templates**, matching the planned knowledge
-pages subsystem (`project_knowledge_pages.md`): users can drop a template into
-their workspace and have it appear in the registry automatically.
+### What Is Already In Place
 
-### Scope
+**Phase 112D (already done before this phase):**
 
-1. **Template file format**
-   - YAML frontmatter declares `id`, `name`, `industry`, `description`,
-     `format` (Word / StructuredPdf / Excel), and a `fields:` list matching
-     the existing `TemplateField` schema (String, Text, Integer, Decimal,
-     Currency, Date, Boolean, StringArray, ObjectArray with nested
-     `itemFields`).
-   - Body is markdown with an expression syntax for field interpolation,
-     conditionals, and loops. Evaluate candidates: Scriban (fastest, .NET-
-     native, safe), Liquid via DotLiquid (familiar to non-devs), Handlebars.
-     **Lean: Scriban** — it's already .NET-native, has strong sandboxing,
-     supports custom functions for our format helpers, and doesn't require
-     a separate interpreter.
-2. **Runtime loader**
-   - New `MarkdownDocumentTemplate : IDocumentTemplate` that accepts a parsed
-     file. Registered alongside existing C# templates.
-   - `FileSystemDocumentTemplateLoader` scans one or more directories (built-
-     in resources, workspace overrides, user overrides) in override order.
-   - Expose format helpers (`FormatMoney`, `FormatDate`, `FormatPercent`,
-     `EscapePipes`, `Slug`) as Scriban functions so markdown templates use
-     the same rendering conventions as the hardcoded ones.
-3. **Validation and error surfacing**
-   - Field validation still runs through `TemplateData.Validate`; frontmatter
-     deserialization produces the same `TemplateField` list.
-   - Template-file errors (bad YAML, unknown field, unresolved expression)
-     should produce actionable error messages at load time, not at render
-     time. Load-time errors fail the registry cold; render-time errors
-     return a `TemplateValidationException`-shaped result.
-4. **Hybrid escape hatch**
-   - Some templates have logic a pure template engine shouldn't express:
-     computed totals (superbill line-item sums, CMA $/sqft averages, closing
-     disclosure cash-to-close), custom table column counts (optional columns
-     only appearing when any row has data), HIPAA-specific sequencing of
-     required clauses, contingency `[Waived]` markers, etc.
-   - Support a **code-behind** model: a markdown template can reference a
-     class (via frontmatter `codeBehind: Sovrant.Runtime.Documents.Templates.Healthcare.SuperbillCodeBehind`)
-     that exposes computed properties to the template context. Simple
-     templates need no code-behind.
-5. **Migration**
-   - Convert the ~20 templates that are purely "fields + markdown body"
-     (NDA, terms-of-service, lease agreement, syllabus, etc.) to `.md` files.
-     Delete the corresponding C# classes.
-   - Keep the ~14 templates with real logic (superbill, CMA, closing
-     disclosure, HIPAA authorization, progress note, business plan,
-     performance review with competencies table, etc.) as markdown + code-
-     behind. Their C# render method shrinks to a handful of computed
-     properties.
-   - All 51 existing template tests must continue to pass, unchanged —
-     they exercise the `IDocumentTemplate` contract, not the implementation.
-6. **User overrides**
-   - Workspace directory `<workspace>/.sovrant/templates/` is scanned by the
-     loader. Templates there shadow built-in templates with the same `id`.
-   - A future Phase 74.x can expose a UI for editing templates in-app; this
-     phase only needs the filesystem contract.
-7. **Author ergonomics**
-   - Document the file format under `docs/document-templates.md` with one
-     worked example per field type, including nested ObjectArray.
-   - Ship a `sovrant templates lint <file>` CLI command that validates a
-     template file without rendering it — useful for authors before they
-     commit.
+- **V036** — `knowledge_pages` gains `fields_json`, `filename_template`,
+  `default_format`, and `industry` columns for document templates.
+- **V037** — Seeds 42 built-in Scriban templates as `kind = 'document-templates'`
+  `BuiltIn` rows. The two Excel-format templates (`finance/expense-report`,
+  `finance/loan-amortization`) remain as C# because they emit structured JSON
+  bodies (preamble/headers/rows) rather than Markdown.
+- **`DbDocumentTemplate`** — `IDocumentTemplate` backed by a `KnowledgePage`.
+  Uses `ScribanRenderer.Render(_page.Body, data)` and
+  `TemplateFieldSerializer.Deserialize(page.FieldsJson)`.
+- **`ScribanRenderer`** — Scriban rendering with format helpers:
+  `format_date`, `format_money`, `format_money_whole`, `format_number`,
+  `format_percent`, `escape_pipes`, `slug`, `normalize_currency`.
+- **`TemplateRegistry`** — loads C# templates first, then DB-backed
+  `DbDocumentTemplate` rows override by slug. DB wins.
+- **Copy-on-write user overlay** — Global/Project tier rows shadow BuiltIn
+  base rows by slug. Revert = delete the overlay row. UI editing uses the
+  existing Knowledge page inline editor (Phase 91).
+- **All 51 existing template tests pass** — they test the `IDocumentTemplate`
+  contract, which is unchanged.
+
+### Delivered
 
 ### Non-Goals
 
-- **Not** building a visual template editor. That's a follow-on phase.
-- **Not** replacing the `IDocumentTemplate` interface; this phase adds a new
-  implementation backed by markdown files, not a new contract.
-- **Not** migrating the code generation / agent / runtime template systems —
-  they already are, or intentionally aren't, file-based.
+- **Not** building a visual template editor — that's a Phase 91 follow-on.
+- **Not** filesystem-based template loading — all templates are DB-only.
+- **Not** changing the `IDocumentTemplate` interface or `TemplateRegistry`.
 
 ### Acceptance Criteria
 
-- [ ] Template file format spec documented with field-type reference and
-      worked examples
-- [ ] `MarkdownDocumentTemplate` implementation + `FileSystemDocumentTemplateLoader`
-      merged and registered in DI alongside C# templates
-- [ ] Scriban (or chosen engine) integrated with format-helper bindings
-      (`format_money`, `format_date`, `format_percent`, `escape_pipes`, `slug`)
-- [ ] Frontmatter schema covers every `TemplateFieldType`, including nested
-      `ObjectArray` with `itemFields`
-- [ ] At least 15 simple templates ported from C# to `.md`, corresponding
-      C# classes deleted
-- [ ] Code-behind mechanism in place for hybrid templates; at least 3 complex
-      templates (e.g. superbill, CMA, closing disclosure) migrated with
-      code-behind
-- [ ] Workspace override directory loads and shadows built-ins by `id`
-- [ ] `sovrant templates lint` CLI command validates a file without rendering
-- [ ] All existing document-template tests still pass; new tests cover the
-      markdown loader, Scriban rendering, and override precedence
-- [ ] Template authoring guide published under `docs/document-templates.md`
-      so non-developers can author a template end-to-end
+- [x] 42 built-in templates seeded as BuiltIn `knowledge_pages` rows (V037)
+- [x] `DbDocumentTemplate` — `IDocumentTemplate` backed by `KnowledgePage`
+- [x] Scriban renderer with `format_date`, `format_money`, `format_percent`,
+      `escape_pipes`, `slug`, `normalize_currency`, `format_number`,
+      `format_money_whole` helpers
+- [x] `TemplateRegistry` merges C# + DB templates; DB overrides win
+- [x] Copy-on-write user overlay — Global/Project tier rows shadow BuiltIn
+- [x] All 51 existing document-template tests pass
+- [x] Admin Edit/Revert buttons on Documents page (Web + Desktop) — inline
+      editor saves a User-tier overlay; `Registry.Reload()` reflects changes
+      immediately; 2 Excel C# templates intentionally excluded (computed logic)
+- [x] `sovrant document lint [--id <id>] [--json]` CLI command validates
+      Scriban syntax and fields_json for DB-backed templates; exit code 1 on
+      any failure
+- [x] `docs/document-templates.md` authoring guide covers field types,
+      Scriban expression syntax, format helpers, and the add/edit workflow
 
 ## Phase 75 — Documents Surface Re-evaluation
 
@@ -11413,7 +11380,7 @@ Once all backends are integrations, the `WebSearchBackend` enum and `WebSearchOp
 
 ## Phase 126 — Chat Conversation UX: Collapsed Work Strips & Clear Hierarchy
 
-**Status:** Planned
+**Status:** Implemented (v1.5) — items 1–7 shipped on Web (`WorkStrip.razor`, `ChatMessage.razor`, `sovrant.css`) and Desktop (`MessageViewModel.cs`, `ChatView.axaml`); solution builds clean, no dangling references to removed pre-strip members. One contrast fix applied before merge: `.work-strip-row-error .work-strip-row-name` was coloring tool-name text red (a colored-text violation of the item 7 rule, ~3.7:1 on the light theme, short of the 4.5:1 bar) — removed in favor of the existing status-dot fill + header ⚠ icon, matching what Desktop already did. **Pending UAT verification** — live browser/Desktop interaction through an actual agentic turn has not been exercised yet (owner verifying in UAT).
 
 ### Why
 
@@ -11499,6 +11466,25 @@ Desktop (`ChatView.axaml` / `ToolUseViewModel`):
 
 Both surfaces share the same visual language (strip line format, icon set, status badge colours) so the experience is identical whether the user is on Web or Desktop.
 
+**7. Color & contrast — reuse existing tokens, verify on both themes**
+
+The strip must not invent a fourth color system. Sovrant already has a themed token set for exactly this kind of chrome, and Web/Desktop have kept it token-for-token identical so far — the strip should extend it, not bypass it:
+
+| Purpose | Web token (`sovrant.css`) | Desktop resource (`SovrantDarkColors.axaml` / `SovrantLightColors.axaml`) | Dark value | Light value |
+|---|---|---|---|---|
+| Strip / tool-row background | `--tool-use-bg` | `ToolUseBackground` | `#1E1E2E` | `#F0F0FA` |
+| Strip / tool-row border | `--tool-use-border` | `ToolUseBorder` | `#3A3A4A` | `#D0D0E0` |
+| In-progress / active accent | `--brand-primary` | `BrandPrimary` | `#6D52C6` | `#6D52C6` (only token intentionally identical across both themes) |
+| Completed / pass indicator | `--status-pass` | `StatusPass` | `#4CAF50` | `#4CAF50` |
+| Partial-failure / warn indicator | `--status-warn` | `StatusWarn` | `#FF9800` | `#FF9800` |
+| Error / fail indicator | `--status-fail` | `StatusFail` | `#F44336` | `#F44336` |
+
+Two things to get right before this ships, not after:
+
+- **The status trio isn't actually re-themed today.** `sovrant.css` only sets `--status-pass/warn/fail` in the `:root[data-theme="dark"]` block; the `:root[data-theme="light"]` block never overrides them, so light mode silently inherits the same dark-tuned hex values (same story in the two Desktop `.axaml` dictionaries — they happen to repeat identical hex rather than share one source). That's been fine for small dots/badges, but the work strip's ⚠ error state and the animated in-progress text put color closer to text-label duty, where dark-surface-tuned colors can under-perform on light backgrounds.
+- **Contrast check, not eyeball check, before merge.** `#4CAF50` green as a filled dot/icon (3:1 WCAG graphical-object threshold) is fine on both `#1E1E2E` (dark tool-use bg) and `#F0F0FA` (light tool-use bg). The same `#4CAF50` used as *text* on a light card (`--surface-card: #FFFFFF`) lands around ~2.4:1 — well under the 4.5:1 text threshold. Rule for this phase: pass/warn/fail render as icon + fill only, never as colored text; if a future design wants colored status *text*, that needs its own light-theme-specific values (e.g. `--status-pass-light`) rather than reusing the dark-tuned hex.
+- **No new tokens for the base strip.** Background/border/active-accent reuse existing tokens as-is. If the contrast check above does force new light-specific status values, add them to both `sovrant.css` and `SovrantLightColors.axaml` in the same PR — don't let Web and Desktop drift on hex values the way the two Desktop `.axaml` files currently duplicate rather than share.
+
 ### What stays out of scope
 
 - Replay / history view of tool calls across sessions (separate memory/history phase)
@@ -11516,3 +11502,596 @@ Both surfaces share the same visual language (strip line format, icon set, statu
 - The answer text is readable without scrolling past tool blocks on a typical 1080p screen
 - Web and Desktop render the strip with the same visual language
 - No regression in tool confirmation flow (Allow once / Allow for turn / Deny buttons still work within the strip)
+- Pass/warn/fail indicators are icon+fill only (no colored text labels) on both themes; if colored text ships anyway, it passes a 4.5:1 contrast check against the light theme's `--surface-card` / `--tool-use-bg` backgrounds, not just the dark theme
+
+---
+
+## Phase 127 — Supabase Row Level Security
+
+**Status:** Planned
+
+### Why
+
+Sovrant enforces the `owner_user_id` privacy model at the application layer — query filters in `SqliteWorkspaceStore`, `SqliteMemoryStore`, and similar stores ensure users only see their own private data. In a Supabase deployment this is sufficient for all traffic that goes through the Sovrant API, but it leaves a gap:
+
+- **Supabase dashboard queries** (developers, DBAs) run directly against the database and bypass the application layer entirely
+- **Edge Functions** calling `supabase.from(...)` use the user's JWT and get no automatic scoping unless RLS is enabled
+- **Service-role callers** (the Sovrant server itself, admin scripts) need unrestricted access and must not be blocked
+
+RLS closes the first two gaps without touching the third — Supabase's service role bypasses RLS by design. This means the Sovrant API server, admin tooling, and migration scripts all continue to work with zero changes; only JWT-authenticated direct-DB callers gain a scoping boundary.
+
+The commented-out policy skeletons already exist in `db/supabase/migrations/20260625000000_initial_schema.sql`. This phase activates them properly with a second migration file admins can apply when they are ready.
+
+### What ships
+
+**A new Supabase migration** (`db/supabase/migrations/20260625000001_enable_rls.sql`) that:
+
+1. Enables RLS on the four privacy-sensitive tables:
+   - `workspace_memory`
+   - `session_summaries`
+   - `learned_patterns`
+   - `instincts`
+
+2. Creates read policies scoped to the calling JWT's `auth.uid()`:
+
+| Table | Policy | Rule |
+|---|---|---|
+| `workspace_memory` | `workspace_memory_read` | `is_private = 0 OR owner_user_id = auth.uid()::text` |
+| `session_summaries` | `session_summaries_read` | `owner_user_id = '' OR owner_user_id = auth.uid()::text` |
+| `learned_patterns` | `learned_patterns_read` | `owner_user_id = '' OR owner_user_id = auth.uid()::text` |
+| `instincts` | `instincts_read` | `owner_user_id = '' OR owner_user_id = auth.uid()::text` |
+
+3. Creates permissive write policies that allow authenticated callers to insert/update/delete their own rows and rows with `owner_user_id = ''` (shared/legacy).
+
+**Service-role key is unaffected** — Supabase's service role always bypasses RLS. The Sovrant API server uses the service role key for all database operations, so no application code changes are needed.
+
+**Docs** — `docs/persistence.md` updated to note that the RLS migration is available as an optional `supabase db push` step; the commented-out stubs in the initial migration file are removed now that a proper migration exists.
+
+### What stays out of scope
+
+- RLS on session or audit tables — those are queried by the application with scoped filters already; RLS on high-write tables adds overhead without meaningful security gain for service-role deployments
+- Per-workspace RLS policies — the current `owner_user_id` model is user-scoped; workspace-level isolation is a separate governance layer
+- Standalone PostgreSQL RLS — standalone deployments use application-layer auth exclusively; service-role bypass does not apply in the same way
+
+### Acceptance criteria
+
+- After applying the migration, a direct Supabase client authenticated as user A cannot read user B's private `workspace_memory` rows via the dashboard or an Edge Function
+- User A can read all `workspace_memory` rows where `is_private = 0` regardless of `owner_user_id`
+- The Sovrant API server (service-role key) continues to read and write all rows without restriction
+
+---
+
+## Phase 128 — Code Generation Quality Gates
+
+**Status:** ✅ Done (2026-07-01)
+
+### Why
+
+Phase 73 shipped the scaffolding *mechanism* — 21 templates, `CodeCreateTool`, `CodeCreateMultiTool`, 235 tests. Generated code runs and passes its first test. That met the "works" bar. The higher bar is **immediately runnable, production-shaped projects**: a .NET user should be able to unzip the artifact and run `dotnet build MyApi.sln` on the first try; a Node user should run `npm install && npm start`; a Go user `go build ./...`. Nothing should be missing.
+
+Three root causes hold this back today:
+
+1. **Scaffolds omit project-level files.** The .NET templates produce `.csproj` files but no `.sln` — `dotnet build` won't work from the project root. No template ships a CI pipeline. No template uses `Directory.Build.props` to share properties across projects. These are mechanical, not model-quality issues.
+
+2. **No structural quality gate.** `CodeCreateTool` writes files and stops. If the LLM writes malformed XML in a `.csproj`, or references a namespace that doesn't exist, or omits `package.json` entirely — those errors are invisible until the user runs the build. A `CodeValidate` tool closes this loop via in-process structural checks (parse JSON/XML/YAML, verify required files exist) without needing any compiler in PATH.
+
+3. **The LLM is not instructed on what to do next.** After `CodeCreate` returns, the agent has conventions (via `LanguageGuidelines`) but no `next_steps` — no "add your route handlers here," no "call CodeValidate when done." The tool description reads like documentation, not instruction.
+
+4. **Artifact delivery has security and correctness gaps.** The artifact store serves LLM-generated HTML/SVG/JS without `Content-Disposition: attachment`, opening an XSS vector. The `RemoteArtifactStore.ListAsync` reads wrong JSON field names from the server. The API server has no bulk zip endpoint. The Blazor Artifacts page bypasses `IArtifactStore` and casts to `LocalArtifactStore` directly.
+
+This phase addresses all four. It is designed to work with **any code-capable LLM** — the quality gates are structural checks and explicit instruction, not model judgment.
+
+### Scope
+
+#### Part A — Artifact store security and correctness fixes
+
+**A1. Content-security headers on file downloads** (`Sovrant.Web/Program.cs` + `Sovrant.Server/Routes/ArtifactRoutes.cs`):
+- For `text/html`, `image/svg+xml`, `application/javascript`: force `Content-Disposition: attachment; filename="..."` and add `X-Content-Type-Options: nosniff`
+- For all artifact downloads: add `X-Content-Type-Options: nosniff` and `Cache-Control: private, no-store`
+- LLM-generated files must be treated as untrusted third-party content even within the user's own workspace
+
+**A2. Fix `RemoteArtifactStore.ListAsync`** (`Sovrant.Api.Client/RemoteArtifactStore.cs:43–55`):
+- JSON field `path` → `relative_path`; `size` → `size_bytes` — these must match what `ArtifactRoutes.cs` actually serializes
+
+**A3. Add `GET /v1/artifacts/{runId}.zip`** to `Sovrant.Server/Routes/ArtifactRoutes.cs`:
+- Mirrors the web-app zip endpoint; streams a `ZipArchive` via `IArtifactStore.ListAsync` + `ReadAsync` (no `LocalArtifactStore` cast — stays interface-clean for future cloud backends)
+- Respects the workspace auth guard
+- Makes bulk code scaffold download available to all clients: SDK, CLI in server mode, mobile
+
+**A4. Fix `Artifacts.razor` abstraction leak**:
+- Replace the `LocalArtifactStore` cast + `Directory.EnumerateFiles` call with `IArtifactStore.ListAsync`
+- Load `_manifest.json` via `ReadAsync` to surface code-specific metadata (see B2)
+
+#### Part B — Code-specific artifact manifest
+
+**B1. `ArtifactManifest` — add optional code metadata fields** (additive, no migration needed):
+```csharp
+[JsonPropertyName("kind")]           public string? Kind { get; set; }          // "code-scaffold"
+[JsonPropertyName("language")]       public string? Language { get; set; }      // "dotnet"
+[JsonPropertyName("template_id")]    public string? TemplateId { get; set; }    // "dotnet/webapi"
+[JsonPropertyName("build_command")]  public string? BuildCommand { get; set; }  // "dotnet build MyApi.sln"
+[JsonPropertyName("run_command")]    public string? RunCommand { get; set; }    // "dotnet run --project MyApi"
+[JsonPropertyName("test_command")]   public string? TestCommand { get; set; }   // "dotnet test MyApi.sln"
+[JsonPropertyName("entry_point")]    public string? EntryPoint { get; set; }    // "MyApi/MyApi.sln"
+```
+
+**B2. `CodeCreateTool` writes a code manifest** after scaffolding — stamps `Kind = "code-scaffold"`, `Language`, `TemplateId`, `BuildCommand`, `RunCommand`, `TestCommand` into `_manifest.json`. The Artifacts page can then render a language badge and copy-able run commands in the folder detail view.
+
+#### Part C — Scaffold enrichment ("every project is immediately runnable")
+
+Update all 21 scaffold templates in `src/Sovrant.Tools/Projects/Scaffolds/`. Pure C# changes to the scaffold classes — no DB migration, no knowledge_pages rows involved (scaffolds live in code, not the DB).
+
+**All 5 .NET scaffolds** (`dotnet/webapi`, `dotnet/console`, `dotnet/library`, `dotnet/blazor`, `dotnet/worker`):
+
+| Addition | Detail |
+|---|---|
+| `{pascal}.sln` | Generated with `Guid.NewGuid()` per project (matches `dotnet new sln` behavior); references main project + tests project with C# project type GUID `{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}`; `Debug\|Release × Any CPU` config matrix |
+| `Directory.Build.props` | Shared `<Nullable>enable</Nullable>`, `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`, `<AnalysisMode>All</AnalysisMode>` — removed from individual `.csproj` files to avoid duplication |
+| `.editorconfig` | Standard C# indentation, charset, trailing whitespace rules |
+| `.github/workflows/ci.yml` | `dotnet restore → dotnet build --no-restore → dotnet test --no-build` on push/PR |
+
+**All 16 non-.NET scaffolds** — add `.github/workflows/ci.yml` per language:
+
+| Templates | CI steps |
+|---|---|
+| `node/*` (4 templates) | `npm ci → npm run lint → npm test`; also add `.nvmrc` |
+| `python/*` (2 templates) | `pip install -e ".[dev]" → ruff check → pytest`; `pyproject.toml` with `[project.optional-dependencies] dev = [pytest, ruff]` |
+| `go/api` | `go build ./... → go vet ./... → go test ./...`; add `Makefile` (build/test/lint targets) |
+| `rust/cli` | `cargo build → cargo clippy → cargo test`; add `rust-toolchain.toml` |
+| `java/maven` | `mvn verify` |
+| `kotlin/console` | `./gradlew check` |
+| `ruby/script` | `bundle install → rspec` |
+| `swift/cli` | `swift build → swift test` |
+| `cpp/cmake` | `cmake → make → ctest`; add `CMakePresets.json` |
+| `lua/script` | `Makefile` (test via busted); `.luacheckrc` |
+| `zig/cli` | `zig build → zig test` |
+
+#### Part D — LLM instruction enrichment
+
+**D1. `IProjectTemplate` — add two optional members** (default `string.Empty`):
+```csharp
+string BuildCommand { get; }  // e.g. "dotnet build {pascal}.sln"
+string RunCommand { get; }    // e.g. "dotnet run --project {pascal}"
+```
+Each scaffold overrides as appropriate. These feed both the artifact manifest (B2) and `next_steps` (D2).
+
+**D2. `CodeCreate` and `CodeCreateMulti` response — add fields**:
+```json
+{
+  "next_steps": [
+    "Add your route handlers — e.g. app.MapPost('/items', async (ItemDto dto) => { ... })",
+    "Register services in Program.cs using builder.Services.Add*()",
+    "Place model classes in a Models/ folder, one file per type",
+    "Call CodeValidate when done to verify structural correctness"
+  ],
+  "build_command": "dotnet build MyApi.sln",
+  "test_command":  "dotnet test MyApi.sln",
+  "run_command":   "dotnet run --project MyApi"
+}
+```
+`next_steps` is generated by each template's `NextSteps(ScaffoldContext)` method. This gives the LLM concrete, project-specific guidance rather than generic style rules.
+
+**D3. Tool `Description` update** for `CodeCreate` and `CodeCreateMulti`:
+> *"After scaffolding, add business logic with the Artifact tool following the returned `conventions` and `next_steps`. Then call `CodeValidate` to verify structural correctness. If issues are found, fix them and call `CodeValidate` once more before presenting the project to the user."*
+
+#### Part E — `CodeValidateTool` (new tool)
+
+**File:** `src/Sovrant.Tools/Projects/CodeValidateTool.cs`  
+**Tool name:** `CodeValidate`  
+**Input:** `run_id`, `workspace_id`, `project_id` (same scope as `CodeCreate`); optional `language` (auto-detected from file extensions if omitted)
+
+**Flow:** `IArtifactStore.ListAsync(scope)` → enumerate files → `ReadAsync(handle, path)` for each → run per-language structural checks → return report. No compiler invocation; no language runtime required in PATH.
+
+**Check matrix:**
+
+| Check | Languages | What |
+|---|---|---|
+| `.sln` present at depth ≤ 2 | dotnet | File exists with `.sln` extension |
+| Each `.csproj` parses as valid XML | dotnet | `XDocument.Parse` |
+| `<TargetFramework>` present in each `.csproj` | dotnet | XPath check |
+| `package.json` present + valid JSON + has `name`/`version` | node | `JsonDocument.Parse` |
+| `go.mod` present with `module` directive | go | File exists; first line check |
+| `Cargo.toml` present with `[package]` section | rust | File exists; line scan |
+| `pyproject.toml` or `requirements.txt` present | python | Either file exists |
+| All `.json` files parse | all | `JsonDocument.Parse` |
+| All `.xml`/`.csproj`/`pom.xml` files parse | all | `XDocument.Parse` |
+| All `.yml`/`.yaml` files parse | all | Basic structure heuristic (no external YAML dep) |
+| `.github/workflows/ci.yml` present | all | File path exists in listing |
+
+**Output on success:**
+```json
+{
+  "valid": true,
+  "language": "dotnet",
+  "file_count": 12,
+  "issue_count": 0,
+  "issues": []
+}
+```
+**Output on failure:**
+```json
+{
+  "valid": false,
+  "language": "dotnet",
+  "file_count": 8,
+  "issue_count": 2,
+  "issues": [
+    {
+      "file": "MyApi.sln",
+      "severity": "error",
+      "message": "Solution file missing — dotnet build will not work from the project root",
+      "fix_hint": "Create MyApi.sln referencing MyApi/MyApi.csproj and MyApi.Tests/MyApi.Tests.csproj"
+    },
+    {
+      "file": "MyApi/MyApi.csproj",
+      "severity": "error",
+      "message": "XML parse error: unexpected token at line 5",
+      "fix_hint": "Check for unclosed tags or invalid characters"
+    }
+  ],
+  "self_correction_prompt": "The scaffold has 2 structural errors (listed above). Fix them using the Artifact tool before presenting the project to the user. Then call CodeValidate once more to confirm."
+}
+```
+
+The `self_correction_prompt` field is the re-entry point for the LLM's agentic loop. The tool itself runs once and returns; the loop is driven by the LLM following the instruction in `self_correction_prompt`. The tool description caps this at one retry: "call CodeValidate once more after fixing."
+
+### Implementation order
+
+| Step | What | Files |
+|---|---|---|
+| A1 | Content-security headers (both servers) | `Sovrant.Web/Program.cs`, `ArtifactRoutes.cs` |
+| A2 | Fix `RemoteArtifactStore.ListAsync` field names | `RemoteArtifactStore.cs` |
+| A3 | Add `GET /v1/artifacts/{runId}.zip` to API server | `ArtifactRoutes.cs` |
+| B1 | `ArtifactManifest` code metadata fields | `ArtifactManifest.cs` |
+| C | Scaffold enrichment — `.sln` + CI for all 21 templates | All scaffold `.cs` files |
+| D1 | `IProjectTemplate.BuildCommand` / `RunCommand` | `IProjectTemplate.cs` + all scaffold classes |
+| D2 | `CodeCreate` / `CodeCreateMulti` response `next_steps` | `CodeCreateTool.cs`, `CodeCreateMultiTool.cs` |
+| B2 | `CodeCreateTool` writes code manifest | `CodeCreateTool.cs` |
+| D3 | Tool `Description` updates | Same files |
+| E | `CodeValidateTool` | New file `Projects/CodeValidateTool.cs` |
+| A4 | `Artifacts.razor` abstraction fix + manifest display | `Artifacts.razor` |
+| — | Tests: enriched scaffolds + `CodeValidateTool` | New test files |
+
+### What this is not
+
+- Not a compiler-in-the-loop gate — structural validation only; no language runtime required in PATH
+- Not a style enforcer — `LanguageGuidelines` remain advisory; guideline conformance is not a gate
+- Not a replacement for the user's own CI — the generated CI config is a starting point
+- Not a continuous linting service — validation fires at generation time, not on every file write
+
+### Acceptance Criteria
+
+- [ ] All 5 .NET scaffolds produce a `.sln` file; `dotnet build {pascal}.sln` succeeds on the generated output with no additional steps
+- [ ] All 21 templates produce `.github/workflows/ci.yml` with correct install/build/test steps for the language
+- [ ] `IProjectTemplate.BuildCommand` / `RunCommand` implemented on all scaffold classes; values appear in `CodeCreate` response and `_manifest.json`
+- [ ] `CodeCreate` response includes `next_steps`, `build_command`, `test_command`, `run_command`; tool description instructs the LLM to call `CodeValidate` after writing code
+- [ ] `CodeValidateTool` registered, all check matrix rows implemented; returns `valid: true` for a freshly scaffolded project of every language; returns `valid: false` with actionable `issues` + `self_correction_prompt` when `.sln` or `package.json` is missing
+- [ ] `GET /v1/artifacts/{runId}.zip` added to API server; returns a correct zip of all run artifacts; respects workspace auth
+- [ ] HTML/SVG/JS artifact downloads from both web and API server send `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff`
+- [ ] `RemoteArtifactStore.ListAsync` field names fixed; remote-mode artifact listing returns correct entries
+- [ ] `Artifacts.razor` no longer casts to `LocalArtifactStore`; uses `IArtifactStore.ListAsync`; displays language badge + build/run commands when `_manifest.json` has code metadata
+- [ ] All existing Phase 73 scaffold tests pass unchanged
+- [ ] New unit tests cover: `.sln` present in each .NET scaffold; `ci.yml` present in each template; `CodeValidateTool` pass/fail cases for dotnet, node, python, go
+
+### Deferred
+
+- Compiler/linter-in-the-loop (invoking `dotnet build`, `tsc`, `ruff` as subprocesses) — requires language runtime availability detection, temp directory management, stdout/stderr capture, and process isolation; too much platform complexity for v1.5; structural validation + self-correction via `CodeValidateTool` achieves the main quality lift without it
+- Continuous background linting of the user's working tree — separate concern
+- Cloud artifact backend (S3/Azure/R2) — `IArtifactStore` is ready; backend registration is the remaining work; deferred to post-v1.5 per the workspace provider roadmap
+
+---
+
+## Phase 129 — Missions → Workflows: Rename, Positioning, and UX Review
+
+**Status:** Planned (v1.5)
+
+### Why
+
+The term "missions" is accurate for the engine internals — a bounded goal delegated to an AI team with a planner, executor, and journal — but it is opaque to users. Almost everyone arriving at Sovrant calls this concept a "workflow." Renaming closes the vocabulary gap without changing what the engine does.
+
+More importantly, the rename is the right moment to resolve a positioning question the codebase sidesteps today: **what kind of workflows does Sovrant own, and what does it deliberately leave to external tools?**
+
+The answer is clear from what's already shipped:
+- **Sovrant owns**: AI-orchestrated, goal-driven workflows where the "steps" are LLM agents making decisions — not predetermined trigger→action chains. The planner decomposes the goal; the executor routes it; the agents adapt. This is the lane n8n and Zapier cannot fill.
+- **n8n, Zapier, Make, Composio own**: trigger-based automation, scheduled jobs, branching deterministic pipelines, and hundreds of SaaS connectors. These are already available in Sovrant via the Integrations Gallery as MCP connections — Sovrant acts as the AI layer on top of them, not a replacement for them.
+
+Without this distinction surfaced in the UI, users either expect Sovrant to be a Zapier clone (and are disappointed) or miss entirely that they can run complex AI-driven goals with a single prompt.
+
+The UX also needs work independent of naming. Today "missions" is discoverable only through the Orchestration Studio → Run button and the Command Center grid. There is no dedicated Workflows page where a user can launch, monitor, and review their AI-driven workflows without knowing what an "orchestration" or "mission" is first.
+
+### What ships
+
+#### 1 — Surface label rename (Web + Desktop)
+
+Replace every user-visible "Mission" / "Missions" label with "Workflow" / "Workflows" across both surfaces. The underlying DB table (`missions`), API path (`/v1/missions`), and C# types (`IMissionStore`, `LlmMissionPlanner`, etc.) are **not renamed** — this is a presentation-layer change only.
+
+| Where | Old label | New label |
+|---|---|---|
+| Nav / rail | Missions | Workflows |
+| Orchestration Studio | Run Mission | Run Workflow |
+| Command Center | Missions column | Workflows column |
+| User Dashboard | missions stat | workflows stat |
+| Page titles | Missions | Workflows |
+| Privacy toggle | Make mission private | Make workflow private |
+| Completion messages | "Mission complete" | "Workflow complete" |
+
+**API compatibility:** Add `/v1/workflows` as an alias that proxies to `/v1/missions` on all CRUD and status endpoints. The `/v1/missions` path is retained and marked `@deprecated` in comments (not removed — no external consumers confirmed yet, but a grace period is the right call).
+
+#### 2 — Dedicated Workflows page
+
+Replace or supplement the current Orchestration Studio with a standalone `/workflows` page (Web) and `WorkflowsView` (Desktop) that is the primary entry point for AI-driven workflows. The Orchestration Studio can remain for team composition; the Workflows page is for goal-level users who don't care about the agent structure underneath.
+
+**Page layout:**
+- **Header**: "Workflows" + "New Workflow" button (prominent)
+- **Active workflows**: card row — name, goal snippet, team name, run-mode badge (Autonomous / Supervised / Step-through), live status indicator (dot + "Running step 3 of ~5"), elapsed time
+- **Recent workflows**: collapsible list of completed/failed — name, team, finish time, outcome badge (✅ Complete / ❌ Failed), link to detail
+- **Empty state**: "No workflows yet. A workflow gives an AI team a goal and lets it figure out the steps." + "New Workflow" CTA
+
+**What it is not**: a node editor, a visual flow diagram, a cron scheduler.
+
+#### 3 — New Workflow launch form
+
+A simple form replacing (or complementing) the current Orchestration Studio run path:
+
+```
+Goal:         [textarea — describe what you want accomplished]
+Team:         [dropdown of configured teams, or "Let Sovrant pick"]
+Run mode:     [Autonomous | Supervised | Step-through]
+Name:         [optional, auto-generated from goal if blank]
+[Run Workflow]
+```
+
+The "Let Sovrant pick" team option uses `AgentOrchestrator` in decomposition mode — the engine selects agents based on the goal. This is the one-click path for users who don't want to configure a team first.
+
+#### 4 — Workflow detail view
+
+Each workflow gets a detail page/view showing:
+- **Goal** — the original prompt
+- **Team** — agents involved, with roles
+- **Journal** — chronological list of events (agent step started, tool called, step complete, replanning triggered) — collapsible by default, expandable for debugging
+- **Artifacts** — files produced, with open/download links
+- **Output summary** — the final LLM-produced summary of what was accomplished
+- **Status timeline** — duration per step if available
+
+This replaces the current "click-through from Command Center" flow, which lands on a sparse detail page.
+
+#### 5 — Positioning callout in the UI
+
+A short inline note on the Workflows page (dismissible, not a modal) that surfaces the positioning:
+
+> **Workflows vs automation tools.** Sovrant workflows are AI-driven — you describe a goal and the AI team plans and executes the steps. For trigger-based automation, scheduled jobs, and SaaS connectors, connect n8n, Zapier, or Make from the [Integrations](link) page and use them as tools inside a workflow.
+
+This single sentence prevents the most common expectation mismatch.
+
+#### 6 — Dual-path execution: Claude Agent SDK dynamic workflows when available
+
+Unlike items 1–5, this is an engine-level addition, not a presentation change. When the workflow's active model is a qualifying Claude tier (exact gate TBD at design time — candidates are the Opus/Sonnet 5 family resolved via `ModelTierResolver`, not simply "any Anthropic key configured"), workflow execution can route through the Claude Agent SDK's dynamic subagent/workflow orchestration instead of Sovrant's own planner/executor. When no qualifying Claude model is configured — no key, or a non-qualifying provider/model — workflows fall back to Sovrant's existing provider-agnostic mission engine (`LlmMissionPlanner` / `ParallelMissionExecutor`), which remains the base version and continues to work with any OpenAI-compatible provider.
+
+Open design questions to resolve before implementation, not before this roadmap entry:
+- Exact model/tier gate — which specific Claude models qualify, and where that check lives (`ModelTierResolver` vs a new capability flag)
+- Whether the two backends emit a compatible event journal, or the Workflows UI needs to tolerate two event vocabularies under one `/v1/workflows` contract
+- Whether a settings override lets a user force one path or the other rather than always auto-selecting by provider capability
+- Whether this ships inside Phase 129 or splits into its own phase, since it changes the "no DB/engine changes" framing that otherwise applies to items 1–5
+
+### What we explicitly do not build
+
+| Not building | Why | Alternative |
+|---|---|---|
+| Visual node/flow editor | That is n8n's lane | Connect n8n via MCP Integrations |
+| Cron / scheduled triggers | That is n8n/Zapier's lane | n8n workflows can call Sovrant's API |
+| Webhook-triggered workflows | Same | n8n trigger → Sovrant REST call |
+| 500-connector library | Already covered | Composio / n8n in the Integrations Gallery |
+| Deterministic branching pipelines | LLM planner handles branching better | No alternative needed |
+
+The constraint is intentional and permanent. Sovrant's value is the AI layer. Adding a visual editor or a scheduler would compete with tools that have years of head start and would dilute what makes Sovrant different.
+
+### Relationship to other phases
+
+- **Phase 51** ✅ built the engine (`IMissionStore`, `LlmMissionPlanner`, `ParallelMissionExecutor`) — remains the base-version execution path (item 6) and is otherwise not touched by items 1–5
+- **Phase 119** (planned) adds per-mission run-modes and integration-sourced Claws — Phase 129 uses those run-modes in the new launch form; Phase 119 should ship first or in parallel
+- **Phase 94** ✅ (Orchestration Studio) remains as the team-composition surface; Phase 129 adds a goal-first surface on top
+- **Claude Agent SDK dependency (item 6, new)** — requires an Anthropic/Claude provider integration capable of driving the Agent SDK's dynamic subagent orchestration; needs its own design pass on the model/tier gate before implementation
+
+### Acceptance criteria
+
+- [ ] Every user-visible "Mission" / "Missions" label replaced with "Workflow" / "Workflows" on Web and Desktop; no DB or runtime type names changed
+- [ ] `/v1/workflows` alias proxies to `/v1/missions`; all CRUD and status operations work identically through both paths
+- [ ] Dedicated Workflows page reachable from nav; shows active + recent workflows; "New Workflow" button launches the new goal form
+- [ ] New Workflow form: goal textarea, team picker with "Let Sovrant pick" option, run-mode selector, optional name field
+- [ ] "Let Sovrant pick" path invokes `AgentOrchestrator` in decomposition mode and runs the workflow without requiring a pre-built team
+- [ ] Workflow detail view shows goal, journal (collapsible), artifacts, and output summary
+- [ ] Positioning callout visible on Workflows page; dismissible per user; links to Integrations
+- [ ] All existing mission/orchestration tests pass unchanged (no engine code modified)
+- [ ] Web + Desktop parity on all new UI surfaces
+
+---
+
+## Phase 130 — OpenRouter Account Registration & In-App Key Issuance
+
+**Status:** Planned
+
+### Why
+
+Today, adding OpenRouter as a provider means: open a browser, create or log into an OpenRouter account, navigate to Keys, generate one, copy it, switch back to Sovrant, and paste it into the provider form. That's a five-step context switch for what should be the single fastest path to a working model — OpenRouter is the default onramp for free-tier models (`SOVRANT_FREE_MODELS_ONLY`, `:free` model routing) and is already Sovrant's most-referenced provider outside the default OpenAI.
+
+OpenRouter publishes exactly the flow that removes this friction: [OAuth PKCE](https://openrouter.ai/docs/use-cases/oauth-pkce). Unlike a normal OAuth login, the token exchange returns a real, permanent OpenRouter API key — not a session token — meaning the end result is identical to what a user would have pasted in by hand, just without the hand.
+
+### What ships
+
+#### 1 — PKCE flow against OpenRouter's own auth endpoint
+
+Reuse the PKCE primitives already built for Phase 101 (MCP OAuth 2.1 + PKCE): code-verifier generation, S256 code-challenge derivation, and the loopback callback listener (`McpOAuthCallbackListener` pattern) — but point them at OpenRouter's dedicated flow rather than a generic MCP server's `/authorize` endpoint:
+
+1. Sovrant generates `code_verifier` + `code_challenge` (S256) and opens `https://openrouter.ai/auth?callback_url={redirect}&code_challenge={challenge}&code_challenge_method=S256` in the user's browser.
+2. The user registers a new OpenRouter account or logs into an existing one, then approves the connection — entirely on OpenRouter's own site, so Sovrant never sees a password.
+3. OpenRouter redirects back to Sovrant's callback with a `code`.
+4. Sovrant exchanges `code` + `code_verifier` via `POST https://openrouter.ai/api/v1/auth/keys` and receives a live OpenRouter API key.
+5. The key is written directly to the encrypted keystore (same AES-256-GCM store used for manually entered keys) and a `provider_profiles` row is created/activated for OpenRouter — indistinguishable afterward from a hand-entered key.
+
+A new `OpenRouterAuthService` in `Sovrant.Runtime` owns this exchange; it is a sibling to `McpOAuthService`, not a fork of it — the PKCE helper (verifier/challenge generation) is extracted into a shared internal utility both services call, rather than duplicated.
+
+#### 2 — Callback handling per surface
+
+- **Desktop:** ephemeral loopback HTTP listener on `127.0.0.1:{port}/openrouter-callback`, matching the pattern `McpOAuthCallbackListener` already uses for MCP server auth — no new listener architecture.
+- **Web:** ASP.NET Core route (`/auth/openrouter/callback`) using an absolute redirect URI, matching Phase 101's web OIDC-style callback handling.
+
+#### 3 — UI entry point (Web + Desktop, Providers settings)
+
+- Existing "Add Provider" flow gains a second path alongside "Enter API key manually": a **"Get an OpenRouter key"** button, shown only for the OpenRouter provider entry.
+- Clicking it opens the system browser to the OpenRouter auth page and shows a waiting state ("Waiting for OpenRouter authorization…") with a cancel option.
+- On success, the provider profile is created and activated automatically — same end state as the manual-entry path, so downstream code (model picker, `SmartRouter`, cost tracking) needs no changes.
+- On denial/timeout/error, a plain-language error is shown and the manual-entry form remains available as a fallback.
+
+#### 4 — Multi-user / workspace scoping
+
+Same scoping rules as any other provider profile (Phase 95/Phase 8): the issued key is stored per-user or per-workspace depending on where the flow was launched from (personal Settings vs. a workspace's admin Providers page), reusing the existing `provider_profiles` ownership model — no new scoping concept.
+
+### Non-goals
+
+- Managing OpenRouter account settings (billing, usage limits) from within Sovrant — out of scope; Sovrant only obtains a key.
+- Building a generic "OAuth key issuance" framework for other providers — this phase is scoped to OpenRouter's specific PKCE-for-a-key flow. If another provider ships an equivalent flow later, it gets its own phase informed by this one.
+- Revoking or rotating the key from Sovrant — the key is managed like any other stored credential (delete + re-run the flow to rotate), consistent with how manually entered keys are already handled.
+
+### Relationship to other phases
+
+- **Phase 101** ✅ (OAuth 2.1 + PKCE for MCP) supplies the PKCE primitives and loopback-listener pattern this phase reuses — Phase 130 does not reimplement PKCE from scratch.
+- **Phase 95** ✅ (Integrations Gallery) established the encrypted-keystore-backed credential pattern this phase writes into.
+- **Phase 8** ✅ (multi-tenant per-request credentials) and the workspace-scoped provider profile model (README §Multi-User & Workspaces) define where the issued key is scoped.
+
+### Acceptance criteria
+
+- [ ] "Get an OpenRouter key" button visible on the OpenRouter provider entry in Settings (Web + Desktop)
+- [ ] Full PKCE round-trip verified against OpenRouter's real `/auth` and `/api/v1/auth/keys` endpoints (registration path and existing-account login path both tested manually)
+- [ ] Issued key lands in the encrypted keystore and appears as an active provider profile with no additional user action
+- [ ] Desktop loopback listener and Web callback route both tear down cleanly on success, cancel, and timeout
+- [ ] Manual key-entry path remains fully functional and is offered as a fallback on any error
+- [ ] Web + Desktop parity
+- [ ] No changes required in `SmartRouter`, model discovery, or cost tracking — the issued key behaves identically to a manually entered one
+
+---
+
+## Phase 131 — Skill Import from Git Repository / URL
+
+**Status:** Planned
+
+### Why
+
+Skills currently reach Sovrant one of two ways: the 32 built-in rows seeded by V035, or hand-authored through the in-place Skills editor. Teams that already maintain skill `.md` files elsewhere — a shared git repo, a public gist, a teammate's fork — have no way to bring that content in except copy-pasting file contents by hand, one skill at a time. The content is already in the right shape (YAML frontmatter + markdown body matching Sovrant's own skill schema); Sovrant just needs a path to ingest it instead of forcing a human to retype it.
+
+### What ships
+
+#### 1 — Import source: git repo URL or raw file URL
+
+- Admin enters a git repo URL (e.g. `https://github.com/org/skills-library`) with an optional subdirectory/branch/ref, or a single raw file URL (raw.githubusercontent.com, gist raw link, etc.) on the Skills page.
+- For a repo URL, Sovrant lists candidate `.md` files via the provider's contents API (e.g. GitHub `/repos/{owner}/{repo}/contents/{path}`) rather than a full local clone — no working copy persisted on disk.
+- For a raw URL, the file is fetched directly through the existing SSRF-protected `WebFetchTool` HTTP path rather than a second client.
+- Public repos need no credentials; private repos take an optional access token, stored in the encrypted keystore and scoped to the import action only (not a general-purpose git credential store).
+
+#### 2 — Validation and preview
+
+- Each candidate file is parsed against the skill schema (`name`, `description`, `trigger`, `tools`, optional `agents` in frontmatter + body).
+- Files that fail to parse — missing required frontmatter fields, malformed YAML, non-skill markdown — are excluded from the batch with a per-file reason shown in the preview, never silently dropped.
+- The preview lists every valid skill found (name, description, trigger) with checkboxes so the admin can import a subset, not all-or-nothing. A slug collision with an existing skill (built-in or user tier) is flagged inline with an explicit overwrite / skip / rename choice per item.
+
+#### 3 — Import execution
+
+- Confirmed items are written as `User`-tier `knowledge_pages` rows (`kind='skills'`), following the same copy-on-write semantics as manual editing — import never mutates a `BuiltIn` base row, even on a slug collision with one.
+- The source URL (and resolved commit/ref where available) is recorded against the imported row so a later re-import can diff against origin.
+- Import is server-side and audited: a `skill_imported` governance audit event records who imported what from where, matching the audit pattern used for MCP trust gate decisions (Phase 103).
+
+#### 4 — Re-import / update path
+
+- Rows with a recorded source show an "Imported from {source}" badge on the Skills page; a "Check for updates" action re-fetches the source and re-runs the preview/confirm flow against the stored body rather than silently overwriting it.
+
+### Non-goals
+
+- Two-way sync — Sovrant never pushes local skill edits back to the source repo; ingestion is one-directional only.
+- Importing agents, document templates, or other `knowledge_pages` kinds — scoped to skills for this phase; if it proves out, the same fetch/preview/import pipeline can be reused for other kinds as a follow-up phase.
+- A marketplace/catalog UI for browsing community skill repos — this is "bring your own URL," not a curated directory.
+- Scheduled automatic re-import — update checks are user-triggered only, no background poller.
+
+### Relationship to other phases
+
+- **Phase 112** ✅ (knowledge_pages DB migration) is the storage model this writes into — skills are already DB-only with a copy-on-write overlay, so import populates an overlay row rather than introducing a new storage mechanism.
+- **Phase 103** ✅ (MCP trust gates) established the audit-log pattern this phase's `skill_imported` event follows.
+- System-wide/global-tier skill mutation is admin-gated the same way manual editing of built-in/global skills already is — import does not bypass that gate.
+- Reuses the existing `WebFetchTool` SSRF-protected fetch path for raw-URL retrieval instead of a second HTTP client.
+
+### Acceptance criteria
+
+- [ ] Admin can enter a git repo URL (with optional subpath/ref) or a raw file URL on the Skills page and see a validated preview of importable skills
+- [ ] Malformed/non-skill files are excluded from the batch with a visible per-file reason, not silently dropped
+- [ ] Slug collisions are flagged with an explicit overwrite/skip/rename choice before import executes
+- [ ] Import never mutates a `BuiltIn` base row — always writes a `User`-tier overlay, even on slug collision with a built-in
+- [ ] Private repo import supports an optional token, stored in the encrypted keystore, scoped to the import flow
+- [ ] `skill_imported` governance audit event recorded per imported skill
+- [ ] Imported skills show a source badge and support a manual "check for updates" re-import flow
+- [ ] Web + Desktop parity
+
+---
+
+## Phase 132 — Durable Streams for Agent-to-Agent Communication
+
+**Status:** Planned
+
+### Why
+
+Phase 57's `coordination_events` mailbox (V013) is a flat table: one row per message, one `source_group_id`, one `target_group_id`, a `status` that moves `pending → delivered → acknowledged`. That's enough for "PM agent A tells PM agent B something happened once," but it breaks down under the failure modes long-running orchestration actually hits:
+
+- If the target PM agent's process is mid-restart (isolated backend, Phase 18) or the agent simply hasn't taken a turn yet, there is no cursor — delivery is "is there a pending row for me," not "give me everything since the last one I processed." A crash between reading a row and marking it `delivered` can silently drop it.
+- Only one target group can consume a given event. A mission with three dependent downstream teams watching the same upstream group's progress needs three duplicate `coordination_events` rows today, not one channel with three subscribers.
+- Delivery is polling-only ("child agents poll on turn start" per `docs/agent-systems.md`), so a PM agent that's mid-turn when an urgent blocker arrives doesn't see it until its next turn starts — there's no live-push option for in-process consumers that could otherwise learn about it immediately over the SignalR hub already used for chat streaming.
+- Nothing distinguishes "message failed to process N times and needs human eyes" from "message is still waiting" — a poison message just sits at `pending` forever.
+
+Missions (Phase 51) and federated claw-to-claw coordination (Phase 50) both compound this: they're long-lived, span process restarts, and — for claws — cross an actual network link where drops are routine. The fix is the same primitive event-sourcing systems use for this exact problem: an append-only, sequence-numbered stream per channel with a durable per-consumer offset, instead of a single mutable status flag per message.
+
+### What ships
+
+#### 1 — Stream and offset model (extends V013, does not replace it)
+
+- `coordination_events` gains a monotonic `sequence` column, scoped per channel (`source_group_id` + `target_group_id`, or a new `channel_id` for multi-subscriber channels — see below). Existing `status`/`delivered_at`/`acknowledged_at` columns are left in place for the current single-consumer call sites; new consumers use the offset model instead.
+- A new `coordination_stream_offsets` table (`channel_id`, `consumer_id`, `last_sequence`, `updated_at`) records how far each consumer has read. Resuming after a crash or restart means reading `last_sequence` and replaying forward — no message is skipped or reprocessed twice.
+- Additive migration only, per the existing DB backwards-compatibility rule: new columns are nullable/defaulted, new table is new, no existing row shape changes. `PMCoordinator`'s current single-target read path keeps working unmodified against the old columns.
+
+#### 2 — Multi-subscriber fan-out
+
+- A channel (identified by `channel_id`, defaulting to `{source_group_id}:{target_group_id}` for backward compatibility, or explicitly named for one-to-many cases) can have more than one registered consumer. Each consumer tracks its own offset independently in `coordination_stream_offsets`, so three downstream groups watching one upstream group's stream each replay at their own pace without stepping on each other.
+- `group_pm_assignments` gains an optional `subscribed_channels` list so a PM agent can declare interest in channels beyond its own group's direct mailbox.
+
+#### 3 — Live push alongside polling
+
+- For in-process (shared backend, `AGENT_MODE=shared`) consumers, a new server-side notifier publishes newly appended stream events over the existing SignalR hub (`/hubs/chat`) as a coordination event, so a PM agent's runtime can react between turns rather than only at turn start — the poll-on-turn-start path from Phase 57 remains the fallback for isolated-backend (process-per-agent) and CLI consumers that aren't connected to the hub.
+- This is additive: nothing that currently polls breaks: push is a faster notification that "there's something new," the actual read still goes through the same offset-tracked stream.
+
+#### 4 — Bounded retry and dead-lettering
+
+- A consumer that fails to process a delivered event (exception during `PMCoordinator` routing, or the receiving PM agent's turn erroring out) can nack it; the event is redelivered up to a configurable retry cap (`coordination.max_retries`, default matching Swarm's existing `swarm.max_retries` pattern) before being marked `dead_letter` instead of retried indefinitely.
+- Dead-lettered events surface in the `CoordinationStatusTool` output and in a Governance page section, so a stuck coordination path is visible instead of silently starving a downstream group forever.
+
+#### 5 — Retention
+
+- Configurable retention window (`coordination.stream_retention_days`, default matching existing session/artifact retention patterns) after which fully-acknowledged-by-all-subscribers events are eligible for cleanup, so long-running installations don't grow `coordination_events` unbounded. Unacknowledged or dead-lettered events are never pruned automatically.
+
+### Non-goals
+
+- Replacing the PM-mediated model with direct agent-to-agent messaging — Phase 57's "no direct chat, mediated by PM agents" stance is unchanged; this phase makes the transport underneath that mediation durable and resumable, it doesn't add new participants.
+- A general-purpose message bus for non-coordination use cases (e.g. a pub/sub feature for application data) — scoped strictly to `coordination_events` and the agent coordination use case.
+- Exactly-once delivery guarantees — this ships at-least-once (retry + dead-letter), matching what the retry/idempotency patterns elsewhere in the codebase (provider retry, swarm task retry) already assume consumers can handle.
+- Priority ordering or negotiation between channels — sequence order within a channel is preserved; cross-channel ordering is explicitly out of scope, same as Phase 57's existing non-goal on PM priority negotiation.
+
+### Relationship to other phases
+
+- **Phase 57** (Inter-Agent Communication) — this phase extends `coordination_events`/`GroupMailbox`/`PMCoordinator` rather than replacing them; the mediation model and `CoordinationStatusTool` are unchanged, only the delivery guarantees underneath.
+- **Phase 51** (Mission Engine) — missions are durable and span process restarts by design (`runtime_traces`); a mission step that depends on cross-group coordination needs the same durability from the coordination layer, which today it doesn't have.
+- **Phase 50** (OpenClaw federation) — claw-to-claw coordination crosses a real network link (routed bus); resumable offsets matter most here since network drops are the common case, not the exception.
+- **Phase 61** (Remote server mode / SignalR) — the live-push option reuses the existing `ChatHub` infrastructure rather than introducing a second real-time transport.
+
+### Acceptance criteria
+
+- [ ] A consumer that crashes mid-stream and restarts resumes from its last acknowledged `sequence` with no gaps and no duplicate processing
+- [ ] A single channel supports at least two independent subscribers, each with its own offset, without one subscriber's read affecting the other's
+- [ ] In-process (shared backend) consumers receive a live push notification for new events; isolated-backend and CLI consumers continue to work via polling with no behavior change
+- [ ] An event that fails processing is retried up to the configured cap, then marked `dead_letter` and surfaced in `CoordinationStatusTool` and the Governance page
+- [ ] Existing Phase 57 single-target call sites (`PMCoordinator`'s current routing) continue to work unmodified against the pre-existing `status`/`delivered_at`/`acknowledged_at` columns
+- [ ] Retention cleanup only removes events acknowledged by all subscribers of a channel; dead-lettered and unacknowledged events are never auto-pruned
+- [ ] Migration is additive — verified against an existing DB with pre-Phase-132 `coordination_events` rows

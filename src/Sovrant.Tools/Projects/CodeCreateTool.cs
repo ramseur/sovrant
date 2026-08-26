@@ -5,6 +5,7 @@ using Sovrant.Runtime.Artifacts;
 using Sovrant.Runtime.Knowledge;
 using Sovrant.Runtime.Projects.Templates;
 using Sovrant.Runtime.Workspaces;
+using Sovrant.Tools.Projects.Scaffolds;
 
 namespace Sovrant.Tools.Projects;
 
@@ -21,8 +22,9 @@ public sealed class CodeCreateTool : ITool
             "Scaffold a new code project from a built-in template. " +
             "Provide either 'template_id' (e.g. 'node/express-api', 'dotnet/webapi', 'python/fastapi') " +
             "or a 'language' + optional 'kind' hint to auto-select the best template. " +
-            "Requires 'project_name' and 'run_id'. All generated files are written to the artifact store " +
-            "and listed in the response. Use 'CodeListTemplates' to discover available templates.",
+            "Requires 'project_name' and 'run_id'. All generated files are written to the artifact store. " +
+            "The response includes 'build_command', 'run_command', 'test_command', and a 'next_steps' list " +
+            "ready to share with the user. Use 'CodeListTemplates' to discover available templates.",
     };
 
     private readonly ProjectTemplateRegistry _registry;
@@ -125,6 +127,17 @@ public sealed class CodeCreateTool : ITool
             return $"Error: {ex.Message}";
         }
 
+        var codeManifest = BuildCodeManifest(template, projectName);
+
+        // Write code metadata into the run manifest so the Artifacts page and
+        // downstream tools can surface build/run/test commands without re-reading files.
+        try
+        {
+            var handle2 = await _store.CreateRunScopeAsync(scope, ct).ConfigureAwait(false);
+            await _store.SetCodeMetadataAsync(handle2, codeManifest, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException) { /* best effort */ _ = ex; }
+
         // Resolve active language guideline (user override > built-in) and surface
         // it to the agent so it can apply conventions when writing additional code.
         string? conventions = null;
@@ -134,6 +147,8 @@ public sealed class CodeCreateTool : ITool
             conventions = dbGuideline?.Body;
         }
         conventions ??= LanguageGuidelines.Get(template.Language)?.Body;
+
+        var nextSteps = BuildNextSteps(codeManifest, projectName);
 
         return JsonSerializer.Serialize(new
         {
@@ -146,6 +161,10 @@ public sealed class CodeCreateTool : ITool
             run_id = scope.RunId,
             workspace_id = scope.WorkspaceId,
             project_id = scope.ProjectId,
+            build_command = codeManifest.BuildCommand,
+            run_command = codeManifest.RunCommand,
+            test_command = codeManifest.TestCommand,
+            next_steps = nextSteps,
             files = written,
             errors,
             conventions,
@@ -186,6 +205,34 @@ public sealed class CodeCreateTool : ITool
 
         error = "Error: either 'template_id' or 'language' is required.";
         return null;
+    }
+
+    private static CodeManifest BuildCodeManifest(IProjectTemplate template, string projectName)
+    {
+        var (defaultBuild, defaultRun, defaultTest) = ScaffoldCommands.For(template.Language, template.Kind, projectName);
+        return new CodeManifest
+        {
+            TemplateId = template.Id,
+            Language = template.Language,
+            Kind = template.Kind,
+            BuildCommand = template.BuildCommand ?? defaultBuild,
+            RunCommand = template.RunCommand ?? defaultRun,
+            TestCommand = template.TestCommand ?? defaultTest,
+            EntryPoint = template.EntryPoint ?? ScaffoldCommands.EntryPoint(template.Language, projectName),
+        };
+    }
+
+    private static string[] BuildNextSteps(CodeManifest manifest, string projectName)
+    {
+        var steps = new List<string>();
+        if (manifest.BuildCommand is not null)
+            steps.Add($"Build: {manifest.BuildCommand}");
+        if (manifest.RunCommand is not null)
+            steps.Add($"Run: {manifest.RunCommand}");
+        if (manifest.TestCommand is not null)
+            steps.Add($"Test: {manifest.TestCommand}");
+        steps.Add($"See {projectName}/README.md for full setup instructions");
+        return [.. steps];
     }
 
     private static string InferContentType(string path)

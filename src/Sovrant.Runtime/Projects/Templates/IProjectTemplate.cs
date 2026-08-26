@@ -40,6 +40,30 @@ public interface IProjectTemplate
     IReadOnlyList<ScaffoldParameter> Parameters { get; }
 
     /// <summary>
+    /// Optional override for the shell command that builds the project.
+    /// When null, <c>ScaffoldCommands.For()</c> provides the language default.
+    /// </summary>
+    string? BuildCommand => null;
+
+    /// <summary>
+    /// Optional override for the shell command that runs the project.
+    /// When null, <c>ScaffoldCommands.For()</c> provides the language default.
+    /// </summary>
+    string? RunCommand => null;
+
+    /// <summary>
+    /// Optional override for the shell command that runs tests.
+    /// When null, <c>ScaffoldCommands.For()</c> provides the language default.
+    /// </summary>
+    string? TestCommand => null;
+
+    /// <summary>
+    /// Optional override for the primary entry-point path relative to the project root.
+    /// When null, <c>ScaffoldCommands.EntryPoint()</c> provides the language default.
+    /// </summary>
+    string? EntryPoint => null;
+
+    /// <summary>
     /// Produces the complete file tree for the project.
     /// All paths in the returned <see cref="ProjectFile"/> list are relative
     /// to the project root (e.g. <c>src/index.ts</c>, <c>README.md</c>).

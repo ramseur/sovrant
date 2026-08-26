@@ -60,8 +60,8 @@
         </div>
 
         <div class="form-field">
-            <label>API Key</label>
-            <input type="password" @bind="_apiKey" placeholder="sk-..." autocomplete="off" data-lpignore="true" data-1p-ignore />
+            <label>API Key @(IsLocalProvider(_selectedProvider) ? "(optional)" : "")</label>
+            <input type="password" @bind="_apiKey" placeholder="@(IsLocalProvider(_selectedProvider) ? "Not required for local providers" : "sk-...")" autocomplete="off" data-lpignore="true" data-1p-ignore />
         </div>
 
         <div class="form-field">
@@ -149,11 +149,25 @@
         }
 
         _apiKey = string.Empty;
+
+        // Deep-link from the top provider switcher's "Set up →" unconfigured-provider entry.
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(Nav.Uri).Query);
+        if (query.TryGetValue("provider", out var providerParam)
+            && Providers.Contains(providerParam.ToString(), StringComparer.Ordinal))
+        {
+            _selectedProvider = providerParam.ToString();
+        }
+
         if (ProviderBaseUrls.TryGetValue(_selectedProvider, out var defaultUrl))
             _baseUrl = defaultUrl;
 
         await LoadProfilesAsync();
         _allWorkspaces = (await WorkspaceService.ListAllAsync()).ToList();
+
+        // Pre-select the personal workspace; all others are opt-in.
+        var personal = _allWorkspaces.FirstOrDefault(w => w.Type == Sovrant.Runtime.Workspaces.WorkspaceType.Personal);
+        if (personal is not null)
+            _selectedWorkspaceIds.Add(personal.WorkspaceId);
     }
 
     private void OnProviderChanged()
@@ -169,9 +183,16 @@
             _baseUrl = profile.BaseUrl;
     }
 
+    private static bool IsLocalProvider(string provider) =>
+        provider is "Ollama" or "LM Studio";
+
     private async Task AddProvider()
     {
-        if (string.IsNullOrWhiteSpace(_apiKey)) { _statusMessage = "Please enter an API key."; return; }
+        if (string.IsNullOrWhiteSpace(_apiKey) && !IsLocalProvider(_selectedProvider))
+        {
+            _statusMessage = "Please enter an API key.";
+            return;
+        }
 
         var displayName = string.IsNullOrWhiteSpace(_newProfileName)
             ? _selectedProvider : _newProfileName.Trim();

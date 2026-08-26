@@ -108,7 +108,7 @@ public partial class DiagnosticsViewModel : ViewModelBase
         // Paths
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         DbPath = _bootstrap.DbPath ?? Path.Combine(home, ".sovrant", "data", "sovrant.db");
-        ArtifactsPath = Path.Combine(home, ".sovrant", "artifacts");
+        ArtifactsPath = _bootstrap.ArtifactsRoot ?? Path.Combine(home, ".sovrant", "workspaces");
     }
 
     [RelayCommand]

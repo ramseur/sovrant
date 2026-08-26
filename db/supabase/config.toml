@@ -1,0 +1,40 @@
+# Supabase CLI project configuration.
+# Run migrations from this directory: cd db/supabase && supabase db push
+# Or link to a remote project:        supabase link --project-ref <ref>
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+
+[auth]
+enabled = true
+# Sovrant uses public.users as the domain anchor.
+# The GoTrue auth.users mirror triggers are in the initial migration.
+site_url = "http://localhost:5100"
+additional_redirect_urls = ["http://localhost:5100"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false

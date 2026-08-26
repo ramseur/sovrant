@@ -52,7 +52,7 @@ public sealed class OldDbUpgradeTests : IAsyncDisposable
         var provider = new SqliteStorageProvider(
             NullLogger<SqliteStorageProvider>.Instance, _dbPath);
         await provider.InitializeAsync();
-        Assert.Equal(43, provider.SchemaVersion);
+        Assert.Equal(46, provider.SchemaVersion);
 
         // ── Verify V005-era data survived ────────────────────────────────
         using var conn = ((ISqliteConnectionFactory)provider).CreateConnection();
@@ -136,7 +136,7 @@ public sealed class OldDbUpgradeTests : IAsyncDisposable
             var provider = new SqliteStorageProvider(
                 NullLogger<SqliteStorageProvider>.Instance, _dbPath);
             await provider.InitializeAsync();
-            Assert.Equal(43, provider.SchemaVersion);
+            Assert.Equal(46, provider.SchemaVersion);
             await provider.DisposeAsync();
         }
         finally
@@ -178,7 +178,7 @@ public sealed class OldDbUpgradeTests : IAsyncDisposable
             var provider = new SqliteStorageProvider(
                 NullLogger<SqliteStorageProvider>.Instance, _dbPath);
             await provider.InitializeAsync();
-            Assert.Equal(43, provider.SchemaVersion);
+            Assert.Equal(46, provider.SchemaVersion);
             await provider.DisposeAsync();
         }
         finally
@@ -207,9 +207,9 @@ public sealed class OldDbUpgradeTests : IAsyncDisposable
         while (r.Read())
             rows.Add((r.GetInt32(0), r.IsDBNull(1) ? null : r.GetString(1)));
 
-        // V001..V005 applied manually (no checksum), V006..V043 applied
+        // V001..V005 applied manually (no checksum), V006..V046 applied
         // by the real runner (with checksum).
-        Assert.Equal(43, rows.Count);
+        Assert.Equal(46, rows.Count);
         Assert.All(rows.Where(x => x.v <= 5), x => Assert.Null(x.c));
         Assert.All(rows.Where(x => x.v >= 6), x => Assert.False(string.IsNullOrEmpty(x.c)));
 

@@ -1,5 +1,6 @@
 @page "/artifacts"
 @using Sovrant.Runtime.Artifacts
+@using Sovrant.Runtime.Workspaces
 @using Sovrant.Web.Services
 @using Markdig
 @using BlazorMonaco.Editor
@@ -120,6 +121,8 @@
 
 @code {
     [Inject] private IArtifactStore ArtifactStore { get; set; } = default!;
+    [Inject] private IWorkspaceService WorkspaceService { get; set; } = default!;
+    [Inject] private Sovrant.Web.Services.WebSessionService Session { get; set; } = default!;
 
     private List<ArtifactItem> _all = [];
     private List<ArtifactItem> _filtered = [];
@@ -137,6 +140,7 @@
         ".md", ".txt", ".json", ".xml", ".html", ".htm", ".css", ".js", ".ts", ".tsx", ".jsx",
         ".cs", ".py", ".go", ".rs", ".java", ".rb", ".php", ".yaml", ".yml", ".toml", ".csv",
         ".log", ".sh", ".ps1", ".sql", ".csproj", ".axaml", ".razor", ".ini", ".cfg", ".conf", ".env",
+        ".sln", ".gitignore", ".editorconfig", ".nvmrc", ".env.example",
     };
 
     private static readonly HashSet<string> CodeExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -148,74 +152,80 @@
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
-    private Task LoadAsync()
+    private async Task LoadAsync()
     {
         _loadError = string.Empty;
         _selected = null;
         _selectedEditorKey = string.Empty;
         try
         {
-            var root = (ArtifactStore as LocalArtifactStore)?.Root;
-            if (root is null || !Directory.Exists(root))
-            {
-                _all = [];
-                ApplyFilter();
-                return Task.CompletedTask;
-            }
-
+            // Scoped to the viewer's own workspaces — personal workspaces are single-member
+            // by construction, so this naturally keeps personal artifacts private. Team
+            // workspace membership (any role) grants visibility into that workspace's
+            // artifacts; global admins see everything. Matches server-side enforcement
+            // in WorkspaceAuthGuards.RequireWorkspaceAccessAsync for the /v1/artifacts API.
+            var workspaces = Session.IsAdmin
+                ? await WorkspaceService.ListAllAsync()
+                : await WorkspaceService.ListForUserAsync(Session.UserId ?? string.Empty);
             var items = new List<ArtifactItem>();
-            foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+
+            foreach (var ws in workspaces)
             {
-                var fileName = System.IO.Path.GetFileName(file);
-                if (string.Equals(fileName, "_manifest.json", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                var relativePath = System.IO.Path.GetRelativePath(root, file).Replace('\\', '/');
-                var segments = relativePath.Split('/');
-                if (segments.Length < 4) continue;
-
-                var info = new FileInfo(file);
-                var ext = System.IO.Path.GetExtension(file);
-
-                var workspaceId = SegmentId(segments[0]);
-                var projectId = SegmentId(segments[1]);
-                var runId = segments[2];
-                var artifactPath = string.Join('/', segments[3..]);
-
-                var accessUrl = string.Empty;
-                var zipUrl = string.Empty;
-                if (!string.IsNullOrEmpty(workspaceId) && !string.IsNullOrEmpty(projectId) && !string.IsNullOrEmpty(runId))
+                // Projects-only: lists the default project's artifacts. Enumerating every
+                // real project's artifacts is deferred until multi-user web and
+                // project-level artifact display are built.
+                var scope = new ArtifactScope
                 {
+                    WorkspaceId = ws.WorkspaceId,
+                    WorkspaceName = ws.Name,
+                };
+
+                await foreach (var entry in ArtifactStore.ListAsync(scope))
+                {
+                    var runId = entry.RunId ?? string.Empty;
+                    if (string.IsNullOrEmpty(runId)) continue;
+
+                    // RelativePath when listing without RunId = "{run}/{artifactPath}"
+                    var artifactPath = entry.RelativePath.Length > runId.Length + 1
+                        ? entry.RelativePath[(runId.Length + 1)..]
+                        : entry.RelativePath;
+
+                    var fileName = System.IO.Path.GetFileName(artifactPath);
+                    var ext = System.IO.Path.GetExtension(artifactPath);
+                    var isCode = CodeExtensions.Contains(ext);
+
+                    // URL layout: /artifacts/{ws}/{proj}/{run}/{file} — FindRunDir in
+                    // Program.cs resolves this against the real on-disk layout
+                    // {root}/{ws}/projects/{proj}/artifacts/{run}.
                     var escapedTail = string.Join('/', artifactPath.Split('/').Select(Uri.EscapeDataString));
-                    accessUrl = $"/artifacts/{Uri.EscapeDataString(workspaceId)}/{Uri.EscapeDataString(projectId)}/{Uri.EscapeDataString(runId)}/{escapedTail}";
-                    zipUrl = $"/artifacts/{Uri.EscapeDataString(workspaceId)}/{Uri.EscapeDataString(projectId)}/{Uri.EscapeDataString(runId)}.zip";
+                    var accessUrl = $"/artifacts/{Uri.EscapeDataString(ws.WorkspaceId)}/{Uri.EscapeDataString(scope.ProjectId)}/{Uri.EscapeDataString(runId)}/{escapedTail}";
+                    var zipUrl = $"/artifacts/{Uri.EscapeDataString(ws.WorkspaceId)}/{Uri.EscapeDataString(scope.ProjectId)}/{Uri.EscapeDataString(runId)}.zip";
+
+                    items.Add(new ArtifactItem
+                    {
+                        WorkspaceId = ws.WorkspaceId,
+                        WorkspaceName = ws.Name,
+                        RunId = runId,
+                        FileName = fileName,
+                        Extension = ext,
+                        ArtifactRelPath = artifactPath,
+                        SizeBytes = entry.SizeBytes,
+                        SizeDisplay = FormatSize(entry.SizeBytes),
+                        ContentType = GuessMime(ext),
+                        LastModified = entry.LastModified,
+                        IsMarkdown = ext.Equals(".md", StringComparison.OrdinalIgnoreCase),
+                        IsPdf = ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase),
+                        IsCode = isCode,
+                        MonacoLanguage = isCode ? GetMonacoLanguage(ext) : "plaintext",
+                        AccessUrl = accessUrl,
+                        ZipUrl = zipUrl,
+                    });
                 }
-
-                var isCode = CodeExtensions.Contains(ext);
-
-                items.Add(new ArtifactItem
-                {
-                    FullDiskPath = file,
-                    FileName = fileName,
-                    Extension = ext,
-                    ArtifactRelPath = artifactPath,
-                    SizeBytes = info.Length,
-                    SizeDisplay = FormatSize(info.Length),
-                    ContentType = GuessMime(ext),
-                    LastModified = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
-                    IsMarkdown = ext.Equals(".md", StringComparison.OrdinalIgnoreCase),
-                    IsPdf = ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase),
-                    IsCode = isCode,
-                    MonacoLanguage = isCode ? GetMonacoLanguage(ext) : "plaintext",
-                    AccessUrl = accessUrl,
-                    ZipUrl = zipUrl,
-                    RunId = runId,
-                });
             }
 
             // Group multi-file runs into folder items; single-file runs stay flat.
             var grouped = new List<ArtifactItem>();
-            foreach (var runGroup in items.GroupBy(a => a.RunId))
+            foreach (var runGroup in items.GroupBy(a => $"{a.WorkspaceId}/{a.RunId}"))
             {
                 var files = runGroup.ToList();
                 if (files.Count > 1)
@@ -223,11 +233,13 @@
                     var first = files.OrderBy(f => f.LastModified).First();
                     var folderName = first.ArtifactRelPath.Contains('/')
                         ? first.ArtifactRelPath.Split('/')[0]
-                        : runGroup.Key;
+                        : files[0].RunId;
                     var totalBytes = files.Sum(f => f.SizeBytes);
                     grouped.Add(new ArtifactItem
                     {
-                        RunId = runGroup.Key,
+                        WorkspaceId = files[0].WorkspaceId,
+                        WorkspaceName = files[0].WorkspaceName,
+                        RunId = files[0].RunId,
                         IsFolder = true,
                         FolderName = folderName,
                         FolderFiles = files,
@@ -252,7 +264,6 @@
             _all = [];
             ApplyFilter();
         }
-        return Task.CompletedTask;
     }
 
     private async Task SelectItem(ArtifactItem item)
@@ -265,19 +276,25 @@
         {
             try
             {
-                if (File.Exists(item.FullDiskPath))
+                var scope = new ArtifactScope
                 {
-                    var content = await File.ReadAllTextAsync(item.FullDiskPath);
-                    if (content.Length > 20000) content = content[..20000] + "\n\n... (truncated at 20,000 chars)";
-                    item.Preview = content;
-                }
+                    WorkspaceId = item.WorkspaceId,
+                    WorkspaceName = item.WorkspaceName,
+                    RunId = item.RunId,
+                };
+                var handle = await ArtifactStore.CreateRunScopeAsync(scope);
+                await using var stream = await ArtifactStore.ReadAsync(handle, item.ArtifactRelPath);
+                using var reader = new System.IO.StreamReader(stream, System.Text.Encoding.UTF8);
+                var content = await reader.ReadToEndAsync();
+                if (content.Length > 20_000) content = content[..20_000] + "\n\n... (truncated at 20,000 chars)";
+                item.Preview = content;
             }
             catch { item.Preview = "(Could not load preview)"; }
         }
 
         // Reveal Monaco only after content is ready so ConstructionOptions sees the value
         if (item.IsCode && !string.IsNullOrEmpty(item.Preview))
-            _selectedEditorKey = item.FullDiskPath;
+            _selectedEditorKey = $"{item.WorkspaceId}/{item.RunId}/{item.ArtifactRelPath}";
 
         StateHasChanged();
     }
@@ -317,12 +334,6 @@
 
     private static string GuessMime(string ext) => ArtifactMime.For(ext);
 
-    private static string SegmentId(string segment)
-    {
-        var idx = segment.IndexOf("__", StringComparison.Ordinal);
-        return idx >= 0 ? segment[..idx] : segment;
-    }
-
     private static string GetMonacoLanguage(string ext) => ext.ToLowerInvariant() switch
     {
         ".ts" or ".tsx" => "typescript",
@@ -356,7 +367,9 @@
 
     private sealed class ArtifactItem
     {
-        public string FullDiskPath { get; init; } = string.Empty;
+        public string WorkspaceId { get; init; } = string.Empty;
+        public string WorkspaceName { get; init; } = string.Empty;
+        public string RunId { get; init; } = string.Empty;
         public string FileName { get; init; } = string.Empty;
         public string Extension { get; init; } = string.Empty;
         public string ArtifactRelPath { get; init; } = string.Empty;
@@ -370,7 +383,6 @@
         public string MonacoLanguage { get; init; } = "plaintext";
         public string AccessUrl { get; init; } = string.Empty;
         public string ZipUrl { get; init; } = string.Empty;
-        public string RunId { get; init; } = string.Empty;
         public string? Preview { get; set; }
         // Folder grouping
         public bool IsFolder { get; set; }

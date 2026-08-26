@@ -41,4 +41,11 @@ public interface IArtifactStore
     /// Returns <see langword="null"/> if the artifact does not exist.
     /// </summary>
     Task<Uri?> GetAccessUrlAsync(ArtifactHandle handle, string relativePath, TimeSpan ttl, CancellationToken ct = default);
+
+    /// <summary>
+    /// Merges code-specific metadata into the run's <c>_manifest.json</c>.
+    /// Called by scaffold tools after all files have been written.
+    /// No-op in remote mode (the server writes the manifest during execution).
+    /// </summary>
+    Task SetCodeMetadataAsync(ArtifactHandle handle, CodeManifest metadata, CancellationToken ct = default);
 }

@@ -346,8 +346,11 @@ public static class Program
     {
         // Single-file endpoint.
         app.MapGet("/artifacts/{workspaceId}/{projectId}/{runId}/{*relPath}",
-            (string workspaceId, string projectId, string runId, string relPath,
-             Sovrant.Runtime.Artifacts.IArtifactStore store) =>
+            async (string workspaceId, string projectId, string runId, string relPath,
+             HttpContext ctx,
+             Sovrant.Runtime.Artifacts.IArtifactStore store,
+             Sovrant.Runtime.Workspaces.IWorkspaceService wsSvc,
+             WebSessionService session) =>
         {
             if (store is not Sovrant.Runtime.Artifacts.LocalArtifactStore local)
                 return Results.NotFound();
@@ -359,6 +362,15 @@ public static class Program
                 runId.Contains("..", StringComparison.Ordinal))
             {
                 return Results.BadRequest();
+            }
+
+            // Personal workspaces are single-member by construction; team workspace
+            // membership (any role) grants visibility into that workspace's artifacts.
+            // Matches WorkspaceAuthGuards.RequireWorkspaceAccessAsync for /v1/artifacts.
+            if (!session.IsAdmin &&
+                !await wsSvc.IsMemberAsync(Uri.UnescapeDataString(workspaceId), session.UserId ?? string.Empty))
+            {
+                return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
             }
 
             var ws = Uri.UnescapeDataString(workspaceId);
@@ -376,7 +388,17 @@ public static class Program
             if (!File.Exists(fullPath))
                 return Results.NotFound();
 
-            var contentType = Sovrant.Web.Services.ArtifactMime.For(Path.GetExtension(fullPath));
+            var ext = Path.GetExtension(fullPath);
+            var contentType = Sovrant.Web.Services.ArtifactMime.For(ext);
+
+            // Security: non-rendereable LLM-generated content must not execute in-browser.
+            ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            ctx.Response.Headers["Cache-Control"] = "private, no-store";
+
+            // Force download for types the browser would otherwise render or execute.
+            if (IsUnsafeInlineType(ext))
+                return Results.File(fullPath, contentType, fileDownloadName: Path.GetFileName(fullPath));
+
             return Results.File(fullPath, contentType, enableRangeProcessing: true);
         });
 
@@ -384,7 +406,10 @@ public static class Program
         // an entire run as one download from the Artifacts page.
         app.MapGet("/artifacts/{workspaceId}/{projectId}/{runId}.zip",
             async (string workspaceId, string projectId, string runId,
-             Sovrant.Runtime.Artifacts.IArtifactStore store) =>
+             HttpContext ctx,
+             Sovrant.Runtime.Artifacts.IArtifactStore store,
+             Sovrant.Runtime.Workspaces.IWorkspaceService wsSvc,
+             WebSessionService session) =>
         {
             if (store is not Sovrant.Runtime.Artifacts.LocalArtifactStore local)
                 return Results.NotFound();
@@ -394,6 +419,12 @@ public static class Program
                 runId.Contains("..", StringComparison.Ordinal))
             {
                 return Results.BadRequest();
+            }
+
+            if (!session.IsAdmin &&
+                !await wsSvc.IsMemberAsync(Uri.UnescapeDataString(workspaceId), session.UserId ?? string.Empty))
+            {
+                return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
             }
 
             var ws = Uri.UnescapeDataString(workspaceId);
@@ -421,6 +452,8 @@ public static class Program
                 }
             }
             ms.Position = 0;
+            ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            ctx.Response.Headers["Cache-Control"] = "private, no-store";
             return Results.File(ms, contentType: "application/zip", fileDownloadName: $"{safeRun}.zip");
         });
     }
@@ -428,16 +461,19 @@ public static class Program
     /// <summary>
     /// Resolves the run directory, handling the optional <c>{id}__{name}</c> suffix
     /// that <see cref="LocalArtifactStore"/> appends when a workspace or project has
-    /// a display name (e.g. <c>ws-personal-abc__myworkspace/artifacts/run-xyz</c>).
+    /// a display name. Matches the projects-only layout
+    /// <c>{root}/{ws}/projects/{proj}/artifacts/{run}</c> — every artifact belongs to
+    /// a workspace AND a project, there is no workspace-level shortcut.
     /// Returns <see langword="null"/> if the directory cannot be found.
     /// </summary>
     private static string? FindRunDir(string root, string ws, string proj, string run)
     {
         var wsDir = FindSegmentDir(root, ws);
         if (wsDir is null) return null;
-        var projDir = FindSegmentDir(wsDir, proj);
+        var projectsDir = Path.Combine(wsDir, "projects");
+        var projDir = FindSegmentDir(projectsDir, proj);
         if (projDir is null) return null;
-        var runDir = Path.Combine(projDir, run);
+        var runDir = Path.Combine(projDir, "artifacts", run);
         return Directory.Exists(runDir) ? runDir : null;
     }
 
@@ -448,6 +484,19 @@ public static class Program
         if (Directory.Exists(exact)) return exact;
         return Directory.EnumerateDirectories(parent, $"{id}__*").FirstOrDefault();
     }
+
+    /// <summary>
+    /// Returns true for file types the browser would render or execute if served inline.
+    /// These must be forced to <c>Content-Disposition: attachment</c> to prevent XSS
+    /// from LLM-generated content served within the user's origin.
+    /// </summary>
+    private static bool IsUnsafeInlineType(string ext) =>
+        ext.Equals(".html", StringComparison.OrdinalIgnoreCase) ||
+        ext.Equals(".htm", StringComparison.OrdinalIgnoreCase) ||
+        ext.Equals(".svg", StringComparison.OrdinalIgnoreCase) ||
+        ext.Equals(".js", StringComparison.OrdinalIgnoreCase) ||
+        ext.Equals(".mjs", StringComparison.OrdinalIgnoreCase) ||
+        ext.Equals(".cjs", StringComparison.OrdinalIgnoreCase);
 
     private static string SanitizeForFilename(string name)
     {

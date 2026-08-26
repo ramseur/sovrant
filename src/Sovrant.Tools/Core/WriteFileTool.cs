@@ -15,11 +15,12 @@ public sealed class WriteFileTool : ITool
     };
 
     // The Sovrant artifact store root — writes here must go through the Artifact tool.
+    // Must match LocalArtifactStore's default (Sovrant.Runtime/Artifacts/LocalArtifactStore.cs).
     private static readonly string s_artifactsRoot = Path.GetFullPath(
         Environment.GetEnvironmentVariable("SOVRANT_ARTIFACTS_ROOT")
         ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".sovrant", "artifacts"));
+            ".sovrant", "workspaces"));
 
     public ToolDefinition Definition => s_definition;
 

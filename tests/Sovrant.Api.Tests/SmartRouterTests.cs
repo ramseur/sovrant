@@ -198,6 +198,34 @@ public sealed class SmartRouterTests
     }
 
     [Fact]
+    public async Task PinProviderAsync_StaysPinned_WhenPinnedProviderTurnsUnhealthy()
+    {
+        // Regression: a pinned provider (e.g. the user's selected cloud provider) going
+        // unhealthy — say, an expired API key producing repeated 401s — must not cause
+        // SelectProvider to fall through to cost-based auto-selection among the other
+        // registered providers. Free/local candidates like Ollama must never be silently
+        // substituted for a provider the user explicitly chose.
+        var cloud = CreateProvider("openai-compat", "https://cloud.example.com");
+        var free = CreateProvider("ollama", "http://localhost:11434");
+        var cloudInfo = new ProviderInfo(cloud, "/v1/models", 0.002);
+        var freeInfo = new ProviderInfo(free, "/v1/models", 0.0);
+        var router = BuildRouter([cloudInfo, freeInfo], RouterMode.Smart, RouterStrategy.Cost);
+        var req = new MessagesRequest("gpt-4o", 100, [InputMessage.UserText("Hi")]);
+
+        await router.PinProviderAsync("openai-compat");
+        Assert.Equal("openai-compat", (await router.RouteAsync(req)).Name);
+
+        // Simulate the pinned provider failing repeatedly until it's marked unhealthy.
+        await router.RecordResultAsync("openai-compat", success: false, durationMs: 100);
+        await router.RecordResultAsync("openai-compat", success: false, durationMs: 100);
+        await router.RecordResultAsync("openai-compat", success: false, durationMs: 100);
+
+        // Must still route to the pinned provider, not fall back to the free "ollama" one.
+        var selected = await router.RouteAsync(req);
+        Assert.Equal("openai-compat", selected.Name);
+    }
+
+    [Fact]
     public async Task PinProviderAsync_ThrowsForUnrecognisedName()
     {
         var info = new ProviderInfo(CreateProvider("p1", "https://p1.example.com"), "/v1/models", 0.001);

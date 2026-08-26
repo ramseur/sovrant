@@ -34,6 +34,12 @@
     --tool-use-border: #D0D0E0;
     --input-bg: #FFFFFF;
     --input-border: #D0D0D0;
+    /* Explicitly themed (not silently inherited from the dark block) — see
+       Phase 126 note: fine as icon/dot fills on both surfaces, but never use
+       these as colored text on a light card (contrast drops well under 4.5:1). */
+    --status-pass: #4CAF50;
+    --status-warn: #FF9800;
+    --status-fail: #F44336;
 }
 
 /* ===== Reset ===== */
@@ -1229,6 +1235,14 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 /* Indent content below avatar row */
 .msg-indent { margin-left: 42px; }
 
+/* Phase 126 — thin divider between the answer and the (now-subordinate) work strip */
+.work-separator {
+    height: 1px;
+    margin: 10px 42px 10px 0;
+    background: var(--surface-border);
+    opacity: 0.6;
+}
+
 .message-text { white-space: pre-wrap; word-break: break-word; }
 .message-text.streaming { font-family: inherit; }
 
@@ -1354,35 +1368,11 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     margin-left: 4px;
 }
 
-/* ===== Execution status bar ===== */
-.execution-status {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
-    margin: 4px 0;
-    border-radius: 6px;
-    background: var(--tool-use-bg);
-    border: 1px solid var(--brand-primary);
-    font-size: 12px;
-}
-
-.execution-status-text {
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
 .intent-narration {
     font-size: 12px;
     font-style: italic;
     color: var(--text-secondary);
     margin-bottom: 4px;
-}
-
-.action-summary {
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-left: 8px;
 }
 
 .btn-copy-message {
@@ -1532,6 +1522,115 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     border-radius: 4px;
     font-size: 11px;
     max-height: 200px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* ===== Work strip (Phase 126 — collapsed tool-use summary) ===== */
+.work-strip {
+    margin: 6px 0;
+}
+
+.work-strip-active {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: var(--tool-use-bg);
+    border: 1px solid var(--brand-primary);
+    font-size: 12px;
+}
+
+.work-strip-status-text {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.work-strip-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: var(--tool-use-bg);
+    border: 1px solid var(--tool-use-border);
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-align: left;
+}
+
+.work-strip-header:hover { border-color: var(--text-secondary); }
+.work-strip-header-error { border-color: var(--status-fail); }
+
+.work-strip-caret { font-size: 10px; color: var(--text-muted); }
+.work-strip-count { font-weight: 600; color: var(--text-primary); }
+.work-strip-dot { color: var(--text-muted); }
+.work-strip-groups { color: var(--text-secondary); }
+.work-strip-errcount { color: var(--text-secondary); }
+.work-strip-elapsed { color: var(--text-muted); margin-left: auto; }
+.work-strip-warn-icon { color: var(--status-fail); font-size: 12px; }
+
+.work-strip-list {
+    display: flex;
+    flex-direction: column;
+    margin-top: 4px;
+    border-radius: 6px;
+    border: 1px solid var(--tool-use-border);
+    overflow: hidden;
+}
+
+.work-strip-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--tool-use-bg);
+    border-top: 1px solid var(--tool-use-border);
+    font-size: 12px;
+    cursor: pointer;
+}
+.work-strip-row:first-child { border-top: none; }
+.work-strip-row:hover { background: var(--surface-hover); }
+.work-strip-row-active { background: var(--surface-hover); }
+/* Error state is signalled by the status dot fill (.status-dot-fail) and the
+   header ⚠ icon — never by coloring this row's text (Phase 126 contrast rule:
+   icon + fill only; --status-fail as text fails 4.5:1 on the light theme). */
+
+.work-strip-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.status-dot-pass { background: var(--status-pass); }
+.status-dot-warn { background: var(--status-warn); }
+.status-dot-fail { background: var(--status-fail); }
+
+.work-strip-row-name { font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+.work-strip-row-preview {
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: 'Consolas', monospace;
+    font-size: 11px;
+}
+
+.work-strip-detail {
+    padding: 8px 10px 10px 25px;
+    background: var(--tool-use-bg);
+    border-top: 1px solid var(--tool-use-border);
+}
+.work-strip-detail pre {
+    margin: 0;
+    padding: 8px;
+    background: var(--surface-card);
+    border-radius: 4px;
+    font-size: 11px;
+    max-height: 300px;
     overflow: auto;
     white-space: pre-wrap;
     word-break: break-all;
