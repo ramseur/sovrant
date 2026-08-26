@@ -7,6 +7,36 @@ Versions correspond to tags on the `development` branch.
 
 ---
 
+## [1.5.0] — 2026-08-26
+
+> **Migration note:** V044–V046 are additive only (skill description/agent enrichment, code-manifest scaffolding, CodeValidateTool guide seed). No destructive schema changes in this release.
+
+### Added
+
+- **Phase 128 — code generation quality gates (Parts A–D)**: artifact routes gain proper content-disposition + security headers on zip download and force-download for unsafe-inline file types; `ArtifactManifest` gains a `Code` manifest (template, language, kind, build/run/test commands, entry point) populated for all 21 scaffold templates; every scaffold gets a CI workflow (`.github/workflows/ci.yml`) plus per-language project scaffolding (`.sln`/`Directory.Build.props`/`.editorconfig` for .NET); `CodeCreateTool`/`CodeCreateMultiTool` return build/run/test/next-step guidance in their responses (V045).
+- **Phase 128e — `CodeValidateTool`**: compiler-free structural quality gates for generated code scaffolds — critical/warning gate checks per language (`.sln`, `package.json`, `go.mod`, `Cargo.toml`, `pom.xml`, etc.) plus universal gates (README, `.gitignore`, CI workflow), with remediation guidance per failed gate (V046).
+- **Phase 114 — enriched all 32 built-in skill descriptions**: every BuiltIn skill row gets a 2–3 sentence description for the `IKnowledgeRouter` harness and Skills page; 9 skills with unset agent delegations get one wired; `verification-loop` skill's reference to a non-existent `Verify` tool corrected (V044).
+- **Phase 126 — chat conversation UX**: per-turn tool calls collapse into a single work strip ("N actions · Read x3 · Grep x2 · 2.4s") with two-level expand, replacing the old per-tool-call box stack, on both Web and Desktop. Answer renders above the (now subordinate) work strip. Light-theme status colors (`--status-pass/warn/fail`) now defined explicitly instead of inheriting dark-theme values.
+- **Standalone Postgres/Supabase database layout**: `db/postgres/PostgresSchema.sql` (plain Postgres, no Supabase-specific triggers/RLS) and `db/supabase/migrations/` (full GoTrue-mirrored schema for the Supabase CLI) replace the single combined schema file.
+
+### Changed
+
+- **Artifacts are projects-only** — workspace-level (project-less) artifact storage removed; every artifact now nests under `{workspace}/projects/{project}/artifacts/{run}`. On-disk root corrected to `~/.sovrant/workspaces` (previously `~/.sovrant/artifacts`, inconsistent with existing docs).
+- **Provider setup pre-selects the personal workspace** by default when adding a provider (Web + Desktop) — other workspaces remain opt-in.
+- **API key is now optional for local providers** (Ollama, LM Studio) on the provider add form, with UI copy reflecting it; previously required a dummy key.
+
+### Fixed
+
+- **Provider pin was abandoned on failure, silently rerouting to unconfigured Ollama** — `SmartRouter` dropped an explicit provider pin the moment the pinned provider was marked unhealthy (e.g. after repeated 401s from an expired key), falling back to cost-scored selection across *every* registered provider. Ollama is always registered at cost `0.0` regardless of whether it's configured, so it won every such fallback and failed against an unreachable `localhost:11434`. A pin now always wins, healthy or not.
+- **Tool registry sent unbounded to OpenAI-compatible providers** — `ModelCapabilities.MaxTools` was never populated for any model, so the existing per-model tool cap never engaged; a full registry of 140+ tools (built-in + enabled MCP servers) got sent as-is and was hard-rejected by OpenAI/OpenRouter/Ollama's shared 128-tool limit. Added a 128-tool fallback cap for any model without an explicit override.
+- **Model list not loading for Ollama** (Web + Desktop) — model-fetch helpers always set an `Authorization: Bearer` header, sending a malformed one when the key was empty; Ollama rejected it and returned no models.
+- **Model list not loading when switching providers on Settings page** — the API key field was cleared before the model fetch fired, so key-gated providers (OpenRouter, etc.) always queried with an empty key.
+- **Artifact routes missing workspace-membership authorization** — the two artifact-serving HTTP routes had no authorization check; any authenticated user could fetch any workspace's artifacts by guessing the URL. Both now 403 non-members, matching the existing `/v1/artifacts` API rule.
+- **Provider setup "Set up →" link routed to a dead URL** — pointed at `/settings?tab=providers`, which Settings.razor silently ignores; now routes to `/admin/providers?provider=X` and preselects the provider.
+- **`PostgresSchema.sql` out of sync with V043** — the username-column drop and unique constraint removal from the SQLite migration weren't mirrored to the Postgres/Supabase schema.
+
+---
+
 ## [1.4.0] — 2026-06-25
 
 > **Migration note:** V043 rewrites all `usr_{hex}` primary keys to email addresses and drops the `username` column via table recreation. Back up your database before upgrading any instance with existing users. The `POST /v1/users` request body and `GET /v1/users` response shape have changed (see **Changed** below).
