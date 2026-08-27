@@ -16,13 +16,21 @@ Each platform folder is a flat list of versions: `v1.html`, `v2.html`, ... A new
 
 Before opening a new version, skim the changelog note at the top of the current one so you're not redoing a decision that was already made and reverted.
 
+## Parity
+
+**Web and Desktop should match as closely as each platform allows.** Same metrics, same icons, same tokens, same treatments — a difference between them needs a reason rooted in the platform (what chrome the OS or browser owns, what the toolkit can express), not in one side simply having drifted. `web/v2.html` carries a parity table tracking where they agree and where they don't; keep it current as screens land.
+
 ## Current state
 
-**v1** (both platforms) — the left-nav redesign shipped in commit `7970ca3`: collapsible icon+label rail, real line icons replacing the old emoji glyphs, a left accent-bar for the active item, and Admin's 9 destinations grouped under Overview / Access / Safety / System. This is the baseline the rest of the app's design should extend, not fight — new screens should read as the same product as this nav, not a different one bolted on.
+**v1** (both platforms) — the left-nav redesign shipped in commit `7970ca3`: collapsible icon+label rail, real line icons replacing the old emoji glyphs, a left accent-bar for the active item, and Admin's 9 destinations grouped under Overview / Access / Safety / System. Still the current record for everything except the brand row.
+
+**v2** (both platforms) — brand row only. The product name was rendering twice on each platform: once in the chrome the platform owns (OS titlebar / browser tab), again in the rail immediately below. v2 removes the rail wordmark on both and grows the mark to 44px so it reads as a logo rather than a favicon. v2 also fixes the Web *record* — v1 drew the Web app in a window frame, which made it look like Desktop; Web previews now sit in browser chrome.
+
+Together these are the baseline the rest of the app's design should extend, not fight — new screens should read as the same product as this shell, not a different one bolted on.
 
 ## What's next
 
-A formal design pass across every remaining screen, starting with **Login**, then working through each destination behind the nav (Dashboard, Chat, Knowledge's six pages, Agents, Projects, Admin's nine pages, Settings). The nav redesign (v1) is the foundation to build on — keep its type scale, spacing rhythm, icon style, and color tokens rather than introducing new ones per screen.
+A formal design pass across every remaining screen, starting with **Login** (which has the same name-duplication problem and, on Desktop, binds a `BackgroundBrush` resource key that doesn't exist in either theme file), then working through each destination behind the nav — Dashboard, Chat, Knowledge's six pages, Agents, Projects, Admin's nine pages, Settings. Keep the shell's type scale, spacing rhythm, icon style, and color tokens rather than introducing new ones per screen.
 
 ## How to use this folder
 
