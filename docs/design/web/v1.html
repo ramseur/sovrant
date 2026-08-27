@@ -1,0 +1,369 @@
+<meta charset="utf-8">
+<title>Sovrant Web Design v1</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  :root {
+    --brand: #6D52C6;
+    --brand-soft: color-mix(in srgb, #6D52C6 16%, transparent);
+    --surface-bg: #F5F5F5;
+    --sidebar-bg: #EBEBEB;
+    --card: #FFFFFF;
+    --border: #D0D0D0;
+    --hover: #E0E0E0;
+    --text-1: #1A1A1A;
+    --text-2: #666666;
+    --text-3: #999999;
+    --stage-bg: #e4e2df;
+    --ring: color-mix(in srgb, #6D52C6 45%, transparent);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --brand: #6D52C6;
+      --brand-soft: color-mix(in srgb, #6D52C6 22%, transparent);
+      --surface-bg: #1A1A1A;
+      --sidebar-bg: #141414;
+      --card: #2A2A2A;
+      --border: #3A3A3A;
+      --hover: #333333;
+      --text-1: #FFFFFF;
+      --text-2: #999999;
+      --text-3: #666666;
+      --stage-bg: #0f0f10;
+      --ring: color-mix(in srgb, #6D52C6 55%, transparent);
+    }
+  }
+  :root[data-theme="dark"] {
+    --brand: #6D52C6;
+    --brand-soft: color-mix(in srgb, #6D52C6 22%, transparent);
+    --surface-bg: #1A1A1A;
+    --sidebar-bg: #141414;
+    --card: #2A2A2A;
+    --border: #3A3A3A;
+    --hover: #333333;
+    --text-1: #FFFFFF;
+    --text-2: #999999;
+    --text-3: #666666;
+    --stage-bg: #0f0f10;
+    --ring: color-mix(in srgb, #6D52C6 55%, transparent);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--stage-bg);
+    color: var(--text-1);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: 1180px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 10px; flex-wrap: wrap; }
+  .intro h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; }
+  .intro p { margin: 0; max-width: 60ch; color: var(--text-2); font-size: 13.5px; line-height: 1.55; }
+  .platform-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--brand); background: var(--brand-soft);
+    border-radius: 999px; padding: 3px 10px; margin-bottom: 10px;
+  }
+  .controls { display: flex; gap: 8px; flex-shrink: 0; }
+  .ctrl-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--card); color: var(--text-1);
+    font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .ctrl-btn:hover { background: var(--hover); }
+  .ctrl-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  .ctrl-btn svg { width: 14px; height: 14px; }
+  .ctrl-btn.on { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
+
+  .changelog {
+    margin: 18px 0 28px; padding: 12px 16px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--card);
+    font-size: 12.5px; color: var(--text-2); line-height: 1.6;
+  }
+  .changelog strong { color: var(--text-1); }
+  .changelog code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; background: var(--hover); padding: 1px 5px; border-radius: 4px; }
+
+  .stage { display: flex; height: 720px; border-radius: 14px; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 20px 50px -25px rgba(0,0,0,0.35); background: var(--surface-bg); }
+
+  .nav-shell { display: flex; flex-direction: column; height: 100%; background: var(--sidebar-bg); border-right: 1px solid var(--border); width: 76px; flex-shrink: 0; transition: width 180ms cubic-bezier(0.4, 0, 0.2, 1); }
+  .stage.expanded .nav-shell { width: 300px; }
+
+  .nav-top { display: flex; align-items: center; height: 60px; padding: 0 14px; gap: 10px; flex-shrink: 0; }
+  .brand-mark { width: 34px; height: 34px; border-radius: 9px; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; flex-shrink: 0; }
+  .brand-word { font-weight: 700; font-size: 15.5px; white-space: nowrap; opacity: 0; transition: opacity 140ms ease; }
+  .stage.expanded .brand-word { opacity: 1; }
+
+  .collapse-toggle { margin-left: auto; width: 30px; height: 30px; border-radius: 7px; border: none; background: transparent; color: var(--text-2); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background 120ms ease, color 120ms ease; }
+  .collapse-toggle:hover { background: var(--hover); color: var(--text-1); }
+  .collapse-toggle svg { width: 15px; height: 15px; transition: transform 200ms ease; }
+  .stage.expanded .collapse-toggle svg { transform: rotate(180deg); }
+
+  .search-wrap { padding: 8px 12px; }
+  .search-box { display: flex; align-items: center; gap: 9px; height: 38px; border-radius: 9px; background: var(--card); border: 1px solid var(--border); padding: 0 11px; color: var(--text-3); opacity: 0; max-height: 0; overflow: hidden; transition: opacity 140ms ease, max-height 200ms ease; }
+  .stage.expanded .search-box { opacity: 1; max-height: 38px; }
+  .search-box svg { width: 15px; height: 15px; flex-shrink: 0; }
+  .search-box input { border: none; background: none; outline: none; font: inherit; font-size: 13.5px; color: var(--text-1); width: 100%; }
+  .search-box input::placeholder { color: var(--text-3); }
+
+  nav.nav-groups { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; border-bottom: 1px solid var(--border); }
+
+  .nav-item { position: relative; display: flex; align-items: center; flex-shrink: 0; gap: 12px; height: 42px; border-radius: 9px; padding: 0 10px; color: var(--text-2); cursor: pointer; font-size: 14.5px; font-weight: 500; background: transparent; border: none; width: 100%; text-align: left; font-family: inherit; transition: background 120ms ease, color 120ms ease; }
+  .nav-item:hover { background: var(--hover); color: var(--text-1); }
+  .nav-item svg { width: 19px; height: 19px; flex-shrink: 0; }
+  .nav-item .label { white-space: nowrap; opacity: 0; transition: opacity 140ms ease; }
+  .stage.expanded .nav-item .label { opacity: 1; }
+  .nav-item.active { background: var(--brand-soft); color: var(--brand); }
+  .nav-item.active::before { content: ""; position: absolute; left: -8px; top: 6px; bottom: 6px; width: 3px; border-radius: 0 3px 3px 0; background: var(--brand); }
+
+  .section-label { flex-shrink: 0; padding: 8px 21px 7px; font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; opacity: 0; max-height: 0; overflow: hidden; transition: opacity 140ms ease, max-height 160ms ease; }
+  .stage.expanded .section-label { opacity: 1; max-height: 28px; }
+
+  .recents { flex: 1; overflow-y: auto; padding: 4px 12px 8px; display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+  .recents::-webkit-scrollbar { width: 6px; }
+  .recents::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .session-row { display: flex; align-items: center; flex-shrink: 0; gap: 10px; height: 40px; border-radius: 8px; padding: 0 10px; color: var(--text-2); font-size: 13px; cursor: pointer; opacity: 0; max-height: 0; overflow: hidden; transition: background 120ms ease, color 120ms ease, opacity 140ms ease, max-height 160ms ease; position: relative; }
+  .stage.expanded .session-row { opacity: 1; max-height: 40px; }
+  .session-row:hover { background: var(--hover); color: var(--text-1); }
+  .session-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .panel-block { display: none; flex-direction: column; min-height: 0; flex: 1; }
+  .panel-block.on { display: flex; }
+
+  .sub-list { flex: 1; overflow-y: auto; padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+  .sub-list::-webkit-scrollbar { width: 6px; }
+  .sub-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .sub-item { display: flex; align-items: center; flex-shrink: 0; height: 40px; border-radius: 8px; padding: 0 10px 0 21px; color: var(--text-2); font-size: 13.5px; cursor: pointer; background: transparent; border: none; width: 100%; text-align: left; font-family: inherit; white-space: nowrap; opacity: 0; max-height: 0; overflow: hidden; transition: background 120ms ease, color 120ms ease, opacity 140ms ease, max-height 160ms ease; position: relative; }
+  .stage.expanded .sub-item { opacity: 1; max-height: 40px; }
+  .sub-item:hover { background: var(--hover); color: var(--text-1); }
+  .sub-item.current { color: var(--brand); font-weight: 600; background: var(--brand-soft); }
+  .sub-item.current::before { content: ""; position: absolute; left: -10px; top: 6px; bottom: 6px; width: 3px; border-radius: 0 3px 3px 0; background: var(--brand); }
+
+  .sub-group-label { flex-shrink: 0; margin-top: 18px; padding: 0 21px 4px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; opacity: 0; max-height: 0; overflow: hidden; transition: opacity 140ms ease, max-height 160ms ease; }
+  .stage.expanded .sub-group-label { opacity: 1; max-height: 22px; }
+  .sub-list .sub-group-label:first-child { margin-top: 8px; }
+
+  .nav-footer { margin-top: auto; border-top: 1px solid var(--border); padding: 10px 12px; flex-shrink: 0; }
+  .footer-row { display: flex; align-items: center; gap: 10px; height: 48px; border-radius: 9px; padding: 0 8px; cursor: pointer; transition: background 120ms ease; }
+  .footer-row:hover { background: var(--hover); }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, var(--brand), #4a3789); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 700; flex-shrink: 0; }
+  .footer-text { display: flex; flex-direction: column; gap: 2px; white-space: nowrap; opacity: 0; transition: opacity 140ms ease; min-width: 0; }
+  .stage.expanded .footer-text { opacity: 1; }
+  .footer-name { font-size: 13px; font-weight: 600; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; }
+  .footer-sub { font-size: 11px; color: var(--text-3); }
+
+  .content-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--surface-bg); }
+  .content-topbar { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; flex-shrink: 0; }
+  .content-topbar .crumb { font-size: 13px; font-weight: 600; color: var(--text-1); }
+  .content-body { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-3); font-size: 12.5px; gap: 8px; }
+  .content-body svg { width: 15px; height: 15px; opacity: 0.6; }
+
+  .notes { margin-top: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .notes { grid-template-columns: 1fr; } }
+  .note-card { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 16px 18px; }
+  .note-card h2 { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-2); margin: 0 0 10px; }
+  .note-card ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .note-card li { font-size: 13px; line-height: 1.5; color: var(--text-1); display: flex; gap: 9px; }
+  .note-card li .tick { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; color: var(--brand); }
+  .note-card code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; background: var(--hover); padding: 1px 5px; border-radius: 4px; }
+</style>
+
+<div class="page">
+  <header class="intro">
+    <div>
+      <span class="platform-badge">Web &middot; v1</span>
+      <h1>Left-nav &amp; shell — as shipped</h1>
+      <p>This is a static record of what's actually live in <code>src/Sovrant.Web</code> as of commit <code>7970ca3</code> — not a proposal. Values here (widths, row heights, colors) are pulled directly from <code>sovrant.css</code>. Click the rail items to see the sub-panels; the theme buttons confirm it holds up in light and dark.</p>
+    </div>
+    <div class="controls">
+      <button class="ctrl-btn on" id="expandBtn" onclick="toggleExpand()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        <span id="expandLbl">Collapse rail</span>
+      </button>
+      <button class="ctrl-btn" onclick="setTheme('light')">Light</button>
+      <button class="ctrl-btn" onclick="setTheme('dark')">Dark</button>
+    </div>
+  </header>
+
+  <div class="changelog">
+    <strong>v1 — 2026-08-27.</strong> First formal design record for the Web shell. Documents the left-nav redesign (real line icons, single collapsible rail replacing the old icon-row + separate sidebar, Admin's 9 items grouped under Overview/Access/Safety/System). No prior version exists — this is the baseline everything else builds on. Known gap: rail item height here is <code>42px</code> (matches <code>.rail-icon</code>), while Desktop's equivalent settled at <code>40px</code> during its own tightening pass — worth reconciling in v2.
+  </div>
+
+  <div class="stage expanded" id="stage">
+    <div class="nav-shell">
+      <div class="nav-top">
+        <div class="brand-mark">S</div>
+        <span class="brand-word">Sovrant</span>
+        <button class="collapse-toggle" onclick="toggleExpand()" title="Collapse">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+      </div>
+
+      <nav class="nav-groups">
+        <button class="nav-item" onclick="selectGroup(this,'dashboard')" title="Dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          <span class="label">Dashboard</span>
+        </button>
+        <button class="nav-item active" onclick="selectGroup(this,'chat')" title="Chat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          <span class="label">Chat</span>
+        </button>
+        <button class="nav-item" onclick="selectGroup(this,'knowledge')" title="Knowledge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          <span class="label">Knowledge</span>
+        </button>
+        <button class="nav-item" onclick="selectGroup(this,'agents')" title="Agents">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="13" rx="2.5"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/><line x1="9" y1="13" x2="9" y2="13.01"/><line x1="15" y1="13" x2="15" y2="13.01"/><path d="M9 17h6"/></svg>
+          <span class="label">Agents</span>
+        </button>
+        <button class="nav-item" onclick="selectGroup(this,'projects')" title="Projects">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2.5h8.5A1.5 1.5 0 0 1 21 10v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18z"/></svg>
+          <span class="label">Projects</span>
+        </button>
+        <button class="nav-item" onclick="selectGroup(this,'admin')" title="Admin">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3.5v6c0 5-3.4 8.9-8 10.5-4.6-1.6-8-5.5-8-10.5v-6z"/></svg>
+          <span class="label">Admin</span>
+        </button>
+      </nav>
+
+      <div class="panel-block on" data-panel="chat">
+        <div class="search-wrap">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" placeholder="Search conversations…">
+          </div>
+        </div>
+        <div class="section-label">Recent</div>
+        <div class="recents">
+          <div class="session-row"><span class="session-title">Fix OpenRouter 401 fallback bug</span></div>
+          <div class="session-row"><span class="session-title">Draft v1.5.0 changelog + PR notes</span></div>
+          <div class="session-row"><span class="session-title">Workspace provider visibility bug</span></div>
+          <div class="session-row"><span class="session-title">Migrate PostgresSchema.sql to db/</span></div>
+        </div>
+      </div>
+
+      <div class="panel-block" data-panel="dashboard">
+        <div class="sub-list"><div class="sub-group-label">No sub-pages — single view</div></div>
+      </div>
+
+      <div class="panel-block" data-panel="knowledge">
+        <div class="section-label">Knowledge</div>
+        <div class="sub-list">
+          <button class="sub-item current">Artifacts</button>
+          <button class="sub-item">Code Templates</button>
+          <button class="sub-item">Documents</button>
+          <button class="sub-item">Memory</button>
+          <button class="sub-item">Skills</button>
+          <button class="sub-item">Tools</button>
+        </div>
+      </div>
+
+      <div class="panel-block" data-panel="agents">
+        <div class="section-label">Agents</div>
+        <div class="sub-list">
+          <button class="sub-item current">Library</button>
+          <button class="sub-item">Orchestration</button>
+        </div>
+      </div>
+
+      <div class="panel-block" data-panel="projects">
+        <div class="section-label">Projects</div>
+        <div class="sub-list"><button class="sub-item current">Projects</button></div>
+      </div>
+
+      <div class="panel-block" data-panel="admin">
+        <div class="section-label">Admin</div>
+        <div class="sub-list">
+          <div class="sub-group-label">Overview</div>
+          <button class="sub-item current">Command Center</button>
+          <div class="sub-group-label">Access</div>
+          <button class="sub-item">Users</button>
+          <button class="sub-item">Workspaces</button>
+          <button class="sub-item">Providers</button>
+          <div class="sub-group-label">Safety</div>
+          <button class="sub-item">Governance</button>
+          <button class="sub-item">Trust Boundary</button>
+          <div class="sub-group-label">System</div>
+          <button class="sub-item">Diagnostics</button>
+          <button class="sub-item">Platform Integrations</button>
+          <button class="sub-item">System Integrations</button>
+        </div>
+      </div>
+
+      <div class="nav-footer">
+        <div class="footer-row">
+          <div class="avatar">ER</div>
+          <div class="footer-text">
+            <div class="footer-name">ramseur@anant.us</div>
+            <div class="footer-sub">Personal workspace</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="content-pane">
+      <div class="content-topbar"><span class="crumb" id="crumbMain">Chat</span></div>
+      <div class="content-body">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        <span>Content pane — out of scope for v1, shown for scale only</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note-card">
+      <h2>What shipped</h2>
+      <ul>
+        <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>One rail instead of two stacked components — <code>RailNav.razor</code> and <code>Sidebar.razor</code> now compose into a single collapsible shell in <code>MainLayout.razor</code>.</li>
+        <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Emoji glyphs replaced with inline SVG stroke icons at 19px, matching Desktop's <code>NavIcons.axaml</code> path data.</li>
+        <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Collapsed rail is 76px; expanded is 300px.</li>
+        <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Active item gets a left accent bar in <code>--brand-primary</code> plus a soft tint background, not full-strength fill.</li>
+        <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Admin's 9 items grouped: Overview (Command Center) &middot; Access (Users, Workspaces, Providers) &middot; Safety (Governance, Trust Boundary) &middot; System (Diagnostics, Platform/System Integrations).</li>
+        <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Every color is a token already in <code>sovrant.css</code> — no new palette introduced.</li>
+      </ul>
+    </div>
+    <div class="note-card">
+      <h2>Bug caught during design, fixed before shipping</h2>
+      <ul>
+        <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><strong>Flexbox row collapse:</strong> sub-nav rows need <code>flex-shrink: 0</code> inside their scrolling flex column. Without it, once a long list (Admin's 9 items) overflows its container, every row silently collapses to 0px height instead of the container scrolling — caught in this very design-preview stage before it ever reached real code, then deliberately built into the shipped CSS from the start.</li>
+        <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>No route or data-model changes — same six destinations, same session store, same admin gating as before.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+  const crumbs = { dashboard: 'Dashboard', chat: 'Chat', knowledge: 'Knowledge', agents: 'Agents', projects: 'Projects', admin: 'Admin' };
+  function selectGroup(el, key) {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    document.querySelectorAll('.panel-block').forEach(p => p.classList.toggle('on', p.dataset.panel === key));
+    document.getElementById('crumbMain').textContent = crumbs[key];
+  }
+  document.querySelectorAll('.sub-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const list = item.closest('.sub-list');
+      list.querySelectorAll('.sub-item').forEach(i => i.classList.remove('current'));
+      item.classList.add('current');
+    });
+  });
+  function toggleExpand() {
+    const stage = document.getElementById('stage');
+    const expanded = stage.classList.toggle('expanded');
+    document.getElementById('expandBtn').classList.toggle('on', expanded);
+    document.getElementById('expandLbl').textContent = expanded ? 'Collapse rail' : 'Expand rail';
+  }
+  function setTheme(mode) {
+    document.documentElement.setAttribute('data-theme', mode);
+    try { localStorage.setItem('sovrant-design-web-v1-theme', mode); } catch (e) {}
+  }
+  try {
+    const saved = localStorage.getItem('sovrant-design-web-v1-theme');
+    if (saved) document.documentElement.setAttribute('data-theme', saved);
+  } catch (e) {}
+</script>
