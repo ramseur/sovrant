@@ -1,8 +1,7 @@
 @*  Phase 69 — Workspace group secondary panel.  *@
 
 <div class="rail-secondary-header">Projects</div>
-<NavButton Href="/projects" Icon="&#x1F4C1;" Label="Projects" OnClick="OnNavigate" />
-
+<NavButton Href="/projects" Label="Projects" OnClick="OnNavigate" />
 
 @code {
     [Parameter] public EventCallback<string> OnNavigate { get; set; }

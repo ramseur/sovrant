@@ -11,6 +11,19 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource SurfaceBackground}">
 
+    <Window.Styles>
+        <!-- Left-nav redesign: smooth background fade on nav-row buttons (hover and
+             active-state changes alike), matching Web's 0.12s CSS transition. Scoped to
+             the sidebar so it doesn't touch button behavior elsewhere in the app. -->
+        <Style Selector="Border.nav-shell Button">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.12" />
+                </Transitions>
+            </Setter>
+        </Style>
+    </Window.Styles>
+
     <Window.DataTemplates>
         <DataTemplate DataType="vm:ChatViewModel">
             <views:ChatView />
@@ -83,23 +96,26 @@
 
     <Panel>
         <DockPanel>
-            <!-- Phase 69 — single 240px sidebar: icon row at top, group panel in middle, settings + user at bottom. -->
+            <!-- Left-nav redesign — collapsible rail: brand row at top, a single
+                 vertical group-nav list (icon+label expanded / icon-only collapsed),
+                 swappable sub-panel below, settings + user footer at bottom. -->
             <Border DockPanel.Dock="Left"
+                    Classes="nav-shell"
                     Width="{Binding NavWidth}"
                     Background="{DynamicResource SidebarBackground}"
                     BorderBrush="{DynamicResource SurfaceBorder}"
                     BorderThickness="0,0,1,0">
                 <DockPanel>
                     <Border DockPanel.Dock="Top"
+                            Height="60"
                             BorderBrush="{DynamicResource SurfaceBorder}"
                             BorderThickness="0,0,0,1"
-                            Padding="6,8">
+                            Padding="10,0">
                         <DockPanel LastChildFill="True">
-                            <!-- Collapse toggle: always visible -->
                             <Button DockPanel.Dock="Right" ToolTip.Tip="Collapse sidebar"
                                     Command="{Binding ToggleNavCommand}"
                                     IsVisible="{Binding IsNavExpanded}"
-                                    Height="30" Width="30" CornerRadius="6" Padding="7,8"
+                                    Height="30" Width="30" CornerRadius="8" Padding="7,8"
                                     Background="Transparent"
                                     Foreground="{DynamicResource TextMuted}"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
@@ -119,7 +135,7 @@
                             <Button DockPanel.Dock="Right" ToolTip.Tip="Expand sidebar"
                                     Command="{Binding ToggleNavCommand}"
                                     IsVisible="{Binding IsNavCollapsed}"
-                                    Height="30" Width="30" CornerRadius="6" Padding="7,8"
+                                    Height="30" Width="30" CornerRadius="8" Padding="7,8"
                                     Background="Transparent"
                                     Foreground="{DynamicResource TextMuted}"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
@@ -133,86 +149,50 @@
                                     </Canvas>
                                 </Viewbox>
                             </Button>
-                            <!-- Admin + main icons: hidden when collapsed -->
-                            <DockPanel LastChildFill="True" IsVisible="{Binding IsNavExpanded}">
-                                <Button DockPanel.Dock="Right" Content="🔑" ToolTip.Tip="Admin"
-                                        Command="{Binding SelectGroupCommand}" CommandParameter="admin"
-                                        Height="30" CornerRadius="6" FontSize="13" Padding="4,0"
-                                        IsVisible="{Binding IsAdmin}"
-                                        Background="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                        Foreground="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                                <UniformGrid Rows="1">
-                                <Button Content="📊" ToolTip.Tip="User Dashboard"
-                                        Command="{Binding SelectGroupCommand}" CommandParameter="dashboard"
-                                        Height="30" CornerRadius="6" FontSize="13" Padding="0"
-                                        Background="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                        Foreground="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                        HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                                <Button Content="💬" ToolTip.Tip="Chat"
-                                        Command="{Binding SelectGroupCommand}" CommandParameter="chat"
-                                        Height="30" CornerRadius="6" FontSize="13" Padding="0"
-                                        Background="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                        Foreground="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                        HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                                <Button Content="📚" ToolTip.Tip="Knowledge"
-                                        Command="{Binding SelectGroupCommand}" CommandParameter="knowledge"
-                                        Height="30" CornerRadius="6" FontSize="13" Padding="0"
-                                        Background="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                        Foreground="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                        HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                                <Button Content="🤖" ToolTip.Tip="Agents"
-                                        Command="{Binding SelectGroupCommand}" CommandParameter="agents"
-                                        Height="30" CornerRadius="6" FontSize="13" Padding="0"
-                                        Background="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                        Foreground="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                        HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                                <Button Content="🗂" ToolTip.Tip="Projects"
-                                        Command="{Binding SelectGroupCommand}" CommandParameter="workspace"
-                                        Height="30" CornerRadius="6" FontSize="13" Padding="0"
-                                        Background="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                        Foreground="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                        HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                                </UniformGrid>
-                            </DockPanel>
+                            <Border Background="{DynamicResource BrandPrimary}"
+                                    Width="34" Height="34" CornerRadius="9"
+                                    IsVisible="{Binding IsNavExpanded}"
+                                    HorizontalAlignment="Left" VerticalAlignment="Center">
+                                <TextBlock Text="S" FontWeight="Bold" FontSize="15" Foreground="White"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="Sovrant" FontWeight="Bold" FontSize="15.5" Margin="10,0,0,0"
+                                       IsVisible="{Binding IsNavExpanded}"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextPrimary}" />
                         </DockPanel>
                     </Border>
 
                     <!-- Bottom: shared footer — avatar + name on left, settings on the right -->
                     <Border DockPanel.Dock="Bottom" IsVisible="{Binding IsNavExpanded}"
-                            Padding="10,8"
+                            Padding="12,10"
                             BorderThickness="0,1,0,0"
                             BorderBrush="{DynamicResource SurfaceBorder}">
                         <DockPanel LastChildFill="True">
                             <Button DockPanel.Dock="Right"
                                     Content="↪" ToolTip.Tip="Log out"
                                     Command="{Binding LogoutCommand}"
-                                    Width="32" Height="32" CornerRadius="8"
+                                    Width="34" Height="34" CornerRadius="9"
                                     FontSize="16" Padding="0" Margin="4,0,0,0"
                                     Background="Transparent"
                                     Foreground="{DynamicResource TextSecondary}"
                                     HorizontalContentAlignment="Center"
                                     VerticalContentAlignment="Center" />
                             <Button Command="{Binding SelectGroupCommand}" CommandParameter="settings"
-                                    Background="Transparent" BorderThickness="0" Padding="4,2"
-                                    CornerRadius="6" ToolTip.Tip="Settings" Cursor="Hand"
+                                    Background="Transparent" BorderThickness="0" Padding="5,2"
+                                    CornerRadius="8" ToolTip.Tip="Settings" Cursor="Hand"
                                     HorizontalContentAlignment="Left" VerticalContentAlignment="Center">
-                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                    <Border Width="28" Height="28" CornerRadius="14"
+                                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                    <Border Width="32" Height="32" CornerRadius="16"
                                             Background="{DynamicResource BrandPrimary}">
-                                        <TextBlock Text="{Binding Sidebar.UserInitial}" FontSize="12" FontWeight="SemiBold"
+                                        <TextBlock Text="{Binding Sidebar.UserInitial}" FontSize="13.5" FontWeight="SemiBold"
                                                    Foreground="White"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Border>
                                     <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Sidebar.CurrentUserName}" FontSize="11"
+                                        <TextBlock Text="{Binding Sidebar.CurrentUserName}" FontSize="13"
                                                    Foreground="{DynamicResource TextPrimary}" />
-                                        <TextBlock Text="{Binding Sidebar.ActiveContext.ActiveWorkspaceRole}" FontSize="9"
+                                        <TextBlock Text="{Binding Sidebar.ActiveContext.ActiveWorkspaceRole}" FontSize="11"
                                                    Foreground="{DynamicResource TextSecondary}"
                                                    IsVisible="{Binding Sidebar.ActiveContext.ActiveWorkspaceRole, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                                     </StackPanel>
@@ -221,50 +201,143 @@
                         </DockPanel>
                     </Border>
 
-                    <!-- Middle: collapsed icon strip OR expanded sub-panel -->
-                    <Panel>
-                        <!-- Collapsed: vertical icon strip -->
-                        <StackPanel IsVisible="{Binding IsNavCollapsed}" Margin="4,8,4,4" Spacing="2">
-                            <Button Content="📊" ToolTip.Tip="User Dashboard"
-                                    Command="{Binding SelectGroupCommand}" CommandParameter="dashboard"
-                                    Height="36" CornerRadius="6" FontSize="16" Padding="0"
-                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                    Background="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
-                            <Button Content="💬" ToolTip.Tip="Chat"
-                                    Command="{Binding SelectGroupCommand}" CommandParameter="chat"
-                                    Height="36" CornerRadius="6" FontSize="16" Padding="0"
-                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                    Background="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
-                            <Button Content="📚" ToolTip.Tip="Knowledge"
-                                    Command="{Binding SelectGroupCommand}" CommandParameter="knowledge"
-                                    Height="36" CornerRadius="6" FontSize="16" Padding="0"
-                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                    Background="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
-                            <Button Content="🤖" ToolTip.Tip="Agents"
-                                    Command="{Binding SelectGroupCommand}" CommandParameter="agents"
-                                    Height="36" CornerRadius="6" FontSize="16" Padding="0"
-                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                    Background="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
-                            <Button Content="🗂" ToolTip.Tip="Projects"
-                                    Command="{Binding SelectGroupCommand}" CommandParameter="workspace"
-                                    Height="36" CornerRadius="6" FontSize="16" Padding="0"
-                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                    Background="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
-                            <Button Content="🔑" ToolTip.Tip="Admin"
-                                    Command="{Binding SelectGroupCommand}" CommandParameter="admin"
-                                    Height="36" CornerRadius="6" FontSize="16" Padding="0"
-                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                    IsVisible="{Binding IsAdmin}"
-                                    Background="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
+                    <!-- Middle: group nav list on top (icon+label expanded / icon-only
+                         collapsed, single source for both states), swappable sub-panel below. -->
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Margin="10,8,10,8" Spacing="2">
+                            <Grid Height="40">
+                                <Button Command="{Binding SelectGroupCommand}" CommandParameter="dashboard"
+                                        HorizontalAlignment="Stretch" Height="40"
+                                        HorizontalContentAlignment="{Binding IsNavCollapsed, Converter={x:Static vm:BoolToAlignmentConverter.CenterWhenTrue}}"
+                                        VerticalContentAlignment="Center"
+                                        CornerRadius="9" Padding="10,0"
+                                        Background="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.BrandTintOrTransparent}}">
+                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <Path Data="{StaticResource IconDashboard}" Width="19" Height="19" Stretch="Uniform"
+                                                  StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                                  Stroke="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrSecondary}}" />
+                                        <TextBlock Text="Dashboard" FontSize="14.5" FontWeight="Medium"
+                                                   IsVisible="{Binding IsNavExpanded}"
+                                                   Foreground="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrSecondary}}"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                                <Border Width="3" HorizontalAlignment="Left" Margin="0,6,0,6" CornerRadius="0,3,3,0"
+                                        Background="{DynamicResource BrandPrimary}"
+                                        IsVisible="{Binding IsDashboardGroup}" />
+                            </Grid>
+                            <Grid Height="40">
+                                <Button Command="{Binding SelectGroupCommand}" CommandParameter="chat"
+                                        HorizontalAlignment="Stretch" Height="40"
+                                        HorizontalContentAlignment="{Binding IsNavCollapsed, Converter={x:Static vm:BoolToAlignmentConverter.CenterWhenTrue}}"
+                                        VerticalContentAlignment="Center"
+                                        CornerRadius="9" Padding="10,0"
+                                        Background="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.BrandTintOrTransparent}}">
+                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <Path Data="{StaticResource IconChat}" Width="19" Height="19" Stretch="Uniform"
+                                                  StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                                  Stroke="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrSecondary}}" />
+                                        <TextBlock Text="Chat" FontSize="14.5" FontWeight="Medium"
+                                                   IsVisible="{Binding IsNavExpanded}"
+                                                   Foreground="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrSecondary}}"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                                <Border Width="3" HorizontalAlignment="Left" Margin="0,6,0,6" CornerRadius="0,3,3,0"
+                                        Background="{DynamicResource BrandPrimary}"
+                                        IsVisible="{Binding IsChatGroup}" />
+                            </Grid>
+                            <Grid Height="40">
+                                <Button Command="{Binding SelectGroupCommand}" CommandParameter="knowledge"
+                                        HorizontalAlignment="Stretch" Height="40"
+                                        HorizontalContentAlignment="{Binding IsNavCollapsed, Converter={x:Static vm:BoolToAlignmentConverter.CenterWhenTrue}}"
+                                        VerticalContentAlignment="Center"
+                                        CornerRadius="9" Padding="10,0"
+                                        Background="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.BrandTintOrTransparent}}">
+                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <Path Data="{StaticResource IconKnowledge}" Width="19" Height="19" Stretch="Uniform"
+                                                  StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                                  Stroke="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrSecondary}}" />
+                                        <TextBlock Text="Knowledge" FontSize="14.5" FontWeight="Medium"
+                                                   IsVisible="{Binding IsNavExpanded}"
+                                                   Foreground="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrSecondary}}"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                                <Border Width="3" HorizontalAlignment="Left" Margin="0,6,0,6" CornerRadius="0,3,3,0"
+                                        Background="{DynamicResource BrandPrimary}"
+                                        IsVisible="{Binding IsKnowledgeGroup}" />
+                            </Grid>
+                            <Grid Height="40">
+                                <Button Command="{Binding SelectGroupCommand}" CommandParameter="agents"
+                                        HorizontalAlignment="Stretch" Height="40"
+                                        HorizontalContentAlignment="{Binding IsNavCollapsed, Converter={x:Static vm:BoolToAlignmentConverter.CenterWhenTrue}}"
+                                        VerticalContentAlignment="Center"
+                                        CornerRadius="9" Padding="10,0"
+                                        Background="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.BrandTintOrTransparent}}">
+                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <Path Data="{StaticResource IconAgents}" Width="19" Height="19" Stretch="Uniform"
+                                                  StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                                  Stroke="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrSecondary}}" />
+                                        <TextBlock Text="Agents" FontSize="14.5" FontWeight="Medium"
+                                                   IsVisible="{Binding IsNavExpanded}"
+                                                   Foreground="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrSecondary}}"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                                <Border Width="3" HorizontalAlignment="Left" Margin="0,6,0,6" CornerRadius="0,3,3,0"
+                                        Background="{DynamicResource BrandPrimary}"
+                                        IsVisible="{Binding IsAgentsGroup}" />
+                            </Grid>
+                            <Grid Height="40">
+                                <Button Command="{Binding SelectGroupCommand}" CommandParameter="workspace"
+                                        HorizontalAlignment="Stretch" Height="40"
+                                        HorizontalContentAlignment="{Binding IsNavCollapsed, Converter={x:Static vm:BoolToAlignmentConverter.CenterWhenTrue}}"
+                                        VerticalContentAlignment="Center"
+                                        CornerRadius="9" Padding="10,0"
+                                        Background="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.BrandTintOrTransparent}}">
+                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <Path Data="{StaticResource IconProjects}" Width="19" Height="19" Stretch="Uniform"
+                                                  StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                                  Stroke="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrSecondary}}" />
+                                        <TextBlock Text="Projects" FontSize="14.5" FontWeight="Medium"
+                                                   IsVisible="{Binding IsNavExpanded}"
+                                                   Foreground="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrSecondary}}"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                                <Border Width="3" HorizontalAlignment="Left" Margin="0,6,0,6" CornerRadius="0,3,3,0"
+                                        Background="{DynamicResource BrandPrimary}"
+                                        IsVisible="{Binding IsWorkspaceGroup}" />
+                            </Grid>
+                            <Grid Height="40" IsVisible="{Binding IsAdmin}">
+                                <Button Command="{Binding SelectGroupCommand}" CommandParameter="admin"
+                                        HorizontalAlignment="Stretch" Height="40"
+                                        HorizontalContentAlignment="{Binding IsNavCollapsed, Converter={x:Static vm:BoolToAlignmentConverter.CenterWhenTrue}}"
+                                        VerticalContentAlignment="Center"
+                                        CornerRadius="9" Padding="10,0"
+                                        Background="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.BrandTintOrTransparent}}">
+                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <Path Data="{StaticResource IconAdmin}" Width="19" Height="19" Stretch="Uniform"
+                                                  StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                                  Stroke="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrSecondary}}" />
+                                        <TextBlock Text="Admin" FontSize="14.5" FontWeight="Medium"
+                                                   IsVisible="{Binding IsNavExpanded}"
+                                                   Foreground="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrSecondary}}"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                                <Border Width="3" HorizontalAlignment="Left" Margin="0,6,0,6" CornerRadius="0,3,3,0"
+                                        Background="{DynamicResource BrandPrimary}"
+                                        IsVisible="{Binding IsAdminGroup}" />
+                            </Grid>
                         </StackPanel>
 
-                        <!-- Expanded: sub-panel content swaps based on SelectedGroup -->
+                        <Border DockPanel.Dock="Top" Height="1" Margin="10,0"
+                                Background="{DynamicResource SurfaceBorder}"
+                                IsVisible="{Binding IsNavExpanded}" />
+
+                        <!-- Sub-panel content swaps based on SelectedGroup — only shown expanded. -->
                         <Panel IsVisible="{Binding IsNavExpanded}">
                             <views:SidebarView DataContext="{Binding Sidebar}"
                                                IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsChatGroup}" />
@@ -277,7 +350,7 @@
                             <views:AdminPanelView DataContext="{Binding Sidebar}"
                                                  IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsAdminGroup}" />
                         </Panel>
-                    </Panel>
+                    </DockPanel>
                 </DockPanel>
             </Border>
 

@@ -432,12 +432,12 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
 .sidebar-search input {
     width: 100%;
-    padding: 7px 10px;
-    border-radius: 8px;
+    padding: 9px 12px;
+    border-radius: 9px;
     border: 1px solid var(--surface-border);
     background: var(--input-bg);
     color: var(--text-primary);
-    font-size: 12px;
+    font-size: 13.5px;
     box-sizing: border-box;
 }
 
@@ -724,55 +724,81 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     box-sizing: border-box;
 }
 
-/* ===== Nav buttons ===== */
+/* ===== Nav buttons =====
+   Sub-nav items (Knowledge/Agents/Projects/Admin panel contents) render
+   label-only — no icon column — so the extra left indent below stands in
+   for the icon gap the top-level .rail-icon rows use. */
 .nav-btn {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 10px;
     width: 100%;
-    padding: 7px 10px;
-    border-radius: 6px;
+    height: 40px;
+    padding: 0 10px 0 21px;
+    border-radius: 8px;
     background: transparent;
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: 13.5px;
     text-align: left;
-    margin: 1px 0;
+    margin: 2px 0;
     line-height: 1.3;
+    flex-shrink: 0;
 }
 
 .nav-btn:hover { background: var(--surface-hover); }
-.nav-btn.active { background: var(--surface-hover); font-weight: 600; }
+.nav-btn.active {
+    background: color-mix(in srgb, var(--brand-primary) 16%, transparent);
+    color: var(--brand-primary);
+    font-weight: 600;
+}
+.nav-btn.active::before {
+    content: "";
+    position: absolute;
+    left: -10px;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--brand-primary);
+}
 
-.nav-icon { font-size: 16px; width: 22px; text-align: center; line-height: 1; }
+.nav-icon { font-size: 16px; width: 22px; text-align: center; line-height: 1; flex-shrink: 0; }
 
 .nav-section-header {
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 700;
     color: var(--text-muted);
-    padding: 4px 4px 2px;
-    margin-top: 14px;
+    padding: 4px 4px 2px 11px;
+    margin-top: 18px;
     margin-bottom: 4px;
     text-transform: uppercase;
-    letter-spacing: 0.8px;
+    letter-spacing: 0.7px;
+    flex-shrink: 0;
 }
+/* First group header right under a panel's own title needs less top gap. */
+.rail-secondary-body .nav-section-header:first-of-type { margin-top: 8px; }
 
 /* ===== Recent sessions ===== */
 .no-sessions {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-secondary);
     padding: 6px 4px;
+    flex-shrink: 0;
 }
 
 .session-item {
+    position: relative;
     display: flex;
     align-items: center;
-    margin: 1px 0;
+    margin: 2px 0;
+    flex-shrink: 0;
 }
 
 .session-btn {
     flex: 1;
-    padding: 5px 8px;
-    border-radius: 6px;
+    padding: 6px 10px;
+    border-radius: 8px;
     background: transparent;
     color: var(--text-primary);
     text-align: left;
@@ -782,23 +808,23 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .session-btn:hover { background: var(--surface-hover); }
 
 .session-label {
-    font-size: 12px;
+    font-size: 13px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .session-time {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-muted);
 }
 
 .session-delete {
     background: transparent;
     color: var(--text-muted);
-    font-size: 10px;
-    padding: 4px;
-    border-radius: 4px;
+    font-size: 11px;
+    padding: 5px;
+    border-radius: 5px;
     margin-left: 2px;
     flex-shrink: 0;
 }
@@ -833,19 +859,20 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
 /* ===== Phase 69 — single sidebar: icon row + panel body + footer ===== */
 .rail-secondary {
-    width: 240px;
-    min-width: 240px;
+    width: 300px;
+    min-width: 300px;
     background: var(--sidebar-background);
     border-right: 1px solid var(--surface-border);
     height: 100vh;
     display: flex;
     flex-direction: column;
+    transition: width 0.18s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .rail-brand-row {
     display: flex;
     align-items: center;
-    height: 50px;
+    height: 60px;
     box-sizing: border-box;
     border-bottom: 1px solid var(--surface-border);
     flex-shrink: 0;
@@ -854,12 +881,12 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .rail-brand {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 0 8px 0 14px;
+    gap: 10px;
+    padding: 0 8px 0 16px;
     height: 100%;
     box-sizing: border-box;
     font-weight: 700;
-    font-size: 14px;
+    font-size: 15.5px;
     color: var(--text-primary);
     letter-spacing: 0.2px;
     background: transparent;
@@ -872,14 +899,14 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
 .rail-collapse-btn {
     flex-shrink: 0;
-    width: 26px;
-    height: 26px;
-    margin: 0 6px;
+    width: 30px;
+    height: 30px;
+    margin: 0 8px;
     background: transparent;
     border: none;
     color: var(--text-muted);
     cursor: pointer;
-    border-radius: 5px;
+    border-radius: 7px;
     font-size: 14px;
     display: flex;
     align-items: center;
@@ -888,20 +915,15 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 }
 .rail-collapse-btn:hover { color: var(--text-primary); background: var(--surface-hover); }
 
-.rail-secondary.collapsed { width: 48px; min-width: 48px; }
+.rail-secondary.collapsed { width: 76px; min-width: 76px; }
 .rail-secondary.collapsed .rail-brand { display: none; }
 .rail-secondary.collapsed .rail-brand-row { justify-content: center; }
 .rail-secondary.collapsed .rail-collapse-btn { margin: 0; }
 .rail-secondary.collapsed .rail-secondary-body { display: none; }
 .rail-secondary.collapsed .rail-footer { display: none; }
-.rail-secondary.collapsed .rail-icons-row {
-    flex-direction: column;
-    align-items: center;
-    height: auto;
-    padding: 4px 6px;
-    gap: 2px;
-}
-.rail-secondary.collapsed .rail-icon { flex: none; width: 36px; height: 36px; }
+.rail-secondary.collapsed .rail-icon { justify-content: center; gap: 0; padding: 0; }
+.rail-secondary.collapsed .rail-icon .rail-label { display: none; }
+.rail-secondary.collapsed .rail-icon.active::before { left: -8px; }
 
 .rail-brand:hover .rail-brand-text { color: var(--brand-primary); }
 
@@ -909,11 +931,11 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 7px;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
     background: var(--brand-primary);
-    font-size: 16px;
+    font-size: 15px;
     color: #FF9800;
     flex-shrink: 0;
 }
@@ -922,51 +944,87 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     line-height: 1;
 }
 
+/* Top-level group nav: Dashboard/Chat/Knowledge/Agents/Projects/Admin.
+   Always a vertical icon+label list — collapsed state just hides the label
+   and centers the icon, rather than reflowing into a separate layout. */
 .rail-icons-row {
     display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 6px;
+    flex-direction: column;
+    padding: 8px 10px;
     border-bottom: 1px solid var(--surface-border);
     gap: 2px;
+    flex-shrink: 0;
 }
 
 .rail-icon {
-    flex: 1;
-    height: 36px;
-    border-radius: 8px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    height: 42px;
+    padding: 0 10px;
+    border-radius: 9px;
     background: transparent;
     color: var(--text-secondary);
-    font-size: 16px;
+    font-size: 14.5px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    text-align: left;
+    flex-shrink: 0;
+    transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.rail-icon-glyph {
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
-    border: none;
-    transition: background-color 0.12s ease, color 0.12s ease;
+    width: 19px;
+    height: 19px;
+    flex-shrink: 0;
+}
+.rail-icon-glyph svg { width: 19px; height: 19px; }
+
+.rail-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .rail-icon:hover { background: var(--surface-hover); color: var(--text-primary); }
 
 .rail-icon.active {
+    background: color-mix(in srgb, var(--brand-primary) 16%, transparent);
+    color: var(--brand-primary);
+}
+.rail-icon.active::before {
+    content: "";
+    position: absolute;
+    left: -8px;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
     background: var(--brand-primary);
-    color: white;
 }
 
 .rail-secondary-body {
     flex: 1;
     overflow-y: auto;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .rail-secondary-header {
-    font-size: 11px;
+    font-size: 11.5px;
     font-weight: 700;
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 1px;
-    padding: 12px 12px 8px;
+    padding: 14px 14px 8px;
+    flex-shrink: 0;
 }
 
 /* Inside .rail-secondary-body, the chat panel renders an .sidebar wrapper.
@@ -981,17 +1039,18 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .rail-footer {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
+    gap: 10px;
+    padding: 12px 14px;
     border-top: 1px solid var(--surface-border);
+    flex-shrink: 0;
 }
 
 .rail-footer-settings {
     background: transparent;
     color: var(--text-secondary);
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
     font-size: 16px;
     display: flex;
     align-items: center;
@@ -1006,12 +1065,12 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     flex: 1;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     min-width: 0;
     background: transparent;
     border: none;
-    padding: 4px 6px;
-    border-radius: 6px;
+    padding: 5px 7px;
+    border-radius: 8px;
     cursor: pointer;
     text-align: left;
 }
@@ -1019,12 +1078,12 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .rail-footer-user:hover { background: var(--surface-hover); }
 
 .rail-footer-avatar {
-    width: 30px;
-    height: 30px;
-    border-radius: 15px;
+    width: 32px;
+    height: 32px;
+    border-radius: 16px;
     background: var(--brand-primary);
     color: white;
-    font-size: 13px;
+    font-size: 13.5px;
     font-weight: 600;
     display: flex;
     align-items: center;
@@ -1038,7 +1097,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 }
 
 .rail-footer-name {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
@@ -1046,7 +1105,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 }
 
 .rail-footer-sub {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-secondary);
     white-space: nowrap;
     overflow: hidden;

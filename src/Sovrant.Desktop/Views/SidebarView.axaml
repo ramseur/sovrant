@@ -8,23 +8,23 @@
     <DockPanel>
         <!-- Phase 69: shared sidebar footer (in MainWindow) owns the user info; Chat panel just renders chat tools. -->
         <ScrollViewer>
-            <StackPanel Margin="10,10,10,4">
-                <TextBlock Text="CHAT" FontSize="11" FontWeight="Bold"
+            <StackPanel Margin="12,10,12,4">
+                <TextBlock Text="CHAT" FontSize="11.5" FontWeight="Bold"
                            Foreground="{DynamicResource TextMuted}"
-                           Margin="2,2,0,10" />
+                           Margin="2,2,0,8" />
 
                 <!-- Search -->
-                <DockPanel Margin="0,0,0,8">
+                <DockPanel Margin="0,0,0,10">
                     <TextBox Watermark="Search conversations..."
-                             CornerRadius="8"
-                             Padding="8,5"
-                             FontSize="11" />
+                             CornerRadius="9"
+                             Padding="10,7"
+                             FontSize="13.5" />
                 </DockPanel>
 
                 <!-- Recent conversations (active sessions shown inline) -->
-                <TextBlock Text="RECENT" FontSize="9" FontWeight="SemiBold"
+                <TextBlock Text="RECENT" FontSize="10.5" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextSecondary}"
-                           Margin="4,4,0,4" />
+                           Margin="2,4,0,4" />
 
                 <ItemsControl ItemsSource="{Binding RecentSessions}">
                     <ItemsControl.ItemTemplate>
@@ -36,51 +36,51 @@
                                         Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).CancelActiveSessionCommand}"
                                         CommandParameter="{Binding SessionId}"
                                         IsVisible="{Binding IsRunning}"
-                                        FontSize="9" Padding="3,1" Margin="2,0,0,0"
+                                        FontSize="10" Padding="4,2" Margin="2,0,0,0"
                                         VerticalAlignment="Center"
                                         Background="Transparent"
                                         Foreground="{DynamicResource TextMuted}"
-                                        CornerRadius="4" ToolTip.Tip="Cancel" />
+                                        CornerRadius="5" ToolTip.Tip="Cancel" />
                                 <Button DockPanel.Dock="Right"
                                         Content="✕"
                                         Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).DeleteSessionCommand}"
                                         CommandParameter="{Binding SessionId}"
                                         IsVisible="{Binding !IsRunning}"
-                                        FontSize="9" Padding="3,1" Margin="2,0,0,0"
+                                        FontSize="10" Padding="4,2" Margin="2,0,0,0"
                                         VerticalAlignment="Center"
                                         Background="Transparent"
                                         Foreground="{DynamicResource TextMuted}"
-                                        CornerRadius="4" ToolTip.Tip="Delete session" />
+                                        CornerRadius="5" ToolTip.Tip="Delete session" />
 
                                 <Button Command="{Binding $parent[UserControl].((vm:SidebarViewModel)DataContext).ResumeSessionCommand}"
                                         CommandParameter="{Binding SessionId}"
                                         HorizontalAlignment="Stretch"
                                         HorizontalContentAlignment="Left"
-                                        Padding="8,3" CornerRadius="4"
+                                        Padding="10,6" CornerRadius="8"
                                         Background="Transparent">
-                                    <StackPanel Spacing="1">
+                                    <StackPanel Spacing="2">
                                         <DockPanel>
                                             <!-- Running indicator icon -->
                                             <TextBlock DockPanel.Dock="Left"
                                                        Text="{Binding ActiveInfo.StatusIcon}"
                                                        IsVisible="{Binding IsRunning}"
-                                                       FontSize="10"
+                                                       FontSize="11.5"
                                                        Foreground="{DynamicResource BrandPrimary}"
                                                        VerticalAlignment="Center"
-                                                       Margin="0,0,4,0" />
+                                                       Margin="0,0,5,0" />
                                             <TextBlock Text="{Binding Label}"
-                                                       FontSize="11"
+                                                       FontSize="13.5"
                                                        Foreground="{DynamicResource TextPrimary}"
                                                        TextTrimming="CharacterEllipsis" />
                                         </DockPanel>
                                         <!-- Active: elapsed time; Inactive: timestamp -->
                                         <TextBlock Text="{Binding ActiveInfo.ElapsedDisplay}"
                                                    IsVisible="{Binding IsRunning}"
-                                                   FontSize="9"
+                                                   FontSize="11"
                                                    Foreground="{DynamicResource BrandPrimary}" />
                                         <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:MMM d, HH:mm}'}"
                                                    IsVisible="{Binding !IsRunning}"
-                                                   FontSize="9"
+                                                   FontSize="11"
                                                    Foreground="{DynamicResource TextMuted}" />
                                     </StackPanel>
                                 </Button>
@@ -90,10 +90,10 @@
                 </ItemsControl>
 
                 <TextBlock Text="No recent conversations"
-                           FontSize="10"
+                           FontSize="12"
                            Foreground="{DynamicResource TextSecondary}"
                            IsVisible="{Binding !RecentSessions.Count}"
-                           Margin="4,0" />
+                           Margin="2,0" />
             </StackPanel>
         </ScrollViewer>
     </DockPanel>
