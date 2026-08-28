@@ -1,53 +1,49 @@
 # Design
 
-This folder is the design record for Sovrant's user-facing surfaces. It exists to let anyone — human or agent — **verify a design before and after it ships**, across every frontend, without having to run the app.
+This folder is the design record for Sovrant's user-facing surfaces. It exists to let anyone — human or agent — **verify a design before and after it ships**, without running the app.
 
-## Scope
+## Two files. That's the whole thing.
 
-- **Web** (`web/`) — Blazor Server app, port 5100.
-- **Desktop** (`desktop/`) — Avalonia app.
-- **CLI** (`cli/`) — not started yet. Add a folder here once CLI gets a real design pass; today it's explicitly out of scope per the README ("functional but actively being refined").
+- **`web.html`** — every Web screen.
+- **`desktop.html`** — every Desktop screen.
 
-Each platform folder holds **versioned, static HTML previews** — self-contained `.html` files that render the design with real interaction (nav switching, hover, light/dark, etc.) but no backend. They are not the app; they're a fast, shareable way to look at a screen's design in a browser and compare it against what's actually implemented in `src/Sovrant.Web` / `src/Sovrant.Desktop`.
+Open either in a browser; no build step. Pick a screen from the index on the left. Each entry is tagged with the pattern that renders it.
 
-## Versioning
+A third file will join them when the CLI gets a real design pass. Today it's out of scope — the README calls it "functional but actively being refined".
 
-Each platform folder is a flat list of versions: `v1.html`, `v2.html`, ... A new version is added whenever a screen or the shared shell (nav, top bar, etc.) gets a deliberate design pass — not for every implementation tweak. `v1` is never edited after `v2` exists; it stays as the historical record of what that revision looked like. If a review needs a specific screen instead of the whole shell, name it `v{n}-{screen}.html` (e.g. `v2-login.html`).
+## 21 screens, 5 patterns
 
-Before opening a new version, skim the changelog note at the top of the current one so you're not redoing a decision that was already made and reverted.
+The destinations behind the nav are not 21 designs. They're five patterns plus data:
+
+| Pattern | Screens | What it is |
+|---|---|---|
+| **Browse** | 13 | Searchable list beside a detail pane. Artifacts, Code Templates, Documents, Memory, Skills, Tools, Agents Library, Projects, Users, Workspaces, Providers, Platform Integrations, System Integrations. |
+| **Overview** | 2 | Stat tiles over an activity table. Dashboard (scoped to you), Command Center (scoped to everyone). |
+| **Settings** | 4 | Sectioned cards of labelled rows, each row one control plus the sentence explaining it. Settings, Governance, Trust Boundary, Diagnostics. |
+| **Conversation** | 1 | Chat. Genuinely its own shape — welcome state, thread, collapsed work strips, composer. |
+| **Entry** | 1 | Login. The only screen with no rail. |
+
+This is the point of the folder. Those pages were each built standalone — they share no layout classes today, which is exactly why they drift. Designing the pattern once and treating each screen as pattern + data is what stops it.
+
+**When adding a screen, use an existing pattern.** A new pattern needs a reason the existing four can't express it.
 
 ## Parity
 
-**Web and Desktop should match as closely as each platform allows.** Same metrics, same icons, same tokens, same treatments — a difference between them needs a reason rooted in the platform (what chrome the OS or browser owns, what the toolkit can express), not in one side simply having drifted. `web/v2.html` carries a parity table tracking where they agree and where they don't; keep it current as screens land.
+**Web and Desktop should match as closely as each platform allows.** `desktop.html` is generated from `web.html` with only the platform chrome swapped — browser tab strip and address bar become a native titlebar and window controls. A diff of the two files should show *only* those chrome lines, the title/heading, and the theme storage key. Anything else that differs is drift.
 
-## Current state
-
-**v1** (both platforms) — the left-nav redesign shipped in commit `7970ca3`: collapsible icon+label rail, real line icons replacing the old emoji glyphs, a left accent-bar for the active item, and Admin's 9 destinations grouped under Overview / Access / Safety / System. Still the current record for everything except the brand row.
-
-**v2** (both platforms) — brand row only. The product name was rendering twice on each platform: once in the chrome the platform owns (OS titlebar / browser tab), again in the rail immediately below. v2 removes the rail wordmark on both and grows the mark to 44px so it reads as a logo rather than a favicon. v2 also fixes the Web *record* — v1 drew the Web app in a window frame, which made it look like Desktop; Web previews now sit in browser chrome.
-
-**v3-login** (both platforms) — first screen pass. Login predates the shell's design system, so it carried its own radii (5px on Web, 3px on Desktop), its own input heights (~34px), and a bare text heading where the product now leads with a mark. v3 puts it on the shell's scale — 40px inputs at 9px radius, 44px primary button, mark leading — and designs the error, busy, and registration-closed states explicitly.
-
-Together these are the baseline the rest of the app's design should extend, not fight — new screens should read as the same product as this shell, not a different one bolted on.
-
-**Parity is currently clean.** Every row in `web/v2.html`'s table reads Matched. Web's `.rail-icon` dropped 42px → 40px to close the one real gap; the footer difference that table once flagged turned out to be an artifact of inconsistent mock data, not a code difference.
+Current state: 47 changed lines, all accounted for by that list.
 
 ## Open decisions
 
-- **The mark is a letter, not a logo.** An "S" in a rounded purple square. v2 made it the only brand element in the shell and v3 puts it at 56px dead-centre on the first screen a new user sees. Worth drawing a real one before these ship.
-- **Login theme on a fresh machine.** `App.razor` hardcodes `data-theme="dark"` and JS overrides from `localStorage`. Login renders before any user preference loads, so it shows whatever the browser last stored — decide whether it should follow `prefers-color-scheme`.
+- **The mark is a letter, not a logo.** An "S" in a rounded purple square. It's now the only brand element in the shell, and at 54px it's the first thing a new user sees on Login. Worth drawing a real one.
+- **Login theme on a fresh machine.** `App.razor` hardcodes `data-theme="dark"` and JS overrides from `localStorage`. Login renders before user preferences load, so it shows whatever the browser last stored — decide whether it should follow `prefers-color-scheme`.
 
-## Bugs found by this pass, not yet fixed
+## Bugs this pass found, not yet fixed
 
-- `LoginWindow.axaml` binds `Background="{DynamicResource BackgroundBrush}"` — that key exists in neither `SovrantDarkColors.axaml` nor `SovrantLightColors.axaml`. `DynamicResource` fails silently, so the Desktop login window never receives its themed background. Should be `SurfaceBackground`.
+- `LoginWindow.axaml` binds `Background="{DynamicResource BackgroundBrush}"` — a key defined in neither `SovrantDarkColors.axaml` nor `SovrantLightColors.axaml`. `DynamicResource` fails silently, so the Desktop login window never receives its themed background. Should be `SurfaceBackground`.
 - The same file hardcodes `Foreground="Red"` for error text instead of the `StatusFail` token, so it ignores the theme.
 
-## What's next
+## Already shipped from this work
 
-Work through each destination behind the nav — Dashboard, Chat, Knowledge's six pages, Agents, Projects, Admin's nine pages, Settings. Keep the shell's type scale, spacing rhythm, icon style, and color tokens rather than introducing new ones per screen.
-
-## How to use this folder
-
-1. Before touching a screen's real implementation, either open the latest version here to confirm what's already agreed, or add a new version if the design is changing.
-2. Preview files are just HTML — open directly in a browser, no build step.
-3. Once a design is implemented for real, leave the preview file as-is (it's a historical snapshot) and note in the next version's header what changed and why, if anything drifted from the preview during implementation.
+- The left-nav redesign (commit `7970ca3`): collapsible rail, real line icons replacing emoji, left accent bar for the active item, Admin's nine destinations grouped under Overview / Access / Safety / System.
+- Web's `.rail-icon` dropped 42px → 40px to match Desktop, closing the one real parity gap.

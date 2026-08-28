@@ -1,0 +1,554 @@
+<meta charset="utf-8">
+<title>Sovrant Desktop — Design</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --brand:#6D52C6; --brand-soft:color-mix(in srgb,#6D52C6 14%,transparent);
+    --bg:#F5F5F5; --rail:#EBEBEB; --card:#FFFFFF; --border:#D0D0D0; --hover:#E0E0E0;
+    --inp:#FFFFFF; --inpb:#D0D0D0;
+    --t1:#1A1A1A; --t2:#666666; --t3:#999999;
+    --page:#e4e2df; --ring:color-mix(in srgb,#6D52C6 45%,transparent);
+    --ok:#3E9B54; --warn:#E0A33E; --fail:#D2453C;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --brand-soft:color-mix(in srgb,#6D52C6 22%,transparent);
+    --bg:#1A1A1A; --rail:#141414; --card:#2A2A2A; --border:#3A3A3A; --hover:#333333;
+    --inp:#2A2A2A; --inpb:#3A3A3A;
+    --t1:#FFFFFF; --t2:#999999; --t3:#666666;
+    --page:#0f0f10; --ring:color-mix(in srgb,#6D52C6 55%,transparent);
+    --ok:#4CAF50; --warn:#E0A33E; --fail:#F44336;
+  }}
+  :root[data-theme="dark"]{
+    --brand-soft:color-mix(in srgb,#6D52C6 22%,transparent);
+    --bg:#1A1A1A; --rail:#141414; --card:#2A2A2A; --border:#3A3A3A; --hover:#333333;
+    --inp:#2A2A2A; --inpb:#3A3A3A;
+    --t1:#FFFFFF; --t2:#999999; --t3:#666666;
+    --page:#0f0f10; --ring:color-mix(in srgb,#6D52C6 55%,transparent);
+    --ok:#4CAF50; --warn:#E0A33E; --fail:#F44336;
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--t1);font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1420px;margin:0 auto;padding:28px 22px 70px}
+  a{color:var(--brand)}
+
+  /* ── doc chrome ── */
+  .top{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:6px}
+  .top h1{font-size:21px;font-weight:600;letter-spacing:-.01em;margin:0 0 5px}
+  .top p{margin:0;max-width:74ch;color:var(--t2);font-size:13px;line-height:1.55}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--brand);background:var(--brand-soft);border-radius:999px;padding:3px 10px;margin-bottom:9px}
+  .cbtn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--t1);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;transition:background .12s,border-color .12s}
+  .cbtn:hover{background:var(--hover)} .cbtn.on{border-color:var(--brand);color:var(--brand);background:var(--brand-soft)}
+  code{font-family:'JetBrains Mono',monospace;font-size:11.5px;background:var(--hover);padding:1px 5px;border-radius:4px}
+
+  .layout{display:grid;grid-template-columns:236px 1fr;gap:22px;margin-top:22px;align-items:start}
+  @media(max-width:1000px){.layout{grid-template-columns:1fr}}
+
+  /* ── screen index ── */
+  .index{position:sticky;top:20px;border:1px solid var(--border);border-radius:12px;background:var(--card);padding:10px;max-height:calc(100vh - 46px);overflow:auto}
+  .idx-group{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--t3);padding:12px 10px 5px}
+  .idx-group:first-child{padding-top:4px}
+  .idx{display:flex;align-items:center;gap:8px;width:100%;border:none;background:transparent;color:var(--t2);font:inherit;font-size:13px;text-align:left;padding:0 10px;height:34px;border-radius:7px;cursor:pointer;transition:background .12s,color .12s}
+  .idx:hover{background:var(--hover);color:var(--t1)}
+  .idx.on{background:var(--brand-soft);color:var(--brand);font-weight:600}
+  .idx .tagp{margin-left:auto;font-size:9.5px;font-weight:700;letter-spacing:.04em;color:var(--t3);text-transform:uppercase}
+  .idx.on .tagp{color:var(--brand)}
+
+  .stagearea{min-width:0}
+  .sheet{border:1px solid var(--border);border-radius:12px;background:var(--card);padding:14px 16px;margin-bottom:14px;font-size:12.5px;color:var(--t2);line-height:1.6}
+  .sheet b{color:var(--t1)}
+  .sheet .patt{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--brand);background:var(--brand-soft);border-radius:5px;padding:2px 7px;margin-right:6px}
+
+  /* ── browser chrome ── */
+  .browser{display:flex;flex-direction:column;height:700px;border-radius:10px 10px 8px 8px;overflow:hidden;border:1px solid var(--border);box-shadow:0 18px 44px -24px rgba(0,0,0,.4);background:var(--chrome)}
+  .titlebar{height:32px;background:var(--rail);border-bottom:1px solid var(--border);display:flex;align-items:center;padding-left:10px;gap:9px;flex-shrink:0}
+  .tico{width:15px;height:15px;border-radius:4px;background:var(--brand);flex-shrink:0}
+  .ttl2{font-size:12px;color:var(--t2)}
+  .wctl{margin-left:auto;display:flex;height:100%}
+  .wctl button{width:40px;height:100%;border:none;background:transparent;color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .1s,color .1s}
+  .wctl button:hover{background:var(--hover);color:var(--t1)}
+  .wctl button.cl:hover{background:#E81123;color:#fff}
+  .wctl svg{width:10px;height:10px}
+
+  .view{flex:1;display:flex;min-height:0;background:var(--bg);border-top:1px solid var(--border)}
+
+  /* ── app shell ── */
+  .rail{display:flex;flex-direction:column;background:var(--rail);border-right:1px solid var(--border);width:270px;flex-shrink:0}
+  .brandrow{display:flex;align-items:center;height:68px;padding:0 12px 0 14px;flex-shrink:0;border-bottom:1px solid var(--border)}
+  .mark{width:44px;height:44px;border-radius:12px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:21px;letter-spacing:-.02em;flex-shrink:0}
+  .ctog{margin-left:auto;width:30px;height:30px;border-radius:8px;border:none;background:transparent;color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .ctog:hover{background:var(--hover);color:var(--t1)} .ctog svg{width:15px;height:15px}
+
+  .navg{padding:8px 10px;display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+  .nav{position:relative;display:flex;align-items:center;gap:12px;height:40px;border-radius:9px;padding:0 10px;color:var(--t2);cursor:pointer;font-size:14px;font-weight:500;background:transparent;border:none;width:100%;text-align:left;font-family:inherit;flex-shrink:0;transition:background .12s,color .12s}
+  .nav:hover{background:var(--hover);color:var(--t1)} .nav svg{width:19px;height:19px;flex-shrink:0}
+  .nav.on{background:var(--brand-soft);color:var(--brand)}
+  .nav.on::before{content:"";position:absolute;left:-8px;top:6px;bottom:6px;width:3px;border-radius:0 3px 3px 0;background:var(--brand)}
+  .rdiv{height:1px;background:var(--border);margin:4px 10px;flex-shrink:0}
+  .slab{padding:10px 21px 6px;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--t3);flex-shrink:0}
+  .sublist{flex:1;overflow-y:auto;padding:2px 10px 10px;display:flex;flex-direction:column;gap:2px;min-height:0}
+  .sublist::-webkit-scrollbar{width:6px}.sublist::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+  .sub{display:flex;align-items:center;height:38px;border-radius:8px;padding:0 10px 0 21px;color:var(--t2);font-size:13px;cursor:pointer;background:transparent;border:none;width:100%;text-align:left;font-family:inherit;white-space:nowrap;position:relative;flex-shrink:0;transition:background .12s,color .12s}
+  .sub:hover{background:var(--hover);color:var(--t1)}
+  .sub.on{color:var(--brand);font-weight:600;background:var(--brand-soft)}
+  .sub.on::before{content:"";position:absolute;left:-10px;top:6px;bottom:6px;width:3px;border-radius:0 3px 3px 0;background:var(--brand)}
+  .sgl{margin-top:13px;padding:0 21px 4px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--t3);flex-shrink:0}
+  .sublist .sgl:first-child{margin-top:3px}
+  .foot{margin-top:auto;border-top:1px solid var(--border);padding:9px 12px;flex-shrink:0}
+  .frow{display:flex;align-items:center;gap:10px;height:44px;border-radius:9px;padding:0 8px;cursor:pointer}
+  .frow:hover{background:var(--hover)}
+  .av{width:29px;height:29px;border-radius:50%;background:linear-gradient(135deg,var(--brand),#4a3789);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+  .fn{font-size:12.5px;font-weight:600} .fs{font-size:11px;color:var(--t3)}
+
+  /* ── content ── */
+  .content{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+  .ctx{height:46px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:9px;padding:0 16px;flex-shrink:0;font-size:12px;color:var(--t2)}
+  .chip{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 10px;border-radius:8px;border:1px solid var(--border);background:var(--card);font-size:12px;color:var(--t1)}
+  .chip .dot{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+  .chip .mono{font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:500}
+  .chip .mut{color:var(--t3)}
+  .body{flex:1;overflow:auto;min-height:0;display:flex;flex-direction:column}
+
+  /* page header (shared by every pattern) */
+  .ph{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:20px 22px 14px;flex-shrink:0}
+  .ph h2{margin:0 0 3px;font-size:19px;font-weight:600;letter-spacing:-.01em}
+  .ph .sub{font-size:12.5px;color:var(--t2)}
+  .ph .acts{display:flex;gap:8px;flex-shrink:0}
+  .btn{height:34px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--t1);font:inherit;font-size:12.5px;font-weight:500;padding:0 13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:background .12s,filter .12s}
+  .btn:hover{background:var(--hover)}
+  .btn svg{width:14px;height:14px}
+  .btn.pri{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+  .btn.pri:hover{filter:brightness(1.08);background:var(--brand)}
+  .btn.ghost{background:transparent;border-color:transparent;color:var(--t2)}
+  .btn.ghost:hover{background:var(--hover);color:var(--t1)}
+
+  .toolbar{padding:0 22px 14px;display:flex;gap:9px;flex-shrink:0}
+  .search{flex:1;display:flex;align-items:center;gap:9px;height:36px;border-radius:9px;background:var(--inp);border:1px solid var(--inpb);padding:0 11px;color:var(--t3)}
+  .search svg{width:15px;height:15px;flex-shrink:0}
+  .search input{border:none;background:none;outline:none;font:inherit;font-size:13px;color:var(--t1);width:100%}
+  .search input::placeholder{color:var(--t3)}
+
+  /* pattern: BROWSE (list + detail) */
+  .split{flex:1;display:grid;grid-template-columns:340px minmax(0,1fr);gap:0;min-height:0;border-top:1px solid var(--border)}
+  .split>*{min-width:0}
+  .mlist{overflow:auto;border-right:1px solid var(--border);padding:10px;display:flex;flex-direction:column;gap:7px}
+  .mlist::-webkit-scrollbar{width:7px}.mlist::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+  .item{border:1px solid var(--border);border-radius:10px;background:var(--card);padding:11px 12px;cursor:pointer;display:flex;flex-direction:column;gap:5px;flex-shrink:0;transition:border-color .12s,background .12s}
+  .item:hover{border-color:color-mix(in srgb,var(--brand) 45%,var(--border))}
+  .item.on{border-color:var(--brand);background:var(--brand-soft)}
+  .item .r1{display:flex;align-items:center;gap:8px}
+  .item .nm{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item .nm.mono{font-family:'JetBrains Mono',monospace;font-weight:500;color:var(--brand)}
+  .item .meta{font-size:11.5px;color:var(--t3);display:flex;gap:8px;flex-wrap:wrap}
+  .badge{font-size:9.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:2px 7px;border-radius:999px;flex-shrink:0;margin-left:auto;border:1px solid transparent}
+  .badge.b-brand{background:var(--brand-soft);color:var(--brand);border-color:color-mix(in srgb,var(--brand) 35%,transparent)}
+  .badge.b-ok{background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok);border-color:color-mix(in srgb,var(--ok) 38%,transparent)}
+  .badge.b-warn{background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 38%,transparent)}
+  .badge.b-mut{background:var(--hover);color:var(--t2);border-color:var(--border)}
+  .detail{overflow:auto;padding:22px}
+  .empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--t3);text-align:center;padding:30px}
+  .empty svg{width:34px;height:34px;opacity:.45}
+  .empty .h{font-size:14px;color:var(--t2);font-weight:500}
+  .empty .p{font-size:12.5px;max-width:38ch;line-height:1.5}
+  .dhead{display:flex;align-items:flex-start;gap:12px;margin-bottom:18px}
+  .dhead h3{margin:0 0 4px;font-size:17px;font-weight:600}
+  .dhead .dsub{font-size:12.5px;color:var(--t2)}
+  .kv{display:grid;grid-template-columns:130px 1fr;gap:9px 16px;font-size:13px;padding:14px 0;border-top:1px solid var(--border)}
+  .kv dt{color:var(--t2);font-size:12.5px}
+  .kv dd{margin:0;font-family:'JetBrains Mono',monospace;font-size:12px}
+
+  /* pattern: OVERVIEW (stats + activity) */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px;padding:0 22px 16px;flex-shrink:0}
+  .stat{border:1px solid var(--border);border-radius:11px;background:var(--card);padding:13px 15px}
+  .stat .lab{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);margin-bottom:6px}
+  .stat .val{font-size:26px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
+  .stat .val.zero{color:var(--t3)}
+  .tablewrap{margin:0 22px 22px;border:1px solid var(--border);border-radius:11px;background:var(--card);overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);padding:10px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
+  td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:var(--hover)}
+  td.num{font-variant-numeric:tabular-nums;color:var(--t2);white-space:nowrap}
+  td.mut{color:var(--t3);white-space:nowrap}
+  .ttl{display:flex;align-items:center;gap:8px;font-weight:500}
+  .lock{width:12px;height:12px;color:var(--t3);flex-shrink:0}
+
+  /* pattern: SETTINGS (sectioned form) */
+  .form{max-width:760px;padding:0 22px 26px;display:flex;flex-direction:column;gap:16px}
+  .fsec{border:1px solid var(--border);border-radius:11px;background:var(--card);overflow:hidden}
+  .fsec > h4{margin:0;font-size:13px;font-weight:600;padding:13px 16px;border-bottom:1px solid var(--border)}
+  .frowi{display:flex;align-items:center;gap:16px;padding:13px 16px;border-bottom:1px solid var(--border)}
+  .frowi:last-child{border-bottom:none}
+  .frowi .fl{flex:1;min-width:0}
+  .frowi .ft{font-size:13px;font-weight:500;margin-bottom:2px}
+  .frowi .fd{font-size:12px;color:var(--t2);line-height:1.45}
+  .inpb{height:34px;border-radius:8px;border:1px solid var(--inpb);background:var(--inp);color:var(--t1);font:inherit;font-size:13px;padding:0 11px;outline:none;min-width:200px}
+  .inpb:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--ring)}
+  .sw{width:38px;height:22px;border-radius:999px;background:var(--border);position:relative;cursor:pointer;flex-shrink:0;transition:background .15s}
+  .sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s}
+  .sw.on{background:var(--brand)} .sw.on::after{transform:translateX(16px)}
+
+  /* pattern: CONVERSATION */
+  .convo{flex:1;display:flex;flex-direction:column;min-height:0}
+  .msgs{flex:1;overflow:auto;padding:22px;display:flex;flex-direction:column;gap:16px}
+  .welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px}
+  .welcome .wm{width:52px;height:52px;border-radius:14px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:25px;font-weight:700;margin-bottom:6px}
+  .welcome h3{margin:0;font-size:21px;font-weight:600;letter-spacing:-.01em}
+  .welcome p{margin:0 0 14px;font-size:13px;color:var(--t2)}
+  .sugg{display:grid;grid-template-columns:1fr 1fr;gap:9px;width:100%;max-width:560px}
+  .sg{border:1px solid var(--border);border-radius:10px;background:var(--card);padding:11px 13px;font-size:12.5px;cursor:pointer;display:flex;gap:9px;align-items:flex-start;line-height:1.4;text-align:left;transition:border-color .12s,background .12s}
+  .sg:hover{border-color:var(--brand);background:var(--brand-soft)}
+  .sg svg{width:15px;height:15px;color:var(--brand);flex-shrink:0;margin-top:1px}
+  .msg{display:flex;gap:11px;max-width:min(760px,100%)}
+  .msg .who{width:28px;height:28px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
+  .msg.u .who{background:linear-gradient(135deg,var(--brand),#4a3789)}
+  .msg.a .who{background:var(--border);color:var(--t2)}
+  .msg .bub{font-size:13.5px;line-height:1.6}
+  .msg.u{align-self:flex-end;flex-direction:row-reverse}
+  .msg.u .bub{background:var(--brand);color:#fff;padding:10px 14px;border-radius:12px 12px 4px 12px}
+  .strip{border:1px solid var(--border);border-radius:9px;background:var(--card);padding:8px 11px;font-size:12px;color:var(--t2);display:flex;align-items:center;gap:9px;margin:8px 0;cursor:pointer;max-width:420px}
+  .strip:hover{background:var(--hover)}
+  .strip .cnt{font-weight:600;color:var(--t1)}
+  .strip svg{width:13px;height:13px;flex-shrink:0}
+  .composer{border-top:1px solid var(--border);padding:12px 22px 14px;flex-shrink:0;background:var(--bg)}
+  .cbox{border:1px solid var(--inpb);border-radius:12px;background:var(--inp);padding:11px 13px;display:flex;flex-direction:column;gap:9px}
+  .cbox:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px var(--ring)}
+  .cbox .ta{font-size:13.5px;color:var(--t3);min-height:20px}
+  .cbar{display:flex;align-items:center;gap:8px}
+  .cbar .sp{flex:1}
+  .ib{width:30px;height:30px;border-radius:8px;border:none;background:transparent;color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .ib:hover{background:var(--hover);color:var(--t1)} .ib svg{width:16px;height:16px}
+  .send{width:32px;height:32px;border-radius:9px;border:none;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .send svg{width:16px;height:16px}
+
+  /* pattern: ENTRY (login) */
+  .entry{flex:1;display:flex;align-items:center;justify-content:center;padding:34px 20px;background:var(--bg)}
+  .lcard{width:396px;max-width:100%;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:30px;display:flex;flex-direction:column;gap:17px;box-shadow:0 4px 20px -8px rgba(0,0,0,.14)}
+  .lhead{display:flex;flex-direction:column;align-items:center;gap:11px}
+  .lhead .lm{width:54px;height:54px;border-radius:15px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:26px}
+  .lhead .lw{font-size:19px;font-weight:700;letter-spacing:-.01em}
+  .lhead .ls{font-size:13px;color:var(--t2);margin-top:-5px}
+  .fld{display:flex;flex-direction:column;gap:6px}
+  .fld label{font-size:12.5px;font-weight:500;color:var(--t2)}
+  .li{height:40px;border-radius:9px;border:1px solid var(--inpb);background:var(--inp);color:var(--t1);font:inherit;font-size:14px;padding:0 12px;outline:none;width:100%}
+  .li:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--ring)}
+  .lbtn{height:44px;border-radius:9px;border:none;background:var(--brand);color:#fff;font:inherit;font-size:14.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+  .lbtn:hover{filter:brightness(1.08)}
+  .lbtn.sec{background:transparent;color:var(--t1);border:1px solid var(--border);font-weight:500}
+  .lbtn.sec:hover{background:var(--hover);filter:none}
+  .lrule{display:flex;align-items:center;gap:12px;color:var(--t3);font-size:12.5px}
+  .lrule::before,.lrule::after{content:"";flex:1;height:1px;background:var(--border)}
+  .lerr{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;line-height:1.45;color:var(--fail);background:color-mix(in srgb,var(--fail) 10%,transparent);border:1px solid color-mix(in srgb,var(--fail) 32%,transparent);padding:9px 11px;border-radius:9px}
+  .lerr svg{width:15px;height:15px;flex-shrink:0;margin-top:1px}
+
+  .patterns{margin-top:26px;border:1px solid var(--border);border-radius:12px;background:var(--card);padding:18px 20px}
+  .patterns h2{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--t2);margin:0 0 13px}
+  .patterns table{font-size:12.5px}
+  .patterns th{padding:0 10px 8px 0}
+  .patterns td{padding:8px 10px 8px 0;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.45}
+  .patterns tr:last-child td{border-bottom:none}
+  .patterns td.n{color:var(--brand);font-weight:600;white-space:nowrap}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div>
+      <span class="pill">Desktop &middot; Design</span>
+      <h1>Sovrant Desktop</h1>
+      <p>Every screen in one page, matching <a href="web.html">web.html</a> pattern for pattern. Same five patterns, same metrics, same data — the only difference is the one the platform forces: a native titlebar instead of browser chrome and an address bar. Anything that diverges beyond that is drift, not design.</p>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="cbtn" onclick="setTheme('light')">Light</button>
+      <button class="cbtn" onclick="setTheme('dark')">Dark</button>
+      <button class="cbtn on" id="railBtn" onclick="toggleRail()">Collapse rail</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="index" id="index"></div>
+    <div class="stagearea">
+      <div class="sheet" id="sheet"></div>
+      <div class="browser">
+        <div class="titlebar">
+          <div class="tico"></div><span class="ttl2" id="wintitle">Sovrant</span>
+          <div class="wctl">
+            <button title="Minimize"><svg viewBox="0 0 10 10" stroke="currentColor" stroke-width="1"><line x1="0" y1="5" x2="10" y2="5"/></svg></button>
+            <button title="Maximize"><svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1"><rect x="0.5" y="0.5" width="9" height="9"/></svg></button>
+            <button class="cl" title="Close"><svg viewBox="0 0 10 10" stroke="currentColor" stroke-width="1"><line x1="0" y1="0" x2="10" y2="10"/><line x1="10" y1="0" x2="0" y2="10"/></svg></button>
+          </div>
+        </div>
+        <div class="view" id="view"></div>
+      </div>
+
+      <div class="patterns">
+        <h2>The five patterns — identical to Web</h2>
+        <table>
+          <tr><th style="width:1%">Pattern</th><th style="width:1%">Screens</th><th>Covers</th></tr>
+          <tr><td class="n">Browse</td><td class="num">13</td><td>Artifacts, Code Templates, Documents, Memory, Skills, Tools, Agents Library, Projects, Users, Workspaces, Providers, Platform Integrations, System Integrations — a searchable list beside a detail pane. Same header, same toolbar, same empty state; only the item card and the detail fields differ.</td></tr>
+          <tr><td class="n">Overview</td><td class="num">2</td><td>Dashboard, Command Center — a row of stat tiles over an activity table. Identical structure; Dashboard is scoped to you, Command Center to everyone.</td></tr>
+          <tr><td class="n">Settings</td><td class="num">4</td><td>Settings, Governance, Trust Boundary, Diagnostics — sectioned cards of labelled rows, each row a control with a description.</td></tr>
+          <tr><td class="n">Conversation</td><td class="num">1</td><td>Chat — genuinely its own shape: welcome state, message thread, collapsed work strips, composer.</td></tr>
+          <tr><td class="n">Entry</td><td class="num">1</td><td>Login — the only screen with no rail.</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const I = {
+  dash:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  chat:'<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>',
+  know:'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  agents:'<rect x="4" y="7" width="16" height="13" rx="2.5"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/><line x1="9" y1="13" x2="9" y2="13.01"/><line x1="15" y1="13" x2="15" y2="13.01"/><path d="M9 17h6"/>',
+  proj:'<path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2.5h8.5A1.5 1.5 0 0 1 21 10v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18z"/>',
+  admin:'<path d="M12 2l8 3.5v6c0 5-3.4 8.9-8 10.5-4.6-1.6-8-5.5-8-10.5v-6z"/>',
+  search:'<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>', refresh:'<path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/>',
+  lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  box:'<path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/>',
+  send:'<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
+  clip:'<path d="M21.4 11.05 12.25 20.2a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 0 1 5.65 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+  chev:'<polyline points="9 18 15 12 9 6"/>', warn:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17.01"/>'
+};
+const sv = (p,w) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w||1.9}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+
+/* group -> rail sub-nav */
+const GROUPS = {
+  dashboard:{icon:I.dash,label:'Dashboard',subs:[]},
+  chat:{icon:I.chat,label:'Chat',subs:null},
+  knowledge:{icon:I.know,label:'Knowledge',subs:['artifacts','templates','documents','memory','skills','tools']},
+  agents:{icon:I.agents,label:'Agents',subs:['agentlib','orchestration']},
+  projects:{icon:I.proj,label:'Projects',subs:['projects']},
+  admin:{icon:I.admin,label:'Admin',subs:['command','users','workspaces','providers','governance','trust','diagnostics','platformint','systemint']}
+};
+const ADMIN_GROUPS = {command:'Overview',users:'Access',governance:'Safety',diagnostics:'System'};
+
+const S = {
+  login:{g:null,p:'Entry',t:'Login',url:'/login',
+    note:'The only screen with no rail. Mark leads, wordmark supports; controls sit on the shell scale (40px inputs, 9px radius, 44px primary).'},
+  dashboard:{g:'dashboard',p:'Overview',t:'Dashboard',url:'/dashboard',sub:"Your activity across every workspace you belong to.",
+    stats:[['My missions',0],['My team runs',0],['My agent runs',1],['My sessions',14],['Shared (public)',1],['Claws',0]],
+    note:'Scoped to you. Command Center is the same pattern scoped to everyone — one design, two data sources.'},
+  chat:{g:'chat',p:'Conversation',t:'Chat',url:'/',note:'The one genuinely bespoke shape. Welcome state until the first message, then thread + collapsed work strips (Phase 126) + composer.'},
+  artifacts:{g:'knowledge',p:'Browse',t:'Artifacts',url:'/artifacts',sub:'1 artifact',
+    items:[{n:'finance-chatbot-customization-plan.md',mono:1,b:['5.0 KB','text/markdown','2026-06-03'],tag:null}],
+    acts:[['Download .zip',0],['Open folder',0]],
+    note:'The Browse pattern at its simplest — file-ish rows, no badges, actions on the detail pane.'},
+  templates:{g:'knowledge',p:'Browse',t:'Code Templates',url:'/guidelines',sub:'21 templates',
+    items:[{n:'dotnet-webapi',mono:1,b:['C#','.NET 10'],tag:['Built-in','b-mut']},{n:'node-express',mono:1,b:['TypeScript','Node 22'],tag:['Built-in','b-mut']},{n:'rust-axum',mono:1,b:['Rust','1.83'],tag:['Built-in','b-mut']}],
+    note:'Same pattern, different card contents — a language chip instead of a file size.'},
+  documents:{g:'knowledge',p:'Browse',t:'Documents',url:'/documents',sub:'8 templates',
+    items:[{n:'Statement of Work',b:['DB-backed','Editable'],tag:['Standard','b-mut']},{n:'Loan Amortization',b:['Excel','C#'],tag:['Built-in','b-brand']}],
+    note:'Admin can edit DB-backed templates in place; C#-only ones are read-only. The badge carries that, not a separate screen.'},
+  memory:{g:'knowledge',p:'Browse',t:'Memory',url:'/memory',sub:'12 entries',
+    items:[{n:'Prefers concise answers',b:['user','2026-08-02'],tag:['Private','b-mut']},{n:'Sovrant uses BSL 1.1',b:['project','2026-04-29'],tag:['Shared','b-ok']}],
+    note:'Privacy is a badge on the row, per the per-record privacy toggles already in the product.'},
+  skills:{g:'knowledge',p:'Browse',t:'Skills',url:'/skills',sub:'32 built-in skills',
+    items:[{n:'verification-loop',mono:1,b:['refactor-cleaner'],tag:['Built-in','b-mut']},{n:'search-first',mono:1,b:['researcher'],tag:['Built-in','b-mut']}],
+    note:'Descriptions enriched in Phase 114 (V044) are what the detail pane shows.'},
+  tools:{g:'knowledge',p:'Browse',t:'Tools',url:'/tools',sub:'58 runtime tools',
+    items:[{n:'CodeValidateTool',mono:1,b:['quality gates'],tag:['Read-only','b-mut']},{n:'WebSearchTool',mono:1,b:['network'],tag:['Read-only','b-mut']}],
+    note:'Read-only on Desktop by design — the badge says so rather than the screen behaving differently.'},
+  agentlib:{g:'agents',p:'Browse',t:'Agents',url:'/agents',sub:'25 agents',
+    acts:[['New',1]],
+    items:[{n:'architect',mono:1,b:['Planner','Read, Grep, Glob'],tag:['High','b-brand']},{n:'code-reviewer',mono:1,b:['Reviewer','Read, Grep, Glob'],tag:['High','b-brand']},{n:'coder',mono:1,b:['Coder','All tools'],tag:['Standard','b-mut']}],
+    note:'Tier is the only thing that needed a new badge colour; everything else is the shared card.'},
+  orchestration:{g:'agents',p:'Settings',t:'Orchestration',url:'/orchestration',
+    secs:[['Team run profile',[['Max parallel agents','How many agents may run at once.','n:4'],['Fail fast','Stop the run when any agent fails.','sw:1']]],['Swarm',[['Decomposition depth','How far a task is broken down.','n:3']]]],
+    note:'Closer to Settings than to Browse — sectioned controls, not a list.'},
+  projects:{g:'projects',p:'Browse',t:'Projects',url:'/projects',sub:'0 projects',
+    acts:[['New project',1]], empty:1,
+    note:'Shown in its empty state, which is the state most new users actually meet. The Browse empty state does the explaining.'},
+  command:{g:'admin',p:'Overview',t:'Command Center',url:'/command',sub:'What is Sovrant doing right now?',
+    stats:[['Missions',0],['Team runs',0],['Agent runs',0],['Sessions',2],['Claws',0]],
+    note:'Same pattern as Dashboard, everyone\'s activity instead of yours. Two screens, one design.'},
+  users:{g:'admin',p:'Browse',t:'Users',url:'/admin',sub:'1 user',
+    acts:[['Invite',1]],
+    items:[{n:'ramseur@anant.us',mono:1,b:['Personal workspace'],tag:['Owner','b-brand']}],
+    note:'Since V043 the user id is the email, so the row leads with it.'},
+  workspaces:{g:'admin',p:'Browse',t:'Workspaces',url:'/admin/workspaces',sub:'1 workspace',
+    items:[{n:'Personal',b:['ws-personal-ramseur-anant.us'],tag:['Personal','b-mut']}],
+    note:'Provider enablement per workspace lives in this detail pane — the setting that hid OpenRouter.'},
+  providers:{g:'admin',p:'Browse',t:'Providers',url:'/admin/providers',sub:'2 configured',
+    acts:[['Add provider',1]],
+    items:[{n:'OpenAI',b:['api.openai.com'],tag:['Enabled','b-ok']},{n:'OpenRouter',b:['openrouter.ai'],tag:['Key expired','b-warn']}],
+    note:'Health belongs on the row. An expired key was invisible for a whole session — the badge is the fix.'},
+  governance:{g:'admin',p:'Settings',t:'Governance',url:'/governance',
+    secs:[['Permissions',[['Permission mode','How tool calls are approved.','sel:Ask each time'],['Allow file writes','Let agents modify files on disk.','sw:1']]],['Audit',[['Retain audit log','Keep a record of every tool call.','sw:1']]]],
+    note:'Settings pattern. Each row is one control plus the sentence explaining what it does.'},
+  trust:{g:'admin',p:'Settings',t:'Trust Boundary',url:'/trust-boundary',
+    secs:[['Prompt sanitisation',[['Sanitise untrusted content','Strip instructions found in tool output.','sw:1'],['Intent gate','Classify intent before exposing tools.','sw:1']]],['Ethics',[['Refuse destructive actions','Block irreversible operations.','sw:1']]]],
+    note:'Phase 58+ framing: Sovrant is the safety layer, not the model. The screen should read that way.'},
+  diagnostics:{g:'admin',p:'Settings',t:'Diagnostics',url:'/diagnostics',
+    secs:[['Providers',[['OpenAI','api.openai.com — reachable','st:ok'],['OpenRouter','openrouter.ai — 401 API key expired','st:fail'],['Ollama','localhost:11434 — not running','st:mut']]],['Storage',[['SQLite','~/.sovrant/data/sovrant.db — V046','st:ok']]]],
+    note:'Read-only Settings: same rows, a status pip instead of a control. This is where the expired key should have surfaced.'},
+  platformint:{g:'admin',p:'Browse',t:'Platform Integrations',url:'/admin/integrations',sub:'1 MCP server',
+    acts:[['Add server',1]],
+    items:[{n:'pixellab',mono:1,b:['0 tools'],tag:['Connected','b-ok']}],
+    note:'MCP servers are just another Browse list; the add-form lives in the detail pane.'},
+  systemint:{g:'admin',p:'Browse',t:'System Integrations',url:'/admin/system-integrations',sub:'0 configured',
+    acts:[['Add',1]], empty:1,
+    note:'Slack, Teams, Discord, webhooks. Empty until one is configured.'},
+  settings:{g:null,p:'Settings',t:'Settings',url:'/settings',
+    secs:[['Appearance',[['Theme','Follow the system, or pick one.','sel:Dark'],['Reduce motion','Minimise animation.','sw:0']]],['Model',[['Active provider','Which provider new chats use.','sel:OpenRouter'],['Max tokens','Ceiling for a single response.','n:32000']]]],
+    note:'Reached from the footer, not the rail — so it has no group and no sub-nav.'}
+};
+
+let cur='dashboard', railOpen=true;
+
+function buildIndex(){
+  const el=document.getElementById('index');
+  const groups=[['Entry',['login']],['Overview',['dashboard','command']],['Conversation',['chat']],
+    ['Knowledge',['artifacts','templates','documents','memory','skills','tools']],
+    ['Agents',['agentlib','orchestration']],['Projects',['projects']],
+    ['Admin',['users','workspaces','providers','governance','trust','diagnostics','platformint','systemint']],
+    ['Account',['settings']]];
+  el.innerHTML = groups.map(([g,keys])=>
+    `<div class="idx-group">${g}</div>` + keys.map(k=>
+      `<button class="idx${k===cur?' on':''}" onclick="go('${k}')">${S[k].t}<span class="tagp">${S[k].p}</span></button>`).join('')
+  ).join('');
+}
+
+function go(k){ cur=k; buildIndex(); render(); }
+function toggleRail(){ railOpen=!railOpen; document.getElementById('railBtn').classList.toggle('on',railOpen);
+  document.getElementById('railBtn').textContent = railOpen?'Collapse rail':'Expand rail'; render(); }
+
+function railHTML(s){
+  if(!s.g) return '';
+  const w = railOpen?270:76;
+  const navs = Object.entries(GROUPS).map(([k,g])=>{
+    const on = k===s.g;
+    return `<button class="nav${on?' on':''}" title="${g.label}" style="${railOpen?'':'justify-content:center;gap:0;padding:0'}">${sv(g.icon)}${railOpen?`<span>${g.label}</span>`:''}</button>`;
+  }).join('');
+  let panel='';
+  if(railOpen){
+    const g=GROUPS[s.g];
+    if(s.g==='chat'){
+      panel=`<div class="rdiv"></div><div style="padding:6px 12px 8px"><div class="search"><span style="display:flex">${sv(I.search,2)}</span><input placeholder="Search conversations…"></div></div>
+      <div class="slab">Recent</div><div class="sublist">
+      ${['Fix OpenRouter 401 fallback bug','Draft v1.5.0 changelog + PR notes','Workspace provider visibility bug','Left-nav redesign — Web + Desktop'].map((t,i)=>
+        `<div class="sub" style="padding-left:10px;gap:9px"><span style="width:6px;height:6px;border-radius:50%;background:${i===0?'var(--ok)':'var(--t3)'};flex-shrink:0"></span><span style="overflow:hidden;text-overflow:ellipsis">${t}</span></div>`).join('')}</div>`;
+    } else if(g.subs && g.subs.length){
+      let last='';
+      const rows=g.subs.map(k=>{
+        let out='';
+        if(s.g==='admin' && ADMIN_GROUPS[k]){ out+=`<div class="sgl">${ADMIN_GROUPS[k]}</div>`; }
+        out+=`<button class="sub${k===cur?' on':''}" onclick="go('${k}')">${S[k].t}</button>`;
+        return out;
+      }).join('');
+      panel=`<div class="rdiv"></div><div class="slab">${g.label}</div><div class="sublist">${rows}</div>`;
+    } else {
+      panel=`<div class="rdiv"></div><div class="sublist"><div style="padding:12px 21px;font-size:12.5px;color:var(--t3);line-height:1.5">No sub-pages — single view.</div></div>`;
+    }
+  }
+  return `<div class="rail" style="width:${w}px">
+    <div class="brandrow" style="${railOpen?'':'justify-content:center;padding:0'}"><div class="mark">S</div>${railOpen?`<button class="ctog">${sv(I.chev,2)}</button>`:''}</div>
+    <div class="navg">${navs}</div>
+    ${panel}
+    ${railOpen?`<div class="foot"><div class="frow"><div class="av">ER</div><div><div class="fn">ramseur</div><div class="fs">owner</div></div></div></div>`:''}
+  </div>`;
+}
+
+function phHTML(s){
+  const acts=(s.acts||[]).map(([t,pri])=>`<button class="btn${pri?' pri':''}">${pri?sv(I.plus,2.4):''}${t}</button>`).join('')
+    + `<button class="btn ghost">${sv(I.refresh,2)}Refresh</button>`;
+  return `<div class="ph"><div><h2>${s.t}</h2>${s.sub?`<div class="sub">${s.sub}</div>`:''}</div><div class="acts">${acts}</div></div>`;
+}
+
+function browseHTML(s){
+  const items=(s.items||[]).map((it,i)=>
+    `<div class="item${i===0&&!s.empty?' on':''}"><div class="r1"><span class="nm${it.mono?' mono':''}">${it.n}</span>${it.tag?`<span class="badge ${it.tag[1]}">${it.tag[0]}</span>`:''}</div>
+     <div class="meta">${(it.b||[]).map(b=>`<span>${b}</span>`).join('')}</div></div>`).join('');
+  const listBody = s.empty
+    ? `<div class="empty" style="padding:40px 20px">${sv(I.box,1.6)}<div class="h">Nothing here yet</div><div class="p">Create the first one to get started.</div></div>`
+    : items;
+  const sel=(s.items||[])[0];
+  const detail = s.empty || !sel
+    ? `<div class="empty">${sv(I.box,1.6)}<div class="h">Nothing selected</div><div class="p">Pick an item from the list to see its details.</div></div>`
+    : `<div class="dhead"><div style="flex:1"><h3>${sel.n}</h3><div class="dsub">${(sel.b||[]).join(' · ')}</div></div>
+        ${sel.tag?`<span class="badge ${sel.tag[1]}" style="margin:0">${sel.tag[0]}</span>`:''}</div>
+       <dl class="kv"><dt>Identifier</dt><dd>${sel.n}</dd><dt>Workspace</dt><dd>ws-personal-ramseur</dd><dt>Updated</dt><dd>2026-08-27 14:02</dd></dl>
+       <div style="display:flex;gap:8px;margin-top:16px">${(s.actsDetail||[['Open',1],['Delete',0]]).map(([t,p])=>`<button class="btn${p?' pri':''}">${t}</button>`).join('')}</div>`;
+  return `${phHTML(s)}
+    <div class="toolbar"><div class="search">${sv(I.search,2)}<input placeholder="Search ${s.t.toLowerCase()}…"></div></div>
+    <div class="split"><div class="mlist">${listBody}</div><div class="detail">${detail}</div></div>`;
+}
+
+function overviewHTML(s){
+  const stats=s.stats.map(([l,v])=>`<div class="stat"><div class="lab">${l}</div><div class="val${v===0?' zero':''}">${v}</div></div>`).join('');
+  const rows=[['session','Fix OpenRouter 401 fallback bug','Recent','4h ago'],['agent-run','adhoc-template · architect','succeeded','Jun 10'],['session','Draft v1.5.0 changelog','Recent','1d ago'],['session','Workspace provider visibility','Recent','2d ago']]
+    .map(([k,t,st,when])=>`<tr><td><span class="badge b-mut" style="margin:0">${k}</span></td>
+      <td><span class="ttl"><span style="display:flex;color:var(--t3)">${sv(I.lock,2.2)}</span>${t}</span></td>
+      <td class="mut">${st}</td><td class="mut">ramseur@anant.us</td><td class="num">${when}</td><td class="mut">—</td></tr>`).join('');
+  return `${phHTML(s)}<div class="stats">${stats}</div>
+    <div class="tablewrap"><table><thead><tr><th>Kind</th><th>Title</th><th>Status</th><th>Owner</th><th>Last activity</th><th>Cost</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function settingsHTML(s){
+  const secs=s.secs.map(([h,rows])=>`<div class="fsec"><h4>${h}</h4>${rows.map(([t,d,ctl])=>{
+    const [kind,val]=ctl.split(':');
+    let c='';
+    if(kind==='sw') c=`<div class="sw${val==='1'?' on':''}"></div>`;
+    if(kind==='n') c=`<input class="inpb" style="min-width:110px;text-align:right" value="${val}">`;
+    if(kind==='sel') c=`<select class="inpb"><option>${val}</option></select>`;
+    if(kind==='st'){const m={ok:['b-ok','Healthy'],fail:['b-warn','Failing'],mut:['b-mut','Offline']}[val];c=`<span class="badge ${m[0]}" style="margin:0">${m[1]}</span>`;}
+    return `<div class="frowi"><div class="fl"><div class="ft">${t}</div><div class="fd">${d}</div></div>${c}</div>`;
+  }).join('')}</div>`).join('');
+  return `${phHTML(s)}<div class="form">${secs}</div>`;
+}
+
+function chatHTML(s){
+  return `<div class="convo">
+    <div class="msgs">
+      <div class="msg u"><div class="who">ER</div><div class="bub">Why are OpenRouter chats failing?</div></div>
+      <div class="msg a"><div class="who">S</div><div>
+        <div class="strip"><span style="display:flex;color:var(--t3)">${sv(I.chev,2.4)}</span><span class="cnt">4 actions</span><span>· Read ×2 · Grep · Bash · 2.4s</span></div>
+        <div class="bub">Your OpenRouter key is expired — the API returns <code>401 API key expired</code> on every request. Two other things surfaced in the log: Ollama is being called although it isn't configured, and a request was rejected for sending 144 tools against a 128 limit.</div>
+      </div></div>
+    </div>
+    <div class="composer"><div class="cbox"><div class="ta">Type a message or / for commands…</div>
+      <div class="cbar"><button class="ib">${sv(I.clip,2)}</button><button class="ib">${sv(I.plus,2.2)}</button><span class="sp"></span>
+      <span style="font-size:11.5px;color:var(--t3)">gemma-4-31b-it</span><button class="send">${sv(I.send,2)}</button></div></div></div>
+  </div>`;
+}
+
+function entryHTML(){
+  return `<div class="entry"><div class="lcard">
+    <div class="lhead"><div class="lm">S</div><div class="lw">Sovrant</div><div class="ls">Sign in to continue.</div></div>
+    <div class="fld"><label>Email</label><input class="li" placeholder="you@example.com"></div>
+    <div class="fld"><label>Password</label><input class="li" type="password" placeholder="Password"></div>
+    <button class="lbtn">Sign in</button>
+    <div class="lrule">Don't have an account?</div>
+    <button class="lbtn sec">Create account</button>
+  </div></div>`;
+}
+
+function ctxHTML(s){
+  if(!s.g) return '';
+  return `<div class="ctx">
+    <span class="chip"><span class="dot"></span><span class="mono">gemma-4-31b-it</span><span class="mut">OpenRouter</span></span>
+    <span class="chip">Personal</span><span class="chip mut">No project</span><span class="chip mut">Integrations</span>
+  </div>`;
+}
+
+function render(){
+  const s=S[cur];
+  document.getElementById('wintitle').textContent = s.p==='Entry' ? 'Sovrant — Sign in' : 'Sovrant';
+  document.getElementById('sheet').innerHTML=`<span class="patt">${s.p}</span><b>${s.t}</b> — ${s.note}`;
+  let inner='';
+  if(s.p==='Entry') inner=entryHTML();
+  else if(s.p==='Browse') inner=browseHTML(s);
+  else if(s.p==='Overview') inner=overviewHTML(s);
+  else if(s.p==='Settings') inner=settingsHTML(s);
+  else if(s.p==='Conversation') inner=chatHTML(s);
+  document.getElementById('view').innerHTML = s.g
+    ? railHTML(s)+`<div class="content">${ctxHTML(s)}<div class="body">${inner}</div></div>`
+    : `<div class="content">${inner}</div>`;
+}
+
+function setTheme(m){document.documentElement.setAttribute('data-theme',m);try{localStorage.setItem('sovrant-design-desktop-theme',m)}catch(e){}}
+try{const t=localStorage.getItem('sovrant-design-desktop-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}
+buildIndex(); render();
+</script>
