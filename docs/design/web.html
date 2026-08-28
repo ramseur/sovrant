@@ -76,10 +76,8 @@
   .view{flex:1;display:flex;min-height:0;background:var(--bg);border-top:1px solid var(--border)}
 
   /* ── app shell ── */
-  .rail{display:flex;flex-direction:column;background:var(--rail);border-right:1px solid var(--border);width:270px;flex-shrink:0}
-  .brandrow{display:flex;align-items:center;height:68px;padding:0 12px 0 14px;flex-shrink:0;border-bottom:1px solid var(--border)}
-  .mark{width:44px;height:44px;border-radius:12px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:21px;letter-spacing:-.02em;flex-shrink:0}
-  .ctog{margin-left:auto;width:30px;height:30px;border-radius:8px;border:none;background:transparent;color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .rail{position:relative;display:flex;flex-direction:column;background:var(--rail);border-right:1px solid var(--border);width:270px;flex-shrink:0}
+  .ctog{position:absolute;top:14px;right:-13px;z-index:5;width:26px;height:26px;border-radius:50%;border:1px solid var(--border);background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.15);color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer}
   .ctog:hover{background:var(--hover);color:var(--t1)} .ctog svg{width:15px;height:15px}
 
   .navg{padding:8px 10px;display:flex;flex-direction:column;gap:2px;flex-shrink:0}
@@ -229,7 +227,6 @@
   .entry{flex:1;display:flex;align-items:center;justify-content:center;padding:34px 20px;background:var(--bg)}
   .lcard{width:396px;max-width:100%;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:30px;display:flex;flex-direction:column;gap:17px;box-shadow:0 4px 20px -8px rgba(0,0,0,.14)}
   .lhead{display:flex;flex-direction:column;align-items:center;gap:11px}
-  .lhead .lm{width:54px;height:54px;border-radius:15px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:26px}
   .lhead .lw{font-size:19px;font-weight:700;letter-spacing:-.01em}
   .lhead .ls{font-size:13px;color:var(--t2);margin-top:-5px}
   .fld{display:flex;flex-direction:column;gap:6px}
@@ -447,7 +444,7 @@ function railHTML(s){
     }
   }
   return `<div class="rail" style="width:${w}px">
-    <div class="brandrow" style="${railOpen?'':'justify-content:center;padding:0'}"><div class="mark">S</div>${railOpen?`<button class="ctog">${sv(I.chev,2)}</button>`:''}</div>
+    <button class="ctog">${sv(I.chev,2)}</button>
     <div class="navg">${navs}</div>
     ${panel}
     ${railOpen?`<div class="foot"><div class="frow"><div class="av">ER</div><div><div class="fn">ramseur</div><div class="fs">owner</div></div></div></div>`:''}
@@ -519,7 +516,7 @@ function chatHTML(s){
 
 function entryHTML(){
   return `<div class="entry"><div class="lcard">
-    <div class="lhead"><div class="lm">S</div><div class="lw">Sovrant</div><div class="ls">Sign in to continue.</div></div>
+    <div class="lhead"><div class="lw">Sovrant</div><div class="ls">Sign in to continue.</div></div>
     <div class="fld"><label>Email</label><input class="li" placeholder="you@example.com"></div>
     <div class="fld"><label>Password</label><input class="li" type="password" placeholder="Password"></div>
     <button class="lbtn">Sign in</button>

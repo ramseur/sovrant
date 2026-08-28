@@ -859,6 +859,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
 /* ===== Phase 69 — single sidebar: icon row + panel body + footer ===== */
 .rail-secondary {
+    position: relative;
     width: 300px;
     min-width: 300px;
     background: var(--sidebar-background);
@@ -869,44 +870,21 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     transition: width 0.18s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.rail-brand-row {
-    display: flex;
-    align-items: center;
-    height: 60px;
-    box-sizing: border-box;
-    border-bottom: 1px solid var(--surface-border);
-    flex-shrink: 0;
-}
-
-.rail-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 0 8px 0 16px;
-    height: 100%;
-    box-sizing: border-box;
-    font-weight: 700;
-    font-size: 15.5px;
-    color: var(--text-primary);
-    letter-spacing: 0.2px;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    flex: 1;
-    min-width: 0;
-    text-align: left;
-}
-
+/* Floats on the rail's own border rather than reserving a header row, so
+   nav content (Dashboard) starts at the top of the rail with no blank space. */
 .rail-collapse-btn {
-    flex-shrink: 0;
-    width: 30px;
-    height: 30px;
-    margin: 0 8px;
-    background: transparent;
-    border: none;
+    position: absolute;
+    top: 14px;
+    right: -13px;
+    z-index: 5;
+    width: 26px;
+    height: 26px;
+    background: var(--surface-background);
+    border: 1px solid var(--surface-border);
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
     color: var(--text-muted);
     cursor: pointer;
-    border-radius: 7px;
     font-size: 14px;
     display: flex;
     align-items: center;
@@ -916,33 +894,11 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .rail-collapse-btn:hover { color: var(--text-primary); background: var(--surface-hover); }
 
 .rail-secondary.collapsed { width: 76px; min-width: 76px; }
-.rail-secondary.collapsed .rail-brand { display: none; }
-.rail-secondary.collapsed .rail-brand-row { justify-content: center; }
-.rail-secondary.collapsed .rail-collapse-btn { margin: 0; }
 .rail-secondary.collapsed .rail-secondary-body { display: none; }
 .rail-secondary.collapsed .rail-footer { display: none; }
 .rail-secondary.collapsed .rail-icon { justify-content: center; gap: 0; padding: 0; }
 .rail-secondary.collapsed .rail-icon .rail-label { display: none; }
 .rail-secondary.collapsed .rail-icon.active::before { left: -8px; }
-
-.rail-brand:hover .rail-brand-text { color: var(--brand-primary); }
-
-.rail-brand-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
-    background: var(--brand-primary);
-    font-size: 15px;
-    color: #FF9800;
-    flex-shrink: 0;
-}
-
-.rail-brand-text {
-    line-height: 1;
-}
 
 /* Top-level group nav: Dashboard/Chat/Knowledge/Agents/Projects/Admin.
    Always a vertical icon+label list — collapsed state just hides the label

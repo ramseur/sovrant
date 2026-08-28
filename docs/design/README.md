@@ -33,9 +33,19 @@ This is the point of the folder. Those pages were each built standalone — they
 
 Current state: 47 changed lines, all accounted for by that list.
 
+## Mark placement (decided 2026-08-28)
+
+The "S"-in-a-square mark showed up everywhere — rail brand row on every screen, 54px on Login — which was wrong. It's brand chrome, not navigation, and repeating it added nothing a user needed. **The mark now appears in exactly two places, both platform chrome, neither one app content:**
+
+- **Web** — the browser tab favicon (`.fav` in the tabstrip mock).
+- **Desktop** — the native titlebar/window icon (`.tico` in the titlebar mock; real code already sets this via `Window.Icon`).
+
+Everywhere else — the rail brand row (both platforms) and the Login header — now carries no brand element at all, not even the "Sovrant" wordmark. It's redundant: the tab/titlebar already names the app, and the rail's first visible thing is now the first nav destination, Dashboard. The brand row survives only as an unlabeled bar holding the collapse toggle. Shipped in both `web.html`/`desktop.html` and in real code: `MainLayout.razor` + `sovrant.css` on Web, `MainWindow.axaml`'s brand row on Desktop (Login already had no mark on either platform).
+
+**Still open:** the mark itself is still a placeholder "S" — worth drawing a real one for the two spots it now actually lives in.
+
 ## Open decisions
 
-- **The mark is a letter, not a logo.** An "S" in a rounded purple square. It's now the only brand element in the shell, and at 54px it's the first thing a new user sees on Login. Worth drawing a real one.
 - **Login theme on a fresh machine.** `App.razor` hardcodes `data-theme="dark"` and JS overrides from `localStorage`. Login renders before user preferences load, so it shows whatever the browser last stored — decide whether it should follow `prefers-color-scheme`.
 
 ## Bugs this pass found, not yet fixed
