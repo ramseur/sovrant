@@ -375,7 +375,7 @@
         <div class="nav-footer">
           <div class="footer-row">
             <div class="avatar">ER</div>
-            <div><div class="footer-name">ramseur@anant.us</div><div class="footer-sub">Personal workspace</div></div>
+            <div><div class="footer-name">ramseur</div><div class="footer-sub">owner</div></div>
           </div>
         </div>
       </div>
@@ -402,13 +402,13 @@
       <tr><td>Rail brand mark</td><td>44px, 12px radius</td><td>44px, 12px radius</td><td class="same">Matched</td></tr>
       <tr><td>Brand row height</td><td>68px</td><td>68px</td><td class="same">Matched</td></tr>
       <tr><td>Rail width — expanded / collapsed</td><td>300px / 76px</td><td>300px / 76px</td><td class="same">Matched</td></tr>
-      <tr><td>Nav row height</td><td>42px <code>.rail-icon</code></td><td>40px</td><td class="diff">Reconcile</td></tr>
+      <tr><td>Nav row height</td><td>40px <code>.rail-icon</code></td><td>40px</td><td class="same">Matched</td></tr>
       <tr><td>Sub-nav row height</td><td>40px <code>.nav-btn</code></td><td>40px</td><td class="same">Matched</td></tr>
       <tr><td>Icon set + stroke</td><td>Inline SVG, 19px, 1.9</td><td><code>NavIcons.axaml</code>, 19px, 1.9</td><td class="same">Matched</td></tr>
       <tr><td>Active treatment</td><td>Tint + 3px left bar</td><td>Tint + 3px left bar</td><td class="same">Matched</td></tr>
       <tr><td>Admin grouping</td><td>Overview / Access / Safety / System</td><td>Overview / Access / Safety / System</td><td class="same">Matched</td></tr>
       <tr><td>Chat panel</td><td>Search + recents</td><td>Search + recents</td><td class="same">Matched</td></tr>
-      <tr><td>Footer identity</td><td>Email + workspace</td><td>Username + role</td><td class="diff">Reconcile</td></tr>
+      <tr><td>Footer identity</td><td><code>LocalPart(email)</code> + role</td><td><code>LocalPart(email)</code> + role</td><td class="same">Matched</td></tr>
     </table>
   </div>
 
@@ -426,7 +426,7 @@
       <h2>Open questions for this pass</h2>
       <ul>
         <li><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg><strong>The mark is a letter, not a logo</strong> — an "S" in a rounded purple square, now the only brand element on screen on both platforms.</li>
-        <li><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg><strong>Two parity gaps above</strong> — Web's 42px nav rows against Desktop's 40px, and the footer showing email + workspace on Web but username + role on Desktop. Both are small; both are the difference between "same design" and "same design, roughly".</li>
+        <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><strong>Parity gaps closed.</strong> Web's <code>.rail-icon</code> dropped 42px → 40px to match Desktop. The footer difference this table previously flagged wasn't real — both platforms already render <code>LocalPart(email)</code> plus workspace role; the earlier mock just used different sample data on each side. Every row above now reads Matched.</li>
         <li><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg><strong>Content panes are still undesigned.</strong> Every screen behind these six groups — and Login — needs its own pass. That work is next.</li>
       </ul>
     </div>

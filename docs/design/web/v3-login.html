@@ -1,0 +1,370 @@
+<meta charset="utf-8">
+<title>Sovrant Web Login v3</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  :root {
+    --brand: #6D52C6;
+    --brand-soft: color-mix(in srgb, #6D52C6 16%, transparent);
+    --surface-bg: #F5F5F5;
+    --card: #FFFFFF;
+    --border: #D0D0D0;
+    --hover: #E0E0E0;
+    --input-bg: #FFFFFF;
+    --input-border: #D0D0D0;
+    --text-1: #1A1A1A;
+    --text-2: #666666;
+    --text-3: #999999;
+    --stage-bg: #e4e2df;
+    --ring: color-mix(in srgb, #6D52C6 45%, transparent);
+    --fail: #F44336;
+    --flag: #E0A33E;
+    --chrome-bg: #DEE1E6;
+    --chrome-tab: #FFFFFF;
+    --chrome-omni: #F1F3F4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --brand-soft: color-mix(in srgb, #6D52C6 22%, transparent);
+      --surface-bg: #1A1A1A; --card: #2A2A2A; --border: #3A3A3A; --hover: #333333;
+      --input-bg: #2A2A2A; --input-border: #3A3A3A;
+      --text-1: #FFFFFF; --text-2: #999999; --text-3: #666666;
+      --stage-bg: #0f0f10; --ring: color-mix(in srgb, #6D52C6 55%, transparent);
+      --chrome-bg: #202124; --chrome-tab: #35363A; --chrome-omni: #292A2D;
+    }
+  }
+  :root[data-theme="dark"] {
+    --brand-soft: color-mix(in srgb, #6D52C6 22%, transparent);
+    --surface-bg: #1A1A1A; --card: #2A2A2A; --border: #3A3A3A; --hover: #333333;
+    --input-bg: #2A2A2A; --input-border: #3A3A3A;
+    --text-1: #FFFFFF; --text-2: #999999; --text-3: #666666;
+    --stage-bg: #0f0f10; --ring: color-mix(in srgb, #6D52C6 55%, transparent);
+    --chrome-bg: #202124; --chrome-tab: #35363A; --chrome-omni: #292A2D;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--stage-bg); color: var(--text-1); font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+  .page { max-width: 1180px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 10px; flex-wrap: wrap; }
+  .intro h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; }
+  .intro p { margin: 0; max-width: 62ch; color: var(--text-2); font-size: 13.5px; line-height: 1.55; }
+  .platform-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--brand); background: var(--brand-soft); border-radius: 999px; padding: 3px 10px; margin-bottom: 10px; }
+  .controls { display: flex; gap: 8px; flex-shrink: 0; }
+  .ctrl-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-1); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; transition: background 120ms ease, border-color 120ms ease; }
+  .ctrl-btn:hover { background: var(--hover); }
+  .ctrl-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  .ctrl-btn.on { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
+
+  .changelog { margin: 18px 0 30px; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); font-size: 12.5px; color: var(--text-2); line-height: 1.6; }
+  .changelog strong { color: var(--text-1); }
+  code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; background: var(--hover); padding: 1px 5px; border-radius: 4px; }
+
+  h3.sec { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); margin: 0 0 4px; }
+  p.sec-sub { font-size: 13px; color: var(--text-2); margin: 0 0 14px; line-height: 1.5; max-width: 74ch; }
+
+  /* browser chrome */
+  .browser { display: flex; flex-direction: column; border-radius: 10px 10px 8px 8px; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 20px 50px -25px rgba(0,0,0,0.4); background: var(--chrome-bg); }
+  .tabstrip { height: 38px; background: var(--chrome-bg); display: flex; align-items: flex-end; padding: 0 8px; gap: 6px; flex-shrink: 0; }
+  .tab { height: 30px; min-width: 190px; background: var(--chrome-tab); border-radius: 8px 8px 0 0; display: flex; align-items: center; gap: 8px; padding: 0 11px; font-size: 12px; color: var(--text-1); }
+  .tab .favicon { width: 14px; height: 14px; border-radius: 4px; background: var(--brand); flex-shrink: 0; }
+  .tab .x { margin-left: auto; color: var(--text-3); font-size: 13px; line-height: 1; }
+  .newtab { color: var(--text-2); font-size: 17px; padding: 0 8px 4px; line-height: 1; }
+  .omnibar { height: 42px; background: var(--chrome-tab); display: flex; align-items: center; gap: 10px; padding: 0 12px; flex-shrink: 0; }
+  .omni-nav { display: flex; gap: 4px; color: var(--text-2); }
+  .omni-nav svg { width: 16px; height: 16px; }
+  .omni-url { flex: 1; height: 28px; border-radius: 999px; background: var(--chrome-omni); display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 12px; color: var(--text-2); font-family: 'JetBrains Mono', monospace; }
+  .omni-url svg { width: 12px; height: 12px; flex-shrink: 0; opacity: 0.7; }
+
+  .login-shell { display: flex; align-items: center; justify-content: center; background: var(--surface-bg); border-top: 1px solid var(--border); padding: 40px 20px; min-height: 560px; }
+
+  /* ── the card ── */
+  .login-card { width: 400px; max-width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 32px; display: flex; flex-direction: column; gap: 18px; box-shadow: 0 4px 20px -8px rgba(0,0,0,0.14); }
+  .login-head { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .mark { width: 56px; height: 56px; border-radius: 15px; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 27px; letter-spacing: -0.02em; flex-shrink: 0; }
+  .wordmark { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+  .sub { font-size: 13.5px; color: var(--text-2); margin-top: -6px; }
+
+  .fields { display: flex; flex-direction: column; gap: 14px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .lbl { font-size: 12.5px; font-weight: 500; color: var(--text-2); }
+  .input-wrap { position: relative; display: flex; align-items: center; }
+  .inp { width: 100%; height: 40px; border-radius: 9px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text-1); font: inherit; font-size: 14px; padding: 0 12px; outline: none; transition: border-color 120ms ease, box-shadow 120ms ease; }
+  .inp::placeholder { color: var(--text-3); }
+  .inp:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--ring); }
+  .inp.has-toggle { padding-right: 42px; }
+  .reveal { position: absolute; right: 6px; width: 30px; height: 30px; border: none; background: transparent; color: var(--text-3); border-radius: 7px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 120ms ease, color 120ms ease; }
+  .reveal:hover { background: var(--hover); color: var(--text-1); }
+  .reveal svg { width: 16px; height: 16px; }
+
+  .btn { height: 44px; border-radius: 9px; border: none; font: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: filter 120ms ease, background 120ms ease; }
+  .btn-primary { background: var(--brand); color: #fff; }
+  .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+  .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+  .btn-secondary { background: transparent; color: var(--text-1); border: 1px solid var(--border); font-weight: 500; }
+  .btn-secondary:hover { background: var(--hover); }
+  .btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+  .err { display: flex; gap: 9px; align-items: flex-start; font-size: 13px; line-height: 1.45; color: var(--fail); background: color-mix(in srgb, var(--fail) 10%, transparent); border: 1px solid color-mix(in srgb, var(--fail) 32%, transparent); padding: 10px 12px; border-radius: 9px; }
+  .err svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; }
+
+  .rule { display: flex; align-items: center; gap: 12px; color: var(--text-3); font-size: 12.5px; }
+  .rule::before, .rule::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+  .spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
+  .hidden { display: none !important; }
+
+  /* state gallery */
+  .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 8px; }
+  @media (max-width: 900px) { .gallery { grid-template-columns: 1fr; } }
+  .gcell { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface-bg); }
+  .gtag { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); padding: 9px 13px; background: var(--card); border-bottom: 1px solid var(--border); }
+  .gbody { padding: 22px 16px; display: flex; justify-content: center; }
+  .mini { width: 100%; max-width: 320px; transform: scale(0.92); transform-origin: top center; }
+  .mini .login-card { width: 100%; padding: 22px; gap: 14px; border-radius: 12px; }
+  .mini .mark { width: 44px; height: 44px; font-size: 21px; border-radius: 12px; }
+  .mini .wordmark { font-size: 17px; }
+  .mini .sub { font-size: 12.5px; }
+
+  /* before/after */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 820px) { .compare { grid-template-columns: 1fr; } }
+  .cpanel { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface-bg); }
+  .ctag { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); padding: 10px 14px; background: var(--card); border-bottom: 1px solid var(--border); }
+  .ctag .pip { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .ctag.now .pip { background: var(--flag); }
+  .ctag.next .pip { background: var(--brand); }
+  .cbody { padding: 26px 18px; display: flex; justify-content: center; }
+  .cfoot { font-size: 11.5px; padding: 10px 14px; line-height: 1.45; display: flex; gap: 7px; align-items: flex-start; border-top: 1px solid var(--border); background: var(--card); }
+  .cfoot svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; }
+  .cfoot.warn { color: var(--flag); }
+  .cfoot.ok { color: var(--brand); }
+
+  /* legacy card replica */
+  .old-card { width: 320px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 28px; display: flex; flex-direction: column; gap: 14px; }
+  .old-title { font-size: 26px; font-weight: 700; text-align: center; }
+  .old-sub { font-size: 13px; color: var(--text-2); text-align: center; }
+  .old-lbl { font-size: 12px; color: var(--text-2); margin-bottom: 5px; }
+  .old-inp { width: 100%; border-radius: 5px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text-1); font: inherit; font-size: 14px; padding: 8px 10px; outline: none; }
+  .old-btn { border-radius: 5px; border: none; background: var(--brand); color: #fff; font: inherit; font-size: 14px; font-weight: 500; padding: 10px; cursor: pointer; }
+
+  .notes { margin-top: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 820px) { .notes { grid-template-columns: 1fr; } }
+  .note-card { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 16px 18px; }
+  .note-card h2 { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-2); margin: 0 0 10px; }
+  .note-card ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .note-card li { font-size: 13px; line-height: 1.5; color: var(--text-1); display: flex; gap: 9px; }
+  .note-card li .tick { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; color: var(--brand); }
+  .note-card li .warn { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; color: var(--flag); }
+  .note-card li .bug { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; color: var(--fail); }
+</style>
+
+<div class="page">
+  <header class="intro">
+    <div>
+      <span class="platform-badge">Web &middot; v3 &middot; Login</span>
+      <h1>Sign in</h1>
+      <p>First screen pass. Login was built before the shell had a design system, so it uses its own radii, its own input heights, and a bare 26px text heading where the rest of the product now leads with a mark. This brings it onto the shell's scale and gives the product a proper front door.</p>
+    </div>
+    <div class="controls">
+      <button class="ctrl-btn" onclick="setTheme('light')">Light</button>
+      <button class="ctrl-btn" onclick="setTheme('dark')">Dark</button>
+    </div>
+  </header>
+
+  <div class="changelog">
+    <strong>v3 — 2026-08-28.</strong> First pass on Login; shell records <a href="v1.html" style="color:var(--brand)">v1</a> and <a href="v2.html" style="color:var(--brand)">v2</a> are unaffected. Desktop mirrors this exactly in <a href="../desktop/v3-login.html" style="color:var(--brand)">desktop/v3-login</a> — same card, same metrics, same states. Parity gap from v2 is now closed: Web's <code>.rail-icon</code> dropped 42px → 40px to match Desktop.
+  </div>
+
+  <h3 class="sec">The screen</h3>
+  <p class="sec-sub">Try the buttons to move through every state the real component can be in. The card is 400px on a centered shell; controls sit on the shell's 40px / 9px radius scale.</p>
+
+  <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap">
+    <button class="ctrl-btn on" id="b-default" onclick="setState('default')">Default</button>
+    <button class="ctrl-btn" id="b-error" onclick="setState('error')">Error</button>
+    <button class="ctrl-btn" id="b-busy" onclick="setState('busy')">Signing in</button>
+    <button class="ctrl-btn" id="b-closed" onclick="setState('closed')">Registration closed</button>
+  </div>
+
+  <div class="browser">
+    <div class="tabstrip"><div class="tab"><span class="favicon"></span><span>Sovrant</span><span class="x">&times;</span></div><span class="newtab">+</span></div>
+    <div class="omnibar">
+      <div class="omni-nav">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </div>
+      <div class="omni-url"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>localhost:5100/login</div>
+    </div>
+
+    <div class="login-shell">
+      <div class="login-card">
+        <div class="login-head">
+          <div class="mark">S</div>
+          <div class="wordmark">Sovrant</div>
+          <div class="sub">Sign in to continue.</div>
+        </div>
+
+        <div class="err hidden" id="errBox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12" y2="16.01"/></svg>
+          <span id="errText">Email or password is incorrect.</span>
+        </div>
+
+        <div class="fields">
+          <div class="field">
+            <label class="lbl" for="em">Email</label>
+            <div class="input-wrap"><input class="inp" id="em" type="email" placeholder="you@example.com" value="ramseur@anant.us"></div>
+          </div>
+          <div class="field">
+            <label class="lbl" for="pw">Password</label>
+            <div class="input-wrap">
+              <input class="inp has-toggle" id="pw" type="password" placeholder="Password" value="hunter2hunter2">
+              <button class="reveal" id="revealBtn" onclick="toggleReveal()" title="Show password" aria-label="Show password">
+                <svg id="eyeOpen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg id="eyeOff" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.9 17.9A10.4 10.4 0 0 1 12 20c-7 0-11-8-11-8a19 19 0 0 1 5.1-6M9.9 4.2A10.9 10.9 0 0 1 12 4c7 0 11 8 11 8a19 19 0 0 1-2.2 3.2M1 1l22 22"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="signBtn">
+          <span class="spinner hidden" id="spin"></span>
+          <span id="signLbl">Sign in</span>
+        </button>
+
+        <div id="regBlock" style="display:flex; flex-direction:column; gap:14px">
+          <div class="rule">Don't have an account?</div>
+          <button class="btn btn-secondary" id="regBtn">Create account</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3 class="sec" style="margin-top:38px">Every state, side by side</h3>
+  <p class="sec-sub">What the component actually renders across its four real branches. Registration visibility is driven by <code>IdentityService.IsRegistrationOpenAsync()</code>, not a design choice.</p>
+  <div class="gallery">
+    <div class="gcell">
+      <div class="gtag">Error — bad credentials</div>
+      <div class="gbody"><div class="mini"><div class="login-card">
+        <div class="login-head"><div class="mark">S</div><div class="wordmark">Sovrant</div><div class="sub">Sign in to continue.</div></div>
+        <div class="err"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12" y2="16.01"/></svg><span>Email or password is incorrect.</span></div>
+        <div class="fields">
+          <div class="field"><span class="lbl">Email</span><input class="inp" value="ramseur@anant.us"></div>
+          <div class="field"><span class="lbl">Password</span><input class="inp" type="password" value="wrongpass"></div>
+        </div>
+        <button class="btn btn-primary">Sign in</button>
+      </div></div></div>
+    </div>
+    <div class="gcell">
+      <div class="gtag">Busy — request in flight</div>
+      <div class="gbody"><div class="mini"><div class="login-card">
+        <div class="login-head"><div class="mark">S</div><div class="wordmark">Sovrant</div><div class="sub">Sign in to continue.</div></div>
+        <div class="fields">
+          <div class="field"><span class="lbl">Email</span><input class="inp" value="ramseur@anant.us" disabled></div>
+          <div class="field"><span class="lbl">Password</span><input class="inp" type="password" value="hunter2hunter2" disabled></div>
+        </div>
+        <button class="btn btn-primary" disabled><span class="spinner"></span><span>Signing in…</span></button>
+      </div></div></div>
+    </div>
+    <div class="gcell">
+      <div class="gtag">Registration closed</div>
+      <div class="gbody"><div class="mini"><div class="login-card">
+        <div class="login-head"><div class="mark">S</div><div class="wordmark">Sovrant</div><div class="sub">Sign in to continue.</div></div>
+        <div class="fields">
+          <div class="field"><span class="lbl">Email</span><input class="inp" placeholder="you@example.com"></div>
+          <div class="field"><span class="lbl">Password</span><input class="inp" type="password" placeholder="Password"></div>
+        </div>
+        <button class="btn btn-primary">Sign in</button>
+      </div></div></div>
+    </div>
+  </div>
+
+  <h3 class="sec" style="margin-top:38px">Against what ships today</h3>
+  <div class="compare">
+    <div class="cpanel">
+      <div class="ctag now"><span class="pip"></span>Today</div>
+      <div class="cbody">
+        <div class="old-card">
+          <div class="old-title">Sovrant</div>
+          <div class="old-sub">Sign in to continue.</div>
+          <div><div class="old-lbl">Email</div><input class="old-inp" placeholder="you@example.com"></div>
+          <div><div class="old-lbl">Password</div><input class="old-inp" type="password" placeholder="Password"></div>
+          <button class="old-btn">Sign in</button>
+        </div>
+      </div>
+      <div class="cfoot warn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg>
+        <span>No mark. 5px radii and ~34px inputs against the shell's 9px and 40px. The product's front door doesn't look like the product.</span>
+      </div>
+    </div>
+    <div class="cpanel">
+      <div class="ctag next"><span class="pip"></span>v3 — proposed</div>
+      <div class="cbody">
+        <div style="width:320px"><div class="login-card" style="padding:24px; gap:15px">
+          <div class="login-head"><div class="mark" style="width:48px;height:48px;font-size:23px;border-radius:13px">S</div><div class="wordmark" style="font-size:18px">Sovrant</div><div class="sub">Sign in to continue.</div></div>
+          <div class="fields">
+            <div class="field"><span class="lbl">Email</span><input class="inp" placeholder="you@example.com"></div>
+            <div class="field"><span class="lbl">Password</span><input class="inp" type="password" placeholder="Password"></div>
+          </div>
+          <button class="btn btn-primary">Sign in</button>
+        </div></div>
+      </div>
+      <div class="cfoot ok">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <span>Mark leads. 40px inputs, 9px radii, 44px button — the same scale as every row in the shell.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note-card">
+      <h2>What v3 changes</h2>
+      <ul>
+        <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><strong>Mark leads, wordmark supports.</strong> A 56px mark above a 20px wordmark, replacing the bare 26px text heading.</li>
+        <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><strong>On the shell's scale.</strong> Inputs 40px at 9px radius, primary button 44px, card 400px / 14px radius / 32px padding — replacing 5px radii, ~34px inputs, and a 360px card.</li>
+        <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><strong>Focus is visible.</strong> Brand border plus a 3px ring — today <code>.login-input:focus</code> only shifts the border color, which is easy to miss.</li>
+        <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><strong>Error gets an icon</strong> and keeps the existing token-based red, so it reads as a state rather than just red text.</li>
+        <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><strong>Busy is on the button</strong> — spinner plus "Signing in…" where the user is already looking, instead of a detached 3px bar at the bottom of the card.</li>
+        <li><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><strong>Password reveal toggle</strong> — new, and the one place a long password typo is worth catching before submit.</li>
+      </ul>
+    </div>
+    <div class="note-card">
+      <h2>Found while designing this</h2>
+      <ul>
+        <li><svg class="bug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12" y2="16.01"/></svg><strong>Desktop binds a resource key that doesn't exist.</strong> <code>LoginWindow.axaml</code> sets <code>Background="{DynamicResource BackgroundBrush}"</code>; neither <code>SovrantDarkColors.axaml</code> nor <code>SovrantLightColors.axaml</code> defines <code>BackgroundBrush</code>. <code>DynamicResource</code> fails silently, so the window never gets its themed background. Should be <code>SurfaceBackground</code>.</li>
+        <li><svg class="bug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12" y2="16.01"/></svg><strong>Desktop hardcodes <code>Foreground="Red"</code></strong> for the error text instead of the <code>StatusFail</code> token, so it ignores the theme and misses the red the rest of the product uses.</li>
+        <li><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg><strong>Theme on a fresh machine.</strong> <code>App.razor</code> hardcodes <code>data-theme="dark"</code> and JS overrides it from <code>localStorage</code>. Login runs before any user preference is loaded, so it shows whatever the browser last stored — worth deciding whether it should follow <code>prefers-color-scheme</code> instead.</li>
+        <li><svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg><strong>The mark is still a letter.</strong> At 56px, dead centre, first thing a new user sees — this screen is the strongest argument yet for drawing a real one.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+  function setState(s) {
+    ['default','error','busy','closed'].forEach(k => document.getElementById('b-'+k).classList.toggle('on', k===s));
+    const err = document.getElementById('errBox'), spin = document.getElementById('spin'),
+          lbl = document.getElementById('signLbl'), btn = document.getElementById('signBtn'),
+          reg = document.getElementById('regBlock'), em = document.getElementById('em'), pw = document.getElementById('pw');
+    err.classList.add('hidden'); spin.classList.add('hidden');
+    lbl.textContent = 'Sign in'; btn.disabled = false;
+    reg.style.display = 'flex'; em.disabled = false; pw.disabled = false;
+    if (s === 'error') { err.classList.remove('hidden'); }
+    if (s === 'busy') { spin.classList.remove('hidden'); lbl.textContent = 'Signing in…'; btn.disabled = true; em.disabled = true; pw.disabled = true; }
+    if (s === 'closed') { reg.style.display = 'none'; }
+  }
+  function toggleReveal() {
+    const pw = document.getElementById('pw'), o = document.getElementById('eyeOpen'), f = document.getElementById('eyeOff'), b = document.getElementById('revealBtn');
+    const show = pw.type === 'password';
+    pw.type = show ? 'text' : 'password';
+    o.classList.toggle('hidden', show); f.classList.toggle('hidden', !show);
+    b.title = show ? 'Hide password' : 'Show password';
+    b.setAttribute('aria-label', b.title);
+  }
+  function setTheme(mode) {
+    document.documentElement.setAttribute('data-theme', mode);
+    try { localStorage.setItem('sovrant-design-web-v3-theme', mode); } catch (e) {}
+  }
+  try { const s = localStorage.getItem('sovrant-design-web-v3-theme'); if (s) document.documentElement.setAttribute('data-theme', s); } catch (e) {}
+</script>

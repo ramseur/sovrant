@@ -26,11 +26,25 @@ Before opening a new version, skim the changelog note at the top of the current 
 
 **v2** (both platforms) — brand row only. The product name was rendering twice on each platform: once in the chrome the platform owns (OS titlebar / browser tab), again in the rail immediately below. v2 removes the rail wordmark on both and grows the mark to 44px so it reads as a logo rather than a favicon. v2 also fixes the Web *record* — v1 drew the Web app in a window frame, which made it look like Desktop; Web previews now sit in browser chrome.
 
+**v3-login** (both platforms) — first screen pass. Login predates the shell's design system, so it carried its own radii (5px on Web, 3px on Desktop), its own input heights (~34px), and a bare text heading where the product now leads with a mark. v3 puts it on the shell's scale — 40px inputs at 9px radius, 44px primary button, mark leading — and designs the error, busy, and registration-closed states explicitly.
+
 Together these are the baseline the rest of the app's design should extend, not fight — new screens should read as the same product as this shell, not a different one bolted on.
+
+**Parity is currently clean.** Every row in `web/v2.html`'s table reads Matched. Web's `.rail-icon` dropped 42px → 40px to close the one real gap; the footer difference that table once flagged turned out to be an artifact of inconsistent mock data, not a code difference.
+
+## Open decisions
+
+- **The mark is a letter, not a logo.** An "S" in a rounded purple square. v2 made it the only brand element in the shell and v3 puts it at 56px dead-centre on the first screen a new user sees. Worth drawing a real one before these ship.
+- **Login theme on a fresh machine.** `App.razor` hardcodes `data-theme="dark"` and JS overrides from `localStorage`. Login renders before any user preference loads, so it shows whatever the browser last stored — decide whether it should follow `prefers-color-scheme`.
+
+## Bugs found by this pass, not yet fixed
+
+- `LoginWindow.axaml` binds `Background="{DynamicResource BackgroundBrush}"` — that key exists in neither `SovrantDarkColors.axaml` nor `SovrantLightColors.axaml`. `DynamicResource` fails silently, so the Desktop login window never receives its themed background. Should be `SurfaceBackground`.
+- The same file hardcodes `Foreground="Red"` for error text instead of the `StatusFail` token, so it ignores the theme.
 
 ## What's next
 
-A formal design pass across every remaining screen, starting with **Login** (which has the same name-duplication problem and, on Desktop, binds a `BackgroundBrush` resource key that doesn't exist in either theme file), then working through each destination behind the nav — Dashboard, Chat, Knowledge's six pages, Agents, Projects, Admin's nine pages, Settings. Keep the shell's type scale, spacing rhythm, icon style, and color tokens rather than introducing new ones per screen.
+Work through each destination behind the nav — Dashboard, Chat, Knowledge's six pages, Agents, Projects, Admin's nine pages, Settings. Keep the shell's type scale, spacing rhythm, icon style, and color tokens rather than introducing new ones per screen.
 
 ## How to use this folder
 
