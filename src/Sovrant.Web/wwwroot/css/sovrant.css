@@ -3739,7 +3739,8 @@ details[open] .doc-advanced-toggle::before { content: "▼ "; }
     gap: 8px;
     margin-bottom: 4px;
 }
-.sys-int-icon { font-size: 20px; }
+.sys-int-icon { display: inline-flex; color: var(--brand-primary); }
+.sys-int-icon svg { width: 20px; height: 20px; }
 .sys-int-name { font-size: 17px; font-weight: 600; color: var(--text-primary); }
 .sys-int-desc { font-size: 12px; color: var(--text-secondary); margin: 0; }
 

@@ -72,7 +72,9 @@
                         </StackPanel>
                         <StackPanel Spacing="2">
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="🐘" FontSize="20" VerticalAlignment="Center" />
+                                <Path Data="{StaticResource IconSwarm}" Width="20" Height="20" Stretch="Uniform"
+                                      StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                      Stroke="{DynamicResource BrandPrimary}" VerticalAlignment="Center" />
                                 <TextBlock Text="PostgreSQL" FontSize="17" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
                             </StackPanel>
@@ -211,7 +213,9 @@
                         </StackPanel>
                         <StackPanel Spacing="2">
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="🗄️" FontSize="20" VerticalAlignment="Center" />
+                                <Path Data="{StaticResource IconSwarm}" Width="20" Height="20" Stretch="Uniform"
+                                      StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                      Stroke="{DynamicResource BrandPrimary}" VerticalAlignment="Center" />
                                 <TextBlock Text="Supabase" FontSize="17" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
                             </StackPanel>

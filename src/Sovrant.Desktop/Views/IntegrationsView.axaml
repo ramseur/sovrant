@@ -275,9 +275,14 @@
                                                 Background="{DynamicResource SurfaceBackground}"
                                                 BorderBrush="{DynamicResource BrandPrimary}"
                                                 BorderThickness="1">
-                                            <TextBlock FontSize="12" Foreground="{DynamicResource BrandPrimary}"
-                                                       TextWrapping="Wrap"
-                                                       Text="🔄 Browser opened. Waiting for authorization... (times out after 2 min)" />
+                                            <DockPanel>
+                                                <Path DockPanel.Dock="Left" Data="{StaticResource IconMission}" Width="13" Height="13" Stretch="Uniform"
+                                                      StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                                      Stroke="{DynamicResource BrandPrimary}" VerticalAlignment="Top" Margin="0,2,6,0" />
+                                                <TextBlock FontSize="12" Foreground="{DynamicResource BrandPrimary}"
+                                                           TextWrapping="Wrap"
+                                                           Text="Browser opened. Waiting for authorization... (times out after 2 min)" />
+                                            </DockPanel>
                                         </Border>
 
                                         <StackPanel Spacing="4">

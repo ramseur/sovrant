@@ -306,7 +306,7 @@
                         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                             <CheckBox IsChecked="{Binding NewMemoryIsPrivate}" FontSize="12"
                                       Foreground="{DynamicResource TextSecondary}"
-                                      Content="🔒 Private (only injected for me)" />
+                                      Content="Private (only injected for me)" />
                             <Button Content="Save"
                                     Command="{Binding AddWorkspaceMemoryCommand}"
                                     IsEnabled="{Binding NewMemoryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
@@ -343,10 +343,14 @@
                                                 <TextBlock Text="{Binding Layer}" FontSize="10"
                                                            Foreground="{DynamicResource TextSecondary}" />
                                             </Border>
-                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}"
-                                                       Text="🔒" IsVisible="{Binding IsPrivate}" />
-                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}"
-                                                       Text="🔓" IsVisible="{Binding !IsPrivate}" />
+                                            <Path Data="{StaticResource IconLock}" Width="11" Height="11" Stretch="Uniform"
+                                                  IsVisible="{Binding IsPrivate}"
+                                                  StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                                  Stroke="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                                            <Path Data="{StaticResource IconUnlock}" Width="11" Height="11" Stretch="Uniform"
+                                                  IsVisible="{Binding !IsPrivate}"
+                                                  StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                                  Stroke="{DynamicResource TextMuted}" VerticalAlignment="Center" />
                                             <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:MMM d, yyyy}'}"
                                                        FontSize="11" Foreground="{DynamicResource TextMuted}" />
                                         </StackPanel>

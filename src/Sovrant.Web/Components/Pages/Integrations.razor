@@ -150,7 +150,10 @@
                         @if (_isOAuthWaiting)
                         {
                             <div class="callout-card" style="border-color:var(--brand);background:var(--surface-card);">
-                                <strong>&#x1F504; Waiting for authorization...</strong>
+                                <strong style="display:inline-flex;align-items:center;gap:6px">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg>
+                                    Waiting for authorization...
+                                </strong>
                                 Browser opened — complete the login and return here. Times out after 2 min.
                             </div>
                         }

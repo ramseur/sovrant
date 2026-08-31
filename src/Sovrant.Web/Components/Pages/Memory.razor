@@ -40,7 +40,7 @@
     @if (!string.IsNullOrEmpty(_loadError))
     {
         <div class="page-error-banner" role="alert">
-            <span>&#9888;</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg>
             <span class="error-message">@_loadError</span>
             <button class="btn-sm" @onclick="LoadAllAsync">Retry</button>
         </div>
@@ -64,7 +64,7 @@
                 <div class="input-group" style="align-items:center;gap:8px;flex-wrap:wrap">
                     <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
                         <input type="checkbox" @bind="_newMemoryIsPrivate" />
-                        🔒 Private (only injected for you)
+                        Private (only injected for you)
                     </label>
                     <button class="btn-primary btn-sm" @onclick="AddWorkspaceMemoryAsync" disabled="@string.IsNullOrWhiteSpace(_newMemoryText)">Save</button>
                 </div>
@@ -83,11 +83,15 @@
                         <div class="memory-meta">
                             @if (m.IsPrivate)
                             {
-                                <span title="Only injected for you" style="font-size:13px">🔒</span>
+                                <span title="Only injected for you" style="display:inline-flex">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                </span>
                             }
                             else
                             {
-                                <span title="Injected for all workspace members" style="font-size:13px">🔓</span>
+                                <span title="Injected for all workspace members" style="display:inline-flex">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+                                </span>
                             }
                             <span class="text-muted text-sm">@m.CreatedAt.LocalDateTime.ToString("d")</span>
                         </div>

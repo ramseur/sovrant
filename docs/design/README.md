@@ -64,6 +64,14 @@ Fixed to match the mock: `KindIcon()` deleted entirely (both Razor methods, both
 
 **Known remaining emoji** (Agents/Browse pattern, next in rotation): the shared `BoolToLockIconConverter`/`BoolToPrivacyLabelConverter` (Desktop) still return 🔒/🔓 text for `AgentsView.axaml` and one more `ChatView.axaml` site (the session-level privacy toggle, distinct from the message-avatar fix already shipped) — left alone this pass since changing the shared converter would require updating all three call sites together to avoid breaking the two not yet in scope.
 
+## Browse: emoji removed (2026-08-31)
+
+Swept the rest of the Browse pattern (Artifacts, Documents, Memory, Agents, Projects, Users/Admin, Workspaces, System Integrations, Platform Integrations — Skills/Tools/Code Templates/Providers were already clean). Same finding as the other two passes: `web.html` never had any of these emoji, so this was real code drifting from the design record. Fixed: warning-triangle error banners (10 files), folder icon (Artifacts), chat-bubble icon (Documents' "Chat to create", Agents' "Launch chat"), lock/unlock (Memory notes, Agents' own-run privacy toggle), a generic package icon replacing the PostgreSQL/Supabase mascot emoji (System Integrations), and a refresh icon replacing the OAuth "waiting" spinner (Platform Integrations). Every icon reused path data already proven earlier this session — no new hand-drawn geometry this pass.
+
+**Left alone, deliberately:** the ✕ close/remove glyph used across ~6 sites (Integrations, WorkspacesAdmin, AdminView). That's a plain typographic symbol (same category as the → ▲▼ sort/link glyphs already in the codebase), not a pictorial emoji — outside what the "real icons, not emoji" standard is targeting.
+
+**Verification gap:** Web was fully verified live (Artifacts, Documents, Memory, Agents, System Integrations) in Chrome, including exercising interactive states. Desktop's build is clean and every icon geometry is one already pixel/screenshot-verified earlier this session, but live interactive verification of this pass's Desktop screens (Documents, Memory, System Integrations, Integrations) wasn't completed — `SetForegroundWindow` silently failed to focus the app window from the automation context, and synthetic clicks were confirmed (via `GetForegroundWindow`) to be landing elsewhere. Stopped immediately rather than continue clicking blindly; worth a manual look next time the app is open.
+
 ## Open decisions
 
 - **Login theme on a fresh machine.** `App.razor` hardcodes `data-theme="dark"` and JS overrides from `localStorage`. Login renders before user preferences load, so it shows whatever the browser last stored — decide whether it should follow `prefers-color-scheme`.
