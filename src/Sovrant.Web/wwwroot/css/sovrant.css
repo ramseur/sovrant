@@ -73,7 +73,6 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 }
 
 /* ===== Top Context Bar (model + workspace + project switchers) ===== */
-/* Height matches .rail-brand so the bottom border lines up across the page. */
 .top-context-bar {
     display: flex;
     align-items: center;

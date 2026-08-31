@@ -40,7 +40,7 @@ The "S"-in-a-square mark showed up everywhere — rail brand row on every screen
 - **Web** — the browser tab favicon (`.fav` in the tabstrip mock).
 - **Desktop** — the native titlebar/window icon (`.tico` in the titlebar mock; real code already sets this via `Window.Icon`).
 
-Everywhere else — the rail brand row (both platforms) and the Login header — now carries no brand element at all, not even the "Sovrant" wordmark. It's redundant: the tab/titlebar already names the app, and the rail's first visible thing is now the first nav destination, Dashboard. The brand row survives only as an unlabeled bar holding the collapse toggle. Shipped in both `web.html`/`desktop.html` and in real code: `MainLayout.razor` + `sovrant.css` on Web, `MainWindow.axaml`'s brand row on Desktop (Login already had no mark on either platform).
+Everywhere else — the rail (both platforms) and the Login header — now carries no brand element at all, not even the "Sovrant" wordmark. It's redundant: the tab/titlebar already names the app, and the rail's first visible thing is now the first nav destination, Dashboard. The brand row itself is gone too, not just its contents — the collapse toggle floats on the rail's own border edge instead of owning a header row, so there's no blank space above Dashboard. Shipped in both `web.html`/`desktop.html` and in real code: `MainLayout.razor` + `sovrant.css` on Web, `MainWindow.axaml` on Desktop (Login already had no mark on either platform).
 
 **Still open:** the mark itself is still a placeholder "S" — worth drawing a real one for the two spots it now actually lives in.
 
