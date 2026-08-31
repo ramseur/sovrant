@@ -44,6 +44,18 @@ Everywhere else — the rail (both platforms) and the Login header — now carri
 
 **Still open:** the mark itself is still a placeholder "S" — worth drawing a real one for the two spots it now actually lives in.
 
+## Chat: mark reuse + emoji removed (2026-08-31)
+
+A screen-by-screen review against the mark-placement rule above found it was already being violated on the highest-traffic screen: Chat's empty-state hero and every assistant message avatar reused the brand-mark treatment (a colored square with a bold glyph — ⚡ in real code, "S" in the mock), and the six welcome-state suggestion tiles used raw emoji (🤖🤝🌀🎯🎼🔗) despite the nav redesign's "real icons, not emoji" standard.
+
+Fixed on both platforms, matching the pattern already used for the rest of the app: the hero icon and every assistant avatar now render the same chat-bubble line icon used in the rail's own Chat nav item, in neutral (not brand-colored) styling — no square, no letter, no color fill. The six suggestion tiles use the same reused-icon-set approach as the rail (agents/projects/box/refresh/chevron/paperclip icons, matching web `I.*` icon keys and Desktop's `NavIcons.axaml` `StreamGeometry` resources).
+
+`web.html`/`desktop.html` also gained a **Thread / Welcome** toggle on the Chat screen (visible only when Chat is selected) so the mock can actually demonstrate both states the Conversation pattern claims to have — previously `.welcome`/`.wm` CSS existed but was never rendered by `chatHTML()`.
+
+Shipped in: `Chat.razor` + `ChatMessage.razor` + `sovrant.css` on Web; `ChatView.axaml` + `NavIcons.axaml` (4 new `StreamGeometry` keys: `IconSwarm`, `IconMission`, `IconOrchestrate`, `IconConnect`) on Desktop.
+
+**Known remaining emoji** (out of scope for this pass — tracked for the next screen in the rotation): `Chat.razor`'s privacy lock icons (🔒/🔓) and error-banner warning triangle (⚠), plus raw emoji still present in `TopContextBar`, `Artifacts`, `Agents`, `Memory`, `UserDashboard`, `DocumentArtifactCard`, `Orchestration`, `CommandCenter`, `Setup` (Web) and their Desktop equivalents.
+
 ## Open decisions
 
 - **Login theme on a fresh machine.** `App.razor` hardcodes `data-theme="dark"` and JS overrides from `localStorage`. Login renders before user preferences load, so it shows whatever the browser last stored — decide whether it should follow `prefers-color-scheme`.

@@ -211,13 +211,14 @@
                         VerticalAlignment="Center"
                         Spacing="16"
                         MaxWidth="600">
-                <!-- Logo icon -->
-                <Border Width="56" Height="56" CornerRadius="14"
-                        Background="{DynamicResource BrandPrimary}"
-                        HorizontalAlignment="Center">
-                    <TextBlock Text="⚡" FontSize="24"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
+                <!-- Logo icon — same chat-bubble mark as the assistant avatar below;
+                     no brand-colored square (that treatment is reserved for the
+                     tab/titlebar mark, see docs/design/README.md). -->
+                <Border Width="56" Height="56" HorizontalAlignment="Center">
+                    <Path Data="{StaticResource IconChat}" Width="42" Height="42" Stretch="Uniform"
+                          StrokeThickness="1.7" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                          Stroke="{DynamicResource BrandPrimary}"
+                          HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
 
                 <!-- Agent scope badge — visible when session is bound to an agent -->
@@ -229,7 +230,10 @@
                         IsVisible="{Binding AgentName,
                                             Converter={x:Static conv:StringNotNullOrEmptyConverter.Instance}}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="🤖" FontSize="12" VerticalAlignment="Center" />
+                        <Path Data="{StaticResource IconAgents}" Width="13" Height="13" Stretch="Uniform"
+                              StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                              Stroke="{DynamicResource TextSecondary}"
+                              VerticalAlignment="Center" />
                         <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
                                    VerticalAlignment="Center">
                             <Run Text="Chatting with " />
@@ -257,7 +261,9 @@
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                             Command="{Binding SuggestionCommand}" CommandParameter="Create a custom agent with tools for web research and summarization">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="🤖" FontSize="14" VerticalAlignment="Center" />
+                            <Path Data="{StaticResource IconAgents}" Width="15" Height="15" Stretch="Uniform"
+                                  StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                  Stroke="{DynamicResource BrandPrimary}" VerticalAlignment="Center" />
                             <TextBlock Text="Create a custom agent" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
@@ -268,7 +274,9 @@
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                             Command="{Binding SuggestionCommand}" CommandParameter="Create a team that researches a topic and produces a structured report">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="🤝" FontSize="14" VerticalAlignment="Center" />
+                            <Path Data="{StaticResource IconProjects}" Width="15" Height="15" Stretch="Uniform"
+                                  StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                  Stroke="{DynamicResource BrandPrimary}" VerticalAlignment="Center" />
                             <TextBlock Text="Build a team of agents" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
@@ -279,7 +287,9 @@
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                             Command="{Binding SuggestionCommand}" CommandParameter="Build a best-practice swarm that parallelizes tasks across agents">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="🌀" FontSize="14" VerticalAlignment="Center" />
+                            <Path Data="{StaticResource IconSwarm}" Width="15" Height="15" Stretch="Uniform"
+                                  StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                  Stroke="{DynamicResource BrandPrimary}" VerticalAlignment="Center" />
                             <TextBlock Text="Design an agent swarm" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
@@ -290,7 +300,9 @@
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                             Command="{Binding SuggestionCommand}" CommandParameter="Set up a mission that monitors a project and sends daily updates">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="🎯" FontSize="14" VerticalAlignment="Center" />
+                            <Path Data="{StaticResource IconMission}" Width="15" Height="15" Stretch="Uniform"
+                                  StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                  Stroke="{DynamicResource BrandPrimary}" VerticalAlignment="Center" />
                             <TextBlock Text="Set up a mission" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
@@ -301,7 +313,9 @@
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                             Command="{Binding SuggestionCommand}" CommandParameter="Orchestrate a multi-agent pipeline for code review and testing">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="🎼" FontSize="14" VerticalAlignment="Center" />
+                            <Path Data="{StaticResource IconOrchestrate}" Width="15" Height="15" Stretch="Uniform"
+                                  StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                  Stroke="{DynamicResource BrandPrimary}" VerticalAlignment="Center" />
                             <TextBlock Text="Orchestrate a pipeline" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
@@ -312,7 +326,9 @@
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                             Command="{Binding SuggestionCommand}" CommandParameter="Connect an MCP server and create an agent that uses its tools">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="🔗" FontSize="14" VerticalAlignment="Center" />
+                            <Path Data="{StaticResource IconConnect}" Width="15" Height="15" Stretch="Uniform"
+                                  StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                  Stroke="{DynamicResource BrandPrimary}" VerticalAlignment="Center" />
                             <TextBlock Text="Connect an MCP server" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
@@ -370,10 +386,12 @@
                                             <!-- Icon + sender label + elapsed + action summary -->
                                             <StackPanel Orientation="Horizontal" Spacing="10">
                                                 <Border Width="32" Height="32" CornerRadius="8"
-                                                        Background="{DynamicResource BrandPrimary}">
-                                                    <TextBlock Text="⚡" FontSize="14"
-                                                               HorizontalAlignment="Center"
-                                                               VerticalAlignment="Center" />
+                                                        Background="{DynamicResource SurfaceBorder}">
+                                                    <Path Data="{StaticResource IconChat}" Width="15" Height="15" Stretch="Uniform"
+                                                          StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                                          Stroke="{DynamicResource TextSecondary}"
+                                                          HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center" />
                                                 </Border>
                                                 <TextBlock Text="{Binding SenderLabel}" FontSize="14" FontWeight="SemiBold"
                                                            Foreground="{DynamicResource TextPrimary}"

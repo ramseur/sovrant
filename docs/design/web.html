@@ -194,7 +194,8 @@
   .convo{flex:1;display:flex;flex-direction:column;min-height:0}
   .msgs{flex:1;overflow:auto;padding:22px;display:flex;flex-direction:column;gap:16px}
   .welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px}
-  .welcome .wm{width:52px;height:52px;border-radius:14px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:25px;font-weight:700;margin-bottom:6px}
+  .welcome .wm{width:52px;height:52px;display:flex;align-items:center;justify-content:center;color:var(--brand);margin-bottom:6px}
+  .welcome .wm svg{width:42px;height:42px}
   .welcome h3{margin:0;font-size:21px;font-weight:600;letter-spacing:-.01em}
   .welcome p{margin:0 0 14px;font-size:13px;color:var(--t2)}
   .sugg{display:grid;grid-template-columns:1fr 1fr;gap:9px;width:100%;max-width:560px}
@@ -203,6 +204,7 @@
   .sg svg{width:15px;height:15px;color:var(--brand);flex-shrink:0;margin-top:1px}
   .msg{display:flex;gap:11px;max-width:min(760px,100%)}
   .msg .who{width:28px;height:28px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
+  .msg .who svg{width:14px;height:14px}
   .msg.u .who{background:linear-gradient(135deg,var(--brand),#4a3789)}
   .msg.a .who{background:var(--border);color:var(--t2)}
   .msg .bub{font-size:13.5px;line-height:1.6}
@@ -259,6 +261,7 @@
       <p>Every screen in one page. The 21 destinations behind the nav are not 21 designs — they're <b>five patterns</b> plus data. Pick a screen on the left; the badge on each entry says which pattern renders it. Designing the pattern once is what stops these screens drifting apart the way they have.</p>
     </div>
     <div style="display:flex;gap:8px">
+      <div id="chatToggle" style="display:none;gap:8px"></div>
       <button class="cbtn" onclick="setTheme('light')">Light</button>
       <button class="cbtn" onclick="setTheme('dark')">Dark</button>
       <button class="cbtn on" id="railBtn" onclick="toggleRail()">Collapse rail</button>
@@ -327,7 +330,7 @@ const ADMIN_GROUPS = {command:'Overview',users:'Access',governance:'Safety',diag
 
 const S = {
   login:{g:null,p:'Entry',t:'Login',url:'/login',
-    note:'The only screen with no rail. Mark leads, wordmark supports; controls sit on the shell scale (40px inputs, 9px radius, 44px primary).'},
+    note:'The only screen with no rail. Wordmark only — no mark, same rule as everywhere else; controls sit on the shell scale (40px inputs, 9px radius, 44px primary).'},
   dashboard:{g:'dashboard',p:'Overview',t:'Dashboard',url:'/dashboard',sub:"Your activity across every workspace you belong to.",
     stats:[['My missions',0],['My team runs',0],['My agent runs',1],['My sessions',14],['Shared (public)',1],['Claws',0]],
     note:'Scoped to you. Command Center is the same pattern scoped to everyone — one design, two data sources.'},
@@ -396,7 +399,7 @@ const S = {
     note:'Reached from the footer, not the rail — so it has no group and no sub-nav.'}
 };
 
-let cur='dashboard', railOpen=true;
+let cur='dashboard', railOpen=true, chatWelcome=false;
 
 function buildIndex(){
   const el=document.getElementById('index');
@@ -414,6 +417,7 @@ function buildIndex(){
 function go(k){ cur=k; buildIndex(); render(); }
 function toggleRail(){ railOpen=!railOpen; document.getElementById('railBtn').classList.toggle('on',railOpen);
   document.getElementById('railBtn').textContent = railOpen?'Collapse rail':'Expand rail'; render(); }
+function setChatState(v){ chatWelcome=v; render(); }
 
 function railHTML(s){
   if(!s.g) return '';
@@ -499,11 +503,31 @@ function settingsHTML(s){
   return `${phHTML(s)}<div class="form">${secs}</div>`;
 }
 
+function welcomeHTML(){
+  const sugg=[[I.agents,2,'Create a custom agent with tools for web research and summarization'],
+    [I.proj,2,'Create a team that researches a topic and produces a structured report'],
+    [I.box,1.8,'Build a best-practice swarm that parallelizes tasks across agents'],
+    [I.refresh,2,'Set up a mission that monitors a project and sends daily updates'],
+    [I.chev,2,'Orchestrate a multi-agent pipeline for code review and testing'],
+    [I.clip,2,'Connect an MCP server and create an agent that uses its tools']];
+  return `<div class="welcome">
+    <div class="wm">${sv(I.chat,1.7)}</div>
+    <h3>What are you working on?</h3>
+    <p>Create agents, build teams, and orchestrate missions to automate your work.</p>
+    <div class="sugg">${sugg.map(([icon,w,t])=>`<div class="sg">${sv(icon,w)}<span>${t}</span></div>`).join('')}</div>
+  </div>`;
+}
+
 function chatHTML(s){
+  if(chatWelcome) return `<div class="convo">${welcomeHTML()}
+    <div class="composer"><div class="cbox"><div class="ta">Type a message or / for commands…</div>
+      <div class="cbar"><button class="ib">${sv(I.clip,2)}</button><button class="ib">${sv(I.plus,2.2)}</button><span class="sp"></span>
+      <span style="font-size:11.5px;color:var(--t3)">gemma-4-31b-it</span><button class="send">${sv(I.send,2)}</button></div></div></div>
+  </div>`;
   return `<div class="convo">
     <div class="msgs">
       <div class="msg u"><div class="who">ER</div><div class="bub">Why are OpenRouter chats failing?</div></div>
-      <div class="msg a"><div class="who">S</div><div>
+      <div class="msg a"><div class="who">${sv(I.chat,2)}</div><div>
         <div class="strip"><span style="display:flex;color:var(--t3)">${sv(I.chev,2.4)}</span><span class="cnt">4 actions</span><span>· Read ×2 · Grep · Bash · 2.4s</span></div>
         <div class="bub">Your OpenRouter key is expired — the API returns <code>401 API key expired</code> on every request. Two other things surfaced in the log: Ollama is being called although it isn't configured, and a request was rejected for sending 144 tools against a 128 limit.</div>
       </div></div>
@@ -537,6 +561,11 @@ function render(){
   const s=S[cur];
   document.getElementById('url').textContent='localhost:5100'+s.url;
   document.getElementById('sheet').innerHTML=`<span class="patt">${s.p}</span><b>${s.t}</b> — ${s.note}`;
+  const ct=document.getElementById('chatToggle');
+  if(cur==='chat'){
+    ct.style.display='flex';
+    ct.innerHTML=`<button class="cbtn${!chatWelcome?' on':''}" onclick="setChatState(false)">Thread</button><button class="cbtn${chatWelcome?' on':''}" onclick="setChatState(true)">Welcome</button>`;
+  } else { ct.style.display='none'; }
   let inner='';
   if(s.p==='Entry') inner=entryHTML();
   else if(s.p==='Browse') inner=browseHTML(s);
