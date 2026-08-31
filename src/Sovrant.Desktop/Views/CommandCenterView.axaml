@@ -55,35 +55,35 @@
                     CornerRadius="8" Padding="16,12" Margin="0,8,0,0">
                 <StackPanel Spacing="10">
                     <Grid ColumnDefinitions="120,*">
-                        <TextBlock Grid.Column="0" Text="🎯 mission" FontWeight="SemiBold"
+                        <TextBlock Grid.Column="0" Text="mission" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
                                    Text="A long-running goal Sovrant decomposes into a plan, then runs through teams and agents until done. Survives restarts and waits for human input when needed." />
                     </Grid>
                     <Grid ColumnDefinitions="120,*">
-                        <TextBlock Grid.Column="0" Text="👥 team run" FontWeight="SemiBold"
+                        <TextBlock Grid.Column="0" Text="team run" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
                                    Text="One execution of a team — a group of agents running together under a profile (sequential, parallel, or swarm). Each member produces an agent run beneath it." />
                     </Grid>
                     <Grid ColumnDefinitions="120,*">
-                        <TextBlock Grid.Column="0" Text="🤖 agent run" FontWeight="SemiBold"
+                        <TextBlock Grid.Column="0" Text="agent run" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
                                    Text="A single agent executing a task — either standalone (kicked off from the Agents page) or as a member of a team run. Has its own ledger row, turns, and review." />
                     </Grid>
                     <Grid ColumnDefinitions="120,*">
-                        <TextBlock Grid.Column="0" Text="💬 session" FontWeight="SemiBold"
+                        <TextBlock Grid.Column="0" Text="session" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
                                    Text="A chat conversation with the assistant. Click to resume; persists across restarts." />
                     </Grid>
                     <Grid ColumnDefinitions="120,*">
-                        <TextBlock Grid.Column="0" Text="🔗 claw" FontWeight="SemiBold"
+                        <TextBlock Grid.Column="0" Text="claw" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
@@ -217,8 +217,6 @@
                                                 CornerRadius="999" Padding="8,2"
                                                 HorizontalAlignment="Left" VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal" Spacing="4">
-                                                <TextBlock Text="{Binding KindIcon}" FontSize="11"
-                                                           VerticalAlignment="Center" />
                                                 <TextBlock Text="{Binding Kind}" FontSize="11"
                                                            Foreground="{DynamicResource TextSecondary}"
                                                            VerticalAlignment="Center" />

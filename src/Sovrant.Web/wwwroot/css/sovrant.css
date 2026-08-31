@@ -1947,6 +1947,9 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .remember-status { color: var(--accent-green, #4caf50); }
 
 .privacy-toggle-mini {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: transparent;
     border: 1px solid var(--border-subtle, #2a2a2a);
     border-radius: 999px;

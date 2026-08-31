@@ -20,4 +20,8 @@
     <StreamGeometry x:Key="IconMission">M23,4 L23,10 L17,10 M1,20 L1,14 L7,14 M3.5,9 a9,9 0 0 1 14.9,-3.4 L23,10 M1,14 l4.6,4.4 A9,9 0 0 0 20.5,15</StreamGeometry>
     <StreamGeometry x:Key="IconOrchestrate">M9,18 L15,12 L9,6</StreamGeometry>
     <StreamGeometry x:Key="IconConnect">M21.4,11.05 L12.25,20.2 a6,6 0 0 1 -8.49,-8.49 l9.2,-9.19 a4,4 0 0 1 5.65,5.66 l-9.2,9.19 a2,2 0 0 1 -2.83,-2.83 l8.49,-8.48</StreamGeometry>
+
+    <!-- Privacy lock/unlock — used wherever a row toggles between private and public. -->
+    <StreamGeometry x:Key="IconLock">M3,11 L21,11 L21,22 L3,22 Z M7,11 L7,7 A5,5 0 0 1 17,7 L17,11</StreamGeometry>
+    <StreamGeometry x:Key="IconUnlock">M3,11 L21,11 L21,22 L3,22 Z M7,11 L7,7 A5,5 0 0 1 16.9,6</StreamGeometry>
 </ResourceDictionary>

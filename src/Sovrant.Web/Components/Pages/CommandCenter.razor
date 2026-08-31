@@ -117,19 +117,19 @@
         {
             <div class="cc-help-panel">
                 <dl class="cc-help-grid">
-                    <dt><span class="cc-kind-pill cc-kind-mission">&#x1F3AF; mission</span></dt>
+                    <dt><span class="cc-kind-pill cc-kind-mission">mission</span></dt>
                     <dd>A long-running goal Sovrant decomposes into a plan, then runs through teams and agents until done. Top of the orchestration stack — survives restarts and waits for human input when needed.</dd>
 
-                    <dt><span class="cc-kind-pill cc-kind-team-run">&#x1F465; team run</span></dt>
+                    <dt><span class="cc-kind-pill cc-kind-team-run">team run</span></dt>
                     <dd>One execution of a team — a group of agents running together under a profile (sequential, parallel, or swarm). Each member produces an agent run beneath it.</dd>
 
-                    <dt><span class="cc-kind-pill cc-kind-agent-run">&#x1F916; agent run</span></dt>
+                    <dt><span class="cc-kind-pill cc-kind-agent-run">agent run</span></dt>
                     <dd>A single agent executing a task — either standalone (kicked off from the Agents page) or as a member of a team run. Has its own ledger row, turns, and review.</dd>
 
-                    <dt><span class="cc-kind-pill cc-kind-session">&#x1F4AC; session</span></dt>
+                    <dt><span class="cc-kind-pill cc-kind-session">session</span></dt>
                     <dd>A chat conversation with the assistant. Click to resume; persists across restarts.</dd>
 
-                    <dt><span class="cc-kind-pill cc-kind-claw">&#x1F517; claw</span></dt>
+                    <dt><span class="cc-kind-pill cc-kind-claw">claw</span></dt>
                     <dd>An autonomous external system Sovrant connects to over MCP (n8n, Zapier, custom servers). Claws run in their own world; Sovrant monitors and steers them from here. Foundational — full claw runtime lands later.</dd>
                 </dl>
             </div>
@@ -138,7 +138,8 @@
         @if (!string.IsNullOrEmpty(_error))
         {
             <div class="page-error-banner" role="alert">
-                <span>&#9888;</span><span class="error-message">@_error</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg>
+                <span class="error-message">@_error</span>
             </div>
         }
 
@@ -190,18 +191,22 @@
                 {
                     <a class="cc-grid-row @(row.IsMasked ? "cc-row-masked" : "")" href="@(string.IsNullOrEmpty(row.DetailRoute) ? null : row.DetailRoute)">
                         <div class="cc-col-kind">
-                            <span class="cc-kind-pill cc-kind-@(row.Kind)">@KindIcon(row.Kind) @row.Kind</span>
+                            <span class="cc-kind-pill cc-kind-@(row.Kind)">@row.Kind</span>
                         </div>
                         <div class="cc-col-title">
                             <div class="cc-title">
                                 @row.Title
                                 @if (row.IsPrivate && !row.IsMasked)
                                 {
-                                    <span class="cc-badge-private" title="Private — only visible to you">&#x1F512;</span>
+                                    <span class="cc-badge-private" title="Private — only visible to you">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                    </span>
                                 }
                                 else if (row.IsMasked)
                                 {
-                                    <span class="cc-badge-private" title="Private — content hidden">&#x1F512;</span>
+                                    <span class="cc-badge-private" title="Private — content hidden">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                    </span>
                                 }
                             </div>
                             @if (!string.IsNullOrEmpty(row.Preview))
@@ -400,16 +405,6 @@
             StateHasChanged();
         }
     }
-
-    private static string KindIcon(string kind) => kind switch
-    {
-        "mission" => "\U0001F3AF",
-        "team-run" => "\U0001F465",
-        "agent-run" => "\U0001F916",
-        "session" => "\U0001F4AC",
-        "claw" => "\U0001F517",
-        _ => "•",
-    };
 
     private static string FormatRelative(DateTimeOffset when)
     {
