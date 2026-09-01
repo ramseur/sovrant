@@ -13,7 +13,10 @@
             <div class="master-header-right">
                 <span class="item-count">@_filtered.Count</span>
                 <button class="btn-sm btn-outline" title="Swarm defaults"
-                        @onclick="ToggleSwarmConfig">&#x2699;</button>
+                        style="display:inline-flex;align-items:center;justify-content:center"
+                        @onclick="ToggleSwarmConfig">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>
+                </button>
                 <button class="btn-sm btn-primary" title="New team"
                         @onclick="StartCreate">+ New</button>
             </div>
