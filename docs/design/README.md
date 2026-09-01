@@ -2,6 +2,8 @@
 
 This folder is the design record for Sovrant's user-facing surfaces. It exists to let anyone — human or agent — **verify a design before and after it ships**, without running the app.
 
+**Scope note:** most entries below describe changes actually applied to production code (`src/Sovrant.Web`, `src/Sovrant.Desktop`), committed and pushed to `development` — not just edits to `web.html`/`desktop.html`. The two mock files stay the source of truth for what a screen *should* look like; the dated sections are the log of real code being brought in line with them. See "Production code touched by this work" below for the full commit-by-commit list.
+
 ## Two files. That's the whole thing.
 
 - **`web.html`** — every Web screen.
@@ -93,6 +95,22 @@ Closed out everything the sweep had left open:
 Web verified live in Chrome (private toggle, remember-form checkbox — both render the new icon correctly on a fresh tab). Desktop builds clean; the `BoolToLockIconConverter`/`LoginWindow` fixes weren't re-verified live this round — same `SetForegroundWindow` automation limitation as the Browse pass, and the icon geometry itself was already pixel-confirmed from the Overview pass.
 
 **Still open:** the ✕ typographic close/remove glyph (left alone everywhere, deliberately — not a pictorial-emoji violation), and the placeholder "S" mark artwork (next up).
+
+## Production code touched by this work
+
+Everything from the nav-mark cleanup through the pattern sweep, in commit order — 8 commits, 33 production files across both platforms, all pushed directly to `development` (this repo's normal workflow, not a deviation):
+
+| Commit | What it shipped |
+|---|---|
+| `5038190`, `48ff6e2` | Nav mark/toggle cleanup — `MainLayout.razor`+CSS (Web), `MainWindow.axaml` (Desktop), both mocks |
+| `1ad8c9d` | Chat: mark reuse + emoji removed — `Chat.razor`, `ChatMessage.razor` (Web); `ChatView.axaml` + 4 new `NavIcons.axaml` resources (Desktop) |
+| `15fea93` | Overview: emoji removed — `UserDashboard.razor`, `CommandCenter.razor` (Web); `UserDashboardView.axaml`, `CommandCenterView.axaml` + both ViewModels (Desktop) |
+| `c99920a` | Browse: emoji removed across 9 screens — `Artifacts`, `Documents`, `Memory`, `Agents`, `Projects`, `Admin`, `Workspaces`, `WorkspacesAdmin`, `SystemIntegrations`, `Integrations` (Web); `DocumentsView`, `MemoryView`, `SystemIntegrationsView`, `IntegrationsView` (Desktop) |
+| `5e58296` | Settings: emoji removed — `Orchestration.razor` run-mode badges |
+| `5b711ce` | Deferred converter + Login bugs — `BoolToLockIconConverter.cs`, `AgentsView.axaml`, `ChatView.axaml` (Desktop); more of `Chat.razor` (Web); `LoginWindow.axaml`'s two theming bugs |
+| `bbeead6` | Web favicon — `App.razor`, new `favicon.ico` |
+
+Every commit above was scoped to the emoji/mark-cleanup review from `docs/design/README.md`'s own findings — nothing unrelated rode along. Full readout available via `git log --oneline 3484766..HEAD` (`3484766` is the two-file mock consolidation this log starts counting from).
 
 ## Open decisions
 
