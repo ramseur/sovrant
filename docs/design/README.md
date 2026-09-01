@@ -94,7 +94,7 @@ Closed out everything the sweep had left open:
 
 Web verified live in Chrome (private toggle, remember-form checkbox — both render the new icon correctly on a fresh tab). Desktop builds clean; the `BoolToLockIconConverter`/`LoginWindow` fixes weren't re-verified live this round — same `SetForegroundWindow` automation limitation as the Browse pass, and the icon geometry itself was already pixel-confirmed from the Overview pass.
 
-**Still open:** the ✕ typographic close/remove glyph (left alone everywhere, deliberately — not a pictorial-emoji violation), and the placeholder "S" mark artwork (next up).
+**Still open:** the ✕ typographic close/remove glyph (left alone everywhere, deliberately — not a pictorial-emoji violation).
 
 ## Production code touched by this work
 
@@ -112,9 +112,22 @@ Everything from the nav-mark cleanup through the pattern sweep, in commit order 
 
 Every commit above was scoped to the emoji/mark-cleanup review from `docs/design/README.md`'s own findings — nothing unrelated rode along. Full readout available via `git log --oneline 3484766..HEAD` (`3484766` is the two-file mock consolidation this log starts counting from).
 
+## Screen-by-screen visual pass (2026-09-01)
+
+Went through all 5 patterns in the browser — Login, Dashboard (Overview), Chat, Artifacts and Users (Browse), Orchestration and Diagnostics (Settings) — checking for genuine design roughness now that the emoji/mark sweep is done: layout, spacing, hierarchy, semantic color use. Nothing found worth changing. The pattern-once approach is holding: every screen checked reads as the same design system, not a bespoke one-off. Not touching the other 14 screens individually — they render through the same 5 pattern functions already confirmed clean, so per-screen re-verification would be checking the same code path repeatedly, not new risk.
+
+That leaves the two long-open items below actually resolved instead of just tracked.
+
 ## Open decisions
 
-- **Login theme on a fresh machine.** `App.razor` hardcodes `data-theme="dark"` and JS overrides from `localStorage`. Login renders before user preferences load, so it shows whatever the browser last stored — decide whether it should follow `prefers-color-scheme`.
+- **Login theme on a fresh machine — resolved.** `App.razor` hardcodes `data-theme="dark"` on the `<html>` tag before any JS runs; an explicit `data-theme` stamp always wins over `prefers-color-scheme` in CSS, so a first-time visitor never sees their actual OS preference regardless of what it is. The mock already does this correctly — `web.html`/`desktop.html` never stamp `data-theme` until the viewer explicitly picks Light/Dark, so `@media (prefers-color-scheme)` decides on first paint. **Decision: match the mock — stop hardcoding `data-theme="dark"` in `App.razor`; leave it unset until `localStorage` has a stored choice.** Not implemented yet (design-only pass); real fix is a one-line removal in `App.razor` plus the equivalent JS-sets-before-first-paint check already in place for the stored-preference case.
+
+- **Control height scale — documented, not unified.** Flagged early in this pass as ad hoc (9 distinct heights: 22/26/28/29/30/32/34/36/38/40/44px). Audited every real height in `web.html`'s CSS (excluding the browser-chrome mockup frame, which isn't product UI) and it's looser than ideal but not random — it clusters into three real tiers:
+  - **28–32px** — compact/icon-only controls: `.chip` (28), `.av` avatar (29), `.ib` icon button (30), `.send` composer action (32), `.ctog` rail toggle (26, deliberately smaller — floats half-off the rail edge)
+  - **34–36px** — standard controls: `.btn` secondary button, `.inpb` settings input, `.idx` index row (34), `.search` (36)
+  - **40–44px** — primary/high-traffic controls: `.nav` rail row, `.li` login input (40), `.frow` footer row, `.lbtn` login primary button (44)
+
+  Not forcing a mass rewrite to 3 exact values — every current height was visually tuned for its specific control, and normalizing ~15 CSS rules with no way to re-verify each one visually within this pass is a real regression risk for a cosmetic-only win. **Standard going forward: new controls should land on 28, 32, 34, 36, 40, or 44px** — one of the six values already in use — rather than introduce a 7th.
 
 ## Already shipped from this work
 
