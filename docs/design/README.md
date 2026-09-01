@@ -72,6 +72,14 @@ Swept the rest of the Browse pattern (Artifacts, Documents, Memory, Agents, Proj
 
 **Verification gap:** Web was fully verified live (Artifacts, Documents, Memory, Agents, System Integrations) in Chrome, including exercising interactive states. Desktop's build is clean and every icon geometry is one already pixel/screenshot-verified earlier this session, but live interactive verification of this pass's Desktop screens (Documents, Memory, System Integrations, Integrations) wasn't completed — `SetForegroundWindow` silently failed to focus the app window from the automation context, and synthetic clicks were confirmed (via `GetForegroundWindow`) to be landing elsewhere. Stopped immediately rather than continue clicking blindly; worth a manual look next time the app is open.
 
+## Settings: emoji removed (2026-09-01)
+
+Swept the last pattern — Governance, Trust Boundary, Diagnostics, Settings, and Orchestration. Only Orchestration had emoji: `ModeIcon()` returned one of three C# unicode escapes (`\U0001F465` people, `⚡` bolt, `\U0001F41D` bee) for the Sequential/Parallel/Swarm run-mode badges, plus one hardcoded bee on the "Swarm Defaults" badge. The other four screens, and Orchestration's Desktop counterpart, were already clean — Desktop's run-mode picker is a plain-text `ComboBox` with no icons at all.
+
+Fixed on Web only (nothing to fix on Desktop): Sequential is now three horizontal lines (a "steps in order" glyph), Parallel is three vertical lines, Swarm reuses the same package icon from the Chat/System-Integrations passes. All three are plain straight-line geometry — no arcs, zero hand-drawing risk. `ModeIcon()` now returns inline SVG markup rendered via `MarkupString`, the same pattern used for Chat's suggestion tiles. Verified live in Chrome: both the team-list badge and the detail-header badge render the new icon correctly.
+
+This closes out the pattern-by-pattern sweep from the review two turns back (Conversation → Overview → Browse → Settings). What's left: the shared `BoolToLockIconConverter` deferred from the Chat pass (`AgentsView.axaml`, one `ChatView.axaml` site), the ✕ typographic glyphs left alone throughout, and the two pre-existing `LoginWindow.axaml` bugs below.
+
 ## Open decisions
 
 - **Login theme on a fresh machine.** `App.razor` hardcodes `data-theme="dark"` and JS overrides from `localStorage`. Login renders before user preferences load, so it shows whatever the browser last stored — decide whether it should follow `prefers-color-scheme`.

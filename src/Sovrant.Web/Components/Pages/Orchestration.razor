@@ -37,7 +37,7 @@
                             @onclick="() => Select(item)">
                         <div class="item-title">
                             <span class="orch-shape-badge shape-@item.RunMode.ToString().ToLowerInvariant()">
-                                @ModeIcon(item.RunMode) @item.RunMode
+                                @((MarkupString)ModeIcon(item.RunMode)) @item.RunMode
                             </span>
                             <span>@item.Name</span>
                         </div>
@@ -95,7 +95,10 @@
             <div class="detail-content">
                 <div class="orch-detail-header">
                     <div>
-                        <span class="orch-shape-badge shape-swarm">&#x1F41D; Defaults</span>
+                        <span class="orch-shape-badge shape-swarm">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>
+                            Defaults
+                        </span>
                         <h2>Swarm Defaults</h2>
                         <p class="text-secondary" style="margin:4px 0 0;">
                             Default run settings inherited by new teams. Per-team overrides live on each team's detail pane.
@@ -163,7 +166,7 @@
                 <div class="orch-detail-header">
                     <div>
                         <span class="orch-shape-badge shape-@_selected.RunMode.ToString().ToLowerInvariant()">
-                            @ModeIcon(_selected.RunMode) @_selected.RunMode
+                            @((MarkupString)ModeIcon(_selected.RunMode)) @_selected.RunMode
                         </span>
                         <h2>@_selected.Name</h2>
                         @if (!string.IsNullOrEmpty(_selected.Description))
@@ -663,11 +666,15 @@
         return $"{string.Join(", ", tools.Take(3))} +{tools.Count - 3} more";
     }
 
+    private const string SequentialIcon = "<svg width=\"11\" height=\"11\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><line x1=\"4\" y1=\"6\" x2=\"20\" y2=\"6\"/><line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\"/><line x1=\"4\" y1=\"18\" x2=\"20\" y2=\"18\"/></svg>";
+    private const string ParallelIcon = "<svg width=\"11\" height=\"11\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><line x1=\"6\" y1=\"4\" x2=\"6\" y2=\"20\"/><line x1=\"12\" y1=\"4\" x2=\"12\" y2=\"20\"/><line x1=\"18\" y1=\"4\" x2=\"18\" y2=\"20\"/></svg>";
+    private const string SwarmIcon = "<svg width=\"11\" height=\"11\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/><polyline points=\"3.3 7 12 12 20.7 7\"/><line x1=\"12\" y1=\"22\" x2=\"12\" y2=\"12\"/></svg>";
+
     private static string ModeIcon(TeamRunMode mode) => mode switch
     {
-        TeamRunMode.Sequential => "\U0001F465",
-        TeamRunMode.Parallel => "\u26A1",
-        TeamRunMode.Swarm => "\U0001F41D",
+        TeamRunMode.Sequential => SequentialIcon,
+        TeamRunMode.Parallel => ParallelIcon,
+        TeamRunMode.Swarm => SwarmIcon,
         _ => string.Empty,
     };
 
