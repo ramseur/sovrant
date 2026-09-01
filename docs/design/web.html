@@ -259,10 +259,10 @@
     <div>
       <span class="pill">Web &middot; Design</span>
       <h1>Sovrant Web</h1>
-      <p>Every screen in one page. The 21 destinations behind the nav are not 21 designs — they're <b>five patterns</b> plus data. Pick a screen on the left; the badge on each entry says which pattern renders it. Designing the pattern once is what stops these screens drifting apart the way they have.</p>
+      <p>Every screen in one page. The 22 destinations behind the nav are not 22 designs — they're <b>five patterns</b> plus data. Pick a screen on the left; the badge on each entry says which pattern renders it. Designing the pattern once is what stops these screens drifting apart the way they have.</p>
     </div>
     <div style="display:flex;gap:8px">
-      <div id="chatToggle" style="display:none;gap:8px"></div>
+      <div id="screenToggle" style="display:none;gap:8px"></div>
       <button class="cbtn" onclick="setTheme('light')">Light</button>
       <button class="cbtn" onclick="setTheme('dark')">Dark</button>
       <button class="cbtn on" id="railBtn" onclick="toggleRail()">Collapse rail</button>
@@ -289,7 +289,7 @@
         <h2>The five patterns</h2>
         <table>
           <tr><th style="width:1%">Pattern</th><th style="width:1%">Screens</th><th>Covers</th></tr>
-          <tr><td class="n">Browse</td><td class="num">13</td><td>Artifacts, Code Templates, Documents, Memory, Skills, Tools, Agents Library, Projects, Users, Workspaces, Providers, Platform Integrations, System Integrations — a searchable list beside a detail pane. Same header, same toolbar, same empty state; only the item card and the detail fields differ.</td></tr>
+          <tr><td class="n">Browse</td><td class="num">14</td><td>Artifacts, Code Templates, Documents, Memory, Skills, Tools, Agents Library, Orchestration, Projects, Users, Workspaces, Providers, Platform Integrations, System Integrations — a searchable list beside a detail pane. Same header, same toolbar, same empty state; only the item card and the detail fields differ. Orchestration's detail pane is the richest of the 14 (Run + Run Profile + Members instead of one key/value block) but the shell is identical.</td></tr>
           <tr><td class="n">Overview</td><td class="num">2</td><td>Dashboard, Command Center — a row of stat tiles over an activity table. Identical structure; Dashboard is scoped to you, Command Center to everyone.</td></tr>
           <tr><td class="n">Settings</td><td class="num">4</td><td>Settings, Governance, Trust Boundary, Diagnostics — sectioned cards of labelled rows, each row a control with a description.</td></tr>
           <tr><td class="n">Conversation</td><td class="num">1</td><td>Chat — genuinely its own shape: welcome state, message thread, collapsed work strips, composer.</td></tr>
@@ -314,7 +314,9 @@ const I = {
   box:'<path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/>',
   send:'<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
   clip:'<path d="M21.4 11.05 12.25 20.2a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 0 1 5.65 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
-  chev:'<polyline points="9 18 15 12 9 6"/>', warn:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17.01"/>'
+  chev:'<polyline points="9 18 15 12 9 6"/>', warn:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17.01"/>',
+  seq:'<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>',
+  par:'<line x1="6" y1="4" x2="6" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="18" y1="4" x2="18" y2="20"/>'
 };
 const sv = (p,w) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w||1.9}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 
@@ -359,9 +361,10 @@ const S = {
     acts:[['New',1]],
     items:[{n:'architect',mono:1,b:['Planner','Read, Grep, Glob'],tag:['High','b-brand']},{n:'code-reviewer',mono:1,b:['Reviewer','Read, Grep, Glob'],tag:['High','b-brand']},{n:'coder',mono:1,b:['Coder','All tools'],tag:['Standard','b-mut']}],
     note:'Tier is the only thing that needed a new badge colour; everything else is the shared card.'},
-  orchestration:{g:'agents',p:'Settings',t:'Orchestration',url:'/orchestration',
-    secs:[['Team run profile',[['Max parallel agents','How many agents may run at once.','n:4'],['Fail fast','Stop the run when any agent fails.','sw:1']]],['Swarm',[['Decomposition depth','How far a task is broken down.','n:3']]]],
-    note:'Closer to Settings than to Browse — sectioned controls, not a list.'},
+  orchestration:{g:'agents',p:'Browse',t:'Orchestration',url:'/orchestration',sub:'1 team',
+    acts:[['New team',1]],
+    items:[{n:'test',b:['1 agent'],tag:['Parallel','b-mut']}],
+    note:'Was mis-tagged Settings — it\'s Browse: a team list + detail, same shell as every other list screen. What made it look like Settings is that the detail pane has three sections (Run, Run Profile, Members) instead of one key/value block. Swarm Defaults is a real second view of this same screen, toggled below — not a separate destination.'},
   projects:{g:'projects',p:'Browse',t:'Projects',url:'/projects',sub:'0 projects',
     acts:[['New project',1]], empty:1,
     note:'Shown in its empty state, which is the state most new users actually meet. The Browse empty state does the explaining.'},
@@ -400,7 +403,7 @@ const S = {
     note:'Reached from the footer, not the rail — so it has no group and no sub-nav.'}
 };
 
-let cur='dashboard', railOpen=true, chatWelcome=false;
+let cur='dashboard', railOpen=true, chatWelcome=false, orchView='team';
 
 function buildIndex(){
   const el=document.getElementById('index');
@@ -419,6 +422,7 @@ function go(k){ cur=k; buildIndex(); render(); }
 function toggleRail(){ railOpen=!railOpen; document.getElementById('railBtn').classList.toggle('on',railOpen);
   document.getElementById('railBtn').textContent = railOpen?'Collapse rail':'Expand rail'; render(); }
 function setChatState(v){ chatWelcome=v; render(); }
+function setOrchView(v){ orchView=v; render(); }
 
 function railHTML(s){
   if(!s.g) return '';
@@ -470,12 +474,17 @@ function browseHTML(s){
     ? `<div class="empty" style="padding:40px 20px">${sv(I.box,1.6)}<div class="h">Nothing here yet</div><div class="p">Create the first one to get started.</div></div>`
     : items;
   const sel=(s.items||[])[0];
-  const detail = s.empty || !sel
-    ? `<div class="empty">${sv(I.box,1.6)}<div class="h">Nothing selected</div><div class="p">Pick an item from the list to see its details.</div></div>`
-    : `<div class="dhead"><div style="flex:1"><h3>${sel.n}</h3><div class="dsub">${(sel.b||[]).join(' · ')}</div></div>
-        ${sel.tag?`<span class="badge ${sel.tag[1]}" style="margin:0">${sel.tag[0]}</span>`:''}</div>
-       <dl class="kv"><dt>Identifier</dt><dd>${sel.n}</dd><dt>Workspace</dt><dd>ws-personal-ramseur</dd><dt>Updated</dt><dd>2026-08-27 14:02</dd></dl>
-       <div style="display:flex;gap:8px;margin-top:16px">${(s.actsDetail||[['Open',1],['Delete',0]]).map(([t,p])=>`<button class="btn${p?' pri':''}">${t}</button>`).join('')}</div>`;
+  let detail;
+  if(s.t==='Orchestration'){
+    detail = orchView==='defaults' ? orchDefaultsHTML() : orchTeamDetailHTML(sel);
+  } else {
+    detail = s.empty || !sel
+      ? `<div class="empty">${sv(I.box,1.6)}<div class="h">Nothing selected</div><div class="p">Pick an item from the list to see its details.</div></div>`
+      : `<div class="dhead"><div style="flex:1"><h3>${sel.n}</h3><div class="dsub">${(sel.b||[]).join(' · ')}</div></div>
+          ${sel.tag?`<span class="badge ${sel.tag[1]}" style="margin:0">${sel.tag[0]}</span>`:''}</div>
+         <dl class="kv"><dt>Identifier</dt><dd>${sel.n}</dd><dt>Workspace</dt><dd>ws-personal-ramseur</dd><dt>Updated</dt><dd>2026-08-27 14:02</dd></dl>
+         <div style="display:flex;gap:8px;margin-top:16px">${(s.actsDetail||[['Open',1],['Delete',0]]).map(([t,p])=>`<button class="btn${p?' pri':''}">${t}</button>`).join('')}</div>`;
+  }
   return `${phHTML(s)}
     <div class="toolbar"><div class="search">${sv(I.search,2)}<input placeholder="Search ${s.t.toLowerCase()}…"></div></div>
     <div class="split"><div class="mlist">${listBody}</div><div class="detail">${detail}</div></div>`;
@@ -491,17 +500,63 @@ function overviewHTML(s){
     <div class="tablewrap"><table><thead><tr><th>Kind</th><th>Title</th><th>Status</th><th>Owner</th><th>Last activity</th><th>Cost</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-function settingsHTML(s){
-  const secs=s.secs.map(([h,rows])=>`<div class="fsec"><h4>${h}</h4>${rows.map(([t,d,ctl])=>{
+function fsecHTML(secs){
+  return secs.map(([h,rows])=>`<div class="fsec">${h?`<h4>${h}</h4>`:''}${rows.map(([t,d,ctl])=>{
     const [kind,val]=ctl.split(':');
     let c='';
     if(kind==='sw') c=`<div class="sw${val==='1'?' on':''}"></div>`;
     if(kind==='n') c=`<input class="inpb" style="min-width:110px;text-align:right" value="${val}">`;
     if(kind==='sel') c=`<select class="inpb"><option>${val}</option></select>`;
     if(kind==='st'){const m={ok:['b-ok','Healthy'],fail:['b-warn','Failing'],mut:['b-mut','Offline']}[val];c=`<span class="badge ${m[0]}" style="margin:0">${m[1]}</span>`;}
-    return `<div class="frowi"><div class="fl"><div class="ft">${t}</div><div class="fd">${d}</div></div>${c}</div>`;
+    return `<div class="frowi"><div class="fl"><div class="ft">${t}</div>${d?`<div class="fd">${d}</div>`:''}</div>${c}</div>`;
   }).join('')}</div>`).join('');
-  return `${phHTML(s)}<div class="form">${secs}</div>`;
+}
+function settingsHTML(s){
+  return `${phHTML(s)}<div class="form">${fsecHTML(s.secs)}</div>`;
+}
+
+/* Orchestration's detail pane is richer than a generic Browse detail —
+   Run + Run Profile + Members — which is why it used to be mis-tagged
+   Settings. It's still Browse: same list shell, same .item cards. */
+function orchTeamDetailHTML(sel){
+  const modeIcon = {Sequential:I.seq,Parallel:I.par,Swarm:I.box}[sel.tag[0]] || I.par;
+  return `<div class="dhead"><div style="flex:1">
+      <span class="badge b-mut" style="margin:0 0 8px;display:inline-flex;align-items:center;gap:5px">${sv(modeIcon,2)}${sel.tag[0]}</span>
+      <h3>${sel.n}</h3><div class="dsub">${(sel.b||[]).join(' · ')}</div>
+    </div><button class="btn ghost" style="color:var(--fail)">Delete</button></div>
+    <div style="margin:18px 0">
+      <div class="slab" style="padding:0 0 8px">Run</div>
+      <div class="sheet" style="margin-bottom:0">
+        <textarea style="width:100%;min-height:56px;border:1px solid var(--border);border-radius:8px;background:var(--inp);color:var(--t1);padding:9px 11px;font:inherit;font-size:13px;resize:vertical" placeholder="Describe the goal or task for this team…"></textarea>
+        <button class="btn pri" style="margin-top:10px">Run Team</button>
+      </div>
+    </div>
+    <div class="slab" style="padding:0 0 8px">Run Profile</div>
+    ${fsecHTML([['',[
+      ['Run Mode','','sel:'+sel.tag[0]],
+      ['Max Concurrent','','n:4'],
+      ['File Locks','Serialize concurrent writes to the same file.','sw:0'],
+      ['Quality Gate','Post-run review + optional retry.','sw:1'],
+      ['Decomposition','','sel:Off']
+    ]]])}
+    <div class="slab" style="padding:14px 0 8px">Members</div>
+    <div class="item" style="cursor:default"><div class="r1"><span class="nm mono">chief</span><span class="badge b-brand">General</span></div><div class="meta"><span>All tools</span></div></div>`;
+}
+function orchDefaultsHTML(){
+  return `<div class="dhead"><div style="flex:1">
+      <span class="badge b-mut" style="margin:0 0 8px;display:inline-flex;align-items:center;gap:5px">${sv(I.box,1.9)}Defaults</span>
+      <h3>Swarm Defaults</h3>
+      <div class="dsub">Default run settings inherited by new teams. Per-team overrides live on each team's detail pane.</div>
+    </div></div>
+    ${fsecHTML([['',[
+      ['Swarm Enabled','Enable swarm orchestrator for parallel agent execution.','sw:1'],
+      ['Quality Gate','Run quality review after execution.','sw:0'],
+      ['Max Concurrent Agents','','n:4'],
+      ['Token Budget','','n:500000'],
+      ['Task Timeout (seconds)','','n:1800'],
+      ['Permissions','','sel:Ask']
+    ]]])}
+    <button class="btn pri" style="margin-top:14px">Save Defaults</button>`;
 }
 
 function welcomeHTML(){
@@ -562,10 +617,13 @@ function render(){
   const s=S[cur];
   document.getElementById('url').textContent='localhost:5100'+s.url;
   document.getElementById('sheet').innerHTML=`<span class="patt">${s.p}</span><b>${s.t}</b> — ${s.note}`;
-  const ct=document.getElementById('chatToggle');
+  const ct=document.getElementById('screenToggle');
   if(cur==='chat'){
     ct.style.display='flex';
     ct.innerHTML=`<button class="cbtn${!chatWelcome?' on':''}" onclick="setChatState(false)">Thread</button><button class="cbtn${chatWelcome?' on':''}" onclick="setChatState(true)">Welcome</button>`;
+  } else if(cur==='orchestration'){
+    ct.style.display='flex';
+    ct.innerHTML=`<button class="cbtn${orchView==='team'?' on':''}" onclick="setOrchView('team')">Team</button><button class="cbtn${orchView==='defaults'?' on':''}" onclick="setOrchView('defaults')">Defaults</button>`;
   } else { ct.style.display='none'; }
   let inner='';
   if(s.p==='Entry') inner=entryHTML();

@@ -13,27 +13,41 @@ Open either in a browser; no build step. Pick a screen from the index on the lef
 
 A third file will join them when the CLI gets a real design pass. Today it's out of scope — the README calls it "functional but actively being refined".
 
-## 21 screens, 5 patterns
+## 22 screens, 5 patterns
 
-The destinations behind the nav are not 21 designs. They're five patterns plus data:
+The destinations behind the nav are not 22 designs. They're five patterns plus data:
 
 | Pattern | Screens | What it is |
 |---|---|---|
-| **Browse** | 13 | Searchable list beside a detail pane. Artifacts, Code Templates, Documents, Memory, Skills, Tools, Agents Library, Projects, Users, Workspaces, Providers, Platform Integrations, System Integrations. |
+| **Browse** | 14 | Searchable list beside a detail pane. Artifacts, Code Templates, Documents, Memory, Skills, Tools, Agents Library, Orchestration, Projects, Users, Workspaces, Providers, Platform Integrations, System Integrations. |
 | **Overview** | 2 | Stat tiles over an activity table. Dashboard (scoped to you), Command Center (scoped to everyone). |
 | **Settings** | 4 | Sectioned cards of labelled rows, each row one control plus the sentence explaining it. Settings, Governance, Trust Boundary, Diagnostics. |
 | **Conversation** | 1 | Chat. Genuinely its own shape — welcome state, thread, collapsed work strips, composer. |
 | **Entry** | 1 | Login. The only screen with no rail. |
 
+(Was 21/13/4 until 2026-09-01 — Orchestration existed as its own nav destination the whole time but was never counted in the running total, on top of being mis-tagged Settings. See below.)
+
 This is the point of the folder. Those pages were each built standalone — they share no layout classes today, which is exactly why they drift. Designing the pattern once and treating each screen as pattern + data is what stops it.
 
 **When adding a screen, use an existing pattern.** A new pattern needs a reason the existing four can't express it.
+
+## Orchestration was mis-tagged Settings (fixed 2026-09-01)
+
+Caught by inspection, not code — Orchestration was rendering as a bare Settings screen (two sections, "Team run profile" and "Swarm") with no team list, no Run panel, no Members. The real page (`Orchestration.razor`) is a full Browse screen: a searchable team list on the left, and a detail pane with three sections (Run, Run Profile, Members) instead of Browse's usual single key/value block. The extra section count is what made it read as Settings — the shell was Browse the whole time.
+
+Fixed in the mock only (design-only pass, no `src/` changes): `S.orchestration` now carries a real team (`test` · Parallel · 1 agent) and renders through `browseHTML()` like every other list screen, with a dedicated detail-pane renderer (`orchTeamDetailHTML`) for the three-section content. "Swarm Defaults" — a real second view of this same screen in the actual product, not a separate destination — is wired up as a **Team / Defaults** toggle next to Chat's existing Thread/Welcome toggle (both now share one generalized `#screenToggle` control instead of a Chat-only one). Two new line icons (`I.seq` three horizontal lines, `I.par` three vertical lines) join the existing package icon for the Sequential/Parallel/Swarm mode badge — matching the icons already shipped in real `Orchestration.razor` during the emoji-cleanup pass.
+
+Not modeled in the mock, deliberately: the "New Team" and "Add Member" inline forms. Those are transient interaction states (open a form, fill it, submit), not distinct screens — same reasoning as why the mock doesn't model a loading spinner or a validation-error state for every button elsewhere.
+
+**Found but not fixed (out of scope — design-only pass):** real `Orchestration.razor` line 16 has one more emoji the sweep missed — `&#x2699;` (⚙) on the "Swarm defaults" button. Also worth reconsidering when that's picked up: the mock's Team/Defaults toggle (matching Chat's established pattern) reads more consistently than the real page's lone gear-icon button.
+
+Verified live in Chrome, both platforms: team list renders with the mode badge, Run/Run Profile/Members all present in the detail pane, Team/Defaults toggle switches correctly, parity holds at 49 changed lines (chrome-only, confirmed line-by-line).
 
 ## Parity
 
 **Web and Desktop should match as closely as each platform allows.** `desktop.html` is generated from `web.html` with only the platform chrome swapped — browser tab strip and address bar become a native titlebar and window controls. A diff of the two files should show *only* those chrome lines, the title/heading, and the theme storage key. Anything else that differs is drift.
 
-Current state: 47 changed lines, all accounted for by that list.
+Current state: 49 changed lines, all accounted for by that list.
 
 ## Mark placement (decided 2026-08-28)
 
@@ -114,7 +128,9 @@ Every commit above was scoped to the emoji/mark-cleanup review from `docs/design
 
 ## Screen-by-screen visual pass (2026-09-01)
 
-Went through all 5 patterns in the browser — Login, Dashboard (Overview), Chat, Artifacts and Users (Browse), Orchestration and Diagnostics (Settings) — checking for genuine design roughness now that the emoji/mark sweep is done: layout, spacing, hierarchy, semantic color use. Nothing found worth changing. The pattern-once approach is holding: every screen checked reads as the same design system, not a bespoke one-off. Not touching the other 14 screens individually — they render through the same 5 pattern functions already confirmed clean, so per-screen re-verification would be checking the same code path repeatedly, not new risk.
+Went through all 5 patterns in the browser — Login, Dashboard (Overview), Chat, Artifacts and Users (Browse), Orchestration and Diagnostics (Settings, as tagged at the time) — checking for genuine design roughness now that the emoji/mark sweep is done: layout, spacing, hierarchy, semantic color use. Nothing found worth changing. The pattern-once approach is holding: every screen checked reads as the same design system, not a bespoke one-off. Not touching the other 14 screens individually — they render through the same 5 pattern functions already confirmed clean, so per-screen re-verification would be checking the same code path repeatedly, not new risk.
+
+(Orchestration's Settings tag turned out to be wrong — see "Orchestration was mis-tagged Settings" above, caught the same day by inspection rather than by this pass. The design-roughness check above still stands for what it actually looked at: Orchestration's *content* — sectioned controls, clear labels — was fine, it was the pattern classification and missing team-list/Run/Members content that were wrong.)
 
 That leaves the two long-open items below actually resolved instead of just tracked.
 
