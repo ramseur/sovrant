@@ -66,7 +66,8 @@
   .browser{display:flex;flex-direction:column;height:700px;border-radius:10px 10px 8px 8px;overflow:hidden;border:1px solid var(--border);box-shadow:0 18px 44px -24px rgba(0,0,0,.4);background:var(--chrome)}
   .tabstrip{height:36px;background:var(--chrome);display:flex;align-items:flex-end;padding:0 8px;gap:6px;flex-shrink:0}
   .tab{height:29px;min-width:180px;background:var(--chrometab);border-radius:8px 8px 0 0;display:flex;align-items:center;gap:8px;padding:0 11px;font-size:12px}
-  .fav{width:14px;height:14px;border-radius:4px;background:var(--brand);flex-shrink:0}
+  .fav{width:14px;height:14px;border-radius:4px;background:var(--brand);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+  .fav svg{width:9px;height:9px}
   .tab .x{margin-left:auto;color:var(--t3);font-size:13px;line-height:1}
   .omnibar{height:40px;background:var(--chrometab);display:flex;align-items:center;gap:10px;padding:0 12px;flex-shrink:0}
   .onav{display:flex;gap:4px;color:var(--t2)} .onav svg{width:15px;height:15px}
@@ -273,7 +274,7 @@
     <div class="stagearea">
       <div class="sheet" id="sheet"></div>
       <div class="browser">
-        <div class="tabstrip"><div class="tab"><span class="fav"></span><span>Sovrant</span><span class="x">&times;</span></div></div>
+        <div class="tabstrip"><div class="tab"><span class="fav"><svg viewBox="0 0 24 24" fill="#FF9800"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span><span>Sovrant</span><span class="x">&times;</span></div></div>
         <div class="omnibar">
           <div class="onav">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>

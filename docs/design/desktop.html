@@ -62,7 +62,8 @@
   /* ── browser chrome ── */
   .browser{display:flex;flex-direction:column;height:700px;border-radius:10px 10px 8px 8px;overflow:hidden;border:1px solid var(--border);box-shadow:0 18px 44px -24px rgba(0,0,0,.4);background:var(--chrome)}
   .titlebar{height:32px;background:var(--rail);border-bottom:1px solid var(--border);display:flex;align-items:center;padding-left:10px;gap:9px;flex-shrink:0}
-  .tico{width:15px;height:15px;border-radius:4px;background:var(--brand);flex-shrink:0}
+  .tico{width:15px;height:15px;border-radius:4px;background:var(--brand);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+  .tico svg{width:10px;height:10px}
   .ttl2{font-size:12px;color:var(--t2)}
   .wctl{margin-left:auto;display:flex;height:100%}
   .wctl button{width:40px;height:100%;border:none;background:transparent;color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .1s,color .1s}
@@ -271,7 +272,7 @@
       <div class="sheet" id="sheet"></div>
       <div class="browser">
         <div class="titlebar">
-          <div class="tico"></div><span class="ttl2" id="wintitle">Sovrant</span>
+          <div class="tico"><svg viewBox="0 0 24 24" fill="#FF9800"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><span class="ttl2" id="wintitle">Sovrant</span>
           <div class="wctl">
             <button title="Minimize"><svg viewBox="0 0 10 10" stroke="currentColor" stroke-width="1"><line x1="0" y1="5" x2="10" y2="5"/></svg></button>
             <button title="Maximize"><svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1"><rect x="0.5" y="0.5" width="9" height="9"/></svg></button>

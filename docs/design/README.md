@@ -42,7 +42,9 @@ The "S"-in-a-square mark showed up everywhere — rail brand row on every screen
 
 Everywhere else — the rail (both platforms) and the Login header — now carries no brand element at all, not even the "Sovrant" wordmark. It's redundant: the tab/titlebar already names the app, and the rail's first visible thing is now the first nav destination, Dashboard. The brand row itself is gone too, not just its contents — the collapse toggle floats on the rail's own border edge instead of owning a header row, so there's no blank space above Dashboard. Shipped in both `web.html`/`desktop.html` and in real code: `MainLayout.razor` + `sovrant.css` on Web, `MainWindow.axaml` on Desktop (Login already had no mark on either platform).
 
-**Still open:** the mark itself is still a placeholder "S" — worth drawing a real one for the two spots it now actually lives in.
+**Resolved (2026-09-01):** the "S" letterform is gone. Explored four abstract concepts (Flow/Orbit/Weave/Monogram) via a side-by-side comparison artifact shown at actual favicon/titlebar sizes — landed on reusing the app's existing lightning-bolt-in-purple-square (`Sovrant.Desktop/Assets/icon.png`, orange `#FF9800` on brand purple `#6D52C6`) rather than commissioning new artwork. That asset already existed as the Desktop window icon; it's now also `Sovrant.Web/wwwroot/favicon.ico`.
+
+One format correction along the way: the first pass shipped an SVG favicon, which modern Chrome/Firefox/Edge support but isn't the actual standard — `.ico` is what browsers request by default and what every browser supports. Regenerated as a proper multi-resolution `.ico` (16/32/48/64/128/256px, via Pillow) from the same source PNG. `web.html`/`desktop.html`'s `.fav`/`.tico` swatches now show the bolt shape (a standard "zap" icon path, filled orange) instead of the placeholder letter.
 
 ## Chat: mark reuse + emoji removed (2026-08-31)
 
