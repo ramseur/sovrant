@@ -16,7 +16,7 @@
     @if (!string.IsNullOrEmpty(_pageError))
     {
         <div class="chat-error-banner" role="alert">
-            <span class="chat-error-banner-icon">&#9888;</span>
+            <span class="chat-error-banner-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg></span>
             <span class="chat-error-banner-text">@_pageError</span>
             <button class="chat-error-banner-close" @onclick="DismissPageError" aria-label="Dismiss">&times;</button>
         </div>
@@ -69,7 +69,16 @@
         <button class="privacy-toggle @(_isPrivate ? "private" : "public")"
                 title="@(_isPrivate ? "Private — only you can see this session" : "Public — visible to admins")"
                 @onclick="TogglePrivacyAsync">
-            <span class="privacy-icon">@(_isPrivate ? "🔒" : "🔓")</span>
+            <span class="privacy-icon">
+                @if (_isPrivate)
+                {
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                }
+                else
+                {
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+                }
+            </span>
             <span class="privacy-label">@(_isPrivate ? "Private" : "Public")</span>
         </button>
         <button class="remember-btn" title="Save a note to memory — injected into every future chat session" @onclick="() => _showRemember = !_showRemember">
@@ -93,7 +102,7 @@
             <div class="remember-form-actions">
                 <label class="remember-privacy-label">
                     <input type="checkbox" @bind="_rememberPrivate" />
-                    🔒 Private
+                    Private
                 </label>
                 @if (!string.IsNullOrEmpty(_rememberStatus))
                 {

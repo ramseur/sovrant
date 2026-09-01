@@ -1105,7 +1105,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     border: 1px solid var(--status-fail, #d93025);
     font-size: 13px;
 }
-.chat-error-banner-icon { font-size: 16px; }
+.chat-error-banner-icon { display: flex; }
 .chat-error-banner-text { flex: 1; }
 .chat-error-banner-close {
     background: transparent;
@@ -1896,7 +1896,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .privacy-toggle:hover { background: var(--surface-hover, rgba(255,255,255,0.04)); }
 .privacy-toggle.private { color: var(--accent, #d4a017); border-color: var(--accent, #d4a017); }
 .privacy-toggle.public { color: var(--text-muted); }
-.privacy-icon { font-size: 12px; }
+.privacy-icon { display: flex; }
 
 .remember-btn {
     background: transparent;

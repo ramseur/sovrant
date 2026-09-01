@@ -141,8 +141,10 @@
                                                     BorderThickness="0"
                                                     Cursor="Hand"
                                                     ToolTip.Tip="Click to toggle privacy">
-                                                <TextBlock Text="{Binding IsPrivate, Converter={x:Static vm:BoolToLockIconConverter.Instance}}"
-                                                           FontSize="10" />
+                                                <Path Data="{Binding IsPrivate, Converter={x:Static vm:BoolToLockIconConverter.Instance}}"
+                                                      Width="10" Height="10" Stretch="Uniform"
+                                                      StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                                      Stroke="{DynamicResource TextMuted}" VerticalAlignment="Center" />
                                             </Button>
                                         </StackPanel>
                                     </StackPanel>

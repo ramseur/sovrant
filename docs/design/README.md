@@ -78,16 +78,23 @@ Swept the last pattern — Governance, Trust Boundary, Diagnostics, Settings, an
 
 Fixed on Web only (nothing to fix on Desktop): Sequential is now three horizontal lines (a "steps in order" glyph), Parallel is three vertical lines, Swarm reuses the same package icon from the Chat/System-Integrations passes. All three are plain straight-line geometry — no arcs, zero hand-drawing risk. `ModeIcon()` now returns inline SVG markup rendered via `MarkupString`, the same pattern used for Chat's suggestion tiles. Verified live in Chrome: both the team-list badge and the detail-header badge render the new icon correctly.
 
-This closes out the pattern-by-pattern sweep from the review two turns back (Conversation → Overview → Browse → Settings). What's left: the shared `BoolToLockIconConverter` deferred from the Chat pass (`AgentsView.axaml`, one `ChatView.axaml` site), the ✕ typographic glyphs left alone throughout, and the two pre-existing `LoginWindow.axaml` bugs below.
+This closes out the pattern-by-pattern sweep from the review two turns back (Conversation → Overview → Browse → Settings).
+
+## Cleanup pass: deferred converter + Login bugs (2026-09-01)
+
+Closed out everything the sweep had left open:
+
+- **Shared `BoolToLockIconConverter` (Desktop).** Now returns the `IconLock`/`IconUnlock` `StreamGeometry` from `NavIcons.axaml` (via the same `Application.Current.TryGetResource` pattern already used by `BoolToBrushConverter`/`NavActiveBrushConverter`), instead of 🔒/🔓 text. All three call sites updated to bind a `Path.Data` instead of a `TextBlock.Text`: `AgentsView.axaml`, and `ChatView.axaml`'s session-level privacy toggle (distinct from the message-avatar mark fixed in the Chat pass).
+- **Web's `Chat.razor` had two more emoji this whole sweep missed**, caught while touching the file for the item above: the session-level privacy toggle (🔒/🔓, the Web twin of the Desktop fix) and the remember-form's "🔒 Private" checkbox label. Fixed the same way as their Dashboard/Memory/Agents equivalents. Also fixed `Chat.razor`'s error-banner ⚠, explicitly deferred at the end of the original Chat pass — closes that loop too.
+- **`LoginWindow.axaml` (Desktop), the two bugs tracked since the original design review:** `Background="{DynamicResource BackgroundBrush}"` → `SurfaceBackground` (the old key doesn't exist in either theme file, so `DynamicResource` was failing silently and the window never got its themed background), and hardcoded `Foreground="Red"` → `{DynamicResource StatusFail}`.
+
+Web verified live in Chrome (private toggle, remember-form checkbox — both render the new icon correctly on a fresh tab). Desktop builds clean; the `BoolToLockIconConverter`/`LoginWindow` fixes weren't re-verified live this round — same `SetForegroundWindow` automation limitation as the Browse pass, and the icon geometry itself was already pixel-confirmed from the Overview pass.
+
+**Still open:** the ✕ typographic close/remove glyph (left alone everywhere, deliberately — not a pictorial-emoji violation), and the placeholder "S" mark artwork (next up).
 
 ## Open decisions
 
 - **Login theme on a fresh machine.** `App.razor` hardcodes `data-theme="dark"` and JS overrides from `localStorage`. Login renders before user preferences load, so it shows whatever the browser last stored — decide whether it should follow `prefers-color-scheme`.
-
-## Bugs this pass found, not yet fixed
-
-- `LoginWindow.axaml` binds `Background="{DynamicResource BackgroundBrush}"` — a key defined in neither `SovrantDarkColors.axaml` nor `SovrantLightColors.axaml`. `DynamicResource` fails silently, so the Desktop login window never receives its themed background. Should be `SurfaceBackground`.
-- The same file hardcodes `Foreground="Red"` for error text instead of the `StatusFail` token, so it ignores the theme.
 
 ## Already shipped from this work
 

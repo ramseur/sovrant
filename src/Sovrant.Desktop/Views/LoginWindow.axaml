@@ -8,7 +8,7 @@
         CanResize="False"
         WindowStartupLocation="CenterScreen">
 
-  <Border Padding="36" Background="{DynamicResource BackgroundBrush}">
+  <Border Padding="36" Background="{DynamicResource SurfaceBackground}">
     <StackPanel Spacing="16">
 
       <TextBlock Text="Sovrant" FontSize="28" FontWeight="Bold"
@@ -38,7 +38,7 @@
 
       <!-- Error message -->
       <TextBlock Text="{Binding ErrorMessage}"
-                 Foreground="Red"
+                 Foreground="{DynamicResource StatusFail}"
                  TextWrapping="Wrap"
                  IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 
