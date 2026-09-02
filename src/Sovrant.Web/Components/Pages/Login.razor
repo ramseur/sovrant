@@ -13,11 +13,28 @@
 <div class="login-card">
     <div class="login-title">Sovrant</div>
 
-    <div class="login-sub" style="margin-bottom:8px">Sign in to continue.</div>
+    @if (_firstRun)
+    {
+        <div class="login-sub" style="margin-bottom:8px">Welcome! Let's set up your server.</div>
+        <div class="login-info">
+            <strong>First-time setup</strong> — no accounts exist yet. The first account you create
+            becomes the <strong>administrator</strong>, with full control over registration,
+            approvals, and server settings.
+        </div>
+    }
+    else
+    {
+        <div class="login-sub" style="margin-bottom:8px">Sign in to continue.</div>
+    }
 
     @if (_errorMessage is not null)
     {
         <div class="login-error">@_errorMessage</div>
+    }
+
+    @if (_infoMessage is not null)
+    {
+        <div class="login-success">@_infoMessage</div>
     }
 
     <div class="login-field">
@@ -41,21 +58,38 @@
                @onkeydown="OnKeyDown" />
     </div>
 
-    <button class="login-btn" @onclick="LoginAsync" disabled="@_busy">
-        @(_busy ? "Signing in…" : "Sign in")
-    </button>
-
-    @if (_registrationOpen)
+    @if (_firstRun)
     {
-        <div class="login-divider"></div>
-        <div class="login-sub">Don't have an account?</div>
-        <button class="login-btn login-btn-secondary" @onclick="RegisterAsync" disabled="@_busy">
-            @(_busy ? "Creating account…" : "Create account")
+        <button class="login-btn" @onclick="RegisterAsync" disabled="@_busy">
+            Create administrator account
         </button>
+    }
+    else
+    {
+        <button class="login-btn" @onclick="LoginAsync" disabled="@_busy">
+            Sign in
+        </button>
+
+        @if (_registrationOpen)
+        {
+            <div class="login-divider"></div>
+            <div class="login-sub">Don't have an account?</div>
+            <button class="login-btn login-btn-secondary" @onclick="RegisterAsync" disabled="@_busy">
+                Create account
+            </button>
+            @if (_approvalRequired)
+            {
+                <div class="login-note">New accounts require administrator approval before first sign-in.</div>
+            }
+        }
     }
 
     @if (_busy)
     {
+        <div class="login-status" role="status" aria-live="polite">
+            <span class="login-spinner" aria-hidden="true"></span>
+            <span>@_busyLabel</span>
+        </div>
         <div class="login-progress"></div>
     }
 </div>
@@ -66,8 +100,12 @@
     private string _email = string.Empty;
     private string _password = string.Empty;
     private string? _errorMessage;
+    private string? _infoMessage;
     private bool _busy;
+    private string _busyLabel = string.Empty;
     private bool _registrationOpen;
+    private bool _firstRun;
+    private bool _approvalRequired;
 
     protected override async Task OnInitializedAsync()
     {
@@ -76,23 +114,37 @@
             Nav.NavigateTo("/", forceLoad: true);
             return;
         }
+        _firstRun = await IdentityService.IsFirstRunAsync().ConfigureAwait(false);
         _registrationOpen = await IdentityService.IsRegistrationOpenAsync().ConfigureAwait(false);
+        _approvalRequired = !_firstRun && _registrationOpen
+            && await IdentityService.IsApprovalRequiredAsync().ConfigureAwait(false);
     }
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter") await LoginAsync();
+        if (e.Key != "Enter") return;
+        // On first run there is nobody to sign in as yet — Enter creates the admin account.
+        if (_firstRun) await RegisterAsync();
+        else await LoginAsync();
+    }
+
+    private bool ValidateInput()
+    {
+        _errorMessage = null;
+        _infoMessage = null;
+        if (string.IsNullOrWhiteSpace(_email) || string.IsNullOrWhiteSpace(_password))
+        {
+            _errorMessage = "Email and password are required.";
+            return false;
+        }
+        return true;
     }
 
     private async Task LoginAsync()
     {
-        _errorMessage = null;
-        if (string.IsNullOrWhiteSpace(_email) || string.IsNullOrWhiteSpace(_password))
-        {
-            _errorMessage = "Email and password are required.";
-            return;
-        }
+        if (!ValidateInput()) return;
         _busy = true;
+        _busyLabel = "Signing you in…";
         try
         {
             var result = await IdentityService.LoginAsync(_email, _password).ConfigureAwait(false);
@@ -120,13 +172,9 @@
 
     private async Task RegisterAsync()
     {
-        _errorMessage = null;
-        if (string.IsNullOrWhiteSpace(_email) || string.IsNullOrWhiteSpace(_password))
-        {
-            _errorMessage = "Email and password are required.";
-            return;
-        }
+        if (!ValidateInput()) return;
         _busy = true;
+        _busyLabel = _firstRun ? "Creating your administrator account…" : "Creating your account…";
         try
         {
             var result = await IdentityService.RegisterAsync(_email, _password).ConfigureAwait(false);
@@ -137,7 +185,7 @@
             }
             if (result.IsPendingApproval)
             {
-                _errorMessage = "Account created. An administrator must approve it before you can sign in.";
+                _infoMessage = "Account created. An administrator must approve it before you can sign in.";
                 return;
             }
             await CredentialStore.StoreAsync(StoredTokenKey, result.Token!).ConfigureAwait(false);
