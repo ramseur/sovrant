@@ -29,6 +29,20 @@ public sealed class BoolToBrushConverter : IValueConverter
         FalseResource = "TextSecondary",
     };
 
+    /// <summary>Nav-redesign active state: soft brand tint background instead of a solid fill.</summary>
+    public static readonly BoolToBrushConverter BrandTintOrTransparent = new()
+    {
+        TrueResource = "BrandPrimarySoft",
+        FalseBrush = Brushes.Transparent,
+    };
+
+    /// <summary>Nav-redesign active state: brand-colored icon/text instead of white-on-solid.</summary>
+    public static readonly BoolToBrushConverter BrandOrSecondary = new()
+    {
+        TrueResource = "BrandPrimary",
+        FalseResource = "TextSecondary",
+    };
+
     public static readonly BoolToBrushConverter ErrorOrToolBorder = new()
     {
         TrueResource = "StatusFail",

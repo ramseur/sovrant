@@ -124,12 +124,12 @@ internal static class DocumentArtifactParser
         var f = format.ToUpperInvariant();
         return f switch
         {
-            "PDF" or "STRUCTURED_PDF" => "document",
-            "WORD" or "DOCX" => "document",
-            "EXCEL" or "XLSX" => "file-spreadsheet",
-            "POWERPOINT" or "PPTX" => "presentation",
-            "MARKDOWN" or "MD" => "document",
-            _ => "paperclip",
+            "PDF" or "STRUCTURED_PDF" => "\uD83D\uDCC4",
+            "WORD" or "DOCX" => "\uD83D\uDCDD",
+            "EXCEL" or "XLSX" => "\uD83D\uDCCA",
+            "POWERPOINT" or "PPTX" => "\uD83D\uDCFD\uFE0F",
+            "MARKDOWN" or "MD" => "\uD83D\uDCC4",
+            _ => "\uD83D\uDCCE",
         };
     }
 

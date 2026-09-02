@@ -107,11 +107,11 @@
 
                 <!-- API Key -->
                 <StackPanel Spacing="6">
-                    <TextBlock Text="API Key" FontSize="13" FontWeight="SemiBold"
+                    <TextBlock Text="{Binding ApiKeyLabel}" FontSize="13" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextSecondary}" />
                     <TextBox Text="{Binding ApiKey}"
                              PasswordChar="*"
-                             Watermark="sk-..."
+                             Watermark="{Binding ApiKeyWatermark}"
                              CornerRadius="8"
                              Padding="12,8" />
                 </StackPanel>

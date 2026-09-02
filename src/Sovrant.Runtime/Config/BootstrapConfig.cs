@@ -23,7 +23,7 @@ public sealed record BootstrapConfig
     /// </summary>
     public string? LogFile { get; init; }
 
-    /// <summary>Root directory for artifact storage. Default: <c>~/.sovrant/artifacts</c>.</summary>
+    /// <summary>Root directory for artifact storage. Default: <c>~/.sovrant/workspaces</c>.</summary>
     public string? ArtifactsRoot { get; init; }
 
     /// <summary>

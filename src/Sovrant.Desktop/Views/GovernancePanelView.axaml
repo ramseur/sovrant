@@ -1,7 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
-             xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.GovernancePanelView"
              x:DataType="vm:SidebarViewModel"
              Background="{DynamicResource SidebarBackground}">
@@ -10,33 +9,21 @@
             <TextBlock Text="GOVERNANCE" FontSize="11" FontWeight="Bold"
                        Foreground="{DynamicResource TextMuted}"
                        Margin="6,4,0,10" />
-            <Button Command="{Binding NavigateCommand}" CommandParameter="Governance"
+            <Button Content="🛡  Governance"
+                    Command="{Binding NavigateCommand}" CommandParameter="Governance"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="Transparent" Foreground="{DynamicResource TextPrimary}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon IconName="governance" Width="14" Height="14" />
-                    <TextBlock Text="Governance" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
-            <Button Command="{Binding NavigateCommand}" CommandParameter="TrustBoundary"
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="🔒  Trust Boundary"
+                    Command="{Binding NavigateCommand}" CommandParameter="TrustBoundary"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="Transparent" Foreground="{DynamicResource TextPrimary}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon IconName="lock" Width="14" Height="14" />
-                    <TextBlock Text="Trust Boundary" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
-            <Button Command="{Binding NavigateCommand}" CommandParameter="Diagnostics"
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+            <Button Content="🔧  Diagnostics"
+                    Command="{Binding NavigateCommand}" CommandParameter="Diagnostics"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="Transparent" Foreground="{DynamicResource TextPrimary}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon IconName="tools" Width="14" Height="14" />
-                    <TextBlock Text="Diagnostics" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
+                    Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

@@ -155,6 +155,75 @@ public partial class MessageViewModel : ViewModelBase
 
     public ObservableCollection<ToolUseViewModel> ToolUses { get; } = [];
 
+    // ── Phase 126 — collapsed work strip ────────────────────────────────
+
+    /// <summary>Whether the work strip's tool-list level is expanded.</summary>
+    [ObservableProperty]
+    private bool _isWorkStripExpanded;
+
+    /// <summary>ToolUseId of the tool currently showing full detail (only one at a time).</summary>
+    [ObservableProperty]
+    private string? _activeDetailToolId;
+
+    public int NonPendingToolCount => ToolUses.Count(t => !t.IsPendingConfirmation);
+    public int ErrorToolCount => ToolUses.Count(t => t.IsError);
+    public bool HasWorkStripErrors => ErrorToolCount > 0;
+    public bool HasWorkStrip => NonPendingToolCount > 0;
+    public string WorkStripCaret => IsWorkStripExpanded ? "▾" : "▸";
+    public string WorkStripActionLabel => NonPendingToolCount == 1 ? "1 action" : $"{NonPendingToolCount} actions";
+    public string WorkStripErrorLabel => ErrorToolCount == 1 ? "1 error" : $"{ErrorToolCount} errors";
+
+    /// <summary>True when this turn has any tool call at all (pending or otherwise) — used to
+    /// decide whether the answer/work-strip separator (Phase 126 #4) should render.</summary>
+    public bool HasAnyToolUses => ToolUses.Count > 0;
+
+    /// <summary>Phase 126 #4 — answer-first: shows a thin divider between the completed answer
+    /// and the (now-subordinate) work strip / pending tools below it.</summary>
+    public bool ShowWorkSeparator => IsComplete && HasAnyToolUses;
+
+    public MessageViewModel()
+    {
+        ToolUses.CollectionChanged += (_, e) =>
+        {
+            if (e.NewItems is not null)
+                foreach (ToolUseViewModel t in e.NewItems)
+                    t.PropertyChanged += (_, args) =>
+                    {
+                        if (args.PropertyName is nameof(ToolUseViewModel.IsError)
+                            or nameof(ToolUseViewModel.IsPendingConfirmation)
+                            or nameof(ToolUseViewModel.Status))
+                            RaiseWorkStripChanged();
+                    };
+            RaiseWorkStripChanged();
+        };
+    }
+
+    private void RaiseWorkStripChanged()
+    {
+        OnPropertyChanged(nameof(NonPendingToolCount));
+        OnPropertyChanged(nameof(HasAnyToolUses));
+        OnPropertyChanged(nameof(ShowWorkSeparator));
+        OnPropertyChanged(nameof(ErrorToolCount));
+        OnPropertyChanged(nameof(HasWorkStripErrors));
+        OnPropertyChanged(nameof(HasWorkStrip));
+        OnPropertyChanged(nameof(WorkStripActionLabel));
+        OnPropertyChanged(nameof(WorkStripErrorLabel));
+    }
+
+    partial void OnIsWorkStripExpandedChanged(bool value) => OnPropertyChanged(nameof(WorkStripCaret));
+
+    [RelayCommand]
+    private void ToggleWorkStrip() => IsWorkStripExpanded = !IsWorkStripExpanded;
+
+    [RelayCommand]
+    private void ToggleToolDetail(ToolUseViewModel tool)
+    {
+        var activate = ActiveDetailToolId != tool.ToolUseId;
+        ActiveDetailToolId = activate ? tool.ToolUseId : null;
+        foreach (var t in ToolUses)
+            t.IsActiveDetail = activate && t.ToolUseId == tool.ToolUseId;
+    }
+
     /// <summary>Artifacts auto-saved from large text blocks (not tied to a specific tool use row).</summary>
     public ObservableCollection<DocumentArtifactViewModel> StandaloneArtifacts { get; } = [];
     public bool HasStandaloneArtifacts => StandaloneArtifacts.Count > 0;
@@ -180,6 +249,7 @@ public partial class MessageViewModel : ViewModelBase
     partial void OnRoleChanged(string value) => IsUser = value == "user";
     partial void OnModelNameChanged(string? value) => OnPropertyChanged(nameof(SenderLabel));
     partial void OnProviderNameChanged(string? value) => OnPropertyChanged(nameof(SenderLabel));
+    partial void OnIsCompleteChanged(bool value) => OnPropertyChanged(nameof(ShowWorkSeparator));
 
     public void StartThinking(string? prompt = null)
     {
@@ -538,28 +608,13 @@ public partial class ToolUseViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isPendingConfirmation;
 
+    /// <summary>Phase 126 — true when this row's full detail is shown in the work strip (only one at a time).</summary>
     [ObservableProperty]
-    private bool _isExpanded;
+    private bool _isActiveDetail;
 
     public ConfirmationRequest? PendingRequest { get; set; }
 
     public bool HasResult => !string.IsNullOrEmpty(Result);
-
-    public bool IsResultLong
-    {
-        get
-        {
-            if (string.IsNullOrEmpty(Result)) return false;
-            if (Result.Length > 400) return true;
-            int nl = 0;
-            foreach (var ch in Result) { if (ch == '\n') { nl++; if (nl > 6) return true; } }
-            return false;
-        }
-    }
-
-    public int ResultMaxLines => IsExpanded ? 10000 : 6;
-
-    public string ExpandToggleText => IsExpanded ? "▾ Show less" : "▸ Show more";
 
     public bool IsStatusDone => !IsError && (Status == "Done" || Status == "Approved");
     public bool IsStatusError => IsError || Status == "Denied";
@@ -578,7 +633,6 @@ public partial class ToolUseViewModel : ViewModelBase
     {
         RebuildDocumentArtifacts();
         OnPropertyChanged(nameof(HasResult));
-        OnPropertyChanged(nameof(IsResultLong));
     }
 
     partial void OnToolNameChanged(string value) => RebuildDocumentArtifacts();
@@ -596,15 +650,6 @@ public partial class ToolUseViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsStatusError));
         OnPropertyChanged(nameof(IsStatusRunning));
     }
-
-    partial void OnIsExpandedChanged(bool value)
-    {
-        OnPropertyChanged(nameof(ResultMaxLines));
-        OnPropertyChanged(nameof(ExpandToggleText));
-    }
-
-    [RelayCommand]
-    private void ToggleExpanded() => IsExpanded = !IsExpanded;
 
     private void RebuildDocumentArtifacts()
     {

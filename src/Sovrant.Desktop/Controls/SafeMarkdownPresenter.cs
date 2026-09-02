@@ -358,7 +358,7 @@ public class SafeMarkdownPresenter : ContentControl
                 foreach (var child in link)
                     if (child is LiteralInline lt) textSb.Append(lt.Content.ToString());
                 var displayText = textSb.Length > 0 ? textSb.ToString() : url;
-                if (link.IsImage) displayText = "Image: " + displayText;
+                if (link.IsImage) displayText = "🖼 " + displayText;
                 inlines.Add(MakeLinkInline(displayText, url));
                 break;
             }

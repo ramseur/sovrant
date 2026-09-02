@@ -1,17 +1,18 @@
--- Sovrant PostgreSQL schema (Supabase-compatible).
--- Mirrors V001–V042 SQLite migrations. Safe to run multiple times (idempotent).
+-- Sovrant initial schema for Supabase deployments.
+-- Mirrors V001–V043 SQLite migrations. Safe to run multiple times (idempotent).
+-- For standalone PostgreSQL use db/postgres/PostgresSchema.sql instead.
+--
 -- Timestamps are stored as TEXT (ISO 8601) for wire-compatibility with SQLite stores.
 -- BYTEA used for encrypted blobs (credentials table).
 -- V035/V037 (built-in knowledge seed data) are handled by the app at startup, not here.
-
--- ── Helper: UTC timestamp default ────────────────────────────────────────────
--- All timestamp columns that had SQLite strftime defaults use this expression.
+--
+-- NOTE: user_id remains the GoTrue UUID (auth.users.id::TEXT) in Supabase mode.
+-- V043's PK rewrite (usr_{hex} → email) applies to SQLite standalone deployments only.
 
 -- ── V001 Foundation ───────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS users (
     user_id       TEXT PRIMARY KEY,
-    username      TEXT NOT NULL,
     email         TEXT,
     role          TEXT NOT NULL DEFAULT 'user',
     team          TEXT,
@@ -19,8 +20,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT,
     created_at    TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
     updated_at    TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
-    CONSTRAINT users_username_unique UNIQUE (username),
-    CONSTRAINT users_email_unique    UNIQUE (email)
+    CONSTRAINT users_email_unique UNIQUE (email)
 );
 
 CREATE TABLE IF NOT EXISTS workspaces (
@@ -648,9 +648,9 @@ CREATE INDEX IF NOT EXISTS idx_sessions_agent_name ON sessions(agent_name) WHERE
 CREATE TABLE IF NOT EXISTS mcp_trust_rules (
     rule_id      TEXT NOT NULL PRIMARY KEY,
     workspace_id TEXT NOT NULL,
-    server_name  TEXT NOT NULL,   -- exact server name or '*' (all servers)
-    tool_pattern TEXT NOT NULL,   -- glob: 'delete_*', 'bulk_*', '*'
-    action       TEXT NOT NULL,   -- Allow | RequireConfirmation | Block
+    server_name  TEXT NOT NULL,
+    tool_pattern TEXT NOT NULL,
+    action       TEXT NOT NULL,
     reason       TEXT,
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
@@ -660,37 +660,26 @@ CREATE INDEX IF NOT EXISTS idx_mcp_trust_rules_workspace ON mcp_trust_rules(work
 CREATE INDEX IF NOT EXISTS idx_mcp_trust_rules_server    ON mcp_trust_rules(server_name);
 
 -- ── V033/V034/V036 Knowledge Pages ───────────────────────────────────────────
--- Combines V033 foundation, V034 agent columns, and V036 document-template
--- columns into one table definition (all columns present on fresh installs).
--- V035 and V037 are seed-data-only migrations handled by the app at startup.
 
 CREATE TABLE IF NOT EXISTS knowledge_pages (
     knowledge_id      TEXT NOT NULL PRIMARY KEY,
-    kind              TEXT NOT NULL,              -- 'skills' | 'agents' | 'documents' | 'tools' | 'document-templates'
+    kind              TEXT NOT NULL,
     slug              TEXT NOT NULL,
     name              TEXT NOT NULL,
     description       TEXT NOT NULL DEFAULT '',
     tier              TEXT NOT NULL DEFAULT 'User',
-    -- skills-specific
     trigger           TEXT,
-    agents            TEXT,                       -- JSON array
-    tools             TEXT,                       -- JSON array
-    -- documents-specific
+    agents            TEXT,
+    tools             TEXT,
     industry          TEXT,
     default_format    TEXT,
-    -- tool-templates-specific
     category          TEXT,
-    -- agent-specific (V034)
     role              TEXT,
     recommended_level TEXT,
-    -- document-template-specific (V036)
     fields_json       TEXT,
     filename_template TEXT,
-    -- content
     body              TEXT NOT NULL DEFAULT '',
-    -- ownership / scope
     workspace_id      TEXT NOT NULL DEFAULT '',
-    -- audit
     created_at        TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
     updated_at        TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
     UNIQUE (kind, slug, workspace_id)
@@ -699,8 +688,6 @@ CREATE TABLE IF NOT EXISTS knowledge_pages (
 CREATE INDEX IF NOT EXISTS idx_knowledge_pages_kind      ON knowledge_pages(kind);
 CREATE INDEX IF NOT EXISTS idx_knowledge_pages_workspace ON knowledge_pages(workspace_id);
 
--- Additive guards for databases that were initialised before this combined
--- definition — safe no-ops on fresh installs.
 ALTER TABLE knowledge_pages ADD COLUMN IF NOT EXISTS role              TEXT;
 ALTER TABLE knowledge_pages ADD COLUMN IF NOT EXISTS recommended_level TEXT;
 ALTER TABLE knowledge_pages ADD COLUMN IF NOT EXISTS fields_json       TEXT;
@@ -712,9 +699,9 @@ CREATE TABLE IF NOT EXISTS knowledge_attributions (
     id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     session_id  TEXT    NOT NULL,
     turn_index  INTEGER NOT NULL,
-    kind        TEXT    NOT NULL,   -- 'skills', 'agents', 'document-templates', 'tools'
+    kind        TEXT    NOT NULL,
     slug        TEXT    NOT NULL,
-    used_at     TEXT    NOT NULL    -- ISO 8601
+    used_at     TEXT    NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_attributions_session ON knowledge_attributions(session_id);
@@ -722,24 +709,18 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_attributions_session ON knowledge_attri
 -- ── V039 Keystore ─────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS keystore (
-    scope      TEXT NOT NULL PRIMARY KEY,  -- 'default' (reserved for future per-workspace keys)
-    key_hex    TEXT NOT NULL,              -- 64-char lowercase hex (256-bit AES master key)
+    scope      TEXT NOT NULL PRIMARY KEY,
+    key_hex    TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
 );
 
 -- ── V040 MCP Server stable ID ────────────────────────────────────────────────
--- Fresh installs already have id + index via the V019 table definition above.
--- These statements are no-ops on fresh installs; they fix upgrade installs that
--- ran before V040 and have id = '' on all existing mcp_servers rows.
 
 ALTER TABLE mcp_servers ADD COLUMN IF NOT EXISTS id TEXT NOT NULL DEFAULT '';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_mcp_servers_id ON mcp_servers(id) WHERE id <> '';
 UPDATE mcp_servers SET id = gen_random_uuid()::text WHERE id = '';
 
 -- ── V041 Workspace Memory Privacy ────────────────────────────────────────────
--- owner_user_id = '' means unowned/legacy: visible to ALL authenticated users
--- via the load filter (owner_user_id = '' OR owner_user_id = $uid).
--- Non-empty means scoped to that specific user only.
 
 ALTER TABLE workspace_memory ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE workspace_memory ADD COLUMN IF NOT EXISTS is_private    INTEGER NOT NULL DEFAULT 0;
@@ -747,9 +728,6 @@ ALTER TABLE workspace_memory ADD COLUMN IF NOT EXISTS is_private    INTEGER NOT 
 CREATE INDEX IF NOT EXISTS ix_workspace_memory_owner ON workspace_memory(owner_user_id);
 
 -- ── V042 Memory Owner User ID ─────────────────────────────────────────────────
--- Scopes auto-generated memories (session summaries, patterns, instincts) to
--- the session owner so they are not mixed across users in a multi-user deployment.
--- Same owner_user_id = '' convention as V041: empty = legacy/global, non-empty = user-scoped.
 
 ALTER TABLE session_summaries ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE learned_patterns  ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';
@@ -759,9 +737,13 @@ CREATE INDEX IF NOT EXISTS ix_session_summaries_owner ON session_summaries(owner
 CREATE INDEX IF NOT EXISTS ix_learned_patterns_owner  ON learned_patterns(owner_user_id);
 CREATE INDEX IF NOT EXISTS ix_instincts_owner         ON instincts(owner_user_id);
 
+-- ── V043 Drop username column ─────────────────────────────────────────────────
+-- Fresh installs never have this column. IF EXISTS makes this safe to run on both
+-- new and upgraded instances. user_id remains the GoTrue UUID in Supabase mode.
+
+ALTER TABLE public.users DROP COLUMN IF EXISTS username;
+
 -- ── Schema version tracking ───────────────────────────────────────────────────
--- Records the last successfully applied schema version so the admin UI
--- can show "Up to date" vs "Needs initialization".
 
 CREATE TABLE IF NOT EXISTS sovrant_schema_version (
     id          INTEGER PRIMARY KEY DEFAULT 1,
@@ -771,22 +753,17 @@ CREATE TABLE IF NOT EXISTS sovrant_schema_version (
 );
 
 INSERT INTO sovrant_schema_version (id, version)
-VALUES (1, 42)
+VALUES (1, 43)
 ON CONFLICT (id) DO UPDATE SET version = EXCLUDED.version, applied_at = EXCLUDED.applied_at;
 
 -- ════════════════════════════════════════════════════════════════════════════════
 -- SUPABASE AUTH EXTENSION
--- Run this section ONLY on Supabase-hosted deployments, AFTER the schema above.
--- Standalone PostgreSQL deployments skip this entire section.
+-- Keeps public.users in sync with auth.users (GoTrue) automatically.
+-- Every time a user signs up or updates their email/role in Supabase Auth,
+-- these triggers mirror the change so all FK constraints remain intact.
 --
--- Why: Supabase Auth stores identities in auth.users (UUID PK, managed by GoTrue).
--- The app uses public.users (TEXT PK) as the FK anchor for all domain tables.
--- These triggers keep public.users in sync automatically so every FK constraint
--- continues to work without any application code changes.
---
--- user_id = auth.users.id::TEXT — UUID string, compatible with TEXT PK on all
--- existing FK columns (workspaces, workspace_members, api_tokens, user_roles,
--- project_members, password_reset_tokens).
+-- user_id = auth.users.id::TEXT (UUID string, NOT the email address).
+-- The email-as-PK rewrite in V043 applies to SQLite standalone only.
 -- ════════════════════════════════════════════════════════════════════════════════
 
 -- ── Mirror trigger: auth.users INSERT → public.users INSERT ──────────────────
@@ -803,10 +780,9 @@ BEGIN
         ELSE 'user'
     END;
 
-    INSERT INTO public.users (user_id, username, email, role, status, created_at, updated_at)
+    INSERT INTO public.users (user_id, email, role, status, created_at, updated_at)
     VALUES (
         NEW.id::TEXT,
-        COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1)),
         NEW.email,
         _role,
         'active',
@@ -857,12 +833,12 @@ CREATE OR REPLACE TRIGGER on_auth_user_updated
 
 -- ── Notes for Supabase deployments ───────────────────────────────────────────
 -- • public.users.password_hash is always NULL for Supabase-authenticated users.
---   GoTrue owns password management; the column is inert and kept for schema
+--   GoTrue owns password management; the column is inert but kept for schema
 --   parity with SQLite / standalone Postgres deployments.
 -- • password_reset_tokens is also inert — Supabase handles password resets.
 --   The table is retained so the schema remains identical across all modes.
 -- • svt_* api_tokens still work for CLI / headless API access in Supabase mode.
---   Only interactive UI sessions use JWTs; machine tokens use the token table.
+--   Only interactive UI sessions use Supabase JWTs; machine tokens use the table.
 -- • First admin: create the user in the Supabase dashboard (Auth → Users).
 --   The mirror trigger fires automatically (role defaults to 'user'). Elevate to
 --   admin by setting sovrant_role in app_metadata (service-role only):
@@ -874,10 +850,13 @@ CREATE OR REPLACE TRIGGER on_auth_user_updated
 --   public.users automatically. Never UPDATE public.users.role directly.
 
 -- ── Row-Level Security (recommended for Supabase deployments) ────────────────
--- Uncomment to enforce the owner_user_id privacy model at the database layer
--- rather than relying solely on application-layer query filters. Required if
--- any Supabase Edge Functions, dashboard queries, or service-role clients need
--- to respect per-user memory privacy without going through the Sovrant API.
+-- Uncomment to enforce the owner_user_id privacy model at the database layer.
+-- Required if any Supabase Edge Functions or dashboard queries need to respect
+-- per-user memory privacy without going through the Sovrant API.
+--
+-- NOTE: auth.uid() only works for Supabase JWT holders. svt_* machine tokens
+-- use the service role and bypass RLS entirely by design. Sovrant's own API
+-- enforces privacy at the application layer for machine-token callers.
 
 -- ALTER TABLE workspace_memory  ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE session_summaries ENABLE ROW LEVEL SECURITY;

@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Sovrant.Runtime.Artifacts;
@@ -87,6 +88,7 @@ internal static class ArtifactRoutes
             {
                 var stream = await store.ReadAsync(handle, path, ct);
                 var contentType = MimeTypeFromExtension(path);
+                ApplyArtifactSecurityHeaders(ctx);
                 return Results.Stream(stream, contentType, Path.GetFileName(path));
             }
             catch (FileNotFoundException)
@@ -97,6 +99,62 @@ internal static class ArtifactRoutes
             {
                 return Results.BadRequest(new { error = ex.Message });
             }
+        });
+
+        // ── Zip download — entire run as a single archive ───────────────
+
+        app.MapGet("/v1/artifacts/{runId}.zip", async (
+            string runId,
+            HttpContext ctx,
+            IArtifactStore store,
+            IWorkspaceService wsSvc,
+            IProjectService projSvc,
+            CancellationToken ct) =>
+        {
+            var scope = await ScopeFromQueryAsync(ctx, wsSvc, projSvc, ct, runId);
+            var deny = await WorkspaceAuthGuards.RequireWorkspaceAccessAsync(ctx, scope.WorkspaceId, wsSvc, ct).ConfigureAwait(false);
+            if (deny is not null) return deny;
+
+            ArtifactHandle handle;
+            try
+            {
+                handle = await store.CreateRunScopeAsync(scope, ct);
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+
+            var ms = new MemoryStream();
+            var hasFiles = false;
+            using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+            {
+                await foreach (var entry in store.ListAsync(scope, ct))
+                {
+                    try
+                    {
+                        await using var fileStream = await store.ReadAsync(handle, entry.RelativePath, ct);
+                        var zipEntry = archive.CreateEntry(entry.RelativePath, CompressionLevel.Fastest);
+#pragma warning disable CA1849 // ZipArchiveEntry has no OpenAsync; archive is over MemoryStream
+                        await using var entryStream = zipEntry.Open();
+#pragma warning restore CA1849
+                        await fileStream.CopyToAsync(entryStream, ct).ConfigureAwait(false);
+                        hasFiles = true;
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        // Skip unreadable entries — partial zip beats a 500
+                    }
+                }
+            }
+
+            if (!hasFiles)
+                return Results.NotFound(new { error = $"No artifacts found for run: {runId}" });
+
+            ms.Position = 0;
+            var safeId = SanitizeForFilename(runId);
+            ApplyArtifactSecurityHeaders(ctx);
+            return Results.File(ms, contentType: "application/zip", fileDownloadName: $"{safeId}.zip");
         });
 
         // ── Delete a run's artifacts ────────────────────────────────────
@@ -201,5 +259,30 @@ internal static class ArtifactRoutes
             ".zip" => "application/zip",
             _ => "application/octet-stream",
         };
+    }
+
+    /// <summary>
+    /// Applies security headers that must be present on every artifact response.
+    /// HTML/SVG/JS files are served with <c>Content-Disposition: attachment</c> by
+    /// <c>Results.Stream</c> (via its fileDownloadName parameter), so this method
+    /// only needs to add the non-disposition headers.
+    /// </summary>
+    private static void ApplyArtifactSecurityHeaders(HttpContext ctx)
+    {
+        ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        ctx.Response.Headers["Cache-Control"] = "private, no-store";
+    }
+
+    private static string SanitizeForFilename(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        Span<char> buffer = stackalloc char[Math.Min(name.Length, 64)];
+        var len = 0;
+        foreach (var c in name)
+        {
+            if (len >= buffer.Length) break;
+            buffer[len++] = Array.IndexOf(invalid, c) >= 0 ? '_' : c;
+        }
+        return len == 0 ? "artifacts" : new string(buffer[..len]);
     }
 }

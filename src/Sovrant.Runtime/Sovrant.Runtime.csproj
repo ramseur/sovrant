@@ -26,7 +26,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Storage\Migrations\*.sql" />
-    <EmbeddedResource Include="Storage\PostgresSchema.sql" />
+    <EmbeddedResource Include="..\..\db\postgres\PostgresSchema.sql" LogicalName="PostgresSchema.sql" />
     <EmbeddedResource Include="Metrics\OpenRouterModelAliases.json" />
   </ItemGroup>
 

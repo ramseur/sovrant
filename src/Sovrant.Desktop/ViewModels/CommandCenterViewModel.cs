@@ -239,7 +239,6 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
                     Rows.Add(new CommandCenterRowViewModel
                     {
                         Kind = r.Kind,
-                        KindIcon = KindIcon(r.Kind),
                         Id = r.Id,
                         Title = r.Title,
                         Status = r.Status,
@@ -271,16 +270,6 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
             IsLoading = false;
         }
     }
-
-    private static string KindIcon(string kind) => kind switch
-    {
-        "mission" => "target",
-        "team-run" => "users",
-        "agent-run" => "agent",
-        "session" => "message",
-        "claw" => "network",
-        _ => "activity",
-    };
 
     private static string FormatRelative(DateTimeOffset when)
     {
@@ -336,7 +325,6 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
 public partial class CommandCenterRowViewModel : ViewModelBase
 {
     [ObservableProperty] private string _kind = string.Empty;
-    [ObservableProperty] private string _kindIcon = string.Empty;
     [ObservableProperty] private string _id = string.Empty;
     [ObservableProperty] private string _title = string.Empty;
     [ObservableProperty] private string _status = string.Empty;

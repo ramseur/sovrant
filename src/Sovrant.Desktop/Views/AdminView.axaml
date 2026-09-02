@@ -1,7 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
-             xmlns:ctrl="using:Sovrant.Desktop.Controls"
              xmlns:conv="using:Sovrant.Desktop.Converters"
              xmlns:users="using:Sovrant.Runtime.Users"
              xmlns:ws="using:Sovrant.Runtime.Workspaces"
@@ -300,17 +299,12 @@
 
                         <!-- Panel header -->
                         <DockPanel>
-                            <Button DockPanel.Dock="Right"
+                            <Button DockPanel.Dock="Right" Content="✕ Close"
                                     Command="{Binding ConfigureWorkspaceCommand}"
                                     CommandParameter="{Binding ConfigWorkspace}"
                                     Padding="10,5" CornerRadius="6" FontSize="12"
                                     Background="{DynamicResource SurfaceBorder}"
-                                    Foreground="{DynamicResource TextSecondary}">
-                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <ctrl:SovrantIcon IconName="x" Width="12" Height="12" />
-                                    <TextBlock Text="Close" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
+                                    Foreground="{DynamicResource TextSecondary}" />
                             <TextBlock Text="{Binding ConfigWorkspace.Name, StringFormat='Configure: {0}'}"
                                        FontSize="15" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextPrimary}"

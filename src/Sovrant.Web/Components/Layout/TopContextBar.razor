@@ -95,7 +95,7 @@
 
     <!-- Workspace -->
     <div class="tcb-field">
-        <span class="tcb-icon"><SovrantIcon Name="building" /></span>
+        <span class="tcb-icon">&#x1F3E2;</span>
         <select @bind="_selectedWorkspaceId" @bind:after="OnWorkspaceChanged" disabled="@(_workspaces.Count <= 1)">
             @foreach (var w in _workspaces)
             {
@@ -106,7 +106,7 @@
 
     <!-- Project -->
     <div class="tcb-field">
-        <span class="tcb-icon"><SovrantIcon Name="project" /></span>
+        <span class="tcb-icon">&#x1F4C1;</span>
         <select @bind="_selectedProjectId" @bind:after="OnProjectChanged" disabled="@(_projects.Count == 0)">
             <option value="">@(_projects.Count == 0 ? "No projects" : "(No project)")</option>
             @foreach (var p in _projects)
@@ -125,7 +125,7 @@
                 @ref="_mcpTriggerRef"
                 @onclick="ToggleMcpDropdown"
                 @onclick:stopPropagation="true">
-            <span class="tcb-icon"><SovrantIcon Name="link" /></span>
+            <span class="tcb-icon">&#128279;</span>
             <span class="tcb-mcp-summary">@McpSummaryLabel</span>
             <span class="tcb-mcp-chevron @(_mcpDropdownOpen ? "open" : "")">&#x25BE;</span>
         </button>
@@ -168,9 +168,9 @@
     {
         <div class="tcb-divider"></div>
         <div class="tcb-agent-badge" title="This session is scoped to @ActiveContext.ActiveAgentName">
-            <span class="tcb-icon"><SovrantIcon Name="agent" /></span>
+            <span class="tcb-icon">&#x1F916;</span>
             <span class="tcb-agent-name">@ActiveContext.ActiveAgentName</span>
-            <button class="tcb-agent-clear" title="Clear agent" @onclick="ClearAgent" @onclick:stopPropagation="true"><SovrantIcon Name="x" /></button>
+            <button class="tcb-agent-clear" title="Clear agent" @onclick="ClearAgent" @onclick:stopPropagation="true">&#x2715;</button>
         </div>
     }
 </div>
@@ -246,17 +246,17 @@
 
     private static readonly (string Name, string Icon)[] _knownProviders =
     [
-        ("OpenAI",       "brain"),
-        ("Anthropic",    "brain"),
-        ("OpenRouter",   "route"),
-        ("DeepSeek",     "search"),
-        ("Groq",         "zap"),
-        ("Mistral",      "wind"),
-        ("Google",       "sparkles"),
-        ("Together AI",  "team"),
-        ("Ollama",       "agent"),
-        ("LM Studio",    "monitor"),
-        ("Azure OpenAI", "cloud"),
+        ("OpenAI",       "🤖"),
+        ("Anthropic",    "🧠"),
+        ("OpenRouter",   "🔀"),
+        ("DeepSeek",     "🔵"),
+        ("Groq",         "🚀"),
+        ("Mistral",      "🌀"),
+        ("Google",       "🔷"),
+        ("Together AI",  "🤝"),
+        ("Ollama",       "🦙"),
+        ("LM Studio",    "💻"),
+        ("Azure OpenAI", "☁️"),
     ];
 
     private static readonly Dictionary<string, string[]> StaticProviderModels = new(StringComparer.Ordinal)
@@ -501,7 +501,13 @@
         }
         _treeGroups = groups.Values.ToList();
         var configuredSet = new HashSet<string>(groups.Keys, StringComparer.OrdinalIgnoreCase);
-        _unconfiguredProviders = _knownProviders.Where(p => !configuredSet.Contains(p.Name)).ToList();
+
+        // Provider setup lives at /admin/providers (system-admin only). Non-admins have no
+        // path to act on an unconfigured provider, so the "Set up →" prompt is admin-only;
+        // non-admins only ever see providers a workspace admin has already enabled for them.
+        _unconfiguredProviders = Session.IsAdmin
+            ? _knownProviders.Where(p => !configuredSet.Contains(p.Name)).ToList()
+            : [];
     }
 
     private async Task ToggleTreeDropdown()
@@ -608,7 +614,8 @@
             var modelsUrl = baseUrl.TrimEnd('/') + "/models";
             using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(modelsUrl));
             var safeKey = new string(apiKey.Where(c => c < 128).ToArray()).Trim();
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", safeKey);
+            if (!string.IsNullOrEmpty(safeKey))
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", safeKey);
             var response = await http.SendAsync(request, cts.Token);
             response.EnsureSuccessStatusCode();
             using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
@@ -773,7 +780,7 @@
     private void NavigateToProviderSetup(string providerName)
     {
         _treeOpen = false;
-        NavManager.NavigateTo("/settings?tab=providers&provider=" + Uri.EscapeDataString(providerName));
+        NavManager.NavigateTo("/admin/providers?provider=" + Uri.EscapeDataString(providerName));
     }
 
     private static string ShortenModelName(string model)

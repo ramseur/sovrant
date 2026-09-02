@@ -161,7 +161,6 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
                     Rows.Add(new UserDashboardRowViewModel
                     {
                         Kind = r.Kind,
-                        KindIcon = KindIcon(r.Kind),
                         Id = r.Id,
                         Title = r.Title,
                         Status = r.Status,
@@ -195,15 +194,6 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private static string KindIcon(string kind) => kind switch
-    {
-        "mission" => "target",
-        "team-run" => "users",
-        "agent-run" => "agent",
-        "session" => "message",
-        "claw" => "network",
-        _ => "activity",
-    };
 
     private static string FormatRelative(DateTimeOffset when)
     {
@@ -228,7 +218,6 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
 public partial class UserDashboardRowViewModel : ViewModelBase
 {
     [ObservableProperty] private string _kind = string.Empty;
-    [ObservableProperty] private string _kindIcon = string.Empty;
     [ObservableProperty] private string _id = string.Empty;
     [ObservableProperty] private string _title = string.Empty;
     [ObservableProperty] private string _status = string.Empty;

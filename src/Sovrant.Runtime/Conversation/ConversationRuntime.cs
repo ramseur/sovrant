@@ -1661,6 +1661,14 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     }
 
     /// <summary>
+    /// Safety-net cap applied when no per-model <c>MaxTools</c> override is
+    /// configured — matches the OpenAI Chat Completions API's documented hard
+    /// limit of 128 tool definitions per request, shared by every
+    /// OpenAI-compatible provider Sovrant routes through.
+    /// </summary>
+    private const int DefaultMaxToolsFallback = 128;
+
+    /// <summary>
     /// Filters the tool list based on model capabilities and the per-session
     /// MCP connection allow-list. If the model doesn't support native tools,
     /// returns empty. If <see cref="SessionConfig.AllowedMcpServers"/> is set,
@@ -1697,7 +1705,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         }
 
         if (_capabilityRegistry is null)
-            return tools;
+            return tools.Count > DefaultMaxToolsFallback
+                ? tools.Take(DefaultMaxToolsFallback).ToList()
+                : tools;
 
         var caps = _capabilityRegistry.GetCapabilities(_config.Model);
 
@@ -1705,8 +1715,15 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         if (!caps.NativeTools)
             return [];
 
-        // Respect max_tools limit if set.
-        if (caps.MaxTools is > 0 and var max && tools.Count > max)
+        // Per-model MaxTools overrides (for models that degrade with many tools)
+        // take priority, but nothing populates MaxTools for the vast majority of
+        // models today. Falling back to "no limit" there is unsafe: OpenAI's Chat
+        // Completions API — and every OpenAI-compatible provider behind it
+        // (OpenRouter, Ollama, etc.) — hard-rejects requests with more than 128
+        // tool definitions with a 400. Fall back to that ceiling instead of
+        // sending the registry unbounded.
+        var max = caps.MaxTools is > 0 ? Math.Min(caps.MaxTools.Value, DefaultMaxToolsFallback) : DefaultMaxToolsFallback;
+        if (tools.Count > max)
             return tools.Take(max).ToList();
 
         return tools;
