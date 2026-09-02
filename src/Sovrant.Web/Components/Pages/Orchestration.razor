@@ -12,11 +12,10 @@
             <h1>Orchestration</h1>
             <div class="master-header-right">
                 <span class="item-count">@_filtered.Count</span>
-                <button class="btn-sm btn-outline" title="Swarm defaults"
-                        style="display:inline-flex;align-items:center;justify-content:center"
-                        @onclick="ToggleSwarmConfig">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>
-                </button>
+                <button class="btn-sm @(!_showSwarmConfig ? "btn-primary" : "btn-outline")"
+                        @onclick="ShowTeamView">Team</button>
+                <button class="btn-sm @(_showSwarmConfig ? "btn-primary" : "btn-outline")"
+                        @onclick="ShowDefaultsView">Defaults</button>
                 <button class="btn-sm btn-primary" title="New team"
                         @onclick="StartCreate">+ New</button>
             </div>
@@ -107,7 +106,7 @@
                             Default run settings inherited by new teams. Per-team overrides live on each team's detail pane.
                         </p>
                     </div>
-                    <button class="btn-sm btn-outline" @onclick="ToggleSwarmConfig">Close</button>
+                    <button class="btn-sm btn-outline" @onclick="ShowTeamView">Close</button>
                 </div>
 
                 <div class="gov-card orch-form">
@@ -584,10 +583,17 @@
         _selected = item;
     }
 
-    private void ToggleSwarmConfig()
+    private void ShowTeamView()
     {
-        _showSwarmConfig = !_showSwarmConfig;
-        if (_showSwarmConfig) { _selected = null; _isCreating = false; }
+        _showSwarmConfig = false;
+        _isCreating = false;
+    }
+
+    private void ShowDefaultsView()
+    {
+        _showSwarmConfig = true;
+        _selected = null;
+        _isCreating = false;
     }
 
     private void RemoveTeam(string id)
