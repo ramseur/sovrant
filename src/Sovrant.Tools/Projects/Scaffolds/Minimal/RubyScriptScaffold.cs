@@ -66,6 +66,26 @@ public sealed class RubyScriptScaffold : IProjectTemplate
                 end
                 """),
 
+            new(".github/workflows/ci.yml", """
+                name: CI
+
+                on:
+                  push:
+                    branches: [main, master]
+                  pull_request:
+                    branches: [main, master]
+
+                jobs:
+                  build-and-test:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - uses: actions/checkout@v4
+                      - uses: ruby/setup-ruby@v1
+                        with:
+                          bundler-cache: true
+                      - run: bundle exec ruby -Itest test/test_*.rb
+                """),
+
             new(".gitignore", """
                 .bundle/
                 vendor/

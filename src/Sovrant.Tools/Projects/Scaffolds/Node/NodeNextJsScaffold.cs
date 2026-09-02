@@ -165,6 +165,29 @@ public sealed class NodeNextJsScaffold : IProjectTemplate
                 });
                 """),
 
+            new(".github/workflows/ci.yml", """
+                name: CI
+
+                on:
+                  push:
+                    branches: [main, master]
+                  pull_request:
+                    branches: [main, master]
+
+                jobs:
+                  build-and-test:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - uses: actions/checkout@v4
+                      - uses: actions/setup-node@v4
+                        with:
+                          node-version: '22'
+                          cache: 'npm'
+                      - run: npm install
+                      - run: npm test
+                      - run: npm run build
+                """),
+
             new(".gitignore", """
                 node_modules/
                 .next/

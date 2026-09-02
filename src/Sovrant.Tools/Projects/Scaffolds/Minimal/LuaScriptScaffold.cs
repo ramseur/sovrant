@@ -80,6 +80,25 @@ public sealed class LuaScriptScaffold : IProjectTemplate
                 end)
                 """),
 
+            new(".github/workflows/ci.yml", """
+                name: CI
+
+                on:
+                  push:
+                    branches: [main, master]
+                  pull_request:
+                    branches: [main, master]
+
+                jobs:
+                  build-and-test:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - uses: actions/checkout@v4
+                      - run: sudo apt-get install -y lua5.4 luarocks
+                      - run: sudo luarocks install busted
+                      - run: busted spec/
+                """),
+
             new(".gitignore", """
                 *.rock
                 luarocks/

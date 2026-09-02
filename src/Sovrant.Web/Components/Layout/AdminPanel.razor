@@ -1,15 +1,23 @@
-@*  Admin group secondary panel — admin-only nav items.  *@
+@*  Admin group secondary panel — admin-only nav items, grouped by function.  *@
 
 <div class="rail-secondary-header">Admin</div>
-<NavButton Href="/command" Icon="target" Label="Command Center" OnClick="OnNavigate" />
-<NavButton Href="/admin" Icon="users" Label="Users" OnClick="OnNavigate" />
-<NavButton Href="/admin/workspaces" Icon="building" Label="Workspaces" OnClick="OnNavigate" />
-<NavButton Href="/admin/providers" Icon="globe" Label="Providers" OnClick="OnNavigate" />
-<NavButton Href="/governance" Icon="governance" Label="Governance" OnClick="OnNavigate" />
-<NavButton Href="/trust-boundary" Icon="lock" Label="Trust Boundary" OnClick="OnNavigate" />
-<NavButton Href="/diagnostics" Icon="tools" Label="Diagnostics" OnClick="OnNavigate" />
-<NavButton Href="/admin/integrations" Icon="integrations" Label="Platform Integrations" OnClick="OnNavigate" />
-<NavButton Href="/admin/system-integrations" Icon="monitor" Label="System Integrations" OnClick="OnNavigate" />
+
+<div class="nav-section-header">Overview</div>
+<NavButton Href="/command" Label="Command Center" OnClick="OnNavigate" />
+
+<div class="nav-section-header">Access</div>
+<NavButton Href="/admin" Label="Users" OnClick="OnNavigate" />
+<NavButton Href="/admin/workspaces" Label="Workspaces" OnClick="OnNavigate" />
+<NavButton Href="/admin/providers" Label="Providers" OnClick="OnNavigate" />
+
+<div class="nav-section-header">Safety</div>
+<NavButton Href="/governance" Label="Governance" OnClick="OnNavigate" />
+<NavButton Href="/trust-boundary" Label="Trust Boundary" OnClick="OnNavigate" />
+
+<div class="nav-section-header">System</div>
+<NavButton Href="/diagnostics" Label="Diagnostics" OnClick="OnNavigate" />
+<NavButton Href="/admin/integrations" Label="Platform Integrations" OnClick="OnNavigate" />
+<NavButton Href="/admin/system-integrations" Label="System Integrations" OnClick="OnNavigate" />
 
 @code {
     [Parameter] public EventCallback<string> OnNavigate { get; set; }

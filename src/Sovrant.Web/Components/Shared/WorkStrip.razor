@@ -1,0 +1,92 @@
+<div class="work-strip">
+    @if (IsExecuting)
+    {
+        <div class="work-strip-active">
+            <span class="thinking-dot"></span>
+            <span class="work-strip-status-text">@ExecutionStatusText</span>
+        </div>
+    }
+    else if (ToolUses.Count > 0)
+    {
+        <button type="button" class="work-strip-header @(ErrorCount > 0 ? "work-strip-header-error" : "")" @onclick="ToggleExpanded">
+            <span class="work-strip-caret">@(_expanded ? "▾" : "▸")</span>
+            <span class="work-strip-count">@ToolUses.Count action@(ToolUses.Count == 1 ? "" : "s")</span>
+            @if (!string.IsNullOrEmpty(ActionSummary))
+            {
+                <span class="work-strip-dot">&middot;</span>
+                <span class="work-strip-groups">@ActionSummary</span>
+            }
+            @if (ErrorCount > 0)
+            {
+                <span class="work-strip-dot">&middot;</span>
+                <span class="work-strip-errcount">@ErrorCount error@(ErrorCount == 1 ? "" : "s")</span>
+            }
+            @if (!string.IsNullOrEmpty(ElapsedText))
+            {
+                <span class="work-strip-dot">&middot;</span>
+                <span class="work-strip-elapsed">@ElapsedText</span>
+            }
+            @if (ErrorCount > 0)
+            {
+                <span class="work-strip-warn-icon">&#9888;</span>
+            }
+        </button>
+
+        @if (_expanded)
+        {
+            <div class="work-strip-list">
+                @foreach (var tool in ToolUses)
+                {
+                    <div class="work-strip-row @(tool.IsError ? "work-strip-row-error" : "") @(_activeToolId == tool.ToolUseId ? "work-strip-row-active" : "")"
+                         @onclick="() => ToggleDetail(tool.ToolUseId)">
+                        <span class="work-strip-status-dot @StatusDotClass(tool)"></span>
+                        <span class="tool-icon">&#x1F527;</span>
+                        <span class="work-strip-row-name">@ChatMessageModel.FriendlyToolLabel(tool.ToolName)</span>
+                        <span class="work-strip-row-preview">@Preview(tool.Result)</span>
+                    </div>
+                    @if (_activeToolId == tool.ToolUseId)
+                    {
+                        <div class="work-strip-detail">
+                            @if (DocumentArtifactCard.ProducesArtifacts(tool.ToolName) && !string.IsNullOrEmpty(tool.Result))
+                            {
+                                <DocumentArtifactCard ToolName="@tool.ToolName" ResultJson="@tool.Result" />
+                            }
+                            @if (!string.IsNullOrEmpty(tool.Result))
+                            {
+                                <pre>@tool.Result</pre>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public List<ToolUseModel> ToolUses { get; set; } = [];
+    [Parameter] public bool IsExecuting { get; set; }
+    [Parameter] public string? ExecutionStatusText { get; set; }
+    [Parameter] public string? ActionSummary { get; set; }
+    [Parameter] public string? ElapsedText { get; set; }
+
+    private bool _expanded;
+    private string? _activeToolId;
+
+    private int ErrorCount => ToolUses.Count(t => t.IsError);
+
+    private void ToggleExpanded() => _expanded = !_expanded;
+
+    private void ToggleDetail(string toolUseId) =>
+        _activeToolId = _activeToolId == toolUseId ? null : toolUseId;
+
+    private static string StatusDotClass(ToolUseModel tool) =>
+        tool.IsError ? "status-dot-fail" : tool.Status == "Done" ? "status-dot-pass" : "status-dot-warn";
+
+    private static string Preview(string result)
+    {
+        if (string.IsNullOrWhiteSpace(result)) return string.Empty;
+        var line = result.Split('\n', 2)[0].Trim();
+        return line.Length > 90 ? line[..90] + "…" : line;
+    }
+}

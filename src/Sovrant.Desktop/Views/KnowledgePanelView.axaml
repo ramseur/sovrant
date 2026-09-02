@@ -1,75 +1,50 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
-             xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.KnowledgePanelView"
              x:DataType="vm:SidebarViewModel"
              Background="{DynamicResource SidebarBackground}">
     <ScrollViewer>
-        <StackPanel Margin="10">
-            <TextBlock Text="KNOWLEDGE" FontSize="11" FontWeight="Bold"
+        <StackPanel Margin="12,10,12,10">
+            <TextBlock Text="KNOWLEDGE" FontSize="11.5" FontWeight="Bold"
                        Foreground="{DynamicResource TextMuted}"
-                       Margin="6,4,0,10" />
-            <Button Command="{Binding NavigateCommand}" CommandParameter="Artifacts"
-                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Artifacts}"
-                    Foreground="{DynamicResource TextPrimary}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon IconName="artifacts" Width="14" Height="14" />
-                    <TextBlock Text="Artifacts" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
-            <Button Command="{Binding NavigateCommand}" CommandParameter="Guidelines"
-                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Guidelines}"
-                    Foreground="{DynamicResource TextPrimary}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon IconName="code" Width="14" Height="14" />
-                    <TextBlock Text="Code Templates" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
-            <Button Command="{Binding NavigateCommand}" CommandParameter="Documents"
-                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Documents}"
-                    Foreground="{DynamicResource TextPrimary}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon IconName="document" Width="14" Height="14" />
-                    <TextBlock Text="Documents" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
-            <Button Command="{Binding NavigateCommand}" CommandParameter="Memory"
-                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Memory}"
-                    Foreground="{DynamicResource TextPrimary}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon IconName="memory" Width="14" Height="14" />
-                    <TextBlock Text="Memory" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
-            <Button Command="{Binding NavigateCommand}" CommandParameter="Skills"
-                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Skills}"
-                    Foreground="{DynamicResource TextPrimary}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon IconName="file" Width="14" Height="14" />
-                    <TextBlock Text="Skills" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
-            <Button Command="{Binding NavigateCommand}" CommandParameter="Tools"
-                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                    Padding="10,6" Margin="0,1" CornerRadius="6" FontSize="13"
-                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBg}, ConverterParameter=Tools}"
-                    Foreground="{DynamicResource TextPrimary}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ctrl:SovrantIcon IconName="tools" Width="14" Height="14" />
-                    <TextBlock Text="Tools" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
+                       Margin="9,4,0,8" />
+            <Button Content="Artifacts"
+                    Command="{Binding NavigateCommand}" CommandParameter="Artifacts"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Center"
+                    Padding="12,0" Height="40" Margin="0,1" CornerRadius="8" FontSize="13.5"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBgSoft}, ConverterParameter=Artifacts}"
+                    Foreground="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavFgOrText}, ConverterParameter=Artifacts}" />
+            <Button Content="Code Templates"
+                    Command="{Binding NavigateCommand}" CommandParameter="Guidelines"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Center"
+                    Padding="12,0" Height="40" Margin="0,1" CornerRadius="8" FontSize="13.5"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBgSoft}, ConverterParameter=Guidelines}"
+                    Foreground="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavFgOrText}, ConverterParameter=Guidelines}" />
+            <Button Content="Documents"
+                    Command="{Binding NavigateCommand}" CommandParameter="Documents"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Center"
+                    Padding="12,0" Height="40" Margin="0,1" CornerRadius="8" FontSize="13.5"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBgSoft}, ConverterParameter=Documents}"
+                    Foreground="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavFgOrText}, ConverterParameter=Documents}" />
+            <Button Content="Memory"
+                    Command="{Binding NavigateCommand}" CommandParameter="Memory"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Center"
+                    Padding="12,0" Height="40" Margin="0,1" CornerRadius="8" FontSize="13.5"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBgSoft}, ConverterParameter=Memory}"
+                    Foreground="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavFgOrText}, ConverterParameter=Memory}" />
+            <Button Content="Skills"
+                    Command="{Binding NavigateCommand}" CommandParameter="Skills"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Center"
+                    Padding="12,0" Height="40" Margin="0,1" CornerRadius="8" FontSize="13.5"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBgSoft}, ConverterParameter=Skills}"
+                    Foreground="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavFgOrText}, ConverterParameter=Skills}" />
+            <Button Content="Tools"
+                    Command="{Binding NavigateCommand}" CommandParameter="Tools"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Center"
+                    Padding="12,0" Height="40" Margin="0,1" CornerRadius="8" FontSize="13.5"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBgSoft}, ConverterParameter=Tools}"
+                    Foreground="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavFgOrText}, ConverterParameter=Tools}" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

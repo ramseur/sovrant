@@ -105,6 +105,25 @@ public sealed class CppCmakeScaffold : IProjectTemplate
                 }
                 """),
 
+            new(".github/workflows/ci.yml", """
+                name: CI
+
+                on:
+                  push:
+                    branches: [main, master]
+                  pull_request:
+                    branches: [main, master]
+
+                jobs:
+                  build-and-test:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - uses: actions/checkout@v4
+                      - run: cmake -B build -DCMAKE_BUILD_TYPE=Debug
+                      - run: cmake --build build
+                      - run: ctest --test-dir build --output-on-failure
+                """),
+
             new(".gitignore", """
                 build/
                 cmake-build-*/

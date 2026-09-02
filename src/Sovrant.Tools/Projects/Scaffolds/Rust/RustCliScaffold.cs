@@ -107,6 +107,26 @@ public sealed class RustCliScaffold : IProjectTemplate
                 }
                 """),
 
+            new(".github/workflows/ci.yml", """
+                name: CI
+
+                on:
+                  push:
+                    branches: [main, master]
+                  pull_request:
+                    branches: [main, master]
+
+                jobs:
+                  build-and-test:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - uses: actions/checkout@v4
+                      - uses: actions-rust-lang/setup-rust-toolchain@v1
+                      - run: cargo build
+                      - run: cargo test
+                      - run: cargo clippy -- -D warnings
+                """),
+
             new(".gitignore", """
                 /target/
                 .env

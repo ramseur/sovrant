@@ -1,7 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
-             xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.DocumentsView"
              x:DataType="vm:DocumentsViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -150,9 +149,11 @@
                                     Background="{DynamicResource BrandPrimary}"
                                     Foreground="White"
                                     FontSize="14">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <ctrl:SovrantIcon IconName="message" Width="16" Height="16" />
-                                    <TextBlock Text="Chat to create this document" VerticalAlignment="Center" />
+                                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                    <Path Data="{StaticResource IconChat}" Width="15" Height="15" Stretch="Uniform"
+                                          StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                          Stroke="White" VerticalAlignment="Center" />
+                                    <TextBlock Text="Chat to create this document" />
                                 </StackPanel>
                             </Button>
                             <TextBlock IsVisible="{Binding CanLaunchChat}"

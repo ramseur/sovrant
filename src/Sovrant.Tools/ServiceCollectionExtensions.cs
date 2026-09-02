@@ -203,6 +203,7 @@ public static class ServiceCollectionExtensions
             sp.GetService<Sovrant.Runtime.Knowledge.IKnowledgeStore>()));
         services.AddSingleton<ITool, CodeCreateMultiTool>();
         services.AddSingleton<ITool, CodeListTemplatesTool>();
+        services.AddSingleton<ITool, CodeValidateTool>();
 
         // Quality / verification tools
         services.AddSingleton<ITool, VerifyTool>();

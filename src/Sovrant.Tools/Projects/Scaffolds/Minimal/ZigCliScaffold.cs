@@ -104,6 +104,27 @@ public sealed class ZigCliScaffold : IProjectTemplate
                 }
                 """),
 
+            new(".github/workflows/ci.yml", """
+                name: CI
+
+                on:
+                  push:
+                    branches: [main, master]
+                  pull_request:
+                    branches: [main, master]
+
+                jobs:
+                  build-and-test:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - uses: actions/checkout@v4
+                      - uses: mlugg/setup-zig@v1
+                        with:
+                          version: '0.14.0'
+                      - run: zig build
+                      - run: zig build test
+                """),
+
             new(".gitignore", """
                 zig-out/
                 zig-cache/

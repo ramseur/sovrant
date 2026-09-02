@@ -1,6 +1,6 @@
 # Sovrant — Persistence Layer
 
-**Phases 32–42.5, 51, 52, 55, 57, 78, 85, 87, 88, 90, 93, 98, 108–116, 123, 124** | **Last updated:** 2026-06-18 | **Current schema:** V042
+**Phases 32–42.5, 51, 52, 55, 57, 78, 85, 87, 88, 90, 93, 98, 108–116, 123–126** | **Last updated:** 2026-06-25 | **Current schema:** V043
 
 This document describes how Sovrant stores durable operational data. All persistent state (sessions, memory, audit, credentials, token usage, workspaces, projects, users, knowledge, hooks, MCP/LSP config) is managed by a relational database. Three deployment modes are supported:
 
@@ -107,8 +107,9 @@ Migrations are embedded SQL resources named `V{NNN}__{description}.sql` inside t
 | V040 | `V040__mcp_server_id.sql` | Adds stable `id` column to `mcp_servers` (UUID surrogate that survives renames; `name` remains the routing key) |
 | V041 | `V041__workspace_memory_privacy.sql` | Adds `owner_user_id` + `is_private` to `workspace_memory` for per-user note privacy |
 | V042 | `V042__memory_owner_user_id.sql` | Adds `owner_user_id` to `session_summaries`, `learned_patterns`, `instincts` so auto-generated memories are scoped to their session owner |
+| V043 | `V043__email_as_user_id.sql` | Rewrites `usr_{hex}` primary keys to email addresses; drops `username` column via table recreation |
 
-V008, V009, V022, V035, V037 ship no new tables — they are data backfills or seed inserts. V014–V016, V023–V025, V027–V031, V034, V036, V040–V042 add only columns to existing tables.
+V008, V009, V022, V035, V037 ship no new tables — they are data backfills or seed inserts. V014–V016, V023–V025, V027–V031, V034, V036, V040–V043 add only columns to existing tables.
 
 Migrations are idempotent — running `InitializeAsync` multiple times is safe. The runner skips already-applied versions and records the SHA-256 checksum of each script in `schema_version.checksum`. Checksum drift is enforced: if a previously-applied `V00X__*.sql` file has been edited in place, `InitializeAsync` throws `MigrationDriftException` on the next boot. Legacy rows with `checksum = NULL` are tolerated so pre-42.5 installs upgrade cleanly.
 
@@ -191,13 +192,13 @@ A failing probe flips `db.status` to `"error"` and overall `status` to `"degrade
 
 ## Database Inventory (authoritative)
 
-The current schema spans **42 migrations (V001–V042)**. The tables below reflect the schema as of V042.
+The current schema spans **43 migrations (V001–V043)**. The tables below reflect the schema as of V043.
 
 ### Tables by purpose
 
 | Category | Tables | First migration | Notes |
 |---|---|---|---|
-| **Identity & access** | `users`, `api_tokens`, `roles`, `permissions`, `role_permissions`, `user_roles` | V001 | `password_hash` added V026. `api_tokens` is live (Phase 38). RBAC tables populated (Phase 40). |
+| **Identity & access** | `users`, `api_tokens`, `roles`, `permissions`, `role_permissions`, `user_roles` | V001 | `password_hash` added V026. `username` column dropped V043 (email is now the PK). `api_tokens` is live (Phase 38). RBAC tables populated (Phase 40). |
 | **Auth extras** | `server_settings`, `password_reset_tokens` | V026 | `server_settings`: key/value store for auth bootstrap. `password_reset_tokens`: local-auth only; inert in Supabase mode. |
 | **Workspaces** | `workspaces`, `workspace_members`, `workspace_config`, `workspace_invites`, `workspace_memory` | V001 + V006 | `workspace_memory` gained `owner_user_id` + `is_private` (V041) for per-user note privacy. |
 | **Projects** | `projects`, `project_members`, `project_config` | V001 | V007 adds indexes only. |
@@ -449,14 +450,14 @@ Sovrant supports three storage deployment modes. The SQLite schema described abo
 | Token resolution | `SqliteTokenService` | `PostgresTokenService` *(planned)* | JWT JWKS validation + `svt_*` fallback |
 | `password_reset_tokens` | used | used | inert (Supabase handles resets) |
 | FK tables | reference `public.users` | same | same — mirror trigger ensures row exists first |
-| Schema bootstrap | V-series migration runner | `PostgresSchema.sql` (base section, manual) | `PostgresSchema.sql` (full file inc. Supabase Auth Extension section) |
-| Row-level security | n/a | optional | Commented-out policies in `PostgresSchema.sql` Supabase Auth Extension section |
+| Schema bootstrap | V-series migration runner | `db/postgres/PostgresSchema.sql` (manual `psql`) | `db/supabase/migrations/` via Supabase CLI |
+| Row-level security | n/a | optional | Commented-out policies in `db/supabase/migrations/20260625000000_initial_schema.sql` |
 
 ### How Supabase Auth fits
 
 Supabase Auth stores identities in `auth.users` (UUID PK, managed by GoTrue). The canonical user identity throughout the app is a `user_id TEXT` column. In Supabase mode this TEXT value is `auth.users.id::TEXT` (a UUID string) — fully compatible with existing FK columns and `owner_user_id` memory columns without any type changes.
 
-Two mirror triggers (in the **SUPABASE AUTH EXTENSION** section at the bottom of `PostgresSchema.sql`) propagate changes from `auth.users` to `public.users`:
+Two mirror triggers (in `db/supabase/migrations/20260625000000_initial_schema.sql`) propagate changes from `auth.users` to `public.users`:
 
 ```sql
 -- on_auth_user_created: fires on new sign-up
@@ -469,8 +470,8 @@ BEGIN
         WHEN NEW.raw_app_meta_data->>'sovrant_role' = 'admin' THEN 'admin'
         ELSE 'user'
     END;
-    INSERT INTO public.users (user_id, username, email, role, ...)
-    VALUES (NEW.id::TEXT, ..., _role, ...)
+    INSERT INTO public.users (user_id, email, role, ...)
+    VALUES (NEW.id::TEXT, NEW.email, _role, ...)
     ON CONFLICT (user_id) DO NOTHING;
 END; $$;
 
@@ -494,13 +495,29 @@ This means every FK reference to `users(user_id)` continues to work without sche
 
 ### File layout
 
-`src/Sovrant.Runtime/Storage/PostgresSchema.sql` — **single file for all Postgres deployments**. Divided into two sections:
+All database files live under `db/` in the repo root:
 
-1. **Base schema** (always run) — full `public.users` with `password_hash`, all FK/memory/knowledge tables, V041/V042 `ADD COLUMN IF NOT EXISTS` guards, V040 `mcp_servers.id` backfill.
+```
+db/
+  postgres/
+    PostgresSchema.sql                            ← standalone Postgres (also embedded in Runtime DLL)
+  supabase/
+    config.toml                                   ← Supabase CLI project config
+    migrations/
+      20260625000000_initial_schema.sql           ← full schema + GoTrue mirror triggers + RLS stubs
+```
 
-2. **SUPABASE AUTH EXTENSION** (Supabase only, clearly marked at the bottom) — the two mirror triggers (`on_auth_user_created`, `on_auth_user_updated`), commented-out RLS policies, and deployment notes. **Standalone Postgres deployments skip this section.**
+**Standalone Postgres** (`db/postgres/PostgresSchema.sql`) — base schema only; no Supabase-specific sections. Run once with `psql` to bootstrap; re-run on upgrades (idempotent). Also embedded in `Sovrant.Runtime.dll` so the runtime can auto-initialize a fresh Postgres database without external files present.
 
-There is no separate `SupabaseAuth.sql` file — the Supabase-specific SQL lives inline in `PostgresSchema.sql` behind the section header. When running in the Supabase SQL editor, run the entire file; Supabase-only objects only apply inside a Supabase project where `auth.users` exists.
+**Supabase** (`db/supabase/migrations/`) — full schema plus the GoTrue mirror triggers (`on_auth_user_created`, `on_auth_user_updated`) and commented-out RLS policies. Managed by the Supabase CLI — run `supabase db push` from `db/supabase/`. Admins can layer their own customizations by adding new numbered migration files after the initial one:
+
+```
+db/supabase/migrations/
+  20260625000000_initial_schema.sql   ← Sovrant base (don't edit)
+  20260625000001_my_org_additions.sql ← admin customizations layered on top
+```
+
+The Supabase CLI applies migrations in timestamp order so admin additions never conflict with future Sovrant upgrades as long as they stay additive.
 
 ### What changes in auth middleware
 
@@ -522,9 +539,9 @@ Because the role is embedded in the JWT by Supabase (from `raw_app_meta_data`), 
 
 | Item | Status |
 |---|---|
-| `PostgresSchema.sql` base schema (V001–V042 parity + V040 backfill) | **Done** |
-| Supabase mirror triggers (`on_auth_user_created`, `on_auth_user_updated`) with Option A role from `app_metadata` | **Done** (SUPABASE AUTH EXTENSION section in `PostgresSchema.sql`) |
-| RLS policies for memory privacy at DB layer | Skeleton commented out in `PostgresSchema.sql` — **Planned** to enable |
+| `db/postgres/PostgresSchema.sql` base schema (V001–V043 parity + V040 backfill) | **Done** |
+| `db/supabase/migrations/` Supabase CLI migration with GoTrue mirror triggers + RLS stubs | **Done** |
+| RLS policies for memory privacy at DB layer | Skeleton commented out in Supabase migration — **Planned** to enable |
 | `PostgresTokenService` (mirrors `SqliteTokenService` for standalone Postgres) | **Planned** |
 | Postgres V-series migration runner (equivalent to SQLite `MigrationRunner`) | **Planned** |
 | JWT validation in `BearerTokenMiddleware` | **Planned** |
@@ -571,10 +588,10 @@ export SOVRANT_POSTGRES_URL="postgres://sovrant_app:yourpassword@localhost:5432/
 
 **3. Bootstrap the schema (one-time, run from the repo):**
 ```bash
-psql $SOVRANT_POSTGRES_URL -f src/Sovrant.Runtime/Storage/PostgresSchema.sql
+psql $SOVRANT_POSTGRES_URL -f db/postgres/PostgresSchema.sql
 ```
 
-> **Stop before the SUPABASE AUTH EXTENSION section.** Standalone Postgres skips everything after the `══ SUPABASE AUTH EXTENSION ══` divider at the bottom of the file. You can verify this by checking that `auth.users` does not exist in your database — the section's `CREATE TRIGGER ... ON auth.users` will error if run on a plain Postgres instance.
+The standalone schema has no Supabase-specific sections — it is safe to run in full against any plain Postgres instance.
 
 **4. Start Sovrant.** It detects Postgres via `SOVRANT_POSTGRES_URL`. On first boot, `SeedDefaultUser` and `SeedPersonalWorkspace` run automatically (same as SQLite).
 
@@ -588,11 +605,22 @@ psql $SOVRANT_POSTGRES_URL -f src/Sovrant.Runtime/Storage/PostgresSchema.sql
 
 Prerequisites: Supabase project (cloud at [supabase.com](https://supabase.com) or self-hosted via `supabase start`).
 
-**1. Run `PostgresSchema.sql` in the Supabase SQL editor.**
+**1. Apply the Sovrant migration via the Supabase CLI (recommended):**
+```bash
+cd db/supabase
+supabase link --project-ref <your-project-ref>
+supabase db push
+```
 
-Open your project → SQL Editor → New query → paste the full contents of `src/Sovrant.Runtime/Storage/PostgresSchema.sql` → Run. This includes the SUPABASE AUTH EXTENSION section at the bottom which creates the mirror triggers. `auth.users` exists in every Supabase project so there are no errors.
+Or paste the contents of `db/supabase/migrations/20260625000000_initial_schema.sql` directly into the Supabase SQL Editor. `auth.users` exists in every Supabase project so there are no errors.
 
-**2. (Optional) Enable Row Level Security** — uncomment and run the RLS block at the very end of the file. This enforces `owner_user_id` privacy at the database layer (not just application layer), which is the recommended posture for multi-user Supabase deployments. The commented policies are:
+**Customizing the schema** — add your own migrations after the initial one:
+```
+db/supabase/migrations/20260625000001_my_org_additions.sql
+```
+The CLI applies them in timestamp order. Keep customizations additive so future Sovrant upgrades layer cleanly on top.
+
+**2. (Optional) Enable Row Level Security** — uncomment the RLS block at the end of `20260625000000_initial_schema.sql`. This enforces `owner_user_id` privacy at the database layer (not just application layer), which is the recommended posture for multi-user Supabase deployments. The commented policies are:
 - `workspace_memory`: `USING (is_private = 0 OR owner_user_id = auth.uid()::text)`
 - `session_summaries`, `learned_patterns`, `instincts`: `USING (owner_user_id = '' OR owner_user_id = auth.uid()::text)`
 
@@ -662,7 +690,7 @@ export SUPABASE_SERVICE_ROLE_KEY="your-service-key"   # secret — server-side o
 | Credential at rest | AES-256-GCM encryption; master key in `keystore` table (DB) since V039 |
 | Concurrent access | WAL mode + `busy_timeout=5000` allows CLI and server to share the same DB file |
 | Server auth | All HTTP endpoints require `Authorization: Bearer`; SQLite DB never directly exposed |
-| Memory privacy | `owner_user_id` scoping enforced at app layer (query filter); no DB-level RLS on SQLite. Supabase deployments can enable RLS policies (commented out in `PostgresSchema.sql`) to enforce privacy at the DB layer. |
+| Memory privacy | `owner_user_id` scoping enforced at app layer (query filter); no DB-level RLS on SQLite. Supabase deployments can enable RLS policies (commented out in `db/supabase/migrations/20260625000000_initial_schema.sql`) to enforce privacy at the DB layer. |
 | Role elevation (Supabase) | `raw_app_meta_data.sovrant_role` is writable only by service-role callers (GoTrue enforces); users cannot self-elevate. Role is embedded in the signed JWT — tamper-proof in transit. |
 
 ---
@@ -708,13 +736,13 @@ export SUPABASE_SERVICE_ROLE_KEY="your-service-key"   # secret — server-side o
 | 5 | **No backup-before-migrate.** Migration applied with no snapshot. | **✓ Resolved (Phase 42.5).** `SOVRANT_DB_BACKUP_ON_UPGRADE=true` checkpoints + copies before migrations. |
 | 6 | **Migration checksum drift not enforced.** | **✓ Resolved (Phase 42.5).** `MigrationDriftException` thrown on any mismatch. |
 | 8 | **Empty `user_id` defaults.** Sessions written with `user_id = ''`. | **✓ Resolved (Phase 38 + V009 backfill).** |
-| 13 | **`PostgresSchema.sql` has no migration runner.** One-shot manual script; Supabase instances bootstrapped before V041/V042 silently lack the privacy columns. Existing Postgres instances not re-run against the updated script will have no `owner_user_id` on memory tables → INSERT failures at runtime. | **Planned** — Postgres V-series migration runner needed; or publish discrete upgrade scripts per release (e.g. `V041_upgrade.sql`). |
-| 14 | **Memory privacy enforced at app layer only.** `owner_user_id` filter is in application query logic, not DB RLS. Direct Supabase dashboard, service-role queries, or edge functions bypass it entirely. | **Partially done** — RLS policy skeletons are in the `PostgresSchema.sql` Supabase Auth Extension section (commented out). Uncomment and run to enforce. Full enforcement requires all Supabase Edge Functions to also use `auth.uid()`. |
-| 15 | **Six tables with `REFERENCES users(user_id)` block Supabase Auth adoption.** `workspaces`, `workspace_members`, `project_members`, `api_tokens`, `user_roles`, `password_reset_tokens`. Without the mirror trigger these FK inserts fail because `public.users` has no row. | **✓ Resolved (2026-06-18).** `on_auth_user_created` mirror trigger in `PostgresSchema.sql` SUPABASE AUTH EXTENSION section ensures `public.users` row is created before any FK-dependent inserts. |
+| 13 | **`db/postgres/PostgresSchema.sql` has no migration runner.** One-shot manual script; Supabase instances bootstrapped before V041/V042 silently lack the privacy columns. Existing Postgres instances not re-run against the updated script will have no `owner_user_id` on memory tables → INSERT failures at runtime. | **Planned** — Postgres V-series migration runner needed; or publish discrete upgrade scripts per release (e.g. `V041_upgrade.sql`). |
+| 14 | **Memory privacy enforced at app layer only.** `owner_user_id` filter is in application query logic, not DB RLS. Direct Supabase dashboard, service-role queries, or edge functions bypass it entirely. | **Partially done** — RLS policy skeletons are in `db/supabase/migrations/20260625000000_initial_schema.sql` (commented out). Uncomment and run to enforce. Full enforcement requires all Supabase Edge Functions to also use `auth.uid()`. |
+| 15 | **Six tables with `REFERENCES users(user_id)` block Supabase Auth adoption.** `workspaces`, `workspace_members`, `project_members`, `api_tokens`, `user_roles`, `password_reset_tokens`. Without the mirror trigger these FK inserts fail because `public.users` has no row. | **✓ Resolved (2026-06-18).** `on_auth_user_created` mirror trigger in the Supabase migration ensures `public.users` row is created before any FK-dependent inserts. |
 | 16 | **`/remember` command writes patterns/instincts with `owner_user_id = ''`** making them visible to all users. | **✓ Resolved (2026-06-18).** `ownerUserId` now threaded through `SlashCommandDispatcher.TryDispatchAsync` → `RememberCommand`. |
 | 17 | **`GET /workspaces/{id}/memory` returned private entries to any member.** `viewerUserId` was not passed to `ListMemoryAsync`. | **✓ Resolved (2026-06-18).** Route now passes `viewerUserId: ctx.GetUserId()`. |
 | 18 | **SQL query fragments built via string interpolation** in `SqliteMemoryStore` and `SqliteWorkspaceStore` for optional owner filters. Currently safe (hardcoded literal strings) but establishes a risky pattern. | Deferred — replace with static tautology queries: `AND ($uid IS NULL OR owner_user_id = '' OR owner_user_id = $uid)`. |
-| 19 | **`PostgresSchema.sql` V040 backfill gap.** V040 backfills `mcp_servers.id` with `randomblob(16)` in SQLite. No equivalent UPDATE in `PostgresSchema.sql` for upgrade installs — existing Postgres rows keep `id=''`. | **✓ Resolved (2026-06-18).** `UPDATE mcp_servers SET id = gen_random_uuid()::text WHERE id = '';` added to the V040 section of `PostgresSchema.sql`. |
+| 19 | **`db/postgres/PostgresSchema.sql` V040 backfill gap.** V040 backfills `mcp_servers.id` with `randomblob(16)` in SQLite. No equivalent UPDATE in the Postgres schema for upgrade installs — existing Postgres rows kept `id=''`. | **✓ Resolved (2026-06-18).** `UPDATE mcp_servers SET id = gen_random_uuid()::text WHERE id = '';` added to the V040 section of both Postgres schema files. |
 | 9 | **No shared bootstrap helper.** Test fixtures re-implement parts of the boot flow. | Deferred. |
 | 10 | **Connection-per-call with no pool.** | Deferred — benchmark before adding pooling. |
 | 11 | **No `sovrant init` first-boot UX.** | Partially addressed — `sovrant db status` covers it. |
@@ -732,7 +760,7 @@ The persistence layer is exercised by the full solution test suite (**2,222 test
 | `SqliteMemoryStoreTests` | Summaries, patterns, instincts, reinforcement, correction, pruning, owner scoping |
 | `SqliteAuditStoreTests` | Governance events, bash commands, batch writes |
 | `SqliteTokenUsageStoreTests` | Record/aggregate, empty session, cost tracking |
-| `MigrationRunnerTests` | All V001–V042 migrations apply in order; idempotency; expected tables present; backfill behavior |
+| `MigrationRunnerTests` | All V001–V043 migrations apply in order; idempotency; expected tables present; backfill behavior |
 | `SqliteWorkspaceStoreTests` | Workspace CRUD, personal-workspace idempotency, members, invites, config, memory with privacy filtering |
 | `SqliteProjectStoreTests` | Project CRUD, archive/unarchive, open-by-default access, member roles, 3-tier config inheritance |
 | `SqliteUserStoreTests` | Server-generated IDs, validation, duplicate detection, soft-delete, FK preservation, usage aggregation |
@@ -748,7 +776,7 @@ After a fresh install and first run, `~/.sovrant/` contains:
 ```
 ~/.sovrant/
 ├── data/
-│   └── sovrant.db          ← SQLite database — all persistent state (V042 schema)
+│   └── sovrant.db          ← SQLite database — all persistent state (V043 schema)
 │                             sessions, memory, audit, credentials, keystore,
 │                             workspaces, projects, users, knowledge, hooks,
 │                             MCP/LSP config, teams, missions, swarm, evals
@@ -763,7 +791,7 @@ After a fresh install and first run, `~/.sovrant/` contains:
 Note: `credentials/.keystore` no longer exists on fresh installs (V039 moved the master key into `sovrant.db`'s `keystore` table). Existing installs had the file migrated and deleted on first V039 boot.
 
 A fresh boot with no existing DB produces:
-- `data/sovrant.db` at schema version 42 (V001–V042 applied in order)
+- `data/sovrant.db` at schema version 43 (V001–V043 applied in order)
 - A `users` row for `SOVRANT_USER_ID` (or OS username) via `SeedDefaultUser`
 - A `workspaces` row `ws-personal-{userId}` via `SeedPersonalWorkspace`
 - A `workspace_members` row linking the seeded user as `owner`

@@ -4,6 +4,7 @@ using Sovrant.Api.Types;
 using Sovrant.Runtime.Artifacts;
 using Sovrant.Runtime.Projects.Templates;
 using Sovrant.Runtime.Workspaces;
+using Sovrant.Tools.Projects.Scaffolds;
 
 namespace Sovrant.Tools.Projects;
 
@@ -19,7 +20,8 @@ public sealed class CodeCreateMultiTool : ITool
         Description =
             "Scaffold multiple interdependent project components (e.g. a monorepo with an API + shared library + frontend) " +
             "in a single call. Each entry in 'components' maps to a template, producing files under " +
-            "'<root_name>/<project_name>/...' in the artifact store. " +
+            "'<root_name>/<project_name>/...' in the artifact store. Each component in the response includes " +
+            "'build_command', 'run_command', and 'test_command'. A 'next_steps' list is also returned. " +
             "Use 'CodeListTemplates' to discover available template IDs.",
     };
 
@@ -137,6 +139,7 @@ public sealed class CodeCreateMultiTool : ITool
                 }
 
                 allErrors.AddRange(componentErrors);
+                var (compBuild, compRun, compTest) = ScaffoldCommands.For(template.Language, template.Kind, projectName);
                 componentResults.Add(new
                 {
                     component = projectName,
@@ -144,6 +147,9 @@ public sealed class CodeCreateMultiTool : ITool
                     template_name = template.Name,
                     file_count = written.Count,
                     error_count = componentErrors.Count,
+                    build_command = template.BuildCommand ?? compBuild,
+                    run_command = template.RunCommand ?? compRun,
+                    test_command = template.TestCommand ?? compTest,
                     files = written,
                 });
             }
@@ -152,6 +158,25 @@ public sealed class CodeCreateMultiTool : ITool
         {
             return $"Error: {ex.Message}";
         }
+
+        // Write a top-level code manifest. For monorepos the commands are
+        // too variable to derive reliably, so we record the template list and
+        // mark the kind as "monorepo" for discoverability.
+        try
+        {
+            var manifestHandle = await _store.CreateRunScopeAsync(scope, ct).ConfigureAwait(false);
+            var languages = resolved.Select(r => r.template.Language).Distinct().ToList();
+            var templateIds = resolved.Select(r => r.template.Id).ToList();
+            await _store.SetCodeMetadataAsync(manifestHandle, new CodeManifest
+            {
+                TemplateId = templateIds.Count == 1 ? templateIds[0] : string.Join(", ", templateIds),
+                Language = languages.Count == 1 ? languages[0] : string.Join(", ", languages),
+                Kind = "monorepo",
+            }, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException) { /* best effort */ _ = ex; }
+
+        var nextSteps = BuildNextSteps(rootName, resolved);
 
         return JsonSerializer.Serialize(new
         {
@@ -163,9 +188,29 @@ public sealed class CodeCreateMultiTool : ITool
             run_id = scope.RunId,
             workspace_id = scope.WorkspaceId,
             project_id = scope.ProjectId,
+            next_steps = nextSteps,
             components = componentResults,
             errors = allErrors,
         });
+    }
+
+    private static string[] BuildNextSteps(
+        string rootName,
+        IReadOnlyList<(string projectName, IProjectTemplate template, ScaffoldContext context)> components)
+    {
+        var steps = new List<string>();
+        foreach (var (projectName, template, _) in components)
+        {
+            var (build, run, test) = ScaffoldCommands.For(template.Language, template.Kind, projectName);
+            var buildCmd = template.BuildCommand ?? build;
+            var runCmd = template.RunCommand ?? run;
+            var testCmd = template.TestCommand ?? test;
+            if (buildCmd is not null) steps.Add($"Build {projectName}: {buildCmd}");
+            if (runCmd is not null) steps.Add($"Run {projectName}: {runCmd}");
+            if (testCmd is not null) steps.Add($"Test {projectName}: {testCmd}");
+        }
+        steps.Add($"See {rootName}/*/README.md files for full setup instructions per component");
+        return [.. steps];
     }
 
     private IProjectTemplate? ResolveTemplate(JsonElement spec, out string? error)

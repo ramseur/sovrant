@@ -58,7 +58,7 @@ public partial class MainViewModel : ViewModelBase
     private bool _isNavCollapsed;
 
     public bool IsNavExpanded => !IsNavCollapsed;
-    public double NavWidth => IsNavCollapsed ? 44 : 240;
+    public double NavWidth => IsNavCollapsed ? 76 : 300;
 
     partial void OnIsNavCollapsedChanged(bool value)
     {

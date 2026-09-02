@@ -11,12 +11,12 @@ namespace Sovrant.Runtime.Artifacts;
 /// (default <c>~/.sovrant/workspaces</c>).
 /// </summary>
 /// <remarks>
-/// Workspace-level layout: <c>{root}/{workspace}/artifacts/{run}/</c>
-/// Project-level layout:   <c>{root}/{workspace}/projects/{project}/artifacts/{run}/</c>
-/// The routing is determined by <see cref="ArtifactScope.IsWorkspaceLevel"/>:
-/// when no real project is selected the artifact lands at workspace level;
-/// an explicit project routes it under the project's artifacts folder.
-/// Each run directory contains a <c>_manifest.json</c> with metadata.
+/// Projects-only layout: <c>{root}/{workspace}/projects/{project}/artifacts/{run}/</c>.
+/// Every artifact belongs to a workspace AND a project — there is no workspace-level
+/// (project-less) storage. Sessions with no explicit project fall back to
+/// <see cref="ArtifactScope.DefaultProjectId"/>, which is a real project folder like
+/// any other, not a routing bypass. Each run directory contains a <c>_manifest.json</c>
+/// with metadata.
 /// </remarks>
 public sealed partial class LocalArtifactStore : IArtifactStore
 {
@@ -63,16 +63,21 @@ public sealed partial class LocalArtifactStore : IArtifactStore
         var runDir = BuildScopePath(scope);
         Directory.CreateDirectory(runDir);
 
-        // Write initial manifest
-        var manifest = new ArtifactManifest
+        // Write manifest only on first creation — subsequent calls (e.g. from download/zip
+        // endpoints that need a handle) must not overwrite an existing manifest.
+        var manifestPath = Path.Combine(runDir, "_manifest.json");
+        if (!File.Exists(manifestPath))
         {
-            RunId = scope.RunId,
-            UserId = scope.UserId,
-            WorkspaceId = scope.WorkspaceId,
-            ProjectId = scope.ProjectId,
-            CreatedAt = DateTimeOffset.UtcNow,
-        };
-        WriteManifest(runDir, manifest);
+            var manifest = new ArtifactManifest
+            {
+                RunId = scope.RunId,
+                UserId = scope.UserId,
+                WorkspaceId = scope.WorkspaceId,
+                ProjectId = scope.ProjectId,
+                CreatedAt = DateTimeOffset.UtcNow,
+            };
+            WriteManifest(runDir, manifest);
+        }
 
         LogScopeCreated(scope.WorkspaceId, scope.ProjectId, scope.RunId);
 
@@ -183,6 +188,39 @@ public sealed partial class LocalArtifactStore : IArtifactStore
     }
 
     /// <inheritdoc/>
+    public async Task SetCodeMetadataAsync(ArtifactHandle handle, CodeManifest metadata, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+        ArgumentNullException.ThrowIfNull(metadata);
+
+        var manifestPath = Path.Combine(handle.ResolvedRoot, "_manifest.json");
+        try
+        {
+            ArtifactManifest manifest;
+            if (File.Exists(manifestPath))
+            {
+                var json = await File.ReadAllTextAsync(manifestPath, ct).ConfigureAwait(false);
+                manifest = JsonSerializer.Deserialize<ArtifactManifest>(json) ?? new ArtifactManifest();
+            }
+            else
+            {
+                manifest = new ArtifactManifest { RunId = handle.Scope.RunId };
+            }
+
+            manifest.Code = metadata;
+            WriteManifest(handle.ResolvedRoot, manifest);
+        }
+        catch (IOException ex)
+        {
+            LogManifestUpdateFailed(manifestPath, ex);
+        }
+        catch (JsonException ex)
+        {
+            LogManifestUpdateFailed(manifestPath, ex);
+        }
+    }
+
+    /// <inheritdoc/>
     public Task<Uri?> GetAccessUrlAsync(
         ArtifactHandle handle,
         string relativePath,
@@ -202,16 +240,9 @@ public sealed partial class LocalArtifactStore : IArtifactStore
             var prefix = _accessPathPrefix.TrimEnd('/');
             var segs = new List<string> { prefix, Uri.EscapeDataString(scope.WorkspaceId) };
 
-            if (scope.IsWorkspaceLevel)
-            {
-                segs.Add("artifacts");
-            }
-            else
-            {
-                segs.Add("projects");
-                segs.Add(Uri.EscapeDataString(scope.ProjectId));
-                segs.Add("artifacts");
-            }
+            segs.Add("projects");
+            segs.Add(Uri.EscapeDataString(scope.ProjectId));
+            segs.Add("artifacts");
 
             if (!string.IsNullOrEmpty(scope.RunId))
                 segs.Add(Uri.EscapeDataString(scope.RunId));
@@ -230,26 +261,17 @@ public sealed partial class LocalArtifactStore : IArtifactStore
     // ── Path helpers ────────────────────────────────────────────────────
 
     /// <summary>
-    /// Builds the filesystem path for a scope.
-    /// Workspace-level (no real project): <c>{root}/{ws}/artifacts/{run}</c>
-    /// Project-level (explicit project):  <c>{root}/{ws}/projects/{proj}/artifacts/{run}</c>
+    /// Builds the filesystem path for a scope. Projects-only layout:
+    /// <c>{root}/{ws}/projects/{proj}/artifacts/{run}</c>. Every artifact belongs to a
+    /// workspace AND a project — there is no workspace-level (project-less) storage.
+    /// Sessions with no explicit project use <see cref="ArtifactScope.DefaultProjectId"/>,
+    /// which is just a real project folder like any other, not a special bypass.
     /// </summary>
     private string BuildScopePath(ArtifactScope scope)
     {
         var wsDir = Path.Combine(_root, MakeDirSegment(scope.WorkspaceId, scope.WorkspaceName));
-
-        string artifactsDir;
-        if (scope.IsWorkspaceLevel)
-        {
-            // No real project selected — store at workspace level.
-            artifactsDir = Path.Combine(wsDir, "artifacts");
-        }
-        else
-        {
-            // Explicit project — nest under projects/{proj}/artifacts.
-            var projDir = Path.Combine(wsDir, "projects", MakeDirSegment(scope.ProjectId, scope.ProjectName));
-            artifactsDir = Path.Combine(projDir, "artifacts");
-        }
+        var projDir = Path.Combine(wsDir, "projects", MakeDirSegment(scope.ProjectId, scope.ProjectName));
+        var artifactsDir = Path.Combine(projDir, "artifacts");
 
         return scope.RunId is not null ? Path.Combine(artifactsDir, scope.RunId) : artifactsDir;
     }

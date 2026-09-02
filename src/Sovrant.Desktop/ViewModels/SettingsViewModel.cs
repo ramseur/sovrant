@@ -76,6 +76,8 @@ public partial class SettingsViewModel : ViewModelBase
     private bool _isDarkMode = Application.Current?.RequestedThemeVariant == ThemeVariant.Dark;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ApiKeyLabel))]
+    [NotifyPropertyChangedFor(nameof(ApiKeyWatermark))]
     private string _selectedProvider = "OpenAI";
 
     [ObservableProperty]
@@ -195,7 +197,11 @@ public partial class SettingsViewModel : ViewModelBase
                 {
                     WorkspaceItems.Clear();
                     foreach (var ws in workspaces)
-                        WorkspaceItems.Add(new WorkspaceSelectItem { WorkspaceId = ws.WorkspaceId, Name = ws.Name });
+                    {
+                        // Personal workspace is pre-selected; all others are opt-in.
+                        var isPersonal = ws.Type == Runtime.Workspaces.WorkspaceType.Personal;
+                        WorkspaceItems.Add(new WorkspaceSelectItem { WorkspaceId = ws.WorkspaceId, Name = ws.Name, IsSelected = isPersonal });
+                    }
                 });
             }
             catch { /* workspaces unavailable — omit the picker */ }
@@ -298,9 +304,18 @@ public partial class SettingsViewModel : ViewModelBase
         {
             List<string> models;
 
+            // The form ApiKey is cleared on provider switch before this fires.
+            // Fall back to the saved credential for any existing profile that
+            // matches the selected provider so the model list still loads.
+            var effectiveKey = !string.IsNullOrWhiteSpace(ApiKey)
+                ? ApiKey
+                : SavedProfiles.FirstOrDefault(p =>
+                    p.Provider.Equals(provider, StringComparison.OrdinalIgnoreCase))?.ApiKey
+                  ?? string.Empty;
+
             if (provider == "OpenRouter")
             {
-                models = await FetchAuthenticatedModelIdsAsync("https://openrouter.ai/api/v1", ApiKey);
+                models = await FetchAuthenticatedModelIdsAsync("https://openrouter.ai/api/v1", effectiveKey);
             }
             else if (provider == "Ollama")
             {
@@ -314,8 +329,8 @@ public partial class SettingsViewModel : ViewModelBase
             {
                 // Try fetching from the provider's /models endpoint (OpenAI, DeepSeek, Groq, etc.)
                 var baseUrl = ProviderBaseUrls.GetValueOrDefault(provider, string.Empty);
-                models = !string.IsNullOrEmpty(baseUrl) && !string.IsNullOrWhiteSpace(ApiKey)
-                    ? await FetchAuthenticatedModelIdsAsync(baseUrl, ApiKey)
+                models = !string.IsNullOrEmpty(baseUrl) && !string.IsNullOrWhiteSpace(effectiveKey)
+                    ? await FetchAuthenticatedModelIdsAsync(baseUrl, effectiveKey)
                     : [];
 
                 // Fall back to static list if API fetch returned nothing.
@@ -353,7 +368,9 @@ public partial class SettingsViewModel : ViewModelBase
 
             var modelsUrl = baseUrl.TrimEnd('/') + "/models";
             using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(modelsUrl));
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", new string(apiKey.Where(c => c < 128).ToArray()).Trim());
+            var safeKey = new string(apiKey.Where(c => c < 128).ToArray()).Trim();
+            if (!string.IsNullOrEmpty(safeKey))
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", safeKey);
 
             var response = await http.SendAsync(request, cts.Token);
             response.EnsureSuccessStatusCode();
@@ -427,10 +444,19 @@ public partial class SettingsViewModel : ViewModelBase
 
     // ─── Provider Profiles ─────────────────────────────
 
+    private static bool IsLocalProvider(string provider) =>
+        provider is "Ollama" or "LM Studio";
+
+    public string ApiKeyLabel =>
+        IsLocalProvider(SelectedProvider) ? "API Key (optional)" : "API Key";
+
+    public string ApiKeyWatermark =>
+        IsLocalProvider(SelectedProvider) ? "Not required for local providers" : "sk-...";
+
     [RelayCommand]
     private async Task AddProviderAsync()
     {
-        if (string.IsNullOrWhiteSpace(ApiKey))
+        if (string.IsNullOrWhiteSpace(ApiKey) && !IsLocalProvider(SelectedProvider))
         {
             StatusMessage = "Please enter an API key.";
             return;

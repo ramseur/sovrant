@@ -1,7 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
-             xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.MemoryView"
              x:DataType="vm:MemoryViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -306,12 +305,8 @@
                                  FontSize="13" />
                         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                             <CheckBox IsChecked="{Binding NewMemoryIsPrivate}" FontSize="12"
-                                      Foreground="{DynamicResource TextSecondary}">
-                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <ctrl:SovrantIcon IconName="lock" Width="12" Height="12" />
-                                    <TextBlock Text="Private (only injected for me)" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </CheckBox>
+                                      Foreground="{DynamicResource TextSecondary}"
+                                      Content="Private (only injected for me)" />
                             <Button Content="Save"
                                     Command="{Binding AddWorkspaceMemoryCommand}"
                                     IsEnabled="{Binding NewMemoryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
@@ -348,12 +343,14 @@
                                                 <TextBlock Text="{Binding Layer}" FontSize="10"
                                                            Foreground="{DynamicResource TextSecondary}" />
                                             </Border>
-                                            <ctrl:SovrantIcon IconName="lock" Width="11" Height="11"
-                                                              Foreground="{DynamicResource TextMuted}"
-                                                              IsVisible="{Binding IsPrivate}" />
-                                            <ctrl:SovrantIcon IconName="unlock" Width="11" Height="11"
-                                                              Foreground="{DynamicResource TextMuted}"
-                                                              IsVisible="{Binding !IsPrivate}" />
+                                            <Path Data="{StaticResource IconLock}" Width="11" Height="11" Stretch="Uniform"
+                                                  IsVisible="{Binding IsPrivate}"
+                                                  StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                                  Stroke="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                                            <Path Data="{StaticResource IconUnlock}" Width="11" Height="11" Stretch="Uniform"
+                                                  IsVisible="{Binding !IsPrivate}"
+                                                  StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                                  Stroke="{DynamicResource TextMuted}" VerticalAlignment="Center" />
                                             <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:MMM d, yyyy}'}"
                                                        FontSize="11" Foreground="{DynamicResource TextMuted}" />
                                         </StackPanel>

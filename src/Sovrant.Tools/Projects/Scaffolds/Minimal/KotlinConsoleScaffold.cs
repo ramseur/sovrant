@@ -72,6 +72,27 @@ public sealed class KotlinConsoleScaffold : IProjectTemplate
                 }
                 """),
 
+            new(".github/workflows/ci.yml", """
+                name: CI
+
+                on:
+                  push:
+                    branches: [main, master]
+                  pull_request:
+                    branches: [main, master]
+
+                jobs:
+                  build-and-test:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - uses: actions/checkout@v4
+                      - uses: actions/setup-java@v4
+                        with:
+                          java-version: '21'
+                          distribution: 'temurin'
+                      - run: ./gradlew build
+                """),
+
             new(".gitignore", """
                 .gradle/
                 build/

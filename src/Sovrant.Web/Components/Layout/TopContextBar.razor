@@ -501,7 +501,13 @@
         }
         _treeGroups = groups.Values.ToList();
         var configuredSet = new HashSet<string>(groups.Keys, StringComparer.OrdinalIgnoreCase);
-        _unconfiguredProviders = _knownProviders.Where(p => !configuredSet.Contains(p.Name)).ToList();
+
+        // Provider setup lives at /admin/providers (system-admin only). Non-admins have no
+        // path to act on an unconfigured provider, so the "Set up →" prompt is admin-only;
+        // non-admins only ever see providers a workspace admin has already enabled for them.
+        _unconfiguredProviders = Session.IsAdmin
+            ? _knownProviders.Where(p => !configuredSet.Contains(p.Name)).ToList()
+            : [];
     }
 
     private async Task ToggleTreeDropdown()
@@ -608,7 +614,8 @@
             var modelsUrl = baseUrl.TrimEnd('/') + "/models";
             using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(modelsUrl));
             var safeKey = new string(apiKey.Where(c => c < 128).ToArray()).Trim();
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", safeKey);
+            if (!string.IsNullOrEmpty(safeKey))
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", safeKey);
             var response = await http.SendAsync(request, cts.Token);
             response.EnsureSuccessStatusCode();
             using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
@@ -773,7 +780,7 @@
     private void NavigateToProviderSetup(string providerName)
     {
         _treeOpen = false;
-        NavManager.NavigateTo("/settings?tab=providers&provider=" + Uri.EscapeDataString(providerName));
+        NavManager.NavigateTo("/admin/providers?provider=" + Uri.EscapeDataString(providerName));
     }
 
     private static string ShortenModelName(string model)

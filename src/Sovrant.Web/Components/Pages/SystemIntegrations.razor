@@ -35,7 +35,7 @@
     @if (!string.IsNullOrEmpty(_errorMessage))
     {
         <div class="page-error-banner" role="alert">
-            <span><SovrantIcon Name="alert" /></span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg>
             <span class="error-message">@_errorMessage</span>
         </div>
     }
@@ -44,7 +44,7 @@
     <div class="sys-int-card">
         <div class="sys-int-card-header">
             <div class="sys-int-card-title">
-                <span class="sys-int-icon"><SovrantIcon Name="database" /></span>
+                <span class="sys-int-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg></span>
                 <span class="sys-int-name">PostgreSQL</span>
                 <div class="sys-int-status-pill" style="margin-left:auto;">
                     <span class="status-dot @(_pgConnectionOk ? "connected" : "warning")"></span>
@@ -118,7 +118,7 @@
     <div class="sys-int-card">
         <div class="sys-int-card-header">
             <div class="sys-int-card-title">
-                <span class="sys-int-icon"><SovrantIcon Name="database-zap" /></span>
+                <span class="sys-int-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg></span>
                 <span class="sys-int-name">Supabase</span>
                 <div class="sys-int-status-pill" style="margin-left:auto;">
                     <span class="status-dot @(_connectionOk ? "connected" : "warning")"></span>

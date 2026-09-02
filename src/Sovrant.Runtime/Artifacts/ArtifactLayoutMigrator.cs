@@ -7,9 +7,9 @@ namespace Sovrant.Runtime.Artifacts;
 /// (<c>~/.sovrant/artifacts/{ws}/{proj}/{run}/</c>) into the new
 /// workspace-first layout (<c>~/.sovrant/workspaces/{ws}/...</c>).
 ///
-/// Routing rule applied during migration:
-/// - <c>default-project</c>  → <c>{ws}/artifacts/{run}/</c>    (workspace-level)
-/// - any other project       → <c>{ws}/projects/{proj}/artifacts/{run}/</c>
+/// Projects-only routing: every project segment — including the old
+/// <c>default-project</c> sentinel — lands under <c>{ws}/projects/{proj}/artifacts/{run}/</c>.
+/// There is no workspace-level (project-less) destination.
 ///
 /// Idempotent — if the old root does not exist or has already been migrated,
 /// returns 0 immediately. Leaves a <c>README.migrated</c> breadcrumb in the
@@ -79,27 +79,13 @@ public sealed partial class ArtifactLayoutMigrator
 
     private string BuildNewPath(string wsSegment, string projSegment, string runSegment)
     {
+        // Projects-only: every project segment, including the legacy "default-project"
+        // sentinel, nests under projects/{proj}/artifacts — no workspace-level bypass.
         var wsDir = Path.Combine(_newRoot, wsSegment);
-        string artifactsDir;
-
-        // Workspace-level: old default-project (exact segment match or prefix match)
-        if (IsDefaultProjectSegment(projSegment))
-        {
-            artifactsDir = Path.Combine(wsDir, "artifacts");
-        }
-        else
-        {
-            artifactsDir = Path.Combine(wsDir, "projects", projSegment, "artifacts");
-        }
+        var artifactsDir = Path.Combine(wsDir, "projects", projSegment, "artifacts");
 
         return Path.Combine(artifactsDir, runSegment);
     }
-
-    // The old segment was either the bare sentinel "default-project" or
-    // "default-project__{safe-name}" (the {id}__{name} format). Match both.
-    private static bool IsDefaultProjectSegment(string segment) =>
-        string.Equals(segment, ArtifactScope.DefaultProjectId, StringComparison.OrdinalIgnoreCase) ||
-        segment.StartsWith(ArtifactScope.DefaultProjectId + "__", StringComparison.OrdinalIgnoreCase);
 
     private void MoveRunDirectory(string source, string target)
     {
@@ -141,9 +127,7 @@ public sealed partial class ArtifactLayoutMigrator
         try
         {
             var fileName = Path.GetFileName(file);
-            var targetDir = IsDefaultProjectSegment(projSegment)
-                ? Path.Combine(_newRoot, wsSegment, "artifacts")
-                : Path.Combine(_newRoot, wsSegment, "projects", projSegment, "artifacts");
+            var targetDir = Path.Combine(_newRoot, wsSegment, "projects", projSegment, "artifacts");
             Directory.CreateDirectory(targetDir);
             var dest = Path.Combine(targetDir, fileName);
             if (!File.Exists(dest)) File.Move(file, dest);

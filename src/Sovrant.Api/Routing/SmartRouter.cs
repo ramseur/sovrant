@@ -242,11 +242,15 @@ public sealed class SmartRouter : ISmartRouter, IAsyncDisposable, IDisposable
     /// <summary>Core provider selection logic shared by RouteAsync and RouteWithIntentAsync.</summary>
     private ILlmProvider SelectProvider(MessagesRequest req)
     {
-        // If a provider is pinned, prefer it when healthy.
+        // An explicit pin always wins, even when the pinned provider is currently
+        // unhealthy. Falling through to cost/latency-based auto-selection here would
+        // silently reroute the user to a provider they never chose (e.g. a local
+        // Ollama instance that isn't even running) instead of surfacing the pinned
+        // provider's real error. Only the "no pin" (auto) path does scored selection.
         var pinned = _pinnedProviderName;
-        if (pinned is not null && _providersByName.TryGetValue(pinned, out var pinnedInfo) && pinnedInfo.Healthy)
+        if (pinned is not null && _providersByName.TryGetValue(pinned, out var pinnedInfo))
         {
-            _logRouting(_logger, pinnedInfo.Provider.Name, "pinned", null);
+            _logRouting(_logger, pinnedInfo.Provider.Name, pinnedInfo.Healthy ? "pinned" : "pinned-unhealthy", null);
             return pinnedInfo.Provider;
         }
 
