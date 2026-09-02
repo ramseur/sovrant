@@ -16,7 +16,7 @@
                 {
                     <span class="item-count">@_filtered.Count</span>
                     <button class="btn-sm btn-outline" title="Refresh"
-                            @onclick="LoadServersAsync"><SovrantIcon Name="refresh" /></button>
+                            @onclick="LoadServersAsync">&#x21BB;</button>
                 }
             </div>
         </div>
@@ -45,7 +45,7 @@
                         <button class="master-item @(isActive ? "active" : "")"
                                 @onclick="() => SelectGalleryCard(card)">
                             <div class="item-title" style="display:flex;align-items:center;gap:6px;">
-                                <span style="font-size:16px;line-height:1;"><SovrantIcon Name="@card.IconKey" /></span>
+                                <span style="font-size:16px;line-height:1;">@card.Icon</span>
                                 <span>@card.Name</span>
                                 @if (isAnyConnected)
                                 {
@@ -107,7 +107,7 @@
             <div class="detail-content">
                 <div class="orch-detail-header">
                     <div>
-                        <span style="font-size:36px;line-height:1;display:block;margin-bottom:8px;"><SovrantIcon Name="@_catalogEntry.IconKey" /></span>
+                        <span style="font-size:36px;line-height:1;display:block;margin-bottom:8px;">@_catalogEntry.Icon</span>
                         <h2>@_catalogEntry.Name</h2>
                         <p class="text-secondary" style="margin:4px 0 0;">@_catalogEntry.Category</p>
                     </div>
@@ -140,7 +140,7 @@
                     @if (_isConnected(_catalogEntry.Id))
                     {
                         <div class="callout-card" style="border-color:var(--status-ok);background:var(--surface-card);">
-                            <strong><SovrantIcon Name="check" /> Already connected</strong> — Re-connect to update credentials.
+                            <strong>&#10003; Already connected</strong> — Re-connect to update credentials.
                         </div>
                     }
 
@@ -150,7 +150,10 @@
                         @if (_isOAuthWaiting)
                         {
                             <div class="callout-card" style="border-color:var(--brand);background:var(--surface-card);">
-                                <strong><SovrantIcon Name="refresh" /> Waiting for authorization...</strong>
+                                <strong style="display:inline-flex;align-items:center;gap:6px">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg>
+                                    Waiting for authorization...
+                                </strong>
                                 Browser opened — complete the login and return here. Times out after 2 min.
                             </div>
                         }
@@ -293,7 +296,7 @@
                                        placeholder="value"
                                        style="font-family:Consolas,monospace;font-size:12px;" />
                                 <button class="btn-sm btn-danger" style="padding:4px 8px;"
-                                        @onclick="() => _envEdits.RemoveAt(idx)"><SovrantIcon Name="x" /></button>
+                                        @onclick="() => _envEdits.RemoveAt(idx)">✕</button>
                             </div>
                         }
                         <div style="display:flex;gap:8px;margin-top:4px;">
@@ -377,7 +380,7 @@
                                         @if (_canManageRules)
                                         {
                                             <button class="btn-sm btn-danger" style="padding:2px 8px;font-size:11px;"
-                                                    @onclick="() => RemoveTrustRuleAsync(rule.RuleId)"><SovrantIcon Name="x" /></button>
+                                                    @onclick="() => RemoveTrustRuleAsync(rule.RuleId)">✕</button>
                                         }
                                     </span>
                                 </div>

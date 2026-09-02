@@ -842,7 +842,7 @@ public partial class CatalogEntryViewModel : ViewModelBase
     public string Id => _entry.Id;
     public string Name => _entry.Name;
     public string Category => _entry.Category;
-    public string IconKey => _entry.IconKey;
+    public string Icon => _entry.Icon;
     public string Description => _entry.Description;
     public IntegrationKind Kind => _entry.Kind;
     public IntegrationTier Tier => _entry.Tier;

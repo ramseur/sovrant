@@ -7,7 +7,7 @@
         {
             <div class="doc-artifact-card">
                 <div class="doc-artifact-header">
-                    <span class="doc-artifact-icon"><SovrantIcon Name="@FormatIcon(art.Format)" /></span>
+                    <span class="doc-artifact-icon">@FormatIcon(art.Format)</span>
                     <div class="doc-artifact-meta">
                         <div class="doc-artifact-name">@art.DisplayName</div>
                         <div class="doc-artifact-sub">
@@ -141,12 +141,12 @@
 
     private static string FormatIcon(string format) => format.ToLowerInvariant() switch
     {
-        "pdf" or "structured_pdf" => "document",
-        "word" or "docx" => "document",
-        "excel" or "xlsx" => "file-spreadsheet",
-        "powerpoint" or "pptx" => "presentation",
-        "markdown" or "md" => "document",
-        _ => "paperclip",
+        "pdf" or "structured_pdf" => "\uD83D\uDCC4",      // 📄
+        "word" or "docx" => "\uD83D\uDCDD",                // 📝
+        "excel" or "xlsx" => "\uD83D\uDCCA",               // 📊
+        "powerpoint" or "pptx" => "\uD83D\uDCFD\uFE0F",    // 📽️
+        "markdown" or "md" => "\uD83D\uDCC4",              // 📄
+        _ => "\uD83D\uDCCE",                                // 📎
     };
 
     public static string FormatBytes(long bytes) => FormatSize(bytes);

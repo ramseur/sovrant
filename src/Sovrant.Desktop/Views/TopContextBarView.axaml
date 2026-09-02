@@ -2,7 +2,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              xmlns:conv="using:Sovrant.Desktop.Converters"
-             xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.TopContextBarView"
              x:DataType="vm:SidebarViewModel"
              Background="{DynamicResource SurfaceBackground}">
@@ -202,8 +201,8 @@
 
             <!-- Project -->
             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                <ctrl:SovrantIcon IconName="folder" Width="12" Height="12" VerticalAlignment="Center"
-                                  Foreground="{DynamicResource TextMuted}" />
+                <TextBlock Text="📁" FontSize="12" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextMuted}" />
                 <ComboBox ItemsSource="{Binding ActiveContext.ProjectChoices}"
                           SelectedItem="{Binding ActiveContext.SelectedProjectChoice}"
                           DisplayMemberBinding="{Binding Name}"
@@ -220,8 +219,8 @@
 
             <!-- Integrations / MCP multi-select — styled to match workspace/project switchers -->
             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                <ctrl:SovrantIcon IconName="integrations" Width="12" Height="12" VerticalAlignment="Center"
-                                  Foreground="{DynamicResource TextMuted}" />
+                <TextBlock Text="🔌" FontSize="12" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextMuted}" />
                 <Panel MinWidth="140">
                     <Button Command="{Binding ToggleMcpDropdownCommand}"
                             HorizontalAlignment="Stretch"
@@ -325,7 +324,7 @@
                     ToolTip.Tip="{Binding ActiveContext.ActiveAgentName,
                                          StringFormat='Session scoped to agent: {0}'}">
                 <StackPanel Orientation="Horizontal" Spacing="5">
-                    <ctrl:SovrantIcon IconName="agent" Width="11" Height="11" VerticalAlignment="Center" />
+                    <TextBlock Text="🤖" FontSize="11" VerticalAlignment="Center" />
                     <TextBlock Text="{Binding ActiveContext.ActiveAgentName}"
                                FontSize="12" FontWeight="Medium"
                                Foreground="{DynamicResource TextPrimary}"
