@@ -264,7 +264,7 @@ McpTrustRoutes.Map(app);
 EvalRoutes.Map(app);
 SwarmRoutes.Map(app);
 EngineRoutes.Map(app);
-MissionRoutes.Map(app);
+WorkflowRoutes.Map(app);
 TeamRoutes.Map(app);
 ArtifactRoutes.Map(app);
 ToolRegistryRoutes.Map(app);

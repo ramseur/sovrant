@@ -27,7 +27,7 @@ public sealed record UserDashboardRow(
 /// <summary>The aggregated User Dashboard state at a single point in time.</summary>
 public sealed record UserDashboardState(
     DateTimeOffset GeneratedAt,
-    int OwnMissions,
+    int OwnWorkflows,
     int OwnTeamRuns,
     int OwnAgentRuns,
     int OwnSessions,

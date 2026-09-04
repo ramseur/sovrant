@@ -1,4 +1,4 @@
-namespace Sovrant.Runtime.Missions;
+namespace Sovrant.Runtime.Workflows;
 
 /// <summary>
 /// Phase 51 — a Sovrant "mission": a long-lived goal the system pursues
@@ -10,13 +10,13 @@ namespace Sovrant.Runtime.Missions;
 ///
 /// The mutable fields on this record (<see cref="Status"/>, <see cref="PlanJson"/>,
 /// <see cref="UpdatedAt"/>, <see cref="CompletedAt"/>) are a convenience
-/// cache — the canonical history lives in <see cref="MissionEvent"/> rows,
+/// cache — the canonical history lives in <see cref="WorkflowEvent"/> rows,
 /// so any state transition also writes an event.
 /// </summary>
-public sealed record Mission(
+public sealed record Workflow(
     string Id,
     string Goal,
-    MissionStatus Status,
+    WorkflowStatus Status,
     string PlanJson,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
@@ -28,10 +28,10 @@ public sealed record Mission(
     bool IsPrivate = true);
 
 /// <summary>
-/// Lifecycle state of a <see cref="Mission"/>. Corresponds 1:1 with the
+/// Lifecycle state of a <see cref="Workflow"/>. Corresponds 1:1 with the
 /// <c>status</c> column values in V011.
 /// </summary>
-public enum MissionStatus
+public enum WorkflowStatus
 {
     /// <summary>Just created — planner hasn't produced a plan yet, or a re-plan is in progress.</summary>
     Planning,
@@ -42,10 +42,10 @@ public enum MissionStatus
     /// <summary>Execution paused pending a human acceptance decision.</summary>
     AwaitingHuman,
 
-    /// <summary>Mission reached its acceptance criteria and is done.</summary>
+    /// <summary>Workflow reached its acceptance criteria and is done.</summary>
     Completed,
 
-    /// <summary>Mission exhausted its re-plan budget or hit a fatal error.</summary>
+    /// <summary>Workflow exhausted its re-plan budget or hit a fatal error.</summary>
     Failed,
 
     /// <summary>A human or supervisor cancelled the mission before it completed.</summary>
@@ -58,9 +58,9 @@ public enum MissionStatus
 /// pause, resume, terminal state) writes one of these rows so the mission
 /// history is fully reconstructable from the journal alone.
 /// </summary>
-public sealed record MissionEvent(
+public sealed record WorkflowEvent(
     long Id,
-    string MissionId,
+    string WorkflowId,
     string EventType,
     string PayloadJson,
     DateTimeOffset Timestamp,
@@ -68,13 +68,13 @@ public sealed record MissionEvent(
     string? ProjectId = null);
 
 /// <summary>
-/// Canonical event-type strings written to <see cref="MissionEvent.EventType"/>.
+/// Canonical event-type strings written to <see cref="WorkflowEvent.EventType"/>.
 /// These match the comment header on <c>mission_events</c> in V011 so
 /// downstream consumers (UI, pm_export) can match on a stable vocabulary.
 /// </summary>
-public static class MissionEventTypes
+public static class WorkflowEventTypes
 {
-    public const string MissionCreated = "mission_created";
+    public const string WorkflowCreated = "mission_created";
     public const string PlanRevised = "plan_revised";
     public const string RunStarted = "run_started";
     public const string RunCompleted = "run_completed";

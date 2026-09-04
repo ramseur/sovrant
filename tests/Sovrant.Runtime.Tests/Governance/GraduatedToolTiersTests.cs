@@ -42,7 +42,7 @@ public sealed class GraduatedToolTiersTests
     [Theory]
     [InlineData("Agent", ToolTier.Escalation)]
     [InlineData("TeamCreate", ToolTier.Escalation)]
-    [InlineData("Mission", ToolTier.Escalation)]
+    [InlineData("Workflow", ToolTier.Escalation)]
     [InlineData("Swarm", ToolTier.Escalation)]
     [InlineData("SwarmStatus", ToolTier.Escalation)]
     public void EscalationTools_ReturnEscalationTier(string toolName, ToolTier expected)

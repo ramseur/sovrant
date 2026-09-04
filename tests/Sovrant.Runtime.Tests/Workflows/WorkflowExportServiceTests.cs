@@ -1,23 +1,23 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 using Sovrant.Runtime.Storage;
 
-namespace Sovrant.Runtime.Tests.Missions;
+namespace Sovrant.Runtime.Tests.Workflows;
 
-public sealed class MissionExportServiceTests : IAsyncDisposable
+public sealed class WorkflowExportServiceTests : IAsyncDisposable
 {
     private readonly string _dbPath;
     private readonly SqliteStorageProvider _provider;
-    private readonly SqliteMissionStore _store;
-    private readonly MissionExportService _exporter;
+    private readonly SqliteWorkflowStore _store;
+    private readonly WorkflowExportService _exporter;
 
-    public MissionExportServiceTests()
+    public WorkflowExportServiceTests()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"sovrant_export_{Guid.NewGuid():N}.db");
         _provider = new SqliteStorageProvider(NullLogger<SqliteStorageProvider>.Instance, _dbPath);
         _provider.InitializeAsync().GetAwaiter().GetResult();
-        _store = new SqliteMissionStore(_provider);
-        _exporter = new MissionExportService(_store);
+        _store = new SqliteWorkflowStore(_provider);
+        _exporter = new WorkflowExportService(_store);
     }
 
     public async ValueTask DisposeAsync()
@@ -30,12 +30,12 @@ public sealed class MissionExportServiceTests : IAsyncDisposable
     public async Task ExportMarkdown_ContainsGoalAndTimeline()
     {
         var m = await _store.CreateAsync("fix the auth bug", ownerUserId: "alice");
-        await _store.AppendEventAsync(m.Id, MissionEventTypes.RunStarted,
+        await _store.AppendEventAsync(m.Id, WorkflowEventTypes.RunStarted,
             """{"runtime_run_id":"run-1"}""");
-        await _store.AppendEventAsync(m.Id, MissionEventTypes.RunCompleted,
+        await _store.AppendEventAsync(m.Id, WorkflowEventTypes.RunCompleted,
             """{"terminal_state":"Completed"}""");
-        await _store.AppendEventAsync(m.Id, MissionEventTypes.Completed, "{}");
-        await _store.UpdateStateAsync(m.Id, MissionStatus.Completed,
+        await _store.AppendEventAsync(m.Id, WorkflowEventTypes.Completed, "{}");
+        await _store.UpdateStateAsync(m.Id, WorkflowStatus.Completed,
             completedAt: DateTimeOffset.UtcNow);
 
         var md = await _exporter.ExportMarkdownAsync(m.Id);
@@ -49,10 +49,10 @@ public sealed class MissionExportServiceTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ExportJson_ContainsMissionAndEvents()
+    public async Task ExportJson_ContainsWorkflowAndEvents()
     {
         var m = await _store.CreateAsync("deploy the hotfix");
-        await _store.AppendEventAsync(m.Id, MissionEventTypes.PlanRevised,
+        await _store.AppendEventAsync(m.Id, WorkflowEventTypes.PlanRevised,
             """{"plan_id":"p1"}""");
 
         var json = await _exporter.ExportJsonAsync(m.Id);
@@ -64,9 +64,9 @@ public sealed class MissionExportServiceTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task Export_UnknownMission_Throws()
+    public async Task Export_UnknownWorkflow_Throws()
     {
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            _exporter.ExportMarkdownAsync("mission-nope"));
+            _exporter.ExportMarkdownAsync("workflow-nope"));
     }
 }

@@ -3,17 +3,17 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 
 namespace Sovrant.Server.Tests;
 
 /// <summary>
-/// Integration tests for the Phase 51 mission routes. These call through
-/// the real SqliteMissionStore and default planner/executor/gate wired
+/// Integration tests for the Phase 51 workflow routes. These call through
+/// the real SqliteWorkflowStore and default planner/executor/gate wired
 /// into the WebApplicationFactory, exercising the full HTTP surface with
 /// the same code paths a CLI would hit.
 /// </summary>
-public sealed class MissionRoutesTests : IClassFixture<SovrantWebAppFactory>
+public sealed class WorkflowRoutesTests : IClassFixture<SovrantWebAppFactory>
 {
     private readonly HttpClient _client;
     private readonly SovrantWebAppFactory _factory;
@@ -23,7 +23,7 @@ public sealed class MissionRoutesTests : IClassFixture<SovrantWebAppFactory>
         PropertyNameCaseInsensitive = true,
     };
 
-    public MissionRoutesTests(SovrantWebAppFactory factory)
+    public WorkflowRoutesTests(SovrantWebAppFactory factory)
     {
         _factory = factory;
         _client = factory.CreateClient();
@@ -37,18 +37,18 @@ public sealed class MissionRoutesTests : IClassFixture<SovrantWebAppFactory>
     }
 
     [Fact]
-    public async Task Create_Then_Get_Returns201_And_Mission()
+    public async Task Create_Then_Get_Returns201_And_Workflow()
     {
-        var create = Auth(HttpMethod.Post, "/v1/missions");
+        var create = Auth(HttpMethod.Post, "/v1/workflows");
         create.Content = JsonContent.Create(new { goal = "ship the refactor", ownerUserId = "alice" });
         var createResp = await _client.SendAsync(create);
         Assert.Equal(HttpStatusCode.Created, createResp.StatusCode);
 
         var doc = await createResp.Content.ReadFromJsonAsync<JsonElement>();
-        var missionId = doc.GetProperty("id").GetString()!;
-        Assert.StartsWith("mission-", missionId, StringComparison.Ordinal);
+        var workflowId = doc.GetProperty("id").GetString()!;
+        Assert.StartsWith("workflow-", workflowId, StringComparison.Ordinal);
 
-        var get = Auth(HttpMethod.Get, $"/v1/missions/{missionId}");
+        var get = Auth(HttpMethod.Get, $"/v1/workflows/{workflowId}");
         var getResp = await _client.SendAsync(get);
         Assert.Equal(HttpStatusCode.OK, getResp.StatusCode);
         var fetched = await getResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -58,7 +58,7 @@ public sealed class MissionRoutesTests : IClassFixture<SovrantWebAppFactory>
     [Fact]
     public async Task Create_MissingGoal_Returns400()
     {
-        var req = Auth(HttpMethod.Post, "/v1/missions");
+        var req = Auth(HttpMethod.Post, "/v1/workflows");
         req.Content = JsonContent.Create(new { goal = "" });
         var resp = await _client.SendAsync(req);
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
@@ -67,7 +67,7 @@ public sealed class MissionRoutesTests : IClassFixture<SovrantWebAppFactory>
     [Fact]
     public async Task Get_Unknown_Returns404()
     {
-        var resp = await _client.SendAsync(Auth(HttpMethod.Get, "/v1/missions/mission-nope"));
+        var resp = await _client.SendAsync(Auth(HttpMethod.Get, "/v1/workflows/workflow-nope"));
         Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
     }
 
@@ -76,39 +76,39 @@ public sealed class MissionRoutesTests : IClassFixture<SovrantWebAppFactory>
     {
         using (var scope = _factory.Services.CreateScope())
         {
-            var store = scope.ServiceProvider.GetRequiredService<IMissionStore>();
+            var store = scope.ServiceProvider.GetRequiredService<IWorkflowStore>();
             await store.CreateAsync("list goal A", ownerUserId: "routes-user");
             await store.CreateAsync("list goal B", ownerUserId: "routes-user");
         }
 
         var resp = await _client.SendAsync(Auth(HttpMethod.Get,
-            "/v1/missions?ownerUserId=routes-user&status=planning"));
+            "/v1/workflows?ownerUserId=routes-user&status=planning"));
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var doc = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        var missions = doc.GetProperty("missions");
-        Assert.True(missions.GetArrayLength() >= 2);
+        var workflows = doc.GetProperty("workflows");
+        Assert.True(workflows.GetArrayLength() >= 2);
     }
 
     [Fact]
     public async Task Events_ReturnsJournalInsertionOrder()
     {
-        string missionId;
+        string workflowId;
         using (var scope = _factory.Services.CreateScope())
         {
-            var store = scope.ServiceProvider.GetRequiredService<IMissionStore>();
+            var store = scope.ServiceProvider.GetRequiredService<IWorkflowStore>();
             var m = await store.CreateAsync("journal test");
-            missionId = m.Id;
-            await store.AppendEventAsync(missionId, MissionEventTypes.RunStarted, "{}");
-            await store.AppendEventAsync(missionId, MissionEventTypes.RunCompleted, "{}");
+            workflowId = m.Id;
+            await store.AppendEventAsync(workflowId, WorkflowEventTypes.RunStarted, "{}");
+            await store.AppendEventAsync(workflowId, WorkflowEventTypes.RunCompleted, "{}");
         }
 
-        var resp = await _client.SendAsync(Auth(HttpMethod.Get, $"/v1/missions/{missionId}/events"));
+        var resp = await _client.SendAsync(Auth(HttpMethod.Get, $"/v1/workflows/{workflowId}/events"));
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var doc = await resp.Content.ReadFromJsonAsync<JsonElement>();
         var events = doc.GetProperty("events");
         Assert.Equal(3, events.GetArrayLength());
-        Assert.Equal(MissionEventTypes.MissionCreated, events[0].GetProperty("event_type").GetString());
-        Assert.Equal(MissionEventTypes.RunStarted, events[1].GetProperty("event_type").GetString());
-        Assert.Equal(MissionEventTypes.RunCompleted, events[2].GetProperty("event_type").GetString());
+        Assert.Equal(WorkflowEventTypes.WorkflowCreated, events[0].GetProperty("event_type").GetString());
+        Assert.Equal(WorkflowEventTypes.RunStarted, events[1].GetProperty("event_type").GetString());
+        Assert.Equal(WorkflowEventTypes.RunCompleted, events[2].GetProperty("event_type").GetString());
     }
 }

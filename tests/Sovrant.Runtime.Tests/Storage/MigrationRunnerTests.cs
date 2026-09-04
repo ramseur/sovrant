@@ -25,7 +25,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
     public async Task AllMigrations_RunSuccessfully()
     {
         await _provider.InitializeAsync();
-        Assert.Equal(46, _provider.SchemaVersion);
+        Assert.Equal(47, _provider.SchemaVersion);
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
     {
         await _provider.InitializeAsync();
         await _provider.InitializeAsync();
-        Assert.Equal(46, _provider.SchemaVersion);
+        Assert.Equal(47, _provider.SchemaVersion);
     }
 
     [Fact]
@@ -48,8 +48,8 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
             "session_summaries", "learned_patterns", "instincts",
             "credentials", "swarm_events", "eval_runs", "eval_results",
             "audit_governance", "audit_bash", "workspace_memory",
-            "runtime_traces", "mission_scratchpad",
-            "missions", "mission_events",
+            "runtime_traces", "workflow_scratchpad",
+            "workflows", "workflow_events",
             "teams", "team_members", "agent_runs",
             "coordination_events", "group_pm_assignments",
             "mcp_trust_rules",
@@ -58,7 +58,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
 
         // Verify tables exist by checking the DB file was created and schema version is correct.
         Assert.True(File.Exists(_dbPath));
-        Assert.Equal(46, _provider.SchemaVersion);
+        Assert.Equal(47, _provider.SchemaVersion);
     }
 
     [Fact]
@@ -246,7 +246,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
     {
         // First boot: apply migrations normally.
         await _provider.InitializeAsync();
-        Assert.Equal(46, _provider.SchemaVersion);
+        Assert.Equal(47, _provider.SchemaVersion);
 
         var factory = (ISqliteConnectionFactory)_provider;
 
@@ -288,7 +288,7 @@ public sealed class MigrationRunnerTests : IAsyncDisposable
         using var probe = factory.CreateConnection();
         var runner = new MigrationRunner(NullLogger<MigrationRunner>.Instance);
         var version = runner.RunPendingMigrations(probe);
-        Assert.Equal(46, version);
+        Assert.Equal(47, version);
     }
 
     private static string FindMigrationFile(string name)

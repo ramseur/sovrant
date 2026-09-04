@@ -15,6 +15,6 @@ public enum ToolTier
     /// <summary>Tools that execute arbitrary commands (Bash, PowerShell, REPL).</summary>
     Dangerous,
 
-    /// <summary>Tools that delegate to other agents/systems (Agent, Swarm, Mission).</summary>
+    /// <summary>Tools that delegate to other agents/systems (Agent, Swarm, Workflow).</summary>
     Escalation,
 }

@@ -1,6 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.UserDashboard;
 using Sovrant.Runtime.Workspaces;
@@ -11,7 +11,7 @@ public sealed class UserDashboardAggregatorTests : IAsyncDisposable
 {
     private readonly string _dbPath;
     private readonly SqliteStorageProvider _provider;
-    private readonly SqliteMissionStore _missions;
+    private readonly SqliteWorkflowStore _missions;
     private readonly SqliteAgentRunStore _runs;
     private readonly IWorkspaceService _workspaces;
     private readonly UserDashboardAggregator _aggregator;
@@ -23,7 +23,7 @@ public sealed class UserDashboardAggregatorTests : IAsyncDisposable
         _provider.InitializeAsync().GetAwaiter().GetResult();
 
         var factory = (ISqliteConnectionFactory)_provider;
-        _missions = new SqliteMissionStore(factory);
+        _missions = new SqliteWorkflowStore(factory);
         _runs = new SqliteAgentRunStore(factory);
         _workspaces = new SqliteWorkspaceStore(factory);
 
@@ -47,40 +47,40 @@ public sealed class UserDashboardAggregatorTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task User_SeesOwn_PublicAndPrivate_Missions()
+    public async Task User_SeesOwn_PublicAndPrivate_Workflows()
     {
         await SeedUserAsync("alice");
         var aliceWs = await _workspaces.CreatePersonalWorkspaceAsync("alice");
 
-        var pubMission = await _missions.CreateAsync("public goal", workspaceId: aliceWs.WorkspaceId, ownerUserId: "alice");
-        await SetMissionPrivacyAsync(pubMission.Id, false);
-        var privMission = await _missions.CreateAsync("private goal", workspaceId: aliceWs.WorkspaceId, ownerUserId: "alice");
-        await SetMissionPrivacyAsync(privMission.Id, true);
+        var pubWorkflow = await _missions.CreateAsync("public goal", workspaceId: aliceWs.WorkspaceId, ownerUserId: "alice");
+        await SetWorkflowPrivacyAsync(pubWorkflow.Id, false);
+        var privWorkflow = await _missions.CreateAsync("private goal", workspaceId: aliceWs.WorkspaceId, ownerUserId: "alice");
+        await SetWorkflowPrivacyAsync(privWorkflow.Id, true);
 
         var state = await _aggregator.GetStateAsync("alice");
 
-        Assert.Contains(state.Rows, r => r.Id == pubMission.Id && r.IsOwn && !r.IsPrivate);
-        Assert.Contains(state.Rows, r => r.Id == privMission.Id && r.IsOwn && r.IsPrivate);
+        Assert.Contains(state.Rows, r => r.Id == pubWorkflow.Id && r.IsOwn && !r.IsPrivate);
+        Assert.Contains(state.Rows, r => r.Id == privWorkflow.Id && r.IsOwn && r.IsPrivate);
     }
 
     [Fact]
-    public async Task User_SeesOtherUsers_PublicMission_InSharedWorkspace()
+    public async Task User_SeesOtherUsers_PublicWorkflow_InSharedWorkspace()
     {
         await SeedUserAsync("alice");
         await SeedUserAsync("bob");
         var teamWs = await _workspaces.CreateTeamWorkspaceAsync("shared", "shared", ownerId: "alice");
         await _workspaces.AddMemberAsync(teamWs.WorkspaceId, "bob", WorkspaceRole.Member);
 
-        var bobMission = await _missions.CreateAsync("bob's public goal", workspaceId: teamWs.WorkspaceId, ownerUserId: "bob");
-        await SetMissionPrivacyAsync(bobMission.Id, false);
+        var bobWorkflow = await _missions.CreateAsync("bob's public goal", workspaceId: teamWs.WorkspaceId, ownerUserId: "bob");
+        await SetWorkflowPrivacyAsync(bobWorkflow.Id, false);
 
         var state = await _aggregator.GetStateAsync("alice");
 
-        Assert.Contains(state.Rows, r => r.Id == bobMission.Id && !r.IsOwn && !r.IsPrivate);
+        Assert.Contains(state.Rows, r => r.Id == bobWorkflow.Id && !r.IsOwn && !r.IsPrivate);
     }
 
     [Fact]
-    public async Task User_DoesNotSee_OtherUsers_PrivateMission_EvenInSharedWorkspace()
+    public async Task User_DoesNotSee_OtherUsers_PrivateWorkflow_EvenInSharedWorkspace()
     {
         await SeedUserAsync("alice");
         await SeedUserAsync("bob");
@@ -88,7 +88,7 @@ public sealed class UserDashboardAggregatorTests : IAsyncDisposable
         await _workspaces.AddMemberAsync(teamWs.WorkspaceId, "bob", WorkspaceRole.Member);
 
         var bobPriv = await _missions.CreateAsync("bob's secret", workspaceId: teamWs.WorkspaceId, ownerUserId: "bob");
-        await SetMissionPrivacyAsync(bobPriv.Id, true);
+        await SetWorkflowPrivacyAsync(bobPriv.Id, true);
 
         var state = await _aggregator.GetStateAsync("alice");
 
@@ -103,12 +103,12 @@ public sealed class UserDashboardAggregatorTests : IAsyncDisposable
         await _workspaces.CreatePersonalWorkspaceAsync("alice");
         var bobOnlyWs = await _workspaces.CreateTeamWorkspaceAsync("bob-only", "bob-only", ownerId: "bob");
 
-        var bobMission = await _missions.CreateAsync("bob's public goal", workspaceId: bobOnlyWs.WorkspaceId, ownerUserId: "bob");
-        await SetMissionPrivacyAsync(bobMission.Id, false);
+        var bobWorkflow = await _missions.CreateAsync("bob's public goal", workspaceId: bobOnlyWs.WorkspaceId, ownerUserId: "bob");
+        await SetWorkflowPrivacyAsync(bobWorkflow.Id, false);
 
         var state = await _aggregator.GetStateAsync("alice");
 
-        Assert.DoesNotContain(state.Rows, r => r.Id == bobMission.Id);
+        Assert.DoesNotContain(state.Rows, r => r.Id == bobWorkflow.Id);
     }
 
     [Fact]
@@ -215,13 +215,13 @@ public sealed class UserDashboardAggregatorTests : IAsyncDisposable
         return Task.CompletedTask;
     }
 
-    private async Task SetMissionPrivacyAsync(string missionId, bool isPrivate)
+    private async Task SetWorkflowPrivacyAsync(string workflowId, bool isPrivate)
     {
         using var connection = ((ISqliteConnectionFactory)_provider).CreateConnection();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "UPDATE missions SET is_private = $p WHERE id = $id";
+        cmd.CommandText = "UPDATE workflows SET is_private = $p WHERE id = $id";
         cmd.Parameters.AddWithValue("$p", isPrivate ? 1 : 0);
-        cmd.Parameters.AddWithValue("$id", missionId);
+        cmd.Parameters.AddWithValue("$id", workflowId);
         await cmd.ExecuteNonQueryAsync();
     }
 }

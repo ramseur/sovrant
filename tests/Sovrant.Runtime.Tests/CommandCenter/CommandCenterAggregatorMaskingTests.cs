@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Runtime.CommandCenter;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 using Sovrant.Runtime.Storage;
 
 namespace Sovrant.Runtime.Tests.CommandCenter;
@@ -14,7 +14,7 @@ public sealed class CommandCenterAggregatorMaskingTests : IAsyncDisposable
 {
     private readonly string _dbPath;
     private readonly SqliteStorageProvider _provider;
-    private readonly SqliteMissionStore _missions;
+    private readonly SqliteWorkflowStore _missions;
     private readonly SqliteAgentRunStore _runs;
     private readonly CommandCenterAggregator _aggregator;
 
@@ -25,7 +25,7 @@ public sealed class CommandCenterAggregatorMaskingTests : IAsyncDisposable
         _provider.InitializeAsync().GetAwaiter().GetResult();
         var factory = (ISqliteConnectionFactory)_provider;
 
-        _missions = new SqliteMissionStore(factory);
+        _missions = new SqliteWorkflowStore(factory);
         _runs = new SqliteAgentRunStore(factory);
         var sessions = new SqliteSessionStore(factory);
 
@@ -41,7 +41,7 @@ public sealed class CommandCenterAggregatorMaskingTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task NonOwnerViewer_OnPrivateMission_SeesMaskedRow()
+    public async Task NonOwnerViewer_OnPrivateWorkflow_SeesMaskedRow()
     {
         var mission = await _missions.CreateAsync("alice's secret plan", ownerUserId: "alice");
         // Default is private (verified by other tests); leave as-is.
@@ -58,7 +58,7 @@ public sealed class CommandCenterAggregatorMaskingTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task OwnerViewer_OnOwnPrivateMission_SeesUnredactedRow()
+    public async Task OwnerViewer_OnOwnPrivateWorkflow_SeesUnredactedRow()
     {
         var mission = await _missions.CreateAsync("alice's secret plan", ownerUserId: "alice");
 
@@ -72,7 +72,7 @@ public sealed class CommandCenterAggregatorMaskingTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task PublicMission_IsNeverMasked()
+    public async Task PublicWorkflow_IsNeverMasked()
     {
         var mission = await _missions.CreateAsync("alice's open plan", ownerUserId: "alice");
         await _missions.UpdatePrivacyAsync(mission.Id, "alice", isPrivate: false);

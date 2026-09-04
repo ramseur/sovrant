@@ -93,7 +93,7 @@ public partial class MainViewModel : ViewModelBase
     /// Bridge from the cockpit grid into the matching detail view. Sessions
     /// resume in chat; team runs open Orchestration; agent runs render inline
     /// inside the cockpit (no page swap) so /activity doesn't need to exist.
-    /// Missions/claws stay on the cockpit until a dedicated detail view exists.
+    /// Workflows/claws stay on the cockpit until a dedicated detail view exists.
     /// </summary>
     private async void OnCockpitRowSelected(object? sender, CommandCenterRowSelectedEventArgs e)
     {
@@ -115,7 +115,7 @@ public partial class MainViewModel : ViewModelBase
             case "team-run":
                 CurrentPage = _services.GetRequiredService<OrchestrationViewModel>();
                 break;
-            // mission/claw — no dedicated detail view yet; keep cockpit visible.
+            // workflow/claw — no dedicated detail view yet; keep cockpit visible.
             default:
                 break;
         }
@@ -141,7 +141,7 @@ public partial class MainViewModel : ViewModelBase
             case "team-run":
                 CurrentPage = _services.GetRequiredService<OrchestrationViewModel>();
                 break;
-            // mission/claw — no dedicated detail view yet
+            // workflow/claw — no dedicated detail view yet
             default:
                 break;
         }

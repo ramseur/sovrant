@@ -90,10 +90,10 @@ export type {
   UpdateTeamProfileRequest,
   AgentRun,
   AgentRunFilter,
-  // Missions
-  Mission,
-  CreateMissionRequest,
-  MissionEvent,
+  // Workflows
+  Workflow,
+  CreateWorkflowRequest,
+  WorkflowEvent,
   // Swarm
   SwarmRunRequest,
   SwarmResult,

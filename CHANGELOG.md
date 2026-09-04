@@ -7,6 +7,16 @@ Versions correspond to tags on the `development` branch.
 
 ---
 
+## [Unreleased]
+
+> **Migration note:** V047 renames `missions`→`workflows`, `mission_events`→`workflow_events`, and `mission_scratchpad`→`workflow_scratchpad` (plus their indexes and the `mission_id`→`workflow_id` FK column) via `ALTER TABLE ... RENAME`. No data loss — existing rows and their full event journals carry over under the new names. One-way: there is no realistic "undo" migration once written under the new names, so it was tested against a copy of a real dev DB before landing. `db/postgres/PostgresSchema.sql` and `db/supabase/migrations/` got the equivalent guarded rename (idempotent — safe to re-run against an already-renamed or a brand-new database).
+
+### Changed
+
+- **Renamed the mission layer to "workflows"** (roadmap item) — `Sovrant.Runtime.Missions` → `Sovrant.Runtime.Workflows` across the whole stack: domain types, SQLite/Postgres/Supabase schema, the `/v1/missions*` → `/v1/workflows*` HTTP API (clean cutover, no alias period), the `/mission` → `/workflow` CLI slash command, the `Mission` → `Workflow` agent tool (governance tool-tier key updated in lockstep so gating doesn't silently drop), Command Center/User Dashboard cockpit rows (`Kind: "mission"` → `"workflow"`, dangling `/missions/{id}` links now point at `/workflows/{id}`), and the `sdk/js` client (`createMission`/`listMissions`/etc. → `createWorkflow`/`listWorkflows`/etc.). Purely a naming pass — no behavior change. Newly created workflow IDs get a `workflow-` prefix instead of `mission-`; existing `mission-`-prefixed IDs are untouched (IDs are opaque, nothing parses the prefix).
+
+---
+
 ## [1.5.0] — 2026-08-26
 
 > **Migration note:** V044–V046 are additive only (skill description/agent enrichment, code-manifest scaffolding, CodeValidateTool guide seed). No destructive schema changes in this release.

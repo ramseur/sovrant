@@ -2,58 +2,58 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
-namespace Sovrant.Runtime.Missions;
+namespace Sovrant.Runtime.Workflows;
 
 /// <summary>
 /// Phase 51 pm_export — generates human-readable Markdown or structured
-/// JSON reports from a mission's state and event journal. Designed to be
-/// called from CLI commands (<c>sovrant mission export</c>), API routes
+/// JSON reports from a workflow's state and event journal. Designed to be
+/// called from CLI commands (<c>sovrant workflow export</c>), API routes
 /// (<c>GET /v1/missions/{id}/export</c>), or tools.
 /// </summary>
-public sealed class MissionExportService
+public sealed class WorkflowExportService
 {
     private static readonly JsonSerializerOptions s_jsonOptions = new() { WriteIndented = true };
 
-    private readonly IMissionStore _store;
+    private readonly IWorkflowStore _store;
 
-    public MissionExportService(IMissionStore store) =>
+    public WorkflowExportService(IWorkflowStore store) =>
         _store = store ?? throw new ArgumentNullException(nameof(store));
 
     /// <summary>
-    /// Produces a Markdown report covering the mission's goal, current
+    /// Produces a Markdown report covering the workflow's goal, current
     /// status, plan snapshot, timeline (derived from the event journal),
     /// and summary statistics.
     /// </summary>
     public async Task<string> ExportMarkdownAsync(
-        string missionId, CancellationToken ct = default)
+        string workflowId, CancellationToken ct = default)
     {
-        var mission = await _store.GetAsync(missionId, ct).ConfigureAwait(false)
-            ?? throw new InvalidOperationException($"mission '{missionId}' not found");
+        var workflow = await _store.GetAsync(workflowId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"workflow '{workflowId}' not found");
 
-        var events = await _store.GetEventsAsync(missionId, ct).ConfigureAwait(false);
+        var events = await _store.GetEventsAsync(workflowId, ct).ConfigureAwait(false);
 
         var sb = new StringBuilder();
 
         // ── Header ───────────────────────────────────────────────────────
-        sb.AppendLine(CultureInfo.InvariantCulture, $"# Mission: {mission.Goal}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"# Workflow: {workflow.Goal}");
         sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"**ID:** `{mission.Id}`");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"**Status:** {mission.Status}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"**Created:** {mission.CreatedAt:yyyy-MM-dd HH:mm:ss} UTC");
-        if (mission.CompletedAt is not null)
+        sb.AppendLine(CultureInfo.InvariantCulture, $"**ID:** `{workflow.Id}`");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"**Status:** {workflow.Status}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"**Created:** {workflow.CreatedAt:yyyy-MM-dd HH:mm:ss} UTC");
+        if (workflow.CompletedAt is not null)
         {
             sb.AppendLine(CultureInfo.InvariantCulture,
-                $"**Completed:** {mission.CompletedAt.Value:yyyy-MM-dd HH:mm:ss} UTC");
-            var duration = mission.CompletedAt.Value - mission.CreatedAt;
+                $"**Completed:** {workflow.CompletedAt.Value:yyyy-MM-dd HH:mm:ss} UTC");
+            var duration = workflow.CompletedAt.Value - workflow.CreatedAt;
             sb.AppendLine(CultureInfo.InvariantCulture,
                 $"**Duration:** {FormatDuration(duration)}");
         }
-        if (mission.WorkspaceId is not null)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"**Workspace:** `{mission.WorkspaceId}`");
-        if (mission.ProjectId is not null)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"**Project:** `{mission.ProjectId}`");
-        if (mission.OwnerUserId is not null)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"**Owner:** `{mission.OwnerUserId}`");
+        if (workflow.WorkspaceId is not null)
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Workspace:** `{workflow.WorkspaceId}`");
+        if (workflow.ProjectId is not null)
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Project:** `{workflow.ProjectId}`");
+        if (workflow.OwnerUserId is not null)
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Owner:** `{workflow.OwnerUserId}`");
         sb.AppendLine();
 
         // ── Timeline ─────────────────────────────────────────────────────
@@ -80,8 +80,8 @@ public sealed class MissionExportService
         // ── Stats ────────────────────────────────────────────────────────
         sb.AppendLine("## Summary");
         sb.AppendLine();
-        var runCount = events.Count(e => e.EventType == MissionEventTypes.RunStarted);
-        var replanCount = events.Count(e => e.EventType == MissionEventTypes.PlanRevised);
+        var runCount = events.Count(e => e.EventType == WorkflowEventTypes.RunStarted);
+        var replanCount = events.Count(e => e.EventType == WorkflowEventTypes.PlanRevised);
         sb.AppendLine(CultureInfo.InvariantCulture, $"- **Engine runs:** {runCount}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- **Plan revisions:** {replanCount}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- **Total events:** {events.Count}");
@@ -91,31 +91,31 @@ public sealed class MissionExportService
 
     /// <summary>
     /// Produces a structured JSON export suitable for external tooling or
-    /// archival. Contains the full mission record plus the complete event
+    /// archival. Contains the full workflow record plus the complete event
     /// journal.
     /// </summary>
     public async Task<string> ExportJsonAsync(
-        string missionId, CancellationToken ct = default)
+        string workflowId, CancellationToken ct = default)
     {
-        var mission = await _store.GetAsync(missionId, ct).ConfigureAwait(false)
-            ?? throw new InvalidOperationException($"mission '{missionId}' not found");
+        var workflow = await _store.GetAsync(workflowId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"workflow '{workflowId}' not found");
 
-        var events = await _store.GetEventsAsync(missionId, ct).ConfigureAwait(false);
+        var events = await _store.GetEventsAsync(workflowId, ct).ConfigureAwait(false);
 
         return JsonSerializer.Serialize(new
         {
-            mission = new
+            workflow = new
             {
-                id = mission.Id,
-                goal = mission.Goal,
-                status = mission.Status.ToString(),
-                plan_json = mission.PlanJson,
-                created_at = mission.CreatedAt,
-                updated_at = mission.UpdatedAt,
-                completed_at = mission.CompletedAt,
-                workspace_id = mission.WorkspaceId,
-                project_id = mission.ProjectId,
-                owner_user_id = mission.OwnerUserId,
+                id = workflow.Id,
+                goal = workflow.Goal,
+                status = workflow.Status.ToString(),
+                plan_json = workflow.PlanJson,
+                created_at = workflow.CreatedAt,
+                updated_at = workflow.UpdatedAt,
+                completed_at = workflow.CompletedAt,
+                workspace_id = workflow.WorkspaceId,
+                project_id = workflow.ProjectId,
+                owner_user_id = workflow.OwnerUserId,
             },
             events = events.Select(e => new
             {
@@ -127,8 +127,8 @@ public sealed class MissionExportService
             stats = new
             {
                 total_events = events.Count,
-                engine_runs = events.Count(e => e.EventType == MissionEventTypes.RunStarted),
-                plan_revisions = events.Count(e => e.EventType == MissionEventTypes.PlanRevised),
+                engine_runs = events.Count(e => e.EventType == WorkflowEventTypes.RunStarted),
+                plan_revisions = events.Count(e => e.EventType == WorkflowEventTypes.PlanRevised),
             },
         }, s_jsonOptions);
     }
@@ -141,19 +141,19 @@ public sealed class MissionExportService
             var root = doc.RootElement;
             return eventType switch
             {
-                MissionEventTypes.MissionCreated =>
+                WorkflowEventTypes.WorkflowCreated =>
                     root.TryGetProperty("goal", out var g) ? Truncate(g.GetString(), 60) : "",
-                MissionEventTypes.PlanRevised =>
+                WorkflowEventTypes.PlanRevised =>
                     root.TryGetProperty("plan_id", out var p) ? $"plan `{Truncate(p.GetString(), 20)}`" : "",
-                MissionEventTypes.RunStarted =>
+                WorkflowEventTypes.RunStarted =>
                     root.TryGetProperty("runtime_run_id", out var r) ? $"run `{Truncate(r.GetString(), 20)}`" : "",
-                MissionEventTypes.RunCompleted =>
+                WorkflowEventTypes.RunCompleted =>
                     root.TryGetProperty("terminal_state", out var t) ? t.GetString() ?? "" : "",
-                MissionEventTypes.Failed =>
+                WorkflowEventTypes.Failed =>
                     root.TryGetProperty("error", out var e)
                         ? Truncate(e.GetString(), 60)
                         : root.TryGetProperty("reason", out var rr) ? Truncate(rr.GetString(), 60) : "",
-                MissionEventTypes.AcceptanceApproved or MissionEventTypes.AcceptanceRejected =>
+                WorkflowEventTypes.AcceptanceApproved or WorkflowEventTypes.AcceptanceRejected =>
                     root.TryGetProperty("reason", out var ar) ? Truncate(ar.GetString(), 60) : "",
                 _ => "",
             };

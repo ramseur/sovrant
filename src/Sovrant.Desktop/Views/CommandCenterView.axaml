@@ -55,7 +55,7 @@
                     CornerRadius="8" Padding="16,12" Margin="0,8,0,0">
                 <StackPanel Spacing="10">
                     <Grid ColumnDefinitions="120,*">
-                        <TextBlock Grid.Column="0" Text="mission" FontWeight="SemiBold"
+                        <TextBlock Grid.Column="0" Text="workflow" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
@@ -100,7 +100,7 @@
                         ToolTip.Tip="Long-running goals decomposed into team and agent runs.">
                     <StackPanel>
                         <TextBlock Text="MISSIONS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
-                        <TextBlock Text="{Binding ActiveMissions}" FontSize="24" FontWeight="SemiBold"
+                        <TextBlock Text="{Binding ActiveWorkflows}" FontSize="24" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" />
                     </StackPanel>
                 </Border>

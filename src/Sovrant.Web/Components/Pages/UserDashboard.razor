@@ -1,14 +1,14 @@
 @page "/dashboard"
 @using System.Globalization
 @using Sovrant.Runtime.UserDashboard
-@using Sovrant.Runtime.Missions
+@using Sovrant.Runtime.Workflows
 @using Sovrant.Runtime.Storage
 @using Sovrant.Runtime.Session
 @using Sovrant.Runtime.Governance
 @using Sovrant.Web.Services
 @inject WebSessionService Session
 @inject UserDashboardAggregator Aggregator
-@inject IMissionStore MissionStore
+@inject IWorkflowStore WorkflowStore
 @inject IAgentRunStore RunStore
 @inject ISessionStore SessionStore
 @inject IAuditStore AuditStore
@@ -39,7 +39,7 @@
     {
         <div class="cc-help-panel">
             <dl class="cc-help-grid">
-                <dt>Missions</dt>
+                <dt>Workflows</dt>
                 <dd>Long-running goals you own across all workspaces. A mission decomposes into team runs and agent runs until the goal is complete.</dd>
 
                 <dt>Team runs</dt>
@@ -69,7 +69,7 @@
     }
 
     <div class="cc-stat-row">
-        <CcStat Label="Missions" Value="@(_state?.OwnMissions ?? 0)"
+        <CcStat Label="Workflows" Value="@(_state?.OwnWorkflows ?? 0)"
                 Tooltip="Long-running goals you own." />
         <CcStat Label="Team runs" Value="@(_state?.OwnTeamRuns ?? 0)"
                 Tooltip="Team executions you kicked off." />
@@ -238,9 +238,9 @@
         {
             switch (row.Kind)
             {
-                case "mission":
-                    await MissionStore.UpdatePrivacyAsync(row.Id, Session.UserId, newValue);
-                    await AuditStore.LogPrivacyChangeAsync(Session.UserId, "mission", row.Id, newValue);
+                case "workflow":
+                    await WorkflowStore.UpdatePrivacyAsync(row.Id, Session.UserId, newValue);
+                    await AuditStore.LogPrivacyChangeAsync(Session.UserId, "workflow", row.Id, newValue);
                     break;
                 case "agent-run":
                 case "team-run":

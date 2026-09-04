@@ -1,42 +1,42 @@
 using System.Globalization;
 using System.Text;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 
 namespace Sovrant.Commands.Commands;
 
 /// <summary>
-/// Phase 51 — CLI surface for the mission layer.
+/// Phase 51 — CLI surface for the workflow layer.
 ///
 /// Subcommands:
 /// <list type="bullet">
-///   <item><c>/mission create &lt;goal&gt;</c> — create a new mission</item>
-///   <item><c>/mission list [--status &lt;s&gt;]</c> — list missions</item>
-///   <item><c>/mission show &lt;id&gt;</c> — show mission details</item>
-///   <item><c>/mission run &lt;id&gt;</c> — drive a mission forward one engine cycle</item>
-///   <item><c>/mission events &lt;id&gt;</c> — print the event journal</item>
-///   <item><c>/mission export &lt;id&gt; [--json]</c> — export a mission report</item>
-///   <item><c>/mission cancel &lt;id&gt;</c> — cancel a mission</item>
+///   <item><c>/workflow create &lt;goal&gt;</c> — create a new workflow</item>
+///   <item><c>/workflow list [--status &lt;s&gt;]</c> — list workflows</item>
+///   <item><c>/workflow show &lt;id&gt;</c> — show workflow details</item>
+///   <item><c>/workflow run &lt;id&gt;</c> — drive a workflow forward one engine cycle</item>
+///   <item><c>/workflow events &lt;id&gt;</c> — print the event journal</item>
+///   <item><c>/workflow export &lt;id&gt; [--json]</c> — export a workflow report</item>
+///   <item><c>/workflow cancel &lt;id&gt;</c> — cancel a workflow</item>
 /// </list>
 /// </summary>
-public sealed class MissionCommand : ISlashCommand
+public sealed class WorkflowCommand : ISlashCommand
 {
-    private readonly IMissionStore _store;
-    private readonly IMissionExecutor _executor;
-    private readonly MissionExportService _exporter;
+    private readonly IWorkflowStore _store;
+    private readonly IWorkflowExecutor _executor;
+    private readonly WorkflowExportService _exporter;
 
-    public MissionCommand(
-        IMissionStore store,
-        IMissionExecutor executor,
-        MissionExportService exporter)
+    public WorkflowCommand(
+        IWorkflowStore store,
+        IWorkflowExecutor executor,
+        WorkflowExportService exporter)
     {
         _store = store;
         _executor = executor;
         _exporter = exporter;
     }
 
-    public string Name => "mission";
+    public string Name => "workflow";
     public IReadOnlyList<string> Aliases => [];
-    public string Description => "Manage autonomous missions (create, list, show, run, events, export, cancel).";
+    public string Description => "Manage autonomous workflows (create, list, show, run, events, export, cancel).";
     public string Category => "Advanced";
 
     public async Task<SlashCommandResult> ExecuteAsync(string args, CancellationToken ct = default)
@@ -71,31 +71,31 @@ public sealed class MissionCommand : ISlashCommand
     {
         var goal = string.Join(' ', rest);
         if (string.IsNullOrWhiteSpace(goal))
-            return new SlashCommandResult("Usage: /mission create <goal>");
+            return new SlashCommandResult("Usage: /workflow create <goal>");
 
-        var mission = await _store.CreateAsync(goal, ct: ct).ConfigureAwait(false);
+        var workflow = await _store.CreateAsync(goal, ct: ct).ConfigureAwait(false);
         return new SlashCommandResult(
-            $"Mission created: `{mission.Id}`\nGoal: {mission.Goal}\nStatus: {mission.Status}");
+            $"Workflow created: `{workflow.Id}`\nGoal: {workflow.Goal}\nStatus: {workflow.Status}");
     }
 
     private async Task<SlashCommandResult> ListAsync(string[] rest, CancellationToken ct)
     {
-        MissionStatus? statusFilter = null;
+        WorkflowStatus? statusFilter = null;
         for (int i = 0; i < rest.Length - 1; i++)
         {
             if (rest[i].Equals("--status", StringComparison.OrdinalIgnoreCase)
-                && Enum.TryParse<MissionStatus>(rest[i + 1], ignoreCase: true, out var parsed))
+                && Enum.TryParse<WorkflowStatus>(rest[i + 1], ignoreCase: true, out var parsed))
             {
                 statusFilter = parsed;
             }
         }
 
-        var missions = await _store.ListAsync(status: statusFilter, limit: 25, ct: ct).ConfigureAwait(false);
-        if (missions.Count == 0)
-            return new SlashCommandResult("No missions found.");
+        var workflows = await _store.ListAsync(status: statusFilter, limit: 25, ct: ct).ConfigureAwait(false);
+        if (workflows.Count == 0)
+            return new SlashCommandResult("No workflows found.");
 
         var sb = new StringBuilder();
-        foreach (var m in missions)
+        foreach (var m in workflows)
         {
             sb.AppendLine(CultureInfo.InvariantCulture,
                 $"  {m.Status,-15} `{m.Id}`  {Truncate(m.Goal, 50)}");
@@ -106,36 +106,36 @@ public sealed class MissionCommand : ISlashCommand
     private async Task<SlashCommandResult> ShowAsync(string[] rest, CancellationToken ct)
     {
         if (rest.Length == 0)
-            return new SlashCommandResult("Usage: /mission show <id>");
+            return new SlashCommandResult("Usage: /workflow show <id>");
 
-        var mission = await _store.GetAsync(rest[0], ct).ConfigureAwait(false);
-        if (mission is null)
-            return new SlashCommandResult($"Mission '{rest[0]}' not found.");
+        var workflow = await _store.GetAsync(rest[0], ct).ConfigureAwait(false);
+        if (workflow is null)
+            return new SlashCommandResult($"Workflow '{rest[0]}' not found.");
 
         var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"**Mission:** `{mission.Id}`");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"**Goal:** {mission.Goal}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"**Status:** {mission.Status}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"**Created:** {mission.CreatedAt:yyyy-MM-dd HH:mm:ss}");
-        if (mission.CompletedAt is not null)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"**Completed:** {mission.CompletedAt.Value:yyyy-MM-dd HH:mm:ss}");
-        if (mission.WorkspaceId is not null)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"**Workspace:** `{mission.WorkspaceId}`");
-        if (mission.ProjectId is not null)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"**Project:** `{mission.ProjectId}`");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"**Workflow:** `{workflow.Id}`");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"**Goal:** {workflow.Goal}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"**Status:** {workflow.Status}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"**Created:** {workflow.CreatedAt:yyyy-MM-dd HH:mm:ss}");
+        if (workflow.CompletedAt is not null)
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Completed:** {workflow.CompletedAt.Value:yyyy-MM-dd HH:mm:ss}");
+        if (workflow.WorkspaceId is not null)
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Workspace:** `{workflow.WorkspaceId}`");
+        if (workflow.ProjectId is not null)
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Project:** `{workflow.ProjectId}`");
         return new SlashCommandResult(sb.ToString().TrimEnd());
     }
 
     private async Task<SlashCommandResult> RunAsync(string[] rest, CancellationToken ct)
     {
         if (rest.Length == 0)
-            return new SlashCommandResult("Usage: /mission run <id>");
+            return new SlashCommandResult("Usage: /workflow run <id>");
 
         try
         {
-            var mission = await _executor.RunAsync(rest[0], ct).ConfigureAwait(false);
+            var workflow = await _executor.RunAsync(rest[0], ct).ConfigureAwait(false);
             return new SlashCommandResult(
-                $"Mission `{mission.Id}` → {mission.Status}");
+                $"Workflow `{workflow.Id}` → {workflow.Status}");
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.Ordinal))
         {
@@ -146,11 +146,11 @@ public sealed class MissionCommand : ISlashCommand
     private async Task<SlashCommandResult> EventsAsync(string[] rest, CancellationToken ct)
     {
         if (rest.Length == 0)
-            return new SlashCommandResult("Usage: /mission events <id>");
+            return new SlashCommandResult("Usage: /workflow events <id>");
 
         var events = await _store.GetEventsAsync(rest[0], ct).ConfigureAwait(false);
         if (events.Count == 0)
-            return new SlashCommandResult("No events found for this mission.");
+            return new SlashCommandResult("No events found for this workflow.");
 
         var sb = new StringBuilder();
         foreach (var e in events)
@@ -164,17 +164,17 @@ public sealed class MissionCommand : ISlashCommand
     private async Task<SlashCommandResult> ExportAsync(string[] rest, CancellationToken ct)
     {
         if (rest.Length == 0)
-            return new SlashCommandResult("Usage: /mission export <id> [--json]");
+            return new SlashCommandResult("Usage: /workflow export <id> [--json]");
 
-        var missionId = rest[0];
+        var workflowId = rest[0];
         var useJson = rest.Length > 1
             && rest[1].Equals("--json", StringComparison.OrdinalIgnoreCase);
 
         try
         {
             var report = useJson
-                ? await _exporter.ExportJsonAsync(missionId, ct).ConfigureAwait(false)
-                : await _exporter.ExportMarkdownAsync(missionId, ct).ConfigureAwait(false);
+                ? await _exporter.ExportJsonAsync(workflowId, ct).ConfigureAwait(false)
+                : await _exporter.ExportMarkdownAsync(workflowId, ct).ConfigureAwait(false);
             return new SlashCommandResult(report);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.Ordinal))
@@ -186,22 +186,22 @@ public sealed class MissionCommand : ISlashCommand
     private async Task<SlashCommandResult> CancelAsync(string[] rest, CancellationToken ct)
     {
         if (rest.Length == 0)
-            return new SlashCommandResult("Usage: /mission cancel <id>");
+            return new SlashCommandResult("Usage: /workflow cancel <id>");
 
-        var mission = await _store.GetAsync(rest[0], ct).ConfigureAwait(false);
-        if (mission is null)
-            return new SlashCommandResult($"Mission '{rest[0]}' not found.");
+        var workflow = await _store.GetAsync(rest[0], ct).ConfigureAwait(false);
+        if (workflow is null)
+            return new SlashCommandResult($"Workflow '{rest[0]}' not found.");
 
-        if (mission.Status is MissionStatus.Completed or MissionStatus.Failed or MissionStatus.Cancelled)
-            return new SlashCommandResult($"Mission already in terminal state: {mission.Status}");
+        if (workflow.Status is WorkflowStatus.Completed or WorkflowStatus.Failed or WorkflowStatus.Cancelled)
+            return new SlashCommandResult($"Workflow already in terminal state: {workflow.Status}");
 
         await _store.AppendEventAsync(
-            mission.Id, MissionEventTypes.Cancelled, "{}", ct: ct).ConfigureAwait(false);
+            workflow.Id, WorkflowEventTypes.Cancelled, "{}", ct: ct).ConfigureAwait(false);
         await _store.UpdateStateAsync(
-            mission.Id, MissionStatus.Cancelled,
+            workflow.Id, WorkflowStatus.Cancelled,
             completedAt: DateTimeOffset.UtcNow, ct: ct).ConfigureAwait(false);
 
-        return new SlashCommandResult($"Mission `{mission.Id}` cancelled.");
+        return new SlashCommandResult($"Workflow `{workflow.Id}` cancelled.");
     }
 
     private static string Truncate(string? value, int max)
@@ -212,15 +212,15 @@ public sealed class MissionCommand : ISlashCommand
 
     private static string Usage() =>
         """
-        Usage: /mission <subcommand> [args]
+        Usage: /workflow <subcommand> [args]
 
         Subcommands:
-          create <goal>           Create a new mission
-          list [--status <s>]     List missions
-          show <id>               Show mission details
-          run <id>                Drive a mission forward one engine cycle
+          create <goal>           Create a new workflow
+          list [--status <s>]     List workflows
+          show <id>               Show workflow details
+          run <id>                Drive a workflow forward one engine cycle
           events <id>             Print the event journal
-          export <id> [--json]    Export a mission report (Markdown or JSON)
-          cancel <id>             Cancel a running mission
+          export <id> [--json]    Export a workflow report (Markdown or JSON)
+          cancel <id>             Cancel a running workflow
         """;
 }

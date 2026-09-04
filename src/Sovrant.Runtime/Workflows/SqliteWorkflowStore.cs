@@ -1,17 +1,17 @@
 using System.Globalization;
 using Sovrant.Runtime.Storage;
 
-namespace Sovrant.Runtime.Missions;
+namespace Sovrant.Runtime.Workflows;
 
 /// <summary>
-/// Phase 51 — SQLite-backed <see cref="IMissionStore"/>. Writes to the
-/// V011 <c>missions</c> and <c>mission_events</c> tables. State updates
-/// on the <c>missions</c> row are a cache; the append-only
-/// <c>mission_events</c> journal is the canonical history.
+/// Phase 51 — SQLite-backed <see cref="IWorkflowStore"/>. Writes to the
+/// V011 <c>workflows</c> and <c>workflow_events</c> tables. State updates
+/// on the <c>workflows</c> row are a cache; the append-only
+/// <c>workflow_events</c> journal is the canonical history.
 /// </summary>
-internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFactory) : IMissionStore
+internal sealed class SqliteWorkflowStore(ISqliteConnectionFactory connectionFactory) : IWorkflowStore
 {
-    public async Task<Mission> CreateAsync(
+    public async Task<Workflow> CreateAsync(
         string goal,
         string? sessionId = null,
         string? workspaceId = null,
@@ -21,7 +21,7 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
     {
         ArgumentNullException.ThrowIfNull(goal);
 
-        var id = $"mission-{Guid.NewGuid():N}";
+        var id = $"workflow-{Guid.NewGuid():N}";
         var now = DateTimeOffset.UtcNow;
         var nowText = now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
 
@@ -29,7 +29,7 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         using (var cmd = connection.CreateCommand())
         {
             cmd.CommandText = """
-                INSERT INTO missions
+                INSERT INTO workflows
                     (id, goal, status, plan_json, created_at, updated_at,
                      session_id, workspace_id, project_id, owner_user_id, is_private)
                 VALUES
@@ -50,12 +50,12 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         using (var evt = connection.CreateCommand())
         {
             evt.CommandText = """
-                INSERT INTO mission_events
-                    (mission_id, event_type, payload, timestamp, workspace_id, project_id)
+                INSERT INTO workflow_events
+                    (workflow_id, event_type, payload, timestamp, workspace_id, project_id)
                 VALUES
-                    ($missionId, 'mission_created', $payload, $now, $workspaceId, $projectId)
+                    ($workflowId, 'mission_created', $payload, $now, $workspaceId, $projectId)
                 """;
-            evt.Parameters.AddWithValue("$missionId", id);
+            evt.Parameters.AddWithValue("$workflowId", id);
             evt.Parameters.AddWithValue("$payload",
                 $$"""{"goal":{{System.Text.Json.JsonSerializer.Serialize(goal)}}}""");
             evt.Parameters.AddWithValue("$now", nowText);
@@ -64,10 +64,10 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
             await evt.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
 
-        return new Mission(
+        return new Workflow(
             Id: id,
             Goal: goal,
-            Status: MissionStatus.Planning,
+            Status: WorkflowStatus.Planning,
             PlanJson: "{}",
             CreatedAt: now,
             UpdatedAt: now,
@@ -79,29 +79,29 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
             IsPrivate: true);
     }
 
-    public async Task<Mission?> GetAsync(string missionId, CancellationToken ct = default)
+    public async Task<Workflow?> GetAsync(string workflowId, CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(missionId);
+        ArgumentNullException.ThrowIfNull(workflowId);
 
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
             SELECT id, goal, status, plan_json, created_at, updated_at, completed_at,
                    session_id, workspace_id, project_id, owner_user_id, is_private
-            FROM missions
+            FROM workflows
             WHERE id = $id
             """;
-        cmd.Parameters.AddWithValue("$id", missionId);
+        cmd.Parameters.AddWithValue("$id", workflowId);
 
         using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         if (!await reader.ReadAsync(ct).ConfigureAwait(false))
             return null;
-        return ReadMission(reader);
+        return ReadWorkflow(reader);
     }
 
-    public async Task<IReadOnlyList<Mission>> ListAsync(
+    public async Task<IReadOnlyList<Workflow>> ListAsync(
         string? ownerUserId = null,
-        MissionStatus? status = null,
+        WorkflowStatus? status = null,
         int limit = 100,
         CancellationToken ct = default)
     {
@@ -115,7 +115,7 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
             cmd.CommandText = """
                 SELECT id, goal, status, plan_json, created_at, updated_at, completed_at,
                        session_id, workspace_id, project_id, owner_user_id, is_private
-                FROM missions
+                FROM workflows
                 WHERE owner_user_id = $owner AND status = $status
                 ORDER BY created_at DESC
                 LIMIT $limit
@@ -128,7 +128,7 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
             cmd.CommandText = """
                 SELECT id, goal, status, plan_json, created_at, updated_at, completed_at,
                        session_id, workspace_id, project_id, owner_user_id, is_private
-                FROM missions
+                FROM workflows
                 WHERE owner_user_id = $owner
                 ORDER BY created_at DESC
                 LIMIT $limit
@@ -140,7 +140,7 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
             cmd.CommandText = """
                 SELECT id, goal, status, plan_json, created_at, updated_at, completed_at,
                        session_id, workspace_id, project_id, owner_user_id, is_private
-                FROM missions
+                FROM workflows
                 WHERE status = $status
                 ORDER BY created_at DESC
                 LIMIT $limit
@@ -152,7 +152,7 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
             cmd.CommandText = """
                 SELECT id, goal, status, plan_json, created_at, updated_at, completed_at,
                        session_id, workspace_id, project_id, owner_user_id, is_private
-                FROM missions
+                FROM workflows
                 ORDER BY created_at DESC
                 LIMIT $limit
                 """;
@@ -160,34 +160,34 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         cmd.Parameters.AddWithValue("$limit", limit);
 
         using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        var results = new List<Mission>();
+        var results = new List<Workflow>();
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
-            results.Add(ReadMission(reader));
+            results.Add(ReadWorkflow(reader));
         return results;
     }
 
     public async Task UpdateStateAsync(
-        string missionId,
-        MissionStatus status,
+        string workflowId,
+        WorkflowStatus status,
         string? planJson = null,
         DateTimeOffset? completedAt = null,
         CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(missionId);
+        ArgumentNullException.ThrowIfNull(workflowId);
 
         var now = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
 
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            UPDATE missions
+            UPDATE workflows
             SET status       = $status,
                 plan_json    = COALESCE($planJson, plan_json),
                 completed_at = COALESCE($completedAt, completed_at),
                 updated_at   = $now
             WHERE id = $id
             """;
-        cmd.Parameters.AddWithValue("$id", missionId);
+        cmd.Parameters.AddWithValue("$id", workflowId);
         cmd.Parameters.AddWithValue("$status", StatusToString(status));
         cmd.Parameters.AddWithValue("$planJson", (object?)planJson ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$completedAt",
@@ -198,15 +198,15 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    public async Task<MissionEvent> AppendEventAsync(
-        string missionId,
+    public async Task<WorkflowEvent> AppendEventAsync(
+        string workflowId,
         string eventType,
         string payloadJson,
         string? workspaceId = null,
         string? projectId = null,
         CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(missionId);
+        ArgumentNullException.ThrowIfNull(workflowId);
         ArgumentNullException.ThrowIfNull(eventType);
         ArgumentNullException.ThrowIfNull(payloadJson);
 
@@ -216,13 +216,13 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO mission_events
-                (mission_id, event_type, payload, timestamp, workspace_id, project_id)
+            INSERT INTO workflow_events
+                (workflow_id, event_type, payload, timestamp, workspace_id, project_id)
             VALUES
-                ($missionId, $eventType, $payload, $now, $workspaceId, $projectId);
+                ($workflowId, $eventType, $payload, $now, $workspaceId, $projectId);
             SELECT last_insert_rowid();
             """;
-        cmd.Parameters.AddWithValue("$missionId", missionId);
+        cmd.Parameters.AddWithValue("$workflowId", workflowId);
         cmd.Parameters.AddWithValue("$eventType", eventType);
         cmd.Parameters.AddWithValue("$payload", payloadJson);
         cmd.Parameters.AddWithValue("$now", nowText);
@@ -231,50 +231,50 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         var idObj = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
         var id = Convert.ToInt64(idObj, CultureInfo.InvariantCulture);
 
-        return new MissionEvent(id, missionId, eventType, payloadJson, now, workspaceId, projectId);
+        return new WorkflowEvent(id, workflowId, eventType, payloadJson, now, workspaceId, projectId);
     }
 
     public async Task UpdatePrivacyAsync(
-        string missionId,
+        string workflowId,
         string ownerUserId,
         bool isPrivate,
         CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(missionId);
+        ArgumentNullException.ThrowIfNull(workflowId);
         ArgumentNullException.ThrowIfNull(ownerUserId);
 
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "UPDATE missions SET is_private = $v WHERE id = $id AND owner_user_id = $owner";
+        cmd.CommandText = "UPDATE workflows SET is_private = $v WHERE id = $id AND owner_user_id = $owner";
         cmd.Parameters.AddWithValue("$v", isPrivate ? 1 : 0);
-        cmd.Parameters.AddWithValue("$id", missionId);
+        cmd.Parameters.AddWithValue("$id", workflowId);
         cmd.Parameters.AddWithValue("$owner", ownerUserId);
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    public async Task<IReadOnlyList<MissionEvent>> GetEventsAsync(
-        string missionId,
+    public async Task<IReadOnlyList<WorkflowEvent>> GetEventsAsync(
+        string workflowId,
         CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(missionId);
+        ArgumentNullException.ThrowIfNull(workflowId);
 
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            SELECT id, mission_id, event_type, payload, timestamp, workspace_id, project_id
-            FROM mission_events
-            WHERE mission_id = $missionId
+            SELECT id, workflow_id, event_type, payload, timestamp, workspace_id, project_id
+            FROM workflow_events
+            WHERE workflow_id = $workflowId
             ORDER BY id ASC
             """;
-        cmd.Parameters.AddWithValue("$missionId", missionId);
+        cmd.Parameters.AddWithValue("$workflowId", workflowId);
 
         using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        var results = new List<MissionEvent>();
+        var results = new List<WorkflowEvent>();
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
-            results.Add(new MissionEvent(
+            results.Add(new WorkflowEvent(
                 Id: reader.GetInt64(0),
-                MissionId: reader.GetString(1),
+                WorkflowId: reader.GetString(1),
                 EventType: reader.GetString(2),
                 PayloadJson: reader.GetString(3),
                 Timestamp: DateTimeOffset.Parse(reader.GetString(4), CultureInfo.InvariantCulture),
@@ -284,9 +284,9 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
         return results;
     }
 
-    private static Mission ReadMission(System.Data.Common.DbDataReader r)
+    private static Workflow ReadWorkflow(System.Data.Common.DbDataReader r)
     {
-        return new Mission(
+        return new Workflow(
             Id: r.GetString(0),
             Goal: r.GetString(1),
             Status: ParseStatus(r.GetString(2)),
@@ -301,25 +301,25 @@ internal sealed class SqliteMissionStore(ISqliteConnectionFactory connectionFact
             IsPrivate: !r.IsDBNull(11) && r.GetInt64(11) != 0);
     }
 
-    private static string StatusToString(MissionStatus s) => s switch
+    private static string StatusToString(WorkflowStatus s) => s switch
     {
-        MissionStatus.Planning => "planning",
-        MissionStatus.Running => "running",
-        MissionStatus.AwaitingHuman => "awaiting_human",
-        MissionStatus.Completed => "completed",
-        MissionStatus.Failed => "failed",
-        MissionStatus.Cancelled => "cancelled",
+        WorkflowStatus.Planning => "planning",
+        WorkflowStatus.Running => "running",
+        WorkflowStatus.AwaitingHuman => "awaiting_human",
+        WorkflowStatus.Completed => "completed",
+        WorkflowStatus.Failed => "failed",
+        WorkflowStatus.Cancelled => "cancelled",
         _ => "planning",
     };
 
-    private static MissionStatus ParseStatus(string s) => s switch
+    private static WorkflowStatus ParseStatus(string s) => s switch
     {
-        "planning" => MissionStatus.Planning,
-        "running" => MissionStatus.Running,
-        "awaiting_human" => MissionStatus.AwaitingHuman,
-        "completed" => MissionStatus.Completed,
-        "failed" => MissionStatus.Failed,
-        "cancelled" => MissionStatus.Cancelled,
-        _ => MissionStatus.Planning,
+        "planning" => WorkflowStatus.Planning,
+        "running" => WorkflowStatus.Running,
+        "awaiting_human" => WorkflowStatus.AwaitingHuman,
+        "completed" => WorkflowStatus.Completed,
+        "failed" => WorkflowStatus.Failed,
+        "cancelled" => WorkflowStatus.Cancelled,
+        _ => WorkflowStatus.Planning,
     };
 }

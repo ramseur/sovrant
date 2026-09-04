@@ -3,12 +3,12 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Runtime.Engine;
 using Sovrant.Runtime.Storage;
 
-namespace Sovrant.Runtime.Missions;
+namespace Sovrant.Runtime.Workflows;
 
 /// <summary>
-/// Phase 51 — enhanced <see cref="IMissionExecutor"/> that fans out
+/// Phase 51 — enhanced <see cref="IWorkflowExecutor"/> that fans out
 /// independent plan steps across concurrent engine runs. Sits on top
-/// of the existing <see cref="LlmMissionExecutor"/> lifecycle (plan →
+/// of the existing <see cref="LlmWorkflowExecutor"/> lifecycle (plan →
 /// execute → gate → journal) but replaces the single-threaded execute
 /// phase with parallel execution when the plan has multiple steps.
 ///
@@ -21,21 +21,21 @@ namespace Sovrant.Runtime.Missions;
 /// <see cref="IExecutor"/>) if the plan has only one step or if
 /// parallel execution is disabled.
 /// </summary>
-public sealed partial class ParallelMissionExecutor : IMissionExecutor
+public sealed partial class ParallelWorkflowExecutor : IWorkflowExecutor
 {
-    [LoggerMessage(Level = LogLevel.Information, Message = "ParallelMissionExecutor: fanning out {Count} steps for mission {MissionId}")]
-    private static partial void LogFanOut(ILogger logger, int count, string missionId);
+    [LoggerMessage(Level = LogLevel.Information, Message = "ParallelWorkflowExecutor: fanning out {Count} steps for workflow {WorkflowId}")]
+    private static partial void LogFanOut(ILogger logger, int count, string workflowId);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "ParallelMissionExecutor: parallel step {Step} failed for mission {MissionId}: {Error}")]
-    private static partial void LogStepFailed(ILogger logger, int step, string missionId, string error);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "ParallelWorkflowExecutor: parallel step {Step} failed for workflow {WorkflowId}: {Error}")]
+    private static partial void LogStepFailed(ILogger logger, int step, string workflowId, string error);
 
-    private readonly IMissionStore _store;
-    private readonly IMissionPlanner _planner;
+    private readonly IWorkflowStore _store;
+    private readonly IWorkflowPlanner _planner;
     private readonly IStepRunner _stepRunner;
     private readonly IRuntimeTraceStore _traceStore;
     private readonly IAcceptanceGate _gate;
-    private readonly IMissionScratchpadStore _scratchpad;
-    private readonly ILogger<ParallelMissionExecutor> _logger;
+    private readonly IWorkflowScratchpadStore _scratchpad;
+    private readonly ILogger<ParallelWorkflowExecutor> _logger;
 
     /// <summary>
     /// Maximum number of concurrent step executions. Prevents resource
@@ -43,14 +43,14 @@ public sealed partial class ParallelMissionExecutor : IMissionExecutor
     /// </summary>
     public int MaxConcurrency { get; init; } = 4;
 
-    public ParallelMissionExecutor(
-        IMissionStore store,
-        IMissionPlanner planner,
+    public ParallelWorkflowExecutor(
+        IWorkflowStore store,
+        IWorkflowPlanner planner,
         IStepRunner stepRunner,
         IRuntimeTraceStore traceStore,
         IAcceptanceGate gate,
-        IMissionScratchpadStore scratchpad,
-        ILogger<ParallelMissionExecutor>? logger = null)
+        IWorkflowScratchpadStore scratchpad,
+        ILogger<ParallelWorkflowExecutor>? logger = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _planner = planner ?? throw new ArgumentNullException(nameof(planner));
@@ -58,19 +58,19 @@ public sealed partial class ParallelMissionExecutor : IMissionExecutor
         _traceStore = traceStore ?? throw new ArgumentNullException(nameof(traceStore));
         _gate = gate ?? throw new ArgumentNullException(nameof(gate));
         _scratchpad = scratchpad ?? throw new ArgumentNullException(nameof(scratchpad));
-        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<ParallelMissionExecutor>.Instance;
+        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<ParallelWorkflowExecutor>.Instance;
     }
 
-    public async Task<Mission> RunAsync(string missionId, CancellationToken ct = default)
+    public async Task<Workflow> RunAsync(string workflowId, CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(missionId);
+        ArgumentNullException.ThrowIfNull(workflowId);
 
-        var mission = await _store.GetAsync(missionId, ct).ConfigureAwait(false)
-            ?? throw new InvalidOperationException($"mission {missionId} not found");
+        var mission = await _store.GetAsync(workflowId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"mission {workflowId} not found");
 
-        if (mission.Status is MissionStatus.Completed
-                          or MissionStatus.Failed
-                          or MissionStatus.Cancelled)
+        if (mission.Status is WorkflowStatus.Completed
+                          or WorkflowStatus.Failed
+                          or WorkflowStatus.Cancelled)
         {
             return mission;
         }
@@ -86,10 +86,10 @@ public sealed partial class ParallelMissionExecutor : IMissionExecutor
         });
 
         await _store.UpdateStateAsync(
-            mission.Id, MissionStatus.Running, planJson: planJson, ct: ct).ConfigureAwait(false);
+            mission.Id, WorkflowStatus.Running, planJson: planJson, ct: ct).ConfigureAwait(false);
         await _store.AppendEventAsync(
             mission.Id,
-            MissionEventTypes.PlanRevised,
+            WorkflowEventTypes.PlanRevised,
             JsonSerializer.Serialize(new { plan_id = plan.Id, plan_version = plan.PlanVersion }),
             mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
 
@@ -97,7 +97,7 @@ public sealed partial class ParallelMissionExecutor : IMissionExecutor
         var runId = $"run-{Guid.NewGuid():N}";
         await _store.AppendEventAsync(
             mission.Id,
-            MissionEventTypes.RunStarted,
+            WorkflowEventTypes.RunStarted,
             JsonSerializer.Serialize(new
             {
                 runtime_run_id = runId,
@@ -123,11 +123,11 @@ public sealed partial class ParallelMissionExecutor : IMissionExecutor
         {
             await _store.AppendEventAsync(
                 mission.Id,
-                MissionEventTypes.Failed,
+                WorkflowEventTypes.Failed,
                 JsonSerializer.Serialize(new { error = ex.Message }),
                 mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
             await _store.UpdateStateAsync(
-                mission.Id, MissionStatus.Failed,
+                mission.Id, WorkflowStatus.Failed,
                 completedAt: DateTimeOffset.UtcNow, ct: ct).ConfigureAwait(false);
             return (await _store.GetAsync(mission.Id, ct).ConfigureAwait(false))!;
         }
@@ -140,7 +140,7 @@ public sealed partial class ParallelMissionExecutor : IMissionExecutor
 
         await _store.AppendEventAsync(
             mission.Id,
-            MissionEventTypes.RunCompleted,
+            WorkflowEventTypes.RunCompleted,
             JsonSerializer.Serialize(new
             {
                 runtime_run_id = runId,
@@ -156,37 +156,37 @@ public sealed partial class ParallelMissionExecutor : IMissionExecutor
         if (decision.RequiresHuman)
         {
             await _store.AppendEventAsync(
-                mission.Id, MissionEventTypes.Paused,
+                mission.Id, WorkflowEventTypes.Paused,
                 JsonSerializer.Serialize(new { reason = decision.Reason }),
                 mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
             await _store.UpdateStateAsync(
-                mission.Id, MissionStatus.AwaitingHuman, ct: ct).ConfigureAwait(false);
+                mission.Id, WorkflowStatus.AwaitingHuman, ct: ct).ConfigureAwait(false);
         }
         else if (decision.Accepted)
         {
             await _store.AppendEventAsync(
-                mission.Id, MissionEventTypes.AcceptanceApproved,
+                mission.Id, WorkflowEventTypes.AcceptanceApproved,
                 JsonSerializer.Serialize(new { reason = decision.Reason }),
                 mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
             await _store.AppendEventAsync(
-                mission.Id, MissionEventTypes.Completed, "{}",
+                mission.Id, WorkflowEventTypes.Completed, "{}",
                 mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
             await _store.UpdateStateAsync(
-                mission.Id, MissionStatus.Completed,
+                mission.Id, WorkflowStatus.Completed,
                 completedAt: DateTimeOffset.UtcNow, ct: ct).ConfigureAwait(false);
         }
         else
         {
             await _store.AppendEventAsync(
-                mission.Id, MissionEventTypes.AcceptanceRejected,
+                mission.Id, WorkflowEventTypes.AcceptanceRejected,
                 JsonSerializer.Serialize(new { reason = decision.Reason }),
                 mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
             await _store.AppendEventAsync(
-                mission.Id, MissionEventTypes.Failed,
+                mission.Id, WorkflowEventTypes.Failed,
                 JsonSerializer.Serialize(new { reason = decision.Reason }),
                 mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
             await _store.UpdateStateAsync(
-                mission.Id, MissionStatus.Failed,
+                mission.Id, WorkflowStatus.Failed,
                 completedAt: DateTimeOffset.UtcNow, ct: ct).ConfigureAwait(false);
         }
 
@@ -194,7 +194,7 @@ public sealed partial class ParallelMissionExecutor : IMissionExecutor
     }
 
     private async Task<IReadOnlyList<StepOutcome>> ExecuteParallelAsync(
-        Mission mission, RuntimePlan plan, string runId, CancellationToken ct)
+        Workflow mission, RuntimePlan plan, string runId, CancellationToken ct)
     {
         var semaphore = new SemaphoreSlim(MaxConcurrency);
         var tasks = new Task<StepOutcome>[plan.Steps.Count];
@@ -220,8 +220,8 @@ public sealed partial class ParallelMissionExecutor : IMissionExecutor
         // Write outcomes to scratchpad so the next plan wave can read them.
         foreach (var outcome in outcomes)
         {
-            await _scratchpad.AppendAsync(new MissionScratchpadEntry(
-                MissionId: mission.Id,
+            await _scratchpad.AppendAsync(new WorkflowScratchpadEntry(
+                WorkflowId: mission.Id,
                 StepIndex: outcome.StepIndex,
                 Namespace: "step_outcome",
                 Key: $"step_{outcome.StepIndex}",
@@ -241,7 +241,7 @@ public sealed partial class ParallelMissionExecutor : IMissionExecutor
     private async Task<StepOutcome> RunStepWithSemaphoreAsync(
         SemaphoreSlim semaphore,
         RuntimeStep step,
-        Mission mission,
+        Workflow mission,
         RuntimePlan plan,
         string runId,
         CancellationToken ct)
@@ -281,7 +281,7 @@ public sealed partial class ParallelMissionExecutor : IMissionExecutor
     }
 
     private async Task<IReadOnlyList<StepOutcome>> ExecuteSequentialAsync(
-        Mission mission, RuntimePlan plan, string runId, CancellationToken ct)
+        Workflow mission, RuntimePlan plan, string runId, CancellationToken ct)
     {
         var outcomes = new List<StepOutcome>();
         foreach (var step in plan.Steps)

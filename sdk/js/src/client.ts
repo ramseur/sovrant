@@ -32,7 +32,7 @@ import type {
   CostDisabled,
   CostSummary,
   CreateInviteRequest,
-  CreateMissionRequest,
+  CreateWorkflowRequest,
   CreateProjectRequest,
   CreateTeamRequest,
   CreateUserRequest,
@@ -43,8 +43,8 @@ import type {
   EvalSuite,
   IssueTokenRequest,
   IssueTokenResponse,
-  Mission,
-  MissionEvent,
+  Workflow,
+  WorkflowEvent,
   ModelsResponse,
   Project,
   ProjectMember,
@@ -1031,61 +1031,61 @@ export class SovrantClient {
     return (await res.json()) as { runs: AgentRun[] };
   }
 
-  // ── Missions ──────────────────────────────────────────────────────────
+  // ── Workflows ─────────────────────────────────────────────────────────
 
-  /** Create a mission. */
-  async createMission(request: CreateMissionRequest): Promise<Mission> {
-    const res = await this.fetchWithRetry("/v1/missions", {
+  /** Create a workflow. */
+  async createWorkflow(request: CreateWorkflowRequest): Promise<Workflow> {
+    const res = await this.fetchWithRetry("/v1/workflows", {
       method: "POST",
       body: JSON.stringify(request),
     });
-    return (await res.json()) as Mission;
+    return (await res.json()) as Workflow;
   }
 
-  /** List missions with optional filters. */
-  async listMissions(options?: {
+  /** List workflows with optional filters. */
+  async listWorkflows(options?: {
     ownerUserId?: string;
     status?: string;
     limit?: number;
-  }): Promise<{ missions: Mission[] }> {
+  }): Promise<{ workflows: Workflow[] }> {
     const params = new URLSearchParams();
     if (options?.ownerUserId) params.set("ownerUserId", options.ownerUserId);
     if (options?.status) params.set("status", options.status);
     if (options?.limit !== undefined) params.set("limit", String(options.limit));
     const qs = params.toString();
-    const res = await this.fetchWithRetry(`/v1/missions${qs ? `?${qs}` : ""}`);
-    return (await res.json()) as { missions: Mission[] };
+    const res = await this.fetchWithRetry(`/v1/workflows${qs ? `?${qs}` : ""}`);
+    return (await res.json()) as { workflows: Workflow[] };
   }
 
-  /** Get a mission by ID. */
-  async getMission(missionId: string): Promise<Mission> {
-    const res = await this.fetchWithRetry(`/v1/missions/${encodeURIComponent(missionId)}`);
-    return (await res.json()) as Mission;
+  /** Get a workflow by ID. */
+  async getWorkflow(workflowId: string): Promise<Workflow> {
+    const res = await this.fetchWithRetry(`/v1/workflows/${encodeURIComponent(workflowId)}`);
+    return (await res.json()) as Workflow;
   }
 
-  /** Drive a mission forward one engine cycle. */
-  async runMission(missionId: string): Promise<Mission> {
-    const res = await this.fetchWithRetry(`/v1/missions/${encodeURIComponent(missionId)}/run`, {
+  /** Drive a workflow forward one engine cycle. */
+  async runWorkflow(workflowId: string): Promise<Workflow> {
+    const res = await this.fetchWithRetry(`/v1/workflows/${encodeURIComponent(workflowId)}/run`, {
       method: "POST",
     });
-    return (await res.json()) as Mission;
+    return (await res.json()) as Workflow;
   }
 
-  /** Get the full event journal for a mission. */
-  async getMissionEvents(missionId: string): Promise<{ events: MissionEvent[] }> {
-    const res = await this.fetchWithRetry(`/v1/missions/${encodeURIComponent(missionId)}/events`);
-    return (await res.json()) as { events: MissionEvent[] };
+  /** Get the full event journal for a workflow. */
+  async getWorkflowEvents(workflowId: string): Promise<{ events: WorkflowEvent[] }> {
+    const res = await this.fetchWithRetry(`/v1/workflows/${encodeURIComponent(workflowId)}/events`);
+    return (await res.json()) as { events: WorkflowEvent[] };
   }
 
-  /** Export a mission as markdown or JSON. */
-  async exportMission(missionId: string, format: "markdown" | "json" = "markdown"): Promise<string> {
+  /** Export a workflow as markdown or JSON. */
+  async exportWorkflow(workflowId: string, format: "markdown" | "json" = "markdown"): Promise<string> {
     if (!ALLOWED_EXPORT_FORMATS.includes(format)) {
       throw new Error(
         `Invalid export format "${format}". Allowed: ${ALLOWED_EXPORT_FORMATS.join(", ")}`
       );
     }
     const qs = format === "json" ? `?format=${encodeURIComponent(format)}` : "";
-    const res = await this.fetchWithRetry(`/v1/missions/${encodeURIComponent(missionId)}/export${qs}`);
+    const res = await this.fetchWithRetry(`/v1/workflows/${encodeURIComponent(workflowId)}/export${qs}`);
     return res.text();
   }
 
@@ -1306,7 +1306,7 @@ export class SovrantClient {
 
   /**
    * Get the current Command Center cockpit state (GET /v1/command-center/state).
-   * Returns active missions, team runs, agent runs, sessions, and a flat row list.
+   * Returns active workflows, team runs, agent runs, sessions, and a flat row list.
    * Non-admin callers are automatically scoped to their own identity on the server.
    */
   async getCommandCenterState(options?: {

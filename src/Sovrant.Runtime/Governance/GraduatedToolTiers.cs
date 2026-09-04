@@ -67,7 +67,7 @@ public static class GraduatedToolTiers
         ["TeamDelegate"]        = ToolTier.Escalation,
         ["TeamRun"]             = ToolTier.Escalation,
         ["TeamPublish"]         = ToolTier.Escalation,
-        ["Mission"]             = ToolTier.Escalation,
+        ["Workflow"]             = ToolTier.Escalation,
         ["Swarm"]               = ToolTier.Escalation,
         ["SwarmStatus"]         = ToolTier.Escalation,
     };

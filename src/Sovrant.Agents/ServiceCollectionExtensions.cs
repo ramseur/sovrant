@@ -103,7 +103,7 @@ public static class ServiceCollectionExtensions
 
         // Autonomous-driver layer (Phase 67) — registered alongside the LLM
         // driver from Sovrant.Runtime so DriverRegistry resolves either by name.
-        services.AddSingleton<Sovrant.Runtime.Missions.IAutonomousDriver, SwarmAutonomousDriver>();
+        services.AddSingleton<Sovrant.Runtime.Workflows.IAutonomousDriver, SwarmAutonomousDriver>();
 
         // Unified agent orchestrator (Phase 52)
         services.AddSingleton<IAgentOrchestrator, AgentOrchestrator>();

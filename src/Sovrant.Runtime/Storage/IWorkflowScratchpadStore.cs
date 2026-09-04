@@ -16,22 +16,22 @@ namespace Sovrant.Runtime.Storage;
 /// Values are opaque JSON; shape is owned by the mission planner /
 /// sub-agent that wrote them. The store never inspects the payload.
 /// </summary>
-public interface IMissionScratchpadStore
+public interface IWorkflowScratchpadStore
 {
     /// <summary>
     /// Appends one scratchpad entry. The underlying table auto-assigns an
     /// id and a <c>created_at</c> timestamp; callers don't need to sequence
     /// writes across sub-agents.
     /// </summary>
-    Task AppendAsync(MissionScratchpadEntry entry, CancellationToken ct = default);
+    Task AppendAsync(WorkflowScratchpadEntry entry, CancellationToken ct = default);
 
     /// <summary>
     /// Loads every entry for a mission, optionally filtered to one step
     /// and/or one namespace. Returned in insertion order (oldest first)
     /// so a reader can reason about what a sub-agent saw at each moment.
     /// </summary>
-    Task<IReadOnlyList<MissionScratchpadEntry>> LoadAsync(
-        string missionId,
+    Task<IReadOnlyList<WorkflowScratchpadEntry>> LoadAsync(
+        string workflowId,
         int? stepIndex = null,
         string? @namespace = null,
         CancellationToken ct = default);
@@ -42,22 +42,22 @@ public interface IMissionScratchpadStore
     /// the "effective state" readers — e.g. "what's the current list of
     /// suspect files this mission's sub-agents agreed on?"
     /// </summary>
-    Task<MissionScratchpadEntry?> ReadLatestAsync(
-        string missionId,
+    Task<WorkflowScratchpadEntry?> ReadLatestAsync(
+        string workflowId,
         string @namespace,
         string key,
         CancellationToken ct = default);
 
     /// <summary>Deletes every scratchpad entry for a mission. Returns rows deleted.</summary>
-    Task<int> DeleteMissionAsync(string missionId, CancellationToken ct = default);
+    Task<int> DeleteWorkflowAsync(string workflowId, CancellationToken ct = default);
 }
 
 /// <summary>
-/// One row in <c>mission_scratchpad</c>. The store auto-populates
+/// One row in <c>workflow_scratchpad</c>. The store auto-populates
 /// <see cref="CreatedAt"/> on write, so callers may leave it at default
 /// when appending — the value you read back is whatever SQLite stamped.
 /// </summary>
-/// <param name="MissionId">Mission family id the entry belongs to.</param>
+/// <param name="WorkflowId">Workflow family id the entry belongs to.</param>
 /// <param name="StepIndex">Plan step index during which the entry was written. Lets readers filter to "what did the sub-agents publish during step 3?".</param>
 /// <param name="Namespace">Free-form bucket name — e.g. "findings", "hypotheses", "blockers". Defaults to <c>"default"</c> in the SQL layer when omitted.</param>
 /// <param name="Key">Logical key inside the namespace. Append-only: writing the same key twice produces two rows.</param>
@@ -66,8 +66,8 @@ public interface IMissionScratchpadStore
 /// <param name="CreatedAt">Wall-clock time when the row was inserted. Ignored on write (SQLite stamps it); populated on read.</param>
 /// <param name="WorkspaceId">Workspace the mission belongs to, for per-workspace cleanup.</param>
 /// <param name="ProjectId">Project the mission belongs to, if any.</param>
-public sealed record MissionScratchpadEntry(
-    string MissionId,
+public sealed record WorkflowScratchpadEntry(
+    string WorkflowId,
     int StepIndex,
     string Namespace,
     string Key,

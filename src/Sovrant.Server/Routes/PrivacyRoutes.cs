@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 using Sovrant.Runtime.Governance;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Storage;
 using Sovrant.Server.Auth;
@@ -18,7 +18,7 @@ internal static class PrivacyRoutes
     public static void Map(WebApplication app)
     {
         app.MapPatch("/v1/sessions/{id}/privacy", UpdateSessionPrivacy);
-        app.MapPatch("/v1/missions/{id}/privacy", UpdateMissionPrivacy);
+        app.MapPatch("/v1/missions/{id}/privacy", UpdateWorkflowPrivacy);
         app.MapPatch("/v1/agent-runs/{id}/privacy", UpdateAgentRunPrivacy);
     }
 
@@ -45,11 +45,11 @@ internal static class PrivacyRoutes
         return Results.NoContent();
     }
 
-    private static async Task<IResult> UpdateMissionPrivacy(
+    private static async Task<IResult> UpdateWorkflowPrivacy(
         string id,
         PrivacyUpdateRequest req,
         HttpContext ctx,
-        IMissionStore store,
+        IWorkflowStore store,
         IAuditStore audit,
         CancellationToken ct)
     {
@@ -59,12 +59,12 @@ internal static class PrivacyRoutes
         if (me is null) return Results.Unauthorized();
 
         var mission = await store.GetAsync(id, ct).ConfigureAwait(false);
-        if (mission is null) return Results.NotFound(new { error = $"Mission '{id}' not found." });
+        if (mission is null) return Results.NotFound(new { error = $"Workflow '{id}' not found." });
         if (!string.Equals(mission.OwnerUserId, me, StringComparison.Ordinal))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
         await store.UpdatePrivacyAsync(id, me, req.IsPrivate, ct).ConfigureAwait(false);
-        await audit.LogPrivacyChangeAsync(me, "mission", id, req.IsPrivate, ct).ConfigureAwait(false);
+        await audit.LogPrivacyChangeAsync(me, "workflow", id, req.IsPrivate, ct).ConfigureAwait(false);
         return Results.NoContent();
     }
 

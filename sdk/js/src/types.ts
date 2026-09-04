@@ -607,10 +607,10 @@ export interface AgentRunFilter {
   limit?: number;
 }
 
-// ── Missions ─────────────────────────────────────────────────────────────
+// ── Workflows ────────────────────────────────────────────────────────────
 
-/** Mission record. */
-export interface Mission {
+/** Workflow record. */
+export interface Workflow {
   id: string;
   goal: string;
   status: "planning" | "running" | "completed" | "failed";
@@ -622,8 +622,8 @@ export interface Mission {
   updated_at: string;
 }
 
-/** Request body for POST /v1/missions. */
-export interface CreateMissionRequest {
+/** Request body for POST /v1/workflows. */
+export interface CreateWorkflowRequest {
   goal: string;
   session_id?: string;
   workspace_id?: string;
@@ -631,10 +631,10 @@ export interface CreateMissionRequest {
   owner_user_id?: string;
 }
 
-/** Mission event from GET /v1/missions/:id/events. */
-export interface MissionEvent {
+/** Workflow event from GET /v1/workflows/:id/events. */
+export interface WorkflowEvent {
   event_id: string;
-  mission_id: string;
+  workflow_id: string;
   event_type: string;
   data: Record<string, unknown>;
   timestamp: string;
@@ -1083,7 +1083,7 @@ export interface CommandCenterRow {
 /** Aggregated cockpit state from GET /v1/command-center/state. */
 export interface CommandCenterState {
   generated_at: string;
-  active_missions: number;
+  active_workflows: number;
   active_team_runs: number;
   active_agent_runs: number;
   active_sessions: number;

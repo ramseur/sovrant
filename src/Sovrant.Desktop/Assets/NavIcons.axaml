@@ -17,7 +17,7 @@
          (V/H expanded to absolute L, arcs/relative curves kept verbatim; arc and
          relative-curve syntax already confirmed working via IconAdmin/IconChat). -->
     <StreamGeometry x:Key="IconSwarm">M21,16 L21,8 a2,2 0 0 0 -1,-1.7 l-7,-4 a2,2 0 0 0 -2,0 l-7,4 A2,2 0 0 0 3,8 L3,16 a2,2 0 0 0 1,1.7 l7,4 a2,2 0 0 0 2,0 l7,-4 A2,2 0 0 0 21,16 Z M3.3,7 L12,12 L20.7,7 M12,22 L12,12</StreamGeometry>
-    <StreamGeometry x:Key="IconMission">M23,4 L23,10 L17,10 M1,20 L1,14 L7,14 M3.5,9 a9,9 0 0 1 14.9,-3.4 L23,10 M1,14 l4.6,4.4 A9,9 0 0 0 20.5,15</StreamGeometry>
+    <StreamGeometry x:Key="IconWorkflow">M23,4 L23,10 L17,10 M1,20 L1,14 L7,14 M3.5,9 a9,9 0 0 1 14.9,-3.4 L23,10 M1,14 l4.6,4.4 A9,9 0 0 0 20.5,15</StreamGeometry>
     <StreamGeometry x:Key="IconOrchestrate">M9,18 L15,12 L9,6</StreamGeometry>
     <StreamGeometry x:Key="IconConnect">M21.4,11.05 L12.25,20.2 a6,6 0 0 1 -8.49,-8.49 l9.2,-9.19 a4,4 0 0 1 5.65,5.66 l-9.2,9.19 a2,2 0 0 1 -2.83,-2.83 l8.49,-8.48</StreamGeometry>
 

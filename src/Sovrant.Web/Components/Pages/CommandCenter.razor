@@ -117,7 +117,7 @@
         {
             <div class="cc-help-panel">
                 <dl class="cc-help-grid">
-                    <dt><span class="cc-kind-pill cc-kind-mission">mission</span></dt>
+                    <dt><span class="cc-kind-pill cc-kind-workflow">workflow</span></dt>
                     <dd>A long-running goal Sovrant decomposes into a plan, then runs through teams and agents until done. Top of the orchestration stack — survives restarts and waits for human input when needed.</dd>
 
                     <dt><span class="cc-kind-pill cc-kind-team-run">team run</span></dt>
@@ -144,7 +144,7 @@
         }
 
         <div class="cc-stat-row">
-            <CcStat Label="Missions" Value="@(_state?.ActiveMissions ?? 0)"
+            <CcStat Label="Workflows" Value="@(_state?.ActiveWorkflows ?? 0)"
                     Tooltip="Long-running goals decomposed into team and agent runs." />
             <CcStat Label="Team runs" Value="@(_state?.ActiveTeamRuns ?? 0)"
                     Tooltip="One execution of a team of agents under a sequential, parallel, or swarm profile." />

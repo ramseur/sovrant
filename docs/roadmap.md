@@ -44,18 +44,18 @@ What we are actively working on and shipping next, in priority order.
 
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
-- **58 tools** across 18 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, missions, artifacts, documents, quality, swarm, coordination, LSP, code scaffolding)
+- **58 tools** across 18 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, workflows, artifacts, documents, quality, swarm, coordination, LSP, code scaffolding)
 - **2,208 tests** across 10 projects, 0 failures
-- **141 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, missions, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth, knowledge, trust-rules, attributions)
+- **141 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, workflows, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth, knowledge, trust-rules, attributions)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
-- SQLite persistence layer with 46 versioned migrations (V001–V046) — V045 seed built-in tool guides for CodeCreate/CodeCreateMulti (Phase 128D), V046 seed CodeValidateTool guide (Phase 128E), V044 enrich built-in skill descriptions + agent/tool list fixes (Phase 114), V040 `mcp_servers.id` stable surrogate for workspace-scoped gating (Phase 105), V041 `workspace_memory` owner/privacy columns (Phase 123), V042 `session_summaries`/`learned_patterns`/`instincts` owner scoping (Phase 123), V043 email-as-user-id rewrite (replaces `usr_{hex}` PKs), V038 `knowledge_attributions` table (Phase 116F), V039 `keystore` table — master AES key in DB (Phase 96), V030 `is_private` (Phase 98), V031 `agent_name` (Phase 106), V032–V033 `knowledge_pages` + `knowledge_attributions` schema (Phase 108/116F), V034–V037 `role`/`recommended_level` + `fields_json`/`filename_template` + skill/agent/doc-template seeds (Phase 112A–D) on top of the Phase 32/42.5/51/52/57/78 foundation
+- SQLite persistence layer with 47 versioned migrations (V001–V047) — V047 renamed the mission layer to "workflows" (Phase 129, `missions`/`mission_events`/`mission_scratchpad` → `workflows`/`workflow_events`/`workflow_scratchpad`, additive `ALTER TABLE ... RENAME`), V045 seed built-in tool guides for CodeCreate/CodeCreateMulti (Phase 128D), V046 seed CodeValidateTool guide (Phase 128E), V044 enrich built-in skill descriptions + agent/tool list fixes (Phase 114), V040 `mcp_servers.id` stable surrogate for workspace-scoped gating (Phase 105), V041 `workspace_memory` owner/privacy columns (Phase 123), V042 `session_summaries`/`learned_patterns`/`instincts` owner scoping (Phase 123), V043 email-as-user-id rewrite (replaces `usr_{hex}` PKs), V038 `knowledge_attributions` table (Phase 116F), V039 `keystore` table — master AES key in DB (Phase 96), V030 `is_private` (Phase 98), V031 `agent_name` (Phase 106), V032–V033 `knowledge_pages` + `knowledge_attributions` schema (Phase 108/116F), V034–V037 `role`/`recommended_level` + `fields_json`/`filename_template` + skill/agent/doc-template seeds (Phase 112A–D) on top of the Phase 32/42.5/51/52/57/78 foundation
 - Single `.env` file configuration — `sovrant.config` removed; all bootstrap knobs are env vars; routing and swarm config fully DB-backed
 - **Integrations Gallery** on Web and Desktop — catalog-first MCP onramp with Automation (Composio, n8n, Zapier, Make), Platform (GitHub, Slack, Notion, Linear, Stripe, PostgreSQL, Supabase, Filesystem), and Search (Brave, Exa, Tavily) tiers; credentials stored in encrypted keystore (Phase 95 ✅)
 - **Model switcher with provider discovery** — configured providers selectable inline; unconfigured known providers shown with click-to-configure deep-link to Settings → Providers on both Web and Desktop
 - **Agent run prompt titles** — one-shot agent runs store the user's prompt (V028); Recent Runs list uses prompt as title with agent name badge on both Web and Desktop
-- **Command Center cockpit** at `/command` on Web and Desktop — read-only live grid aggregating active missions, team runs, agent runs, and sessions; Owner column resolves userId → username/email; click-through to existing detail pages; paginated grid with header timestamp, 30s auto-refresh, and page-preserve on navigation (Phase 89/90/98 polish ✅)
-- Mission engine with durable goals, re-planning, acceptance gates, and event journal (Phase 51 ✅)
+- **Command Center cockpit** at `/command` on Web and Desktop — read-only live grid aggregating active workflows, team runs, agent runs, and sessions; Owner column resolves userId → username/email; click-through to existing detail pages; paginated grid with header timestamp, 30s auto-refresh, and page-preserve on navigation (Phase 89/90/98 polish ✅)
+- Workflow engine (formerly "mission engine") with durable goals, re-planning, acceptance gates, and event journal (Phase 51 ✅, renamed Phase 129)
 - Unified agent orchestration: SQLite-backed teams + swarm + agent run ledger (Phase 52 ✅)
 - Scoped artifact storage with workspace-first layout (Phase 53 ✅)
 - Agent artifact tools — isolated produce-and-deposit pattern for team deliverables (Phase 41 ✅)
@@ -91,7 +91,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Config switch (`AGENT_MODE`) | ✅ Working | `isolated` (default, process-per-agent) or `shared` (in-process). |
 | Team tools | ✅ Complete | `TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`, `TeamRun`, `TeamPublish`. SQLite-backed teams with workspace/project scoping. |
 | Unified orchestration | ✅ Complete | `AgentOrchestrator` unifies teams + swarm. `agent_runs` ledger tracks all executions. Three modes: pre-existing team, composed teams, engine decomposition. |
-| Mission engine | ✅ Complete | `IMissionStore` + `LlmMissionPlanner` + `ParallelMissionExecutor`. Durable goals with re-planning, acceptance gates, event journal. |
+| Workflow engine (formerly "mission engine") | ✅ Complete | `IWorkflowStore` + `LlmWorkflowPlanner` + `ParallelWorkflowExecutor` (renamed Phase 129, formerly `IMissionStore`/`LlmMissionPlanner`/`ParallelMissionExecutor`). Durable goals with re-planning, acceptance gates, event journal. |
 
 ### Completed phases (1–56)
 
@@ -138,7 +138,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | 43 | Windows PowerShell native integration (cwd persistence, version detection, elevation hints) |
 | 44 | Desktop application — Avalonia, 15 pages, streaming chat, tool use, setup wizard, dark/light theme |
 | 48 | Intent-aware model routing — IntentClassifier (10 classes), ModelTierResolver, free-models-only mode |
-| 51 | Engine layer (IPlanner/IExecutor/IStepRunner with crash-safe traces) + mission engine (store, planner, executor, journal, API) |
+| 51 | Engine layer (IPlanner/IExecutor/IStepRunner with crash-safe traces) + mission engine (store, planner, executor, journal, API) — renamed to "workflow engine" in Phase 129 |
 | 52 | Unified agent orchestration — SqliteTeamRegistry, AgentOrchestrator, agent_runs ledger, TeamRun/TeamPublish, /v1/teams + /v1/runs API |
 | 53 | Scoped artifact storage — IArtifactStore, workspace-first layout, /v1/artifacts API, /artifacts CLI |
 | 54 | Model capability registry — layered resolution (user > bundled > live > default), Gemma 4 support |
@@ -168,7 +168,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 |---|---|---|
 | Enterprise auth & external identity (OAuth/OIDC, SAML, SSO) | Phase 40B | Deferred |
 | Supabase backend ✅ — optional Postgres backend shipped (sessions + credentials, admin UI, schema init, SQLite→Postgres migrator, boot-time DI switch, Web + Desktop parity); SSO (Supabase Auth, OAuth/OIDC, SAML) remains deferred | Phase 40C | ✅ Done — SSO deferred |
-| Granular feature permissions — workspace members can be granted or denied access to specific features (Chat, Agents, Teams, Swarms, Missions, MCP, Knowledge, Artifacts, Settings); current model is all-or-nothing per workspace role; Phase 40D adds a permission matrix admins configure per user or role | Phase 40D | Deferred |
+| Granular feature permissions — workspace members can be granted or denied access to specific features (Chat, Agents, Teams, Swarms, Workflows, MCP, Knowledge, Artifacts, Settings); current model is all-or-nothing per workspace role; Phase 40D adds a permission matrix admins configure per user or role | Phase 40D | Deferred |
 | DuckDB database provider — `IStorageProvider` implementation backed by DuckDB; columnar analytics for agent runs, session history, token usage, cost aggregations, and audit queries; embedded like SQLite, analytical like a data warehouse; ideal for self-hosted deployments that need fast cross-session reporting without standing up Supabase | Phase 104 | Deferred |
 | MCP server permissions — workspace-level gating ✅ shipped (V040 stable IDs, `GetEnabledEntriesAsync` workspace filter, admin toggle UI on Web + Desktop, memory-gate guards at selection point); project-level restrictions (project owners further restrict per project) remain deferred | Phase 105 | Partial ✅ — project-level deferred |
 | VS Code native extension | Phase 42 | Deferred (MCP server covers MCP-aware IDEs) |
@@ -11783,7 +11783,9 @@ The `self_correction_prompt` field is the re-entry point for the LLM's agentic l
 
 ## Phase 129 — Missions → Workflows: Rename, Positioning, and UX Review
 
-**Status:** Planned (v1.5)
+**Status:** In progress (v1.5) — item 1 done, superseded by a full-stack rename (see note below); items 2–6 not yet planned in detail
+
+> **2026-09-03 update:** This entry originally scoped item 1 as presentation-layer-only (DB table, API path, and C# types left as `missions`/`Mission`, with `/v1/workflows` added as an alias proxying to a retained `/v1/missions`). That was missed during a later planning pass and a **full-stack rename shipped instead**: `missions`/`mission_events`/`mission_scratchpad` tables renamed in place (SQLite `ALTER TABLE ... RENAME`, mirrored as a guarded rename in `db/postgres/PostgresSchema.sql` and `db/supabase/migrations/`), every C# type/namespace renamed (`Sovrant.Runtime.Workflows`, `Workflow`, `IWorkflowStore`, etc.), `/v1/missions*` → `/v1/workflows*` as a **clean cutover with no alias/deprecation window**, `/mission` → `/workflow` CLI command, the `Mission` → `Workflow` agent tool (governance tier key updated in lockstep), and the `sdk/js` client. 1908 tests passing. This was a deliberate decision, made after discovering the conflict with this entry, to keep the deeper rename rather than revert to the presentation-only design — the API had no confirmed external consumers beyond the first-party SDK, which was updated in the same change. Items 2–6 below (dedicated Workflows page, launch form, detail view, positioning callout, Claude Agent SDK dual-path execution) were not part of that change and still need their own planning pass — do not assume the rest of this entry's original design is still the intended shape; a background-polling `WorkflowSchedulerService` was scoped separately for baseline autonomous execution and may or may not supersede item 6's Claude-Agent-SDK-routing idea.
 
 ### Why
 
@@ -11801,9 +11803,9 @@ The UX also needs work independent of naming. Today "missions" is discoverable o
 
 ### What ships
 
-#### 1 — Surface label rename (Web + Desktop)
+#### 1 — Surface label rename (Web + Desktop) — ✅ Done, full-stack (not presentation-layer as originally scoped)
 
-Replace every user-visible "Mission" / "Missions" label with "Workflow" / "Workflows" across both surfaces. The underlying DB table (`missions`), API path (`/v1/missions`), and C# types (`IMissionStore`, `LlmMissionPlanner`, etc.) are **not renamed** — this is a presentation-layer change only.
+~~Replace every user-visible "Mission" / "Missions" label with "Workflow" / "Workflows" across both surfaces. The underlying DB table (`missions`), API path (`/v1/missions`), and C# types (`IMissionStore`, `LlmMissionPlanner`, etc.) are **not renamed** — this is a presentation-layer change only.~~ Shipped instead as a full-stack rename — see the 2026-09-03 update above. `IMissionStore`/`LlmMissionPlanner`/etc. are now `IWorkflowStore`/`LlmWorkflowPlanner`/etc.
 
 | Where | Old label | New label |
 |---|---|---|
@@ -11815,7 +11817,7 @@ Replace every user-visible "Mission" / "Missions" label with "Workflow" / "Workf
 | Privacy toggle | Make mission private | Make workflow private |
 | Completion messages | "Mission complete" | "Workflow complete" |
 
-**API compatibility:** Add `/v1/workflows` as an alias that proxies to `/v1/missions` on all CRUD and status endpoints. The `/v1/missions` path is retained and marked `@deprecated` in comments (not removed — no external consumers confirmed yet, but a grace period is the right call).
+~~**API compatibility:** Add `/v1/workflows` as an alias that proxies to `/v1/missions` on all CRUD and status endpoints. The `/v1/missions` path is retained and marked `@deprecated` in comments (not removed — no external consumers confirmed yet, but a grace period is the right call).~~ Shipped as a clean cutover instead — `/v1/missions*` was replaced by `/v1/workflows*` with no alias/deprecation window, per the same 2026-09-03 decision.
 
 #### 2 — Dedicated Workflows page
 
@@ -11887,15 +11889,15 @@ The constraint is intentional and permanent. Sovrant's value is the AI layer. Ad
 
 ### Relationship to other phases
 
-- **Phase 51** ✅ built the engine (`IMissionStore`, `LlmMissionPlanner`, `ParallelMissionExecutor`) — remains the base-version execution path (item 6) and is otherwise not touched by items 1–5
+- **Phase 51** ✅ built the engine (`IWorkflowStore`, `LlmWorkflowPlanner`, `ParallelWorkflowExecutor` — renamed 2026-09-03, formerly `IMissionStore`/`LlmMissionPlanner`/`ParallelMissionExecutor`) — remains the base-version execution path (item 6) and is otherwise not touched by items 2–6
 - **Phase 119** (planned) adds per-mission run-modes and integration-sourced Claws — Phase 129 uses those run-modes in the new launch form; Phase 119 should ship first or in parallel
 - **Phase 94** ✅ (Orchestration Studio) remains as the team-composition surface; Phase 129 adds a goal-first surface on top
 - **Claude Agent SDK dependency (item 6, new)** — requires an Anthropic/Claude provider integration capable of driving the Agent SDK's dynamic subagent orchestration; needs its own design pass on the model/tier gate before implementation
 
 ### Acceptance criteria
 
-- [ ] Every user-visible "Mission" / "Missions" label replaced with "Workflow" / "Workflows" on Web and Desktop; no DB or runtime type names changed
-- [ ] `/v1/workflows` alias proxies to `/v1/missions`; all CRUD and status operations work identically through both paths
+- [x] Every user-visible "Mission" / "Missions" label replaced with "Workflow" / "Workflows" on Web and Desktop — ~~no DB or runtime type names changed~~ shipped as a full-stack rename instead (2026-09-03)
+- [x] ~~`/v1/workflows` alias proxies to `/v1/missions`~~ `/v1/missions*` replaced by `/v1/workflows*` (clean cutover, no alias) — `sdk/js` updated in the same change
 - [ ] Dedicated Workflows page reachable from nav; shows active + recent workflows; "New Workflow" button launches the new goal form
 - [ ] New Workflow form: goal textarea, team picker with "Let Sovrant pick" option, run-mode selector, optional name field
 - [ ] "Let Sovrant pick" path invokes `AgentOrchestrator` in decomposition mode and runs the workflow without requiring a pre-built team

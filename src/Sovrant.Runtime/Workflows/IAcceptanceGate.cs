@@ -1,6 +1,6 @@
 using Sovrant.Runtime.Engine;
 
-namespace Sovrant.Runtime.Missions;
+namespace Sovrant.Runtime.Workflows;
 
 /// <summary>
 /// Phase 51 — policy seam that decides whether a completed engine run
@@ -13,14 +13,14 @@ namespace Sovrant.Runtime.Missions;
 public interface IAcceptanceGate
 {
     Task<AcceptanceDecision> EvaluateAsync(
-        Mission mission,
+        Workflow mission,
         ExecutionResult result,
         CancellationToken ct = default);
 }
 
 /// <param name="Accepted">True if the mission can be marked completed; false if the gate rejects and the mission should re-plan or escalate to human review.</param>
 /// <param name="Reason">Human-readable reason — written into the mission event payload for the audit trail.</param>
-/// <param name="RequiresHuman">If true, the mission transitions to <see cref="MissionStatus.AwaitingHuman"/> rather than being auto-accepted or rejected.</param>
+/// <param name="RequiresHuman">If true, the mission transitions to <see cref="WorkflowStatus.AwaitingHuman"/> rather than being auto-accepted or rejected.</param>
 public sealed record AcceptanceDecision(bool Accepted, string Reason, bool RequiresHuman = false);
 
 /// <summary>
@@ -32,7 +32,7 @@ public sealed record AcceptanceDecision(bool Accepted, string Reason, bool Requi
 public sealed class AllStepsSucceededGate : IAcceptanceGate
 {
     public Task<AcceptanceDecision> EvaluateAsync(
-        Mission mission,
+        Workflow mission,
         ExecutionResult result,
         CancellationToken ct = default)
     {

@@ -5,7 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.Auth;
 using Sovrant.Runtime.Governance;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.UserDashboard;
@@ -22,7 +22,7 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
 {
     private readonly UserDashboardAggregator _aggregator;
     private readonly IPrincipalAccessor _principal;
-    private readonly IMissionStore _missionStore;
+    private readonly IWorkflowStore _workflowStore;
     private readonly IAgentRunStore _runStore;
     private readonly ISessionStore _sessionStore;
     private readonly IAuditStore _auditStore;
@@ -31,7 +31,7 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private string _errorMessage = string.Empty;
-    [ObservableProperty] private int _ownMissions;
+    [ObservableProperty] private int _ownWorkflows;
     [ObservableProperty] private int _ownTeamRuns;
     [ObservableProperty] private int _ownAgentRuns;
     [ObservableProperty] private int _ownSessions;
@@ -73,14 +73,14 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
     public UserDashboardViewModel(
         UserDashboardAggregator aggregator,
         IPrincipalAccessor principal,
-        IMissionStore missionStore,
+        IWorkflowStore workflowStore,
         IAgentRunStore runStore,
         ISessionStore sessionStore,
         IAuditStore auditStore)
     {
         _aggregator = aggregator;
         _principal = principal;
-        _missionStore = missionStore;
+        _workflowStore = workflowStore;
         _runStore = runStore;
         _sessionStore = sessionStore;
         _auditStore = auditStore;
@@ -116,9 +116,9 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
         {
             switch (row.Kind)
             {
-                case "mission":
-                    await _missionStore.UpdatePrivacyAsync(row.Id, userId, newValue).ConfigureAwait(false);
-                    await _auditStore.LogPrivacyChangeAsync(userId, "mission", row.Id, newValue).ConfigureAwait(false);
+                case "workflow":
+                    await _workflowStore.UpdatePrivacyAsync(row.Id, userId, newValue).ConfigureAwait(false);
+                    await _auditStore.LogPrivacyChangeAsync(userId, "workflow", row.Id, newValue).ConfigureAwait(false);
                     break;
                 case "agent-run":
                 case "team-run":
@@ -148,7 +148,7 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
             var state = await _aggregator.GetStateAsync(userId).ConfigureAwait(false);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                OwnMissions = state.OwnMissions;
+                OwnWorkflows = state.OwnWorkflows;
                 OwnTeamRuns = state.OwnTeamRuns;
                 OwnAgentRuns = state.OwnAgentRuns;
                 OwnSessions = state.OwnSessions;

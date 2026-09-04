@@ -370,9 +370,37 @@ CREATE TABLE IF NOT EXISTS runtime_traces (
     project_id     TEXT
 );
 
-CREATE TABLE IF NOT EXISTS mission_scratchpad (
+-- ── Rename: missions/mission_events/mission_scratchpad → workflows/workflow_events/workflow_scratchpad ──
+-- Guarded, not a bare ALTER: InitializeAsync() is a documented idempotent
+-- contract (see ISchemaInitializer), so this must survive being run again
+-- after the rename has already happened (missions no longer exists) as a
+-- clean no-op, same as every other guarded statement in this file. Runs
+-- BEFORE the CREATE TABLE IF NOT EXISTS statements below on purpose — an
+-- existing deployment's real data must claim the new table name first, or
+-- CREATE TABLE IF NOT EXISTS would create an empty workflows table and
+-- leave the real data stranded under the old name with no way to rename
+-- into an already-occupied name afterward.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'mission_scratchpad')
+       AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'workflow_scratchpad') THEN
+        ALTER TABLE mission_scratchpad RENAME TO workflow_scratchpad;
+        ALTER TABLE workflow_scratchpad RENAME COLUMN mission_id TO workflow_id;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'missions')
+       AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'workflows') THEN
+        ALTER TABLE missions RENAME TO workflows;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'mission_events')
+       AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'workflow_events') THEN
+        ALTER TABLE mission_events RENAME TO workflow_events;
+        ALTER TABLE workflow_events RENAME COLUMN mission_id TO workflow_id;
+    END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS workflow_scratchpad (
     id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    mission_id   TEXT NOT NULL,
+    workflow_id  TEXT NOT NULL,
     step_index   INTEGER NOT NULL,
     agent_id     TEXT,
     namespace    TEXT NOT NULL DEFAULT 'default',
@@ -387,12 +415,12 @@ CREATE INDEX IF NOT EXISTS ix_runtime_traces_run        ON runtime_traces(runtim
 CREATE INDEX IF NOT EXISTS ix_runtime_traces_entry_type ON runtime_traces(entry_type);
 CREATE INDEX IF NOT EXISTS ix_runtime_traces_workspace  ON runtime_traces(workspace_id);
 CREATE INDEX IF NOT EXISTS ix_runtime_traces_project    ON runtime_traces(project_id);
-CREATE INDEX IF NOT EXISTS ix_mission_scratchpad_mission   ON mission_scratchpad(mission_id, step_index);
-CREATE INDEX IF NOT EXISTS ix_mission_scratchpad_workspace ON mission_scratchpad(workspace_id);
+CREATE INDEX IF NOT EXISTS ix_workflow_scratchpad_workflow   ON workflow_scratchpad(workflow_id, step_index);
+CREATE INDEX IF NOT EXISTS ix_workflow_scratchpad_workspace ON workflow_scratchpad(workspace_id);
 
--- ── V011 Missions ─────────────────────────────────────────────────────────────
+-- ── V011 Workflows (formerly "Missions") ────────────────────────────────────────
 
-CREATE TABLE IF NOT EXISTS missions (
+CREATE TABLE IF NOT EXISTS workflows (
     id            TEXT PRIMARY KEY,
     goal          TEXT NOT NULL,
     status        TEXT NOT NULL DEFAULT 'planning',
@@ -406,9 +434,9 @@ CREATE TABLE IF NOT EXISTS missions (
     owner_user_id TEXT
 );
 
-CREATE TABLE IF NOT EXISTS mission_events (
+CREATE TABLE IF NOT EXISTS workflow_events (
     id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    mission_id   TEXT NOT NULL,
+    workflow_id  TEXT NOT NULL,
     event_type   TEXT NOT NULL,
     payload      TEXT NOT NULL DEFAULT '{}',
     timestamp    TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
@@ -416,12 +444,12 @@ CREATE TABLE IF NOT EXISTS mission_events (
     project_id   TEXT
 );
 
-CREATE INDEX IF NOT EXISTS ix_missions_status    ON missions(status);
-CREATE INDEX IF NOT EXISTS ix_missions_workspace ON missions(workspace_id);
-CREATE INDEX IF NOT EXISTS ix_missions_project   ON missions(project_id);
-CREATE INDEX IF NOT EXISTS ix_missions_owner     ON missions(owner_user_id);
-CREATE INDEX IF NOT EXISTS ix_mission_events_mission   ON mission_events(mission_id, id);
-CREATE INDEX IF NOT EXISTS ix_mission_events_workspace ON mission_events(workspace_id);
+CREATE INDEX IF NOT EXISTS ix_workflows_status    ON workflows(status);
+CREATE INDEX IF NOT EXISTS ix_workflows_workspace ON workflows(workspace_id);
+CREATE INDEX IF NOT EXISTS ix_workflows_project   ON workflows(project_id);
+CREATE INDEX IF NOT EXISTS ix_workflows_owner     ON workflows(owner_user_id);
+CREATE INDEX IF NOT EXISTS ix_workflow_events_workflow   ON workflow_events(workflow_id, id);
+CREATE INDEX IF NOT EXISTS ix_workflow_events_workspace ON workflow_events(workspace_id);
 
 -- ── V012 Unified Orchestration ────────────────────────────────────────────────
 
@@ -628,11 +656,11 @@ CREATE INDEX IF NOT EXISTS ix_prt_hash ON password_reset_tokens(token_hash);
 
 -- ── V030 Activity is Private ──────────────────────────────────────────────────
 
-ALTER TABLE missions   ADD COLUMN IF NOT EXISTS is_private INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE workflows  ADD COLUMN IF NOT EXISTS is_private INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS is_private INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE sessions   ADD COLUMN IF NOT EXISTS is_private INTEGER NOT NULL DEFAULT 0;
 
-CREATE INDEX IF NOT EXISTS ix_missions_is_private   ON missions(is_private);
+CREATE INDEX IF NOT EXISTS ix_workflows_is_private  ON workflows(is_private);
 CREATE INDEX IF NOT EXISTS ix_agent_runs_is_private ON agent_runs(is_private);
 CREATE INDEX IF NOT EXISTS ix_sessions_is_private   ON sessions(is_private);
 

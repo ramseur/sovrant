@@ -1,6 +1,6 @@
 using Sovrant.Runtime.Engine;
 
-namespace Sovrant.Runtime.Missions;
+namespace Sovrant.Runtime.Workflows;
 
 /// <summary>
 /// Phase 51 — produces a <see cref="RuntimePlan"/> for one mission step.
@@ -12,7 +12,7 @@ namespace Sovrant.Runtime.Missions;
 /// <see cref="RuntimePlan"/>; richer implementations can consult prior
 /// events, split goals into phases, or delegate to an LLM.
 /// </summary>
-public interface IMissionPlanner
+public interface IWorkflowPlanner
 {
-    Task<RuntimePlan> PlanAsync(Mission mission, CancellationToken ct = default);
+    Task<RuntimePlan> PlanAsync(Workflow mission, CancellationToken ct = default);
 }

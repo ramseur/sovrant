@@ -249,7 +249,7 @@
                            FontSize="24" FontWeight="Bold"
                            Foreground="{DynamicResource TextPrimary}"
                            HorizontalAlignment="Center" />
-                <TextBlock Text="Create agents, build teams, and orchestrate missions to automate your work."
+                <TextBlock Text="Create agents, build teams, and orchestrate workflows to automate your work."
                            FontSize="14"
                            Foreground="{DynamicResource TextSecondary}"
                            HorizontalAlignment="Center"
@@ -300,12 +300,12 @@
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                             Background="{DynamicResource SurfaceCard}"
                             BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
-                            Command="{Binding SuggestionCommand}" CommandParameter="Set up a mission that monitors a project and sends daily updates">
+                            Command="{Binding SuggestionCommand}" CommandParameter="Set up a workflow that monitors a project and sends daily updates">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Path Data="{StaticResource IconMission}" Width="15" Height="15" Stretch="Uniform"
+                            <Path Data="{StaticResource IconWorkflow}" Width="15" Height="15" Stretch="Uniform"
                                   StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
                                   Stroke="{DynamicResource BrandPrimary}" VerticalAlignment="Center" />
-                            <TextBlock Text="Set up a mission" FontSize="13"
+                            <TextBlock Text="Set up a workflow" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
                         </StackPanel>
                     </Button>

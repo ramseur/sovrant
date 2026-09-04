@@ -35,8 +35,8 @@ public sealed class SqliteStorageProviderTests : IAsyncDisposable
     {
         await _provider.InitializeAsync();
 
-        // Schema head bumped to 46 by V046 (seed CodeValidateTool guide).
-        Assert.Equal(46, _provider.SchemaVersion);
+        // Schema head bumped to 47 by V047 (rename missions to workflows).
+        Assert.Equal(47, _provider.SchemaVersion);
     }
 
     [Fact]

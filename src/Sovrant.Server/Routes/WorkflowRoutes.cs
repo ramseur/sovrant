@@ -1,28 +1,28 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 using Sovrant.Server.Auth;
 
 namespace Sovrant.Server.Routes;
 
 /// <summary>
-/// Phase 51 — HTTP surface for the mission layer. A mission is a
+/// Phase 51 — HTTP surface for the workflow layer. A workflow is a
 /// long-lived goal that the runtime pursues autonomously across one or
 /// more engine runs, with an append-only event journal and an acceptance
-/// gate. These endpoints let a CLI or UI create missions, inspect their
+/// gate. These endpoints let a CLI or UI create workflows, inspect their
 /// state, drive them forward one engine cycle at a time, and read the
 /// canonical journal.
 ///
 /// Endpoints:
 /// <list type="bullet">
-///   <item><c>POST /v1/missions</c> — create a mission in <c>planning</c> state</item>
-///   <item><c>GET /v1/missions</c> — list missions (optionally filtered by owner/status)</item>
-///   <item><c>GET /v1/missions/{id}</c> — fetch one mission record</item>
-///   <item><c>POST /v1/missions/{id}/run</c> — drive the mission forward one engine cycle</item>
-///   <item><c>GET /v1/missions/{id}/events</c> — full event journal for the mission</item>
+///   <item><c>POST /v1/workflows</c> — create a workflow in <c>planning</c> state</item>
+///   <item><c>GET /v1/workflows</c> — list workflows (optionally filtered by owner/status)</item>
+///   <item><c>GET /v1/workflows/{id}</c> — fetch one workflow record</item>
+///   <item><c>POST /v1/workflows/{id}/run</c> — drive the workflow forward one engine cycle</item>
+///   <item><c>GET /v1/workflows/{id}/events</c> — full event journal for the workflow</item>
 /// </list>
 /// </summary>
-internal static class MissionRoutes
+internal static class WorkflowRoutes
 {
     private static readonly JsonSerializerOptions s_jsonOptions = new()
     {
@@ -33,72 +33,72 @@ internal static class MissionRoutes
 
     public static void Map(WebApplication app)
     {
-        app.MapPost("/v1/missions", async (
-            CreateMissionRequest req,
+        app.MapPost("/v1/workflows", async (
+            CreateWorkflowRequest req,
             HttpContext ctx,
-            IMissionStore store,
+            IWorkflowStore store,
             CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Goal))
                 return Results.BadRequest(new { error = "goal is required." });
 
             var callerId = HttpContextAuthExtensions.GetUserId(ctx);
-            var mission = await store.CreateAsync(
+            var workflow = await store.CreateAsync(
                 req.Goal, req.SessionId, req.WorkspaceId, req.ProjectId, callerId, ct);
-            return Results.Json(mission, s_jsonOptions, statusCode: 201);
+            return Results.Json(workflow, s_jsonOptions, statusCode: 201);
         });
 
-        app.MapGet("/v1/missions", async (
+        app.MapGet("/v1/workflows", async (
             string? ownerUserId,
             string? status,
             int? limit,
             HttpContext ctx,
-            IMissionStore store,
+            IWorkflowStore store,
             CancellationToken ct) =>
         {
-            MissionStatus? statusFilter = null;
+            WorkflowStatus? statusFilter = null;
             if (!string.IsNullOrWhiteSpace(status))
             {
-                if (!Enum.TryParse<MissionStatus>(status, ignoreCase: true, out var parsed))
+                if (!Enum.TryParse<WorkflowStatus>(status, ignoreCase: true, out var parsed))
                     return Results.BadRequest(new { error = $"unknown status '{status}'" });
                 statusFilter = parsed;
             }
 
-            // Non-admin callers can only see their own missions.
+            // Non-admin callers can only see their own workflows.
             if (!HttpContextAuthExtensions.IsAdmin(ctx))
                 ownerUserId = HttpContextAuthExtensions.GetUserId(ctx);
 
-            var missions = await store.ListAsync(ownerUserId, statusFilter, limit ?? 100, ct);
-            return Results.Json(new { missions }, s_jsonOptions);
+            var workflows = await store.ListAsync(ownerUserId, statusFilter, limit ?? 100, ct);
+            return Results.Json(new { workflows }, s_jsonOptions);
         });
 
-        app.MapGet("/v1/missions/{id}", async (
+        app.MapGet("/v1/workflows/{id}", async (
             string id,
             HttpContext ctx,
-            IMissionStore store,
+            IWorkflowStore store,
             CancellationToken ct) =>
         {
-            var mission = await store.GetAsync(id, ct);
-            if (mission is null)
-                return Results.NotFound(new { error = $"mission '{id}' not found" });
+            var workflow = await store.GetAsync(id, ct);
+            if (workflow is null)
+                return Results.NotFound(new { error = $"workflow '{id}' not found" });
             if (!HttpContextAuthExtensions.IsAdmin(ctx) &&
-                !string.Equals(mission.OwnerUserId, HttpContextAuthExtensions.GetUserId(ctx), StringComparison.Ordinal))
+                !string.Equals(workflow.OwnerUserId, HttpContextAuthExtensions.GetUserId(ctx), StringComparison.Ordinal))
                 return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
-            return Results.Json(mission, s_jsonOptions);
+            return Results.Json(workflow, s_jsonOptions);
         });
 
-        app.MapPost("/v1/missions/{id}/run", async (
+        app.MapPost("/v1/workflows/{id}/run", async (
             string id,
             HttpContext ctx,
-            IMissionStore store,
-            IMissionExecutor executor,
+            IWorkflowStore store,
+            IWorkflowExecutor executor,
             CancellationToken ct) =>
         {
-            var mission = await store.GetAsync(id, ct);
-            if (mission is null)
-                return Results.NotFound(new { error = $"mission '{id}' not found" });
+            var workflow = await store.GetAsync(id, ct);
+            if (workflow is null)
+                return Results.NotFound(new { error = $"workflow '{id}' not found" });
             if (!HttpContextAuthExtensions.IsAdmin(ctx) &&
-                !string.Equals(mission.OwnerUserId, HttpContextAuthExtensions.GetUserId(ctx), StringComparison.Ordinal))
+                !string.Equals(workflow.OwnerUserId, HttpContextAuthExtensions.GetUserId(ctx), StringComparison.Ordinal))
                 return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
 
             try
@@ -112,35 +112,35 @@ internal static class MissionRoutes
             }
         });
 
-        app.MapGet("/v1/missions/{id}/events", async (
+        app.MapGet("/v1/workflows/{id}/events", async (
             string id,
             HttpContext ctx,
-            IMissionStore store,
+            IWorkflowStore store,
             CancellationToken ct) =>
         {
-            var mission = await store.GetAsync(id, ct);
-            if (mission is null)
-                return Results.NotFound(new { error = $"mission '{id}' not found" });
+            var workflow = await store.GetAsync(id, ct);
+            if (workflow is null)
+                return Results.NotFound(new { error = $"workflow '{id}' not found" });
             if (!HttpContextAuthExtensions.IsAdmin(ctx) &&
-                !string.Equals(mission.OwnerUserId, HttpContextAuthExtensions.GetUserId(ctx), StringComparison.Ordinal))
+                !string.Equals(workflow.OwnerUserId, HttpContextAuthExtensions.GetUserId(ctx), StringComparison.Ordinal))
                 return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
             var events = await store.GetEventsAsync(id, ct);
             return Results.Json(new { events }, s_jsonOptions);
         });
 
-        app.MapGet("/v1/missions/{id}/export", async (
+        app.MapGet("/v1/workflows/{id}/export", async (
             string id,
             string? format,
             HttpContext ctx,
-            IMissionStore store,
-            MissionExportService exporter,
+            IWorkflowStore store,
+            WorkflowExportService exporter,
             CancellationToken ct) =>
         {
-            var mission = await store.GetAsync(id, ct);
-            if (mission is null)
-                return Results.NotFound(new { error = $"mission '{id}' not found" });
+            var workflow = await store.GetAsync(id, ct);
+            if (workflow is null)
+                return Results.NotFound(new { error = $"workflow '{id}' not found" });
             if (!HttpContextAuthExtensions.IsAdmin(ctx) &&
-                !string.Equals(mission.OwnerUserId, HttpContextAuthExtensions.GetUserId(ctx), StringComparison.Ordinal))
+                !string.Equals(workflow.OwnerUserId, HttpContextAuthExtensions.GetUserId(ctx), StringComparison.Ordinal))
                 return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
 
             if (string.Equals(format, "json", StringComparison.OrdinalIgnoreCase))
@@ -154,7 +154,7 @@ internal static class MissionRoutes
         });
     }
 
-    public sealed record CreateMissionRequest(
+    public sealed record CreateWorkflowRequest(
         string Goal,
         string? SessionId = null,
         string? WorkspaceId = null,

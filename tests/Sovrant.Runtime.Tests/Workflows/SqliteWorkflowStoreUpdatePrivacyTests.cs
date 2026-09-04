@@ -1,21 +1,21 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 using Sovrant.Runtime.Storage;
 
-namespace Sovrant.Runtime.Tests.Missions;
+namespace Sovrant.Runtime.Tests.Workflows;
 
-public sealed class SqliteMissionStoreUpdatePrivacyTests : IAsyncDisposable
+public sealed class SqliteWorkflowStoreUpdatePrivacyTests : IAsyncDisposable
 {
     private readonly string _dbPath;
     private readonly SqliteStorageProvider _provider;
-    private readonly SqliteMissionStore _store;
+    private readonly SqliteWorkflowStore _store;
 
-    public SqliteMissionStoreUpdatePrivacyTests()
+    public SqliteWorkflowStoreUpdatePrivacyTests()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"sovrant_missions_priv_{Guid.NewGuid():N}.db");
         _provider = new SqliteStorageProvider(NullLogger<SqliteStorageProvider>.Instance, _dbPath);
         _provider.InitializeAsync().GetAwaiter().GetResult();
-        _store = new SqliteMissionStore(_provider);
+        _store = new SqliteWorkflowStore(_provider);
     }
 
     public async ValueTask DisposeAsync()
@@ -25,7 +25,7 @@ public sealed class SqliteMissionStoreUpdatePrivacyTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task NewMission_DefaultsToPrivate()
+    public async Task NewWorkflow_DefaultsToPrivate()
     {
         var m = await _store.CreateAsync("goal", ownerUserId: "alice");
         var got = await _store.GetAsync(m.Id);

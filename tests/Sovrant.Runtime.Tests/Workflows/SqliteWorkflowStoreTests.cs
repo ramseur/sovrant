@@ -1,21 +1,21 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 using Sovrant.Runtime.Storage;
 
-namespace Sovrant.Runtime.Tests.Missions;
+namespace Sovrant.Runtime.Tests.Workflows;
 
-public sealed class SqliteMissionStoreTests : IAsyncDisposable
+public sealed class SqliteWorkflowStoreTests : IAsyncDisposable
 {
     private readonly string _dbPath;
     private readonly SqliteStorageProvider _provider;
-    private readonly SqliteMissionStore _store;
+    private readonly SqliteWorkflowStore _store;
 
-    public SqliteMissionStoreTests()
+    public SqliteWorkflowStoreTests()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"sovrant_missions_{Guid.NewGuid():N}.db");
         _provider = new SqliteStorageProvider(NullLogger<SqliteStorageProvider>.Instance, _dbPath);
         _provider.InitializeAsync().GetAwaiter().GetResult();
-        _store = new SqliteMissionStore(_provider);
+        _store = new SqliteWorkflowStore(_provider);
     }
 
     public async ValueTask DisposeAsync()
@@ -27,19 +27,19 @@ public sealed class SqliteMissionStoreTests : IAsyncDisposable
     [Fact]
     public async Task Create_PersistsRowAndWritesCreatedEvent()
     {
-        var mission = await _store.CreateAsync("ship the bugfix", ownerUserId: "alice");
+        var workflow = await _store.CreateAsync("ship the bugfix", ownerUserId: "alice");
 
-        Assert.Equal(MissionStatus.Planning, mission.Status);
-        Assert.Equal("ship the bugfix", mission.Goal);
-        Assert.Equal("alice", mission.OwnerUserId);
+        Assert.Equal(WorkflowStatus.Planning, workflow.Status);
+        Assert.Equal("ship the bugfix", workflow.Goal);
+        Assert.Equal("alice", workflow.OwnerUserId);
 
-        var fetched = await _store.GetAsync(mission.Id);
+        var fetched = await _store.GetAsync(workflow.Id);
         Assert.NotNull(fetched);
-        Assert.Equal(mission.Id, fetched!.Id);
+        Assert.Equal(workflow.Id, fetched!.Id);
 
-        var events = await _store.GetEventsAsync(mission.Id);
+        var events = await _store.GetEventsAsync(workflow.Id);
         Assert.Single(events);
-        Assert.Equal(MissionEventTypes.MissionCreated, events[0].EventType);
+        Assert.Equal(WorkflowEventTypes.WorkflowCreated, events[0].EventType);
     }
 
     [Fact]
@@ -56,18 +56,18 @@ public sealed class SqliteMissionStoreTests : IAsyncDisposable
         var m2 = await _store.CreateAsync("goal two", ownerUserId: "alice");
         var m3 = await _store.CreateAsync("goal three", ownerUserId: "bob");
 
-        await _store.UpdateStateAsync(m2.Id, MissionStatus.Completed,
+        await _store.UpdateStateAsync(m2.Id, WorkflowStatus.Completed,
             completedAt: DateTimeOffset.UtcNow);
 
         var aliceAll = await _store.ListAsync(ownerUserId: "alice");
         Assert.Equal(2, aliceAll.Count);
 
         var alicePlanning = await _store.ListAsync(
-            ownerUserId: "alice", status: MissionStatus.Planning);
+            ownerUserId: "alice", status: WorkflowStatus.Planning);
         Assert.Single(alicePlanning);
         Assert.Equal(m1.Id, alicePlanning[0].Id);
 
-        var allCompleted = await _store.ListAsync(status: MissionStatus.Completed);
+        var allCompleted = await _store.ListAsync(status: WorkflowStatus.Completed);
         Assert.Single(allCompleted);
         Assert.Equal(m2.Id, allCompleted[0].Id);
 
@@ -81,17 +81,17 @@ public sealed class SqliteMissionStoreTests : IAsyncDisposable
     {
         var m = await _store.CreateAsync("plan me");
         await _store.UpdateStateAsync(
-            m.Id, MissionStatus.Running, planJson: """{"v":1}""");
+            m.Id, WorkflowStatus.Running, planJson: """{"v":1}""");
 
         var fetched = (await _store.GetAsync(m.Id))!;
-        Assert.Equal(MissionStatus.Running, fetched.Status);
+        Assert.Equal(WorkflowStatus.Running, fetched.Status);
         Assert.Equal("""{"v":1}""", fetched.PlanJson);
         Assert.Null(fetched.CompletedAt);
 
         var when = DateTimeOffset.UtcNow;
-        await _store.UpdateStateAsync(m.Id, MissionStatus.Completed, completedAt: when);
+        await _store.UpdateStateAsync(m.Id, WorkflowStatus.Completed, completedAt: when);
         fetched = (await _store.GetAsync(m.Id))!;
-        Assert.Equal(MissionStatus.Completed, fetched.Status);
+        Assert.Equal(WorkflowStatus.Completed, fetched.Status);
         Assert.NotNull(fetched.CompletedAt);
     }
 
@@ -99,11 +99,11 @@ public sealed class SqliteMissionStoreTests : IAsyncDisposable
     public async Task UpdateState_NullPlanJson_PreservesExistingPlan()
     {
         var m = await _store.CreateAsync("keep plan");
-        await _store.UpdateStateAsync(m.Id, MissionStatus.Running, planJson: """{"v":1}""");
-        await _store.UpdateStateAsync(m.Id, MissionStatus.AwaitingHuman, planJson: null);
+        await _store.UpdateStateAsync(m.Id, WorkflowStatus.Running, planJson: """{"v":1}""");
+        await _store.UpdateStateAsync(m.Id, WorkflowStatus.AwaitingHuman, planJson: null);
 
         var fetched = (await _store.GetAsync(m.Id))!;
-        Assert.Equal(MissionStatus.AwaitingHuman, fetched.Status);
+        Assert.Equal(WorkflowStatus.AwaitingHuman, fetched.Status);
         Assert.Equal("""{"v":1}""", fetched.PlanJson);
     }
 
@@ -111,16 +111,16 @@ public sealed class SqliteMissionStoreTests : IAsyncDisposable
     public async Task AppendEvent_PreservesInsertionOrder()
     {
         var m = await _store.CreateAsync("journal test");
-        await _store.AppendEventAsync(m.Id, MissionEventTypes.RunStarted, """{"i":1}""");
-        await _store.AppendEventAsync(m.Id, MissionEventTypes.RunCompleted, """{"i":2}""");
-        await _store.AppendEventAsync(m.Id, MissionEventTypes.Completed, """{"i":3}""");
+        await _store.AppendEventAsync(m.Id, WorkflowEventTypes.RunStarted, """{"i":1}""");
+        await _store.AppendEventAsync(m.Id, WorkflowEventTypes.RunCompleted, """{"i":2}""");
+        await _store.AppendEventAsync(m.Id, WorkflowEventTypes.Completed, """{"i":3}""");
 
         var events = await _store.GetEventsAsync(m.Id);
         Assert.Equal(4, events.Count); // includes mission_created
-        Assert.Equal(MissionEventTypes.MissionCreated, events[0].EventType);
-        Assert.Equal(MissionEventTypes.RunStarted, events[1].EventType);
-        Assert.Equal(MissionEventTypes.RunCompleted, events[2].EventType);
-        Assert.Equal(MissionEventTypes.Completed, events[3].EventType);
+        Assert.Equal(WorkflowEventTypes.WorkflowCreated, events[0].EventType);
+        Assert.Equal(WorkflowEventTypes.RunStarted, events[1].EventType);
+        Assert.Equal(WorkflowEventTypes.RunCompleted, events[2].EventType);
+        Assert.Equal(WorkflowEventTypes.Completed, events[3].EventType);
 
         // IDs strictly increasing — proves insertion order survives read back.
         for (int i = 1; i < events.Count; i++)

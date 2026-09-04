@@ -4,28 +4,28 @@ using System.Text;
 namespace Sovrant.Runtime.Storage;
 
 /// <summary>
-/// Phase 51 — SQLite-backed <see cref="IMissionScratchpadStore"/>. Writes
-/// to the <c>mission_scratchpad</c> table (V010). Append-only: every
+/// Phase 51 — SQLite-backed <see cref="IWorkflowScratchpadStore"/>. Writes
+/// to the <c>workflow_scratchpad</c> table (V010). Append-only: every
 /// write produces a new row, and readers decide whether they want the
 /// full history or only the latest value per key.
 /// </summary>
-internal sealed class SqliteMissionScratchpadStore(ISqliteConnectionFactory connectionFactory) : IMissionScratchpadStore
+internal sealed class SqliteWorkflowScratchpadStore(ISqliteConnectionFactory connectionFactory) : IWorkflowScratchpadStore
 {
-    public async Task AppendAsync(MissionScratchpadEntry entry, CancellationToken ct = default)
+    public async Task AppendAsync(WorkflowScratchpadEntry entry, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(entry);
 
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO mission_scratchpad
-                (mission_id, step_index, agent_id, namespace, key, value,
+            INSERT INTO workflow_scratchpad
+                (workflow_id, step_index, agent_id, namespace, key, value,
                  workspace_id, project_id)
             VALUES
-                ($missionId, $stepIndex, $agentId, $namespace, $key, $value,
+                ($workflowId, $stepIndex, $agentId, $namespace, $key, $value,
                  $workspaceId, $projectId)
             """;
-        cmd.Parameters.AddWithValue("$missionId", entry.MissionId);
+        cmd.Parameters.AddWithValue("$workflowId", entry.WorkflowId);
         cmd.Parameters.AddWithValue("$stepIndex", entry.StepIndex);
         cmd.Parameters.AddWithValue("$agentId", (object?)entry.AgentId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$namespace", entry.Namespace);
@@ -36,24 +36,24 @@ internal sealed class SqliteMissionScratchpadStore(ISqliteConnectionFactory conn
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    public async Task<IReadOnlyList<MissionScratchpadEntry>> LoadAsync(
-        string missionId,
+    public async Task<IReadOnlyList<WorkflowScratchpadEntry>> LoadAsync(
+        string workflowId,
         int? stepIndex = null,
         string? @namespace = null,
         CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(missionId);
+        ArgumentNullException.ThrowIfNull(workflowId);
 
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
 
         var sql = new StringBuilder("""
-            SELECT mission_id, step_index, agent_id, namespace, key, value,
+            SELECT workflow_id, step_index, agent_id, namespace, key, value,
                    created_at, workspace_id, project_id
-            FROM mission_scratchpad
-            WHERE mission_id = $missionId
+            FROM workflow_scratchpad
+            WHERE workflow_id = $workflowId
             """);
-        cmd.Parameters.AddWithValue("$missionId", missionId);
+        cmd.Parameters.AddWithValue("$workflowId", workflowId);
 
         if (stepIndex.HasValue)
         {
@@ -71,7 +71,7 @@ internal sealed class SqliteMissionScratchpadStore(ISqliteConnectionFactory conn
 #pragma warning restore CA2100
 
         using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        var results = new List<MissionScratchpadEntry>();
+        var results = new List<WorkflowScratchpadEntry>();
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
             results.Add(await ReadRowAsync(reader, ct).ConfigureAwait(false));
@@ -79,29 +79,29 @@ internal sealed class SqliteMissionScratchpadStore(ISqliteConnectionFactory conn
         return results;
     }
 
-    public async Task<MissionScratchpadEntry?> ReadLatestAsync(
-        string missionId,
+    public async Task<WorkflowScratchpadEntry?> ReadLatestAsync(
+        string workflowId,
         string @namespace,
         string key,
         CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(missionId);
+        ArgumentNullException.ThrowIfNull(workflowId);
         ArgumentNullException.ThrowIfNull(@namespace);
         ArgumentNullException.ThrowIfNull(key);
 
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            SELECT mission_id, step_index, agent_id, namespace, key, value,
+            SELECT workflow_id, step_index, agent_id, namespace, key, value,
                    created_at, workspace_id, project_id
-            FROM mission_scratchpad
-            WHERE mission_id = $missionId
+            FROM workflow_scratchpad
+            WHERE workflow_id = $workflowId
               AND namespace  = $namespace
               AND key        = $key
             ORDER BY id DESC
             LIMIT 1
             """;
-        cmd.Parameters.AddWithValue("$missionId", missionId);
+        cmd.Parameters.AddWithValue("$workflowId", workflowId);
         cmd.Parameters.AddWithValue("$namespace", @namespace);
         cmd.Parameters.AddWithValue("$key", key);
 
@@ -111,22 +111,22 @@ internal sealed class SqliteMissionScratchpadStore(ISqliteConnectionFactory conn
         return await ReadRowAsync(reader, ct).ConfigureAwait(false);
     }
 
-    public async Task<int> DeleteMissionAsync(string missionId, CancellationToken ct = default)
+    public async Task<int> DeleteWorkflowAsync(string workflowId, CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(missionId);
+        ArgumentNullException.ThrowIfNull(workflowId);
 
         using var connection = connectionFactory.CreateConnection();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "DELETE FROM mission_scratchpad WHERE mission_id = $missionId";
-        cmd.Parameters.AddWithValue("$missionId", missionId);
+        cmd.CommandText = "DELETE FROM workflow_scratchpad WHERE workflow_id = $workflowId";
+        cmd.Parameters.AddWithValue("$workflowId", workflowId);
         return await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    private static async Task<MissionScratchpadEntry> ReadRowAsync(
+    private static async Task<WorkflowScratchpadEntry> ReadRowAsync(
         System.Data.Common.DbDataReader reader, CancellationToken ct)
     {
-        return new MissionScratchpadEntry(
-            MissionId: reader.GetString(0),
+        return new WorkflowScratchpadEntry(
+            WorkflowId: reader.GetString(0),
             StepIndex: reader.GetInt32(1),
             AgentId: await reader.IsDBNullAsync(2, ct).ConfigureAwait(false) ? null : reader.GetString(2),
             Namespace: reader.GetString(3),

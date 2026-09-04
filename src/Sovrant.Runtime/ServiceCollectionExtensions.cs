@@ -10,7 +10,7 @@ using Sovrant.Runtime.Hooks;
 using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Evals;
 using Sovrant.Runtime.Memory;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Preferences;
 using Sovrant.Runtime.Providers;
@@ -290,11 +290,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRuntimeTraceStore>(sp =>
             new SqliteRuntimeTraceStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
-        // Mission scratchpad (Phase 51) — typed, append-only shared store for
+        // Workflow scratchpad (Phase 51) — typed, append-only shared store for
         // parallel sub-agents within one mission to publish intermediate
         // findings the next plan wave can read.
-        services.AddSingleton<IMissionScratchpadStore>(sp =>
-            new SqliteMissionScratchpadStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+        services.AddSingleton<IWorkflowScratchpadStore>(sp =>
+            new SqliteWorkflowScratchpadStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
         // Context compactor (Phase 51) — folds older step outcomes into a
         // summary when the run history won't fit in the planner budget.
@@ -345,20 +345,20 @@ public static class ServiceCollectionExtensions
         // that need a bespoke step runner build their own executor.
         services.AddSingleton<Engine.IExecutor, Engine.LlmExecutor>();
 
-        // Mission layer (Phase 51) — long-lived goals sitting on top of the
+        // Workflow layer (Phase 51) — long-lived goals sitting on top of the
         // engine layer with acceptance gates and an append-only event
         // journal. The store owns V011 tables; the planner/executor/gate
         // are deliberately swap-in seams so production can later plug in
         // an LLM-backed planner without touching routes or storage.
-        services.AddSingleton<IMissionStore>(sp =>
-            new SqliteMissionStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
-        services.AddSingleton<IMissionPlanner, SimpleMissionPlanner>();
+        services.AddSingleton<IWorkflowStore>(sp =>
+            new SqliteWorkflowStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+        services.AddSingleton<IWorkflowPlanner, SimpleWorkflowPlanner>();
         services.AddSingleton<IAcceptanceGate, AllStepsSucceededGate>();
-        services.AddSingleton<IMissionExecutor, LlmMissionExecutor>();
-        services.AddSingleton<MissionExportService>();
+        services.AddSingleton<IWorkflowExecutor, LlmWorkflowExecutor>();
+        services.AddSingleton<WorkflowExportService>();
 
         // Autonomous-driver layer (Phase 67) — named strategies for advancing
-        // a mission forward. The LLM driver wraps IMissionExecutor; additional
+        // a mission forward. The LLM driver wraps IWorkflowExecutor; additional
         // drivers (swarm, external orchestrator) register alongside it and are
         // resolved by name through DriverRegistry.
         services.AddSingleton<IAutonomousDriver, LlmAutonomousDriver>();

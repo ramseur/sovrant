@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace Sovrant.Runtime.Missions;
+namespace Sovrant.Runtime.Workflows;
 
 /// <summary>
 /// Phase 67 — lookup for registered <see cref="IAutonomousDriver"/>s by

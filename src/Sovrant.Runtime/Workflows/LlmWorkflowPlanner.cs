@@ -5,12 +5,12 @@ using Microsoft.Extensions.Logging;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Engine;
 
-namespace Sovrant.Runtime.Missions;
+namespace Sovrant.Runtime.Workflows;
 
 /// <summary>
-/// Phase 51 — LLM-backed <see cref="IMissionPlanner"/>. Asks a model
+/// Phase 51 — LLM-backed <see cref="IWorkflowPlanner"/>. Asks a model
 /// to decompose a mission goal into a multi-step <see cref="RuntimePlan"/>
-/// instead of the single-step stub the <see cref="SimpleMissionPlanner"/>
+/// instead of the single-step stub the <see cref="SimpleWorkflowPlanner"/>
 /// produces. Falls back to the simple planner if the LLM call fails or
 /// returns unparseable output so the mission layer never stalls on a
 /// planning error.
@@ -21,26 +21,26 @@ namespace Sovrant.Runtime.Missions;
 /// parses the array and builds a <see cref="RuntimePlan"/> with
 /// contiguous indexes.
 /// </summary>
-public sealed partial class LlmMissionPlanner : IMissionPlanner
+public sealed partial class LlmWorkflowPlanner : IWorkflowPlanner
 {
-    [LoggerMessage(Level = LogLevel.Warning, Message = "LlmMissionPlanner: LLM decomposition failed, falling back to simple planner: {Error}")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "LlmWorkflowPlanner: LLM decomposition failed, falling back to simple planner: {Error}")]
     private static partial void LogFallback(ILogger logger, string error);
 
     private readonly IRuntimeSessionPool _sessionPool;
-    private readonly SimpleMissionPlanner _fallback = new();
-    private readonly ILogger<LlmMissionPlanner> _logger;
+    private readonly SimpleWorkflowPlanner _fallback = new();
+    private readonly ILogger<LlmWorkflowPlanner> _logger;
 
     private const string PlannerSessionId = "__sovrant_mission_planner__";
 
-    public LlmMissionPlanner(
+    public LlmWorkflowPlanner(
         IRuntimeSessionPool sessionPool,
-        ILogger<LlmMissionPlanner>? logger = null)
+        ILogger<LlmWorkflowPlanner>? logger = null)
     {
         _sessionPool = sessionPool ?? throw new ArgumentNullException(nameof(sessionPool));
-        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<LlmMissionPlanner>.Instance;
+        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<LlmWorkflowPlanner>.Instance;
     }
 
-    public async Task<RuntimePlan> PlanAsync(Mission mission, CancellationToken ct = default)
+    public async Task<RuntimePlan> PlanAsync(Workflow mission, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(mission);
 
@@ -94,7 +94,7 @@ public sealed partial class LlmMissionPlanner : IMissionPlanner
         return text.ToString().Trim();
     }
 
-    private static string BuildPrompt(Mission mission) =>
+    private static string BuildPrompt(Workflow mission) =>
         $$"""
         You are a mission planner. Decompose the following goal into 2-8 concrete steps
         that an autonomous coding agent can execute sequentially. Each step should be
@@ -105,7 +105,7 @@ public sealed partial class LlmMissionPlanner : IMissionPlanner
 
         model_tier must be one of: "high" (reasoning-heavy), "standard" (normal), "fast" (mechanical).
 
-        Mission goal: {{mission.Goal}}
+        Workflow goal: {{mission.Goal}}
         """;
 
     private static List<RuntimeStep> ParseSteps(string rawJson)

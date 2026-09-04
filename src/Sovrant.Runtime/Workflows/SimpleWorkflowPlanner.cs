@@ -1,19 +1,19 @@
 using Sovrant.Runtime.Engine;
 
-namespace Sovrant.Runtime.Missions;
+namespace Sovrant.Runtime.Workflows;
 
 /// <summary>
 /// Phase 51 — deterministic mission planner used as the default
-/// <see cref="IMissionPlanner"/>. Produces a single-step plan whose
+/// <see cref="IWorkflowPlanner"/>. Produces a single-step plan whose
 /// intent is the mission's goal and whose expected outcome is
 /// "goal satisfied". This is intentionally minimal: the value of the
 /// mission layer at this point is the orchestration + journal, not the
 /// planner sophistication. An LLM-backed planner can slot in later
 /// without touching the executor or store.
 /// </summary>
-public sealed class SimpleMissionPlanner : IMissionPlanner
+public sealed class SimpleWorkflowPlanner : IWorkflowPlanner
 {
-    public Task<RuntimePlan> PlanAsync(Mission mission, CancellationToken ct = default)
+    public Task<RuntimePlan> PlanAsync(Workflow mission, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(mission);
 

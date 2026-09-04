@@ -28,7 +28,7 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private string _errorMessage = string.Empty;
-    [ObservableProperty] private int _activeMissions;
+    [ObservableProperty] private int _activeWorkflows;
     [ObservableProperty] private int _activeTeamRuns;
     [ObservableProperty] private int _activeAgentRuns;
     [ObservableProperty] private int _activeSessions;
@@ -227,7 +227,7 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (IsFocused) return;
-                ActiveMissions = state.ActiveMissions;
+                ActiveWorkflows = state.ActiveWorkflows;
                 ActiveTeamRuns = state.ActiveTeamRuns;
                 ActiveAgentRuns = state.ActiveAgentRuns;
                 ActiveSessions = state.ActiveSessions;

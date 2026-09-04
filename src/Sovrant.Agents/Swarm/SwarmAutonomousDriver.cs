@@ -1,35 +1,35 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 
 namespace Sovrant.Agents.Swarm;
 
 /// <summary>
-/// Phase 67 — autonomous driver that advances a mission by decomposing its
+/// Phase 67 — autonomous driver that advances a workflow by decomposing its
 /// goal into a <see cref="SwarmPlan"/> and running it through
 /// <see cref="ISwarmOrchestrator"/>. Swarm events are projected onto the
-/// mission journal so the mission's history is consistent regardless of
+/// workflow journal so the workflow's history is consistent regardless of
 /// which driver advanced it.
 /// </summary>
 public sealed partial class SwarmAutonomousDriver : IAutonomousDriver
 {
     public const string DriverName = "swarm";
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "SwarmDriver: advancing mission {MissionId}")]
-    private static partial void LogStart(ILogger logger, string missionId);
+    [LoggerMessage(Level = LogLevel.Information, Message = "SwarmDriver: advancing workflow {WorkflowId}")]
+    private static partial void LogStart(ILogger logger, string workflowId);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "SwarmDriver: mission {MissionId} terminal state {State} (swarm {SwarmStatus})")]
-    private static partial void LogTerminal(ILogger logger, string missionId, MissionStatus state, SwarmStatus swarmStatus);
+    [LoggerMessage(Level = LogLevel.Information, Message = "SwarmDriver: workflow {WorkflowId} terminal state {State} (swarm {SwarmStatus})")]
+    private static partial void LogTerminal(ILogger logger, string workflowId, WorkflowStatus state, SwarmStatus swarmStatus);
 
-    private readonly IMissionStore _store;
+    private readonly IWorkflowStore _store;
     private readonly ISwarmDecomposer _decomposer;
     private readonly ISwarmOrchestrator _orchestrator;
     private readonly SwarmConfig _config;
     private readonly ILogger<SwarmAutonomousDriver> _logger;
 
     public SwarmAutonomousDriver(
-        IMissionStore store,
+        IWorkflowStore store,
         ISwarmDecomposer decomposer,
         ISwarmOrchestrator orchestrator,
         SwarmConfig config,
@@ -50,23 +50,23 @@ public sealed partial class SwarmAutonomousDriver : IAutonomousDriver
         SupportsHumanAcceptance: false,
         MaxStepsPerCycle: int.MaxValue);
 
-    public async Task<Mission> AdvanceAsync(string missionId, CancellationToken ct = default)
+    public async Task<Workflow> AdvanceAsync(string workflowId, CancellationToken ct = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(missionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowId);
 
-        var mission = await _store.GetAsync(missionId, ct).ConfigureAwait(false)
-            ?? throw new InvalidOperationException($"mission {missionId} not found");
+        var workflow = await _store.GetAsync(workflowId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"workflow {workflowId} not found");
 
-        if (mission.Status is MissionStatus.Completed
-                          or MissionStatus.Failed
-                          or MissionStatus.Cancelled)
+        if (workflow.Status is WorkflowStatus.Completed
+                          or WorkflowStatus.Failed
+                          or WorkflowStatus.Cancelled)
         {
-            return mission;
+            return workflow;
         }
 
-        LogStart(_logger, missionId);
+        LogStart(_logger, workflowId);
 
-        var plan = await _decomposer.DecomposeAsync(mission.Goal, _config, ct).ConfigureAwait(false);
+        var plan = await _decomposer.DecomposeAsync(workflow.Goal, _config, ct).ConfigureAwait(false);
         var planJson = JsonSerializer.Serialize(new
         {
             driver = DriverName,
@@ -75,12 +75,12 @@ public sealed partial class SwarmAutonomousDriver : IAutonomousDriver
             wave_count = plan.WaveCount,
         });
 
-        await _store.AppendEventAsync(missionId, MissionEventTypes.PlanRevised, planJson,
-            mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
-        await _store.UpdateStateAsync(missionId, MissionStatus.Running, planJson: planJson, ct: ct).ConfigureAwait(false);
-        await _store.AppendEventAsync(missionId, MissionEventTypes.RunStarted,
+        await _store.AppendEventAsync(workflowId, WorkflowEventTypes.PlanRevised, planJson,
+            workflow.WorkspaceId, workflow.ProjectId, ct).ConfigureAwait(false);
+        await _store.UpdateStateAsync(workflowId, WorkflowStatus.Running, planJson: planJson, ct: ct).ConfigureAwait(false);
+        await _store.AppendEventAsync(workflowId, WorkflowEventTypes.RunStarted,
             JsonSerializer.Serialize(new { driver = DriverName, swarm_id = plan.Id }),
-            mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
+            workflow.WorkspaceId, workflow.ProjectId, ct).ConfigureAwait(false);
 
         var buffered = new ConcurrentQueue<SwarmEvent>();
 
@@ -95,38 +95,38 @@ public sealed partial class SwarmAutonomousDriver : IAutonomousDriver
         }
         catch (OperationCanceledException)
         {
-            await FlushBufferedEventsAsync(missionId, mission, buffered, ct: CancellationToken.None).ConfigureAwait(false);
-            await _store.AppendEventAsync(missionId, MissionEventTypes.Cancelled, "{}",
-                mission.WorkspaceId, mission.ProjectId, CancellationToken.None).ConfigureAwait(false);
-            await _store.UpdateStateAsync(missionId, MissionStatus.Cancelled,
+            await FlushBufferedEventsAsync(workflowId, workflow, buffered, ct: CancellationToken.None).ConfigureAwait(false);
+            await _store.AppendEventAsync(workflowId, WorkflowEventTypes.Cancelled, "{}",
+                workflow.WorkspaceId, workflow.ProjectId, CancellationToken.None).ConfigureAwait(false);
+            await _store.UpdateStateAsync(workflowId, WorkflowStatus.Cancelled,
                 completedAt: DateTimeOffset.UtcNow, ct: CancellationToken.None).ConfigureAwait(false);
             throw;
         }
         catch (Exception ex)
         {
-            await FlushBufferedEventsAsync(missionId, mission, buffered, ct).ConfigureAwait(false);
-            await _store.AppendEventAsync(missionId, MissionEventTypes.Failed,
+            await FlushBufferedEventsAsync(workflowId, workflow, buffered, ct).ConfigureAwait(false);
+            await _store.AppendEventAsync(workflowId, WorkflowEventTypes.Failed,
                 JsonSerializer.Serialize(new { error = ex.Message }),
-                mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
-            await _store.UpdateStateAsync(missionId, MissionStatus.Failed,
+                workflow.WorkspaceId, workflow.ProjectId, ct).ConfigureAwait(false);
+            await _store.UpdateStateAsync(workflowId, WorkflowStatus.Failed,
                 completedAt: DateTimeOffset.UtcNow, ct: ct).ConfigureAwait(false);
-            return await _store.GetAsync(missionId, ct).ConfigureAwait(false)
-                ?? throw new InvalidOperationException($"mission {missionId} disappeared after failure");
+            return await _store.GetAsync(workflowId, ct).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"workflow {workflowId} disappeared after failure");
         }
 
-        await FlushBufferedEventsAsync(missionId, mission, buffered, ct).ConfigureAwait(false);
+        await FlushBufferedEventsAsync(workflowId, workflow, buffered, ct).ConfigureAwait(false);
 
         var terminalStatus = result.Status switch
         {
-            SwarmStatus.Completed => MissionStatus.Completed,
-            SwarmStatus.Cancelled => MissionStatus.Cancelled,
-            _ => MissionStatus.Failed,
+            SwarmStatus.Completed => WorkflowStatus.Completed,
+            SwarmStatus.Cancelled => WorkflowStatus.Cancelled,
+            _ => WorkflowStatus.Failed,
         };
         var terminalEventType = terminalStatus switch
         {
-            MissionStatus.Completed => MissionEventTypes.Completed,
-            MissionStatus.Cancelled => MissionEventTypes.Cancelled,
-            _ => MissionEventTypes.Failed,
+            WorkflowStatus.Completed => WorkflowEventTypes.Completed,
+            WorkflowStatus.Cancelled => WorkflowEventTypes.Cancelled,
+            _ => WorkflowEventTypes.Failed,
         };
 
         var runCompletedPayload = JsonSerializer.Serialize(new
@@ -139,27 +139,27 @@ public sealed partial class SwarmAutonomousDriver : IAutonomousDriver
             combined_output_len = result.CombinedOutput?.Length ?? 0,
         });
 
-        await _store.AppendEventAsync(missionId, MissionEventTypes.RunCompleted, runCompletedPayload,
-            mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
-        await _store.AppendEventAsync(missionId, terminalEventType, "{}",
-            mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
-        await _store.UpdateStateAsync(missionId, terminalStatus,
+        await _store.AppendEventAsync(workflowId, WorkflowEventTypes.RunCompleted, runCompletedPayload,
+            workflow.WorkspaceId, workflow.ProjectId, ct).ConfigureAwait(false);
+        await _store.AppendEventAsync(workflowId, terminalEventType, "{}",
+            workflow.WorkspaceId, workflow.ProjectId, ct).ConfigureAwait(false);
+        await _store.UpdateStateAsync(workflowId, terminalStatus,
             completedAt: DateTimeOffset.UtcNow, ct: ct).ConfigureAwait(false);
 
-        LogTerminal(_logger, missionId, terminalStatus, result.Status);
+        LogTerminal(_logger, workflowId, terminalStatus, result.Status);
 
-        return await _store.GetAsync(missionId, ct).ConfigureAwait(false)
-            ?? throw new InvalidOperationException($"mission {missionId} disappeared after completion");
+        return await _store.GetAsync(workflowId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"workflow {workflowId} disappeared after completion");
     }
 
     private async Task FlushBufferedEventsAsync(
-        string missionId, Mission mission, ConcurrentQueue<SwarmEvent> buffered, CancellationToken ct)
+        string workflowId, Workflow workflow, ConcurrentQueue<SwarmEvent> buffered, CancellationToken ct)
     {
         while (buffered.TryDequeue(out var ev))
         {
             var payload = JsonSerializer.Serialize<object>(ev);
-            await _store.AppendEventAsync(missionId, SwarmEventTypeFor(ev), payload,
-                mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
+            await _store.AppendEventAsync(workflowId, SwarmEventTypeFor(ev), payload,
+                workflow.WorkspaceId, workflow.ProjectId, ct).ConfigureAwait(false);
         }
     }
 

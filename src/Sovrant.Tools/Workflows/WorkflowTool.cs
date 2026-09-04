@@ -1,30 +1,30 @@
 using System.Text.Json;
 using Sovrant.Api.Types;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 
-namespace Sovrant.Tools.Missions;
+namespace Sovrant.Tools.Workflows;
 
 /// <summary>
-/// Phase 51 — exposes mission lifecycle to running agents so they can
-/// spawn sub-missions, check status, or read the event journal from
+/// Phase 51 — exposes workflow lifecycle to running agents so they can
+/// spawn sub-workflows, check status, or read the event journal from
 /// inside a tool call. This lets a parent agent delegate a sub-goal
-/// as a full mission (with its own plan/execute/gate/journal cycle)
+/// as a full workflow (with its own plan/execute/gate/journal cycle)
 /// rather than trying to drive every step itself.
 /// </summary>
-public sealed class MissionTool : ITool
+public sealed class WorkflowTool : ITool
 {
-    private static readonly ToolDefinition s_definition = new("Mission", CreateSchema())
+    private static readonly ToolDefinition s_definition = new("Workflow", CreateSchema())
     {
         Description =
-            "Manage autonomous missions. Actions: 'create' (spawn a new mission from a goal), " +
-            "'run' (drive a mission forward one engine cycle), 'get' (fetch current state), " +
-            "'events' (read the full event journal), 'list' (list missions, optionally filtered).",
+            "Manage autonomous workflows. Actions: 'create' (spawn a new workflow from a goal), " +
+            "'run' (drive a workflow forward one engine cycle), 'get' (fetch current state), " +
+            "'events' (read the full event journal), 'list' (list workflows, optionally filtered).",
     };
 
-    private readonly IMissionStore _store;
-    private readonly IMissionExecutor _executor;
+    private readonly IWorkflowStore _store;
+    private readonly IWorkflowExecutor _executor;
 
-    public MissionTool(IMissionStore store, IMissionExecutor executor)
+    public WorkflowTool(IWorkflowStore store, IWorkflowExecutor executor)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
@@ -56,7 +56,7 @@ public sealed class MissionTool : ITool
         if (string.IsNullOrWhiteSpace(goal))
             return "Error: 'goal' is required for action 'create'.";
 
-        var mission = await _store.CreateAsync(
+        var workflow = await _store.CreateAsync(
             goal,
             sessionId: input.GetStringProp("session_id"),
             workspaceId: input.GetStringProp("workspace_id"),
@@ -66,45 +66,45 @@ public sealed class MissionTool : ITool
 
         return JsonSerializer.Serialize(new
         {
-            mission_id = mission.Id,
-            status = mission.Status switch
+            workflow_id = workflow.Id,
+            status = workflow.Status switch
             {
-                MissionStatus.Planning => "planning",
-                MissionStatus.Running => "running",
-                MissionStatus.AwaitingHuman => "awaiting_human",
-                MissionStatus.Completed => "completed",
-                MissionStatus.Failed => "failed",
-                MissionStatus.Cancelled => "cancelled",
+                WorkflowStatus.Planning => "planning",
+                WorkflowStatus.Running => "running",
+                WorkflowStatus.AwaitingHuman => "awaiting_human",
+                WorkflowStatus.Completed => "completed",
+                WorkflowStatus.Failed => "failed",
+                WorkflowStatus.Cancelled => "cancelled",
                 _ => "unknown",
             },
-            goal = mission.Goal,
-            created_at = mission.CreatedAt,
+            goal = workflow.Goal,
+            created_at = workflow.CreatedAt,
         });
     }
 
     private async Task<string> RunAsync(JsonElement input, CancellationToken ct)
     {
-        var missionId = input.GetStringProp("mission_id");
-        if (string.IsNullOrWhiteSpace(missionId))
-            return "Error: 'mission_id' is required for action 'run'.";
+        var workflowId = input.GetStringProp("workflow_id");
+        if (string.IsNullOrWhiteSpace(workflowId))
+            return "Error: 'workflow_id' is required for action 'run'.";
 
         try
         {
-            var mission = await _executor.RunAsync(missionId, ct).ConfigureAwait(false);
+            var workflow = await _executor.RunAsync(workflowId, ct).ConfigureAwait(false);
             return JsonSerializer.Serialize(new
             {
-                mission_id = mission.Id,
-                status = mission.Status switch
+                workflow_id = workflow.Id,
+                status = workflow.Status switch
             {
-                MissionStatus.Planning => "planning",
-                MissionStatus.Running => "running",
-                MissionStatus.AwaitingHuman => "awaiting_human",
-                MissionStatus.Completed => "completed",
-                MissionStatus.Failed => "failed",
-                MissionStatus.Cancelled => "cancelled",
+                WorkflowStatus.Planning => "planning",
+                WorkflowStatus.Running => "running",
+                WorkflowStatus.AwaitingHuman => "awaiting_human",
+                WorkflowStatus.Completed => "completed",
+                WorkflowStatus.Failed => "failed",
+                WorkflowStatus.Cancelled => "cancelled",
                 _ => "unknown",
             },
-                completed_at = mission.CompletedAt,
+                completed_at = workflow.CompletedAt,
             });
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.Ordinal))
@@ -115,45 +115,45 @@ public sealed class MissionTool : ITool
 
     private async Task<string> GetAsync(JsonElement input, CancellationToken ct)
     {
-        var missionId = input.GetStringProp("mission_id");
-        if (string.IsNullOrWhiteSpace(missionId))
-            return "Error: 'mission_id' is required for action 'get'.";
+        var workflowId = input.GetStringProp("workflow_id");
+        if (string.IsNullOrWhiteSpace(workflowId))
+            return "Error: 'workflow_id' is required for action 'get'.";
 
-        var mission = await _store.GetAsync(missionId, ct).ConfigureAwait(false);
-        if (mission is null)
-            return $"Mission '{missionId}' not found.";
+        var workflow = await _store.GetAsync(workflowId, ct).ConfigureAwait(false);
+        if (workflow is null)
+            return $"Workflow '{workflowId}' not found.";
 
         return JsonSerializer.Serialize(new
         {
-            mission_id = mission.Id,
-            goal = mission.Goal,
-            status = mission.Status switch
+            workflow_id = workflow.Id,
+            goal = workflow.Goal,
+            status = workflow.Status switch
             {
-                MissionStatus.Planning => "planning",
-                MissionStatus.Running => "running",
-                MissionStatus.AwaitingHuman => "awaiting_human",
-                MissionStatus.Completed => "completed",
-                MissionStatus.Failed => "failed",
-                MissionStatus.Cancelled => "cancelled",
+                WorkflowStatus.Planning => "planning",
+                WorkflowStatus.Running => "running",
+                WorkflowStatus.AwaitingHuman => "awaiting_human",
+                WorkflowStatus.Completed => "completed",
+                WorkflowStatus.Failed => "failed",
+                WorkflowStatus.Cancelled => "cancelled",
                 _ => "unknown",
             },
-            plan_json = mission.PlanJson,
-            created_at = mission.CreatedAt,
-            updated_at = mission.UpdatedAt,
-            completed_at = mission.CompletedAt,
-            workspace_id = mission.WorkspaceId,
-            project_id = mission.ProjectId,
-            owner_user_id = mission.OwnerUserId,
+            plan_json = workflow.PlanJson,
+            created_at = workflow.CreatedAt,
+            updated_at = workflow.UpdatedAt,
+            completed_at = workflow.CompletedAt,
+            workspace_id = workflow.WorkspaceId,
+            project_id = workflow.ProjectId,
+            owner_user_id = workflow.OwnerUserId,
         });
     }
 
     private async Task<string> EventsAsync(JsonElement input, CancellationToken ct)
     {
-        var missionId = input.GetStringProp("mission_id");
-        if (string.IsNullOrWhiteSpace(missionId))
-            return "Error: 'mission_id' is required for action 'events'.";
+        var workflowId = input.GetStringProp("workflow_id");
+        if (string.IsNullOrWhiteSpace(workflowId))
+            return "Error: 'workflow_id' is required for action 'events'.";
 
-        var events = await _store.GetEventsAsync(missionId, ct).ConfigureAwait(false);
+        var events = await _store.GetEventsAsync(workflowId, ct).ConfigureAwait(false);
         return JsonSerializer.Serialize(events.Select(e => new
         {
             id = e.Id,
@@ -167,27 +167,27 @@ public sealed class MissionTool : ITool
     {
         var owner = input.GetStringProp("owner_user_id");
         var statusText = input.GetStringProp("status");
-        MissionStatus? statusFilter = null;
+        WorkflowStatus? statusFilter = null;
         if (!string.IsNullOrWhiteSpace(statusText)
-            && Enum.TryParse<MissionStatus>(statusText, ignoreCase: true, out var parsed))
+            && Enum.TryParse<WorkflowStatus>(statusText, ignoreCase: true, out var parsed))
         {
             statusFilter = parsed;
         }
 
         var limit = input.GetIntProp("limit", 20);
-        var missions = await _store.ListAsync(owner, statusFilter, limit, ct).ConfigureAwait(false);
-        return JsonSerializer.Serialize(missions.Select(m => new
+        var workflows = await _store.ListAsync(owner, statusFilter, limit, ct).ConfigureAwait(false);
+        return JsonSerializer.Serialize(workflows.Select(m => new
         {
-            mission_id = m.Id,
+            workflow_id = m.Id,
             goal = m.Goal,
             status = m.Status switch
             {
-                MissionStatus.Planning => "planning",
-                MissionStatus.Running => "running",
-                MissionStatus.AwaitingHuman => "awaiting_human",
-                MissionStatus.Completed => "completed",
-                MissionStatus.Failed => "failed",
-                MissionStatus.Cancelled => "cancelled",
+                WorkflowStatus.Planning => "planning",
+                WorkflowStatus.Running => "running",
+                WorkflowStatus.AwaitingHuman => "awaiting_human",
+                WorkflowStatus.Completed => "completed",
+                WorkflowStatus.Failed => "failed",
+                WorkflowStatus.Cancelled => "cancelled",
                 _ => "unknown",
             },
             created_at = m.CreatedAt,
@@ -201,15 +201,15 @@ public sealed class MissionTool : ITool
                 "action": {
                     "type": "string",
                     "enum": ["create", "run", "get", "events", "list"],
-                    "description": "The mission action to perform."
+                    "description": "The workflow action to perform."
                 },
                 "goal": {
                     "type": "string",
-                    "description": "The mission goal (required for 'create')."
+                    "description": "The workflow goal (required for 'create')."
                 },
-                "mission_id": {
+                "workflow_id": {
                     "type": "string",
-                    "description": "Mission ID (required for 'run', 'get', 'events')."
+                    "description": "Workflow ID (required for 'run', 'get', 'events')."
                 },
                 "owner_user_id": {
                     "type": "string",
