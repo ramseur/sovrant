@@ -21,6 +21,12 @@
                     Padding="12,0" Height="40" Margin="0,1" CornerRadius="8" FontSize="13.5"
                     Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBgSoft}, ConverterParameter=Orchestration}"
                     Foreground="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavFgOrText}, ConverterParameter=Orchestration}" />
+            <Button Content="Workflows"
+                    Command="{Binding NavigateCommand}" CommandParameter="Workflows"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Center"
+                    Padding="12,0" Height="40" Margin="0,1" CornerRadius="8" FontSize="13.5"
+                    Background="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavBgSoft}, ConverterParameter=Workflows}"
+                    Foreground="{Binding SelectedNavItem, Converter={x:Static vm:NavActiveBrushConverter.SubNavFgOrText}, ConverterParameter=Workflows}" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

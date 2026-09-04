@@ -18,7 +18,7 @@ internal static class PrivacyRoutes
     public static void Map(WebApplication app)
     {
         app.MapPatch("/v1/sessions/{id}/privacy", UpdateSessionPrivacy);
-        app.MapPatch("/v1/missions/{id}/privacy", UpdateWorkflowPrivacy);
+        app.MapPatch("/v1/workflows/{id}/privacy", UpdateWorkflowPrivacy);
         app.MapPatch("/v1/agent-runs/{id}/privacy", UpdateAgentRunPrivacy);
     }
 

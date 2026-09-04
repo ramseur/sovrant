@@ -1,0 +1,265 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.WorkflowsView"
+             x:DataType="vm:WorkflowsViewModel"
+             Background="{DynamicResource SurfaceBackground}">
+
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="8">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{Binding WorkflowCount}" FontSize="12"
+                               Foreground="{DynamicResource TextSecondary}"
+                               VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <Button Content="+ New" ToolTip.Tip="New workflow"
+                            Command="{Binding StartCreateCommand}"
+                            Padding="10,5" CornerRadius="6" FontSize="12" FontWeight="SemiBold"
+                            Background="{DynamicResource BrandPrimary}" Foreground="White" />
+                    <Button Content="Refresh"
+                            Command="{Binding RefreshCommand}"
+                            Padding="10,5" CornerRadius="6" FontSize="12"
+                            Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="Workflows" FontSize="24" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                               Text="Give an AI team a goal — the scheduler keeps it moving on its own." />
+                </StackPanel>
+            </DockPanel>
+            <TextBlock Text="{Binding StatusMessage}" FontSize="11"
+                       Foreground="{DynamicResource TextMuted}"
+                       IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+
+        <Grid Margin="32,12,32,24" ColumnDefinitions="320,12,*">
+
+            <!-- Master: workflow list -->
+            <Border Grid.Column="0" CornerRadius="10"
+                    Background="{DynamicResource SurfaceCard}"
+                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                    Padding="8">
+                <ScrollViewer>
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="No workflows yet. Click + New to create one."
+                                   FontSize="12" TextWrapping="Wrap" Margin="8"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   IsVisible="{Binding !WorkflowCount}" />
+
+                        <ItemsControl ItemsSource="{Binding Workflows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:WorkflowItemViewModel">
+                                    <Button Command="{Binding $parent[UserControl].((vm:WorkflowsViewModel)DataContext).SelectWorkflowCommand}"
+                                            CommandParameter="{Binding}"
+                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                            Padding="10,8" Margin="0,2" CornerRadius="6"
+                                            Background="Transparent" BorderThickness="0" Cursor="Hand">
+                                        <StackPanel Spacing="4">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <Border Padding="6,2" CornerRadius="4"
+                                                        Background="{DynamicResource BrandPrimary}">
+                                                    <TextBlock Text="{Binding StatusName}"
+                                                               FontSize="10" FontWeight="SemiBold"
+                                                               Foreground="White" />
+                                                </Border>
+                                                <TextBlock Text="{Binding Goal}"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextPrimary}"
+                                                           VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Subtitle}"
+                                                       FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Detail pane -->
+            <Grid Grid.Column="2">
+
+                <!-- Create workflow panel -->
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding IsCreating}">
+                    <StackPanel Spacing="16" MaxWidth="480">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Cancel"
+                                    Command="{Binding CancelCreateCommand}"
+                                    Padding="10,5" CornerRadius="4" FontSize="11"
+                                    Background="Transparent" Foreground="{DynamicResource TextPrimary}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" />
+                            <TextBlock Text="New Workflow" FontSize="18" FontWeight="Bold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+                        </DockPanel>
+
+                        <Border Padding="14" CornerRadius="8"
+                                Background="{DynamicResource SurfaceBackground}"
+                                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Goal" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextSecondary}" />
+                                <TextBox Text="{Binding CreateGoal, Mode=TwoWay}"
+                                         Watermark="Describe what you want accomplished…"
+                                         AcceptsReturn="True" MinHeight="70"
+                                         CornerRadius="6" Padding="8,6" />
+                            </StackPanel>
+                        </Border>
+
+                        <Button Content="Create Workflow"
+                                Command="{Binding ConfirmCreateCommand}"
+                                IsEnabled="{Binding CreateGoal, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                HorizontalAlignment="Left"
+                                Padding="16,8" CornerRadius="8"
+                                Background="{DynamicResource BrandPrimary}"
+                                Foreground="White" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Empty state -->
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding HasNoSelection}">
+                    <TextBlock Text="Select a workflow to view details"
+                               FontSize="14" Foreground="{DynamicResource TextMuted}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+
+                <!-- Workflow detail -->
+                <Border CornerRadius="10"
+                        Background="{DynamicResource SurfaceCard}"
+                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        Padding="20,16"
+                        IsVisible="{Binding HasSelection}">
+                    <ScrollViewer>
+                        <StackPanel Spacing="16" DataContext="{Binding SelectedWorkflow}">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="Cancel"
+                                        Command="{Binding $parent[UserControl].((vm:WorkflowsViewModel)DataContext).CancelWorkflowCommand}"
+                                        IsVisible="{Binding !IsTerminal}"
+                                        Padding="10,5" CornerRadius="4" FontSize="11"
+                                        Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
+                                <StackPanel Spacing="4">
+                                    <Border Padding="6,2" CornerRadius="4" HorizontalAlignment="Left"
+                                            Background="{DynamicResource BrandPrimary}">
+                                        <TextBlock Text="{Binding StatusName}"
+                                                   FontSize="10" FontWeight="SemiBold"
+                                                   Foreground="White" />
+                                    </Border>
+                                    <TextBlock Text="{Binding Goal}"
+                                               FontSize="16" FontWeight="Bold" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextPrimary}" />
+                                </StackPanel>
+                            </DockPanel>
+
+                            <!-- ── Plan ──────────────────────────────────── -->
+                            <TextBlock Text="Plan" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+
+                            <TextBlock Text="No plan yet." FontSize="12"
+                                       Foreground="{DynamicResource TextMuted}"
+                                       IsVisible="{Binding !Steps.Count}" />
+
+                            <ItemsControl ItemsSource="{Binding Steps}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vm:PlanStepViewModel">
+                                        <Border Margin="0,3" Padding="10,8" CornerRadius="6"
+                                                Background="{DynamicResource SurfaceBackground}"
+                                                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                            <DockPanel>
+                                                <Border DockPanel.Dock="Right" Padding="6,2" CornerRadius="4"
+                                                        Background="{DynamicResource SurfaceHover}"
+                                                        VerticalAlignment="Top">
+                                                    <TextBlock Text="{Binding Tier}"
+                                                               FontSize="10" Foreground="{DynamicResource TextSecondary}" />
+                                                </Border>
+                                                <StackPanel Spacing="3">
+                                                    <TextBlock FontSize="13" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextPrimary}"
+                                                               TextWrapping="Wrap">
+                                                        <Run Text="{Binding Index}" />
+                                                        <Run Text=". " />
+                                                        <Run Text="{Binding Intent}" />
+                                                    </TextBlock>
+                                                    <TextBlock Text="{Binding Expected}"
+                                                               FontSize="11" TextWrapping="Wrap"
+                                                               Foreground="{DynamicResource TextSecondary}" />
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- ── Event journal ─────────────────────────── -->
+                            <TextBlock Text="Event Journal" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" />
+
+                            <TextBlock Text="No events yet." FontSize="12"
+                                       Foreground="{DynamicResource TextMuted}"
+                                       IsVisible="{Binding !Events.Count}" />
+
+                            <Border IsVisible="{Binding Events.Count}"
+                                    Padding="10,4" CornerRadius="8"
+                                    Background="{DynamicResource SurfaceBackground}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                <ItemsControl ItemsSource="{Binding Events}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="vm:WorkflowEventItemViewModel">
+                                            <DockPanel Margin="0,5">
+                                                <TextBlock Text="{Binding Timestamp}" DockPanel.Dock="Left"
+                                                           FontFamily="Consolas,Menlo,monospace" FontSize="11"
+                                                           Foreground="{DynamicResource TextMuted}"
+                                                           Margin="0,0,12,0" />
+                                                <TextBlock Text="{Binding EventType}" FontSize="12"
+                                                           Foreground="{DynamicResource TextSecondary}" />
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Border>
+
+                            <!-- ── Actions ────────────────────────────────── -->
+                            <StackPanel Orientation="Horizontal" Spacing="12"
+                                        DataContext="{Binding $parent[UserControl].DataContext}">
+                                <Button Content="{Binding RunButtonLabel}"
+                                        Command="{Binding RunNowCommand}"
+                                        IsVisible="{Binding !SelectedWorkflow.IsTerminal}"
+                                        Padding="14,6" CornerRadius="6"
+                                        Background="{DynamicResource BrandPrimary}"
+                                        Foreground="White" FontWeight="SemiBold" />
+                                <Button Content="Export"
+                                        Command="{Binding ToggleExportCommand}"
+                                        Padding="10,5" CornerRadius="6" FontSize="12"
+                                        Background="Transparent" Foreground="{DynamicResource TextPrimary}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" />
+                            </StackPanel>
+
+                            <Border IsVisible="{Binding $parent[UserControl].((vm:WorkflowsViewModel)DataContext).ShowExport}"
+                                    Padding="10" CornerRadius="6" MaxHeight="240"
+                                    Background="{DynamicResource SurfaceBackground}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1">
+                                <ScrollViewer>
+                                    <SelectableTextBlock Text="{Binding $parent[UserControl].((vm:WorkflowsViewModel)DataContext).ExportText}"
+                                                         FontFamily="Consolas,Menlo,monospace"
+                                                         FontSize="12" TextWrapping="Wrap"
+                                                         Foreground="{DynamicResource TextPrimary}" />
+                                </ScrollViewer>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</UserControl>

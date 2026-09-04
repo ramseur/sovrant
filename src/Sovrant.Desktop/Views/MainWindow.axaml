@@ -77,6 +77,9 @@
         <DataTemplate DataType="vm:OrchestrationViewModel">
             <views:OrchestrationView />
         </DataTemplate>
+        <DataTemplate DataType="vm:WorkflowsViewModel">
+            <views:WorkflowsView />
+        </DataTemplate>
         <DataTemplate DataType="vm:CommandCenterViewModel">
             <views:CommandCenterView />
         </DataTemplate>

@@ -8,7 +8,7 @@ namespace Sovrant.Runtime.Workflows;
 /// Phase 51 pm_export — generates human-readable Markdown or structured
 /// JSON reports from a workflow's state and event journal. Designed to be
 /// called from CLI commands (<c>sovrant workflow export</c>), API routes
-/// (<c>GET /v1/missions/{id}/export</c>), or tools.
+/// (<c>GET /v1/workflows/{id}/export</c>), or tools.
 /// </summary>
 public sealed class WorkflowExportService
 {

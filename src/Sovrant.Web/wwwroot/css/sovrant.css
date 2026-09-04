@@ -3296,7 +3296,7 @@ details[open] .doc-advanced-toggle::before { content: "▼ "; }
     border: 1px solid var(--surface-border);
     color: var(--text-secondary);
 }
-.cc-status-running, .cc-status-active, .cc-status-planning {
+.cc-status-running, .cc-status-active, .cc-status-planning, .cc-status-completed {
     background: rgba(76, 175, 80, 0.12);
     color: var(--status-pass);
     border-color: var(--status-pass);

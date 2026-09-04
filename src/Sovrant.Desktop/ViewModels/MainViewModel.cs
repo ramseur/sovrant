@@ -262,6 +262,7 @@ public partial class MainViewModel : ViewModelBase
             "Agents" => GetOrCreateAgentsViewModel(),
             "Automations" => _services.GetRequiredService<AutomationsViewModel>(),
             "Orchestration" => _services.GetRequiredService<OrchestrationViewModel>(),
+            "Workflows" => _services.GetRequiredService<WorkflowsViewModel>(),
             "CommandCenter" => ResetCockpitToGrid(),
             "Admin" => ResolveAdmin("users"),
             "AdminWorkspaces" => ResolveAdmin("workspaces"),
