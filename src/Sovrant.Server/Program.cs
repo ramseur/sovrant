@@ -108,6 +108,10 @@ builder.Services.AddSingleton<WebhookCallbackService>();
 // Session eviction background service — TTL sweep + LRU cap (Phase 9.1).
 builder.Services.AddHostedService<Sovrant.Server.SessionEvictionService>();
 
+// Workflow scheduler — polls Planning/Running workflows and advances them
+// without waiting for a human or agent to explicitly ask (Phase 129).
+builder.Services.AddHostedService<Sovrant.Server.WorkflowSchedulerService>();
+
 // SignalR for real-time web frontend streaming (Phase 61).
 builder.Services.AddSignalR()
     .AddJsonProtocol(o =>
